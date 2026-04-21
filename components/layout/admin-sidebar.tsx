@@ -36,7 +36,6 @@ import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { SidebarModePicker } from '@/components/layout/sidebar-mode-picker';
 import { SidebarCollapsedFlyout } from '@/components/layout/sidebar-collapsed-flyout';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
-import { AdminBrandPill } from '@/components/layout/admin-brand-pill';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import {
   Sidebar,
@@ -377,68 +376,61 @@ export function AdminSidebar({
           (b) stays within the primary sidebar's x-bounds — a fixed-position
           overlay overlapped the "← Back to dashboard" text in the secondary
           Edits / Settings rails. Click keeps the "Hi there!" easter egg. */}
-      <SidebarHeader className="h-[60px] py-3 flex items-center">
-        {/* Header height is locked to 60px so nav icons sit at the same y
-            in both states. When the rail is expanded we render the full
-            wordmark; when collapsed we swap to the favicon-sized icon
-            mark so there's still a brand presence in the corner. */}
-        <div className="relative flex h-9 w-full items-center justify-center">
-          <button
-            type="button"
-            onClick={() => {
-              setShowHiTooltip(true);
-              setTimeout(() => setShowHiTooltip(false), 2200);
-            }}
-            aria-label="Hi there!"
-            className="flex items-center justify-center transition-opacity duration-200 cursor-pointer hover:opacity-80"
-          >
-            {mode === 'nativz' ? (
-              <Image
-                src="/nativz-logo.svg"
-                alt="Nativz"
-                width={140}
-                height={52}
-                className={`${open ? 'h-9' : 'h-5'} w-auto transition-[height] duration-200 ease-out`}
-                priority
-              />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src="/anderson-logo-dark.svg"
-                alt="Anderson Collaborative"
-                className={`${open ? 'h-9' : 'h-5'} w-auto transition-[height] duration-200 ease-out`}
-              />
-            )}
-          </button>
-
-          {showHiTooltip && (
-            <div
-              className="absolute left-1/2 top-full mt-2 -translate-x-1/2 pointer-events-none"
-              style={{ animation: 'hiTooltip 2.2s cubic-bezier(0.16,1,0.3,1) forwards' }}
+      {/* Sidebar header — portal still shows the agency logo + BrandSwitcher
+          here (portal doesn't use the app-shell top bar). Admin routes now
+          render the logo + brand pill in <AdminTopBar> above the rail, so
+          the admin sidebar header renders empty (or with a tiny affordance
+          space) to keep nav-icon y-alignment across both roles. */}
+      {role === 'viewer' ? (
+        <SidebarHeader className="h-[60px] py-3 flex items-center">
+          <div className="relative flex h-9 w-full items-center justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                setShowHiTooltip(true);
+                setTimeout(() => setShowHiTooltip(false), 2200);
+              }}
+              aria-label="Hi there!"
+              className="flex items-center justify-center transition-opacity duration-200 cursor-pointer hover:opacity-80"
             >
-              <div className="whitespace-nowrap rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm font-medium text-text-primary shadow-elevated">
-                Hi there! 👋
+              {mode === 'nativz' ? (
+                <Image
+                  src="/nativz-logo.svg"
+                  alt="Nativz"
+                  width={140}
+                  height={52}
+                  className={`${open ? 'h-9' : 'h-5'} w-auto transition-[height] duration-200 ease-out`}
+                  priority
+                />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src="/anderson-logo-dark.svg"
+                  alt="Anderson Collaborative"
+                  className={`${open ? 'h-9' : 'h-5'} w-auto transition-[height] duration-200 ease-out`}
+                />
+              )}
+            </button>
+
+            {showHiTooltip && (
+              <div
+                className="absolute left-1/2 top-full mt-2 -translate-x-1/2 pointer-events-none"
+                style={{ animation: 'hiTooltip 2.2s cubic-bezier(0.16,1,0.3,1) forwards' }}
+              >
+                <div className="whitespace-nowrap rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm font-medium text-text-primary shadow-elevated">
+                  Hi there! 👋
+                </div>
               </div>
+            )}
+          </div>
+
+          {brands && brands.length > 1 && activeBrandId && (
+            <div className="mb-1 mt-3">
+              <BrandSwitcher activeBrandId={activeBrandId} brands={brands} collapsed={!open} />
             </div>
           )}
-        </div>
-
-        {role === 'viewer' && brands && brands.length > 1 && activeBrandId && (
-          <div className="mb-1 mt-3">
-            <BrandSwitcher activeBrandId={activeBrandId} brands={brands} collapsed={!open} />
-          </div>
-        )}
-
-        {/* Admin-only: top-level brand pill. Portal users get the BrandSwitcher
-            above; admins get this richer pill with search + "Create brand" CTA.
-            Wrapped in an `ActiveBrandProvider` higher up in the admin layout —
-            `useActiveBrand()` inside the pill reads that context. */}
-        {role === 'admin' && (
-          <div className="mb-1 mt-3">
-            <AdminBrandPill collapsed={!open} />
-          </div>
-        )}
-      </SidebarHeader>
+        </SidebarHeader>
+      ) : null}
 
       {/* Navigation — Supabase-style: thin dividers between groups, no labels */}
       <SidebarContent>

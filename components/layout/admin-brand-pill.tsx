@@ -87,22 +87,10 @@ export function AdminBrandPill({ collapsed = false }: AdminBrandPillProps) {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [open]);
 
-  // Global ⌘B / Ctrl+B opens the switcher
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
-        // Leave browser sidebar shortcuts alone — only handle when focus isn't in a text field.
-        const target = e.target as HTMLElement | null;
-        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
-          return;
-        }
-        e.preventDefault();
-        setOpen((prev) => !prev);
-      }
-    }
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, []);
+  // Keyboard shortcut intentionally NOT claimed — `SidebarProvider` already
+  // binds ⌘B to toggle the rail (sidebar.tsx), and ⌘K is reserved for the
+  // app command palette. Adding another global chord here is more confusing
+  // than useful. Click the pill or hit the search via the command palette.
 
   // Focus search when popover opens
   useEffect(() => {
@@ -131,7 +119,7 @@ export function AdminBrandPill({ collapsed = false }: AdminBrandPillProps) {
         onClick={() => setOpen((prev) => !prev)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        title={isMuted ? 'Brand context not used here' : `${triggerLabel} — ⌘B`}
+        title={isMuted ? 'Brand context not used here' : triggerLabel}
         className={`group flex w-full items-center rounded-lg border transition-all duration-150 ${
           collapsed ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'
         } ${
@@ -173,9 +161,6 @@ export function AdminBrandPill({ collapsed = false }: AdminBrandPillProps) {
               placeholder="Search brands..."
               className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
             />
-            <kbd className="shrink-0 rounded border border-nativz-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-text-muted">
-              ⌘B
-            </kbd>
           </div>
 
           {/* Brand list */}

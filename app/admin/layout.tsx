@@ -5,11 +5,12 @@ import { unstable_cache } from 'next/cache';
 /** Avoid static prerender during `next build` when Preview env omits Supabase vars. */
 export const dynamic = 'force-dynamic';
 import { AdminSidebar } from '@/components/layout/admin-sidebar';
-// AgencyLogo lives inside the sidebar header (admin-sidebar.tsx) so it scales
-// with collapse state. Secondary rails (Settings/Edits/Tools/Competitor
-// Spying) were folded into the main sidebar as expandable `children` so the
-// app never shows more than two sidebars at once.
-import { AdminHeader } from '@/components/layout/admin-header';
+// Admin shell structure: full-width top bar (agency logo + brand pill +
+// global actions) spans above the sidebar + main content. The sidebar
+// header is now empty for admins — logo + brand live in <AdminTopBar>.
+// Portal still renders its own sidebar-embedded logo since the portal
+// layout doesn't use the top bar.
+import { AdminTopBar } from '@/components/layout/admin-top-bar';
 import { SidebarProvider, SidebarInset } from '@/components/layout/sidebar';
 import { EasterEgg } from '@/components/easter-egg';
 import { CommandPalette } from '@/components/shared/command-palette';
@@ -83,12 +84,11 @@ export default async function AdminLayout({
     return (
       <BackgroundSearchProvider>
         <ActiveBrandProvider initialBrand={active.brand} availableBrands={availableBrands}>
-          <SidebarProvider>
+          <SidebarProvider topBar={<AdminTopBar />}>
             <EasterEgg />
             <CommandPalette />
             <AdminSidebar userName={userName} avatarUrl={avatarUrl} hiddenSidebarItems={hiddenSidebarItems} />
             <SidebarInset>
-              <AdminHeader />
               <PageTransition>{children}</PageTransition>
             </SidebarInset>
           </SidebarProvider>

@@ -74,9 +74,17 @@ export function useSidebar() {
 interface SidebarProviderProps {
   defaultOpen?: boolean;
   children: ReactNode;
+  /**
+   * Optional full-width bar that renders above the sidebar + inset row.
+   * When provided, the provider's inner wrapper switches from a single
+   * flex-row to a flex-col (topBar on top, sidebar+inset below). Portal
+   * layouts that don't need a top bar can omit this and get the original
+   * row layout.
+   */
+  topBar?: ReactNode;
 }
 
-export function SidebarProvider({ defaultOpen = true, children }: SidebarProviderProps) {
+export function SidebarProvider({ defaultOpen = true, children, topBar }: SidebarProviderProps) {
   const [mode, setModeState] = useState<SidebarMode>(defaultOpen ? 'expanded' : 'collapsed');
   const [openMobile, setOpenMobile] = useState(false);
   const [forceCollapsed, setForceCollapsedState] = useState(false);
@@ -179,13 +187,21 @@ export function SidebarProvider({ defaultOpen = true, children }: SidebarProvide
       }}
     >
       <div
-        className="flex h-screen w-full overflow-hidden"
+        className={cn(
+          'h-screen w-full overflow-hidden',
+          topBar ? 'flex flex-col' : 'flex',
+        )}
         style={{
           '--sidebar-width': SIDEBAR_WIDTH,
           '--sidebar-width-icon': SIDEBAR_WIDTH_ICON,
         } as React.CSSProperties}
       >
-        {children}
+        {topBar}
+        {topBar ? (
+          <div className="flex min-h-0 flex-1">{children}</div>
+        ) : (
+          children
+        )}
       </div>
     </SidebarContext.Provider>
   );
