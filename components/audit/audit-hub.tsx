@@ -1,14 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Building2, Loader2, Search, X } from 'lucide-react';
+import { ArrowRight, Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { AuditHistoryRail, type AuditSummary } from '@/components/audit/audit-history-rail';
 import { ClientLogo } from '@/components/clients/client-logo';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { ClientOption } from '@/components/ui/client-picker';
-import { cn } from '@/lib/utils/cn';
 
 interface AuditHubProps {
   audits: AuditSummary[];
@@ -35,8 +33,6 @@ export function AuditHub({
   const [clientId, setClientId] = useState<string | null>(
     initialClientId && clients.some((c) => c.id === initialClientId) ? initialClientId : null,
   );
-  const [brandPopoverOpen, setBrandPopoverOpen] = useState(false);
-  const [clientQuery, setClientQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -48,20 +44,8 @@ export function AuditHub({
 
   const isValid = websiteUrl.trim().length > 0;
 
-  const filteredClients = useMemo(() => {
-    const q = clientQuery.trim().toLowerCase();
-    if (!q) return clients;
-    return clients.filter((c) => c.name.toLowerCase().includes(q));
-  }, [clientQuery, clients]);
-
-  function pickClient(id: string) {
-    setClientId(id);
-    setBrandPopoverOpen(false);
-  }
-
   function clearBrand() {
     setClientId(null);
-    setClientQuery('');
   }
 
   async function handleStart() {
@@ -134,118 +118,32 @@ export function AuditHub({
 
             <div className="flex flex-nowrap items-center gap-2 border-t border-nativz-border/60 px-3 pb-3 pt-2">
               <div className="flex min-h-[2.5rem] min-w-0 flex-1 items-center gap-2">
-                <Popover open={brandPopoverOpen} onOpenChange={setBrandPopoverOpen}>
-                  <div
-                    className={cn(
-                      'inline-flex h-9 max-w-[min(100%,13rem)] min-w-0 shrink-0 items-stretch rounded-full border border-nativz-border bg-surface-hover/80 text-xs font-medium text-text-secondary shadow-sm transition hover:border-accent/35 hover:bg-surface-hover',
-                      selectedClient && 'pr-0.5',
-                    )}
-                  >
-                    <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 text-left text-text-secondary hover:bg-transparent"
-                      >
-                        {selectedClient ? (
-                          <ClientLogo
-                            src={selectedClient.logo_url}
-                            name={selectedClient.name}
-                            size="sm"
-                            className="h-7 w-7 shrink-0 !rounded-md"
-                          />
-                        ) : (
-                          <Building2 size={15} className="shrink-0 text-text-muted" aria-hidden />
-                        )}
-                        <span className="truncate">
-                          {selectedClient ? selectedClient.name : 'Brand'}
-                        </span>
-                      </button>
-                    </PopoverTrigger>
-                    {selectedClient && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          clearBrand();
-                        }}
-                        className="flex shrink-0 items-center justify-center rounded-full p-1.5 text-text-muted transition hover:bg-background/40 hover:text-text-primary"
-                        aria-label="Remove brand"
-                      >
-                        <X size={15} strokeWidth={2} aria-hidden />
-                      </button>
-                    )}
-                  </div>
-                  <PopoverContent
-                    align="start"
-                    sideOffset={8}
-                    matchAnchorWidth={false}
-                    className="w-[min(22rem,calc(100vw-2rem))] border-nativz-border bg-surface p-0 text-text-primary shadow-[var(--shadow-dropdown)]"
-                  >
-                    <div className="border-b border-nativz-border p-3">
-                      <div className="relative">
-                        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
-                        <input
-                          type="text"
-                          value={clientQuery}
-                          onChange={(e) => setClientQuery(e.target.value)}
-                          placeholder="Search clients…"
-                          className="w-full rounded-lg border border-nativz-border bg-background py-2 pl-8 pr-3 text-sm text-foreground placeholder:text-text-muted focus:border-accent focus:outline-none"
-                          autoComplete="off"
-                        />
-                      </div>
+                {/* Attached brand — seeded from the top-bar pill via
+                 *  initialClientId. No in-page picker: if the admin wants
+                 *  to audit for a different brand, they switch the session
+                 *  pill. The clear button stays so a prospect audit (no
+                 *  client attachment) is still expressible. */}
+                {selectedClient && (
+                  <div className="inline-flex h-9 max-w-[min(100%,13rem)] min-w-0 items-stretch rounded-full border border-nativz-border bg-surface-hover/80 pr-0.5 text-xs font-medium text-text-secondary shadow-sm">
+                    <div className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5">
+                      <ClientLogo
+                        src={selectedClient.logo_url}
+                        name={selectedClient.name}
+                        size="sm"
+                        className="h-7 w-7 shrink-0 !rounded-md"
+                      />
+                      <span className="truncate">{selectedClient.name}</span>
                     </div>
-                    <div
-                      className="max-h-56 overflow-y-auto p-2"
-                      role="listbox"
-                      aria-label="Clients"
+                    <button
+                      type="button"
+                      onClick={clearBrand}
+                      className="flex shrink-0 items-center justify-center rounded-full p-1.5 text-text-muted transition hover:bg-background/40 hover:text-text-primary"
+                      aria-label="Remove brand"
                     >
-                      {filteredClients.length === 0 ? (
-                        <p className="px-2 py-6 text-center text-sm text-text-muted">No matching clients</p>
-                      ) : (
-                        <div className="grid grid-cols-[repeat(auto-fill,minmax(4.75rem,1fr))] gap-2">
-                          {filteredClients.map((c) => (
-                            <button
-                              key={c.id}
-                              type="button"
-                              role="option"
-                              aria-selected={clientId === c.id}
-                              onClick={() => pickClient(c.id)}
-                              className={cn(
-                                'flex flex-col items-center gap-1.5 rounded-xl border border-transparent p-2 text-center transition-colors hover:bg-surface-hover',
-                                clientId === c.id && 'border-accent/35 bg-accent/10',
-                              )}
-                            >
-                              <ClientLogo
-                                src={c.logo_url}
-                                name={c.name}
-                                size="sm"
-                                className="shrink-0 rounded-lg"
-                              />
-                              <span className="line-clamp-2 w-full text-[10px] font-medium leading-tight text-text-primary">
-                                {c.name}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    {selectedClient && (
-                      <div className="border-t border-nativz-border p-3">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            clearBrand();
-                            setBrandPopoverOpen(false);
-                          }}
-                          className="text-left text-xs text-text-muted hover:text-text-secondary"
-                        >
-                          Clear brand
-                        </button>
-                      </div>
-                    )}
-                  </PopoverContent>
-                </Popover>
+                      <X size={15} strokeWidth={2} aria-hidden />
+                    </button>
+                  </div>
+                )}
               </div>
 
               <button
