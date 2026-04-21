@@ -13,6 +13,13 @@ import { ADMIN_ACTIVE_CLIENT_COOKIE } from '@/lib/admin/get-active-client';
 // set the cookie + 302 in one hop, before any RSC streams.
 const LEGACY_STRATEGY_LAB_CLIENT_ID = /^\/admin\/strategy-lab\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/)?$/i;
 
+// Same story for Ad Creatives: /admin/ad-creatives-v2/<uuid> was a client-side
+// boot + POST + replace. Middleware sets the cookie and 302s to the flat
+// /admin/ad-creatives URL in a single hop. Batch subpath has its own
+// server-side redirect (see /admin/ad-creatives-v2/[clientId]/batches/[batchId])
+// so we scope this regex to the parent shape only.
+const LEGACY_AD_CREATIVES_CLIENT_ID = /^\/admin\/ad-creatives-v2\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/)?$/i;
+
 type SupabaseFromMiddleware = ReturnType<typeof createServerClient>;
 
 /**
@@ -305,6 +312,26 @@ export async function middleware(request: NextRequest) {
     const target = new URL('/admin/strategy-lab', request.url);
     const attach = request.nextUrl.searchParams.get('attach');
     if (attach) target.searchParams.set('attach', attach);
+    const redirect = NextResponse.redirect(target);
+    redirect.cookies.set(ADMIN_ACTIVE_CLIENT_COOKIE, clientId, {
+      httpOnly: false,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 180,
+    });
+    return redirect;
+  }
+
+  // Legacy /admin/ad-creatives-v2/<uuid> → same treatment. Saves the
+  // client-side boot + POST + router.replace hop for bookmarks, task
+  // links, and task-attached creative history. Batch subpath has its
+  // own server-side redirect (see the legacy batches page.tsx); this
+  // branch only catches the parent URL.
+  const legacyAcMatch = pathname.match(LEGACY_AD_CREATIVES_CLIENT_ID);
+  if (legacyAcMatch) {
+    const clientId = legacyAcMatch[1];
+    const target = new URL('/admin/ad-creatives', request.url);
     const redirect = NextResponse.redirect(target);
     redirect.cookies.set(ADMIN_ACTIVE_CLIENT_COOKIE, clientId, {
       httpOnly: false,
