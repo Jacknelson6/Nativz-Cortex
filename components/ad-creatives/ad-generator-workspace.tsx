@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { MessagesSquare, Images, FolderOpen, LayoutTemplate } from 'lucide-react';
 import { AdAssetLibrary, type AdAsset } from './ad-asset-library';
+import { AdTemplateLibrary, type AdPromptTemplate } from './ad-template-library';
 
 type TabId = 'chat' | 'gallery' | 'assets' | 'templates';
 
@@ -19,6 +20,7 @@ interface Props {
   clientSlug: string;
   brandDnaStatus: string;
   initialAssets: AdAsset[];
+  initialTemplates: AdPromptTemplate[];
 }
 
 /**
@@ -33,6 +35,7 @@ export function AdGeneratorWorkspace({
   clientName,
   brandDnaStatus,
   initialAssets,
+  initialTemplates,
 }: Props) {
   // Default to Assets since it's the only live tab in phase 1. When Chat
   // ships in phase 2 we'll flip the default.
@@ -97,15 +100,23 @@ export function AdGeneratorWorkspace({
         />
       )}
 
+      {activeTab === 'templates' && (
+        <AdTemplateLibrary
+          clientId={clientId}
+          initialTemplates={initialTemplates}
+        />
+      )}
+
       {activeTab === 'chat' && <ComingSoonPanel tab="chat" />}
       {activeTab === 'gallery' && <ComingSoonPanel tab="gallery" />}
-      {activeTab === 'templates' && <ComingSoonPanel tab="templates" />}
     </div>
   );
 }
 
-function ComingSoonPanel({ tab }: { tab: Exclude<TabId, 'assets'> }) {
-  const copy: Record<Exclude<TabId, 'assets'>, { title: string; body: string }> = {
+type PlaceholderTabId = Extract<TabId, 'chat' | 'gallery'>;
+
+function ComingSoonPanel({ tab }: { tab: PlaceholderTabId }) {
+  const copy: Record<PlaceholderTabId, { title: string; body: string }> = {
     chat: {
       title: 'Chat intake — Phase 2',
       body: 'Natural-language ad generation. Say "make 30 ads emphasizing testimonials, use these product shots" and the Nerd cycles through the 15 templates, grounding each concept in real reviews and winning ads from the asset library.',
@@ -113,10 +124,6 @@ function ComingSoonPanel({ tab }: { tab: Exclude<TabId, 'assets'> }) {
     gallery: {
       title: 'Gallery — Phase 2',
       body: 'Grid view of every generated concept with per-card approve / reject / regenerate. Share link for client review (comments land here before an admin sweeps them into chat commands).',
-    },
-    templates: {
-      title: 'Templates — Phase 2',
-      body: 'Drop an ad screenshot, get a reusable JSON layout. The vision model reads the composition (headline position, photo slots, logo placement, color roles) and writes a template that the compositor can render for any brand.',
     },
   };
   const c = copy[tab];

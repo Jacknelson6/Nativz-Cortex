@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getActiveAdminClient } from '@/lib/admin/get-active-client';
 import { AdGeneratorWorkspace } from '@/components/ad-creatives/ad-generator-workspace';
+import type { AdPromptTemplate } from '@/components/ad-creatives/ad-template-library';
 
 /**
  * Ad Generator — replaces the old dev-facing form-page with a chat-led
@@ -41,7 +42,7 @@ export default async function AdCreativesPage() {
 
   // Parallel: load what the workspace needs on first paint. Kept small
   // for now — Phase 2 adds generation history + concept gallery rows.
-  const [clientResult, assetResult] = await Promise.all([
+  const [clientResult, assetResult, templateResult] = await Promise.all([
     admin
       .from('clients')
       .select('id, name, slug, logo_url, brand_dna_status')
@@ -53,6 +54,12 @@ export default async function AdCreativesPage() {
       .eq('client_id', clientId)
       .order('created_at', { ascending: false })
       .limit(200),
+    admin
+      .from('ad_prompt_templates')
+      .select('id, name, reference_image_url, prompt_schema, aspect_ratio, ad_category, tags, created_at, updated_at')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false })
+      .limit(500),
   ]);
 
   const client = clientResult.data;
@@ -76,6 +83,7 @@ export default async function AdCreativesPage() {
       clientSlug={client.slug ?? ''}
       brandDnaStatus={client.brand_dna_status ?? 'none'}
       initialAssets={assetResult.data ?? []}
+      initialTemplates={(templateResult.data ?? []) as AdPromptTemplate[]}
     />
   );
 }
