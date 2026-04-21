@@ -103,6 +103,11 @@ const NAV_SECTIONS: NavSection[] = [
       },
       { href: '/admin/ad-creatives', label: 'Ad Generator', icon: ImagePlus },
       { href: '/admin/knowledge', label: 'Brain', icon: Brain },
+      // NAT-57 follow-up: single entry point for the pinned brand's
+      // profile. Sits between Brain (AI knowledge) and Notes (manual
+      // notes) — both adjacent to it in the user's mental model as
+      // "stuff about the brand that isn't a generator/tool."
+      { href: '/admin/brand-profile', label: 'Brand Profile', icon: Building },
       { href: '/admin/notes', label: 'Notes', icon: StickyNote },
     ],
   },

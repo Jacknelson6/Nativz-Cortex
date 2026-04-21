@@ -1,25 +1,20 @@
-import Image from 'next/image';
-import Link from 'next/link';
-import { Building, Globe, Pencil } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getActiveAdminClient } from '@/lib/admin/get-active-client';
-import { BrandProfileSocialsView } from '@/components/clients/brand-profile-socials-view';
-import { BrandProfileCompetitorsView } from '@/components/clients/brand-profile-competitors-view';
+import { BrandProfileView, type BrandProfileData } from '@/components/clients/brand-profile-view';
 import { PageError } from '@/components/shared/page-error';
+import { Building } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * /admin/brand-profile — admin-side mirror of the portal brand profile.
- * Renders whichever brand is pinned in the session pill. If no brand is
- * pinned, shows a friendly prompt to pick one rather than an error.
+ * Reads whichever brand is pinned in the session pill. If no brand is
+ * pinned, shows a friendly prompt to pick one.
  *
- * The admin view re-uses the portal's read-only view components (socials
- * + competitors) because the shape we want to show a teammate reviewing
- * a client brand is identical to the shape the client themselves see —
- * no point maintaining two UIs. Editing still happens in the admin
- * settings page at /admin/clients/[slug]/settings/brand, linked at the
- * top of this page.
+ * Re-uses <BrandProfileView/> with `editHref` set → exposes an "Edit in
+ * settings" CTA deep-linking to /admin/clients/[slug]/settings/brand.
+ * Portal uses the same component with editHref=null so the layout is
+ * visually identical — only the affordances differ.
  */
 export default async function AdminBrandProfilePage() {
   try {
@@ -45,106 +40,92 @@ export default async function AdminBrandProfilePage() {
     const clientId = active.brand.id;
     const admin = createAdminClient();
 
-    // Parallel: extra client fields + brand DNA guideline.
-    const [clientExtraResult] = await Promise.all([
+    // Parallel reads: full client profile columns + latest brand DNA
+    // guideline. The guideline's jsonb metadata drives the bento cards
+    // rendered by BrandDNACards at the bottom of the view.
+    const [clientResult, guidelineResult] = await Promise.all([
       admin
         .from('clients')
         .select(
-          'description, industry, brand_voice, target_audience, logo_url, website_url, slug, brand_dna_status',
+          [
+            'id', 'name', 'slug', 'logo_url', 'website_url', 'description',
+            'industry', 'brand_voice', 'target_audience',
+            'tagline', 'value_proposition', 'mission_statement',
+            'products', 'services', 'brand_aliases', 'topic_keywords',
+            'writing_style', 'ai_image_style', 'banned_phrases', 'content_language',
+            'primary_country', 'primary_state', 'primary_city',
+            'created_at',
+          ].join(','),
         )
         .eq('id', clientId)
         .maybeSingle(),
+      admin
+        .from('client_knowledge_entries')
+        .select('metadata, updated_at')
+        .eq('client_id', clientId)
+        .eq('type', 'brand_guideline')
+        .is('metadata->superseded_by', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
-    const extra = clientExtraResult.data;
-    const slug = extra?.slug ?? active.brand.slug;
+    // supabase-js's generic inference gets confused by our long
+    // comma-joined select string and returns `GenericStringError` for
+    // `.data` — hence the cast to Record<string, unknown> before we
+    // pluck fields. The view component does its own runtime guards so
+    // downcasting here is safe.
+    const raw = clientResult.data as Record<string, unknown> | null;
+    if (!raw) return <PageError title="Could not load brand" />;
+
+    // Cast + fill-in defaults so the view component can rely on arrays
+    // being arrays (vs null) — the DB has NOT NULL DEFAULT '{}' but
+    // an old row-cast with `unknown` types needs coercion anyway.
+    const profile: BrandProfileData = {
+      id: raw.id as string,
+      name: (raw.name as string | null) ?? null,
+      slug: (raw.slug as string | null) ?? null,
+      logo_url: (raw.logo_url as string | null) ?? null,
+      website_url: (raw.website_url as string | null) ?? null,
+      description: (raw.description as string | null) ?? null,
+      industry: (raw.industry as string | null) ?? null,
+      brand_voice: (raw.brand_voice as string | null) ?? null,
+      target_audience: (raw.target_audience as string | null) ?? null,
+      tagline: (raw.tagline as string | null) ?? null,
+      value_proposition: (raw.value_proposition as string | null) ?? null,
+      mission_statement: (raw.mission_statement as string | null) ?? null,
+      products: (raw.products as string[] | null) ?? [],
+      services: (raw.services as string[] | null) ?? [],
+      brand_aliases: (raw.brand_aliases as string[] | null) ?? [],
+      topic_keywords: (raw.topic_keywords as string[] | null) ?? [],
+      writing_style: (raw.writing_style as string | null) ?? null,
+      ai_image_style: (raw.ai_image_style as string | null) ?? null,
+      banned_phrases: (raw.banned_phrases as string[] | null) ?? [],
+      content_language: (raw.content_language as string | null) ?? null,
+      primary_country: (raw.primary_country as string | null) ?? null,
+      primary_state: (raw.primary_state as string | null) ?? null,
+      primary_city: (raw.primary_city as string | null) ?? null,
+      created_at: (raw.created_at as string | null) ?? null,
+    };
+
+    const dnaMetadata = (guidelineResult.data?.metadata as Record<string, unknown> | null) ?? null;
+    const dnaUpdatedAt = (guidelineResult.data?.updated_at as string | null) ?? null;
+
+    const slug = profile.slug ?? active.brand.slug;
+    const editHref = slug ? `/admin/clients/${slug}/settings/brand` : null;
 
     return (
-      <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
-        {/* Brand header — with an "Edit in settings" shortcut for admins.
-            The portal's header doesn't have this button; everything else
-            is identical so the look-and-feel matches. */}
-        <header className="rounded-xl border border-nativz-border bg-surface p-6">
-          <div className="flex items-start gap-4">
-            {extra?.logo_url ? (
-              <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-background shrink-0">
-                <Image
-                  src={extra.logo_url}
-                  alt={`${active.brand.name} logo`}
-                  fill
-                  className="object-contain"
-                />
-              </div>
-            ) : (
-              <div className="w-16 h-16 rounded-lg bg-background/50 flex items-center justify-center shrink-0">
-                <Building size={24} className="text-text-muted" />
-              </div>
-            )}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h1 className="text-2xl font-semibold text-text-primary">
-                    {active.brand.name ?? 'Brand profile'}
-                  </h1>
-                  {extra?.website_url && (
-                    <a
-                      href={extra.website_url}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="text-sm text-accent-text hover:underline inline-flex items-center gap-1 mt-1"
-                    >
-                      <Globe size={12} /> {cleanDomain(extra.website_url)}
-                    </a>
-                  )}
-                </div>
-                <Link
-                  href={`/admin/clients/${slug}/settings/brand`}
-                  className="shrink-0 inline-flex items-center gap-1 text-xs rounded-full border border-nativz-border px-3 py-1.5 text-text-secondary hover:text-text-primary hover:bg-surface-hover transition"
-                >
-                  <Pencil size={12} /> Edit in settings
-                </Link>
-              </div>
-              {extra?.description && (
-                <p className="text-sm text-text-secondary mt-3 leading-relaxed">
-                  {extra.description}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {(extra?.industry || extra?.brand_voice || extra?.target_audience) && (
-            <dl className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-4 pt-5 border-t border-nativz-border">
-              {extra?.industry && <Field label="Industry" value={extra.industry} />}
-              {extra?.brand_voice && <Field label="Brand voice" value={extra.brand_voice} />}
-              {extra?.target_audience && <Field label="Target audience" value={extra.target_audience} />}
-            </dl>
-          )}
-        </header>
-
-        <BrandProfileSocialsView clientId={clientId} />
-        <BrandProfileCompetitorsView clientId={clientId} />
+      <div className="max-w-5xl mx-auto p-4 md:p-6">
+        <BrandProfileView
+          profile={profile}
+          dnaMetadata={dnaMetadata}
+          dnaUpdatedAt={dnaUpdatedAt}
+          editHref={editHref}
+        />
       </div>
     );
   } catch (err) {
     console.error('AdminBrandProfilePage error:', err);
     return <PageError />;
   }
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">
-        {label}
-      </dt>
-      <dd className="text-sm text-text-primary mt-1">{value}</dd>
-    </div>
-  );
-}
-
-function cleanDomain(url: string): string {
-  return url
-    .replace(/^https?:\/\//, '')
-    .replace(/^www\./, '')
-    .replace(/\/$/, '');
 }

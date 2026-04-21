@@ -4,9 +4,31 @@ import { BrandSettingsForm } from '@/components/clients/settings/brand-settings-
 import { BrandDNAView } from '@/components/brand-dna/brand-dna-view';
 import { LinkedSocialsSection } from '@/components/clients/linked-socials-section';
 import { CompetitorsSection } from '@/components/clients/competitors-section';
+import { BrandEssenceSection } from '@/components/clients/brand-essence-section';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * /admin/clients/[slug]/settings/brand — the admin-only, detailed edit
+ * surface. Everything configurable about a brand lives here, grouped
+ * into clear sections. The client-facing `/portal/brand-profile`
+ * mirrors a subset of this (read-only, minus ops-sensitive fields).
+ *
+ * Layout (top-down):
+ *   1. Brand information — name, website, description (existing form)
+ *   2. Brand essence — tagline / value prop / mission (AI-assisted)
+ *   3. Products, aliases, categories
+ *   4. Content generation preferences
+ *   5. Default location
+ *   6. Social presence — linked profiles + competitors (2 col on lg)
+ *   7. Brand DNA — auto-generated brand guideline (if present)
+ *
+ * `space-y-6` is the standard vertical rhythm between top-level
+ * sections; each BrandEssenceSection internally uses `space-y-4` for
+ * the cards within it. A thin border-t separator precedes Brand DNA
+ * to signal the shift from "brand-data fields" to "AI-distilled brand
+ * identity."
+ */
 export default async function ClientSettingsBrandPage({
   params,
 }: {
@@ -43,19 +65,34 @@ export default async function ClientSettingsBrandPage({
   }
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
+      {/* 1. Brand information — name, website, description, budget. */}
       <BrandSettingsForm slug={slug} />
 
-      {/* NAT-57 follow-up: social slots + competitors. Placed above brand
-          DNA because they're the new onboarding-invariant surfaces — every
-          client needs all four platform slots resolved (linked or
-          no-account) before analysis tools work, so they deserve top
-          billing. */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <LinkedSocialsSection clientId={client.id} />
-        <CompetitorsSection clientId={client.id} />
-      </div>
+      {/* 2-5. Essence, products, content generation, location. This
+          component owns its own internal section stack + spacing. */}
+      <BrandEssenceSection clientId={client.id} />
 
+      {/* 6. Social presence. Two-column grid on lg+; stacks on smaller
+          screens. Wrapped in a header so the pair reads as one section
+          rather than two orphaned cards. */}
+      <section className="space-y-3">
+        <header>
+          <h2 className="text-sm font-semibold text-text-primary">Social presence</h2>
+          <p className="text-xs text-text-muted mt-0.5">
+            One linked account per platform unlocks analytics; tracked
+            competitors auto-suggest in spying tools.
+          </p>
+        </header>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <LinkedSocialsSection clientId={client.id} />
+          <CompetitorsSection clientId={client.id} />
+        </div>
+      </section>
+
+      {/* 7. Brand DNA — the AI-distilled visual + verbal identity.
+          Separated with a rule + extra top padding so the shift is
+          clear: above = raw fields, below = AI-synthesized views. */}
       <div className="border-t border-nativz-border pt-8">
         <BrandDNAView
           clientId={client.id}
