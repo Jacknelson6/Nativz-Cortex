@@ -5,6 +5,7 @@ import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibili
 import { getVaultClients } from '@/lib/vault/reader';
 import { ResearchHub } from '@/components/research/research-hub';
 import { fetchHistory, TOPIC_SEARCH_HUB_HISTORY_LIMIT } from '@/lib/research/history';
+import { getActiveAdminClient } from '@/lib/admin/get-active-client';
 
 type ResearchHubDbClientRow = {
   id: string;
@@ -45,6 +46,15 @@ export default async function AdminNewSearchPage({
     return null;
   })();
 
+  // Resolve the admin's active brand from the top-bar pill cookie so the
+  // history rail fetch is scoped to that brand when one is selected. Without
+  // this the server returns the last 40 searches across ALL clients, and the
+  // client-side filter in research-hub (`item.clientId === selectedClientId`)
+  // ends up hiding any active-brand searches that fell outside the global
+  // top-40 — showing a bogus "No results yet" even though history exists.
+  const activeBrand = await getActiveAdminClient();
+  const historyClientId = activeBrand.brand?.id ?? null;
+
   // Vault supplies display name when present; agency comes from vault first, else Postgres (admin client profile)
   const [vaultClients, rosterResult, historyItems, userFirstName] = await Promise.all([
     getVaultClients(),
@@ -55,6 +65,7 @@ export default async function AdminNewSearchPage({
     fetchHistory({
       limit: TOPIC_SEARCH_HUB_HISTORY_LIMIT,
       includeIdeas: false,
+      clientId: historyClientId,
     }),
     greetingPromise,
   ]);

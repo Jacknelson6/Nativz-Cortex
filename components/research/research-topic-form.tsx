@@ -201,7 +201,7 @@ export function ResearchTopicForm({
           <p className="text-sm font-medium text-text-muted">Hey, {greetingName}</p>
           <div className="mt-1.5 flex items-center justify-center gap-2">
             <p className="text-xl font-semibold tracking-tight text-text-primary md:text-2xl">
-              What&apos;s trending?
+              Find out what&apos;s trending
             </p>
             <Popover>
               <PopoverTrigger asChild>
