@@ -18,9 +18,13 @@ import type { AdminBrand } from '@/lib/admin/get-active-client';
  * from those pages so the next tool you hit already has context set.
  */
 
-// Admin-only route prefixes — these ignore the active brand value. Keep in
-// sync with docs/spec-top-level-brand-selector.md "Admin-only (ignore
-// selector)" section.
+// Admin-only route prefixes — the brand pill dims on these routes because
+// they don't read the active brand. Keep in sync with the "Admin" section
+// of NAV_SECTIONS in admin-sidebar.tsx AND the admin-only list in
+// docs/spec-top-level-brand-selector.md.
+//
+// Brain (/admin/knowledge) lives under "Brand tools" now, so it's intentionally
+// NOT listed here — Brain reads the active brand.
 const ADMIN_ONLY_PREFIXES = [
   '/admin/dashboard',
   '/admin/tasks',
@@ -30,7 +34,7 @@ const ADMIN_ONLY_PREFIXES = [
   '/admin/accounting',
   '/admin/clients',
   '/admin/team',
-  '/admin/knowledge',
+  '/admin/tools',
   '/admin/nerd',
   '/admin/presentations',
   '/admin/notes',

@@ -285,8 +285,10 @@ export function SidebarFooter({ children, className = '' }: { children: ReactNod
 }
 
 export function SidebarContent({ children, className = '' }: { children: ReactNode; className?: string }) {
+  // flex + flex-col lets downstream groups opt into `mt-auto` to push the
+  // Admin section to the bottom of the rail, RankPrompt-style.
   return (
-    <div className={cn('flex-1 overflow-y-auto overflow-x-hidden px-3 py-1', className)}>
+    <div className={cn('flex flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 py-1', className)}>
       {children}
     </div>
   );

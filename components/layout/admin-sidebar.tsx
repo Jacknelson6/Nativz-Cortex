@@ -30,7 +30,6 @@ import {
   Megaphone,
   Calendar,
   Brain,
-  Cpu,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { SidebarModePicker } from '@/components/layout/sidebar-mode-picker';
@@ -43,6 +42,7 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
@@ -70,6 +70,11 @@ interface NavItem {
 interface NavSection {
   label: string;
   items: NavItem[];
+  /** When true, render the section label above the items. Default: false. */
+  labeled?: boolean;
+  /** When true, this section's group gets `mt-auto` so it sinks to the
+   *  bottom of the rail. Intended for the Admin (platform-operator) section. */
+  pushToBottom?: boolean;
 }
 
 // Parents with `children` expand to an inline accordion (RankPrompt-style).
@@ -77,6 +82,17 @@ interface NavSection {
 // so existing deep links (e.g. /admin/analyze-social) keep working.
 // Route kept at /admin/analyze-social for Competitor Spying to avoid breaking
 // outbound share links (/shared/analyze-social/[token]).
+//
+// Section layout intent (RankPrompt-style separation of concerns):
+//   1. Dashboard         — cross-brand overview entry points
+//   2. Brand tools       — tools that operate on the active brand
+//   3. Content ops       — cross-brand operational surfaces (tasks, edits, calendars)
+//   4. Admin (bottom)    — platform-operator tools (users, accounting, integrations, AI settings)
+//
+// The active brand pill in the top bar dims to 60% opacity on admin-only
+// routes (see ADMIN_ONLY_PREFIXES in admin-brand-pill.tsx) — grouping those
+// routes under a dedicated bottom Admin section makes that muted state
+// read as "brand context paused" rather than as a bug.
 const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Dashboard',
@@ -86,7 +102,8 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    label: 'Intelligence',
+    label: 'Brand tools',
+    labeled: true,
     items: [
       { href: '/admin/search/new', label: 'Trend Finder', icon: TrendingUp },
       { href: '/admin/strategy-lab', label: 'Strategy Lab', icon: MessagesSquare },
@@ -102,13 +119,15 @@ const NAV_SECTIONS: NavSection[] = [
         ],
       },
       { href: '/admin/ad-creatives', label: 'Ad Generator', icon: ImagePlus },
-      { href: '/admin/notes', label: 'Notes', icon: StickyNote },
+      { href: '/admin/knowledge', label: 'Brain', icon: Brain },
     ],
   },
   {
-    label: 'Manage',
+    label: 'Content ops',
+    labeled: true,
     items: [
-      { href: '/admin/clients', label: 'Clients', icon: Contact },
+      { href: '/admin/notes', label: 'Notes', icon: StickyNote },
+      { href: '/admin/tasks', label: 'Tasks', icon: CheckSquare },
       {
         href: '/admin/pipeline',
         label: 'Edits',
@@ -122,10 +141,17 @@ const NAV_SECTIONS: NavSection[] = [
           { href: '/admin/scheduler', label: 'Calendars', icon: Calendar },
         ],
       },
-      { href: '/admin/tasks', label: 'Tasks', icon: CheckSquare },
+    ],
+  },
+  {
+    label: 'Admin',
+    labeled: true,
+    pushToBottom: true,
+    items: [
+      { href: '/admin/clients', label: 'Clients', icon: Contact },
       {
         href: '/admin/tools',
-        label: 'Tools',
+        label: 'Platform',
         icon: Wrench,
         children: [
           { href: '/admin/tools/users', label: 'Users', icon: Users },
@@ -133,15 +159,7 @@ const NAV_SECTIONS: NavSection[] = [
           { href: '/admin/tools/email', label: 'Email Hub', icon: Mail },
         ],
       },
-      {
-        href: '/admin/settings/ai',
-        label: 'Settings',
-        icon: SettingsIcon,
-        children: [
-          { href: '/admin/knowledge', label: 'Brain', icon: Brain },
-          { href: '/admin/settings/ai', label: 'AI settings', icon: Cpu },
-        ],
-      },
+      { href: '/admin/settings/ai', label: 'AI settings', icon: SettingsIcon },
     ],
   },
 ];
@@ -441,8 +459,20 @@ export function AdminSidebar({
           }))
           .filter((section) => section.items.length > 0)
           .map((section, idx) => (
-          <SidebarGroup key={section.label}>
-            {idx > 0 && <SidebarSeparator />}
+          <SidebarGroup
+            key={section.label || `section-${idx}`}
+            className={section.pushToBottom ? 'mt-auto' : ''}
+          >
+            {/* When a section is labeled (e.g. "Brand tools", "Admin"), the
+                label takes the place of the plain separator and gives each
+                section a readable name. For label-less sections we still
+                emit a separator between groups so the rail doesn't feel
+                like one undifferentiated list. */}
+            {section.labeled ? (
+              <SidebarGroupLabel>{section.label}</SidebarGroupLabel>
+            ) : idx > 0 ? (
+              <SidebarSeparator />
+            ) : null}
             <SidebarMenu>
               {section.items.map((item) => {
                 const active = isActivePath(pathname, item.href, searchParams);
