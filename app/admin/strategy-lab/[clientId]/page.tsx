@@ -1,155 +1,79 @@
-import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
-import { ChevronLeft } from 'lucide-react';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { ContentLabWorkspace } from '@/components/content-lab/content-lab-workspace';
-import { loadPillarReferencePreviews } from '@/lib/content-lab/pillar-reference-previews';
-import { getKnowledgeEntries, getKnowledgeGraph } from '@/lib/knowledge/queries';
-import { SyncActiveBrand } from '@/components/admin/sync-active-brand';
+'use client';
 
-export default async function ContentLabClientPage({
+import { use, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
+
+/**
+ * Legacy `/admin/strategy-lab/[clientId]` route. Strategy Lab's URL was
+ * flattened to just `/admin/strategy-lab` — the session brand pill now
+ * drives which client's workspace renders. This shim keeps old share
+ * links, internal outbound references, and bookmarks alive by:
+ *
+ *   1. Writing the URL's clientId into the `x-admin-active-client` cookie
+ *      via the existing /api/admin/active-client endpoint.
+ *   2. `router.replace()`-ing to `/admin/strategy-lab` (preserves any
+ *      `?attach=…` query param).
+ *
+ * A brief "Loading Strategy Lab…" state is rendered during the round-trip.
+ * Once the cookie is set, the new page loads the brand-scoped workspace.
+ */
+export default function LegacyStrategyLabClientRedirect({
   params,
-  searchParams,
 }: {
   params: Promise<{ clientId: string }>;
-  searchParams: Promise<{ attach?: string }>;
 }) {
-  const { clientId } = await params;
-  const { attach } = await searchParams;
-  const initialAttachedSearchId = (() => {
-    if (!attach) return null;
-    const [type, id] = attach.split(':');
-    return type === 'topic_search' && id ? id : null;
-  })();
+  const { clientId } = use(params);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [error, setError] = useState<string | null>(null);
 
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    redirect('/admin/login');
-  }
+  useEffect(() => {
+    let cancelled = false;
 
-  const admin = createAdminClient();
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/active-client', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ client_id: clientId }),
+        });
+        if (cancelled) return;
 
-  const { data: client, error: clientErr } = await admin
-    .from('clients')
-    .select('id, name, slug, brand_dna_status')
-    .eq('id', clientId)
-    .maybeSingle();
+        // Even if the cookie POST fails (403 for a brand the user can't
+        // see, 404 for a deleted client), fall forward to the flattened
+        // route — the Strategy Lab page shows a graceful empty/general
+        // chat when no brand resolves.
+        if (!res.ok) {
+          const msg = (await res.json().catch(() => null))?.error;
+          if (msg) setError(msg);
+        }
 
-  if (clientErr || !client) {
-    notFound();
-  }
-
-  let brandGuideline: {
-    id: string;
-    content: string;
-    metadata: unknown;
-    created_at: string;
-    updated_at: string;
-  } | null = null;
-
-  if (client.brand_dna_status !== 'none') {
-    const { data: g } = await admin
-      .from('client_knowledge_entries')
-      .select('id, content, metadata, created_at, updated_at')
-      .eq('client_id', client.id)
-      .eq('type', 'brand_guideline')
-      .is('metadata->superseded_by', null)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    brandGuideline = g;
-  }
-
-  const [{ data: topicRows }, { data: pillarRows }, { data: boardRows }] = await Promise.all([
-    admin
-      .from('topic_searches')
-      .select('id, query, status, created_at')
-      .eq('client_id', clientId)
-      .order('created_at', { ascending: false })
-      .limit(200),
-    admin
-      .from('content_pillars')
-      .select('*')
-      .eq('client_id', clientId)
-      .order('sort_order', { ascending: true }),
-    admin
-      .from('moodboard_boards')
-      .select('id, name, archived_at, updated_at')
-      .eq('client_id', clientId)
-      .order('updated_at', { ascending: false })
-      .limit(50),
-  ]);
-
-  const topicSearches = topicRows ?? [];
-  const pillars = pillarRows ?? [];
-  const boards = (boardRows ?? []).filter((b) => !b.archived_at);
-
-  const boardIds = boards.map((b) => b.id as string);
-  const boardThumbnails: Record<string, string[]> = {};
-  const boardItemCounts: Record<string, number> = {};
-  if (boardIds.length > 0) {
-    const { data: itemData } = await admin
-      .from('moodboard_items')
-      .select('board_id, thumbnail_url')
-      .in('board_id', boardIds);
-    if (itemData) {
-      for (const row of itemData) {
-        const bid = row.board_id as string;
-        boardItemCounts[bid] = (boardItemCounts[bid] ?? 0) + 1;
-        const url = row.thumbnail_url as string | null;
-        if (!url) continue;
-        if (!boardThumbnails[bid]) boardThumbnails[bid] = [];
-        if (boardThumbnails[bid].length < 4) boardThumbnails[bid].push(url);
+        const attach = searchParams.get('attach');
+        const target = attach
+          ? `/admin/strategy-lab?attach=${encodeURIComponent(attach)}`
+          : '/admin/strategy-lab';
+        router.replace(target);
+      } catch (err) {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : 'Network error');
+        // Still forward — better a general chat than a stuck spinner.
+        router.replace('/admin/strategy-lab');
       }
-    }
-  }
+    })();
 
-  const moodBoardsWithThumbs = boards.map((b) => ({
-    id: b.id as string,
-    name: (b.name as string) ?? 'Untitled',
-    thumbnails: boardThumbnails[b.id as string] ?? [],
-    itemCount: boardItemCounts[b.id as string] ?? 0,
-  }));
-
-  const { count: completedIdeaGenCount } = await admin
-    .from('idea_generations')
-    .select('*', { count: 'exact', head: true })
-    .eq('client_id', clientId)
-    .eq('status', 'completed');
-
-  const pillarIds = (pillars ?? []).map((p) => p.id as string);
-  const pillarReferencePreviews = await loadPillarReferencePreviews(admin, client.id, pillarIds);
-
-  const [vaultEntries, vaultGraphData] = await Promise.all([
-    getKnowledgeEntries(client.id),
-    getKnowledgeGraph(client.id),
-  ]);
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId, router, searchParams]);
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] overflow-hidden">
-      {/* Direct-link visits update the top-bar pill so the session context
-          matches what the user is actually looking at. No-op when the URL
-          clientId already equals the active brand. */}
-      <SyncActiveBrand clientId={client.id} />
-      <ContentLabWorkspace
-        clientId={client.id}
-        clientSlug={client.slug ?? ''}
-        clientName={client.name ?? ''}
-        brandDnaStatus={client.brand_dna_status ?? 'none'}
-        brandGuideline={brandGuideline}
-        topicSearches={topicSearches}
-        pillars={pillars}
-        pillarReferencePreviews={pillarReferencePreviews}
-        moodBoards={moodBoardsWithThumbs}
-        hasCompletedIdeaGeneration={(completedIdeaGenCount ?? 0) > 0}
-        vaultEntries={vaultEntries}
-        vaultGraphData={vaultGraphData}
-        initialAttachedSearchId={initialAttachedSearchId}
-      />
+    <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center">
+      <div className="flex flex-col items-center gap-3 text-sm text-text-muted">
+        <Loader2 size={20} className="animate-spin" aria-hidden />
+        <p>Loading Strategy Lab…</p>
+        {error ? <p className="text-xs text-red-400">{error}</p> : null}
+      </div>
     </div>
   );
 }

@@ -96,12 +96,16 @@ test.describe('Admin active-brand flow', () => {
     const brandCookie = cookies.find((c) => c.name === 'x-admin-active-client');
     expect(brandCookie?.value).toBe(target.id);
 
-    // Strategy Lab index should redirect to /admin/strategy-lab/<target.id>
-    // now that the cookie is set.
+    // Strategy Lab URL is flat now — no `[clientId]` segment. The page
+    // reads the cookie server-side and renders the branded workspace at
+    // the plain /admin/strategy-lab URL.
     await page.goto('/admin/strategy-lab', { waitUntil: 'domcontentloaded' });
-    await expect(page).toHaveURL(new RegExp(`/admin/strategy-lab/${target.id}`));
+    await expect(page).toHaveURL(/\/admin\/strategy-lab(\?|$)/);
+    // Sanity — the workspace-specific "Strategy Lab" header chip should
+    // render when a brand is pinned (general chat shows a different header).
+    await expect(page.locator('text=/strategy lab/i').first()).toBeVisible({ timeout: 10_000 });
 
-    // Ad Creatives v2 index should redirect the same way.
+    // Ad Creatives v2 index still redirects (pre-flatten pattern).
     await page.goto('/admin/ad-creatives-v2', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(new RegExp(`/admin/ad-creatives-v2/${target.id}`));
   });
@@ -116,10 +120,11 @@ test.describe('Admin active-brand flow', () => {
     });
     expect(clearRes.ok(), `clear-active-client: ${clearRes.status()}`).toBeTruthy();
 
-    // Strategy Lab with no cookie stays on /admin/strategy-lab (fallback
-    // cross-brand chat) — no redirect to any [clientId].
+    // Strategy Lab with no cookie renders the general chat at the
+    // flattened /admin/strategy-lab URL — no clientId segment.
     await page.goto('/admin/strategy-lab', { waitUntil: 'domcontentloaded' });
     expect(page.url()).not.toMatch(new RegExp(`/admin/strategy-lab/${UUID_RE.source}`));
+    await expect(page).toHaveURL(/\/admin\/strategy-lab(\?|$)/);
   });
 
   test('POST /api/admin/active-client rejects a brand the user cannot see (403)', async ({ page, request }) => {
