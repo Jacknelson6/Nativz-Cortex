@@ -1,17 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { MessagesSquare, Images, FolderOpen, LayoutTemplate } from 'lucide-react';
 import { AdAssetLibrary, type AdAsset } from './ad-asset-library';
 import { AdTemplateLibrary, type AdPromptTemplate } from './ad-template-library';
+import { AdGeneratorChat } from './ad-generator-chat';
+import { AdConceptGallery, type AdConcept } from './ad-concept-gallery';
 
 type TabId = 'chat' | 'gallery' | 'assets' | 'templates';
 
-const TABS: { id: TabId; label: string; icon: typeof MessagesSquare; phase: number }[] = [
-  { id: 'chat', label: 'Chat', icon: MessagesSquare, phase: 2 },
-  { id: 'gallery', label: 'Gallery', icon: Images, phase: 2 },
-  { id: 'assets', label: 'Assets', icon: FolderOpen, phase: 1 },
-  { id: 'templates', label: 'Templates', icon: LayoutTemplate, phase: 1 },
+const TABS: { id: TabId; label: string; icon: typeof MessagesSquare }[] = [
+  { id: 'chat', label: 'Chat', icon: MessagesSquare },
+  { id: 'gallery', label: 'Gallery', icon: Images },
+  { id: 'assets', label: 'Assets', icon: FolderOpen },
+  { id: 'templates', label: 'Templates', icon: LayoutTemplate },
 ];
 
 interface Props {
@@ -21,14 +23,19 @@ interface Props {
   brandDnaStatus: string;
   initialAssets: AdAsset[];
   initialTemplates: AdPromptTemplate[];
+  initialConcepts: AdConcept[];
 }
 
 /**
  * Ad Generator workspace — tab-driven shell that replaces the old
- * form-heavy /admin/ad-creatives surface. Phase 1 ships with the Assets
- * tab live (upload + list + tag) and the other three tabs stubbed. Phase
- * 2 wires the chat (intake), gallery (concepts + review), and templates
- * (image→JSON extraction).
+ * form-heavy /admin/ad-creatives surface. Phase 2 brings the chat
+ * (intake) and gallery (concept review) live alongside the phase-1
+ * Assets + Templates tabs.
+ *
+ * Gallery state lives here so the chat can prepend a freshly-generated
+ * batch into the same list the gallery renders — single source of
+ * truth, optimistic updates from card actions flow back through a pair
+ * of callbacks.
  */
 export function AdGeneratorWorkspace({
   clientId,
@@ -36,10 +43,24 @@ export function AdGeneratorWorkspace({
   brandDnaStatus,
   initialAssets,
   initialTemplates,
+  initialConcepts,
 }: Props) {
-  // Default to Assets since it's the only live tab in phase 1. When Chat
-  // ships in phase 2 we'll flip the default.
-  const [activeTab, setActiveTab] = useState<TabId>('assets');
+  const [activeTab, setActiveTab] = useState<TabId>(
+    initialConcepts.length > 0 ? 'gallery' : 'chat',
+  );
+  const [concepts, setConcepts] = useState<AdConcept[]>(initialConcepts);
+
+  const handleBatchComplete = useCallback((fresh: AdConcept[]) => {
+    setConcepts((prev) => [...fresh, ...prev]);
+  }, []);
+
+  const handleUpdate = useCallback((updated: AdConcept) => {
+    setConcepts((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+  }, []);
+
+  const handleDelete = useCallback((id: string) => {
+    setConcepts((prev) => prev.filter((c) => c.id !== id));
+  }, []);
 
   return (
     <div className="cortex-page-gutter space-y-6 py-6">
@@ -57,14 +78,12 @@ export function AdGeneratorWorkspace({
         )}
       </header>
 
-      {/* Tab bar — mirror the analytics treatment so the two pages feel like
-          siblings. Phase-2 tabs are rendered but marked with a subtle
-          "Coming soon" label so Jack can click them and see what's next. */}
       <div className="flex items-center rounded-lg border border-nativz-border bg-surface p-0.5">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
-          const isPlaceholder = tab.phase > 1;
+          const badgeCount =
+            tab.id === 'gallery' && concepts.length > 0 ? concepts.length : null;
           return (
             <button
               key={tab.id}
@@ -78,14 +97,13 @@ export function AdGeneratorWorkspace({
             >
               <Icon size={14} />
               {tab.label}
-              {isPlaceholder && (
+              {badgeCount !== null && (
                 <span
-                  className={`ml-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
+                  className={`ml-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${
                     isActive ? 'bg-accent-surface/60 text-accent-text' : 'bg-surface-hover text-text-muted'
                   }`}
-                  title="Coming in Phase 2"
                 >
-                  soon
+                  {badgeCount}
                 </span>
               )}
             </button>
@@ -93,44 +111,29 @@ export function AdGeneratorWorkspace({
         })}
       </div>
 
-      {activeTab === 'assets' && (
-        <AdAssetLibrary
+      {activeTab === 'chat' && (
+        <AdGeneratorChat
           clientId={clientId}
-          initialAssets={initialAssets}
+          onBatchComplete={handleBatchComplete}
+          onSwitchToGallery={() => setActiveTab('gallery')}
         />
+      )}
+
+      {activeTab === 'gallery' && (
+        <AdConceptGallery
+          concepts={concepts}
+          onUpdate={handleUpdate}
+          onDelete={handleDelete}
+        />
+      )}
+
+      {activeTab === 'assets' && (
+        <AdAssetLibrary clientId={clientId} initialAssets={initialAssets} />
       )}
 
       {activeTab === 'templates' && (
-        <AdTemplateLibrary
-          clientId={clientId}
-          initialTemplates={initialTemplates}
-        />
+        <AdTemplateLibrary clientId={clientId} initialTemplates={initialTemplates} />
       )}
-
-      {activeTab === 'chat' && <ComingSoonPanel tab="chat" />}
-      {activeTab === 'gallery' && <ComingSoonPanel tab="gallery" />}
-    </div>
-  );
-}
-
-type PlaceholderTabId = Extract<TabId, 'chat' | 'gallery'>;
-
-function ComingSoonPanel({ tab }: { tab: PlaceholderTabId }) {
-  const copy: Record<PlaceholderTabId, { title: string; body: string }> = {
-    chat: {
-      title: 'Chat intake — Phase 2',
-      body: 'Natural-language ad generation. Say "make 30 ads emphasizing testimonials, use these product shots" and the Nerd cycles through the 15 templates, grounding each concept in real reviews and winning ads from the asset library.',
-    },
-    gallery: {
-      title: 'Gallery — Phase 2',
-      body: 'Grid view of every generated concept with per-card approve / reject / regenerate. Share link for client review (comments land here before an admin sweeps them into chat commands).',
-    },
-  };
-  const c = copy[tab];
-  return (
-    <div className="rounded-xl border border-dashed border-nativz-border bg-surface/40 p-10 text-center">
-      <h2 className="text-base font-semibold text-text-primary">{c.title}</h2>
-      <p className="mt-2 mx-auto max-w-xl text-sm text-text-muted">{c.body}</p>
     </div>
   );
 }
