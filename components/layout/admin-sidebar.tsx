@@ -381,7 +381,7 @@ export function AdminSidebar({
             >
               {mode === 'nativz' ? (
                 <Image
-                  src="/nativz-logo.svg"
+                  src="/nativz-logo.png"
                   alt="Nativz"
                   width={140}
                   height={52}

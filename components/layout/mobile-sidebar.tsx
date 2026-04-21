@@ -57,7 +57,7 @@ export function MobileSidebar({ children }: MobileSidebarProps) {
         <div className="flex h-16 items-center justify-between border-b border-nativz-border px-4">
           <div className="flex items-center">
             {mode === 'nativz' ? (
-              <Image src="/nativz-logo.svg" alt="Nativz" width={100} height={38} className="h-8 w-auto" />
+              <Image src="/nativz-logo.png" alt="Nativz" width={100} height={38} className="h-8 w-auto" />
             ) : (
               <img src="/anderson-logo-dark.svg" alt="Anderson Collaborative" className="h-8 w-auto" />
             )}

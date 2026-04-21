@@ -41,7 +41,7 @@ export function AgencyLogo() {
       >
         {mode === 'nativz' ? (
           <Image
-            src="/nativz-logo.svg"
+            src="/nativz-logo.png"
             alt="Nativz"
             width={150}
             height={56}

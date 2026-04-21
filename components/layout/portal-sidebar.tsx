@@ -100,7 +100,7 @@ export function PortalSidebar({ userName, avatarUrl, featureFlags, brands, activ
           }`}
         >
           <Image
-            src="/nativz-logo.svg"
+            src="/nativz-logo.png"
             alt="Nativz"
             width={open ? 90 : 28}
             height={open ? 34 : 10}

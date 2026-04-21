@@ -67,6 +67,18 @@ const nextConfig: NextConfig = {
           { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-scripts.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co https://api.openrouter.ai https://*.googleapis.com https://*.tikwm.com https://*.apify.com https://*.reddit.com https://*.brave.com https://vitals.vercel-insights.com https://va.vercel-scripts.com wss://*.supabase.co; frame-src https://www.tiktok.com https://www.youtube.com; object-src 'none'; base-uri 'self'" },
         ],
       },
+      {
+        // Long-cache static logos + icons. Avoids the "logo flashes every
+        // nav" problem — once the browser has it, it won't re-fetch for a
+        // week. Not `immutable` because a rebrand would need to invalidate.
+        source: '/:file(.*\\.(?:png|svg|webp|avif|ico|jpg|jpeg))',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400, stale-while-revalidate=604800',
+          },
+        ],
+      },
     ];
   },
   images: {

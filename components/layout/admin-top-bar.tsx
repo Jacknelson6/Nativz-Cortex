@@ -38,7 +38,7 @@ export function AdminTopBar({
       <div className="flex h-9 shrink-0 items-center">
         {mode === 'nativz' ? (
           <Image
-            src="/nativz-logo.svg"
+            src="/nativz-logo.png"
             alt="Nativz"
             width={120}
             height={32}
