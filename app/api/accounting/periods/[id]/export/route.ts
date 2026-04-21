@@ -88,8 +88,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       'Content-Type': 'text/csv; charset=utf-8',
       'Content-Disposition': `attachment; filename="${filename}"`,
       'Cache-Control': 'no-store',
-      // Leaving this here so logs make sense on the Fluid Compute side:
-      'X-Payroll-Period': labelFor(period.start_date, period.half as 'first-half' | 'second-half'),
+      // RFC 7230 restricts header values to ASCII — the period label contains
+      // `·` and an en-dash, which make Node throw before the body is sent.
+      'X-Payroll-Period': encodeURIComponent(
+        labelFor(period.start_date, period.half as 'first-half' | 'second-half'),
+      ),
     },
   });
 }
