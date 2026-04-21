@@ -428,52 +428,12 @@ export function AdminSidebar({
               {section.items.map((item) => {
                 const active = isActivePath(pathname, item.href, searchParams);
 
-                // Collapsed rail + dropdown parent: render the icon as a
-                // clickable link AND a hover flyout so the children stay
-                // reachable without first expanding the sidebar.
-                if (item.children && !open) {
-                  const childActive = item.children.some((c) => isActivePath(pathname, c.href, searchParams));
-                  return (
-                    <SidebarMenuItem key={item.href} className="group/flyout">
-                      <Link href={item.href}>
-                        <SidebarMenuButton isActive={active || childActive} tooltip={undefined}>
-                          <item.icon size={18} className="shrink-0" />
-                        </SidebarMenuButton>
-                      </Link>
-                      <div
-                        className="absolute left-full top-0 ml-2 z-50 opacity-0 pointer-events-none translate-x-1 transition-[opacity,transform] duration-150 ease-out group-hover/flyout:opacity-100 group-hover/flyout:pointer-events-auto group-hover/flyout:translate-x-0"
-                      >
-                        <div className="min-w-[200px] rounded-lg border border-nativz-border bg-surface shadow-dropdown py-1">
-                          <div className="px-3 pt-1.5 pb-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-                            {item.label}
-                          </div>
-                          <ul className="px-1">
-                            {item.children.map((child) => {
-                              const cActive = isActivePath(pathname, child.href, searchParams);
-                              return (
-                                <li key={child.href}>
-                                  <Link
-                                    href={child.href}
-                                    className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors ${
-                                      cActive
-                                        ? 'text-accent-text bg-accent-surface'
-                                        : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover'
-                                    }`}
-                                  >
-                                    <child.icon size={14} className="shrink-0" />
-                                    <span className="truncate">{child.label}</span>
-                                  </Link>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </div>
-                      </div>
-                    </SidebarMenuItem>
-                  );
-                }
-
-                if (item.children && open) {
+                // Dropdown parent — one render path for collapsed AND expanded
+                // so the label + chevron reveal animates with the same
+                // transition-[max-width,margin,opacity] the flat items below
+                // use. Collapsed mode additionally exposes the children as a
+                // hover flyout so they stay reachable without expanding first.
+                if (item.children) {
                   const childActive = item.children.some((c) => isActivePath(pathname, c.href, searchParams));
                   // `isExpanded` is the OR of "this dropdown contains the
                   // current page" and "user manually toggled it open". The
@@ -482,53 +442,93 @@ export function AdminSidebar({
                   // never navigates, so we don't want it painting itself open.
                   const isExpanded = childActive || expandedMenus.has(item.href);
                   return (
-                    <SidebarMenuItem key={item.href}>
+                    <SidebarMenuItem key={item.href} className={!open ? 'group/flyout' : ''}>
                       <SidebarMenuButton
                         isActive={childActive}
-                        tooltip={item.label}
+                        tooltip={!open ? item.label : undefined}
                         onClick={() => toggleMenu(item.href)}
                       >
                         <item.icon size={18} className="shrink-0" />
-                        {/* `ml-2.5` matches the icon → label gap used by flat
-                            nav items below so parents with a dropdown chevron
-                            don't visually drift left relative to siblings. */}
-                        <span className="ml-2.5 truncate">{item.label}</span>
+                        <span
+                          className={`overflow-hidden whitespace-nowrap transition-[max-width,margin,opacity] duration-200 ease-out ${
+                            open ? 'max-w-[160px] ml-2.5 opacity-100' : 'max-w-0 ml-0 opacity-0'
+                          }`}
+                        >
+                          {item.label}
+                        </span>
                         <ChevronRight
                           size={14}
-                          className={`ml-auto shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
+                          className={`shrink-0 transition-[max-width,margin,opacity,transform] duration-200 ease-out ${
+                            open ? 'ml-auto max-w-4 opacity-100' : 'ml-0 max-w-0 opacity-0'
+                          } ${isExpanded ? 'rotate-90' : ''}`}
                           onClick={(e) => { e.stopPropagation(); toggleMenu(item.href); }}
                         />
                       </SidebarMenuButton>
-                      <div
-                        className="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
-                        style={{
-                          gridTemplateRows: isExpanded ? '1fr' : '0fr',
-                          opacity: isExpanded ? 1 : 0,
-                        }}
-                      >
-                        <div className="overflow-hidden">
-                          <ul className="ml-6 mt-1.5 space-y-1 border-l border-nativz-border pl-2 pb-1">
-                            {item.children.map((child) => {
-                              const cActive = isActivePath(pathname, child.href, searchParams);
-                              return (
-                                <li key={child.href}>
-                                  <Link
-                                    href={child.href}
-                                    className={`flex items-center gap-2 rounded-md px-2 py-2 text-sm font-medium transition-colors ${
-                                      cActive
-                                        ? 'text-accent-text bg-accent-surface'
-                                        : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover'
-                                    }`}
-                                  >
-                                    <child.icon size={16} className="shrink-0" />
-                                    <span className="truncate">{child.label}</span>
-                                  </Link>
-                                </li>
-                              );
-                            })}
-                          </ul>
+
+                      {/* Accordion — expanded rail */}
+                      {open && (
+                        <div
+                          className="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
+                          style={{
+                            gridTemplateRows: isExpanded ? '1fr' : '0fr',
+                            opacity: isExpanded ? 1 : 0,
+                          }}
+                        >
+                          <div className="overflow-hidden">
+                            <ul className="ml-6 mt-1.5 space-y-1 border-l border-nativz-border pl-2 pb-1">
+                              {item.children.map((child) => {
+                                const cActive = isActivePath(pathname, child.href, searchParams);
+                                return (
+                                  <li key={child.href}>
+                                    <Link
+                                      href={child.href}
+                                      className={`flex items-center gap-2 rounded-md px-2 py-2 text-sm font-medium transition-colors ${
+                                        cActive
+                                          ? 'text-accent-text bg-accent-surface'
+                                          : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover'
+                                      }`}
+                                    >
+                                      <child.icon size={16} className="shrink-0" />
+                                      <span className="truncate">{child.label}</span>
+                                    </Link>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
                         </div>
-                      </div>
+                      )}
+
+                      {/* Hover flyout — collapsed rail */}
+                      {!open && (
+                        <div className="absolute left-full top-0 ml-2 z-50 opacity-0 pointer-events-none translate-x-1 transition-[opacity,transform] duration-150 ease-out group-hover/flyout:opacity-100 group-hover/flyout:pointer-events-auto group-hover/flyout:translate-x-0">
+                          <div className="min-w-[200px] rounded-lg border border-nativz-border bg-surface shadow-dropdown py-1">
+                            <div className="px-3 pt-1.5 pb-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+                              {item.label}
+                            </div>
+                            <ul className="px-1">
+                              {item.children.map((child) => {
+                                const cActive = isActivePath(pathname, child.href, searchParams);
+                                return (
+                                  <li key={child.href}>
+                                    <Link
+                                      href={child.href}
+                                      className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors ${
+                                        cActive
+                                          ? 'text-accent-text bg-accent-surface'
+                                          : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover'
+                                      }`}
+                                    >
+                                      <child.icon size={14} className="shrink-0" />
+                                      <span className="truncate">{child.label}</span>
+                                    </Link>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+                        </div>
+                      )}
                     </SidebarMenuItem>
                   );
                 }
