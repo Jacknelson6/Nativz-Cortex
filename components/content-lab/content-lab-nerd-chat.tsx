@@ -14,7 +14,6 @@ import { toast } from 'sonner';
 import { ContentLabConversationExportButton } from './content-lab-conversation-export-button';
 import { ConversationShareButton } from '@/components/ai/conversation-share-button';
 import { CommandsCatalogButton } from '@/components/nerd/commands-catalog-button';
-import { ContentLabClientPickerPill } from './content-lab-client-picker-pill';
 import { ContentLabConversationHistoryRail } from './content-lab-conversation-history-rail';
 import { ContentLabTopicSearchChipBar } from './content-lab-topic-search-chip-bar';
 import { ContentLabAttachResearchDialog } from './content-lab-attach-research-dialog';
@@ -785,28 +784,22 @@ export function ContentLabNerdChat({
             four surfaces now live under the chat (artifacts in the rail,
             everything else automatically reachable from the sidebar). */}
         <header className="relative flex shrink-0 items-center justify-between gap-3 border-b border-nativz-border/40 px-4 py-3 md:px-6">
+          {/* Passive brand-identity display in both modes now — the
+           *  top-bar brand pill handles switching on the admin side, so
+           *  duplicating it in this header was redundant UX and extra
+           *  render weight. */}
           <div className="flex min-w-0 items-center gap-2">
-            {portalMode ? (
-              <>
-                <AgencyClientAvatar
-                  clientName={clientName}
-                  clientLogoUrl={clientLogoUrl}
-                  size="sm"
-                />
-                <div className="flex min-w-0 flex-col">
-                  <span className="truncate text-sm font-semibold text-text-primary">
-                    {clientName}
-                  </span>
-                  <span className="text-xs text-text-muted">Strategy Lab</span>
-                </div>
-              </>
-            ) : (
-              <ContentLabClientPickerPill
-                clientId={clientId}
-                clientName={clientName}
-                clientSlug={clientSlug}
-              />
-            )}
+            <AgencyClientAvatar
+              clientName={clientName}
+              clientLogoUrl={clientLogoUrl}
+              size="sm"
+            />
+            <div className="flex min-w-0 flex-col">
+              <span className="truncate text-sm font-semibold text-text-primary">
+                {clientName}
+              </span>
+              <span className="text-xs text-text-muted">Strategy Lab</span>
+            </div>
           </div>
 
           {!portalMode && (
