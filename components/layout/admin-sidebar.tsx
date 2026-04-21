@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { SidebarModePicker } from '@/components/layout/sidebar-mode-picker';
+import { SidebarCollapsedFlyout } from '@/components/layout/sidebar-collapsed-flyout';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import {
@@ -439,107 +440,78 @@ export function AdminSidebar({
                   // union — the parent button is a pure toggle, clicking it
                   // never navigates, so we don't want it painting itself open.
                   const isExpanded = childActive || expandedMenus.has(item.href);
+
+                  const parentButton = (
+                    <SidebarMenuButton
+                      isActive={childActive}
+                      tooltip={!open ? item.label : undefined}
+                      onClick={() => toggleMenu(item.href)}
+                    >
+                      <item.icon size={18} className="shrink-0" />
+                      <span
+                        className={`overflow-hidden whitespace-nowrap transition-[max-width,margin,opacity] duration-200 ease-out ${
+                          open ? 'max-w-[160px] ml-2.5 opacity-100' : 'max-w-0 ml-0 opacity-0'
+                        }`}
+                      >
+                        {item.label}
+                      </span>
+                      <ChevronRight
+                        size={14}
+                        className={`shrink-0 transition-[max-width,margin,opacity,transform] duration-200 ease-out ${
+                          open ? 'ml-auto max-w-4 opacity-100' : 'ml-0 max-w-0 opacity-0'
+                        } ${isExpanded ? 'rotate-90' : ''}`}
+                        onClick={(e) => { e.stopPropagation(); toggleMenu(item.href); }}
+                      />
+                    </SidebarMenuButton>
+                  );
+
                   return (
-                    <SidebarMenuItem key={item.href} className={!open ? 'group/flyout' : ''}>
-                      <SidebarMenuButton
-                        isActive={childActive}
-                        tooltip={!open ? item.label : undefined}
-                        onClick={() => toggleMenu(item.href)}
-                      >
-                        <item.icon size={18} className="shrink-0" />
-                        <span
-                          className={`overflow-hidden whitespace-nowrap transition-[max-width,margin,opacity] duration-200 ease-out ${
-                            open ? 'max-w-[160px] ml-2.5 opacity-100' : 'max-w-0 ml-0 opacity-0'
-                          }`}
+                    <SidebarMenuItem key={item.href}>
+                      {/* When the rail is collapsed, wrap the parent button
+                          in a portaled hover flyout so children stay reachable
+                          without expanding first. We have to portal — both
+                          Sidebar and SidebarContent carry overflow-hidden, so
+                          an in-tree absolute flyout gets clipped at the rail's
+                          right edge. When expanded, render the button bare. */}
+                      {!open ? (
+                        <SidebarCollapsedFlyout
+                          label={item.label}
+                          items={item.children}
+                          isActive={(href) => isActivePath(pathname, href, searchParams)}
                         >
-                          {item.label}
-                        </span>
-                        <ChevronRight
-                          size={14}
-                          className={`shrink-0 transition-[max-width,margin,opacity,transform] duration-200 ease-out ${
-                            open ? 'ml-auto max-w-4 opacity-100' : 'ml-0 max-w-0 opacity-0'
-                          } ${isExpanded ? 'rotate-90' : ''}`}
-                          onClick={(e) => { e.stopPropagation(); toggleMenu(item.href); }}
-                        />
-                      </SidebarMenuButton>
+                          {parentButton}
+                        </SidebarCollapsedFlyout>
+                      ) : (
+                        parentButton
+                      )}
 
-                      {/* Accordion — renders in BOTH collapsed and expanded
-                          rails whenever this dropdown is expanded. In the
-                          collapsed state children show as icon-only rows so
-                          the reveal animation has something to reveal when
-                          the user hovers to expand. In the expanded state
-                          the guide rail + indent fade in and each label
-                          slides via the same transition the flat items use. */}
-                      <div
-                        className="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
-                        style={{
-                          gridTemplateRows: isExpanded ? '1fr' : '0fr',
-                          opacity: isExpanded ? 1 : 0,
-                        }}
-                      >
-                        <div className="overflow-hidden">
-                          <ul
-                            className={`mt-1.5 space-y-1 pb-1 transition-[margin-left,padding-left,border-color] duration-200 ease-out border-l ${
-                              open
-                                ? 'ml-6 pl-2 border-nativz-border'
-                                : 'ml-0 pl-0 border-transparent'
-                            }`}
-                          >
-                            {item.children.map((child) => {
-                              const cActive = isActivePath(pathname, child.href, searchParams);
-                              return (
-                                <li key={child.href}>
-                                  <Link
-                                    href={child.href}
-                                    title={!open ? child.label : undefined}
-                                    className={`flex items-center rounded-md transition-colors ${
-                                      open ? 'px-2 py-2' : 'h-10 justify-center'
-                                    } ${
-                                      cActive
-                                        ? 'text-accent-text bg-accent-surface'
-                                        : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover'
-                                    }`}
-                                  >
-                                    <child.icon size={16} className="shrink-0" />
-                                    <span
-                                      className={`overflow-hidden whitespace-nowrap text-sm font-medium transition-[max-width,margin,opacity] duration-200 ease-out ${
-                                        open ? 'max-w-[160px] ml-2 opacity-100' : 'max-w-0 ml-0 opacity-0'
-                                      }`}
-                                    >
-                                      {child.label}
-                                    </span>
-                                  </Link>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </div>
-                      </div>
-
-                      {/* Hover flyout — only when the rail is collapsed AND the
-                          dropdown isn't already expanded inline (inline icons
-                          replace the flyout for the active dropdown so the
-                          user gets one source of truth per state). */}
-                      {!open && !isExpanded && (
-                        <div className="absolute left-full top-0 ml-2 z-50 opacity-0 pointer-events-none translate-x-1 transition-[opacity,transform] duration-150 ease-out group-hover/flyout:opacity-100 group-hover/flyout:pointer-events-auto group-hover/flyout:translate-x-0">
-                          <div className="min-w-[200px] rounded-lg border border-nativz-border bg-surface shadow-dropdown py-1">
-                            <div className="px-3 pt-1.5 pb-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-                              {item.label}
-                            </div>
-                            <ul className="px-1">
+                      {/* Inline accordion — only in the expanded rail. The
+                          collapsed rail relies on the hover flyout above, so
+                          we don't render icon-only children inline (they
+                          cluttered the rail for users on a child route). */}
+                      {open && (
+                        <div
+                          className="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
+                          style={{
+                            gridTemplateRows: isExpanded ? '1fr' : '0fr',
+                            opacity: isExpanded ? 1 : 0,
+                          }}
+                        >
+                          <div className="overflow-hidden">
+                            <ul className="mt-1.5 space-y-1 pb-1 ml-6 pl-2 border-l border-nativz-border">
                               {item.children.map((child) => {
                                 const cActive = isActivePath(pathname, child.href, searchParams);
                                 return (
                                   <li key={child.href}>
                                     <Link
                                       href={child.href}
-                                      className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors ${
+                                      className={`flex items-center gap-2 rounded-md px-2 py-2 text-sm font-medium transition-colors ${
                                         cActive
                                           ? 'text-accent-text bg-accent-surface'
                                           : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover'
                                       }`}
                                     >
-                                      <child.icon size={14} className="shrink-0" />
+                                      <child.icon size={16} className="shrink-0" />
                                       <span className="truncate">{child.label}</span>
                                     </Link>
                                   </li>
