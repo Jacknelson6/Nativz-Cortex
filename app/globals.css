@@ -16,8 +16,11 @@ summary {
   --border: #2a2f45;
   --border-light: #1f2337;
   --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --text-secondary: #cbd5e1;
+  /* Muted text on #0f1117 / #1a1d2e backgrounds. #64748b failed WCAG AA
+     (3.5:1 on surface, 3.96:1 on background). #94a3b8 gives 5.55:1 on
+     background and 4.75:1 on surface — passes AA for normal text. */
+  --text-muted: #94a3b8;
   --accent: #046bd2;
   --accent-hover: #0580f0;
   --accent-surface: rgba(4, 107, 210, 0.12);

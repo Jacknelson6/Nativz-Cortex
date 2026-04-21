@@ -77,9 +77,23 @@ export function TopPostsView({
       </div>
 
       {loading ? (
+        // Skeleton card shape matches the loaded card: aspect-[9/16] thumbnail
+        // + caption + metrics row. Needed so CLS doesn't spike when posts land
+        // and the card height grows from thumbnail-only to full card.
         <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
           {Array.from({ length: limit }).map((_, i) => (
-            <Skeleton key={i} className="aspect-[9/16]" />
+            <div key={i} className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
+              <Skeleton className="aspect-[9/16] rounded-none" />
+              <div className="p-3 space-y-2">
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-2/3" />
+                <div className="flex gap-3 pt-1">
+                  <Skeleton className="h-3 w-10" />
+                  <Skeleton className="h-3 w-10" />
+                  <Skeleton className="h-3 w-10" />
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       ) : (posts ?? []).length === 0 ? (
@@ -90,7 +104,7 @@ export function TopPostsView({
         </Card>
       ) : (
         <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-          {(posts ?? []).map((post) => (
+          {(posts ?? []).map((post, index) => (
             <Card
               key={post.id}
               padding="none"
@@ -104,12 +118,17 @@ export function TopPostsView({
               <div className="relative">
                 <div className="aspect-[9/16] bg-surface-hover overflow-hidden rounded-t-xl">
                   {post.thumbnailUrl ? (
+                    // First row is above the fold on desktop (5-col grid) —
+                    // eager-load + high priority so Lighthouse can discover
+                    // the LCP image from initial HTML instead of waiting on
+                    // the lazy-load threshold.
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={post.thumbnailUrl}
                       alt={post.caption ?? 'Post thumbnail'}
                       className="h-full w-full object-cover"
-                      loading="lazy"
+                      loading={index < 5 ? 'eager' : 'lazy'}
+                      fetchPriority={index === 0 ? 'high' : 'auto'}
                     />
                   ) : (
                     <div

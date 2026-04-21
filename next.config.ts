@@ -95,6 +95,12 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: '*.monday.com' },
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
       { protocol: 'https', hostname: 'images.unsplash.com' },
+      // Client-brand logos come from arbitrary customer domains (Shopify
+      // CDNs, client websites, etc.). Cortex is an internal admin-only tool
+      // behind auth, so the open image-proxy DoS risk is contained. Catch-all
+      // lets Next/Image resize these down to display size instead of serving
+      // the raw file (some client logos are 1000×990 PNGs for 20×20 slots).
+      { protocol: 'https', hostname: '**' },
     ],
   },
   serverExternalPackages: [

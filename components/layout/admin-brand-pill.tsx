@@ -235,7 +235,6 @@ function BrandIcon({ brand, size }: { brand: AdminBrand | null; size: number }) 
         height={size}
         className="shrink-0 rounded-md object-cover"
         style={{ width: size, height: size }}
-        unoptimized
       />
     );
   }
