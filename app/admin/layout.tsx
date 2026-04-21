@@ -1,6 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { unstable_cache } from 'next/cache';
 
 /** Avoid static prerender during `next build` when Preview env omits Supabase vars. */
 export const dynamic = 'force-dynamic';
@@ -21,20 +20,6 @@ import { BannerStrip } from '@/components/shared/banner-strip';
 import { ActiveBrandProvider } from '@/lib/admin/active-client-context';
 import { getActiveAdminClient, listAdminAccessibleBrands } from '@/lib/admin/get-active-client';
 
-const getCachedUser = unstable_cache(
-  async (userId: string) => {
-    const adminClient = createAdminClient();
-    const { data } = await adminClient
-      .from('users')
-      .select('full_name, avatar_url')
-      .eq('id', userId)
-      .single();
-    return data;
-  },
-  ['admin-layout-user'],
-  { revalidate: 300 },
-);
-
 export default async function AdminLayout({
   children,
 }: {
@@ -53,36 +38,18 @@ export default async function AdminLayout({
       );
     }
 
-    let userName = '';
-    let avatarUrl: string | null = null;
-    try {
-      const userData = await getCachedUser(user.id);
-      userName = userData?.full_name || user.email || '';
-      avatarUrl = userData?.avatar_url || null;
-    } catch {
-      userName = user.email || '';
-      avatarUrl = null;
-    }
-
-    // Read sidebar preferences uncached — the 5-min cache on `getCachedUser`
-    // would mask toggle changes until it expires.
-    let hiddenSidebarItems: string[] = [];
-    try {
-      const adminClient = createAdminClient();
-      const { data: prefs } = await adminClient
+    // One users-table read covers all three fields the shell needs. The
+    // previous split (cached full_name/avatar_url + uncached hidden_sidebar_items)
+    // meant the first nav of every session hit the DB twice. Merging pulls
+    // it down to a single query; we run it in parallel with brand resolution
+    // so the shell renders as soon as the slowest of the three settles.
+    const adminClient = createAdminClient();
+    const [userRowRes, active, availableBrands] = await Promise.all([
+      adminClient
         .from('users')
-        .select('hidden_sidebar_items')
+        .select('full_name, avatar_url, hidden_sidebar_items')
         .eq('id', user.id)
-        .single();
-      hiddenSidebarItems = (prefs?.hidden_sidebar_items as string[] | null) ?? [];
-    } catch { /* silent — ship without filtering */ }
-
-    // Resolve the admin's working brand + accessible brand list in parallel
-    // so the top-bar pill can render its popover without a post-mount fetch.
-    // Both queries are independent; Promise.all keeps this off a waterfall.
-    // Roster failure degrades gracefully — an empty list just renders the
-    // pill in its "select a brand" state rather than crashing the shell.
-    const [active, availableBrands] = await Promise.all([
+        .single(),
       getActiveAdminClient().catch(() => ({
         brand: null,
         source: 'none' as const,
@@ -90,6 +57,12 @@ export default async function AdminLayout({
       })),
       listAdminAccessibleBrands().catch(() => []),
     ]);
+
+    const userRow = userRowRes.data;
+    const userName = userRow?.full_name || user.email || '';
+    const avatarUrl = userRow?.avatar_url || null;
+    const hiddenSidebarItems =
+      (userRow?.hidden_sidebar_items as string[] | null) ?? [];
 
     return (
       <SWRProvider>

@@ -23,14 +23,40 @@ export default async function AdminNewSearchPage({
   const prefillQuery = typeof queryParam === 'string' ? queryParam : '';
 
   const supabase = createAdminClient();
+  const serverSupabase = await createServerSupabaseClient();
+
+  // Kick off the auth check + user-name lookup as a single chained promise
+  // so it can run alongside the other fetches. None of the roster / vault /
+  // history queries depend on the authed user's id, so there's no reason
+  // for them to wait on each other.
+  const greetingPromise = (async () => {
+    const {
+      data: { user: authUser },
+    } = await serverSupabase.auth.getUser();
+    if (!authUser) return null;
+    const { data: userRow } = await serverSupabase
+      .from('users')
+      .select('full_name')
+      .eq('id', authUser.id)
+      .maybeSingle();
+    const raw = userRow?.full_name?.trim();
+    if (raw) return raw.split(/\s+/)[0] ?? null;
+    if (authUser.email) return authUser.email.split('@')[0] ?? null;
+    return null;
+  })();
 
   // Vault supplies display name when present; agency comes from vault first, else Postgres (admin client profile)
-  const [vaultClients, rosterResult] = await Promise.all([
+  const [vaultClients, rosterResult, historyItems, userFirstName] = await Promise.all([
     getVaultClients(),
     selectClientsWithRosterVisibility<ResearchHubDbClientRow>(supabase, {
       select: 'id, slug, logo_url, is_active, agency',
       onlyActive: true,
     }),
+    fetchHistory({
+      limit: TOPIC_SEARCH_HUB_HISTORY_LIMIT,
+      includeIdeas: false,
+    }),
+    greetingPromise,
   ]);
 
   const dbClients = rosterResult.data;
@@ -49,29 +75,6 @@ export default async function AdminNewSearchPage({
       agency: agencyFromVault || agencyFromDb || null,
     };
   }).sort((a, b) => a.name.localeCompare(b.name));
-
-  const historyItems = await fetchHistory({
-    limit: TOPIC_SEARCH_HUB_HISTORY_LIMIT,
-    includeIdeas: false,
-  });
-  const serverSupabase = await createServerSupabaseClient();
-  const {
-    data: { user: authUser },
-  } = await serverSupabase.auth.getUser();
-  let userFirstName: string | null = null;
-  if (authUser) {
-    const { data: userRow } = await serverSupabase
-      .from('users')
-      .select('full_name')
-      .eq('id', authUser.id)
-      .maybeSingle();
-    const raw = userRow?.full_name?.trim();
-    if (raw) {
-      userFirstName = raw.split(/\s+/)[0] ?? null;
-    } else if (authUser.email) {
-      userFirstName = authUser.email.split('@')[0] ?? null;
-    }
-  }
 
   return (
     <Suspense
