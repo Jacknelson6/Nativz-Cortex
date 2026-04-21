@@ -1,55 +1,78 @@
-# Spec — Brand-native analysis flows (our brand / competitors / prospects)
+# Spec — Brand-native analysis flows (our brand / competitors)
 
-**Status:** Draft — open questions need Jack's input
-**Author:** Claude (Cortex session, 2026-04-21)
+**Status:** Resolved — executing
+**Author:** Claude (Cortex session, 2026-04-21; revised through Jack's lunch-break answers)
 **Parent:** NAT-57 (session-level brand context), NAT-?? (to file)
 
 ---
 
 ## Context
 
-After NAT-57 shipped the session-level brand pill, every tool can
-(in theory) default its "which brand am I analyzing for?" context from the
-top-bar pill instead of prompting. We've stripped most of the in-page
-pickers. The remaining friction is on the **analysis surfaces** — Trend
-Finder, Competitor Spying, Audit, Ad Creatives — where the question isn't
-just "which client are we working on?" but **"are we analyzing _our own_
-brand, one of their _competitors_, or a totally _new prospect_?"**
+After NAT-57 shipped the session-level brand pill, every tool defaults
+its "which brand am I analyzing for?" context from the top-bar pill
+instead of prompting. We've stripped most of the in-page pickers. The
+remaining friction is on the **analysis surfaces** — Trend Finder,
+Competitor Spying, Audit, Ad Creatives — where the question isn't just
+"which client are we working on?" but **"are we analyzing _our own_
+brand or one of their _competitors_?"**
 
-Jack's observation: since the attached brand has a website URL (and often
-Zernio-connected socials, brand DNA, and a client record), a lot of the
-"input a URL and let me scrape it" friction goes away. We already know
-everything about the session brand. What we don't know — and what the
-user typically types — is the URL of _someone else_ we want to compare to
-or scout.
+Jack's observation: the attached brand already has a website URL, linked
+social handles, a client record, and optionally Zernio — so the "input
+a URL and let me scrape it" friction is unnecessary for the common
+case. What we don't know (and what the user typically types) is the URL
+of _someone else_ we want to compare to.
+
+### Why no "Prospect" mode
+
+An earlier draft had three modes — Our brand / Competitor / Prospect —
+where Prospect covered "live-demo on a sales call." Jack killed it:
+prospects are already a `clients` row by the time we run analysis on
+them, so "scrape a totally unknown brand" isn't a real user journey —
+it's just "Our brand mode on a client that doesn't have Zernio yet."
+
+That collapses the model to two modes and pushes the data-source
+question ("Zernio vs scrape?") into a resolver beneath the mode.
 
 ## Goals
 
 1. **Brand-native first.** When the session brand is pinned, every
    analysis tool opens with the brand's data pre-loaded: URL, social
-   handles from Zernio, pillar knowledge, recent audit. Zero re-typing.
-2. **Explicit modes.** Surface three distinct analysis intents as
-   first-class modes, not UI ambiguity:
-   - **Our brand** — deep analysis of the attached client's own presence
-     (what's working on our socials, what our audits say, what our pillars
-     are).
-   - **Competitor** — a competitor of the attached client. Results get
-     cross-referenced against _our_ data so the output is comparative
-     ("they post X times per week, we post Y").
-   - **Prospect** — a brand we're courting / haven't signed. Live-demo
-     path for sales calls. Does NOT cross-reference against any existing
-     client.
-3. **One input. One verdict.** Whatever analysis path, the user types a
-   single thing (URL / query / handle) and picks a mode. The tool knows
-   the rest.
+   handles, pillar knowledge, recent audit. Zero re-typing.
+2. **Two explicit modes.**
+   - **Our brand** — deep analysis of the attached client's own presence.
+   - **Competitor** — a competitor of the attached client; results diff
+     against _our_ data so the output is comparative.
+3. **One input, one verdict.** At most one thing typed (URL / query /
+   handle) and a mode inference. Tool knows the rest.
+4. **Zernio-or-scrape is invisible.** Resolver returns one shape; tools
+   never branch on data source.
+5. **No AI competitor-sourcing.** Competitor social profiles come from
+   (a) website scrape of the competitor's site or (b) admin manually
+   pasted links. Never from an LLM-generated guess. Bad handles waste
+   scrapes and produce misleading diffs — explicit input is cheap and
+   deterministic.
 
 ## Non-goals
 
-- Re-architecting Zernio / social ingestion. This spec assumes the
-  existing social-profile and brand-DNA plumbing.
-- Changing how audits, topic searches, TikTok Shop searches are
-  _executed_ at the API level. This is a UX + routing layer, not a
-  pipeline redesign.
+- Re-architecting Zernio / social ingestion. Existing `social_profiles`
+  table + a thin resolver.
+- Changing how audits / topic searches / TikTok Shop searches run at
+  the API layer. This is UX + routing, not a pipeline redesign.
+
+---
+
+## Resolved design decisions (Jack's lunch break, 2026-04-21)
+
+| Question | Answer |
+|---|---|
+| Mode UX | **Inferred** (B). Session brand → "Our brand". Pasted URL not matching → "Competitor" with override pill. |
+| Data-source chip | **Hidden.** Same data shape from both sources; source stays behind the veil. |
+| Data shape | **Identical across Zernio + scrape.** Surface the intersection of fields so comparisons are apples-to-apples. Zernio might have more internally, but the UI shows only what both can produce. |
+| Zernio-covered platforms | **YouTube, TikTok, Instagram, Facebook.** All four are scrape-capable too. |
+| Competitor discovery | **Always manual or website-scrape.** No AI guessing. |
+| Onboarding enforcement | Per-platform: every client has a slot for YT / TT / IG / FB. Each slot is one of: linked handle, "No account", or unset. "Unset" blocks analysis tools for that platform only. |
+| Competitor spying scope | **Organic Social + TikTok Shop only for now.** Meta Ads + Ecom retired from nav (pages may stay but hidden from navigation). |
+| Brand profile | New **client-visible** portal page at `/portal/brand-profile`. Shows brand info + linked socials + competitor list. Deep detail (brand DNA raw, audit history, billing, etc.) stays admin-only. |
 
 ---
 
@@ -57,149 +80,195 @@ or scout.
 
 ### Tool inventory + mapping
 
-| Today's surface | Today's input | Post-spec mode(s) |
+| Today's surface | Post-spec mode(s) | Notes |
 |---|---|---|
-| **Trend Finder** (`/admin/search/new`) | query + optional client attach | **Our brand** (default): topic search scoped to session brand's keywords + pillars. **Competitor**: topic search for a named competitor, diffed against our performance. **Prospect**: live topic search against a URL/handle with no client attach. |
-| **Competitor Spying → Organic Social** (`/admin/analyze-social`) | URL + optional client attach | **Our brand** (default): audit of session brand's own URL. **Competitor**: audit of a competitor URL diffed against ours. **Prospect**: audit of an unknown URL for demo purposes. |
-| **Competitor Spying → Meta Ads / Ecom / TikTok Shop** | manual URL / handle / search | Same three-mode split. Our brand = scrape our own; Competitor = scrape theirs and diff; Prospect = scrape any. |
-| **Ad Generator** (`/admin/ad-creatives` post-flatten) | session brand only | **Our brand only.** Generating ads for a competitor or prospect doesn't make sense. |
-| **Strategy Lab** (`/admin/strategy-lab` post-flatten) | session brand only | **Our brand only.** Strategy Lab is about producing strategy for our client. |
-| **Brain / Knowledge** | session brand only | **Our brand only.** |
-
-### Mode picker UX
-
-Two candidate patterns — need Jack's input on which:
-
-**A) Tab / segmented control above the input:**
-```
-┌──────────────────────────────────────────────────┐
-│ ○ Our brand   ● Competitor   ○ Prospect          │
-├──────────────────────────────────────────────────┤
-│ [ Input field — placeholder changes per mode ]   │
-└──────────────────────────────────────────────────┘
-```
-- Pro: discoverable, mode is visible at all times
-- Pro: keyboard-switchable (←/→ like tabs)
-- Con: takes vertical space on every analysis tool
-
-**B) Smart single input with inferred mode:**
-- User types a URL → detect domain match against session brand → auto-mode "Our brand" (just hit Enter) OR "Competitor" if match against `social_competitors` table OR "Prospect" otherwise.
-- A pill above shows the inferred mode, clickable to override.
-- Pro: fastest for the common case
-- Con: more magic, error-prone when brand has multiple domains or when a competitor domain is close to ours
-
-Recommendation: **A** — explicit. Let it be obvious what mode you're in.
+| **Trend Finder** (`/admin/search/new`) | Our brand (session) / Competitor (paste URL) | No URL typing for Our brand — resolved from session brand's `website_url` + linked socials. |
+| **Competitor Spying → Organic Social** (`/admin/analyze-social`) | Our brand / Competitor | Competitor picker auto-suggests the client's saved competitor list first. |
+| **Competitor Spying → TikTok Shop** | Our brand / Competitor | Same pattern. |
+| **Competitor Spying → Meta Ads** | — | **Retired from nav.** Files may remain but the flow is dormant. |
+| **Competitor Spying → Ecom stores** | — | **Retired from nav.** Same. |
+| **Ad Generator** (`/admin/ad-creatives`) | Our brand only | |
+| **Strategy Lab** (`/admin/strategy-lab`) | Our brand only | |
+| **Brain / Knowledge** | Our brand only | |
 
 ### Data flow per mode
 
 **Our brand mode:**
-- Skip URL/query input for URL-based tools — we already know the session
-  brand's `website_url`. Show it passively ("Analyzing allshuttersandblinds.com").
-- For topic search: pre-fill the query suggestion from the brand's
-  `topic_keywords` column; user can override.
-- Automatically cross-link the result to the brand (existing `attached_client_id` column).
-- Pull and display **actual performance data** from Zernio where available
-  (follower counts, post frequency, last 30d reach) as context above the
-  results. Today's audit pipeline only looks at public-facing data;
-  brand-native mode augments with internal social metrics.
+- No URL input for URL-based tools — use session brand's `website_url`
+  and `social_profiles` rows.
+- Topic search: pre-fill query from `topic_keywords`; user can override.
+- Result auto-linked to brand (`attached_client_id`).
+- Performance-data panel above results, via the resolver.
 
 **Competitor mode:**
-- User types URL or handle. Required.
-- Result is diffed against the session brand's own data — side-by-side
-  cards ("them: 50k followers / us: 12k", "they post 8/wk / we post 3/wk").
-- Saved under the session brand as a `competitor_of_client_id` row so it
-  appears in that client's competitive intel over time.
+- User picks from the brand's saved competitor list **or** pastes a URL
+  inline. URL paste path also saves the competitor to the list for
+  future use (with admin confirmation prompt).
+- Always scrape-based.
+- Result diffed against our own data — side-by-side cards.
+- Appears in that client's competitor intel over time.
 
-**Prospect mode:**
-- User types URL or handle. Required.
-- No cross-reference, no save-to-client. Results persist only in the
-  short-term `prospect_audits` table (TTL ~30 days, or until converted
-  to a client).
-- UI hint: "Prospect audits don't save to any client. Good for live
-  sales demos."
-- Option at the bottom of the result: "Onboard this prospect" →
-  `/admin/clients/onboard` with the scraped data pre-filled.
+### The data resolver — Zernio-or-scrape
+
+```ts
+// lib/analysis/resolve-brand-metrics.ts
+export async function resolveBrandMetrics(
+  clientId: string,
+  network: 'instagram' | 'tiktok' | 'facebook' | 'youtube',
+): Promise<BrandMetrics | NoAccountMarker> {
+  const profile = await getLinkedSocialProfile(clientId, network);
+  if (!profile) throw new MissingProfileError(clientId, network);
+  if (profile.no_account) return { noAccount: true as const };
+
+  if (profile.late_account_id) {
+    return fetchZernioMetrics(profile.late_account_id, network);
+  }
+  return scrapePublicMetrics(profile.handle, network);
+}
+```
+
+The resolver's return type hides whether data came from Zernio or a
+scrape. The UI shows whichever field set both paths produce — same
+fields, same shape. No "source: Zernio" chip anywhere.
+
+### The onboarding invariant (revised)
+
+Every client record has **four platform slots** — YouTube, TikTok,
+Instagram, Facebook. Each slot is one of three states:
+
+- **Linked** — a `social_profiles` row exists for (client, platform).
+- **No account** — admin has explicitly declared the client has no
+  presence on this platform. Analysis tools skip it silently.
+- **Unset** — neither linked nor declared. Analysis tools surface a
+  prompt: "Add a handle or mark 'no account'".
+
+Enforcement:
+
+1. **Onboarding** (`/admin/clients/onboard`) — scrape the client's
+   website for socials. For each found handle → pre-fill as Linked. For
+   each platform missing → admin decides Linked / No account before
+   saving. No more "skip and fill later."
+2. **Retroactive backfill** — existing clients get a one-time prompt
+   until all four slots are resolved.
+3. **Visible on brand profile (portal)** — clients see their own slot
+   states. Admin-side (`/admin/clients/[slug]/settings/brand`) has the
+   full management UI.
+
+### The data resolver + `social_profiles` schema changes
+
+We already have `social_profiles` (migrations 026 + 027). We need one
+additional column:
+
+```sql
+ALTER TABLE social_profiles
+  ADD COLUMN IF NOT EXISTS no_account BOOLEAN NOT NULL DEFAULT FALSE;
+```
+
+A `no_account = TRUE` row encodes "this client is NOT on this platform"
+— platform field still populated, handle/tokens can be NULL. The
+presence of the row itself encodes "admin has decided." Absence = Unset.
+
+Alternative considered: separate enum column `status ('linked'|'no_account'|'unset')`.
+Rejected because Unset is "no row at all" by nature.
+
+### The competitor list
+
+New table (or re-use `social_competitors` if the schema fits):
+
+```sql
+CREATE TABLE IF NOT EXISTS client_competitors (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  website_url TEXT,
+  instagram_handle TEXT,
+  tiktok_handle TEXT,
+  facebook_handle TEXT,
+  youtube_handle TEXT,
+  notes TEXT,
+  created_by UUID REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+Populated by:
+1. **Website scrape** during onboarding or first audit — parses obvious
+   "competitors" mentions on a competitor's homepage / "alternatives"
+   style SEO pages. If found → suggested, admin confirms before save.
+2. **Admin manual entry** on `/admin/clients/[slug]/settings/brand`
+   under a "Competitors" section. Paste URL + socials, save.
+3. **Organic Social audit** — when a user pastes a competitor URL, we
+   auto-save it (with consent prompt).
+
+When launching a Competitor-mode analysis:
+- Show the brand's saved competitor list as auto-suggestions.
+- Allow picking one with one click → pre-fills socials.
+- Or allow pasting a fresh URL + socials for a one-off.
 
 ### Implementation sketch
 
 ```
+app/portal/brand-profile/
+  page.tsx                         ← client-visible brand profile
+
+app/admin/clients/[slug]/settings/brand/
+  page.tsx                         ← existing; add <LinkedSocialsSection/> + <CompetitorsSection/>
+
+components/clients/
+  linked-socials-section.tsx       ← admin UI to link/unlink/mark-no-account per platform
+  competitors-section.tsx          ← admin UI for competitor list
+  brand-profile-view.tsx           ← shared read-only block used by portal
+
 components/analysis/
-  mode-selector.tsx        ← segmented control (3 modes)
-  brand-native-input.tsx   ← input that reads session brand for "Our brand"
-  competitor-input.tsx
-  prospect-input.tsx
-  analysis-shell.tsx       ← wraps mode-selector + appropriate input
+  mode-pill.tsx                    ← inferred-mode indicator with override popover
+  brand-native-input.tsx
+  competitor-input.tsx             ← picker with saved-list suggestions + URL paste
+  analysis-shell.tsx
 
 lib/analysis/
-  resolve-our-brand.ts     ← pulls session brand + zernio metrics
+  resolve-brand-metrics.ts
+  resolve-our-brand.ts
   resolve-competitor.ts
-  resolve-prospect.ts
+  infer-analysis-mode.ts           ← URL → 'our-brand' | 'competitor'
+  scrape-competitor-socials.ts     ← website URL → { ig, tt, fb, yt } or nulls
 ```
 
-Each tool (`trend-finder`, `audit-hub`, `meta-ads`, etc.) drops its
-current custom input block and renders `<AnalysisShell toolId="…" />`
-with its own output area below.
-
 ---
 
-## Open questions for Jack
+## Phased rollout
 
-1. **Mode UX** — A (explicit tabs), B (inferred with override), or C (you have a better idea)?
+**Phase 1 — concrete, no spec-dependency (✅ shipped earlier today):**
+- `/admin/strategy-lab/[clientId]` → `/admin/strategy-lab`
+- `/admin/ad-creatives-v2/[clientId]` → `/admin/ad-creatives`
+- Trend Finder inline brand popover stripped.
 
-2. **"Our brand" data depth** — When analyzing our own brand, how much
-   Zernio data should surface inline vs linking out to Analytics? E.g.,
-   on the audit page, should I show our own brand's last-30d reach /
-   engagement / follower growth right there, or just "see Analytics"?
+**Phase 2 — brand profile + competitor infra (executing now):**
+- Retire Meta Ads + Ecom from sidebar (keep routes dormant for now).
+- Kill AI-based competitor discovery path.
+- DB migration: `social_profiles.no_account` + `client_competitors` table.
+- Admin UI: Linked Social Profiles + Competitors sections on brand settings.
+- Portal UI: `/portal/brand-profile` page.
 
-3. **Prospect persistence** — Is 30 days right? Or save forever until
-   manually deleted? Or never save (ephemeral in-session only)?
+**Phase 3 — resolver + onboarding (next session):**
+- `resolve-brand-metrics.ts` unit-tested against both branches.
+- Onboarding flow captures per-platform slots (Linked / No account).
+- Retroactive backfill prompt for existing clients.
 
-4. **Prospect → onboarding flow** — You mentioned scraping prospect socials
-   live on a call. The scraped profile — do we save it raw to a
-   `prospect_profiles` table so the "Onboard this prospect" CTA pre-fills
-   a real client record, or is it always re-scraped during onboarding?
+**Phase 4 — analysis shell (next session):**
+- `<AnalysisShell>` + inferred mode pill.
+- Pilot on Organic Social audit.
 
-5. **Competitor diff source** — For the "them vs us" side-by-side, do we
-   pull _our_ side from:
-   - (a) Zernio live data (rate-limited, fresh)?
-   - (b) The most recent audit we ran on ourselves (cheap, might be stale)?
-   - (c) Both — show live stats + link to the audit for deeper context?
-
-6. **Which social networks does Zernio cover?** I need to know where the
-   data will come from. Also: is there a generic "connected social"
-   abstraction today, or is it Zernio-specific?
-
-7. **Multi-competitor tracking** — Right now `social_competitors` is a
-   manual list. Should "Competitor mode" automatically add to that list,
-   or keep it as a separate ad-hoc search path?
-
-8. **Modes available per tool** — confirm the mapping table above. Any
-   tools where one mode doesn't make sense? E.g. is TikTok Shop
-   "Our brand" mode even useful (the idea there is scouting _other_
-   people's products), or is it Competitor/Prospect only?
-
----
-
-## Phased rollout (once questions answered)
-
-**Phase 1 — concrete, no spec-dependency (executing now):**
-- Flatten `/admin/strategy-lab/[clientId]` → `/admin/strategy-lab` (read
-  session brand from cookie).
-- Rename + flatten `/admin/ad-creatives-v2/[clientId]` →
-  `/admin/ad-creatives` (after retiring v1 hub).
-- Strip Trend Finder's inline brand popover — default to session brand.
-
-**Phase 2 — pilot on Audit, then broaden:**
-- Build `<AnalysisShell>` + mode-selector primitive.
-- Wire Audit (`/admin/analyze-social`) as the first tool.
-- Get Jack's approval on the UX shape before expanding.
-
-**Phase 3 — roll out to the rest:**
-- Trend Finder, Meta Ads, Ecom Tracker, TikTok Shop Hub adopt
-  `<AnalysisShell>`.
+**Phase 5 — broader rollout:**
+- Trend Finder, TikTok Shop adopt `<AnalysisShell>`.
 - Retire each tool's bespoke input block.
 
-**Phase 4 — "our brand" data surfacing:**
-- Add Zernio-powered performance context panel to "Our brand" mode on
-  applicable tools.
-- Only after phases 2–3 prove the pattern.
+---
+
+## Deferred / explicit non-scope
+
+- Meta Ads + Ecom competitor spying surfaces. Routes remain but hidden
+  from navigation until Jack re-prioritizes.
+- Prospect mode / `prospect_audits` table. Scrapped.
+- "Source: Zernio / scrape" chip. Scrapped.
+- AI-generated competitor lists. Scrapped.

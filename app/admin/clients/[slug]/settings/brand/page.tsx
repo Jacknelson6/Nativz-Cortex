@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { BrandSettingsForm } from '@/components/clients/settings/brand-settings-form';
 import { BrandDNAView } from '@/components/brand-dna/brand-dna-view';
+import { LinkedSocialsSection } from '@/components/clients/linked-socials-section';
+import { CompetitorsSection } from '@/components/clients/competitors-section';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,6 +45,17 @@ export default async function ClientSettingsBrandPage({
   return (
     <div className="space-y-10">
       <BrandSettingsForm slug={slug} />
+
+      {/* NAT-57 follow-up: social slots + competitors. Placed above brand
+          DNA because they're the new onboarding-invariant surfaces — every
+          client needs all four platform slots resolved (linked or
+          no-account) before analysis tools work, so they deserve top
+          billing. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <LinkedSocialsSection clientId={client.id} />
+        <CompetitorsSection clientId={client.id} />
+      </div>
+
       <div className="border-t border-nativz-border pt-8">
         <BrandDNAView
           clientId={client.id}

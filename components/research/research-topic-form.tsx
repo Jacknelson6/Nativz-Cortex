@@ -7,9 +7,13 @@ import {
   ChevronDown,
   Clock,
   Compass,
+  Globe,
   HelpCircle,
   Loader2,
+  MessageCircle,
+  Music,
   X,
+  Youtube,
 } from 'lucide-react';
 import { ClientLogo } from '@/components/clients/client-logo';
 import type { ClientOption } from '@/components/ui/client-picker';

@@ -19,8 +19,6 @@ import {
   Receipt,
   Settings as SettingsIcon,
   Users,
-  Facebook,
-  Store,
   ShoppingBag,
   Bell,
   Camera,
@@ -88,13 +86,17 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/admin/search/new', label: 'Trend Finder', icon: TrendingUp },
       { href: '/admin/strategy-lab', label: 'Strategy Lab', icon: MessagesSquare },
       {
+        // NAT-57 follow-up (2026-04-21): Meta Ads + Ecom retired from nav.
+        // Routes remain live for any existing deep links, but we're not
+        // surfacing them while the brand-native analysis shell is being
+        // built. Organic Social + TikTok Shop are the only spying paths
+        // we're investing in right now — everything else gets re-evaluated
+        // after the resolver lands.
         href: '/admin/analyze-social',
         label: 'Competitor Spying',
         icon: ScanSearch,
         children: [
           { href: '/admin/analyze-social', label: 'Organic Social', icon: Users },
-          { href: '/admin/competitor-tracking/meta-ads', label: 'Meta Ads', icon: Facebook },
-          { href: '/admin/competitor-tracking/ecom', label: 'Ecom stores', icon: Store },
           { href: '/admin/competitor-tracking/tiktok-shop', label: 'TikTok Shop', icon: ShoppingBag },
         ],
       },

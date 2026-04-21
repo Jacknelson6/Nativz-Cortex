@@ -490,7 +490,7 @@ async function scrapeOneCandidate(
     return { type: 'success', competitor: stub };
   }
 
-  let socials = siteResult.socialLinks ?? [];
+  const socials = siteResult.socialLinks ?? [];
 
   // If the website surfaced nothing — or surfaced socials but none overlap
   // with the target's platforms — fall back to Apify platform-native search.
@@ -690,59 +690,26 @@ function detectSocialFromUrl(raw: string): { platform: AuditPlatform; username: 
  * re-scrape manually).
  */
 export async function discoverCompetitorsByWebsite(
-  websiteContext: WebsiteContext | null,
-  targetPlatforms: PlatformReport[],
-  maxCompetitors: number = DEFAULT_TARGET_COMPETITORS,
+  _websiteContext: WebsiteContext | null,
+  _targetPlatforms: PlatformReport[],
+  _maxCompetitors: number = DEFAULT_TARGET_COMPETITORS,
 ): Promise<CompetitorDiscoveryResult> {
-  const failures: CompetitorDiscoveryFailure[] = [];
-  const competitors: CompetitorProfile[] = [];
-
-  if (!websiteContext) {
-    return { competitors, failures };
-  }
-
-  const targetPlatformNames: AuditPlatform[] = targetPlatforms.map((p) => p.platform);
-  const targetSignals = targetPlatforms.map((p) => ({
-    platform: p.platform,
-    topHashtags: getTopHashtags(p.videos, 10),
-    followers: p.profile.followers,
-  }));
-
-  const candidates = await suggestCompetitorWebsites(websiteContext, targetSignals);
-  if (candidates.length === 0) {
-    console.warn('[audit] LLM returned zero competitor candidates');
-    return { competitors, failures };
-  }
-  console.log(
-    `[audit] LLM suggested ${candidates.length} competitor candidates: ${candidates.map((c) => c.name).join(', ')}`,
-  );
-
-  // Serial: avoid hammering Apify and any competitor's host in parallel.
-  // Enforce a global time budget so we can't blow past the Vercel 300s
-  // function limit and leave the audit stuck in `processing`.
-  const discoveryStartMs = Date.now();
-  for (const candidate of candidates) {
-    if (competitors.length >= maxCompetitors) break;
-    const elapsedMs = Date.now() - discoveryStartMs;
-    if (elapsedMs > DISCOVERY_TIME_BUDGET_MS) {
-      console.warn(
-        `[audit] competitor discovery exceeded ${Math.round(DISCOVERY_TIME_BUDGET_MS / 1000)}s budget — stopping early with ${competitors.length} competitors`,
-      );
-      failures.push({
-        name: candidate.name,
-        website: candidate.website,
-        reason: 'discovery time budget exceeded — skipped',
-      });
-      break;
-    }
-
-    const result = await scrapeOneCandidate(candidate, targetPlatformNames, discoveryStartMs);
-    if (result.type === 'success') {
-      competitors.push(result.competitor);
-    } else {
-      failures.push(result.failure);
-    }
-  }
-
-  return { competitors, failures };
+  // NAT-57 follow-up (2026-04-21): AI-seeded competitor discovery retired.
+  // The old flow asked an LLM for 5-8 brand names, then scraped their
+  // websites for socials. Even with the website-grounding step, the LLM
+  // routinely suggested brands that weren't real competitors (wrong
+  // niche, wrong region, hallucinated outright) — so the comparison
+  // charts ended up noisy and admins lost trust in benchmarking.
+  //
+  // New contract: competitors always come from an explicit source —
+  // the saved list on the client's brand profile, or a manual paste
+  // on the audit form (`analysis_data.competitor_urls_override`). The
+  // process route already handles that branch via `scrapeProvidedCompetitors`;
+  // this function now returns empty so the "LLM fallback" branch is a no-op.
+  //
+  // The rest of the file's helpers (scrapeOneCandidate,
+  // suggestCompetitorWebsites, etc.) are kept so a future
+  // "scrape-THEIR-website-for-mentioned-competitors" flow can reuse
+  // the scrape helpers without resurrecting the LLM path.
+  return { competitors: [], failures: [] };
 }

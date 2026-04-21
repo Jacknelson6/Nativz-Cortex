@@ -8,7 +8,6 @@ import {
   Users,
   Eye,
   TrendingUp,
-  Sparkles,
   ExternalLink,
   Loader2,
   X,
@@ -84,10 +83,6 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
   const [resolving, setResolving] = useState(false);
   const [resolved, setResolved] = useState<ResolvedSocials | null>(null);
   const [selectedProfiles, setSelectedProfiles] = useState<Set<string>>(new Set());
-  const [discovering, setDiscovering] = useState(false);
-  const [suggestions, setSuggestions] = useState<
-    { brand_name: string; domain: string; reason: string }[] | null
-  >(null);
   // Client's own daily follower series (summed across platforms) — overlaid
   // on the chart as "Your account" so the benchmarking view answers
   // "how are we doing relative to them?", not just "how are they doing
@@ -287,12 +282,6 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
     }
   }
 
-  async function handleAddFromSuggestion(domain: string) {
-    // Run the discovered domain through /resolve — same path as a manual
-    // paste. Shows the multi-platform picker so the user can confirm.
-    await handleResolve(domain);
-  }
-
   function toggleResolvedProfile(platform: string, username: string) {
     const key = `${platform}-${username}`;
     setSelectedProfiles((prev) => {
@@ -389,28 +378,6 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
     }
   }
 
-  async function handleDiscover() {
-    setDiscovering(true);
-    setSuggestions(null);
-    try {
-      const res = await fetch('/api/analytics/competitors/discover', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: clientId }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error ?? 'Discovery failed');
-        return;
-      }
-      setSuggestions(data.suggestions ?? []);
-    } catch {
-      toast.error('Discovery failed');
-    } finally {
-      setDiscovering(false);
-    }
-  }
-
   if (loading) {
     return (
       <div className="space-y-4">
@@ -430,13 +397,12 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
   return (
     <div className="space-y-6">
       {/* Actions bar */}
+      {/* NAT-57 follow-up: the "Discover with AI" CTA was retired. Manual
+          entry only — competitors come from the brand profile's saved
+          list (see <CompetitorsSection/>) or a one-off paste here. */}
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="outline" size="sm" onClick={() => setShowAddForm(true)}>
           <Plus size={14} /> Add competitor
-        </Button>
-        <Button variant="outline" size="sm" onClick={handleDiscover} disabled={discovering}>
-          {discovering ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-          Discover with AI
         </Button>
       </div>
 
@@ -593,47 +559,6 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
               )}
             </div>
           )}
-        </div>
-      )}
-
-      {/* AI suggestions */}
-      {suggestions && suggestions.length > 0 && (
-        <div className="rounded-xl border border-accent/20 bg-accent-surface/5 p-4">
-          <h3 className="text-sm font-semibold text-text-primary mb-3 flex items-center gap-2">
-            <Sparkles size={14} className="text-accent-text" />
-            Suggested competitors
-          </h3>
-          <div className="space-y-2">
-            {suggestions.map(s => (
-              <div key={s.domain} className="flex items-center gap-3 rounded-lg border border-nativz-border bg-surface p-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-text-primary truncate">{s.brand_name}</p>
-                  <p className="text-xs text-text-muted truncate">
-                    <span className="text-text-secondary">{s.domain}</span> · {s.reason}
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void handleAddFromSuggestion(s.domain)}
-                  disabled={adding || resolving}
-                >
-                  {resolving && addInput === s.domain ? (
-                    <Loader2 size={12} className="animate-spin" />
-                  ) : (
-                    <Plus size={12} />
-                  )}
-                  Find socials
-                </Button>
-              </div>
-            ))}
-          </div>
-          <button
-            onClick={() => setSuggestions(null)}
-            className="mt-2 text-xs text-text-muted hover:text-text-secondary cursor-pointer"
-          >
-            Dismiss suggestions
-          </button>
         </div>
       )}
 
@@ -813,6 +738,7 @@ function CompetitorCard({
           )}
 
           {(() => {
+            // eslint-disable-next-line react-hooks/purity -- "stale" is a cosmetic badge; an extra render won't affect correctness.
             const ageMs = Date.now() - new Date(snap.scraped_at).getTime();
             const stale = ageMs > 7 * 24 * 60 * 60 * 1000;
             return (
