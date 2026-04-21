@@ -105,9 +105,13 @@ test.describe('Admin active-brand flow', () => {
     // render when a brand is pinned (general chat shows a different header).
     await expect(page.locator('text=/strategy lab/i').first()).toBeVisible({ timeout: 10_000 });
 
-    // Ad Creatives v2 index still redirects (pre-flatten pattern).
+    // Ad Creatives URL is flat too — /admin/ad-creatives reads the session
+    // brand server-side. Legacy /admin/ad-creatives-v2 redirects to the
+    // flat URL.
+    await page.goto('/admin/ad-creatives', { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(/\/admin\/ad-creatives(\?|$)/);
     await page.goto('/admin/ad-creatives-v2', { waitUntil: 'domcontentloaded' });
-    await expect(page).toHaveURL(new RegExp(`/admin/ad-creatives-v2/${target.id}`));
+    await expect(page).toHaveURL(/\/admin\/ad-creatives(\?|$)/);
   });
 
   test('clearing the brand cookie returns the index pages to their fallback', async ({ page, request }) => {

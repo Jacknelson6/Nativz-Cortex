@@ -61,7 +61,7 @@ export function V2BatchCreator({ clientId }: { clientId: string }) {
           );
         }
         const data = await res.json();
-        router.push(`/admin/ad-creatives-v2/${clientId}/batches/${data.batchId}`);
+        router.push(`/admin/ad-creatives/batches/${data.batchId}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }
