@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname, useSearchParams, useRouter } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import {
   LayoutDashboard,
   BarChart3,
@@ -32,7 +32,6 @@ import {
   Calendar,
   Brain,
   Cpu,
-  Code,
 } from 'lucide-react';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { SidebarModePicker } from '@/components/layout/sidebar-mode-picker';
@@ -142,7 +141,6 @@ const NAV_SECTIONS: NavSection[] = [
         children: [
           { href: '/admin/knowledge', label: 'Brain', icon: Brain },
           { href: '/admin/settings/ai', label: 'AI settings', icon: Cpu },
-          { href: '/admin/nerd/api', label: 'API docs', icon: Code },
         ],
       },
     ],
@@ -168,22 +166,18 @@ function isActivePath(pathname: string, href: string, searchParams?: URLSearchPa
     return pathname === href || pathname.startsWith(href + '/');
   }
 
-  // Settings gear — active on any route that shows the settings secondary rail
-  if (href === '/admin/settings/ai') {
-    const SETTINGS_AREAS = ['/admin/knowledge', '/admin/settings/ai', '/admin/nerd/api'];
-    if (SETTINGS_AREAS.some((p) => pathname === p || pathname.startsWith(p + '/'))) return true;
-  }
-
   // Tools hub — stay active on every /admin/tools/* child (Users, Accounting, Email).
   if (href === '/admin/tools') {
     if (pathname === '/admin/tools' || pathname.startsWith('/admin/tools/')) return true;
   }
 
-  // Competitor Tracking — active on any route that shows the CT secondary rail
-  if (href === '/admin/analyze-social') {
-    const CT_AREAS = ['/admin/analyze-social', '/admin/competitor-tracking'];
-    if (CT_AREAS.some((p) => pathname === p || pathname.startsWith(p + '/'))) return true;
-  }
+  // NOTE: the old "Competitor Tracking → /admin/analyze-social" and
+  // "Settings → /admin/settings/ai" broad-match blocks were removed. They
+  // previously made the first sub-item (which shared an href with its parent
+  // group) light up for every sibling route, so "Organic Social" appeared
+  // selected when the user was actually on Meta Ads / Ecom / TikTok Shop.
+  // The parent row is still highlighted via `childActive` in the render loop
+  // (any child match promotes the parent), so no behaviour is lost.
 
   // Handle hrefs with query params (e.g. /admin/pipeline?stage=editing)
   if (href.includes('?')) {
@@ -336,12 +330,20 @@ export function AdminSidebar({
     hiddenSidebarItems.filter((href) => !UNHIDABLE_HREFS.has(href)),
   );
   const pathname = usePathname();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { open } = useSidebar();
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
   const [showHiTooltip, setShowHiTooltip] = useState(false);
   const { mode } = useBrandMode();
+
+  // Auto-collapse manual expansions whenever the user navigates. The
+  // active dropdown still stays open because its `childActive` flag
+  // forces `isExpanded=true` in the render pass — this effect only
+  // drops stale "I peeked at Settings" state so two dropdowns never
+  // stay open simultaneously after a route change.
+  useEffect(() => {
+    setExpandedMenus(new Set());
+  }, [pathname]);
 
   function toggleMenu(href: string) {
     setExpandedMenus((prev) => {
@@ -427,16 +429,66 @@ export function AdminSidebar({
               {section.items.map((item) => {
                 const active = isActivePath(pathname, item.href, searchParams);
 
+                // Collapsed rail + dropdown parent: render the icon as a
+                // clickable link AND a hover flyout so the children stay
+                // reachable without first expanding the sidebar.
+                if (item.children && !open) {
+                  const childActive = item.children.some((c) => isActivePath(pathname, c.href, searchParams));
+                  return (
+                    <SidebarMenuItem key={item.href} className="group/flyout">
+                      <Link href={item.href}>
+                        <SidebarMenuButton isActive={active || childActive} tooltip={undefined}>
+                          <item.icon size={18} className="shrink-0" />
+                        </SidebarMenuButton>
+                      </Link>
+                      <div
+                        className="absolute left-full top-0 ml-2 z-50 opacity-0 pointer-events-none translate-x-1 transition-[opacity,transform] duration-150 ease-out group-hover/flyout:opacity-100 group-hover/flyout:pointer-events-auto group-hover/flyout:translate-x-0"
+                      >
+                        <div className="min-w-[200px] rounded-lg border border-nativz-border bg-surface shadow-dropdown py-1">
+                          <div className="px-3 pt-1.5 pb-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+                            {item.label}
+                          </div>
+                          <ul className="px-1">
+                            {item.children.map((child) => {
+                              const cActive = isActivePath(pathname, child.href, searchParams);
+                              return (
+                                <li key={child.href}>
+                                  <Link
+                                    href={child.href}
+                                    className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors ${
+                                      cActive
+                                        ? 'text-accent-text bg-accent-surface'
+                                        : 'text-text-muted hover:text-text-primary hover:bg-surface-hover'
+                                    }`}
+                                  >
+                                    <child.icon size={14} className="shrink-0" />
+                                    <span className="truncate">{child.label}</span>
+                                  </Link>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      </div>
+                    </SidebarMenuItem>
+                  );
+                }
+
                 if (item.children && open) {
                   const childActive = item.children.some((c) => isActivePath(pathname, c.href, searchParams));
-                  const isExpanded = childActive || active || expandedMenus.has(item.href);
+                  // `isExpanded` is the OR of "this dropdown contains the
+                  // current page" and "user manually toggled it open". The
+                  // parent's own `href` (active) is intentionally NOT in this
+                  // union — the parent button is a pure toggle, clicking it
+                  // never navigates, so we don't want it painting itself open.
+                  const isExpanded = childActive || expandedMenus.has(item.href);
                   return (
                     <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton isActive={active || childActive} tooltip={item.label} onClick={() => {
-                        // Navigate to the parent (all stages) and expand children
-                        router.push(item.href);
-                        if (!isExpanded) toggleMenu(item.href);
-                      }}>
+                      <SidebarMenuButton
+                        isActive={childActive}
+                        tooltip={item.label}
+                        onClick={() => toggleMenu(item.href)}
+                      >
                         <item.icon size={18} className="shrink-0" />
                         {/* `ml-2.5` matches the icon → label gap used by flat
                             nav items below so parents with a dropdown chevron
