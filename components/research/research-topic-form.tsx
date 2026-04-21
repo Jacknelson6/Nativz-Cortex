@@ -14,6 +14,7 @@ import {
   Music,
   Youtube,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import type { ClientOption } from '@/components/ui/client-picker';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils/cn';
@@ -337,6 +338,16 @@ export function ResearchTopicForm({
               <button
                 type="button"
                 onClick={async () => {
+                  // NAT-57 follow-up (2026-04-21): this button was
+                  // silently swallowing errors — any 4xx/5xx from
+                  // /api/search/suggest-topics would leave it stuck in
+                  // idle with no feedback. Jack rightly flagged it as
+                  // "not working." Now we surface failures via toast +
+                  // log the body so we can diagnose from DevTools.
+                  if (!clientId) {
+                    toast.error('No brand attached. Pick one in the top-bar pill.');
+                    return;
+                  }
                   setLoadingSuggestions(true);
                   setSuggestions([]);
                   try {
@@ -345,12 +356,31 @@ export function ResearchTopicForm({
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ client_id: clientId }),
                     });
-                    if (res.ok) {
-                      const data = await res.json();
-                      setSuggestions(data.suggestions ?? []);
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                      const msg = typeof data.error === 'string'
+                        ? data.error
+                        : `Couldn't generate suggestions (HTTP ${res.status})`;
+                      console.error('suggest-topics failed', res.status, data);
+                      toast.error(msg);
+                      return;
                     }
-                  } catch { /* ignore */ }
-                  finally { setLoadingSuggestions(false); }
+                    const list: string[] = Array.isArray(data.suggestions)
+                      ? data.suggestions.filter((s: unknown) => typeof s === 'string')
+                      : [];
+                    if (list.length === 0) {
+                      toast.info(
+                        'No suggestions came back — add more brand data (description, industry, keywords) and try again.',
+                      );
+                      return;
+                    }
+                    setSuggestions(list);
+                  } catch (err) {
+                    console.error('suggest-topics network error', err);
+                    toast.error('Network error generating suggestions');
+                  } finally {
+                    setLoadingSuggestions(false);
+                  }
                 }}
                 disabled={loadingSuggestions}
                 className="mx-auto flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-text-muted transition hover:bg-surface-hover hover:text-text-secondary"

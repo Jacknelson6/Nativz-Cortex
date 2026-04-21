@@ -84,10 +84,6 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Brand tools',
     items: [
-      // NAT-57 follow-up: single entry point for the pinned brand's
-      // profile. Same page as /portal/brand-profile but with an
-      // "Edit in settings" shortcut for admins.
-      { href: '/admin/brand-profile', label: 'Brand Profile', icon: Building },
       { href: '/admin/search/new', label: 'Trend Finder', icon: TrendingUp },
       { href: '/admin/strategy-lab', label: 'Strategy Lab', icon: MessagesSquare },
       {
