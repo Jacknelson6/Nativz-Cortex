@@ -42,6 +42,13 @@ summary {
 
   /* Button label letter-spacing */
   --nz-btn-letter-spacing: 0.125em;
+
+  /* Radius scale — matches live nativz.io ROUNDED corners.
+     Buttons override with a full-pill shape (see .nz-btn-pill). */
+  --nz-radius-sm: 5px;
+  --nz-radius-md: 10px;
+  --nz-radius-lg: 20px;
+  --nz-radius-pill: 9999px;
 }
 
 :root {
@@ -93,11 +100,12 @@ summary {
   --status-info:     var(--nz-cyan);
   --status-trending: #F59E0B;
 
-  /* Shadow depth tokens */
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
-  --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.5), 0 4px 8px rgba(0, 0, 0, 0.3);
-  --shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 1px rgba(0, 0, 0, 0.3);
+  /* Shadow depth tokens — Nativz is FLAT. No resting shadow on cards.
+     Shadows only appear on hover lift, sticky surfaces, and active press. */
+  --shadow-card: none;
+  --shadow-card-hover: 0 6px 18px rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.25);
+  --shadow-elevated: 0 12px 32px rgba(0, 0, 0, 0.55), 0 4px 10px rgba(0, 0, 0, 0.3);
+  --shadow-dropdown: 0 6px 20px rgba(0, 0, 0, 0.55), 0 0 1px rgba(0, 0, 0, 0.3);
 
   /* Timing tokens */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
@@ -837,6 +845,45 @@ dialog:not([open]) {
   text-decoration-color: rgba(54, 209, 194, 0.60);
 }
 
+/* ═══════════════════════════════════════════════════════════
+   Eyebrow — signature Nativz treatment
+   Cyan italic tagline sitting directly above an H1/H2 section heading.
+   Live-site-confirmed pattern on nativz.io. Use sparingly on dashboard
+   sections where a one-line context note helps orientation.
+   ═══════════════════════════════════════════════════════════ */
+.nz-eyebrow {
+  font-family: var(--font-nz-display), system-ui, sans-serif;
+  font-weight: 500;
+  font-style: italic;
+  font-size: 0.875rem; /* 14px — product-UI-appropriate scale, marketing uses 18–22 */
+  line-height: 1.45;
+  color: var(--nz-cyan);
+  letter-spacing: 0;
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+[data-brand-mode="anderson"] .nz-eyebrow {
+  color: #1A9E91;
+}
+
+/* Pill-shape button override — Nativz signature shape for all CTAs.
+   Apply via Button `shape="pill"` or the .nz-btn-pill utility. */
+.nz-btn-pill {
+  border-radius: var(--nz-radius-pill);
+}
+
+/* Circular icon tile — the full-circle backing behind a glyph next to a
+   section heading or service block. Live-site default on nativz.io. */
+.nz-icon-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: var(--accent-surface);
+  color: var(--accent-text);
+}
+
 /* Nerd tile prompt cursor — blinks steadily (1Hz square wave) so the tile
    reads as "live" without reaching for the AI-glow/ping pattern. */
 @keyframes nerdPromptBlink {
@@ -852,4 +899,43 @@ dialog:not([open]) {
     animation: none;
     opacity: 0.85;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Action buttons = Nativz purple.
+   Any button / link / role=button styled with `bg-accent` is treated as
+   a CTA and rendered in the Nativz primary-action purple. Pills, badges,
+   chips, and tab indicators live on <div>/<span> elements so they keep
+   the brand cyan fill from --accent. This is a one-rule override —
+   flip the selector off to revert to cyan CTAs.
+   ═══════════════════════════════════════════════════════════ */
+button.bg-accent,
+a.bg-accent,
+[role="button"].bg-accent {
+  background-color: var(--nz-purple);
+  /* Nativz signature: action buttons are full-pill shapes. Overrides any
+     inline rounded-lg / rounded-md / rounded-xl on the same element. */
+  border-radius: var(--nz-radius-pill);
+}
+button.bg-accent:hover,
+a.bg-accent:hover,
+[role="button"].bg-accent:hover {
+  background-color: var(--nz-purple-700);
+}
+
+/* Cover the common hover escape hatches inline CTAs use:
+   `hover:bg-accent-hover`, `hover:bg-accent/90`, etc. */
+button:is(.hover\:bg-accent-hover, .hover\:bg-accent\/90, .hover\:bg-accent\/80, .hover\:bg-accent\/60):hover,
+a:is(.hover\:bg-accent-hover, .hover\:bg-accent\/90, .hover\:bg-accent\/80, .hover\:bg-accent\/60):hover,
+[role="button"]:is(.hover\:bg-accent-hover, .hover\:bg-accent\/90, .hover\:bg-accent\/80, .hover\:bg-accent\/60):hover {
+  background-color: var(--nz-purple-700);
+}
+
+/* Focus ring on CTA buttons tracks the purple too so keyboard focus feels
+   consistent with the fill. Pills / tabs keep their cyan focus ring. */
+button.bg-accent:focus-visible,
+a.bg-accent:focus-visible,
+[role="button"].bg-accent:focus-visible {
+  outline-color: var(--nz-purple);
+  box-shadow: 0 0 0 3px var(--accent2-ring);
 }

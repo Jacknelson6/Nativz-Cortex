@@ -231,13 +231,9 @@ export function NotificationsWidget() {
       <div className="relative flex-1 min-h-0 -mx-1">
       <div className="h-full max-h-[320px] overflow-y-auto" style={{ maskImage: 'linear-gradient(to bottom, black calc(100% - 48px), transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, black calc(100% - 48px), transparent 100%)' }}>
         {loading ? (
-          <div className="space-y-2 px-1">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 px-2 py-2 animate-pulse">
-                <div className="h-4 w-4 rounded-full bg-surface-elevated" />
-                <div className="flex-1 h-4 rounded bg-surface-elevated" />
-              </div>
-            ))}
+          <div className="px-1">
+            {/* One skeleton per loader — not a stack of fake rows. */}
+            <div className="h-40 w-full rounded-[var(--nz-radius-md)] bg-surface-elevated animate-pulse" />
           </div>
         ) : notifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">

@@ -167,13 +167,9 @@ export function TodoWidget() {
 
       <div className="flex min-h-0 flex-1 flex-col">
         {loading ? (
-          <div className="flex flex-1 flex-col justify-center space-y-2">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 px-2 py-2 animate-pulse">
-                <div className="h-5 w-5 rounded-full bg-surface-elevated" />
-                <div className="flex-1 h-4 rounded bg-surface-elevated" />
-              </div>
-            ))}
+          <div className="flex flex-1 flex-col justify-center">
+            {/* One skeleton per loader — not a stack of fake rows. */}
+            <div className="h-24 w-full rounded-[var(--nz-radius-md)] bg-surface-elevated animate-pulse" />
           </div>
         ) : todayTasks.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center py-6 min-h-[7rem]">

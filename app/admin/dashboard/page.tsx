@@ -28,7 +28,7 @@ function BentoTile({
       <div className="relative h-full overflow-hidden rounded-2xl border border-nativz-border/60 bg-surface transition-all duration-300 hover:-translate-y-0.5 hover:border-nativz-border hover:shadow-[var(--shadow-card-hover)]">
         <div className="relative flex h-full flex-col justify-between p-5">
           <div className="flex items-start justify-between">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent-surface">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-accent-surface ring-1 ring-inset ring-accent/20">
               {icon}
             </div>
             <ArrowUpRight

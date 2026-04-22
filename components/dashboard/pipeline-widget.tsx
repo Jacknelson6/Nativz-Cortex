@@ -100,18 +100,8 @@ export function PipelineWidget() {
           <Workflow size={16} className="text-accent-text" />
           <span className="text-base font-semibold text-text-primary">Pipeline</span>
         </div>
-        <div className="space-y-3">
-          <div className="flex gap-2">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex-1 h-20 rounded-lg bg-surface-elevated animate-pulse" />
-            ))}
-          </div>
-          <div className="space-y-1.5">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-8 rounded-lg bg-surface-elevated animate-pulse" />
-            ))}
-          </div>
-        </div>
+        {/* One skeleton per loader — pipeline strip + upcoming list collapsed. */}
+        <div className="h-44 w-full rounded-[var(--nz-radius-md)] bg-surface-elevated animate-pulse" />
       </Card>
     );
   }

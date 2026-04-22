@@ -37,7 +37,9 @@ export function StatCard({ title, value, subtitle, change, icon, footer }: StatC
             {subtitle && <p className="mt-1 text-xs text-text-muted">{subtitle}</p>}
           </div>
           {icon && (
-            <div className="rounded-lg bg-accent-surface p-2.5 text-accent-text">{icon}</div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-accent-surface text-accent-text ring-1 ring-inset ring-accent/20">
+              {icon}
+            </div>
           )}
         </div>
         {footer ? <div className="mt-3 border-t border-nativz-border/70 pt-3">{footer}</div> : null}

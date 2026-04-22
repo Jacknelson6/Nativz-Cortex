@@ -60,7 +60,7 @@ export function NerdTile({ className = '' }: { className?: string }) {
       <div className="relative h-full overflow-hidden rounded-2xl border border-accent/30 bg-surface transition-all duration-300 hover:-translate-y-0.5 hover:border-accent/55 hover:shadow-[var(--shadow-card-hover)]">
         <div className="relative flex h-full flex-col justify-between p-5">
           <div className="flex items-start justify-between">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent/12 ring-1 ring-accent/20">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-accent/12 ring-1 ring-accent/20">
               <BotMessageSquare size={20} className="text-accent-text" />
             </div>
             <ArrowUpRight

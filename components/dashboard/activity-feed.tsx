@@ -99,15 +99,7 @@ export function ActivityFeed({ initialEvents }: { initialEvents?: ActivityEvent[
       </div>
 
       {loading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-3 px-3 py-2.5 animate-pulse">
-              <div className="h-7 w-7 rounded-full bg-surface-elevated" />
-              <div className="flex-1 h-4 rounded bg-surface-elevated" />
-              <div className="h-3 w-16 rounded bg-surface-elevated" />
-            </div>
-          ))}
-        </div>
+        <div className="h-40 w-full rounded-[var(--nz-radius-md)] bg-surface-elevated animate-pulse" />
       ) : events.length === 0 ? (
         <p className="text-sm text-text-muted text-center py-8">No recent activity</p>
       ) : (

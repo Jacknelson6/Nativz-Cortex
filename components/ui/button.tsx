@@ -11,8 +11,9 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   shape?: Shape;
 }
 
-// Primary = Nativz flat purple CTA (the one "do this now" color in the system).
-// Uppercase Jost-700 w/ 2px letter-spacing per brand tokens.
+// Primary = Nativz flat purple CTA. Uppercase Jost-700, 2px letter-spacing.
+// Secondary/outline/ghost stay neutral so non-primary actions don't compete
+// with primary CTAs. Danger stays red for destructive semantics.
 const variantStyles: Record<Variant, string> = {
   primary:
     'bg-[color:var(--nz-purple)] text-white shadow-[var(--shadow-card)] hover:bg-[color:var(--nz-purple-700)] hover:shadow-[var(--shadow-card-hover)] nz-btn-label',
@@ -32,8 +33,12 @@ const sizeStyles: Record<Size, string> = {
   lg: 'px-6 py-3 text-base',
 };
 
+// Nativz signature: action buttons are full-pill shapes. `default` maps to
+// pill to match the brand; `pill` is an explicit alias. The older rounded-lg
+// look is kept via the `rectangle` opt-out for contexts where a pill would
+// feel wrong (e.g. dense toolbar buttons).
 const shapeStyles: Record<Shape, string> = {
-  default: 'rounded-lg',
+  default: 'rounded-full',
   pill: 'rounded-full',
 };
 
