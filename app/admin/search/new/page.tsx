@@ -1,4 +1,3 @@
-import { Suspense } from 'react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibility-query';
@@ -88,20 +87,11 @@ export default async function AdminNewSearchPage({
   }).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <Suspense
-      fallback={
-        <div className="cortex-page-gutter max-w-5xl mx-auto space-y-4 animate-pulse">
-          <div className="h-8 w-56 rounded-lg bg-surface border border-nativz-border" />
-          <div className="h-96 rounded-xl bg-surface border border-nativz-border" />
-        </div>
-      }
-    >
-      <ResearchHub
-        clients={clients}
-        historyItems={historyItems}
-        userFirstName={userFirstName}
-        prefillQuery={prefillQuery}
-      />
-    </Suspense>
+    <ResearchHub
+      clients={clients}
+      historyItems={historyItems}
+      userFirstName={userFirstName}
+      prefillQuery={prefillQuery}
+    />
   );
 }

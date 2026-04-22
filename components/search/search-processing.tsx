@@ -387,7 +387,13 @@ export function SearchProcessing({
       stopStatusPoll();
 
       if (res.status === 202) {
-        clearIntervals();
+        // Stop the progress animator (we've capped at 88% pending poll), but
+        // keep the elapsed-time ticker running so users see a live counter
+        // instead of a frozen "9s" while polling can run for minutes.
+        if (intervalsRef.current.progress) {
+          clearInterval(intervalsRef.current.progress);
+          intervalsRef.current.progress = null;
+        }
         setStageIndex(stages.length - 2);
         setProgress(88);
         try {
@@ -513,14 +519,11 @@ export function SearchProcessing({
           <PipelineStepper searchId={searchId} />
         )}
 
-        {/* Progress bar */}
+        {/* Progress bar — solid cyan (brand accent), no purple tail. */}
         <div className="mt-5 h-1.5 rounded-full bg-surface-hover overflow-hidden">
           <div
-            className="h-full rounded-full transition-all duration-300 ease-out"
-            style={{
-              width: `${progress}%`,
-              background: 'linear-gradient(90deg, var(--accent), var(--accent2))',
-            }}
+            className="h-full rounded-full bg-accent transition-all duration-300 ease-out"
+            style={{ width: `${progress}%` }}
           />
         </div>
 

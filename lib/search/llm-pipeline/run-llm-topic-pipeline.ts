@@ -376,11 +376,16 @@ async function researchOneSubtopicWithLiveSerp(args: {
     titleByUrl.set(u, h.title);
   }
 
+  const fetchLimit = Math.min(hits.length, args.maxFetches);
+  const toFetch = hits.slice(0, fetchLimit);
+  const fetched = await Promise.all(
+    toFetch.map((h) => fetchUrlText(h.url, { maxChars: 8000 })),
+  );
   const fetchedParts: string[] = [];
   const records: ResearchSourceRecord[] = [];
-  const fetchLimit = Math.min(hits.length, args.maxFetches);
-  for (const h of hits.slice(0, fetchLimit)) {
-    const ft = await fetchUrlText(h.url, { maxChars: 8000 });
+  for (let i = 0; i < toFetch.length; i += 1) {
+    const h = toFetch[i];
+    const ft = fetched[i];
     const text = ft.ok ? ft.text : h.snippet;
     fetchedParts.push(`URL: ${h.url}\nTitle: ${h.title}\nExcerpt:\n${text.slice(0, 6000)}`);
     records.push({

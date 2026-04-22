@@ -773,21 +773,7 @@ export function ContentLabNerdChat({
             Chat/Knowledge Base/Artifacts/Analytics tab row was removed; all
             four surfaces now live under the chat (artifacts in the rail,
             everything else automatically reachable from the sidebar). */}
-        <header className="relative flex shrink-0 items-center justify-between gap-3 border-b border-nativz-border/40 px-4 py-3 md:px-6">
-          {/* Section title — the top-bar brand pill identifies the active
-           *  client, so this header is just the page label. Mirrors Trend
-           *  Finder's treatment. */}
-          <div className="flex min-w-0 items-center gap-2">
-            <AgencyClientAvatar
-              clientName={clientName}
-              clientLogoUrl={clientLogoUrl}
-              size="sm"
-            />
-            <span className="truncate text-sm font-semibold text-text-primary">
-              Strategy Lab
-            </span>
-          </div>
-
+        <header className="relative flex shrink-0 items-center justify-end gap-3 border-b border-nativz-border/40 px-4 py-3 md:px-6">
           {!portalMode && messages.length > 0 && (
             <div className="flex items-center gap-1.5">
               <ConversationShareButton

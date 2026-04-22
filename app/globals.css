@@ -37,8 +37,10 @@ summary {
   --nz-line:        rgba(255, 255, 255, 0.12);
   --nz-line-ink:    rgba(0, 12, 17, 0.10);
 
-  /* Signature highlight underline (H1/H2 emphasis) */
-  --nz-highlight-underline: rgba(0, 174, 239, 0.70);
+  /* Signature highlight underline (H1/H2 emphasis). Base hex #0082b5 — a
+     darker cyan than --nz-cyan so the bar behind glyphs reads as a deliberate
+     highlight, not a tint of the brand accent. */
+  --nz-highlight-underline: rgba(0, 130, 181, 0.70);
 
   /* Button label letter-spacing */
   --nz-btn-letter-spacing: 0.125em;
