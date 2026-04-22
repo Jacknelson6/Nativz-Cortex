@@ -3,6 +3,7 @@ import { logUsage } from '@/lib/ai/usage';
 import { getEmailBrand, getEmailLogoUrl } from '@/lib/email/brand-tokens';
 import { buildAffiliateWeeklyReportCardHtml } from '@/lib/email/templates/affiliate-weekly-report-html';
 import { buildWeeklySocialReportCardHtml } from '@/lib/email/templates/weekly-social-report-html';
+import { buildUserEmailHtml } from '@/lib/email/templates/user-email';
 import { getSecret } from '@/lib/secrets/store';
 import type { WeeklySocialReport } from '@/lib/reporting/weekly-social-report';
 import type { AgencyBrand } from '@/lib/agency/detect';
@@ -442,4 +443,48 @@ export async function sendSearchCompletedEmail(opts: {
   }).catch(() => {});
 
   return result;
+}
+
+// ── Onboarding email (ad-hoc admin → client) ───────────────────────────────
+// Fires a pre-interpolated onboarding email template through Resend. Subject
+// and body markdown arrive already resolved against the tracker's context —
+// this function is just the transport layer. Returns a discriminated union
+// so the caller can log the result either way.
+
+export async function sendOnboardingEmail(opts: {
+  to: string;
+  subject: string;
+  bodyMarkdown: string;
+  agency?: AgencyBrand;
+}): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  if (!opts.to.trim()) return { ok: false, error: 'Recipient email is empty' };
+  const agency = opts.agency ?? 'nativz';
+
+  try {
+    const html = buildUserEmailHtml(opts.bodyMarkdown, agency);
+    const result = await (await getResend()).emails.send({
+      from: getFromAddress(agency),
+      replyTo: getReplyTo(agency),
+      to: opts.to,
+      subject: opts.subject,
+      html,
+    });
+    if (result.error) return { ok: false, error: result.error.message || 'Resend error' };
+    const id = result.data?.id;
+    if (!id) return { ok: false, error: 'Resend returned no id' };
+
+    logUsage({
+      service: 'resend',
+      model: 'email-api',
+      feature: 'onboarding_send',
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      costUsd: 0,
+    }).catch(() => {});
+
+    return { ok: true, id };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Unknown send error' };
+  }
 }

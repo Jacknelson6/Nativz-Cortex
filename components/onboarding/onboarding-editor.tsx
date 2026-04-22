@@ -102,6 +102,7 @@ export function OnboardingEditor({
   emailTemplates = [],
   availableTemplates = [],
   contactFirstName = null,
+  contactEmail = null,
 }: {
   initialTracker: Tracker;
   initialPhases: Phase[];
@@ -110,6 +111,7 @@ export function OnboardingEditor({
   emailTemplates?: EmailTemplate[];
   availableTemplates?: AvailableTemplate[];
   contactFirstName?: string | null;
+  contactEmail?: string | null;
 }) {
   const router = useRouter();
   const [tracker, setTracker] = useState<Tracker>(initialTracker);
@@ -527,6 +529,7 @@ export function OnboardingEditor({
           <OnboardingEmailTemplatesPanel
             templates={emailTemplates}
             trackerId={tracker.id}
+            defaultRecipientEmail={contactEmail}
             context={{
               clientName: tracker.clients?.name ?? 'Client',
               service: tracker.service,

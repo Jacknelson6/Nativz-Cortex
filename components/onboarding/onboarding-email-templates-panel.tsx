@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { ChevronDown, ChevronUp, Copy, Check, Mail, Settings } from 'lucide-react';
+import { ChevronDown, ChevronUp, Copy, Check, Loader2, Mail, Send, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { EmailPreview } from '@/components/email/email-preview';
 import { interpolateEmail, type EmailContext } from '@/lib/onboarding/interpolate-email';
@@ -28,10 +28,12 @@ export function OnboardingEmailTemplatesPanel({
   templates,
   context,
   trackerId,
+  defaultRecipientEmail,
 }: {
   templates: EmailTemplate[];
   context: EmailContext;
   trackerId?: string;
+  defaultRecipientEmail?: string | null;
 }) {
   if (templates.length === 0) {
     return (
@@ -70,7 +72,13 @@ export function OnboardingEmailTemplatesPanel({
         </Link>
       </div>
       {templates.map((t) => (
-        <EmailTemplateCard key={t.id} template={t} context={context} trackerId={trackerId} />
+        <EmailTemplateCard
+          key={t.id}
+          template={t}
+          context={context}
+          trackerId={trackerId}
+          defaultRecipientEmail={defaultRecipientEmail}
+        />
       ))}
     </div>
   );
@@ -80,13 +88,18 @@ function EmailTemplateCard({
   template,
   context,
   trackerId,
+  defaultRecipientEmail,
 }: {
   template: EmailTemplate;
   context: EmailContext;
   trackerId?: string;
+  defaultRecipientEmail?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [copiedField, setCopiedField] = useState<'subject' | 'body' | null>(null);
+  const [recipient, setRecipient] = useState(defaultRecipientEmail ?? '');
+  const [sending, setSending] = useState(false);
+  const [lastSentAt, setLastSentAt] = useState<number | null>(null);
 
   const renderedSubject = interpolateEmail(template.subject, context);
   const renderedBody = interpolateEmail(template.body, context);
@@ -99,6 +112,47 @@ function EmailTemplateCard({
       toast.success(`${field === 'subject' ? 'Subject' : 'Body'} copied`);
     } catch {
       toast.error('Copy failed');
+    }
+  }
+
+  async function send() {
+    const to = recipient.trim();
+    if (!to) {
+      toast.error('Add a recipient email first.');
+      return;
+    }
+    // Basic shape check — server validates rigorously with Zod.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      toast.error('That doesn\u2019t look like a valid email.');
+      return;
+    }
+    if (!trackerId) {
+      toast.error('Send requires a tracker context.');
+      return;
+    }
+    const ok = window.confirm(
+      `Send \u201C${template.name}\u201D to ${to}?\n\nThis will deliver immediately via Resend.`,
+    );
+    if (!ok) return;
+
+    setSending(true);
+    try {
+      const res = await fetch(`/api/onboarding/trackers/${trackerId}/send-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template_id: template.id, to }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast.error((d as { error?: string }).error || 'Failed to send');
+        return;
+      }
+      toast.success(`Sent to ${to}`);
+      setLastSentAt(Date.now());
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send');
+    } finally {
+      setSending(false);
     }
   }
 
@@ -118,11 +172,46 @@ function EmailTemplateCard({
             Subject: {renderedSubject}
           </p>
         </div>
+        {lastSentAt && (
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400 shrink-0">
+            Sent
+          </span>
+        )}
         {open ? <ChevronUp size={16} className="text-text-muted shrink-0" /> : <ChevronDown size={16} className="text-text-muted shrink-0" />}
       </button>
 
       {open && (
         <div className="border-t border-nativz-border px-4 py-4 space-y-4">
+          {/* Send-now control: recipient input (pre-filled from primary
+              contact when we have one) + Send button. Sits above the copy
+              buttons because it's the primary action. */}
+          <div className="rounded-lg border border-nativz-border bg-surface-hover/20 p-3 space-y-2">
+            <label className="block text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+              Send to
+            </label>
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                type="email"
+                value={recipient}
+                onChange={(e) => setRecipient(e.target.value)}
+                placeholder="client@example.com"
+                className="flex-1 min-w-[220px] rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => void send()}
+                disabled={sending || !recipient.trim()}
+              >
+                {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                {sending ? 'Sending\u2026' : 'Send now'}
+              </Button>
+            </div>
+            <p className="text-[11px] text-text-muted">
+              Delivered via Resend with full brand rendering. Every send is logged.
+            </p>
+          </div>
+
           <div className="flex items-center gap-2 flex-wrap">
             <Button
               type="button"
@@ -136,6 +225,7 @@ function EmailTemplateCard({
             <Button
               type="button"
               size="sm"
+              variant="outline"
               onClick={() => void copy('body', renderedBody)}
             >
               {copiedField === 'body' ? <Check size={13} /> : <Copy size={13} />}

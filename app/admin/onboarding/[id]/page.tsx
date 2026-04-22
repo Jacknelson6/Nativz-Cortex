@@ -82,12 +82,12 @@ export default async function OnboardingEditorPage({
           .eq('is_template', true)
           .eq('service', initialTracker.service)
           .order('created_at', { ascending: false }),
-    // Primary contact for {{contact_first_name}} — templates have no client.
+    // Primary contact for {{contact_first_name}} + default Send recipient.
     initialTracker.is_template || !initialTracker.client_id
       ? Promise.resolve({ data: null })
       : admin
           .from('contacts')
-          .select('name, is_primary')
+          .select('name, email, is_primary')
           .eq('client_id', initialTracker.client_id)
           .order('is_primary', { ascending: false })
           .order('created_at', { ascending: true })
@@ -97,8 +97,9 @@ export default async function OnboardingEditorPage({
 
   // Pull "Jack" out of "Jack Nelson" — anything before the first space.
   // Null when no contact exists → email panel falls back to "there".
-  const contact = contactRes.data as { name: string | null } | null;
+  const contact = contactRes.data as { name: string | null; email: string | null } | null;
   const contactFirstName = contact?.name?.trim().split(/\s+/)[0] ?? null;
+  const contactEmail = contact?.email ?? null;
 
   return (
     <OnboardingEditor
@@ -109,6 +110,7 @@ export default async function OnboardingEditorPage({
       emailTemplates={(emailTemplatesRes.data as Parameters<typeof OnboardingEditor>[0]['emailTemplates']) ?? []}
       availableTemplates={(availableTemplatesRes.data as Parameters<typeof OnboardingEditor>[0]['availableTemplates']) ?? []}
       contactFirstName={contactFirstName}
+      contactEmail={contactEmail}
     />
   );
 }
