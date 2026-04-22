@@ -205,8 +205,9 @@ summary {
   --font-nz-body: var(--font-ac-body);        /* Roboto */
   /* --font-nz-sans stays on Rubik (AC uses it too) */
 
-  /* Button shape — AC CTAs are SHARP RECTANGLES per ac-btn spec. */
-  --nz-btn-radius: 0;
+  /* Button shape — AC matches Nativz pill shape (Jack visual-QA call).
+     Token spec originally said rectangle; pill felt wrong in product UI. */
+  --nz-btn-radius: var(--nz-radius-pill);
 }
 
 /* Anderson mode — scrollbar & element overrides */
@@ -864,10 +865,11 @@ dialog:not([open]) {
   text-underline-offset: -0.25em;
 }
 
-/* Anderson brand mode — underline uses AC teal, not Nativz cyan. */
+/* Anderson brand mode — the highlight-underline is a Nativz-only signature.
+   AC drops the decoration entirely (confirmed against live AC web refs). */
 [data-brand-mode="anderson"] .nz-u,
 [data-brand-mode="anderson"] :where(.nz-hero, .nz-h1, .nz-h2, h1.nz-highlight, h2.nz-highlight) u {
-  text-decoration-color: rgba(54, 209, 194, 0.60);
+  text-decoration: none;
 }
 
 /* ═══════════════════════════════════════════════════════════
