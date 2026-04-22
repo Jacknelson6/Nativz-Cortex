@@ -494,6 +494,7 @@ export function OnboardingEditor({
           </div>
           <OnboardingEmailTemplatesPanel
             templates={emailTemplates}
+            trackerId={tracker.id}
             context={{
               clientName: tracker.clients?.name ?? 'Client',
               service: tracker.service,

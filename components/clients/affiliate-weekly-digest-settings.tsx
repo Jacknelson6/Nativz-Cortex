@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Mail, Save } from 'lucide-react';
+import { ChevronDown, ChevronUp, Eye, Loader2, Mail, Save } from 'lucide-react';
+import { EmailPreview } from '@/components/email/email-preview';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -88,6 +89,7 @@ export function AffiliateWeeklyDigestSettings({
     hourMinuteToTimeValue(affiliateDigestSendHour, affiliateDigestSendMinute),
   );
   const [savingDigest, setSavingDigest] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     setDigestEnabled(affiliateDigestEnabled);
@@ -263,12 +265,28 @@ export function AffiliateWeeklyDigestSettings({
               <span className="font-mono text-text-secondary">{affiliateDigestLastSentWeekKey}</span>
             </p>
           ) : null}
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setPreviewOpen((v) => !v)}
+            >
+              {previewOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              <Eye size={14} />
+              {previewOpen ? 'Hide preview' : 'Preview this week\u2019s email'}
+            </Button>
             <Button type="button" size="sm" onClick={handleSaveDigest} disabled={savingDigest}>
               {savingDigest ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
               {savingDigest ? 'Saving…' : 'Save email settings'}
             </Button>
           </div>
+
+          {previewOpen && (
+            <div className="pt-2">
+              <EmailPreview input={{ kind: 'weekly_affiliate', clientId }} />
+            </div>
+          )}
         </div>
       )}
     </>

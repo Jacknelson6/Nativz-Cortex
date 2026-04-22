@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { ChevronDown, ChevronUp, Copy, Check, Mail, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { EmailPreview } from '@/components/email/email-preview';
 import { interpolateEmail, type EmailContext } from '@/lib/onboarding/interpolate-email';
 
 export type EmailTemplate = {
@@ -20,14 +21,17 @@ export type EmailTemplate = {
  * editor for real (non-template) trackers. Shows every email template
  * for the tracker's service, interpolates variables against the current
  * context (client name, share URL, etc.), and provides one-click copy
- * for subject + body so admins can paste into Gmail.
+ * for subject + body + inline preview so admins can sanity-check rendered
+ * HTML before pasting into Gmail.
  */
 export function OnboardingEmailTemplatesPanel({
   templates,
   context,
+  trackerId,
 }: {
   templates: EmailTemplate[];
   context: EmailContext;
+  trackerId?: string;
 }) {
   if (templates.length === 0) {
     return (
@@ -66,7 +70,7 @@ export function OnboardingEmailTemplatesPanel({
         </Link>
       </div>
       {templates.map((t) => (
-        <EmailTemplateCard key={t.id} template={t} context={context} />
+        <EmailTemplateCard key={t.id} template={t} context={context} trackerId={trackerId} />
       ))}
     </div>
   );
@@ -75,9 +79,11 @@ export function OnboardingEmailTemplatesPanel({
 function EmailTemplateCard({
   template,
   context,
+  trackerId,
 }: {
   template: EmailTemplate;
   context: EmailContext;
+  trackerId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [copiedField, setCopiedField] = useState<'subject' | 'body' | null>(null);
@@ -116,8 +122,8 @@ function EmailTemplateCard({
       </button>
 
       {open && (
-        <div className="border-t border-nativz-border px-4 py-3 space-y-3">
-          <div className="flex items-center gap-2">
+        <div className="border-t border-nativz-border px-4 py-4 space-y-4">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button
               type="button"
               size="sm"
@@ -137,21 +143,16 @@ function EmailTemplateCard({
             </Button>
           </div>
 
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-muted mb-1">
-              Subject
-            </p>
-            <p className="text-[14px] text-text-primary">{renderedSubject}</p>
-          </div>
-
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-muted mb-1">
-              Body
-            </p>
-            <pre className="text-[13px] text-text-primary whitespace-pre-wrap font-sans leading-relaxed">
-              {renderedBody}
-            </pre>
-          </div>
+          {/* Inline preview — resolves placeholders against THIS tracker's
+              real client + contact + share URL on the server. */}
+          <EmailPreview
+            input={{
+              kind: 'onboarding',
+              subject: template.subject,
+              body: template.body,
+              trackerId,
+            }}
+          />
         </div>
       )}
     </div>

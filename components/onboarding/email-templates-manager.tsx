@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ChevronDown, ChevronUp, Loader2, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { EmailPreview } from '@/components/email/email-preview';
 import { EMAIL_PLACEHOLDERS } from '@/lib/onboarding/interpolate-email';
 
 type Template = {
@@ -165,15 +166,22 @@ function TemplateEditor({
   onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  // Controlled local state so the preview updates live as admin types —
+  // persistence still happens on blur (see handlers below).
+  const [subject, setSubject] = useState(template.subject);
+  const [body, setBody] = useState(template.body);
+  const [name, setName] = useState(template.name);
 
   return (
     <div className="rounded-[10px] border border-nativz-border bg-surface overflow-hidden">
       <div className="flex items-center gap-3 px-4 py-3">
         <input
-          defaultValue={template.name}
-          onBlur={(e) => {
-            const v = e.target.value.trim();
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={() => {
+            const v = name.trim();
             if (v && v !== template.name) onUpdate({ name: v });
+            else setName(template.name);
           }}
           className="flex-1 bg-transparent text-[14px] font-semibold text-text-primary focus:outline-none border-b border-transparent focus:border-accent-border/50 pb-0.5 transition-colors"
         />
@@ -196,36 +204,54 @@ function TemplateEditor({
       </div>
 
       {open && (
-        <div className="border-t border-nativz-border px-4 py-3 space-y-3">
-          <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-1">
-              Subject
-            </label>
-            <input
-              defaultValue={template.subject}
-              onBlur={(e) => {
-                const v = e.target.value.trim();
-                if (v && v !== template.subject) onUpdate({ subject: v });
-              }}
-              placeholder="Welcome to {{service}}, {{client_name}}"
-              className="block w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-            />
+        <div className="border-t border-nativz-border px-4 py-4 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] gap-5">
+          {/* Left column — editor */}
+          <div className="space-y-3">
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-1">
+                Subject
+              </label>
+              <input
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                onBlur={() => {
+                  const v = subject.trim();
+                  if (v && v !== template.subject) onUpdate({ subject: v });
+                  else if (!v) setSubject(template.subject);
+                }}
+                placeholder="Welcome to {{service}}, {{client_name}}"
+                className="block w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-1">
+                Body
+              </label>
+              <textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                onBlur={() => {
+                  const v = body.trim();
+                  if (v && v !== template.body) onUpdate({ body: v });
+                  else if (!v) setBody(template.body);
+                }}
+                rows={14}
+                placeholder={`Hi {{contact_first_name}},\n\n…`}
+                className="block w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-[13px] text-text-primary placeholder-text-muted font-mono leading-relaxed focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent resize-y"
+              />
+              <p className="text-[11px] text-text-muted mt-1.5 leading-relaxed">
+                Supports markdown-lite: <code className="text-accent-text">#</code> headings,{' '}
+                <code className="text-accent-text">**bold**</code>,{' '}
+                <code className="text-accent-text">- bullets</code>,{' '}
+                <code className="text-accent-text">[link](url)</code>.
+              </p>
+            </div>
           </div>
-          <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-1">
-              Body
-            </label>
-            <textarea
-              defaultValue={template.body}
-              onBlur={(e) => {
-                const v = e.target.value.trim();
-                if (v && v !== template.body) onUpdate({ body: v });
-              }}
-              rows={10}
-              placeholder={`Hi {{contact_first_name}},\n\n…`}
-              className="block w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-[13px] text-text-primary placeholder-text-muted font-mono leading-relaxed focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent resize-y"
-            />
-          </div>
+
+          {/* Right column — live preview (server-rendered to match send output exactly) */}
+          <EmailPreview
+            input={{ kind: 'onboarding', subject, body }}
+          />
         </div>
       )}
     </div>

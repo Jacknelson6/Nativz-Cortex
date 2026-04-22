@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, BarChart3, Save } from 'lucide-react';
+import { Loader2, BarChart3, ChevronDown, ChevronUp, Eye, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { EmailPreview } from '@/components/email/email-preview';
 import { TimePicker15 } from '@/components/ui/time-picker-15';
 import { cn } from '@/lib/utils/cn';
 import {
@@ -89,6 +90,7 @@ export function SocialWeeklyDigestSettings({
     hourMinuteToTimeValue(socialDigestSendHour, socialDigestSendMinute),
   );
   const [saving, setSaving] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     setDigestEnabled(socialDigestEnabled);
@@ -259,12 +261,28 @@ export function SocialWeeklyDigestSettings({
           <span className="font-mono text-text-secondary">{socialDigestLastSentWeekKey}</span>
         </p>
       ) : null}
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => setPreviewOpen((v) => !v)}
+        >
+          {previewOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          <Eye size={14} />
+          {previewOpen ? 'Hide preview' : 'Preview this week\u2019s email'}
+        </Button>
         <Button type="button" size="sm" onClick={handleSave} disabled={saving}>
           {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
           {saving ? 'Saving…' : 'Save email settings'}
         </Button>
       </div>
+
+      {previewOpen && (
+        <div className="pt-2">
+          <EmailPreview input={{ kind: 'weekly_social', clientId }} />
+        </div>
+      )}
     </div>
   );
 
