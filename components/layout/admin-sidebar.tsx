@@ -89,19 +89,16 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/admin/search/new', label: 'Trend Finder', icon: TrendingUp },
       { href: '/admin/strategy-lab', label: 'Strategy Lab', icon: MessagesSquare },
       {
-        // NAT-57 follow-up (2026-04-21): Meta Ads + Ecom retired from nav.
-        // Routes remain live for any existing deep links, but we're not
-        // surfacing them while the brand-native analysis shell is being
-        // built. Organic Social + TikTok Shop are the only spying paths
-        // we're investing in right now — everything else gets re-evaluated
-        // after the resolver lands.
-        href: '/admin/analyze-social',
-        label: 'Competitor Spying',
+        // NAT-62 (2026-04-22): unified landing page — "Competitor intelligence"
+        // replaces the old collapsible. Audits live at /admin/analyze-social,
+        // watches in /admin/analytics?tab=benchmarking, reports in
+        // /admin/competitor-intelligence/reports — the landing page at
+        // /admin/competitor-intelligence is the hub that routes between them.
+        // TikTok Shop tracker is still reachable via a footer link on that
+        // landing page.
+        href: '/admin/competitor-intelligence',
+        label: 'Competitor intelligence',
         icon: ScanSearch,
-        children: [
-          { href: '/admin/analyze-social', label: 'Organic Social', icon: Users },
-          { href: '/admin/competitor-tracking/tiktok-shop', label: 'TikTok Shop', icon: ShoppingBag },
-        ],
       },
       { href: '/admin/ad-creatives', label: 'Ad Generator', icon: ImagePlus },
       { href: '/admin/knowledge', label: 'Brain', icon: Brain },
@@ -206,6 +203,7 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/shoots',
   '/admin/knowledge',
   '/admin/analyze-social',
+  '/admin/competitor-intelligence',
   '/admin/notifications',
   '/admin/infrastructure',
   // Settings is reachable from the avatar popover — it doesn't need its

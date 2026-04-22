@@ -959,3 +959,31 @@ a.bg-accent,
 [role="button"].bg-accent {
   border-radius: var(--nz-btn-radius, var(--nz-radius-pill));
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Competitor intelligence landing — stagger-on-mount + sparkline
+   Purely decorative; respects prefers-reduced-motion.
+   ═══════════════════════════════════════════════════════════ */
+@keyframes ci-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-ci-rise {
+  opacity: 0;
+  animation: ci-rise 500ms var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)) forwards;
+}
+@keyframes ci-sparkline {
+  from { stroke-dashoffset: 200; }
+  to   { stroke-dashoffset: 0; }
+}
+.animate-ci-sparkline {
+  animation: ci-sparkline 700ms var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-ci-rise,
+  .animate-ci-sparkline {
+    animation: none;
+    opacity: 1;
+    stroke-dashoffset: 0 !important;
+  }
+}

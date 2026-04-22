@@ -3,7 +3,9 @@ import { logUsage } from '@/lib/ai/usage';
 import { getEmailBrand, getEmailLogoUrl } from '@/lib/email/brand-tokens';
 import { buildAffiliateWeeklyReportCardHtml } from '@/lib/email/templates/affiliate-weekly-report-html';
 import { buildWeeklySocialReportCardHtml } from '@/lib/email/templates/weekly-social-report-html';
+import { buildCompetitorReportCardHtml } from '@/lib/email/templates/competitor-report-html';
 import { buildUserEmailHtml } from '@/lib/email/templates/user-email';
+import type { CompetitorReportData } from '@/lib/reporting/competitor-report-types';
 import { getSecret } from '@/lib/secrets/store';
 import type { WeeklySocialReport } from '@/lib/reporting/weekly-social-report';
 import type { AgencyBrand } from '@/lib/agency/detect';
@@ -486,5 +488,58 @@ export async function sendOnboardingEmail(opts: {
     return { ok: true, id };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'Unknown send error' };
+  }
+}
+
+// ── Recurring competitor report ────────────────────────────────────────────
+
+export async function sendCompetitorReportEmail(opts: {
+  to: string[];
+  data: CompetitorReportData;
+  analyticsUrl: string;
+  isTestOverride?: boolean;
+  agency?: AgencyBrand;
+}): Promise<{ ok: true; id: string; html: string } | { ok: false; error: string; html: string }> {
+  const agency = opts.agency ?? (opts.data.client_agency === 'anderson' ? 'anderson' : 'nativz');
+  const subjectPrefix = opts.isTestOverride ? '[Test] ' : '';
+  const rangeLabel = (() => {
+    const fmt = (iso: string) =>
+      new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return `${fmt(opts.data.period_start)} – ${fmt(opts.data.period_end)}`;
+  })();
+  const subject = `${subjectPrefix}Competitor update — ${opts.data.client_name} (${rangeLabel})`;
+
+  const cardHtml = buildCompetitorReportCardHtml({
+    data: opts.data,
+    agency,
+    analyticsUrl: opts.analyticsUrl,
+  });
+  const html = layout(cardHtml, agency);
+
+  try {
+    const result = await (await getResend()).emails.send({
+      from: getFromAddress(agency),
+      replyTo: getReplyTo(agency),
+      to: opts.to,
+      subject,
+      html,
+    });
+    logUsage({
+      service: 'resend',
+      model: 'email-api',
+      feature: 'email_delivery',
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      costUsd: 0,
+    }).catch(() => {});
+    const id = result?.data?.id ?? '';
+    return { ok: true, id, html };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : 'Unknown send error',
+      html,
+    };
   }
 }

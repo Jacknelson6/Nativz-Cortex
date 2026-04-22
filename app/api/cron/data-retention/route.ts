@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 
 export const maxDuration = 60;
 
@@ -15,7 +16,7 @@ export const maxDuration = 60;
  * @auth Bearer CRON_SECRET (mandatory)
  * @returns {{ message: string, deleted: Record<string, number> }}
  */
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
@@ -105,3 +106,5 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+export const GET = withCronTelemetry({ route: '/api/cron/data-retention' }, handleGet);

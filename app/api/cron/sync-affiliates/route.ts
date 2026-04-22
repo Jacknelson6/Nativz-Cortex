@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { syncAllAffiliateClients } from '@/lib/uppromote/sync';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 
 export const maxDuration = 60;
 
@@ -46,5 +47,5 @@ async function handler(request: NextRequest) {
 }
 
 // GET for Vercel crons, POST for manual triggers
-export const GET = handler;
-export const POST = handler;
+export const GET = withCronTelemetry({ route: '/api/cron/sync-affiliates' }, handler);
+export const POST = withCronTelemetry({ route: '/api/cron/sync-affiliates' }, handler);

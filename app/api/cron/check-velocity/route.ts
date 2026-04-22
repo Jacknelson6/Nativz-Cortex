@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkPostVelocity } from '@/lib/reporting/velocity';
+import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 
 export const maxDuration = 120;
 
@@ -12,7 +13,7 @@ export const maxDuration = 120;
  * @auth Bearer CRON_SECRET (Vercel cron)
  * @returns {{ message: string, checked: number, trending: number }}
  */
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
@@ -35,3 +36,5 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+export const GET = withCronTelemetry({ route: '/api/cron/check-velocity' }, handleGet);

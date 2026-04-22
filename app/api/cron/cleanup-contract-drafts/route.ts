@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 
 export const maxDuration = 60;
 
@@ -15,7 +16,7 @@ const DRAFT_TTL_HOURS = 6;
  *
  * @auth Bearer CRON_SECRET (mandatory)
  */
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
@@ -73,3 +74,5 @@ export async function GET(request: NextRequest) {
     cutoff,
   });
 }
+
+export const GET = withCronTelemetry({ route: '/api/cron/cleanup-contract-drafts' }, handleGet);

@@ -6,6 +6,7 @@ import { scrapeFacebookProfile } from '@/lib/audit/scrape-facebook-profile';
 import { scrapeYouTubeProfile } from '@/lib/audit/scrape-youtube-profile';
 import { calculateEngagementRate, calculateAvgViews, estimatePostingFrequency } from '@/lib/audit/analyze';
 import type { AuditPlatform, ProspectVideo, ProspectProfile } from '@/lib/audit/types';
+import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 
 export const maxDuration = 300;
 
@@ -83,7 +84,7 @@ function summarizeNewPosts(videos: ProspectVideo[], sinceIso: string | null) {
   }));
 }
 
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = request.headers.get('authorization');
   if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
@@ -222,3 +223,5 @@ async function markProcessed(
     })
     .eq('id', benchmarkId);
 }
+
+export const GET = withCronTelemetry({ route: '/api/cron/benchmark-snapshots' }, handleGet);

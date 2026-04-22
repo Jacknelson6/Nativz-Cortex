@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { scrapeEcomCompetitor } from '@/lib/ecom/apify-ecom-scrape';
+import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 
 export const maxDuration = 300;
 
@@ -15,7 +16,7 @@ const PER_RUN_LIMIT = 15; // Apify ecom is slower than TikTok scrapes
  *
  * @auth Bearer $CRON_SECRET
  */
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = request.headers.get('authorization');
   if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
@@ -94,3 +95,5 @@ export async function GET(request: NextRequest) {
     results,
   });
 }
+
+export const GET = withCronTelemetry({ route: '/api/cron/ecom-snapshots' }, handleGet);

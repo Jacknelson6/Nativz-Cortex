@@ -20,7 +20,8 @@
  * See: Agency Brain `docs/REVERSE-MERGE-AUDIT.md`, section 4 (Ingestion).
  */
 
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry'
 
 const GONE_PAYLOAD = {
   error: 'This endpoint was retired.',
@@ -29,10 +30,13 @@ const GONE_PAYLOAD = {
   retired_at: '2026-04-13',
 } as const
 
-export async function GET(): Promise<NextResponse> {
+async function handleGet(_req: NextRequest): Promise<NextResponse> {
   return NextResponse.json(GONE_PAYLOAD, { status: 410 })
 }
 
-export async function POST(): Promise<NextResponse> {
+async function handlePost(_req: NextRequest): Promise<NextResponse> {
   return NextResponse.json(GONE_PAYLOAD, { status: 410 })
 }
+
+export const GET = withCronTelemetry({ route: '/api/cron/fyxer-import' }, handleGet);
+export const POST = withCronTelemetry({ route: '/api/cron/fyxer-import' }, handlePost);

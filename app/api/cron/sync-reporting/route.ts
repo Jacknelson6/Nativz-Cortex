@@ -4,6 +4,7 @@ import { syncClientReporting } from '@/lib/reporting/sync';
 import { generateAnalyticsNotifications } from '@/lib/reporting/notifications';
 import { notifyAdmins, truncateNotificationBody } from '@/lib/notifications';
 import type { DateRange } from '@/lib/types/reporting';
+import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 
 export const maxDuration = 300;
 
@@ -18,7 +19,7 @@ export const maxDuration = 300;
  * @auth Bearer CRON_SECRET (Vercel cron)
  * @returns {{ message: string, synced: number, failed: number, notifications: number }}
  */
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
@@ -168,3 +169,5 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+export const GET = withCronTelemetry({ route: '/api/cron/sync-reporting' }, handleGet);

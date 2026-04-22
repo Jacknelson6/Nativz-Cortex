@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { resolveCampaignRecipients, sendCampaign } from '@/lib/email/send-campaign';
 import { sendUserEmail } from '@/lib/email/send-user-email';
 import type { AgencyBrand } from '@/lib/agency/detect';
+import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 
 export const maxDuration = 60;
 
@@ -20,7 +21,7 @@ function isAuthorisedCron(req: NextRequest): boolean {
  *
  * Designed to run every minute (see vercel.json crons entry).
  */
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
   if (!isAuthorisedCron(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -37,6 +38,8 @@ export async function GET(request: NextRequest) {
     sequences: sequenceResult,
   });
 }
+
+export const GET = withCronTelemetry({ route: '/api/cron/drain-email-hub' }, handleGet);
 
 async function drainCampaigns(
   admin: ReturnType<typeof createAdminClient>,

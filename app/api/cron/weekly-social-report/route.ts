@@ -13,6 +13,7 @@ import {
 import { sendWeeklySocialReportEmail } from '@/lib/email/resend';
 import { getSecret } from '@/lib/secrets/store';
 import type { AgencyBrand } from '@/lib/agency/detect';
+import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 
 export const maxDuration = 300;
 
@@ -226,5 +227,5 @@ async function handler(request: NextRequest) {
   }
 }
 
-export const GET = handler;
-export const POST = handler;
+export const GET = withCronTelemetry({ route: '/api/cron/weekly-social-report' }, handler);
+export const POST = withCronTelemetry({ route: '/api/cron/weekly-social-report' }, handler);

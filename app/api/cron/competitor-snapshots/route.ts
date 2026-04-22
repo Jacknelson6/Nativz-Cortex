@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { scrapeTikTokProfile } from '@/lib/audit/scrape-tiktok-profile';
 import { notifyAdmins } from '@/lib/notifications';
+import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 
 export const maxDuration = 300;
 
@@ -22,7 +23,7 @@ const STALE_DAYS = 7;
  *
  * Auth: `Bearer $CRON_SECRET`.
  */
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = request.headers.get('authorization');
   if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
@@ -165,3 +166,5 @@ export async function GET(request: NextRequest) {
     stale_total: stale.length,
   });
 }
+
+export const GET = withCronTelemetry({ route: '/api/cron/competitor-snapshots' }, handleGet);

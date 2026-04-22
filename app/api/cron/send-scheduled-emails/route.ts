@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendUserEmail } from '@/lib/email/send-user-email';
 import { detectAgencyFromHostname } from '@/lib/agency/detect';
+import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 
 export const maxDuration = 60;
 
@@ -14,7 +15,7 @@ function isAuthorisedCron(req: NextRequest): boolean {
   return auth === `Bearer ${secret}`;
 }
 
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
   if (!isAuthorisedCron(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -110,3 +111,5 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({ ok: true, processed: results.length, results });
 }
+
+export const GET = withCronTelemetry({ route: '/api/cron/send-scheduled-emails' }, handleGet);

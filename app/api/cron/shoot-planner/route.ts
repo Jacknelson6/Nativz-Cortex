@@ -7,6 +7,7 @@ import { buildShootPlanPrompt } from '@/lib/prompts/shoot-plan';
 import { getClientMemory, formatClientMemoryBlock } from '@/lib/vault/content-memory';
 import { syncShootPlanToVault } from '@/lib/vault/sync';
 import type { ShootPlan } from '@/lib/types/strategy';
+import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 
 export const maxDuration = 300;
 
@@ -21,7 +22,7 @@ export const maxDuration = 300;
  * @auth Bearer CRON_SECRET (Vercel cron)
  * @returns {{ message: string, processed: number, failed: number, total: number }}
  */
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
   try {
     // Verify cron secret (Vercel sets this header for cron jobs)
     const authHeader = request.headers.get('authorization');
@@ -153,3 +154,5 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+export const GET = withCronTelemetry({ route: '/api/cron/shoot-planner' }, handleGet);

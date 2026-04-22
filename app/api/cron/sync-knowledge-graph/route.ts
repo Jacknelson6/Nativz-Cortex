@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { syncAllKnowledgeSources } from '@/lib/knowledge/github-sync';
+import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 
 export const maxDuration = 300;
 
@@ -37,10 +38,12 @@ async function handle(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
-  return handle(request);
-}
+export const GET = withCronTelemetry(
+  { route: '/api/cron/sync-knowledge-graph' },
+  async (request: NextRequest) => handle(request),
+);
 
-export async function POST(request: NextRequest) {
-  return handle(request);
-}
+export const POST = withCronTelemetry(
+  { route: '/api/cron/sync-knowledge-graph' },
+  async (request: NextRequest) => handle(request),
+);

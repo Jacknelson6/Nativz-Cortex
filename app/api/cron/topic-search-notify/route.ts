@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runTopicSearchOpsCron } from '@/lib/topic-search/ops-cron';
+import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 
 export const maxDuration = 120;
 
@@ -13,7 +14,7 @@ export const maxDuration = 120;
  * @env TOPIC_SEARCH_STUCK_PROCESSING_MINUTES (default 25)
  * @env TOPIC_SEARCH_STUCK_QUEUE_MINUTES (default 90)
  */
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
@@ -33,3 +34,5 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+export const GET = withCronTelemetry({ route: '/api/cron/topic-search-notify' }, handleGet);

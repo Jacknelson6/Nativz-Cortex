@@ -10,6 +10,7 @@ import {
 import { syncClientAffiliates } from '@/lib/uppromote/sync';
 import { sendAffiliateWeeklyReportEmail } from '@/lib/email/resend';
 import { getSecret } from '@/lib/secrets/store';
+import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 
 export const maxDuration = 300;
 
@@ -235,5 +236,5 @@ async function handler(request: NextRequest) {
   }
 }
 
-export const GET = handler;
-export const POST = handler;
+export const GET = withCronTelemetry({ route: '/api/cron/weekly-affiliate-report' }, handler);
+export const POST = withCronTelemetry({ route: '/api/cron/weekly-affiliate-report' }, handler);

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getPostingService } from '@/lib/posting';
 import type { SocialPlatform } from '@/lib/posting/types';
+import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 
 export const maxDuration = 300;
 
@@ -18,7 +19,7 @@ const BATCH_SIZE = 5;
  * @auth Bearer CRON_SECRET (Vercel cron)
  * @returns {{ message: string, published: number, failed: number }}
  */
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
@@ -202,6 +203,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+export const GET = withCronTelemetry({ route: '/api/cron/publish-posts' }, handleGet);
 
 async function sendFailureNotification(
   adminClient: ReturnType<typeof createAdminClient>,
