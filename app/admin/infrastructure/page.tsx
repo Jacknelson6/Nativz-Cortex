@@ -1,10 +1,68 @@
 import { redirect } from 'next/navigation';
+import { unstable_cache } from 'next/cache';
 import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ChevronRight } from 'lucide-react';
 
+// Auth must run per-request (otherwise non-admins could hit a cached admin
+// page response). The expensive part is the three DB reads below — those
+// are wrapped in unstable_cache with a 30s TTL since the data shown is
+// global (last 50 runs / last 7d aggregates / configured models) and
+// doesn't vary by user.
 export const dynamic = 'force-dynamic';
+
+const INFRA_CACHE_TAG = 'infrastructure-telemetry';
+const INFRA_CACHE_TTL = 30; // seconds
+
+// ── Cached data fetchers ─────────────────────────────────────────────────
+// These are global queries (no per-user filtering) so they're safe to cache.
+// 30s TTL means a refresh hits the DB at most once every 30s no matter how
+// many admins are watching the page. Auth still runs per-request below.
+
+const getRecentRunsCached = unstable_cache(
+  async () => {
+    const admin = createAdminClient();
+    return admin
+      .from('topic_searches')
+      .select(
+        'id, query, status, topic_pipeline, created_at, completed_at, processing_started_at, tokens_used, estimated_cost, pipeline_state',
+      )
+      .eq('topic_pipeline', 'llm_v1')
+      .order('created_at', { ascending: false })
+      .limit(50);
+  },
+  ['infrastructure-recent-runs'],
+  { revalidate: INFRA_CACHE_TTL, tags: [INFRA_CACHE_TAG] },
+);
+
+const getWeeklyRollupCached = unstable_cache(
+  async () => {
+    const admin = createAdminClient();
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    return admin
+      .from('topic_searches')
+      .select('status, completed_at, processing_started_at, pipeline_state')
+      .eq('topic_pipeline', 'llm_v1')
+      .gte('created_at', sevenDaysAgo)
+      .limit(500);
+  },
+  ['infrastructure-weekly-rollup'],
+  { revalidate: INFRA_CACHE_TTL, tags: [INFRA_CACHE_TAG] },
+);
+
+const getConfiguredModelsCached = unstable_cache(
+  async () => {
+    const admin = createAdminClient();
+    return admin
+      .from('agency_settings')
+      .select('topic_search_planner_model, topic_search_research_model, topic_search_merger_model')
+      .eq('agency', 'nativz')
+      .single();
+  },
+  ['infrastructure-models'],
+  { revalidate: 5 * 60, tags: [INFRA_CACHE_TAG] }, // models change rarely
+);
 
 type StageRow = {
   phase?: string;
@@ -51,12 +109,15 @@ const PHASE_LABELS: Record<string, string> = {
   merge_retry: 'Merge retry',
 };
 
+// Cyan-only palette per Jack's "no purple" feedback. Lightness gradations
+// give us 5 distinguishable steps; coral handles the "trouble" stages
+// (retries, errors) since coral is the brand's accent for urgency.
 const PHASE_TINTS: Record<string, string> = {
-  subtopic_research: 'bg-cyan-500/70',
-  platform_scrapers: 'bg-blue-500/70',
-  transcribe_all: 'bg-fuchsia-500/70',
-  cluster_pillars: 'bg-violet-500/70',
-  merge: 'bg-purple-500/70',
+  subtopic_research: 'bg-cyan-300/85',
+  platform_scrapers: 'bg-cyan-500/85',
+  transcribe_all: 'bg-cyan-200/70',
+  cluster_pillars: 'bg-cyan-700/85',
+  merge: 'bg-cyan-400/85',
   merge_retry: 'bg-coral-500/70',
 };
 
@@ -71,13 +132,52 @@ function formatMs(ms: number | null | undefined): string {
 }
 
 function totalWallClockMs(row: SearchRow): number | null {
-  if (row.completed_at && row.processing_started_at) {
-    return new Date(row.completed_at).getTime() - new Date(row.processing_started_at).getTime();
-  }
+  // Pipeline state is the source of truth — sums actual stage durations.
+  // We can't use completed_at - processing_started_at because route.ts
+  // resets processing_started_at to null on completion (single-flight
+  // lease cleanup), so the difference is always null for finished runs.
+  const stageSum = sumStageDurations(row.pipeline_state?.stages);
+  if (stageSum > 0) return stageSum;
+  // Fallback for runs without pipeline_state (rare): created → completed.
   if (row.completed_at) {
     return new Date(row.completed_at).getTime() - new Date(row.created_at).getTime();
   }
   return null;
+}
+
+/** Group stage rows by phase for the legend — collapses the 5 repeated
+ *  "subtopic_research" entries into one summary row so the legend stays
+ *  readable at a glance. Returns total + count + slowest per phase. */
+function groupStagesByPhase(stages: StageRow[] | undefined): {
+  phase: string;
+  total: number;
+  count: number;
+  slowest: number;
+}[] {
+  if (!stages?.length) return [];
+  const map = new Map<string, { total: number; count: number; slowest: number }>();
+  for (const s of stages) {
+    if (typeof s.duration_ms !== 'number' || s.duration_ms <= 0) continue;
+    const phase = String(s.phase ?? 'unknown');
+    const existing = map.get(phase) ?? { total: 0, count: 0, slowest: 0 };
+    existing.total += s.duration_ms;
+    existing.count += 1;
+    existing.slowest = Math.max(existing.slowest, s.duration_ms);
+    map.set(phase, existing);
+  }
+  return [...map.entries()]
+    .map(([phase, v]) => ({ phase, ...v }))
+    .sort((a, b) => b.total - a.total);
+}
+
+/** Find the phase consuming the largest share of wall-clock time. */
+function longPole(stages: StageRow[] | undefined): { phase: string; ms: number; pct: number } | null {
+  const grouped = groupStagesByPhase(stages);
+  if (grouped.length === 0) return null;
+  const total = grouped.reduce((acc, g) => acc + g.total, 0);
+  if (total === 0) return null;
+  const top = grouped[0];
+  return { phase: top.phase, ms: top.total, pct: (top.total / total) * 100 };
 }
 
 function sumStageDurations(stages: StageRow[] | undefined): number {
@@ -133,28 +233,10 @@ export default async function InfrastructurePage() {
     redirect('/admin/dashboard');
   }
 
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-
   const [recentResult, weeklyResult, modelsResult] = await Promise.all([
-    admin
-      .from('topic_searches')
-      .select(
-        'id, query, status, topic_pipeline, created_at, completed_at, processing_started_at, tokens_used, estimated_cost, pipeline_state',
-      )
-      .eq('topic_pipeline', 'llm_v1')
-      .order('created_at', { ascending: false })
-      .limit(50),
-    admin
-      .from('topic_searches')
-      .select('status, completed_at, processing_started_at, pipeline_state')
-      .eq('topic_pipeline', 'llm_v1')
-      .gte('created_at', sevenDaysAgo)
-      .limit(500),
-    admin
-      .from('agency_settings')
-      .select('topic_search_planner_model, topic_search_research_model, topic_search_merger_model')
-      .eq('agency', 'nativz')
-      .single(),
+    getRecentRunsCached(),
+    getWeeklyRollupCached(),
+    getConfiguredModelsCached(),
   ]);
 
   const rows = (recentResult.data ?? []) as SearchRow[];
@@ -166,13 +248,11 @@ export default async function InfrastructurePage() {
   const completedWeek = weekly.filter((r) => r.status === 'completed');
   const failedWeek = weekly.filter((r) => r.status === 'failed').length;
 
+  // Sum stage durations from pipeline_state — same source-of-truth logic as
+  // the per-row total. Wraps a guard for runs with no stages recorded.
   const totalTimes = completedWeek
-    .map((r) =>
-      r.completed_at && r.processing_started_at
-        ? new Date(r.completed_at).getTime() - new Date(r.processing_started_at).getTime()
-        : null,
-    )
-    .filter((n): n is number => typeof n === 'number' && n > 0);
+    .map((r) => sumStageDurations(r.pipeline_state?.stages))
+    .filter((n) => n > 0);
   const avgTotal = totalTimes.length
     ? totalTimes.reduce((a, b) => a + b, 0) / totalTimes.length
     : null;
@@ -211,7 +291,7 @@ export default async function InfrastructurePage() {
         <Stat label="Failed (7d)" value={String(failedWeek)} sub={
           weekly.length ? `${Math.round((failedWeek / weekly.length) * 100)}% failure rate` : undefined
         } />
-        <Stat label="Avg total time" value={formatMs(avgTotal)} sub="processing → completed" />
+        <Stat label="Avg total time" value={formatMs(avgTotal)} sub="sum of stage durations" />
         <Stat label="Avg merge stage" value={formatMs(avgMerge)} sub={
           avgSubtopic != null ? `subtopic avg: ${formatMs(avgSubtopic)}` : undefined
         } />
@@ -255,8 +335,9 @@ export default async function InfrastructurePage() {
             {rows.map((row) => {
               const total = totalWallClockMs(row);
               const stages = row.pipeline_state?.stages;
-              const slow = slowestStage(stages);
               const bar = stageBar(stages);
+              const grouped = groupStagesByPhase(stages);
+              const longest = longPole(stages);
               return (
                 <details
                   key={row.id}
@@ -277,13 +358,20 @@ export default async function InfrastructurePage() {
                     <span className="w-20 shrink-0 text-right text-xs tabular-nums text-text-muted">
                       {formatMs(total)}
                     </span>
-                    <span className="hidden w-32 shrink-0 truncate text-right text-xs text-text-muted md:inline-block">
-                      {slow ? `${PHASE_LABELS[slow.phase ?? ''] ?? slow.phase} ${formatMs(slow.duration_ms)}` : '—'}
+                    <span className="hidden w-44 shrink-0 truncate text-right text-xs text-text-muted md:inline-block">
+                      {longest ? (
+                        <>
+                          long pole:{' '}
+                          <span className="text-accent-text">{PHASE_LABELS[longest.phase] ?? longest.phase}</span>{' '}
+                          <span className="tabular-nums">{Math.round(longest.pct)}%</span>
+                        </>
+                      ) : '—'}
                     </span>
                   </summary>
                   <div className="space-y-4 border-t border-nativz-border/60 px-4 py-4">
                     {bar.length > 0 ? (
-                      <div className="space-y-2">
+                      <div className="space-y-3">
+                        {/* Stacked bar — every stage segment, in execution order. */}
                         <div className="flex h-2 overflow-hidden rounded-full bg-surface-hover">
                           {bar.map((seg, i) => (
                             <div
@@ -294,11 +382,19 @@ export default async function InfrastructurePage() {
                             />
                           ))}
                         </div>
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-muted">
-                          {bar.map((seg, i) => (
-                            <span key={i} className="inline-flex items-center gap-1.5">
-                              <span className={`h-2 w-2 rounded-full ${PHASE_TINTS[seg.phase] ?? 'bg-text-muted/30'}`} />
-                              {PHASE_LABELS[seg.phase] ?? seg.phase}: {formatMs(seg.ms)}
+                        {/* Legend — grouped by phase so 5 subtopic-research entries
+                            collapse into one line with a count + slowest detail. */}
+                        <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-text-muted">
+                          {grouped.map((g) => (
+                            <span key={g.phase} className="inline-flex items-center gap-2">
+                              <span className={`h-2.5 w-2.5 rounded-full ${PHASE_TINTS[g.phase] ?? 'bg-text-muted/30'}`} />
+                              <span className="text-text-secondary">{PHASE_LABELS[g.phase] ?? g.phase}</span>
+                              <span className="tabular-nums">{formatMs(g.total)}</span>
+                              {g.count > 1 && (
+                                <span className="text-text-muted/70">
+                                  · {g.count}× · slowest {formatMs(g.slowest)}
+                                </span>
+                              )}
                             </span>
                           ))}
                         </div>
@@ -388,14 +484,16 @@ function Meta({ label, value, mono }: { label: string; value: string; mono?: boo
 }
 
 function StatusPill({ status }: { status: string }) {
+  // Brand palette: cyan = brand/success-positive, coral = error/urgency,
+  // muted neutral = in-flight. No emerald (off-brand per .impeccable.md).
   const tone =
     status === 'completed'
-      ? 'bg-emerald-500/15 text-emerald-300'
+      ? 'border border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
       : status === 'failed'
-        ? 'bg-red-500/15 text-red-300'
+        ? 'border border-coral-500/30 bg-coral-500/10 text-coral-300'
         : status === 'processing'
-          ? 'bg-amber-500/15 text-amber-300'
-          : 'bg-text-muted/15 text-text-muted';
+          ? 'border border-text-muted/30 bg-surface-hover/60 text-text-secondary'
+          : 'border border-text-muted/20 bg-surface-hover/40 text-text-muted';
   return (
     <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${tone}`}>
       {status}
