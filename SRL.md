@@ -984,3 +984,42 @@ Also reverted the Button component's secondary/outline/ghost variants back to ne
 
 **Still held back (Jack to apply selectively):**
 - Where exactly to drop `.nz-eyebrow` — candidates: above portal "Recent reports", above portal "Content strategy", above admin "Today's tasks" / "Notifications" widget headings. Should be rare, each placement a deliberate brand moment.
+
+### Iteration 11.8 — 2026-04-22 · Revert purple CTAs
+
+**Focus:** Jack saw the purple palette in action and said "being 100% honest, I hate the purple." Revert without losing the rest of the iter 11.1-11.7 progress.
+
+**Shipped:** part of `feat(brand): revert purple CTAs, AC brand-mode double pass` (dc1eb7b)
+
+- Button primary variant: `bg-[--nz-purple]` → `bg-accent` (cyan in Nativz, teal in Anderson per brand mode). Kept `.nz-btn-label` uppercase Jost because Jack only objected to the color.
+- Killed the `button.bg-accent → --nz-purple` CSS override block entirely. Raw inline `bg-accent` CTAs render in brand accent again.
+- Retained the button-shape override: `button.bg-accent` keeps picking up `--nz-btn-radius` (pill in Nativz, rectangle in AC).
+- Button focus ring: `--nz-purple` → `--accent`.
+- New `--nz-btn-radius` token — Button `shape` styles use it so brand modes flip the whole system.
+- **Fix:** global `:focus-visible` rule was setting `border-radius: 4px` which squished pill buttons on keyboard focus. Now excludes `button`, `a`, `[role="button"]` — they carry their own focus treatment.
+
+### Iteration 11.9 — 2026-04-22 · Anderson Collaborative double pass
+
+**Focus:** Jack pasted the full AC design token spec (Sora/Rubik/Roboto fonts, teal+navy+orange palette, sharp rectangular buttons, tag pills). Existing AC mode was teal-only and missing surface-elevated. Bring it to parity with the Nativz mode so both brands render correctly.
+
+**Shipped:** part of commit `dc1eb7b`
+
+- Full ac-teal + ac-navy + ac-orange + neutrals ramps applied
+- `--accent2` in AC now = `ac-orange #FF7A45` (was duplicate teal). Secondary accent finally has its own identity.
+- `--surface-elevated` defined (`ac-navy-50 #F0F4F8`) so widget skeletons don't silently drop.
+- Status palette AC-specific: success=teal, warn=ac-warn amber, danger=ac-danger, info=ac-slate, trending=ac-orange.
+- AC fonts loaded via `next/font/google`: **Sora** (display) + **Roboto** (body); Rubik already shared. CSS remaps `--font-nz-display → --font-ac-display` in AC mode, so every `ui-page-title` / `ui-section-title` etc. picks up Sora automatically.
+- AC CTAs are SHARP RECTANGLES per AC spec: `--nz-btn-radius: 0` in AC mode. Button component + inline CTA shape both flip.
+- AC background shifts from cool `#F4F6F8` to warmer `#F9F8FA` (ac-stone) for cleaner match to AC's live marketing.
+- AC elevation stays flat-ish with navy-tinted hover shadows (ac-navy rgba pattern instead of pure black).
+- `.nz-u` signature underline already had AC teal override; `.nz-eyebrow` already had AC teal-600 color override — both still correct.
+
+**Verification:**
+- `npx tsc --noEmit` clean.
+- Dev server on 3005 healthy.
+- Switch brand mode via `<html data-brand-mode="anderson">` to see AC rendering.
+
+**Known gaps (not launch-blockers):**
+- `.btn-shimmer` CSS still exists in globals.css but no TSX references it since iter 11.1 (Button component stopped using it). Orphaned but harmless. Clean up in a future pass.
+- `.glow-btn` CSS still wired to `components/ui/glow-button.tsx`. Kept as-is.
+- Icon tiles in AC mode default to circles (matching Nativz). If AC screenshots show rectangular tiles, flag and I'll switch.
