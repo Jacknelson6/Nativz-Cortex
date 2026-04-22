@@ -5,13 +5,14 @@ import type { AgencyBrand } from '@/lib/agency/detect';
 /**
  * Convert a merge-resolved Markdown body into the HTML card Resend accepts.
  * Supports:
- *   # heading            → large branded heading (22px, tight tracking)
- *   ## subheading        → secondary heading (16px)
- *   **bold**, *italic*   → <strong> / <em>
- *   - bullet             → <ul>/<li>
- *   [text](url)          → branded link
- *   ---                  → horizontal divider
- *   blank line           → paragraph break
+ *   # heading                       → large branded heading (22px, tight tracking)
+ *   ## subheading                   → secondary heading (16px)
+ *   **bold**, *italic*              → <strong> / <em>
+ *   - bullet                        → <ul>/<li>
+ *   [text](url)                     → inline branded link
+ *   [text](url)  (on its own line)  → full-width CTA button pill
+ *   ---                             → horizontal divider
+ *   blank line                      → paragraph break
  *
  * Everything else is HTML-escaped — admin-authored content can never inject
  * into the markup. Inline-style rendering because Gmail strips <style> blocks
@@ -42,6 +43,10 @@ function markdownToHtml(markdown: string, agency: AgencyBrand): string {
   const blocks = markdown.split(/\n{2,}/).map((b) => b.replace(/\s+$/g, ''));
   const parts: string[] = [];
 
+  // Regex for "this whole block is just one markdown link" -> promotes it
+  // to a pill-button CTA. Matches [text](url) with surrounding whitespace.
+  const standaloneLinkRe = /^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/;
+
   for (const raw of blocks) {
     const block = raw.trim();
     if (!block) continue;
@@ -65,6 +70,18 @@ function markdownToHtml(markdown: string, agency: AgencyBrand): string {
       const text = block.replace(/^##\s+/, '');
       parts.push(
         `<h2 style="margin:24px 0 8px;font-size:15px;font-weight:700;letter-spacing:-0.01em;color:${brand.textPrimary};text-transform:none;">${renderInline(text, accent)}</h2>`,
+      );
+      continue;
+    }
+
+    // Standalone link -> CTA button. Matches the inline styles the
+    // invite/reset emails apply to .button (layout() in resend.ts).
+    const ctaMatch = standaloneLinkRe.exec(block);
+    if (ctaMatch) {
+      const label = escape(ctaMatch[1]);
+      const url = ctaMatch[2];
+      parts.push(
+        `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:28px 0;"><tr><td align="center"><a href="${url}" style="display:inline-block;background:${brand.blueCta};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;letter-spacing:0.02em;padding:14px 36px;border-radius:10px;">${label}</a></td></tr></table>`,
       );
       continue;
     }
