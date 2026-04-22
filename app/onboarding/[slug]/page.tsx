@@ -1,5 +1,7 @@
+import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { detectAgencyFromHostname } from '@/lib/agency/detect';
 import { OnboardingPublicView } from '@/components/onboarding/onboarding-public-view';
 
 export const dynamic = 'force-dynamic';
@@ -85,12 +87,18 @@ export default async function PublicOnboardingPage({
     clients: Array.isArray(raw.clients) ? raw.clients[0] ?? null : raw.clients,
   };
 
+  // Detect agency from Host header so Anderson Collaborative clients
+  // don\u2019t see the Nativz wordmark in the public footer.
+  const hostHeader = (await headers()).get('host') ?? '';
+  const agency = detectAgencyFromHostname(hostHeader);
+
   return (
     <OnboardingPublicView
       tracker={normalized}
       phases={phasesRes.data ?? []}
       groups={groupsRes.data ?? []}
       items={items ?? []}
+      agency={agency}
     />
   );
 }

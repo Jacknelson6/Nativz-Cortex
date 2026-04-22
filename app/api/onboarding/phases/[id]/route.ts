@@ -47,6 +47,33 @@ export async function PATCH(
       console.error('PATCH /api/onboarding/phases/[id] error:', error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    // Cascade: when a phase moves to 'done' and every sibling phase is now
+    // done too, auto-mark the tracker as completed so the admin doesn't
+    // have to remember. Only touches non-template trackers that aren't
+    // already completed/archived.
+    if (parsed.data.status === 'done' && data) {
+      const [{ data: siblings }, { data: tracker }] = await Promise.all([
+        admin
+          .from('onboarding_phases')
+          .select('status')
+          .eq('tracker_id', data.tracker_id),
+        admin
+          .from('onboarding_trackers')
+          .select('id, status, is_template, completed_at')
+          .eq('id', data.tracker_id)
+          .maybeSingle(),
+      ]);
+      const allDone = (siblings ?? []).length > 0 && (siblings ?? []).every((p) => p.status === 'done');
+      const shouldComplete = allDone && tracker && !tracker.is_template && tracker.status === 'active';
+      if (shouldComplete) {
+        await admin
+          .from('onboarding_trackers')
+          .update({ status: 'completed', completed_at: new Date().toISOString() })
+          .eq('id', data.tracker_id);
+      }
+    }
+
     return NextResponse.json({ phase: data });
   } catch (error) {
     console.error('PATCH /api/onboarding/phases/[id] error:', error);

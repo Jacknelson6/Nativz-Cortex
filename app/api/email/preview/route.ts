@@ -95,11 +95,14 @@ async function renderOnboarding(
   admin: AdminClient,
   agency: Agency,
 ) {
+  // Generic placeholder context for the standalone template editor, where
+  // no real client is attached. Deliberately impersonal so admins know
+  // they\u2019re looking at sample copy, not a real client\u2019s name.
   let ctx = {
-    clientName: 'Sample Client',
-    service: 'SMM',
-    shareUrl: 'https://cortex.nativz.io/onboarding/sample?token=preview',
-    contactFirstName: 'Jack',
+    clientName: '[Client]',
+    service: '[Service]',
+    shareUrl: 'https://cortex.nativz.io/onboarding/example?token=preview',
+    contactFirstName: '[First name]',
   };
 
   if (input.tracker_id) {

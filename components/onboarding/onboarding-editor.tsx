@@ -125,6 +125,28 @@ export function OnboardingEditor({
   useEffect(() => { setGroups(initialGroups); }, [initialGroups]);
   useEffect(() => { setItems(initialItems); }, [initialItems]);
 
+  // Ref map for scroll-into-view on newly-added rows. We keep one
+  // element per phase+group id; the add* callbacks set the pending id,
+  // this effect fires post-render and smooth-scrolls, then clears.
+  const phaseRefMap = useRef<Map<string, HTMLElement>>(new Map());
+  const groupRefMap = useRef<Map<string, HTMLElement>>(new Map());
+  const [pendingScrollPhaseId, setPendingScrollPhaseId] = useState<string | null>(null);
+  const [pendingScrollGroupId, setPendingScrollGroupId] = useState<string | null>(null);
+  useEffect(() => {
+    if (pendingScrollPhaseId) {
+      const el = phaseRefMap.current.get(pendingScrollPhaseId);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setPendingScrollPhaseId(null);
+    }
+  }, [pendingScrollPhaseId, phases]);
+  useEffect(() => {
+    if (pendingScrollGroupId) {
+      const el = groupRefMap.current.get(pendingScrollGroupId);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setPendingScrollGroupId(null);
+    }
+  }, [pendingScrollGroupId, groups]);
+
   // ─── Tracker mutations ──────────────────────────────────────────────
 
   const updateTracker = useCallback(async (fields: Partial<Tracker> & { regenerate_share_token?: boolean }) => {
@@ -163,6 +185,7 @@ export function OnboardingEditor({
     if (!res.ok) { toast.error('Failed to add phase'); return; }
     const { phase } = await res.json() as { phase: Phase };
     setPhases((xs) => [...xs, phase]);
+    setPendingScrollPhaseId(phase.id);
   }, [tracker.id]);
 
   const updatePhase = useCallback(async (id: string, fields: Partial<Phase>) => {
@@ -230,6 +253,7 @@ export function OnboardingEditor({
     if (!res.ok) { toast.error('Failed to add section'); return; }
     const { group } = await res.json() as { group: Group };
     setGroups((gs) => [...gs, group]);
+    setPendingScrollGroupId(group.id);
   }, [tracker.id]);
 
   const updateGroup = useCallback(async (id: string, fields: Partial<Group>) => {
@@ -438,6 +462,10 @@ export function OnboardingEditor({
                   onUpdate={(fields) => void updatePhase(p.id, fields)}
                   onDelete={() => void deletePhase(p.id)}
                   onReorder={(sourceId, targetId) => void reorderPhases(sourceId, targetId)}
+                  registerRef={(el) => {
+                    if (el) phaseRefMap.current.set(p.id, el);
+                    else phaseRefMap.current.delete(p.id);
+                  }}
                 />
               ))}
           </div>
@@ -475,6 +503,10 @@ export function OnboardingEditor({
                   onUpdateItem={(id, fields) => void updateItem(id, fields)}
                   onDeleteItem={(id) => void deleteItem(id)}
                   onReorderItem={(sourceId, targetId) => void reorderItems(g.id, sourceId, targetId)}
+                  registerRef={(el) => {
+                    if (el) groupRefMap.current.set(g.id, el);
+                    else groupRefMap.current.delete(g.id);
+                  }}
                 />
               );
             })}
@@ -545,6 +577,13 @@ function TrackerHeader({
   }
 
   async function rotateToken() {
+    // Confirm before invalidating — a rotated token 404s the old URL for
+    // anyone who received it. Easy to do accidentally otherwise.
+    const ok = window.confirm(
+      'Rotate the share link?\n\n' +
+        'Anyone who has the current URL will see a 404. You\u2019ll need to resend the new link.',
+    );
+    if (!ok) return;
     setRotating(true);
     try {
       await onUpdate({ regenerate_share_token: true });
@@ -766,11 +805,13 @@ function PhaseRow({
   onUpdate,
   onDelete,
   onReorder,
+  registerRef,
 }: {
   phase: Phase;
   onUpdate: (fields: Partial<Phase>) => void | Promise<void>;
   onDelete: () => void;
   onReorder: (sourceId: string, targetId: string) => void;
+  registerRef?: (el: HTMLDivElement | null) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -778,6 +819,7 @@ function PhaseRow({
 
   return (
     <div
+      ref={registerRef}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = 'move';
@@ -968,6 +1010,7 @@ function GroupBlock({
   onUpdateItem,
   onDeleteItem,
   onReorderItem,
+  registerRef,
 }: {
   group: Group;
   items: Item[];
@@ -977,11 +1020,12 @@ function GroupBlock({
   onUpdateItem: (id: string, fields: Partial<Item>) => void;
   onDeleteItem: (id: string) => void;
   onReorderItem: (sourceId: string, targetId: string) => void;
+  registerRef?: (el: HTMLDivElement | null) => void;
 }) {
   const done = items.filter((it) => it.status === 'done').length;
 
   return (
-    <div className="rounded-[10px] border border-nativz-border bg-surface overflow-hidden">
+    <div ref={registerRef} className="rounded-[10px] border border-nativz-border bg-surface overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-nativz-border bg-surface-hover/30">
         <input
           defaultValue={group.name}

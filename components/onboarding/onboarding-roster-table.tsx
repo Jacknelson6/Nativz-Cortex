@@ -61,8 +61,15 @@ export function OnboardingRosterTable({
   const [showNew, setShowNew] = useState(false);
   const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Archived trackers are hidden from the roster by default — status is
+  // a terminal signal and a cluttered list is worse than a focused one.
+  const [includeArchived, setIncludeArchived] = useState(false);
 
   const isTemplatesView = view === 'templates';
+  const archivedCount = useMemo(
+    () => (isTemplatesView ? 0 : trackers.filter((t) => t.status === 'archived').length),
+    [trackers, isTemplatesView],
+  );
 
   // Row-level duplicate: same shape as the tracker it came from.
   async function handleDuplicate(trackerId: string) {
@@ -102,8 +109,11 @@ export function OnboardingRosterTable({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return trackers;
-    return trackers.filter((t) => {
+    const base = isTemplatesView || includeArchived
+      ? trackers
+      : trackers.filter((t) => t.status !== 'archived');
+    if (!q) return base;
+    return base.filter((t) => {
       const cname = t.clients?.name?.toLowerCase() ?? '';
       const tname = (t.template_name ?? '').toLowerCase();
       return (
@@ -113,7 +123,7 @@ export function OnboardingRosterTable({
         (t.title ?? '').toLowerCase().includes(q)
       );
     });
-  }, [trackers, query]);
+  }, [trackers, query, includeArchived, isTemplatesView]);
 
   async function handleCreate(clientId: string, service: string) {
     if (!clientId || !service) return;
@@ -172,6 +182,20 @@ export function OnboardingRosterTable({
             className="w-full rounded-lg border border-nativz-border bg-surface-primary pl-9 pr-4 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-border focus:outline-none focus:ring-1 focus:ring-accent-border transition-colors"
           />
         </div>
+        {!isTemplatesView && archivedCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setIncludeArchived((v) => !v)}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors ${
+              includeArchived
+                ? 'border-accent-border bg-accent-surface text-accent-text'
+                : 'border-nativz-border bg-surface-primary text-text-muted hover:text-text-primary'
+            }`}
+            title={`${archivedCount} archived`}
+          >
+            {includeArchived ? 'Hide archived' : `Show archived (${archivedCount})`}
+          </button>
+        )}
         <Button
           type="button"
           size="sm"
@@ -198,14 +222,14 @@ export function OnboardingRosterTable({
             {trackers.length === 0
               ? isTemplatesView
                 ? 'No templates yet.'
-                : 'No onboarding trackers yet.'
+                : 'Ready to kick off your first client onboarding?'
               : 'No results.'}
           </p>
           {trackers.length === 0 && (
-            <p className="text-xs text-text-muted mt-1">
+            <p className="text-xs text-text-muted mt-1 max-w-sm">
               {isTemplatesView
-                ? 'Click "New template" to save a reusable preset.'
-                : 'Click "New tracker" to start one.'}
+                ? 'Save a reusable preset so every new client inherits your best playbook.'
+                : 'Click "New tracker" to pick a client + service \u2014 apply a template to skip the setup.'}
             </p>
           )}
         </div>

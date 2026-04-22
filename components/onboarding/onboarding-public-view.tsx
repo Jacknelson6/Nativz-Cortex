@@ -77,14 +77,17 @@ export function OnboardingPublicView({
   phases,
   groups,
   items,
+  agency = 'nativz',
 }: {
   tracker: Tracker;
   phases: Phase[];
   groups: Group[];
   items: Item[];
+  agency?: 'nativz' | 'anderson';
 }) {
   const clientName = tracker.clients?.name ?? 'Client';
   const logoUrl = tracker.clients?.logo_url;
+  const brandName = agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz Cortex';
 
   const totalItems = items.length;
   const doneItems = items.filter((it) => it.status === 'done').length;
@@ -225,7 +228,7 @@ export function OnboardingPublicView({
         )}
 
         <footer className="pt-6 text-center text-[11px] text-text-muted/70">
-          Powered by Nativz Cortex
+          Powered by {brandName}
         </footer>
       </main>
     </div>
