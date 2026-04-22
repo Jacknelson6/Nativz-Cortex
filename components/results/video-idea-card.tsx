@@ -17,16 +17,21 @@ interface VideoIdeaCardProps {
   initialReaction?: Reaction;
 }
 
-const VIRALITY_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info' | 'purple'> = {
+const VIRALITY_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info' | 'coral'> = {
   low: 'default',
   medium: 'info',
   high: 'success',
-  viral_potential: 'purple',
+  viral_potential: 'coral',
 };
 
-const VIRALITY_BORDER: Record<string, string> = {
-  viral_potential: 'border-l-accent2',
-  high: 'border-l-blue-500',
+// "viral_potential" cards get a full-perimeter coral ring instead of the
+// previous left-stripe accent. The 3px border-left pattern is a banned
+// AI-design tell (.impeccable.md BAN 1) and using --accent2 (purple)
+// also violated "purple is CTA only". Whole-card ring keeps the visual
+// signal without the slop.
+const VIRALITY_RING: Record<string, string> = {
+  viral_potential: 'ring-1 ring-inset ring-coral-500/30',
+  high: 'ring-1 ring-inset ring-accent/20',
 };
 
 function formatIdeaForClipboard(idea: VideoIdea): string {
@@ -64,7 +69,7 @@ export function VideoIdeaCard({ idea, topicName, clientId, searchId, initialReac
   const [reaction, setReaction] = useState<Reaction>(initialReaction ?? null);
   const [saving, setSaving] = useState(false);
   const virality = effectiveVirality(idea.virality);
-  const borderClass = VIRALITY_BORDER[virality] || 'border-l-transparent';
+  const ringClass = VIRALITY_RING[virality] ?? '';
 
   async function handleCopy(e: React.MouseEvent) {
     e.stopPropagation();
@@ -116,7 +121,7 @@ export function VideoIdeaCard({ idea, topicName, clientId, searchId, initialReac
   }
 
   return (
-    <div className={`group rounded-lg border border-nativz-border border-l-[3px] ${borderClass} bg-surface p-4 transition-all duration-200 hover:shadow-card-hover hover:border-accent/40`}>
+    <div className={`group rounded-lg border border-nativz-border ${ringClass} bg-surface p-4 transition-all duration-200 hover:-translate-y-px hover:border-accent/40 hover:shadow-card-hover`}>
       {/* Title row with virality badge and copy button */}
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-start gap-2 min-w-0">

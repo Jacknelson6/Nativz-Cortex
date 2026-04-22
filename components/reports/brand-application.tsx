@@ -24,12 +24,17 @@ export function BrandApplication({ content, clientName }: BrandApplicationProps)
   const body = trimmed.length > 0 ? trimmed : fallback;
 
   return (
-    <div className="flex items-start gap-3 sm:gap-4 h-full min-h-[4rem] lg:border-l lg:border-nativz-border/50 lg:pl-8">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent2-surface mt-0.5">
-        <Target size={18} className="text-accent2-text" />
+    <div className="flex h-full min-h-[4rem] items-start gap-3 sm:gap-4 lg:border-l lg:border-nativz-border/50 lg:pl-8">
+      {/* Icon tile — coral instead of accent2/purple. Coral is the brand's
+          accent / urgency color (.impeccable.md), and using it here keeps
+          the executive-summary | brand-application pair visually distinct
+          while staying inside the cyan-purple-coral palette ("don't blur
+          them" — purple is reserved for CTAs, not chrome). */}
+      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-coral-500/10 ring-1 ring-coral-500/25">
+        <Target size={16} className="text-coral-300" />
       </div>
       <div className="min-w-0 flex-1">
-        <h3 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-2.5">
+        <h3 className="mb-2.5 font-mono text-[10px] uppercase tracking-[0.2em] text-coral-300/90">
           Brand application
         </h3>
         <div className="leading-relaxed text-text-primary [&_p]:text-text-primary [&_p]:m-0 [&_strong]:font-semibold">
