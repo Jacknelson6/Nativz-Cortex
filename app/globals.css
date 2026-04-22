@@ -8,11 +8,52 @@ summary {
   cursor: pointer;
 }
 
+/* ═══════════════════════════════════════════════════════════
+   Nativz Brand Tokens — Canonical (source of truth: .impeccable.md)
+   Colors: #00AEEF cyan brand · #9314CE purple CTA · #ED6B63 coral accent
+   #000C11 ink · Jost display · Poppins body · Rubik sans
+   ═══════════════════════════════════════════════════════════ */
 :root {
+  /* Brand colors */
+  --nz-cyan:        #00AEEF;
+  --nz-cyan-700:    #0095CC;
+  --nz-cyan-200:    #B2E7FA;
+  --nz-cyan-50:     #E5F7FD;
+
+  --nz-purple:      #9314CE;
+  --nz-purple-700:  #7A0FB0;
+  --nz-purple-100:  #E6C9F3;
+
+  --nz-coral:       #ED6B63;
+  --nz-coral-700:   #D84A42;
+  --nz-coral-100:   #FBD7D4;
+
+  /* Neutrals / surfaces */
+  --nz-ink:         #000C11;
+  --nz-ink-2:       #01151D;
+  --nz-ink-3:       #0A2631;
+  --nz-white:       #FFFFFF;
+  --nz-paper:       #FAFAFA;
+  --nz-line:        rgba(255, 255, 255, 0.12);
+  --nz-line-ink:    rgba(0, 12, 17, 0.10);
+
+  /* Signature highlight underline (H1/H2 emphasis) */
+  --nz-highlight-underline: rgba(0, 174, 239, 0.70);
+
+  /* Button label letter-spacing */
+  --nz-btn-letter-spacing: 0.125em;
+}
+
+:root {
+  /* Semantic app tokens (dashboard UI layer).
+     Brand cyan drives `--accent`; flat purple reserved for primary CTA. */
   --background: #0f1117;
   --foreground: #f1f5f9;
   --surface: #1a1d2e;
   --surface-hover: #222640;
+  /* Elevated surface — one step above --surface for inset skeletons,
+     mask tracks, and loading states. Sits between --surface and --border. */
+  --surface-elevated: #242842;
   --border: #2a2f45;
   --border-light: #1f2337;
   --text-primary: #f1f5f9;
@@ -21,24 +62,36 @@ summary {
      (3.5:1 on surface, 3.96:1 on background). #94a3b8 gives 5.55:1 on
      background and 4.75:1 on surface — passes AA for normal text. */
   --text-muted: #94a3b8;
-  --accent: #046bd2;
-  --accent-hover: #0580f0;
-  --accent-surface: rgba(4, 107, 210, 0.12);
-  --accent-text: #5ba3e6;
 
-  /* Secondary accent (Ideas/AI/Creative) — purple in Nativz */
-  --accent2: #8b5cf6;
-  --accent2-hover: #7c3aed;
-  --accent2-surface: rgba(139, 92, 246, 0.12);
-  --accent2-text: #a78bfa;
-  --accent2-ring: rgba(139, 92, 246, 0.25);
+  /* Accent = Nativz brand cyan. Used for links, focus, quiet UI highlights. */
+  --accent: var(--nz-cyan);
+  --accent-hover: var(--nz-cyan-700);
+  --accent-surface: rgba(0, 174, 239, 0.12);
+  --accent-text: #5BC7F2;
 
-  /* Focus ring glow */
-  --focus-ring: rgba(4, 107, 210, 0.15);
+  /* Secondary accent = primary CTA purple. Used for the one-and-only
+     "do this now" color on primary buttons and key actions. */
+  --accent2: var(--nz-purple);
+  --accent2-hover: var(--nz-purple-700);
+  --accent2-surface: rgba(147, 20, 206, 0.12);
+  --accent2-text: #C478E0;
+  --accent2-ring: rgba(147, 20, 206, 0.25);
 
-  /* Destructive (aligned with danger buttons) */
+  /* Focus ring glow (brand cyan, subtle) */
+  --focus-ring: rgba(0, 174, 239, 0.18);
+
+  /* Destructive (Nativz coral for text/urgency, deep red for destructive buttons).
+     --error drives danger buttons; --nz-coral drives inline urgency/text. */
   --error: #dc2626;
   --error-hover: #b91c1c;
+
+  /* Status colors — tinted toward brand palette so they stop reading
+     as raw Tailwind. Use these in widgets instead of emerald-400 etc. */
+  --status-success:  #34D399;
+  --status-warning:  #F5B961;
+  --status-danger:   var(--nz-coral);
+  --status-info:     var(--nz-cyan);
+  --status-trending: #F59E0B;
 
   /* Shadow depth tokens */
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -160,6 +213,7 @@ summary {
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
   --color-surface-hover: var(--surface-hover);
+  --color-surface-elevated: var(--surface-elevated);
   --color-nativz-border: var(--border);
   --color-nativz-border-light: var(--border-light);
   --color-text-primary: var(--text-primary);
@@ -173,8 +227,32 @@ summary {
   --color-accent2-hover: var(--accent2-hover);
   --color-accent2-surface: var(--accent2-surface);
   --color-accent2-text: var(--accent2-text);
-  --font-sans: var(--font-geist-sans);
+
+  /* Brand palette (reachable via `bg-nz-cyan`, `text-nz-purple`, etc.) */
+  --color-nz-cyan: var(--nz-cyan);
+  --color-nz-cyan-700: var(--nz-cyan-700);
+  --color-nz-cyan-200: var(--nz-cyan-200);
+  --color-nz-purple: var(--nz-purple);
+  --color-nz-purple-700: var(--nz-purple-700);
+  --color-nz-coral: var(--nz-coral);
+  --color-nz-coral-700: var(--nz-coral-700);
+  --color-nz-ink: var(--nz-ink);
+  --color-nz-ink-2: var(--nz-ink-2);
+  --color-nz-ink-3: var(--nz-ink-3);
+
+  /* Status palette (use instead of raw Tailwind emerald/red/amber) */
+  --color-status-success: var(--status-success);
+  --color-status-warning: var(--status-warning);
+  --color-status-danger: var(--status-danger);
+  --color-status-info: var(--status-info);
+  --color-status-trending: var(--status-trending);
+
+  /* Font stacks */
+  --font-sans: var(--font-nz-body);
+  --font-display: var(--font-nz-display);
+  --font-ui: var(--font-nz-sans);
   --font-mono: var(--font-geist-mono);
+
   --color-error: var(--error);
   --color-error-hover: var(--error-hover);
 
@@ -709,4 +787,49 @@ dialog:not([open]) {
   border: none !important;
   box-shadow: none !important;
   animation: none !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Nativz brand typography + signature underline
+   ═══════════════════════════════════════════════════════════ */
+
+/* Display-font utility — Jost when on nativz, keeps AC on system-sans. */
+.font-display {
+  font-family: var(--font-nz-display), 'Futura PT', 'futura-pt', 'Futura',
+    'Century Gothic', system-ui, sans-serif;
+}
+
+/* Button label — Jost 700 uppercase with 2px letter-spacing.
+   Applied to primary CTAs and key action buttons. */
+.nz-btn-label {
+  font-family: var(--font-nz-display), 'Futura PT', 'Futura',
+    'Century Gothic', system-ui, sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--nz-btn-letter-spacing);
+  line-height: 1.2;
+}
+
+/* Signature: thick translucent cyan underline sitting BEHIND glyphs.
+   Wrap emphasis words in <u> inside H1/H2, or apply .nz-u directly. */
+.nz-u,
+:where(.nz-hero, .nz-h1, .nz-h2, h1.nz-highlight, h2.nz-highlight) u {
+  text-decoration: underline;
+  text-decoration-color: var(--nz-highlight-underline);
+  text-decoration-thickness: 0.6em;
+  text-decoration-skip-ink: none;
+  text-underline-offset: -0.3em;
+}
+
+/* Smaller emphasis — H2/H3 sized headings. */
+.nz-u-sm,
+:where(h2.nz-highlight, .nz-h2) u {
+  text-decoration-thickness: 0.5em;
+  text-underline-offset: -0.25em;
+}
+
+/* Anderson brand mode — underline uses AC teal, not Nativz cyan. */
+[data-brand-mode="anderson"] .nz-u,
+[data-brand-mode="anderson"] :where(.nz-hero, .nz-h1, .nz-h2, h1.nz-highlight, h2.nz-highlight) u {
+  text-decoration-color: rgba(54, 209, 194, 0.60);
 }

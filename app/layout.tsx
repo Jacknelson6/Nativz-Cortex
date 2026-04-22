@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Plus_Jakarta_Sans } from 'next/font/google';
+import { Jost, Poppins, Rubik } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { Analytics } from '@vercel/analytics/next';
 import { headers } from 'next/headers';
@@ -8,8 +8,36 @@ import { BrandModeProvider } from '@/components/layout/brand-mode-provider';
 import { MobileBlocker } from '@/components/shared/mobile-blocker';
 import { getSupabaseUrl } from '@/lib/supabase/public-env';
 
-const jakarta = Plus_Jakarta_Sans({
+// Nativz brand typography — Jost (display, Futura PT open substitute),
+// Poppins (body), Rubik (UI sans). See .impeccable.md.
+// `--font-geist-sans` is kept as a compatibility alias so existing
+// component code keeps compiling; it now points at Rubik (the UI sans).
+const jost = Jost({
+  variable: '--font-nz-display',
+  weight: ['300', '400', '500', '600', '700', '800'],
+  subsets: ['latin'],
+  display: 'swap',
+});
+
+const poppins = Poppins({
+  variable: '--font-nz-body',
+  weight: ['300', '400', '500', '600', '700'],
+  subsets: ['latin'],
+  display: 'swap',
+});
+
+const rubik = Rubik({
+  variable: '--font-nz-sans',
+  weight: ['300', '400', '500', '600', '700'],
+  subsets: ['latin'],
+  display: 'swap',
+});
+
+// Legacy alias — components reference `--font-geist-sans` via Tailwind `font-sans`.
+// Point it at Rubik so nothing breaks while the UI migrates to brand tokens.
+const legacySansAlias = Rubik({
   variable: '--font-geist-sans',
+  weight: ['300', '400', '500', '600', '700'],
   subsets: ['latin'],
   display: 'swap',
 });
@@ -100,7 +128,9 @@ export default async function RootLayout({
           fetchPriority="high"
         />
       </head>
-      <body className={`${jakarta.variable} font-sans antialiased`}>
+      <body
+        className={`${jost.variable} ${poppins.variable} ${rubik.variable} ${legacySansAlias.variable} font-sans antialiased`}
+      >
         <BrandModeProvider forcedMode={forcedMode}>
           <MobileBlocker />
           {children}

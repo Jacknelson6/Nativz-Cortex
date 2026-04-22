@@ -37,30 +37,32 @@ interface Notification {
   created_at: string;
 }
 
+// All icon colors route through brand status tokens. See globals.css.
+// success (brand-green) · warning (amber) · danger (nz-coral) · info (nz-cyan) · trending (amber-600)
 const TYPE_ICON: Record<string, React.ReactNode> = {
-  idea_submitted: <Lightbulb size={14} className="text-amber-400" />,
+  idea_submitted: <Lightbulb size={14} className="text-[color:var(--status-warning)]" />,
   report_published: <FileText size={14} className="text-accent-text" />,
-  concepts_ready: <FileText size={14} className="text-emerald-400" />,
+  concepts_ready: <FileText size={14} className="text-[color:var(--status-success)]" />,
   feedback_received: <MessageSquare size={14} className="text-accent2-text" />,
   weekly_digest: <Mail size={14} className="text-text-muted" />,
-  search_completed: <Search size={14} className="text-emerald-400" />,
-  shoot_scheduled: <Camera size={14} className="text-blue-400" />,
-  task_assigned: <CheckSquare size={14} className="text-blue-400" />,
-  task_due_tomorrow: <Clock size={14} className="text-amber-400" />,
-  task_overdue: <AlertTriangle size={14} className="text-red-400" />,
-  task_completed: <CheckCircle size={14} className="text-emerald-400" />,
-  monday_status: <FileText size={14} className="text-blue-400" />,
-  pipeline_alert: <AlertTriangle size={14} className="text-amber-400" />,
-  post_top_performer: <Flame size={14} className="text-orange-400" />,
-  engagement_spike: <TrendingUp size={14} className="text-emerald-400" />,
+  search_completed: <Search size={14} className="text-[color:var(--status-success)]" />,
+  shoot_scheduled: <Camera size={14} className="text-[color:var(--status-info)]" />,
+  task_assigned: <CheckSquare size={14} className="text-[color:var(--status-info)]" />,
+  task_due_tomorrow: <Clock size={14} className="text-[color:var(--status-warning)]" />,
+  task_overdue: <AlertTriangle size={14} className="text-[color:var(--status-danger)]" />,
+  task_completed: <CheckCircle size={14} className="text-[color:var(--status-success)]" />,
+  monday_status: <FileText size={14} className="text-[color:var(--status-info)]" />,
+  pipeline_alert: <AlertTriangle size={14} className="text-[color:var(--status-warning)]" />,
+  post_top_performer: <Flame size={14} className="text-[color:var(--status-trending)]" />,
+  engagement_spike: <TrendingUp size={14} className="text-[color:var(--status-success)]" />,
   follower_milestone: <Users size={14} className="text-accent2-text" />,
-  sync_failed: <RefreshCcw size={14} className="text-red-400" />,
-  post_published: <CheckCircle size={14} className="text-emerald-400" />,
-  post_failed: <AlertTriangle size={14} className="text-red-400" />,
-  post_trending: <Zap size={14} className="text-yellow-400" />,
-  account_disconnected: <WifiOff size={14} className="text-amber-400" />,
-  topic_search_failed: <AlertTriangle size={14} className="text-red-400" />,
-  topic_search_stuck: <Clock size={14} className="text-amber-400" />,
+  sync_failed: <RefreshCcw size={14} className="text-[color:var(--status-danger)]" />,
+  post_published: <CheckCircle size={14} className="text-[color:var(--status-success)]" />,
+  post_failed: <AlertTriangle size={14} className="text-[color:var(--status-danger)]" />,
+  post_trending: <Zap size={14} className="text-[color:var(--status-trending)]" />,
+  account_disconnected: <WifiOff size={14} className="text-[color:var(--status-warning)]" />,
+  topic_search_failed: <AlertTriangle size={14} className="text-[color:var(--status-danger)]" />,
+  topic_search_stuck: <Clock size={14} className="text-[color:var(--status-warning)]" />,
 };
 
 export function NotificationsWidget() {
@@ -205,7 +207,7 @@ export function NotificationsWidget() {
             <button
               type="button"
               onClick={clearAll}
-              className="flex items-center gap-1 text-xs text-text-muted hover:text-red-400 transition-colors"
+              className="flex items-center gap-1 text-xs text-text-muted hover:text-[color:var(--status-danger)] transition-colors"
             >
               <Trash2 size={12} />
               Clear all
@@ -293,7 +295,7 @@ export function NotificationsWidget() {
                   <button
                     type="button"
                     onClick={(e) => handleDelete(e, notif)}
-                    className="h-5 w-5 flex items-center justify-center rounded text-text-muted/0 group-hover:text-text-muted hover:!text-red-400 transition-colors cursor-pointer"
+                    className="h-5 w-5 flex items-center justify-center rounded text-text-muted/0 group-hover:text-text-muted hover:!text-[color:var(--status-danger)] transition-colors cursor-pointer"
                     title="Delete notification"
                   >
                     <X size={12} />

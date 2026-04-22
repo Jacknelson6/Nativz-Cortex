@@ -109,7 +109,7 @@ export function AvatarEditor({ value, onChange, size = 'lg' }: AvatarEditorProps
               fill
               className="object-cover"
             />
-            <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="absolute inset-0 flex items-center justify-center bg-[color:var(--nz-ink)]/55 opacity-0 group-hover:opacity-100 transition-opacity">
               <span className="text-xs font-medium text-white">Change</span>
             </div>
           </>
@@ -284,7 +284,7 @@ function CropModal({ src, onSave, onCancel }: CropModalProps) {
   const canvasSize = CROP_SIZE + 80;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[color:var(--nz-ink)]/80 backdrop-blur-sm">
       <div className="bg-surface border border-nativz-border rounded-2xl p-6 shadow-xl max-w-md w-full mx-4 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-semibold text-text-primary">Position your photo</h3>

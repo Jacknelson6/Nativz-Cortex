@@ -782,3 +782,33 @@ status without explicit authorization.
 Playwright-driven verdict comment dated 2026-04-21. 5 are outright ✅ PASS,
 3 are 🟡 MIXED with specific untestable criteria and root-cause explanations
 for what blocked full verification.
+
+---
+
+## Goal 11 (set 2026-04-22) — Impeccable audit remediation (dashboards)
+
+Execute the 9-step action plan from the `/impeccable audit` + `/impeccable critique` on Cortex dashboards. Target: `/portal/dashboard` + `/admin/dashboard` + their shared components. Drive the audit score from **12/20 → 16+/20** and critique from **24/40 → 32+/40**. Source of truth: `.impeccable.md`.
+
+Jack override: **do NOT push to main.** Run dev server on 3001 at the end for manual QA.
+
+### Acceptance criteria
+- [ ] **P1 #1 — Mobile grid fixed.** `app/admin/dashboard/page.tsx:67` bento grid + `:115` widget row have responsive breakpoints that don't crush on <768px.
+- [ ] **P1 #2 — Nerd tile de-slopped.** Animated ping dot + gradient orbs removed from the Nerd tile, replaced with a nerdy instrument (live counter / latency tick / terminal glyph).
+- [ ] **P1 #3 — Primary button on-brand.** `components/ui/button.tsx` primary variant uses flat `--nz-purple` (#9314CE), Jost-700 uppercase, 2px letter-spacing. `btn-shimmer` gradient removed.
+- [ ] **P2 #4 — Brand tokens installed.** `--nz-*` tokens live in `globals.css`. `--accent` maps to `--nz-cyan` or kept for UI neutral and new `--nz-purple` drives CTAs. Raw Tailwind color classes (emerald/red/amber/blue/orange/yellow-400) replaced across `notifications-widget.tsx` + `stat-card.tsx`.
+- [ ] **P2 #5 — Typography on-brand.** Jost + Poppins + Rubik loaded. H1 on both dashboards renders with thick translucent cyan highlight-underline on emphasis words per `.nz-u` spec.
+- [ ] **P2 #6 — Portal proof-of-work.** `/portal/dashboard` Recent reports rows carry source count, model, or topic sample per row.
+- [ ] **P3 #7 — Missing token fixed.** `bg-surface-elevated` either defined in `globals.css` or swapped to a defined token in `todo-widget.tsx:173` + `notifications-widget.tsx:223`.
+- [ ] **P3 #8 — Pure-black backdrops retired.** 8 files (command-palette, admin-in-portal-guard, avatar-editor×2, client-picker, confirm-dialog, dialog, image-upload) swapped from `bg-black` to brand-tinted ink.
+- [ ] **P3 #9 — Clear all confirmation.** Notifications "Clear all" has a confirm step before wipe.
+- [ ] **Re-audit passes.** Re-run `/impeccable audit` and `/impeccable critique` on the same scope; audit ≥ 16/20, critique ≥ 32/40, no new P0/P1.
+- [ ] `npx tsc --noEmit` clean after every iteration.
+- [ ] `npm run dev` running on port 3001 at the end.
+
+### Scope boundaries
+- **IN:** `app/globals.css`, `app/portal/dashboard/page.tsx`, `app/admin/dashboard/page.tsx`, `components/ui/button.tsx`, `components/dashboard/todo-widget.tsx`, `components/dashboard/notifications-widget.tsx`, `components/shared/stat-card.tsx`, `components/portal/portal-strategy-card.tsx`, the 8 `bg-black` backdrop files, `app/layout.tsx` (for font loading).
+- **OUT:** Anderson Collaborative brand mode tokens (locked to AC), the entire admin app outside dashboard, unrelated component refactors, API routes, database.
+
+## Goal 11 Iterations
+
+

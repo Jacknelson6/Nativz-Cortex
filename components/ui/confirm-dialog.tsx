@@ -42,14 +42,14 @@ export function ConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-[color:var(--nz-ink)]/70 backdrop-blur-sm"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}
       onKeyDown={handleKeyDown}
     >
       <div className="w-full max-w-sm rounded-xl border border-nativz-border bg-surface p-6 shadow-xl animate-[popIn_200ms_ease-out]">
         {variant === 'danger' && (
-          <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-red-500/15">
-            <AlertTriangle size={22} className="text-red-400" />
+          <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--status-danger)]/15">
+            <AlertTriangle size={22} className="text-[color:var(--status-danger)]" />
           </div>
         )}
         <h3 className="text-center text-sm font-semibold text-text-primary">{title}</h3>

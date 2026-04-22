@@ -59,7 +59,7 @@ export function Dialog({
       ref={dialogRef}
       onClose={onClose}
       onClick={handleBackdropClick}
-      className={`${maxWidthStyles[maxWidth]} w-full m-auto rounded-xl border border-nativz-border bg-surface p-0 shadow-elevated backdrop:bg-black/60 relative ${className}`.trim()}
+      className={`${maxWidthStyles[maxWidth]} w-full m-auto rounded-xl border border-nativz-border bg-surface p-0 shadow-elevated backdrop:bg-[color:var(--nz-ink)]/70 backdrop:backdrop-blur-sm relative ${className}`.trim()}
     >
       <div className={bodyClassName ?? 'p-6'}>
         {title ? (

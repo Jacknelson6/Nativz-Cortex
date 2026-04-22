@@ -92,7 +92,7 @@ export function ImageUpload({ value, onChange, size = 'md', label }: ImageUpload
               alt={label || 'Logo'}
               className="absolute inset-0 h-full w-full object-cover scale-125"
             />
-            <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="absolute inset-0 flex items-center justify-center bg-[color:var(--nz-ink)]/55 opacity-0 group-hover:opacity-100 transition-opacity">
               <span className="text-xs font-medium text-white">Change</span>
             </div>
           </>

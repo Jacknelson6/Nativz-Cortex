@@ -240,17 +240,17 @@ export function CommandPalette() {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[20vh]" onClick={() => setOpen(false)}>
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="fixed inset-0 bg-[color:var(--nz-ink)]/70 backdrop-blur-sm" />
       <div
-        className="relative w-full max-w-lg rounded-2xl border border-white/10 bg-zinc-900/90 backdrop-blur-xl shadow-2xl overflow-hidden"
+        className="relative w-full max-w-lg rounded-2xl border border-nativz-border bg-surface/95 backdrop-blur-xl shadow-[var(--shadow-elevated)] overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* Input */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-nativz-border">
           {mode === 'task' ? (
-            <Plus className="w-4 h-4 text-blue-400" />
+            <Plus className="w-4 h-4 text-accent-text" />
           ) : (
-            <Search className="w-4 h-4 text-zinc-400" />
+            <Search className="w-4 h-4 text-text-muted" />
           )}
           <input
             ref={inputRef}
@@ -262,7 +262,7 @@ export function CommandPalette() {
                 ? 'Add a task... (e.g. Edit Rana videos by Friday)'
                 : 'Search pages, clients, actions...'
             }
-            className="flex-1 bg-transparent text-sm text-white placeholder:text-zinc-500 outline-none"
+            className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-none"
           />
           {parsing && <Loader2 className="w-4 h-4 text-zinc-400 animate-spin" />}
           <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-zinc-400">

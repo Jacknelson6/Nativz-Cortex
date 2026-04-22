@@ -74,7 +74,7 @@ export function AdminInPortalGuard({ isAdmin }: { isAdmin: boolean }) {
     <>
       {showModal && (
         <div
-          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 px-4"
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-[color:var(--nz-ink)]/70 backdrop-blur-sm px-4"
           role="dialog"
           aria-modal="true"
         >
@@ -89,7 +89,7 @@ export function AdminInPortalGuard({ isAdmin }: { isAdmin: boolean }) {
             </button>
 
             <div className="flex flex-col items-center text-center">
-              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-amber-500/15 text-amber-400">
+              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--status-warning)]/15 text-[color:var(--status-warning)]">
                 <ShieldAlert size={20} />
               </div>
               <h2 className="text-base font-semibold text-text-primary">

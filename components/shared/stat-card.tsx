@@ -24,7 +24,9 @@ export function StatCard({ title, value, subtitle, change, icon, footer }: StatC
               {change !== undefined && (
                 <span
                   className={`inline-flex items-center gap-0.5 text-xs font-medium ${
-                    change >= 0 ? 'text-emerald-400' : 'text-red-400'
+                    change >= 0
+                      ? 'text-[color:var(--status-success)]'
+                      : 'text-[color:var(--status-danger)]'
                   }`}
                 >
                   {change >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
