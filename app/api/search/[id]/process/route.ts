@@ -214,10 +214,16 @@ export async function POST(
 
       const allPlatformSources = result.platformSources ?? [];
       const tiktokSources = allPlatformSources.filter((s) => s.platform === 'tiktok');
+      const nonTikTokSources = allPlatformSources.filter((s) => s.platform !== 'tiktok');
 
-      // Batch 1: 8 TikTok videos + essentials
-      // Batch 2: next 42 TikTok videos (50 total TikTok)
-      const batch1Sources = tiktokSources.slice(0, 8).map(mapSource);
+      // Batch 1: all non-TikTok sources (Reddit/YouTube/Quora — no transcripts
+      // so they're small) + top 8 TikTok videos + essentials. Previously this
+      // filtered to TikTok-only, which meant the 3m+ we just spent scraping
+      // Reddit/YouTube/Quora was silently discarded — those platforms were
+      // collected into allPlatformSources but never persisted.
+      // Batch 2: next 42 TikTok videos (50 TikTok cap — keeps payload under
+      // PostgREST limits because TikTok rows carry transcripts + comments).
+      const batch1Sources = [...nonTikTokSources.map(mapSource), ...tiktokSources.slice(0, 8).map(mapSource)];
       const batch2Sources = tiktokSources.slice(8, 50).map(mapSource);
 
       // Save in two batches to avoid PostgREST payload size limits.

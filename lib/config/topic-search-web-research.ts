@@ -23,7 +23,20 @@ export function getTopicSearchWebResearchMode(): TopicSearchWebResearchMode {
   if (v === 'openrouter') return 'openrouter';
   // Legacy compat: treat 'brave' as 'searxng'
   if (v === 'brave') return 'searxng';
-  // Default to searxng — SearXNG is always running locally (localhost:8888)
+
+  // Auto-detect: in production (Vercel), the SearXNG default of localhost:8888
+  // never resolves — every subtopic ends up throwing ENOTFOUND and falling
+  // back to llm_only, which silently produces 0 research sources. So if no
+  // explicit mode is set AND SEARXNG_URL points at localhost (or is unset),
+  // default to OpenRouter's web plugin instead. Local dev still gets searxng
+  // since it actually runs there.
+  const isProd = !!process.env.VERCEL || process.env.NODE_ENV === 'production';
+  if (isProd) {
+    const url = process.env.SEARXNG_URL?.trim() ?? '';
+    const isLocalUrl = !url || url.includes('localhost') || url.includes('127.0.0.1');
+    if (isLocalUrl) return 'openrouter';
+  }
+
   return 'searxng';
 }
 

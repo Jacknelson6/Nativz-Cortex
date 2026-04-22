@@ -297,7 +297,10 @@ export async function gatherTikTokData(
       for (const r of results) {
         if (r.status === 'fulfilled') commentsMap.set(r.value.id, r.value.comments);
       }
-      if (i + commentBatchSize < topForComments.length) await new Promise((r) => setTimeout(r, 300));
+      // Inter-batch stagger removed — each batch is already
+      // Promise.allSettled internally, so 300ms between batches just adds
+      // wall-clock without protecting any rate limit (tikwm tolerates
+      // bursts of ~15 concurrent fetches fine in practice).
     }
 
     // Transcripts: prefer embedded captions / tikwm (no marginal $). Groq Whisper only when captions missing.
@@ -322,9 +325,9 @@ export async function gatherTikTokData(
           transcriptMap.set(r.value.id, r.value.transcript);
         }
       }
-      if (i + transcriptChunk < transcriptTargets.length) {
-        await new Promise((res) => setTimeout(res, 150));
-      }
+      // Inter-batch stagger removed — for medium volume that was 12 × 150ms
+      // ≈ 1.8s of dead time per run; for deep volume ~3.6s. Batch is already
+      // parallel internally; tikwm/Groq tolerate the burst.
     }
 
     const videos: TikTokSearchVideo[] = baseVideos.map((v) => ({
