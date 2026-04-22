@@ -208,6 +208,7 @@ async function renderWeeklyAffiliate(
       revenue: a.revenue,
       referrals: a.referrals,
     })),
+    agency,
   });
   const html = layout(card, agency);
 

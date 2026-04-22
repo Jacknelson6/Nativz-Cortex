@@ -330,6 +330,7 @@ export async function sendAffiliateWeeklyReportEmail(opts: {
     rangeLabel: opts.rangeLabel,
     kpis: opts.kpis,
     topAffiliates: opts.topAffiliates,
+    agency,
   });
 
   const result = await (await getResend()).emails.send({

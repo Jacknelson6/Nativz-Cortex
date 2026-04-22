@@ -1,7 +1,13 @@
 /**
  * Saved HTML for the weekly affiliate performance email (inner card only — wrapped by `layout()` in resend).
+ *
+ * Brand-swappable: accepts optional `agency` param ('nativz' | 'anderson') and
+ * picks the right palette so Anderson Collaborative clients don't see Nativz
+ * cyan in their affiliate digest. Defaults to Nativz for back-compat with
+ * any existing caller that doesn't pass it.
  */
-import { EMAIL_BRAND as BRAND } from '@/lib/email/brand-tokens';
+import { EMAIL_BRAND as NATIVZ, AC_EMAIL_BRAND as AC } from '@/lib/email/brand-tokens';
+import type { AgencyBrand } from '@/lib/agency/detect';
 
 export type AffiliateWeeklyReportKpis = {
   newAffiliates: number;
@@ -31,7 +37,9 @@ export function buildAffiliateWeeklyReportCardHtml(opts: {
   rangeLabel: string;
   kpis: AffiliateWeeklyReportKpis;
   topAffiliates: AffiliateWeeklyReportTopRow[];
+  agency?: AgencyBrand;
 }): string {
+  const BRAND = opts.agency === 'anderson' ? AC : NATIVZ;
   const safeClient = escapeHtml(opts.clientName);
   const safeRange = escapeHtml(opts.rangeLabel);
 
