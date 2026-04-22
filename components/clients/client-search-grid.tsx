@@ -2,7 +2,20 @@
 
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Search, UserX, LayoutGrid, List, Trash2, Loader2, Eye } from 'lucide-react';
+import {
+  Search,
+  UserX,
+  LayoutGrid,
+  List,
+  Trash2,
+  Loader2,
+  Eye,
+  Plus,
+  MoreHorizontal,
+  Check,
+  FolderPlus,
+  ArrowRight,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { HealthBadge } from '@/components/clients/health-badge';
@@ -24,11 +37,41 @@ interface ClientItem {
   healthScore?: string | null;
   lastActivityAt?: string | null;
   organizationId?: string | null;
+  groupId?: string | null;
+}
+
+interface ClientGroup {
+  id: string;
+  name: string;
+  color: string;
+  sort_order: number;
 }
 
 const STANDARD_SERVICES = ['SMM', 'Paid Media', 'Affiliates', 'Editing'] as const;
 const STAGGER_CAP = 12;
 const STAGGER_MS = 28;
+
+// ─── Group color palette ───────────────────────────────────────────────────
+// Curated palette. Key stored in DB; these map to visible styles. Keeping
+// colors as literal class strings so Tailwind's JIT sees them and doesn't
+// tree-shake — `bg-${x}` patterns would break the build.
+
+type ColorKey = 'cyan' | 'purple' | 'coral' | 'emerald' | 'amber' | 'rose' | 'teal' | 'slate';
+
+const GROUP_COLORS: { key: ColorKey; label: string; dot: string; soft: string; text: string }[] = [
+  { key: 'cyan',    label: 'Cyan',    dot: 'bg-[#00AEEF]', soft: 'bg-[#00AEEF]/10',   text: 'text-[#5CC8F2]' },
+  { key: 'purple',  label: 'Purple',  dot: 'bg-[#9314CE]', soft: 'bg-[#9314CE]/10',   text: 'text-[#B85CE3]' },
+  { key: 'coral',   label: 'Coral',   dot: 'bg-[#ED6B63]', soft: 'bg-[#ED6B63]/10',   text: 'text-[#F08A83]' },
+  { key: 'emerald', label: 'Emerald', dot: 'bg-emerald-500', soft: 'bg-emerald-500/10', text: 'text-emerald-400' },
+  { key: 'amber',   label: 'Amber',   dot: 'bg-amber-500',   soft: 'bg-amber-500/10',   text: 'text-amber-400' },
+  { key: 'rose',    label: 'Rose',    dot: 'bg-rose-500',    soft: 'bg-rose-500/10',    text: 'text-rose-400' },
+  { key: 'teal',    label: 'Teal',    dot: 'bg-teal-500',    soft: 'bg-teal-500/10',    text: 'text-teal-400' },
+  { key: 'slate',   label: 'Slate',   dot: 'bg-slate-500',   soft: 'bg-slate-500/10',   text: 'text-slate-300' },
+];
+
+function colorStyles(key: string | undefined) {
+  return GROUP_COLORS.find((c) => c.key === key) ?? GROUP_COLORS[GROUP_COLORS.length - 1];
+}
 
 function normalizeServices(raw: string[]): string[] {
   const result = new Set<string>();
@@ -89,7 +132,6 @@ function SpotlightCard({
     el.style.setProperty('--my', `${e.clientY - rect.top}px`);
   }, []);
 
-  // Nativz cyan for active cards; neutral for inactive/dimmed.
   const spotColor = dimmed ? 'rgba(120, 130, 140, 0.08)' : 'rgba(0, 174, 239, 0.10)';
 
   return (
@@ -106,6 +148,87 @@ function SpotlightCard({
   );
 }
 
+// ─── Move-to-group menu ────────────────────────────────────────────────────
+
+function MoveToGroupMenu({
+  groups,
+  currentGroupId,
+  onMove,
+}: {
+  groups: ClientGroup[];
+  currentGroupId: string | null | undefined;
+  onMove: (groupId: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        className="rounded-md p-1.5 text-text-muted hover:text-accent-text hover:bg-accent-surface/30 cursor-pointer transition-colors"
+        title="Move to group"
+        aria-label="Move to group"
+      >
+        <ArrowRight size={14} />
+      </button>
+      {open && (
+        <div
+          className="absolute right-0 top-full mt-1 z-30 min-w-[200px] rounded-lg border border-nativz-border bg-surface shadow-xl animate-[popIn_150ms_ease-out] py-1"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-3 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-text-muted/70">
+            Move to
+          </div>
+          {groups.map((g) => {
+            const s = colorStyles(g.color);
+            const active = g.id === currentGroupId;
+            return (
+              <button
+                key={g.id}
+                type="button"
+                onClick={() => { setOpen(false); onMove(g.id); }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-primary hover:bg-surface-hover transition-colors text-left"
+              >
+                <span className={`h-2 w-2 rounded-full ${s.dot}`} />
+                <span className="flex-1 truncate">{g.name}</span>
+                {active && <Check size={12} className="text-accent-text" />}
+              </button>
+            );
+          })}
+          <div className="my-1 h-px bg-nativz-border/60" />
+          <button
+            type="button"
+            onClick={() => { setOpen(false); onMove(null); }}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-muted hover:bg-surface-hover transition-colors text-left"
+          >
+            <span className="h-2 w-2 rounded-full bg-slate-600" />
+            <span className="flex-1">Unassigned</span>
+            {!currentGroupId && <Check size={12} className="text-accent-text" />}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Client card ───────────────────────────────────────────────────────────
 
 function ClientCard({
@@ -113,24 +236,35 @@ function ClientCard({
   i,
   dimmed,
   listView,
+  groups,
   onNavigate,
   onImpersonate,
   onRequestDelete,
+  onMoveGroup,
   deleting,
 }: {
   client: ClientItem;
   i: number;
   dimmed?: boolean;
   listView?: boolean;
+  groups: ClientGroup[];
   onNavigate: () => void;
   onImpersonate: () => void;
   onRequestDelete: () => void;
+  onMoveGroup: (groupId: string | null) => void;
   deleting?: boolean;
 }) {
   const staggerDelay = `${Math.min(i, STAGGER_CAP) * STAGGER_MS}ms`;
 
   const actionButtons = (
     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200">
+      {groups.length > 0 && client.dbId && (
+        <MoveToGroupMenu
+          groups={groups}
+          currentGroupId={client.groupId}
+          onMove={onMoveGroup}
+        />
+      )}
       {client.organizationId && (
         <button
           type="button"
@@ -247,7 +381,209 @@ function ClientCard({
   );
 }
 
-// ─── Section header ────────────────────────────────────────────────────────
+// ─── Group section header ──────────────────────────────────────────────────
+
+function GroupSectionHeader({
+  group,
+  count,
+  onRename,
+  onRecolor,
+  onDelete,
+}: {
+  group: ClientGroup;
+  count: number;
+  onRename: (name: string) => void;
+  onRecolor: (color: ColorKey) => void;
+  onDelete: () => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [draftName, setDraftName] = useState(group.name);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const s = colorStyles(group.color);
+
+  useEffect(() => setDraftName(group.name), [group.name]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
+
+  if (renaming) {
+    return (
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          const v = draftName.trim();
+          if (v && v !== group.name) onRename(v);
+          setRenaming(false);
+        }}
+        className="flex items-center gap-2 pb-1"
+      >
+        <span className={`h-2 w-2 rounded-full ${s.dot} shrink-0`} />
+        <input
+          autoFocus
+          value={draftName}
+          onChange={(e) => setDraftName(e.target.value)}
+          onBlur={() => {
+            const v = draftName.trim();
+            if (v && v !== group.name) onRename(v);
+            setRenaming(false);
+          }}
+          className="bg-transparent text-[11px] font-semibold uppercase tracking-[0.12em] text-text-primary focus:outline-none border-b border-accent-border/50 pb-0.5"
+        />
+        <span className="text-[11px] text-text-muted/60 tabular-nums">{count}</span>
+      </form>
+    );
+  }
+
+  return (
+    <div ref={rootRef} className="relative flex items-center gap-2 pb-1">
+      <span className={`h-2 w-2 rounded-full ${s.dot} shrink-0`} />
+      <h2
+        className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted cursor-pointer hover:text-text-secondary"
+        onClick={() => setRenaming(true)}
+        title="Rename"
+      >
+        {group.name}
+      </h2>
+      <span className="text-[11px] text-text-muted/60 tabular-nums">{count}</span>
+      <div className="flex-1 h-px bg-nativz-border/40 ml-1" />
+      <button
+        type="button"
+        onClick={() => setMenuOpen((v) => !v)}
+        className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors"
+        aria-label={`Manage ${group.name}`}
+        title="Manage"
+      >
+        <MoreHorizontal size={14} />
+      </button>
+      {menuOpen && (
+        <div className="absolute right-0 top-full mt-1 z-30 min-w-[220px] rounded-lg border border-nativz-border bg-surface shadow-xl animate-[popIn_150ms_ease-out] py-1.5">
+          <button
+            type="button"
+            onClick={() => { setMenuOpen(false); setRenaming(true); }}
+            className="w-full text-left px-3 py-1.5 text-sm text-text-primary hover:bg-surface-hover transition-colors"
+          >
+            Rename
+          </button>
+          <div className="px-3 py-1.5">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-text-muted mb-1.5">Color</div>
+            <div className="flex flex-wrap gap-1.5">
+              {GROUP_COLORS.map((c) => (
+                <button
+                  key={c.key}
+                  type="button"
+                  onClick={() => { setMenuOpen(false); onRecolor(c.key); }}
+                  className={`h-5 w-5 rounded-full ${c.dot} ring-2 ring-offset-2 ring-offset-surface transition-all ${c.key === group.color ? 'ring-accent-border' : 'ring-transparent hover:ring-nativz-border'}`}
+                  title={c.label}
+                  aria-label={c.label}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="my-1 h-px bg-nativz-border/60" />
+          <button
+            type="button"
+            onClick={() => { setMenuOpen(false); onDelete(); }}
+            className="w-full text-left px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+          >
+            Delete group
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── New group inline form ─────────────────────────────────────────────────
+
+function NewGroupForm({
+  onCreate,
+  onCancel,
+}: {
+  onCreate: (name: string, color: ColorKey) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [color, setColor] = useState<ColorKey>('cyan');
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  async function submit() {
+    const v = name.trim();
+    if (!v) { onCancel(); return; }
+    setSaving(true);
+    try {
+      await onCreate(v, color);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="rounded-[10px] border border-nativz-border bg-surface p-3 space-y-2.5">
+      <div className="flex items-center gap-2">
+        <span className={`h-2.5 w-2.5 rounded-full ${colorStyles(color).dot} shrink-0`} />
+        <input
+          ref={inputRef}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); void submit(); }
+            if (e.key === 'Escape') { onCancel(); }
+          }}
+          placeholder="Group name (e.g. Onboarding, Active, Pause)"
+          className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+          disabled={saving}
+        />
+      </div>
+      <div className="flex items-center gap-1.5">
+        {GROUP_COLORS.map((c) => (
+          <button
+            key={c.key}
+            type="button"
+            onClick={() => setColor(c.key)}
+            className={`h-5 w-5 rounded-full ${c.dot} ring-2 ring-offset-2 ring-offset-surface transition-all ${c.key === color ? 'ring-accent-border' : 'ring-transparent hover:ring-nativz-border'}`}
+            title={c.label}
+            aria-label={c.label}
+          />
+        ))}
+        <div className="flex-1" />
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="text-xs text-text-muted hover:text-text-primary px-2 py-1 rounded transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => void submit()}
+          disabled={saving || !name.trim()}
+          className="inline-flex items-center gap-1 rounded-full bg-accent-text text-background px-3 py-1 text-xs font-semibold disabled:opacity-50 transition-opacity"
+        >
+          {saving ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+          Create
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Generic section header (agency fallback + inactive bucket) ────────────
 
 function SectionHeader({
   label,
@@ -272,7 +608,13 @@ function SectionHeader({
 
 type AgencyFilter = 'all' | 'nativz' | 'ac';
 
-export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[] }) {
+export function ClientSearchGrid({
+  clients: rawClients,
+  groups: initialGroups = [],
+}: {
+  clients: ClientItem[];
+  groups?: ClientGroup[];
+}) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -280,11 +622,14 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
   const [allClients, setAllClients] = useState(() =>
     rawClients.map((c) => ({ ...c, services: normalizeServices(c.services) })),
   );
+  const [groups, setGroups] = useState<ClientGroup[]>(initialGroups);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ dbId: string; name: string } | null>(null);
+  const [pendingGroupDelete, setPendingGroupDelete] = useState<{ id: string; name: string; memberCount: number } | null>(null);
   const [query, setQuery] = useState('');
   const [agencyFilter, setAgencyFilter] = useState<AgencyFilter>('all');
   const [listView, setListView] = useState(false);
+  const [showNewGroup, setShowNewGroup] = useState(false);
 
   const legacyClientParam = searchParams.get('client');
   useEffect(() => {
@@ -292,7 +637,6 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
     router.replace(`/admin/clients/${encodeURIComponent(legacyClientParam)}`);
   }, [legacyClientParam, router]);
 
-  // "/" focuses search — cockpit keyboard shortcut.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== '/') return;
@@ -335,6 +679,76 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
       .catch(() => toast.error('Failed to impersonate'));
   }, []);
 
+  const handleMoveGroup = useCallback(async (dbId: string, groupId: string | null) => {
+    const prev = allClients;
+    setAllClients((xs) => xs.map((c) => (c.dbId === dbId ? { ...c, groupId } : c)));
+    try {
+      const res = await fetch(`/api/clients/${dbId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group_id: groupId }),
+      });
+      if (!res.ok) throw new Error('Failed to move');
+      const g = groupId ? groups.find((x) => x.id === groupId)?.name ?? 'group' : 'Unassigned';
+      toast.success(`Moved to ${g}`);
+    } catch {
+      toast.error('Failed to move');
+      setAllClients(prev);
+    }
+  }, [allClients, groups]);
+
+  const handleCreateGroup = useCallback(async (name: string, color: ColorKey) => {
+    try {
+      const res = await fetch('/api/client-groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, color }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error((d as { error?: string }).error || 'Failed to create group');
+      }
+      const { group } = await res.json() as { group: ClientGroup };
+      setGroups((gs) => [...gs, group]);
+      setShowNewGroup(false);
+      toast.success(`Group "${group.name}" created`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create group');
+    }
+  }, []);
+
+  const handleUpdateGroup = useCallback(async (id: string, fields: Partial<ClientGroup>) => {
+    const prev = groups;
+    setGroups((gs) => gs.map((g) => (g.id === id ? { ...g, ...fields } : g)));
+    try {
+      const res = await fetch(`/api/client-groups/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fields),
+      });
+      if (!res.ok) throw new Error('Failed to update');
+    } catch {
+      toast.error('Failed to update group');
+      setGroups(prev);
+    }
+  }, [groups]);
+
+  const handleDeleteGroup = useCallback(async (id: string) => {
+    const prev = groups;
+    const prevClients = allClients;
+    setGroups((gs) => gs.filter((g) => g.id !== id));
+    setAllClients((xs) => xs.map((c) => (c.groupId === id ? { ...c, groupId: null } : c)));
+    try {
+      const res = await fetch(`/api/client-groups/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
+      toast.success('Group deleted');
+    } catch {
+      toast.error('Failed to delete group');
+      setGroups(prev);
+      setAllClients(prevClients);
+    }
+  }, [groups, allClients]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     let list = q
@@ -359,13 +773,31 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
   const active = filtered.filter((c) => c.isActive !== false);
   const inactive = filtered.filter((c) => c.isActive === false);
 
-  const groups = useMemo(() => {
-    if (agencyFilter !== 'all') return [] as { key: AgencyBucket; items: typeof active }[];
+  // When groups exist, sections are user-defined. Otherwise fall back to
+  // hardcoded agency buckets — preserves the earlier UX for admins who
+  // haven't created any groups yet.
+  const useGroupSections = groups.length > 0;
+
+  const groupSections = useMemo(() => {
+    if (!useGroupSections) return [];
+    return groups.map((g) => ({
+      group: g,
+      items: active.filter((c) => c.groupId === g.id),
+    }));
+  }, [useGroupSections, groups, active]);
+
+  const unassigned = useMemo(() => {
+    if (!useGroupSections) return [];
+    return active.filter((c) => !c.groupId);
+  }, [useGroupSections, active]);
+
+  const agencyBuckets = useMemo(() => {
+    if (useGroupSections || agencyFilter !== 'all') return [];
     return BUCKET_ORDER.flatMap((key) => {
       const items = active.filter((c) => bucketFor(c.agency) === key);
       return items.length ? [{ key, items }] : [];
     });
-  }, [active, agencyFilter]);
+  }, [useGroupSections, active, agencyFilter]);
 
   const totalShown = filtered.length;
   const totalAll = allClients.length;
@@ -383,10 +815,12 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
               i={indexBase + i}
               dimmed={dimmed}
               listView
+              groups={groups}
               deleting={deletingId === client.dbId}
               onNavigate={() => router.push(`/admin/clients/${client.slug}`)}
               onImpersonate={() => client.organizationId && handleImpersonate(client.organizationId, client.slug)}
               onRequestDelete={() => client.dbId && setPendingDelete({ dbId: client.dbId, name: client.name })}
+              onMoveGroup={(gid) => client.dbId && handleMoveGroup(client.dbId, gid)}
             />
           ))}
         </div>
@@ -400,10 +834,12 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
             client={client}
             i={indexBase + i}
             dimmed={dimmed}
+            groups={groups}
             deleting={deletingId === client.dbId}
             onNavigate={() => router.push(`/admin/clients/${client.slug}`)}
             onImpersonate={() => client.organizationId && handleImpersonate(client.organizationId, client.slug)}
             onRequestDelete={() => client.dbId && setPendingDelete({ dbId: client.dbId, name: client.name })}
+            onMoveGroup={(gid) => client.dbId && handleMoveGroup(client.dbId, gid)}
           />
         ))}
       </div>
@@ -443,6 +879,16 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
           <option value="ac">Anderson Collaborative</option>
         </select>
 
+        <button
+          type="button"
+          onClick={() => setShowNewGroup(true)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-nativz-border bg-surface-primary px-3 py-2 text-sm text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+          title="Create new pipeline group"
+        >
+          <FolderPlus size={14} />
+          New group
+        </button>
+
         <div className="flex rounded-lg border border-nativz-border overflow-hidden">
           <button
             type="button"
@@ -473,6 +919,10 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
         )}
       </div>
 
+      {showNewGroup && (
+        <NewGroupForm onCreate={handleCreateGroup} onCancel={() => setShowNewGroup(false)} />
+      )}
+
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center rounded-[10px] border border-dashed border-nativz-border/60">
           <Search size={28} className="text-text-muted/60 mb-3" />
@@ -481,19 +931,50 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
         </div>
       ) : (
         <div className="space-y-8">
-          {groups.length > 0
-            ? groups.map((g, gi) => {
-                const offset = groups.slice(0, gi).reduce((n, x) => n + x.items.length, 0);
+          {useGroupSections ? (
+            <>
+              {groupSections.map((gs, gi) => {
+                const offset = groupSections.slice(0, gi).reduce((n, x) => n + x.items.length, 0);
                 return (
-                  <section key={g.key} className="space-y-2">
-                    <SectionHeader label={BUCKET_LABEL[g.key]} count={g.items.length} />
-                    {renderBucket(g.items, false, offset)}
+                  <section key={gs.group.id} className="space-y-2">
+                    <GroupSectionHeader
+                      group={gs.group}
+                      count={gs.items.length}
+                      onRename={(name) => handleUpdateGroup(gs.group.id, { name })}
+                      onRecolor={(color) => handleUpdateGroup(gs.group.id, { color })}
+                      onDelete={() => setPendingGroupDelete({
+                        id: gs.group.id,
+                        name: gs.group.name,
+                        memberCount: gs.items.length,
+                      })}
+                    />
+                    {gs.items.length > 0
+                      ? renderBucket(gs.items, false, offset)
+                      : <p className="text-xs text-text-muted italic pl-4">Empty — move clients here with the arrow button on each card.</p>
+                    }
                   </section>
                 );
-              })
-            : active.length > 0
-              ? renderBucket(active, false)
-              : null}
+              })}
+              {unassigned.length > 0 && (
+                <section className="space-y-2">
+                  <SectionHeader label="Unassigned" count={unassigned.length} />
+                  {renderBucket(unassigned, false)}
+                </section>
+              )}
+            </>
+          ) : agencyBuckets.length > 0 ? (
+            agencyBuckets.map((g, gi) => {
+              const offset = agencyBuckets.slice(0, gi).reduce((n, x) => n + x.items.length, 0);
+              return (
+                <section key={g.key} className="space-y-2">
+                  <SectionHeader label={BUCKET_LABEL[g.key]} count={g.items.length} />
+                  {renderBucket(g.items, false, offset)}
+                </section>
+              );
+            })
+          ) : active.length > 0 ? (
+            renderBucket(active, false)
+          ) : null}
 
           {inactive.length > 0 && (
             <section className="space-y-2">
@@ -519,6 +1000,25 @@ export function ClientSearchGrid({ clients: rawClients }: { clients: ClientItem[
           setPendingDelete(null);
         }}
         onCancel={() => setPendingDelete(null)}
+      />
+
+      <ConfirmDialog
+        open={pendingGroupDelete !== null}
+        title="Delete group"
+        description={
+          pendingGroupDelete
+            ? pendingGroupDelete.memberCount > 0
+              ? `Delete "${pendingGroupDelete.name}"? Its ${pendingGroupDelete.memberCount} ${pendingGroupDelete.memberCount === 1 ? 'client' : 'clients'} will become unassigned.`
+              : `Delete "${pendingGroupDelete.name}"?`
+            : ''
+        }
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => {
+          if (pendingGroupDelete) void handleDeleteGroup(pendingGroupDelete.id);
+          setPendingGroupDelete(null);
+        }}
+        onCancel={() => setPendingGroupDelete(null)}
       />
     </div>
   );

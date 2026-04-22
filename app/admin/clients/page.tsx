@@ -19,6 +19,14 @@ type AdminClientsDbRow = {
   agency: string | null;
   health_score: number | null;
   organization_id: string | null;
+  group_id: string | null;
+};
+
+type ClientGroupRow = {
+  id: string;
+  name: string;
+  color: string;
+  sort_order: number;
 };
 
 export default async function AdminClientsPage() {
@@ -34,19 +42,28 @@ export default async function AdminClientsPage() {
       isSuperAdmin = sa?.is_super_admin === true;
     }
 
-    // Fetch all clients from DB
-    const { data: dbClients, error: dbError } = await selectClientsWithRosterVisibility<AdminClientsDbRow>(
-      adminClient,
-      {
-        select: 'id, name, slug, industry, is_active, logo_url, services, agency, health_score, organization_id',
+    // Fetch all clients + pipeline groups in parallel (independent I/O).
+    const [
+      { data: dbClients, error: dbError },
+      { data: groupsData },
+    ] = await Promise.all([
+      selectClientsWithRosterVisibility<AdminClientsDbRow>(adminClient, {
+        select: 'id, name, slug, industry, is_active, logo_url, services, agency, health_score, organization_id, group_id',
         orderBy: { column: 'name' },
-      },
-    );
+      }),
+      adminClient
+        .from('client_groups')
+        .select('id, name, color, sort_order')
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true }),
+    ]);
 
     if (dbError) {
       console.error('Database error fetching clients:', JSON.stringify(dbError, null, 2));
       throw dbError;
     }
+
+    const groups: ClientGroupRow[] = (groupsData as ClientGroupRow[] | null) ?? [];
 
     // Transform DB results to match the grid component's expectations
     const clients = (dbClients ?? []).map((c) => ({
@@ -61,6 +78,7 @@ export default async function AdminClientsPage() {
       agency: c.agency ?? undefined,
       healthScore: c.health_score != null ? String(c.health_score) : null,
       organizationId: c.organization_id ?? null,
+      groupId: c.group_id ?? null,
     }));
 
     return (
@@ -100,7 +118,7 @@ export default async function AdminClientsPage() {
             }
           />
         ) : (
-          <ClientSearchGrid clients={clients} />
+          <ClientSearchGrid clients={clients} groups={groups} />
         )}
       </div>
     );

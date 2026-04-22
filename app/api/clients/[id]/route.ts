@@ -272,6 +272,7 @@ export async function PATCH(
           'health_score_override',
           'health_score',
           'agency',
+          'group_id',
           'google_drive_branding_url',
           'google_drive_calendars_url',
           'monthly_boosting_budget',
