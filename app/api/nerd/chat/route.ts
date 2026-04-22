@@ -1011,8 +1011,34 @@ export async function POST(req: NextRequest) {
           })
         : '';
 
+    // Strategy Lab mode auto-injects the pinned client's full Brand DNA
+    // prompt block into the system prompt. The research-grounded addendum
+    // above TELLS the model to call `search_knowledge_base` before scripting,
+    // but we've repeatedly seen the model skip that call and then complain
+    // it "doesn't have the brand context" — especially on the first turn
+    // before any tool use has happened. Static injection belt-and-suspenders
+    // the tool flow: the voice / pillars / approved CTAs / claim hygiene
+    // reach the model on turn 1 whether or not it reaches for a tool.
+    // Scoped to Strategy Lab so we don't bloat general admin chats.
+    let brandDnaInjection = '';
+    if (mode === 'content-lab' || mode === 'strategy-lab') {
+      const pinnedClientId = (mentions ?? []).find((m) => m.type === 'client')?.id ?? null;
+      if (pinnedClientId) {
+        try {
+          const { getBrandContext } = await import('@/lib/knowledge/brand-context');
+          const brandCtx = await getBrandContext(pinnedClientId);
+          const block = brandCtx.toPromptBlock();
+          if (block.trim()) {
+            brandDnaInjection = `\n\n---\n\n# PINNED BRAND — Brand DNA (authoritative source for voice, pillars, CTAs, claims)\n\nThis is the brand context for the session. Use these rules for every script and idea. If any rule conflicts with your general knowledge, the rule wins.\n\n${block}`;
+          }
+        } catch (err) {
+          console.warn('[nerd/chat] strategy-lab brand DNA injection failed:', err);
+        }
+      }
+    }
+
     const systemPrompt =
-      basePrompt + skillsContext + dbSkillsContext + contentLabAddendum + guardrailInstruction;
+      basePrompt + skillsContext + dbSkillsContext + contentLabAddendum + brandDnaInjection + guardrailInstruction;
 
     // Build attachment context block if the user attached files
     const attachmentContextParts: string[] = [];

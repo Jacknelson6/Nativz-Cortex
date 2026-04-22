@@ -176,13 +176,31 @@ export const knowledgeTools: ToolDefinition[] = [
             }
           : await searchKnowledgeWithIntent(clientId, query, { limit, threshold: 0.3 });
 
-        const formatted = results.map((r) => ({
-          id: r.id,
-          type: r.type,
-          title: r.title,
-          content: r.content.length > 500 ? r.content.substring(0, 500) + '...' : r.content,
-          score: Math.round(r.score * 100) / 100,
-        }));
+        // Per-type preview caps. Most vault entries are fine at 500 chars
+        // (titles + leading context is enough to decide whether to pull the
+        // full entry). Brand DNA is different — it carries load-bearing
+        // structured sections (messaging pillars, approved CTAs, claim
+        // hygiene, framing rules) that live several thousand chars into the
+        // body, and the nerd needs them verbatim to script correctly. Give
+        // it room to land the whole thing inline so the model doesn't have
+        // to chain a second get_knowledge_entry call (and often just
+        // doesn't).
+        const previewCap = (type: string): number => {
+          if (type === 'brand_guideline' || type === 'brand_profile') return 12_000;
+          return 500;
+        };
+
+        const formatted = results.map((r) => {
+          const cap = previewCap(r.type);
+          const content = r.content.length > cap ? r.content.substring(0, cap) + '...' : r.content;
+          return {
+            id: r.id,
+            type: r.type,
+            title: r.title,
+            content,
+            score: Math.round(r.score * 100) / 100,
+          };
+        });
 
         return {
           success: true,

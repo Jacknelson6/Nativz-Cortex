@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { invalidateBrandContext } from '@/lib/knowledge/brand-context';
+import { embedKnowledgeEntry } from '@/lib/ai/embeddings';
 import { assertUserCanAccessClient, getUserRoleInfo } from '@/lib/api/client-access';
 import {
   mergeProductAppendix,
@@ -186,5 +187,16 @@ export async function PATCH(
   }
 
   invalidateBrandContext(clientId);
+
+  // Re-embed when the searchable surface changed. Without this, semantic
+  // search keeps ranking the entry by the old vector — silent regression
+  // on every brand DNA edit. Fire-and-forget; a failed embed must not
+  // reject the user's save.
+  if (typeof updates.content === 'string') {
+    embedKnowledgeEntry(guideline.id).catch((err) => {
+      console.warn(`[brand-dna PATCH] re-embed failed for ${guideline.id}:`, err);
+    });
+  }
+
   return NextResponse.json({ success: true });
 }

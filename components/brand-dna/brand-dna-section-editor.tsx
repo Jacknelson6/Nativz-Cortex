@@ -104,6 +104,37 @@ function SectionForm({
       );
     case 'Product catalog':
       return <ProductsForm clientId={clientId} products={metadata.products ?? []} onClose={onClose} onSaved={onSaved} />;
+    case 'Content framing rules':
+      return (
+        <FramingRulesForm
+          clientId={clientId}
+          rules={metadata.content_framing_rules ?? {}}
+          onClose={onClose}
+          onSaved={onSaved}
+        />
+      );
+    case 'CTAs and quotes':
+      return (
+        <CtasAndQuotesForm
+          clientId={clientId}
+          approvedCtas={metadata.approved_ctas ?? []}
+          bannedCtas={metadata.banned_ctas ?? []}
+          approvedQuoteBank={metadata.approved_quote_bank ?? []}
+          onClose={onClose}
+          onSaved={onSaved}
+        />
+      );
+    case 'Claim hygiene':
+      return (
+        <GuardrailsForm
+          clientId={clientId}
+          claimHygiene={metadata.claim_hygiene_rules ?? {}}
+          videoRules={metadata.short_form_video_rules ?? {}}
+          castingTone={metadata.casting_and_tone ?? {}}
+          onClose={onClose}
+          onSaved={onSaved}
+        />
+      );
     default:
       return <p className="text-sm text-text-muted">No editor available for this section.</p>;
   }
@@ -908,6 +939,511 @@ function sectionLabel(section: string): string {
     'Target audience': 'audience',
     'Competitive positioning': 'positioning',
     'Product catalog': 'products',
+    'Content framing rules': 'content framing rules',
+    'CTAs and quotes': 'CTAs and quotes',
+    'Claim hygiene': 'claim hygiene & tone rules',
   };
   return map[section] ?? section.toLowerCase();
+}
+
+// ---------------------------------------------------------------------------
+// Content framing rules form
+// Edits BrandGuidelineMetadata.content_framing_rules — the structured
+// scripting guardrails (funnel hierarchy, mandatory rule, CTA alignment,
+// show-don't-imply, free-offer framing). These keys are read by
+// lib/knowledge/brand-context.ts → formatPromptBlock and injected into
+// Strategy Lab system prompts.
+// ---------------------------------------------------------------------------
+
+type FramingRules = {
+  mandatory_rule?: string;
+  cta_alignment?: string;
+  show_dont_imply?: string;
+  free_offer_framing?: string;
+  funnel_hierarchy?: { top?: string; middle?: string; bottom?: string };
+  [key: string]: unknown;
+};
+
+function FramingRulesForm({
+  clientId,
+  rules: initial,
+  onClose,
+  onSaved,
+}: {
+  clientId: string;
+  rules: FramingRules;
+  onClose: () => void;
+  onSaved: (u: Partial<BrandGuidelineMetadata>) => void;
+}) {
+  const [mandatory, setMandatory] = useState((initial.mandatory_rule as string) ?? '');
+  const [ctaAlignment, setCtaAlignment] = useState((initial.cta_alignment as string) ?? '');
+  const [showDontImply, setShowDontImply] = useState((initial.show_dont_imply as string) ?? '');
+  const [offerFraming, setOfferFraming] = useState((initial.free_offer_framing as string) ?? '');
+  const [top, setTop] = useState(initial.funnel_hierarchy?.top ?? '');
+  const [middle, setMiddle] = useState(initial.funnel_hierarchy?.middle ?? '');
+  const [bottom, setBottom] = useState(initial.funnel_hierarchy?.bottom ?? '');
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    const next: FramingRules = {
+      ...initial,
+      mandatory_rule: mandatory.trim() || undefined,
+      cta_alignment: ctaAlignment.trim() || undefined,
+      show_dont_imply: showDontImply.trim() || undefined,
+      free_offer_framing: offerFraming.trim() || undefined,
+    };
+    // Funnel hierarchy: only include when at least one stage is populated
+    const hierarchy: { top?: string; middle?: string; bottom?: string } = {};
+    if (top.trim()) hierarchy.top = top.trim();
+    if (middle.trim()) hierarchy.middle = middle.trim();
+    if (bottom.trim()) hierarchy.bottom = bottom.trim();
+    if (Object.keys(hierarchy).length > 0) {
+      next.funnel_hierarchy = hierarchy;
+    } else {
+      delete next.funnel_hierarchy;
+    }
+    // Drop undefined leaves so we don't persist empty keys
+    for (const k of Object.keys(next)) {
+      if (next[k] === undefined) delete next[k];
+    }
+
+    setSaving(true);
+    const patch: Partial<BrandGuidelineMetadata> = {
+      content_framing_rules: next as BrandGuidelineMetadata['content_framing_rules'],
+      content_framing_rules_updated_at: new Date().toISOString().slice(0, 10),
+    };
+    const ok = await saveBrandDNA(clientId, patch);
+    setSaving(false);
+    if (ok) {
+      toast.success('Content framing rules saved');
+      onSaved(patch);
+      onClose();
+    } else {
+      toast.error('Failed to save');
+    }
+  }
+
+  return (
+    <div className="space-y-5 max-h-[60vh] overflow-y-auto pr-1">
+      <LabeledTextarea
+        label="Mandatory rule"
+        hint="The one rule that must hold across every piece of content — e.g. 'Every script must mention spendability.'"
+        value={mandatory}
+        onChange={setMandatory}
+        minRows={3}
+      />
+
+      <div>
+        <label className="block text-xs font-medium text-text-muted uppercase tracking-wide mb-1.5">
+          Funnel hierarchy
+        </label>
+        <p className="text-[11px] text-text-muted/70 mb-2">
+          What each funnel stage should emphasize. Leave blank if not applicable.
+        </p>
+        <div className="space-y-2">
+          <StageInput label="Top (curiosity)" value={top} onChange={setTop} />
+          <StageInput label="Middle (consideration)" value={middle} onChange={setMiddle} />
+          <StageInput label="Bottom (action)" value={bottom} onChange={setBottom} />
+        </div>
+      </div>
+
+      <LabeledTextarea
+        label="CTA alignment"
+        hint="How the opening hook should lead to the closing CTA."
+        value={ctaAlignment}
+        onChange={setCtaAlignment}
+      />
+
+      <LabeledTextarea
+        label="Show, don't imply"
+        hint="Visual rules — e.g. if the script says 'here's what you're getting,' the visual must show X not Y."
+        value={showDontImply}
+        onChange={setShowDontImply}
+      />
+
+      <LabeledTextarea
+        label="Free/lead offer framing"
+        hint="How to word lead offers — e.g. be specific about what the viewer receives."
+        value={offerFraming}
+        onChange={setOfferFraming}
+      />
+
+      <SaveRow saving={saving} onCancel={onClose} onSave={handleSave} />
+    </div>
+  );
+}
+
+function StageInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="grid grid-cols-[10rem_minmax(0,1fr)] items-center gap-3">
+      <span className="text-xs text-text-muted">{label}</span>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="What this stage emphasizes"
+        className="w-full rounded-lg border border-nativz-border bg-background px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted/50 outline-none focus:border-accent/50 transition-colors"
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// CTAs & quote bank form
+// Edits approved_ctas / banned_ctas / approved_quote_bank. Uses the
+// long-form list editor because CTAs and quotes can exceed 80 chars and
+// wrap awkwardly in the tag pill layout used for shorter vocabulary tags.
+// ---------------------------------------------------------------------------
+
+function CtasAndQuotesForm({
+  clientId,
+  approvedCtas: initialApproved,
+  bannedCtas: initialBanned,
+  approvedQuoteBank: initialQuotes,
+  onClose,
+  onSaved,
+}: {
+  clientId: string;
+  approvedCtas: string[];
+  bannedCtas: string[];
+  approvedQuoteBank: string[];
+  onClose: () => void;
+  onSaved: (u: Partial<BrandGuidelineMetadata>) => void;
+}) {
+  const [approved, setApproved] = useState<string[]>(initialApproved);
+  const [banned, setBanned] = useState<string[]>(initialBanned);
+  const [quotes, setQuotes] = useState<string[]>(initialQuotes);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    const patch: Partial<BrandGuidelineMetadata> = {
+      approved_ctas: approved.map((s) => s.trim()).filter(Boolean),
+      banned_ctas: banned.map((s) => s.trim()).filter(Boolean),
+      approved_quote_bank: quotes.map((s) => s.trim()).filter(Boolean),
+    };
+    setSaving(true);
+    const ok = await saveBrandDNA(clientId, patch);
+    setSaving(false);
+    if (ok) {
+      toast.success('CTAs and quotes saved');
+      onSaved(patch);
+      onClose();
+    } else {
+      toast.error('Failed to save');
+    }
+  }
+
+  return (
+    <div className="space-y-5 max-h-[60vh] overflow-y-auto pr-1">
+      <LongListEditor
+        label="Approved CTAs"
+        hint="Use these verbatim (or as close variants) at the close of scripts."
+        entries={approved}
+        onChange={setApproved}
+        placeholder='e.g. "Get yours free at example.com"'
+      />
+      <LongListEditor
+        label="Banned CTAs"
+        hint="Phrasings that must never appear in copy."
+        entries={banned}
+        onChange={setBanned}
+        placeholder='e.g. "Fill out the form"'
+      />
+      <LongListEditor
+        label="Approved quote bank"
+        hint="On-brand quotes the nerd can reuse verbatim or adapt."
+        entries={quotes}
+        onChange={setQuotes}
+        placeholder='e.g. "Gold holds what paper loses."'
+      />
+      <SaveRow saving={saving} onCancel={onClose} onSave={handleSave} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Guardrails form — claim hygiene + short-form video rules + casting & tone
+// ---------------------------------------------------------------------------
+
+function GuardrailsForm({
+  clientId,
+  claimHygiene: initialClaim,
+  videoRules: initialVideo,
+  castingTone: initialTone,
+  onClose,
+  onSaved,
+}: {
+  clientId: string;
+  claimHygiene: Record<string, string>;
+  videoRules: Record<string, string>;
+  castingTone: Record<string, string>;
+  onClose: () => void;
+  onSaved: (u: Partial<BrandGuidelineMetadata>) => void;
+}) {
+  const [claim, setClaim] = useState<KvEntry[]>(toKvEntries(initialClaim));
+  const [video, setVideo] = useState<KvEntry[]>(toKvEntries(initialVideo));
+  const [tone, setTone] = useState<KvEntry[]>(toKvEntries(initialTone));
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    const patch: Partial<BrandGuidelineMetadata> = {
+      claim_hygiene_rules: fromKvEntries(claim),
+      short_form_video_rules: fromKvEntries(video),
+      casting_and_tone: fromKvEntries(tone),
+    };
+    setSaving(true);
+    const ok = await saveBrandDNA(clientId, patch);
+    setSaving(false);
+    if (ok) {
+      toast.success('Guardrails saved');
+      onSaved(patch);
+      onClose();
+    } else {
+      toast.error('Failed to save');
+    }
+  }
+
+  return (
+    <div className="space-y-5 max-h-[60vh] overflow-y-auto pr-1">
+      <KeyValueListEditor
+        label="Claim hygiene"
+        hint="Factual-accuracy rules. Key = short descriptor, value = the rule."
+        entries={claim}
+        onChange={setClaim}
+        keyPlaceholder="e.g. gold_price_movement"
+        valuePlaceholder='e.g. "Use ~8% avg over 25+ years, never ‘only goes up.’"'
+      />
+      <KeyValueListEditor
+        label="Short-form video rules"
+        hint="Rules specific to ≤15s / Reels / TikTok / Shorts output."
+        entries={video}
+        onChange={setVideo}
+        keyPlaceholder="e.g. hook_to_cta"
+        valuePlaceholder="How hooks should land the CTA."
+      />
+      <KeyValueListEditor
+        label="Casting & tone"
+        hint="Tone, casting, and influencer-read constraints."
+        entries={tone}
+        onChange={setTone}
+        keyPlaceholder="e.g. tone"
+        valuePlaceholder="Light-hearted, universal, optimistic."
+      />
+      <SaveRow saving={saving} onCancel={onClose} onSave={handleSave} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Long-form list editor — one row per entry, long inputs. Used for CTAs
+// and quotes where entries often exceed 60 chars.
+// ---------------------------------------------------------------------------
+
+function LongListEditor({
+  label,
+  hint,
+  entries,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  hint?: string;
+  entries: string[];
+  onChange: (next: string[]) => void;
+  placeholder: string;
+}) {
+  function add() {
+    onChange([...entries, '']);
+  }
+  function update(i: number, v: string) {
+    onChange(entries.map((e, idx) => (idx === i ? v : e)));
+  }
+  function remove(i: number) {
+    onChange(entries.filter((_, idx) => idx !== i));
+  }
+  return (
+    <div>
+      <label className="block text-xs font-medium text-text-muted uppercase tracking-wide mb-1">
+        {label}
+      </label>
+      {hint ? <p className="text-[11px] text-text-muted/70 mb-2">{hint}</p> : null}
+      <div className="space-y-2 mb-2">
+        {entries.length === 0 ? (
+          <p className="text-xs text-text-muted/50 italic">None yet — add one below.</p>
+        ) : (
+          entries.map((entry, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <input
+                type="text"
+                value={entry}
+                onChange={(e) => update(i, e.target.value)}
+                placeholder={placeholder}
+                className="flex-1 rounded-lg border border-nativz-border bg-background px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted/50 outline-none focus:border-accent/50 transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                className="rounded-lg border border-nativz-border px-2 py-1.5 text-text-muted hover:text-red-400 hover:border-red-400/50 transition-colors cursor-pointer"
+                aria-label="Remove entry"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={add}
+        className="flex items-center gap-1.5 rounded-lg border border-nativz-border px-3 py-1.5 text-xs text-text-muted hover:text-text-primary hover:border-accent/50 transition-colors cursor-pointer"
+      >
+        <Plus size={12} /> Add
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Key-value list editor — stable row identity via local uuid so input focus
+// doesn't jump when a key is edited. Used for claim_hygiene / short-form
+// video / casting & tone rules.
+// ---------------------------------------------------------------------------
+
+type KvEntry = { id: string; key: string; value: string };
+
+function toKvEntries(obj: Record<string, string>): KvEntry[] {
+  return Object.entries(obj ?? {}).map(([key, value]) => ({
+    id: `${key}-${Math.random().toString(36).slice(2, 9)}`,
+    key,
+    value: value ?? '',
+  }));
+}
+
+function fromKvEntries(entries: KvEntry[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const e of entries) {
+    const k = e.key.trim();
+    const v = e.value.trim();
+    if (k && v) out[k] = v;
+  }
+  return out;
+}
+
+function KeyValueListEditor({
+  label,
+  hint,
+  entries,
+  onChange,
+  keyPlaceholder,
+  valuePlaceholder,
+}: {
+  label: string;
+  hint?: string;
+  entries: KvEntry[];
+  onChange: (next: KvEntry[]) => void;
+  keyPlaceholder: string;
+  valuePlaceholder: string;
+}) {
+  function add() {
+    onChange([
+      ...entries,
+      { id: `new-${Math.random().toString(36).slice(2, 9)}`, key: '', value: '' },
+    ]);
+  }
+  function update(i: number, field: 'key' | 'value', v: string) {
+    onChange(entries.map((e, idx) => (idx === i ? { ...e, [field]: v } : e)));
+  }
+  function remove(i: number) {
+    onChange(entries.filter((_, idx) => idx !== i));
+  }
+  return (
+    <div>
+      <label className="block text-xs font-medium text-text-muted uppercase tracking-wide mb-1">
+        {label}
+      </label>
+      {hint ? <p className="text-[11px] text-text-muted/70 mb-2">{hint}</p> : null}
+      <div className="space-y-2 mb-2">
+        {entries.length === 0 ? (
+          <p className="text-xs text-text-muted/50 italic">None yet — add one below.</p>
+        ) : (
+          entries.map((entry, i) => (
+            <div key={entry.id} className="rounded-lg border border-nativz-border bg-background/40 p-2 space-y-1.5">
+              <div className="flex items-start gap-2">
+                <input
+                  type="text"
+                  value={entry.key}
+                  onChange={(e) => update(i, 'key', e.target.value)}
+                  placeholder={keyPlaceholder}
+                  className="flex-1 rounded-lg border border-nativz-border bg-background px-3 py-1.5 text-xs font-mono text-text-primary placeholder:text-text-muted/50 outline-none focus:border-accent/50 transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => remove(i)}
+                  className="rounded-lg border border-nativz-border px-2 py-1.5 text-text-muted hover:text-red-400 hover:border-red-400/50 transition-colors cursor-pointer"
+                  aria-label="Remove rule"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <textarea
+                value={entry.value}
+                onChange={(e) => update(i, 'value', e.target.value)}
+                placeholder={valuePlaceholder}
+                rows={2}
+                className="w-full rounded-lg border border-nativz-border bg-background px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted/50 outline-none focus:border-accent/50 transition-colors resize-y"
+              />
+            </div>
+          ))
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={add}
+        className="flex items-center gap-1.5 rounded-lg border border-nativz-border px-3 py-1.5 text-xs text-text-muted hover:text-text-primary hover:border-accent/50 transition-colors cursor-pointer"
+      >
+        <Plus size={12} /> Add rule
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Labeled textarea — multi-line field with optional hint + minRows.
+// ---------------------------------------------------------------------------
+
+function LabeledTextarea({
+  label,
+  hint,
+  value,
+  onChange,
+  minRows = 2,
+}: {
+  label: string;
+  hint?: string;
+  value: string;
+  onChange: (v: string) => void;
+  minRows?: number;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-text-muted uppercase tracking-wide mb-1">
+        {label}
+      </label>
+      {hint ? <p className="text-[11px] text-text-muted/70 mb-2">{hint}</p> : null}
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={minRows}
+        className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 outline-none focus:border-accent/50 transition-colors resize-y"
+      />
+    </div>
+  );
 }

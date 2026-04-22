@@ -3,6 +3,7 @@
 import {
   Palette, Type, Globe, Users, Target,
   FileText, Image, Check, Pencil, ChevronRight,
+  Megaphone, Quote, ShieldCheck, X,
 } from 'lucide-react';
 import type { BrandColor, BrandFont, BrandLogo } from '@/lib/knowledge/types';
 import { BrandDnaGoogleFontLink } from './brand-dna-google-font-link';
@@ -32,6 +33,18 @@ export function BrandDNACards({ metadata, clientId: _clientId, editable = false,
   const targetAudience = (metadata.target_audience_summary as string) ?? '';
   const positioning = (metadata.competitive_positioning as string) ?? '';
   const verified = (metadata.verified_sections as Record<string, unknown>) ?? {};
+
+  // Scripting guardrails (content_framing_rules, approved/banned CTAs, quote
+  // bank, claim hygiene, short-form video rules, casting & tone). These keys
+  // are what the nerd reads when scripting — the tiles below make them
+  // editable without SQL.
+  const framingRules = (metadata.content_framing_rules as Record<string, unknown>) ?? {};
+  const approvedCtas = (metadata.approved_ctas as string[]) ?? [];
+  const bannedCtas = (metadata.banned_ctas as string[]) ?? [];
+  const quoteBank = (metadata.approved_quote_bank as string[]) ?? [];
+  const claimHygiene = (metadata.claim_hygiene_rules as Record<string, string>) ?? {};
+  const videoRules = (metadata.short_form_video_rules as Record<string, string>) ?? {};
+  const castingTone = (metadata.casting_and_tone as Record<string, string>) ?? {};
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:items-stretch">
@@ -210,6 +223,175 @@ export function BrandDNACards({ metadata, clientId: _clientId, editable = false,
           <p className="text-xs text-text-muted/60">No positioning data</p>
         )}
       </BentoCard>
+
+      {/* Scripting guardrails row — framing rules, CTAs/quotes, claim
+          hygiene. Each tile opens a dedicated editor in
+          BrandDNASectionEditor. Jack added these so the nerd pulls the
+          same rules the team called out on client feedback calls (e.g.
+          Goldback's "spendability must appear in every script" rule,
+          approved CTAs, banned phrases like 'fill out the form'). */}
+      <BentoCard
+        title="Content framing rules"
+        icon={<Target size={14} />}
+        verified={!!verified['Content framing rules']}
+        editable={editable}
+        onEdit={() => onEditSection?.('Content framing rules')}
+      >
+        <FramingRulesPreview rules={framingRules} />
+      </BentoCard>
+
+      <BentoCard
+        title="CTAs & quote bank"
+        icon={<Megaphone size={14} />}
+        verified={!!verified['CTAs and quotes']}
+        editable={editable}
+        onEdit={() => onEditSection?.('CTAs and quotes')}
+      >
+        <CtasAndQuotesPreview
+          approved={approvedCtas}
+          banned={bannedCtas}
+          quotes={quoteBank}
+        />
+      </BentoCard>
+
+      <BentoCard
+        title="Claim hygiene & tone"
+        icon={<ShieldCheck size={14} />}
+        verified={!!verified['Claim hygiene']}
+        editable={editable}
+        onEdit={() => onEditSection?.('Claim hygiene')}
+      >
+        <GuardrailsPreview
+          claimHygiene={claimHygiene}
+          videoRules={videoRules}
+          castingTone={castingTone}
+        />
+      </BentoCard>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Tile previews for scripting guardrails
+// ---------------------------------------------------------------------------
+
+function FramingRulesPreview({ rules }: { rules: Record<string, unknown> }) {
+  const mandatory = typeof rules.mandatory_rule === 'string' ? rules.mandatory_rule : '';
+  const hierarchy = rules.funnel_hierarchy as Record<string, string> | undefined;
+  const keys: Array<[string, string]> = [
+    ['mandatory_rule', 'Mandatory'],
+    ['cta_alignment', 'CTA alignment'],
+    ['show_dont_imply', "Show, don't imply"],
+    ['free_offer_framing', 'Offer framing'],
+  ];
+  const otherCount = keys.filter(([k]) => typeof rules[k] === 'string' && (rules[k] as string).trim()).length;
+
+  if (!mandatory && !hierarchy && otherCount === 0) {
+    return <p className="text-xs text-text-muted/60">No framing rules yet</p>;
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {mandatory ? (
+        <LineClampText lines={4}>{mandatory}</LineClampText>
+      ) : null}
+      {hierarchy ? (
+        <div className="flex flex-wrap gap-1">
+          {['top', 'middle', 'bottom'].map((k) =>
+            typeof hierarchy[k] === 'string' && hierarchy[k].trim() ? (
+              <span
+                key={k}
+                className="rounded-full bg-surface/60 px-2 py-0.5 text-[10px] text-text-muted capitalize"
+                title={hierarchy[k]}
+              >
+                {k}
+              </span>
+            ) : null,
+          )}
+        </div>
+      ) : null}
+      {otherCount > 1 ? (
+        <p className="text-[10px] text-text-muted/70">+{otherCount - (mandatory ? 1 : 0)} more rule{otherCount - (mandatory ? 1 : 0) === 1 ? '' : 's'}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function CtasAndQuotesPreview({
+  approved,
+  banned,
+  quotes,
+}: {
+  approved: string[];
+  banned: string[];
+  quotes: string[];
+}) {
+  if (approved.length === 0 && banned.length === 0 && quotes.length === 0) {
+    return <p className="text-xs text-text-muted/60">No CTAs or quotes yet</p>;
+  }
+  return (
+    <div className="space-y-1.5">
+      {approved.length > 0 ? (
+        <div className="flex items-start gap-1.5">
+          <ChevronRight size={10} className="mt-0.5 shrink-0 text-accent-text" />
+          <span className="text-xs text-text-secondary">
+            {approved.length} approved CTA{approved.length === 1 ? '' : 's'}
+          </span>
+        </div>
+      ) : null}
+      {banned.length > 0 ? (
+        <div className="flex items-start gap-1.5">
+          <X size={10} className="mt-0.5 shrink-0 text-red-400/80" />
+          <span className="text-xs text-text-secondary">
+            {banned.length} banned CTA{banned.length === 1 ? '' : 's'}
+          </span>
+        </div>
+      ) : null}
+      {quotes.length > 0 ? (
+        <div className="flex items-start gap-1.5">
+          <Quote size={10} className="mt-0.5 shrink-0 text-accent-text" />
+          <span className="text-xs text-text-secondary line-clamp-2">
+            {quotes.length > 0 ? `"${quotes[0]}"` : ''}
+          </span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function GuardrailsPreview({
+  claimHygiene,
+  videoRules,
+  castingTone,
+}: {
+  claimHygiene: Record<string, string>;
+  videoRules: Record<string, string>;
+  castingTone: Record<string, string>;
+}) {
+  const claimCount = Object.values(claimHygiene).filter((v) => (v ?? '').trim()).length;
+  const videoCount = Object.values(videoRules).filter((v) => (v ?? '').trim()).length;
+  const toneCount = Object.values(castingTone).filter((v) => (v ?? '').trim()).length;
+
+  if (claimCount === 0 && videoCount === 0 && toneCount === 0) {
+    return <p className="text-xs text-text-muted/60">No guardrails yet</p>;
+  }
+
+  const rows: Array<[string, number]> = [
+    ['Claim hygiene', claimCount],
+    ['Short-form video', videoCount],
+    ['Casting & tone', toneCount],
+  ];
+
+  return (
+    <div className="space-y-1">
+      {rows.map(([label, count]) =>
+        count > 0 ? (
+          <div key={label} className="flex items-center justify-between text-xs">
+            <span className="text-text-secondary">{label}</span>
+            <span className="text-text-muted">{count} rule{count === 1 ? '' : 's'}</span>
+          </div>
+        ) : null,
+      )}
     </div>
   );
 }

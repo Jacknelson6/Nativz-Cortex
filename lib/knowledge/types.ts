@@ -251,6 +251,31 @@ export interface BrandGuidelineMetadata {
   version: number;
   superseded_by?: string;
   verified_sections?: Record<string, { verified_at: string; verified_by: string }>;
+
+  // --- Content framing rules (structured guardrails that reach scripting prompts) ---
+  /** Approved CTA phrases — use these verbatim or as close variants */
+  approved_ctas?: string[];
+  /** CTA phrases that must never appear (e.g. "fill out the form") */
+  banned_ctas?: string[];
+  /** Approved on-brand quotes — use verbatim or as style models */
+  approved_quote_bank?: string[];
+  /** Funnel-aware framing rules (hierarchy, mandatory pillars, show-don't-imply, etc.) */
+  content_framing_rules?: {
+    funnel_hierarchy?: { top?: string; middle?: string; bottom?: string };
+    mandatory_rule?: string;
+    cta_alignment?: string;
+    show_dont_imply?: string;
+    free_offer_framing?: string;
+    [key: string]: unknown;
+  };
+  /** Fact-accuracy and dated-claim guardrails */
+  claim_hygiene_rules?: Record<string, string>;
+  /** Short-form video rules (length buffer, hook→CTA, b-roll, overlays) */
+  short_form_video_rules?: Record<string, string>;
+  /** Tone + casting constraints (controversy avoidance, influencer-read style) */
+  casting_and_tone?: Record<string, string>;
+  /** ISO date the framing rules were last updated — displayed in prompts for recency */
+  content_framing_rules_updated_at?: string;
 }
 
 // ---------------------------------------------------------------------------

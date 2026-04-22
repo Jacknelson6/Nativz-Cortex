@@ -339,6 +339,19 @@ export async function updateKnowledgeEntry(
     .single();
 
   if (error) throw new Error(`Failed to update knowledge entry: ${error.message}`);
+
+  // Re-embed whenever the searchable text surface (title or content) changes.
+  // Skipping this leaves a stale vector against the new text — semantic
+  // search keeps ranking by the old body, so updates to guardrail-carrying
+  // entries like brand DNA become invisible to `search_knowledge_base`
+  // until someone regenerates manually. Fire-and-forget: a failed embed
+  // shouldn't reject the write.
+  if (updates.title !== undefined || updates.content !== undefined) {
+    embedKnowledgeEntry(id).catch((err) => {
+      console.warn(`[updateKnowledgeEntry] re-embed failed for ${id}:`, err);
+    });
+  }
+
   return data as KnowledgeEntry;
 }
 

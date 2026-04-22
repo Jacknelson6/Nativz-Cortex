@@ -731,10 +731,67 @@ Industry: ${ctx.clientIndustry}${ctx.clientWebsiteUrl ? `\nWebsite: ${ctx.client
     sections.push(`<competitive_positioning>\n${ctx.positioning}\n</competitive_positioning>`);
   }
 
-  // If from guideline, include the full content as well (truncated to prevent token explosion)
+  // Structured framing rules (CTAs, quote bank, claim hygiene, funnel rules) —
+  // load-bearing scripting guardrails that sit in metadata, not body text. These
+  // must reach every prompt; serialize BEFORE the truncated document body so
+  // they survive the token budget even when the body gets clipped.
+  if (meta?.content_framing_rules) {
+    const r = meta.content_framing_rules;
+    const lines: string[] = [];
+    if (r.mandatory_rule) lines.push(`Mandatory: ${r.mandatory_rule}`);
+    if (r.funnel_hierarchy) {
+      const h = r.funnel_hierarchy;
+      if (h.top) lines.push(`Funnel top (curiosity): ${h.top}`);
+      if (h.middle) lines.push(`Funnel middle (consideration): ${h.middle}`);
+      if (h.bottom) lines.push(`Funnel bottom (action): ${h.bottom}`);
+    }
+    if (r.cta_alignment) lines.push(`CTA alignment: ${r.cta_alignment}`);
+    if (r.show_dont_imply) lines.push(`Show-don't-imply: ${r.show_dont_imply}`);
+    if (r.free_offer_framing) lines.push(`Offer framing: ${r.free_offer_framing}`);
+    if (lines.length > 0) {
+      sections.push(`<content_framing_rules>\n${lines.join('\n')}\n</content_framing_rules>`);
+    }
+  }
+
+  if (meta?.approved_ctas?.length) {
+    sections.push(`<approved_ctas>\n${meta.approved_ctas.map((c) => `- ${c}`).join('\n')}\n</approved_ctas>`);
+  }
+
+  if (meta?.banned_ctas?.length) {
+    sections.push(`<banned_ctas>\nNever use these CTA phrasings:\n${meta.banned_ctas.map((c) => `- ${c}`).join('\n')}\n</banned_ctas>`);
+  }
+
+  if (meta?.approved_quote_bank?.length) {
+    sections.push(
+      `<approved_quote_bank>\nUse these verbatim or as style models when they fit:\n${meta.approved_quote_bank.map((q) => `- ${q}`).join('\n')}\n</approved_quote_bank>`,
+    );
+  }
+
+  if (meta?.claim_hygiene_rules && Object.keys(meta.claim_hygiene_rules).length > 0) {
+    const lines = Object.entries(meta.claim_hygiene_rules).map(([k, v]) => `- ${k}: ${v}`);
+    sections.push(`<claim_hygiene_rules>\n${lines.join('\n')}\n</claim_hygiene_rules>`);
+  }
+
+  if (meta?.short_form_video_rules && Object.keys(meta.short_form_video_rules).length > 0) {
+    const lines = Object.entries(meta.short_form_video_rules).map(([k, v]) => `- ${k}: ${v}`);
+    sections.push(`<short_form_video_rules>\n${lines.join('\n')}\n</short_form_video_rules>`);
+  }
+
+  if (meta?.casting_and_tone && Object.keys(meta.casting_and_tone).length > 0) {
+    const lines = Object.entries(meta.casting_and_tone).map(([k, v]) => `- ${k}: ${v}`);
+    sections.push(`<casting_and_tone>\n${lines.join('\n')}\n</casting_and_tone>`);
+  }
+
+  // If from guideline, include the document body too. Bumped cap from 4k → 16k
+  // so narrative sections like "Content framing rules" at the tail of a long
+  // Brand DNA doc don't get chopped off. Total brand_dna block still bounded:
+  // structured sections (visuals / tone / products / ICPs / framing / CTAs /
+  // quotes / claim hygiene) add maybe 4-6k on a well-populated brand, leaving
+  // the model plenty of budget for messages + research blocks.
   if (ctx.guidelineContent) {
-    const truncated = ctx.guidelineContent.length > 4000
-      ? ctx.guidelineContent.substring(0, 4000) + '\n...(truncated)'
+    const MAX_GUIDELINE_CHARS = 16_000;
+    const truncated = ctx.guidelineContent.length > MAX_GUIDELINE_CHARS
+      ? ctx.guidelineContent.substring(0, MAX_GUIDELINE_CHARS) + '\n...(truncated)'
       : ctx.guidelineContent;
     sections.push(`<brand_guideline_document>\n${truncated}\n</brand_guideline_document>`);
   }
