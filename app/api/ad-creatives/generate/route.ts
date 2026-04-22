@@ -200,6 +200,27 @@ export async function POST(req: NextRequest) {
     })
     .eq('id', batchRow.id);
 
+  // Persist the turn in the chat history — one user bubble (the prompt)
+  // and one assistant bubble (the generation summary). batch_id on the
+  // assistant row lets the chat UI render the inline concept preview
+  // without re-deriving the link.
+  await admin.from('ad_generator_messages').insert([
+    {
+      client_id: clientId,
+      role: 'user',
+      content: prompt,
+      author_user_id: user.id,
+    },
+    {
+      client_id: clientId,
+      role: 'assistant',
+      content: `Generated ${inserted.length} concept${inserted.length === 1 ? '' : 's'}${partial ? ` (requested ${count}, model returned ${inserted.length})` : ''}.`,
+      batch_id: batchRow.id,
+      metadata: { requested: count, returned: inserted.length, partial },
+      author_user_id: user.id,
+    },
+  ]);
+
   return NextResponse.json({
     batchId: batchRow.id,
     status: partial ? 'partial' : 'completed',

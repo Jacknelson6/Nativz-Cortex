@@ -62,6 +62,22 @@ export function AdGeneratorWorkspace({
     setConcepts((prev) => prev.filter((c) => c.id !== id));
   }, []);
 
+  // Bulk updates from slash commands — merge status changes + drop
+  // deleted rows in one pass so the gallery re-renders once per turn.
+  const handleConceptsChanged = useCallback(
+    (updatedRows: AdConcept[], deletedIds: string[]) => {
+      setConcepts((prev) => {
+        const byId = new Map(prev.map((c) => [c.id, c]));
+        for (const u of updatedRows) byId.set(u.id, u);
+        for (const id of deletedIds) byId.delete(id);
+        return Array.from(byId.values()).sort((a, b) =>
+          b.created_at.localeCompare(a.created_at),
+        );
+      });
+    },
+    [],
+  );
+
   return (
     <div className="cortex-page-gutter space-y-6 py-6">
       <header className="flex items-start justify-between gap-4">
@@ -115,12 +131,14 @@ export function AdGeneratorWorkspace({
         <AdGeneratorChat
           clientId={clientId}
           onBatchComplete={handleBatchComplete}
+          onConceptsChanged={handleConceptsChanged}
           onSwitchToGallery={() => setActiveTab('gallery')}
         />
       )}
 
       {activeTab === 'gallery' && (
         <AdConceptGallery
+          clientId={clientId}
           concepts={concepts}
           onUpdate={handleUpdate}
           onDelete={handleDelete}

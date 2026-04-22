@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import {
   Check,
@@ -9,6 +9,9 @@ import {
   Wand2,
   Loader2,
   Eye,
+  Share2,
+  MessageSquare,
+  Copy,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getSupabaseUrl } from '@/lib/supabase/public-env';
@@ -33,7 +36,20 @@ export interface AdConcept {
 
 type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
 
+interface ConceptComment {
+  id: string;
+  concept_id: string;
+  author_name: string;
+  body: string;
+  kind: 'comment' | 'approval' | 'rejection';
+  share_token_id: string | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  created_at: string;
+}
+
 interface Props {
+  clientId: string;
   concepts: AdConcept[];
   onUpdate: (concept: AdConcept) => void;
   onDelete: (id: string) => void;
@@ -48,10 +64,40 @@ interface Props {
  * parent workspace holds the concept list and mutates it in response to
  * child callbacks.
  */
-export function AdConceptGallery({ concepts, onUpdate, onDelete }: Props) {
+export function AdConceptGallery({ clientId, concepts, onUpdate, onDelete }: Props) {
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [openId, setOpenId] = useState<string | null>(null);
   const [renderingIds, setRenderingIds] = useState<Set<string>>(new Set());
+  const [shareOpen, setShareOpen] = useState(false);
+  const [commentsByConcept, setCommentsByConcept] = useState<Record<string, ConceptComment[]>>({});
+
+  // Prefetch comment counts in a single batched call when the gallery
+  // mounts or the concept list grows. Keeps card badges accurate without
+  // N round-trips. Only fetches when there's something to show.
+  useEffect(() => {
+    if (concepts.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const conceptIds = concepts.map((c) => c.id).join(',');
+      if (!conceptIds) return;
+      try {
+        const res = await fetch(
+          `/api/ad-creatives/concept-comments?conceptIds=${encodeURIComponent(conceptIds)}`,
+          { cache: 'no-store' },
+        );
+        if (!res.ok || cancelled) return;
+        const { commentsByConcept: map } = (await res.json()) as {
+          commentsByConcept: Record<string, ConceptComment[]>;
+        };
+        if (!cancelled) setCommentsByConcept(map ?? {});
+      } catch {
+        // Network blip — badges stay at 0, no toast (quietly degraded).
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [concepts]);
 
   const counts = useMemo(() => {
     const map: Record<StatusFilter, number> = {
@@ -142,30 +188,40 @@ export function AdConceptGallery({ concepts, onUpdate, onDelete }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-1">
-        <FilterChip
-          label={`All · ${counts.all}`}
-          active={filter === 'all'}
-          onClick={() => setFilter('all')}
-        />
-        <FilterChip
-          label={`Pending · ${counts.pending}`}
-          active={filter === 'pending'}
-          onClick={() => setFilter('pending')}
-          dim={counts.pending === 0}
-        />
-        <FilterChip
-          label={`Approved · ${counts.approved}`}
-          active={filter === 'approved'}
-          onClick={() => setFilter('approved')}
-          dim={counts.approved === 0}
-        />
-        <FilterChip
-          label={`Rejected · ${counts.rejected}`}
-          active={filter === 'rejected'}
-          onClick={() => setFilter('rejected')}
-          dim={counts.rejected === 0}
-        />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1">
+          <FilterChip
+            label={`All · ${counts.all}`}
+            active={filter === 'all'}
+            onClick={() => setFilter('all')}
+          />
+          <FilterChip
+            label={`Pending · ${counts.pending}`}
+            active={filter === 'pending'}
+            onClick={() => setFilter('pending')}
+            dim={counts.pending === 0}
+          />
+          <FilterChip
+            label={`Approved · ${counts.approved}`}
+            active={filter === 'approved'}
+            onClick={() => setFilter('approved')}
+            dim={counts.approved === 0}
+          />
+          <FilterChip
+            label={`Rejected · ${counts.rejected}`}
+            active={filter === 'rejected'}
+            onClick={() => setFilter('rejected')}
+            dim={counts.rejected === 0}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setShareOpen(true)}
+          className="inline-flex items-center gap-2 rounded-lg border border-nativz-border bg-surface px-3 py-1.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover"
+        >
+          <Share2 size={14} />
+          Share with client
+        </button>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -173,6 +229,7 @@ export function AdConceptGallery({ concepts, onUpdate, onDelete }: Props) {
           <ConceptCard
             key={concept.id}
             concept={concept}
+            commentCount={(commentsByConcept[concept.id] ?? []).length}
             isRendering={renderingIds.has(concept.id)}
             onOpen={() => setOpenId(concept.id)}
             onApprove={() => void patchStatus(concept.id, 'approved')}
@@ -186,6 +243,7 @@ export function AdConceptGallery({ concepts, onUpdate, onDelete }: Props) {
       {openConcept && (
         <ConceptDetailDialog
           concept={openConcept}
+          comments={commentsByConcept[openConcept.id] ?? []}
           isRendering={renderingIds.has(openConcept.id)}
           onClose={() => setOpenId(null)}
           onApprove={() => void patchStatus(openConcept.id, 'approved')}
@@ -193,6 +251,10 @@ export function AdConceptGallery({ concepts, onUpdate, onDelete }: Props) {
           onDelete={() => void handleDelete(openConcept.id)}
           onRender={() => void handleRender(openConcept.id)}
         />
+      )}
+
+      {shareOpen && (
+        <ShareDialog clientId={clientId} onClose={() => setShareOpen(false)} />
       )}
     </div>
   );
@@ -232,6 +294,7 @@ function FilterChip({
 
 interface CardProps {
   concept: AdConcept;
+  commentCount: number;
   isRendering: boolean;
   onOpen: () => void;
   onApprove: () => void;
@@ -242,6 +305,7 @@ interface CardProps {
 
 function ConceptCard({
   concept,
+  commentCount,
   isRendering,
   onOpen,
   onApprove,
@@ -294,6 +358,15 @@ function ConceptCard({
         >
           {concept.status}
         </span>
+        {commentCount > 0 && (
+          <span
+            className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-accent-surface/90 px-2 py-0.5 text-[10px] font-semibold text-accent-text shadow-sm"
+            title={`${commentCount} comment${commentCount === 1 ? '' : 's'}`}
+          >
+            <MessageSquare size={10} />
+            {commentCount}
+          </span>
+        )}
       </button>
 
       <div className="flex flex-1 flex-col gap-2 p-3">
@@ -385,6 +458,7 @@ function IconButton({
 
 function ConceptDetailDialog({
   concept,
+  comments,
   isRendering,
   onClose,
   onApprove,
@@ -393,6 +467,7 @@ function ConceptDetailDialog({
   onRender,
 }: {
   concept: AdConcept;
+  comments: ConceptComment[];
   isRendering: boolean;
   onClose: () => void;
   onApprove: () => void;
@@ -480,6 +555,38 @@ function ConceptDetailDialog({
                 {concept.image_prompt}
               </pre>
             </Section>
+            <Section label={`Client comments · ${comments.length}`}>
+              {comments.length === 0 ? (
+                <p className="text-[12px] text-text-muted">
+                  No feedback yet. Share the gallery with the client and their replies land here.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {comments.map((c) => (
+                    <div
+                      key={c.id}
+                      className={`rounded-md border px-2.5 py-2 text-[12px] ${
+                        c.kind === 'approval'
+                          ? 'border-emerald-500/30 bg-emerald-500/5'
+                          : c.kind === 'rejection'
+                            ? 'border-red-500/30 bg-red-500/5'
+                            : 'border-nativz-border bg-background'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2 text-[10px] text-text-muted">
+                        <span className="font-semibold text-text-primary">
+                          {c.author_name}
+                        </span>
+                        <span>{new Date(c.created_at).toLocaleString()}</span>
+                      </div>
+                      <p className="mt-1 whitespace-pre-wrap text-text-secondary">
+                        {c.body}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Section>
           </div>
         </div>
 
@@ -538,4 +645,231 @@ function publicImageUrl(storagePath: string): string {
   } catch {
     return '';
   }
+}
+
+// ---------------------------------------------------------------------------
+// Share dialog — create + revoke share links for the current client
+// ---------------------------------------------------------------------------
+
+interface ShareTokenRow {
+  id: string;
+  token: string;
+  batch_id: string | null;
+  label: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+}
+
+function ShareDialog({ clientId, onClose }: { clientId: string; onClose: () => void }) {
+  const [tokens, setTokens] = useState<ShareTokenRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [label, setLabel] = useState('');
+  const [expiresInDays, setExpiresInDays] = useState<string>('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/ad-creatives/share-links?clientId=${clientId}`, {
+          cache: 'no-store',
+        });
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { shareTokens: ShareTokenRow[] };
+        if (!cancelled) setTokens(data.shareTokens ?? []);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId]);
+
+  const handleCreate = useCallback(async () => {
+    setCreating(true);
+    try {
+      const payload: Record<string, unknown> = { clientId };
+      if (label.trim()) payload.label = label.trim();
+      const days = Number.parseInt(expiresInDays, 10);
+      if (Number.isFinite(days) && days > 0) payload.expiresInDays = days;
+
+      const res = await fetch('/api/ad-creatives/share-links', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        toast.error(err?.error ?? 'Could not create share link');
+        return;
+      }
+      const { shareToken } = (await res.json()) as { shareToken: ShareTokenRow };
+      setTokens((prev) => [shareToken, ...prev]);
+      setLabel('');
+      setExpiresInDays('');
+      toast.success('Share link ready — click Copy');
+    } finally {
+      setCreating(false);
+    }
+  }, [clientId, label, expiresInDays]);
+
+  const handleRevoke = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/ad-creatives/share-links/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('revoke failed');
+      setTokens((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, revoked_at: new Date().toISOString() } : t)),
+      );
+      toast.success('Share link revoked');
+    } catch {
+      toast.error('Could not revoke');
+    }
+  }, []);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-nativz-border bg-surface shadow-elevated"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-nativz-border/50 px-5 py-3">
+          <p className="text-sm font-semibold text-text-primary">Share with client</p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
+            aria-label="Close"
+          >
+            <XIcon size={16} />
+          </button>
+        </div>
+
+        <div className="shrink-0 space-y-2 border-b border-nativz-border/50 bg-surface/60 px-5 py-4">
+          <p className="text-xs text-text-muted">
+            Creates a public URL for the whole concept gallery (pending +
+            approved only — rejected stays internal). Anyone with the link
+            can leave comments; they come back on each card.
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="Label (optional — e.g. 'Q2 testimonial drop')"
+              className="flex-1 rounded-md border border-nativz-border bg-background px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent/40 focus:outline-none"
+            />
+            <input
+              type="number"
+              min={1}
+              max={365}
+              value={expiresInDays}
+              onChange={(e) => setExpiresInDays(e.target.value)}
+              placeholder="Expires in days"
+              className="w-40 rounded-md border border-nativz-border bg-background px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent/40 focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => void handleCreate()}
+              disabled={creating}
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-accent/90 disabled:opacity-50"
+            >
+              {creating ? <Loader2 size={14} className="animate-spin" /> : <Share2 size={14} />}
+              Create link
+            </button>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
+          {loading ? (
+            <div className="flex items-center gap-2 py-8 text-sm text-text-muted">
+              <Loader2 size={14} className="animate-spin" />
+              Loading share links…
+            </div>
+          ) : tokens.length === 0 ? (
+            <p className="py-8 text-center text-sm text-text-muted">
+              No share links yet. Create one above.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {tokens.map((t) => (
+                <ShareTokenRowCard key={t.id} token={t} onRevoke={() => void handleRevoke(t.id)} />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ShareTokenRowCard({
+  token,
+  onRevoke,
+}: {
+  token: ShareTokenRow;
+  onRevoke: () => void;
+}) {
+  const url =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/shared/ad-creatives/${token.token}`
+      : `/shared/ad-creatives/${token.token}`;
+  const isDead = !!token.revoked_at || (!!token.expires_at && new Date(token.expires_at) < new Date());
+  const status = token.revoked_at
+    ? 'Revoked'
+    : token.expires_at && new Date(token.expires_at) < new Date()
+      ? 'Expired'
+      : token.expires_at
+        ? `Expires ${new Date(token.expires_at).toLocaleDateString()}`
+        : 'No expiry';
+
+  return (
+    <div
+      className={`rounded-lg border px-3 py-2 ${
+        isDead ? 'border-nativz-border/40 bg-surface/40 opacity-60' : 'border-nativz-border bg-background'
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-text-primary">
+            {token.label ?? 'Shared gallery'}
+          </p>
+          <p className="mt-0.5 truncate font-mono text-[11px] text-text-muted" title={url}>
+            {url}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard.writeText(url);
+              toast.success('Copied');
+            }}
+            disabled={isDead}
+            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+            title="Copy URL"
+          >
+            <Copy size={12} />
+          </button>
+          {!isDead && (
+            <button
+              type="button"
+              onClick={onRevoke}
+              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-text-muted transition-colors hover:bg-red-500/10 hover:text-red-400"
+              title="Revoke link"
+            >
+              <Trash2 size={12} />
+            </button>
+          )}
+        </div>
+      </div>
+      <p className="mt-1 text-[10px] text-text-muted">
+        {status} · Created {new Date(token.created_at).toLocaleString()}
+      </p>
+    </div>
+  );
 }
