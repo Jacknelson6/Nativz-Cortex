@@ -23,11 +23,17 @@ export function SearchStatsRow({ videos }: SearchStatsRowProps) {
     }
   }
 
+  // Icon accents intentionally muted — per .impeccable.md ("accents work
+  // BECAUSE they're rare; overuse kills their power"), the numeric value
+  // is the visual punch on a stats card. The previous mix (pink-400 /
+  // emerald-400 / purple-400) read as decoration and pulled focus from
+  // the actual metrics. One cyan accent on the hero stat (Views) keeps
+  // the brand color rare and meaningful.
   const stats = [
-    { label: 'Videos', value: formatNumber(videos.length), icon: Camera, accent: 'text-pink-400' },
-    { label: 'Views', value: formatNumber(totalViews), icon: Eye, accent: 'text-text-muted' },
-    { label: 'Avg views', value: formatNumber(avgViews), icon: BarChart3, accent: 'text-emerald-400' },
-    { label: 'Creators', value: formatNumber(uniqueAuthors), icon: Users, accent: 'text-purple-400' },
+    { label: 'Videos', value: formatNumber(videos.length), icon: Camera, accent: 'text-text-muted' },
+    { label: 'Views', value: formatNumber(totalViews), icon: Eye, accent: 'text-accent-text' },
+    { label: 'Avg views', value: formatNumber(avgViews), icon: BarChart3, accent: 'text-text-muted' },
+    { label: 'Creators', value: formatNumber(uniqueAuthors), icon: Users, accent: 'text-text-muted' },
     { label: 'Hashtags', value: formatNumber(allHashtags.size), icon: Hash, accent: 'text-text-muted' },
   ];
 
@@ -36,12 +42,12 @@ export function SearchStatsRow({ videos }: SearchStatsRowProps) {
       {stats.map((s) => (
         <div
           key={s.label}
-          className="rounded-xl border border-nativz-border bg-surface p-3 flex items-center gap-3"
+          className="group flex items-center gap-3 rounded-xl border border-nativz-border bg-surface p-3 transition-all duration-200 hover:-translate-y-px hover:border-nativz-border/90 hover:bg-surface-hover/30"
         >
           <s.icon size={16} className={s.accent} />
           <div className="min-w-0">
-            <p className="text-lg font-bold text-text-primary leading-tight">{s.value}</p>
-            <p className="text-xs text-text-muted">{s.label}</p>
+            <p className="text-lg font-semibold tabular-nums leading-tight text-text-primary">{s.value}</p>
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-muted/85">{s.label}</p>
           </div>
         </div>
       ))}

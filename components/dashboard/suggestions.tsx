@@ -24,10 +24,10 @@ interface SuggestionsProps {
   suggestions: Suggestion[];
 }
 
-const priorityConfig: Record<SuggestionPriority, { badge: string; variant: 'danger' | 'warning' | 'info'; border: string }> = {
-  urgent: { badge: 'Urgent', variant: 'danger', border: 'border-l-red-500/60' },
-  high: { badge: 'High', variant: 'warning', border: 'border-l-amber-500/60' },
-  normal: { badge: '', variant: 'info', border: 'border-l-accent/40' },
+const priorityConfig: Record<SuggestionPriority, { badge: string; variant: 'danger' | 'warning' | 'info' }> = {
+  urgent: { badge: 'Urgent', variant: 'danger' },
+  high: { badge: 'High', variant: 'warning' },
+  normal: { badge: '', variant: 'info' },
 };
 
 export function Suggestions({ suggestions }: SuggestionsProps) {
@@ -67,7 +67,7 @@ export function Suggestions({ suggestions }: SuggestionsProps) {
           return (
             <Link key={suggestion.id} href={suggestion.href}>
               <div
-                className={`animate-stagger-in flex items-center gap-3 rounded-lg border border-nativz-border-light border-l-[3px] ${config.border} px-4 py-3 hover:bg-surface-hover transition-colors group`}
+                className="animate-stagger-in group flex items-center gap-3 rounded-lg border border-nativz-border-light px-4 py-3 transition-colors hover:bg-surface-hover"
                 style={{ animationDelay: `${i * 50}ms` }}
               >
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-hover text-text-muted group-hover:text-accent-text transition-colors">
