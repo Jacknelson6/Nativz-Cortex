@@ -26,6 +26,8 @@ import {
   Calendar,
   Brain,
   Cpu,
+  Gauge,
+  ListChecks,
 } from 'lucide-react';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
@@ -132,9 +134,11 @@ const NAV_SECTIONS: NavSection[] = [
           { href: '/admin/shoots', label: 'Shoots', icon: Camera },
           { href: '/admin/scheduler', label: 'Content calendars', icon: Calendar },
           { href: '/admin/clients', label: 'Clients', icon: Contact },
+          { href: '/admin/onboarding', label: 'Onboarding', icon: ListChecks },
           { href: '/admin/users', label: 'Users', icon: Users },
           { href: '/admin/accounting', label: 'Accounting', icon: Receipt },
           { href: '/admin/notifications', label: 'Notifications', icon: Bell },
+          { href: '/admin/infrastructure', label: 'Infrastructure', icon: Gauge },
           { href: '/admin/settings/ai', label: 'AI settings', icon: Cpu },
         ],
       },
@@ -203,6 +207,7 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/knowledge',
   '/admin/analyze-social',
   '/admin/notifications',
+  '/admin/infrastructure',
   // Settings is reachable from the avatar popover — it doesn't need its
   // own nav row on the portal. Keeping it on the admin side where the gear
   // is the primary entry point to the agency settings secondary rail.

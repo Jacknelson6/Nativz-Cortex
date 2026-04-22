@@ -1,14 +1,23 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { Monitor } from 'lucide-react';
+
+// Public client-facing surfaces that must work on mobile. The admin +
+// portal are desktop-only (by design), but client-shared links like
+// onboarding timelines are viewed on phones. Add any future public
+// client surfaces here.
+const MOBILE_ALLOWED_PREFIXES = ['/onboarding/'];
 
 /**
  * Detects mobile viewport and shows a full-screen overlay telling the user
  * to switch to desktop. Uses viewport width (not user-agent) for reliability.
+ * Skipped entirely on public client-facing routes (see MOBILE_ALLOWED_PREFIXES).
  */
 export function MobileBlocker() {
   const [isMobile, setIsMobile] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     function check() {
@@ -19,7 +28,8 @@ export function MobileBlocker() {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  if (!isMobile) return null;
+  const isMobileAllowed = pathname && MOBILE_ALLOWED_PREFIXES.some((p) => pathname.startsWith(p));
+  if (!isMobile || isMobileAllowed) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background px-8 text-center">
