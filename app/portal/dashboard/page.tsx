@@ -119,7 +119,7 @@ export default async function PortalDashboardPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="ui-page-title nz-highlight">
-              Welcome back{firstName ? <> , <u>{firstName}</u></> : ''}
+              Welcome back{firstName ? <>, <u>{firstName}</u></> : ''}
             </h1>
             <p className="text-sm text-text-muted">{clientName}</p>
           </div>

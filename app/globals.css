@@ -267,7 +267,10 @@ body {
   color: var(--foreground);
 }
 
-/* ── Typography scale (use across app for SaaS consistency) ── */
+/* ── Typography scale (use across app for SaaS consistency) ──
+   Page-level headings use the Jost display font per Nativz brand.
+   Card / chrome titles stay on the body sans (Rubik) to keep density
+   readable in admin cockpits. */
 @layer components {
   /* Product app shell — applied to <main> next to sidebars */
   .cortex-main {
@@ -280,18 +283,18 @@ body {
   }
 
   .ui-page-title {
-    @apply text-2xl font-semibold tracking-tight text-text-primary;
+    @apply text-2xl font-semibold tracking-tight text-text-primary font-display;
   }
 
   .ui-page-title-md {
-    @apply text-xl font-semibold tracking-tight text-text-primary;
+    @apply text-xl font-semibold tracking-tight text-text-primary font-display;
   }
 
   .ui-page-title-hero {
-    @apply text-3xl font-semibold tracking-tight text-text-primary;
+    @apply text-3xl font-semibold tracking-tight text-text-primary font-display;
   }
   .ui-section-title {
-    @apply text-lg font-semibold tracking-tight text-text-primary;
+    @apply text-lg font-semibold tracking-tight text-text-primary font-display;
   }
 
   /* Dense shell headers (sidebar chrome, vault breadcrumb title) */

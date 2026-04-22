@@ -63,8 +63,9 @@ export default async function AdminDashboardPage() {
           <p className="text-sm text-text-muted mt-0.5">{monthDay}</p>
         </div>
 
-        {/* Quick actions — responsive: 1 col phone, 2 col tablet, 5 cols desktop */}
-        <div className="grid grid-cols-1 gap-3 auto-rows-[140px] sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-[1fr_1fr_1fr_1fr_minmax(200px,1.2fr)]">
+        {/* Quick actions — responsive: 1 col phone, 2 col tablet,
+            4-col (Nerd slightly wider) from lg up. */}
+        <div className="grid grid-cols-1 gap-3 auto-rows-[140px] sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_minmax(220px,1.25fr)]">
           <BentoTile
             href="/admin/pipeline"
             icon={<Workflow size={20} className="text-accent-text" />}
@@ -83,10 +84,8 @@ export default async function AdminDashboardPage() {
             label="Research topic"
             description="Social listening and trends"
           />
-          {/* Spacer under sm/lg to balance grid before Nerd tile */}
-          <div className="hidden sm:block lg:hidden" aria-hidden />
-          {/* Nerd tile — own component, nerdy instrument instead of AI glow */}
-          <NerdTile className="col-span-1 sm:col-span-2 lg:col-span-1 xl:col-span-1" />
+          {/* Nerd tile — nerdy instrument instead of AI glow */}
+          <NerdTile />
         </div>
 
         {/* Tasks + notifications — stacks on phone, side-by-side on tablet+ */}
