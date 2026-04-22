@@ -278,8 +278,13 @@ export default async function InfrastructurePage() {
   return (
     <div className="cortex-page-gutter max-w-6xl mx-auto space-y-8">
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold text-text-primary">Infrastructure</h1>
-        <p className="text-sm text-text-muted">
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-text/80">
+          Cortex · admin
+        </p>
+        <h1 className="text-2xl font-semibold leading-tight text-text-primary">
+          Infrastructure
+        </h1>
+        <p className="max-w-2xl text-sm text-text-muted">
           Topic search pipeline telemetry — per-stage timings for the last 50 LLM v1 runs.
           Use this to spot slow stages before chasing optimizations.
         </p>
@@ -455,21 +460,47 @@ export default async function InfrastructurePage() {
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-xl border border-nativz-border bg-surface px-4 py-3">
-      <div className="text-xs uppercase tracking-wide text-text-muted">{label}</div>
-      <div className="mt-1 text-xl font-semibold tabular-nums text-text-primary">{value}</div>
-      {sub && <div className="mt-0.5 text-[11px] text-text-muted">{sub}</div>}
+    <div className="group relative overflow-hidden rounded-xl border border-nativz-border bg-surface px-4 py-4 transition-all duration-200 hover:-translate-y-px hover:border-nativz-border/90 hover:bg-surface-hover/30">
+      {/* Top-left cyan tick — tiny brand signature on each stat. Not a
+          border-stripe accent (banned per impeccable.md), just a 6px square
+          marker that signals "Cortex telemetry" at a glance. */}
+      <span aria-hidden className="absolute left-3 top-3 h-1 w-1 rounded-full bg-accent/60" />
+      <div className="pl-3 font-mono text-[10px] uppercase tracking-[0.18em] text-text-muted/85">
+        {label}
+      </div>
+      <div className="mt-2 text-2xl font-semibold leading-none tabular-nums text-text-primary">
+        {value}
+      </div>
+      {sub && <div className="mt-1.5 text-[11px] text-text-muted">{sub}</div>}
     </div>
   );
 }
 
 function ModelRow({ label, value }: { label: string; value?: string | null }) {
+  // Split provider prefix (e.g. "openai/gpt-5.4-mini") into a small cyan
+  // pill + the model name. Reads as "[provider] model" instead of one
+  // dense slug — easier to scan and reinforces the "all via OpenRouter"
+  // routing story.
+  const slash = value?.indexOf('/') ?? -1;
+  const provider = value && slash > 0 ? value.slice(0, slash) : null;
+  const model = value && slash > 0 ? value.slice(slash + 1) : value;
   return (
-    <div className="rounded-lg border border-nativz-border/60 bg-surface-hover/30 px-3 py-2">
-      <div className="text-[11px] uppercase tracking-wide text-text-muted">{label}</div>
-      <div className="mt-0.5 truncate font-mono text-xs text-text-primary">
-        {value || <span className="text-text-muted">env default</span>}
+    <div className="rounded-lg border border-nativz-border/60 bg-surface-hover/30 px-3 py-2.5 transition-colors hover:border-nativz-border/90">
+      <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-muted/85">
+        {label}
       </div>
+      {value ? (
+        <div className="mt-1.5 flex items-center gap-2">
+          {provider && (
+            <span className="inline-flex shrink-0 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-[1px] font-mono text-[10px] font-medium tracking-tight text-cyan-300">
+              {provider}
+            </span>
+          )}
+          <span className="truncate font-mono text-xs text-text-primary">{model}</span>
+        </div>
+      ) : (
+        <div className="mt-1.5 text-xs text-text-muted">env default</div>
+      )}
     </div>
   );
 }
