@@ -64,6 +64,50 @@ export default async function OnboardingRosterPage({
     services: Array.isArray(c.services) ? (c.services as string[]) : [],
   }));
 
+  // Aggregate child counts for preview badges. We fetch phase rows and
+  // group rows scoped to the visible trackers, then count items via
+  // group_id. Keeps all three queries in parallel so the page stays fast.
+  const trackerIds = trackers.map((t) => t.id);
+  let stats: Record<string, { phases: number; groups: number; items: number }> = {};
+  if (trackerIds.length > 0) {
+    const [phasesRes, groupsRes] = await Promise.all([
+      admin
+        .from('onboarding_phases')
+        .select('tracker_id')
+        .in('tracker_id', trackerIds),
+      admin
+        .from('onboarding_checklist_groups')
+        .select('id, tracker_id')
+        .in('tracker_id', trackerIds),
+    ]);
+
+    const phaseRows = (phasesRes.data ?? []) as { tracker_id: string }[];
+    const groupRows = (groupsRes.data ?? []) as { id: string; tracker_id: string }[];
+    const groupToTracker = new Map(groupRows.map((g) => [g.id, g.tracker_id]));
+
+    const itemsRes = groupRows.length
+      ? await admin
+          .from('onboarding_checklist_items')
+          .select('group_id')
+          .in('group_id', groupRows.map((g) => g.id))
+      : { data: [] as { group_id: string }[] };
+    const itemRows = (itemsRes.data ?? []) as { group_id: string }[];
+
+    stats = Object.fromEntries(
+      trackerIds.map((id) => [id, { phases: 0, groups: 0, items: 0 }]),
+    );
+    for (const p of phaseRows) {
+      if (stats[p.tracker_id]) stats[p.tracker_id].phases += 1;
+    }
+    for (const g of groupRows) {
+      if (stats[g.tracker_id]) stats[g.tracker_id].groups += 1;
+    }
+    for (const it of itemRows) {
+      const tid = groupToTracker.get(it.group_id);
+      if (tid && stats[tid]) stats[tid].items += 1;
+    }
+  }
+
   return (
     <div className="cortex-page-gutter space-y-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -95,7 +139,7 @@ export default async function OnboardingRosterPage({
         </SegmentLink>
       </div>
 
-      <OnboardingRosterTable trackers={trackers} clients={clients} view={view} />
+      <OnboardingRosterTable trackers={trackers} clients={clients} view={view} stats={stats} />
     </div>
   );
 }

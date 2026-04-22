@@ -12,6 +12,7 @@ import {
   Check,
   ExternalLink,
   FileStack,
+  GripVertical,
   Loader2,
   Plus,
   RefreshCw,
@@ -100,6 +101,7 @@ export function OnboardingEditor({
   initialItems,
   emailTemplates = [],
   availableTemplates = [],
+  contactFirstName = null,
 }: {
   initialTracker: Tracker;
   initialPhases: Phase[];
@@ -107,6 +109,7 @@ export function OnboardingEditor({
   initialItems: Item[];
   emailTemplates?: EmailTemplate[];
   availableTemplates?: AvailableTemplate[];
+  contactFirstName?: string | null;
 }) {
   const router = useRouter();
   const [tracker, setTracker] = useState<Tracker>(initialTracker);
@@ -190,6 +193,32 @@ export function OnboardingEditor({
     }
   }, [phases]);
 
+  // Reorder phases: takes the dragged id and the id it was dropped over,
+  // splices in-place, renumbers sort_order, and posts the full order.
+  const reorderPhases = useCallback(async (sourceId: string, targetId: string) => {
+    if (sourceId === targetId) return;
+    const current = [...phases].sort((a, b) => a.sort_order - b.sort_order);
+    const srcIdx = current.findIndex((p) => p.id === sourceId);
+    const tgtIdx = current.findIndex((p) => p.id === targetId);
+    if (srcIdx === -1 || tgtIdx === -1) return;
+    const [moved] = current.splice(srcIdx, 1);
+    current.splice(tgtIdx, 0, moved);
+    const next = current.map((p, i) => ({ ...p, sort_order: i }));
+    const prev = phases;
+    setPhases(next);
+    try {
+      const res = await fetch('/api/onboarding/phases/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tracker_id: tracker.id, order: next.map((p) => p.id) }),
+      });
+      if (!res.ok) throw new Error('Failed');
+    } catch {
+      toast.error('Failed to save new order');
+      setPhases(prev);
+    }
+  }, [phases, tracker.id]);
+
   // ─── Group mutations ────────────────────────────────────────────────
 
   const addGroup = useCallback(async () => {
@@ -271,6 +300,38 @@ export function OnboardingEditor({
       if (!res.ok) throw new Error('Failed');
     } catch {
       toast.error('Failed to delete task');
+      setItems(prev);
+    }
+  }, [items]);
+
+  // Reorder items within a single group. Dragging between groups isn't
+  // supported in slice 3 — keeps the UI + API simple; cross-group moves
+  // are rare in practice.
+  const reorderItems = useCallback(async (groupId: string, sourceId: string, targetId: string) => {
+    if (sourceId === targetId) return;
+    const inGroup = items
+      .filter((it) => it.group_id === groupId)
+      .sort((a, b) => a.sort_order - b.sort_order);
+    const srcIdx = inGroup.findIndex((it) => it.id === sourceId);
+    const tgtIdx = inGroup.findIndex((it) => it.id === targetId);
+    if (srcIdx === -1 || tgtIdx === -1) return;
+    const [moved] = inGroup.splice(srcIdx, 1);
+    inGroup.splice(tgtIdx, 0, moved);
+    const renumbered = inGroup.map((it, i) => ({ ...it, sort_order: i }));
+    const prev = items;
+    setItems((xs) => {
+      const others = xs.filter((it) => it.group_id !== groupId);
+      return [...others, ...renumbered];
+    });
+    try {
+      const res = await fetch('/api/onboarding/items/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group_id: groupId, order: renumbered.map((it) => it.id) }),
+      });
+      if (!res.ok) throw new Error('Failed');
+    } catch {
+      toast.error('Failed to save new order');
       setItems(prev);
     }
   }, [items]);
@@ -368,14 +429,17 @@ export function OnboardingEditor({
           <EmptyBlock label="No phases yet." />
         ) : (
           <div className="space-y-2">
-            {phases.map((p) => (
-              <PhaseRow
-                key={p.id}
-                phase={p}
-                onUpdate={(fields) => void updatePhase(p.id, fields)}
-                onDelete={() => void deletePhase(p.id)}
-              />
-            ))}
+            {[...phases]
+              .sort((a, b) => a.sort_order - b.sort_order)
+              .map((p) => (
+                <PhaseRow
+                  key={p.id}
+                  phase={p}
+                  onUpdate={(fields) => void updatePhase(p.id, fields)}
+                  onDelete={() => void deletePhase(p.id)}
+                  onReorder={(sourceId, targetId) => void reorderPhases(sourceId, targetId)}
+                />
+              ))}
           </div>
         )}
       </section>
@@ -397,7 +461,9 @@ export function OnboardingEditor({
         ) : (
           <div className="space-y-4">
             {groups.map((g) => {
-              const groupItems = items.filter((it) => it.group_id === g.id);
+              const groupItems = items
+                .filter((it) => it.group_id === g.id)
+                .sort((a, b) => a.sort_order - b.sort_order);
               return (
                 <GroupBlock
                   key={g.id}
@@ -408,6 +474,7 @@ export function OnboardingEditor({
                   onAddItem={() => void addItem(g.id)}
                   onUpdateItem={(id, fields) => void updateItem(id, fields)}
                   onDeleteItem={(id) => void deleteItem(id)}
+                  onReorderItem={(sourceId, targetId) => void reorderItems(g.id, sourceId, targetId)}
                 />
               );
             })}
@@ -431,7 +498,7 @@ export function OnboardingEditor({
               clientName: tracker.clients?.name ?? 'Client',
               service: tracker.service,
               shareUrl,
-              contactFirstName: null,
+              contactFirstName,
             }}
           />
         </section>
@@ -697,17 +764,50 @@ function PhaseRow({
   phase,
   onUpdate,
   onDelete,
+  onReorder,
 }: {
   phase: Phase;
   onUpdate: (fields: Partial<Phase>) => void | Promise<void>;
   onDelete: () => void;
+  onReorder: (sourceId: string, targetId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const statusStyle = PHASE_STATUS_LABELS[phase.status];
 
   return (
-    <div className="rounded-[10px] border border-nativz-border bg-surface p-4 space-y-2">
-      <div className="flex items-start gap-3 flex-wrap">
+    <div
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('application/cortex-phase-id', phase.id);
+      }}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes('application/cortex-phase-id')) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          if (!dragOver) setDragOver(true);
+        }
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        const sourceId = e.dataTransfer.getData('application/cortex-phase-id');
+        setDragOver(false);
+        if (sourceId) onReorder(sourceId, phase.id);
+      }}
+      className={`group relative rounded-[10px] border bg-surface p-4 space-y-2 transition-colors ${
+        dragOver ? 'border-accent-border ring-2 ring-accent/20' : 'border-nativz-border'
+      }`}
+    >
+      <div className="flex items-start gap-2 flex-wrap">
+        <span
+          className="mt-1 cursor-grab active:cursor-grabbing text-text-muted/60 hover:text-text-muted transition-colors"
+          aria-hidden="true"
+          title="Drag to reorder"
+        >
+          <GripVertical size={14} />
+        </span>
         <input
           defaultValue={phase.name}
           onBlur={(e) => {
@@ -866,6 +966,7 @@ function GroupBlock({
   onAddItem,
   onUpdateItem,
   onDeleteItem,
+  onReorderItem,
 }: {
   group: Group;
   items: Item[];
@@ -874,6 +975,7 @@ function GroupBlock({
   onAddItem: () => void;
   onUpdateItem: (id: string, fields: Partial<Item>) => void;
   onDeleteItem: (id: string) => void;
+  onReorderItem: (sourceId: string, targetId: string) => void;
 }) {
   const done = items.filter((it) => it.status === 'done').length;
 
@@ -918,6 +1020,7 @@ function GroupBlock({
               item={it}
               onUpdate={(fields) => onUpdateItem(it.id, fields)}
               onDelete={() => onDeleteItem(it.id)}
+              onReorder={(sourceId, targetId) => onReorderItem(sourceId, targetId)}
             />
           ))}
         </ul>
@@ -930,14 +1033,52 @@ function ItemRow({
   item,
   onUpdate,
   onDelete,
+  onReorder,
 }: {
   item: Item;
   onUpdate: (fields: Partial<Item>) => void;
   onDelete: () => void;
+  onReorder: (sourceId: string, targetId: string) => void;
 }) {
   const done = item.status === 'done';
+  const [dragOver, setDragOver] = useState(false);
+
+  // Each item's drag payload is namespaced to its group so a drag across
+  // groups is a no-op (the drop target ignores it).
+  const dragType = `application/cortex-item-id-${item.group_id}`;
+
   return (
-    <li className="flex items-center gap-3 px-4 py-2">
+    <li
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData(dragType, item.id);
+      }}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes(dragType)) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          if (!dragOver) setDragOver(true);
+        }
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        const sourceId = e.dataTransfer.getData(dragType);
+        setDragOver(false);
+        if (sourceId) onReorder(sourceId, item.id);
+      }}
+      className={`flex items-center gap-2 px-3 py-2 transition-colors ${
+        dragOver ? 'bg-accent-surface/40' : ''
+      }`}
+    >
+      <span
+        className="cursor-grab active:cursor-grabbing text-text-muted/50 hover:text-text-muted transition-colors shrink-0"
+        aria-hidden="true"
+        title="Drag to reorder"
+      >
+        <GripVertical size={12} />
+      </span>
       <button
         type="button"
         onClick={() => onUpdate({ status: done ? 'pending' : 'done' })}

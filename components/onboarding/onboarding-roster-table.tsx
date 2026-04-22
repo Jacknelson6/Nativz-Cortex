@@ -1,9 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Search, Plus, Loader2, ArrowRight } from 'lucide-react';
+import { Copy, Loader2, MoreHorizontal, Plus, Search, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ClientLogo } from '@/components/clients/client-logo';
@@ -23,6 +23,8 @@ type TrackerRow = {
   share_token?: string;
   clients: { name: string; slug: string; logo_url: string | null } | null;
 };
+
+export type TrackerStats = Record<string, { phases: number; groups: number; items: number }>;
 
 type ClientOption = {
   id: string;
@@ -47,17 +49,56 @@ export function OnboardingRosterTable({
   trackers,
   clients,
   view = 'trackers',
+  stats = {},
 }: {
   trackers: TrackerRow[];
   clients: ClientOption[];
   view?: 'trackers' | 'templates';
+  stats?: TrackerStats;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [showNew, setShowNew] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const isTemplatesView = view === 'templates';
+
+  // Row-level duplicate: same shape as the tracker it came from.
+  async function handleDuplicate(trackerId: string) {
+    setBusyId(trackerId);
+    try {
+      const res = await fetch(`/api/onboarding/trackers/${trackerId}/duplicate`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast.error((d as { error?: string }).error || 'Failed to duplicate');
+        return;
+      }
+      toast.success('Duplicated');
+      router.refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleDelete(trackerId: string, label: string) {
+    if (!confirm(`Delete "${label}"? This cannot be undone.`)) return;
+    setBusyId(trackerId);
+    try {
+      const res = await fetch(`/api/onboarding/trackers/${trackerId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast.error((d as { error?: string }).error || 'Failed to delete');
+        return;
+      }
+      toast.success('Deleted');
+      router.refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -185,6 +226,10 @@ export function OnboardingRosterTable({
               <tbody>
                 {filtered.map((t) => {
                   const status = STATUS_VARIANTS[t.status] ?? STATUS_VARIANTS.active;
+                  const s = stats[t.id];
+                  const rowLabel = isTemplatesView
+                    ? (t.template_name ?? 'Untitled template')
+                    : (t.clients?.name ?? 'Unknown');
                   return (
                     <tr
                       key={t.id}
@@ -193,9 +238,16 @@ export function OnboardingRosterTable({
                     >
                       <Td>
                         {isTemplatesView ? (
-                          <p className="text-[14px] font-medium text-text-primary truncate">
-                            {t.template_name ?? 'Untitled template'}
-                          </p>
+                          <div className="min-w-0">
+                            <p className="text-[14px] font-medium text-text-primary truncate">
+                              {t.template_name ?? 'Untitled template'}
+                            </p>
+                            {s && (s.phases > 0 || s.groups > 0 || s.items > 0) && (
+                              <p className="text-[12px] text-text-muted truncate mt-0.5">
+                                <StatsLine phases={s.phases} groups={s.groups} items={s.items} />
+                              </p>
+                            )}
+                          </div>
                         ) : (
                           <div className="flex items-center gap-3">
                             <ClientLogo
@@ -207,9 +259,13 @@ export function OnboardingRosterTable({
                               <p className="text-[14px] font-medium text-text-primary truncate">
                                 {t.clients?.name ?? 'Unknown'}
                               </p>
-                              {t.title && (
+                              {t.title ? (
                                 <p className="text-[12px] text-text-muted truncate">{t.title}</p>
-                              )}
+                              ) : s && (s.phases > 0 || s.items > 0) ? (
+                                <p className="text-[12px] text-text-muted truncate">
+                                  <StatsLine phases={s.phases} groups={s.groups} items={s.items} />
+                                </p>
+                              ) : null}
                             </div>
                           </div>
                         )}
@@ -234,8 +290,12 @@ export function OnboardingRosterTable({
                           {formatRelativeTime(t.created_at)}
                         </span>
                       </Td>
-                      <Td className="text-right pr-4">
-                        <ArrowRight size={14} className="inline text-text-muted" />
+                      <Td className="text-right pr-2">
+                        <RowActionsMenu
+                          busy={busyId === t.id}
+                          onDuplicate={() => void handleDuplicate(t.id)}
+                          onDelete={() => void handleDelete(t.id, rowLabel)}
+                        />
                       </Td>
                     </tr>
                   );
@@ -398,4 +458,86 @@ function Th({ children, className }: { children: React.ReactNode; className?: st
 
 function Td({ children, className }: { children: React.ReactNode; className?: string }) {
   return <td className={`px-4 py-3 align-middle ${className ?? ''}`}>{children}</td>;
+}
+
+// ─── Stats line (preview) ────────────────────────────────────────────────
+
+function StatsLine({ phases, groups, items }: { phases: number; groups: number; items: number }) {
+  const parts: string[] = [];
+  if (phases > 0) parts.push(`${phases} ${phases === 1 ? 'phase' : 'phases'}`);
+  if (groups > 0) parts.push(`${groups} ${groups === 1 ? 'section' : 'sections'}`);
+  if (items > 0) parts.push(`${items} ${items === 1 ? 'task' : 'tasks'}`);
+  return <>{parts.join(' · ')}</>;
+}
+
+// ─── Row actions (… menu) ────────────────────────────────────────────────
+//
+// Stops click propagation so the menu trigger doesn't also fire the row's
+// navigate-to-editor click. The menu is absolutely positioned right-aligned
+// below the button; outside-click + Escape close it.
+
+function RowActionsMenu({
+  busy,
+  onDuplicate,
+  onDelete,
+}: {
+  busy: boolean;
+  onDuplicate: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div
+      ref={rootRef}
+      className="relative inline-block"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        disabled={busy}
+        className="inline-flex items-center justify-center rounded-md p-1.5 text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors disabled:opacity-60"
+        aria-label="Row actions"
+      >
+        {busy ? <Loader2 size={14} className="animate-spin" /> : <MoreHorizontal size={14} />}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-20 min-w-[160px] rounded-lg border border-nativz-border bg-surface shadow-xl animate-[popIn_150ms_ease-out] py-1">
+          <button
+            type="button"
+            onClick={() => { setOpen(false); onDuplicate(); }}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-primary hover:bg-surface-hover transition-colors text-left"
+          >
+            <Copy size={13} />
+            Duplicate
+          </button>
+          <div className="my-1 h-px bg-nativz-border/60" />
+          <button
+            type="button"
+            onClick={() => { setOpen(false); onDelete(); }}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors text-left"
+          >
+            <Trash2 size={13} />
+            Delete
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }

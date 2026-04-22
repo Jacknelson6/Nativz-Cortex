@@ -55,9 +55,9 @@ export default async function OnboardingEditorPage({
     clients: Array.isArray(rawTracker.clients) ? rawTracker.clients[0] ?? null : rawTracker.clients,
   } as Parameters<typeof OnboardingEditor>[0]['initialTracker'];
 
-  // Fetch items + email templates + applicable templates in parallel.
+  // Fetch items + email templates + applicable templates + contact name in parallel.
   const groupIds = (groupsRes.data ?? []).map((g) => g.id);
-  const [itemsRes, emailTemplatesRes, availableTemplatesRes] = await Promise.all([
+  const [itemsRes, emailTemplatesRes, availableTemplatesRes, contactRes] = await Promise.all([
     groupIds.length
       ? admin
           .from('onboarding_checklist_items')
@@ -82,7 +82,23 @@ export default async function OnboardingEditorPage({
           .eq('is_template', true)
           .eq('service', initialTracker.service)
           .order('created_at', { ascending: false }),
+    // Primary contact for {{contact_first_name}} — templates have no client.
+    initialTracker.is_template || !initialTracker.client_id
+      ? Promise.resolve({ data: null })
+      : admin
+          .from('contacts')
+          .select('name, is_primary')
+          .eq('client_id', initialTracker.client_id)
+          .order('is_primary', { ascending: false })
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle(),
   ]);
+
+  // Pull "Jack" out of "Jack Nelson" — anything before the first space.
+  // Null when no contact exists → email panel falls back to "there".
+  const contact = contactRes.data as { name: string | null } | null;
+  const contactFirstName = contact?.name?.trim().split(/\s+/)[0] ?? null;
 
   return (
     <OnboardingEditor
@@ -92,6 +108,7 @@ export default async function OnboardingEditorPage({
       initialItems={(itemsRes.data as Parameters<typeof OnboardingEditor>[0]['initialItems']) ?? []}
       emailTemplates={(emailTemplatesRes.data as Parameters<typeof OnboardingEditor>[0]['emailTemplates']) ?? []}
       availableTemplates={(availableTemplatesRes.data as Parameters<typeof OnboardingEditor>[0]['availableTemplates']) ?? []}
+      contactFirstName={contactFirstName}
     />
   );
 }
