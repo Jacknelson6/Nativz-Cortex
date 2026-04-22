@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { Card } from '@/components/ui/card';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 interface Notification {
   id: string;
@@ -70,6 +71,14 @@ export function NotificationsWidget() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  const { confirm: confirmClearAll, dialog: clearAllDialog } = useConfirm({
+    title: 'Clear all notifications?',
+    description:
+      'This removes every notification from your list. Unread items will be lost. This can’t be undone.',
+    confirmLabel: 'Clear all',
+    variant: 'danger',
+  });
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -131,6 +140,8 @@ export function NotificationsWidget() {
   }
 
   async function clearAll() {
+    const confirmed = await confirmClearAll();
+    if (!confirmed) return;
     try {
       const res = await fetch('/api/notifications/clear-all', { method: 'POST' });
       if (res.ok) {
@@ -182,6 +193,7 @@ export function NotificationsWidget() {
 
   return (
     <Card className="flex min-h-0 flex-1 flex-col">
+      {clearAllDialog}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-base font-semibold text-text-primary flex items-center gap-2">
           <Bell size={16} className="text-accent-text" />

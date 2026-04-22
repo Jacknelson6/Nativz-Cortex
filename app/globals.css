@@ -833,3 +833,20 @@ dialog:not([open]) {
 [data-brand-mode="anderson"] :where(.nz-hero, .nz-h1, .nz-h2, h1.nz-highlight, h2.nz-highlight) u {
   text-decoration-color: rgba(54, 209, 194, 0.60);
 }
+
+/* Nerd tile prompt cursor — blinks steadily (1Hz square wave) so the tile
+   reads as "live" without reaching for the AI-glow/ping pattern. */
+@keyframes nerdPromptBlink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.18; }
+}
+.nerd-prompt-cursor {
+  display: inline-block;
+  animation: nerdPromptBlink 1.05s steps(1, end) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nerd-prompt-cursor {
+    animation: none;
+    opacity: 0.85;
+  }
+}
