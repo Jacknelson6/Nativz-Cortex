@@ -8,8 +8,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PLATFORM_CONFIG } from './platform-icon';
-import { PipelineStepper } from './pipeline-stepper';
-import { EncryptedText } from '@/components/ui/encrypted-text';
+import { ResearchConsole } from './research-console';
 import { toast } from 'sonner';
 import { useBackgroundSearch } from './background-search-tracker';
 
@@ -493,59 +492,57 @@ export function SearchProcessing({
 
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 animate-fade-slide-in">
-      <div className="w-full max-w-md">
-        {/* Heading */}
-        <div className="text-center mb-8">
-          <h2 className="text-xl font-semibold text-text-primary">
-            Researching &ldquo;{query}&rdquo;
+      <div className="w-full max-w-2xl">
+        {/* Heading — eyebrow + display title with cyan highlighter underline
+            on the user's query. Matches the rest of the brand surface vs. the
+            old centered "Researching X" treatment. */}
+        <div className="mb-5">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-text/80">
+            Cortex pipeline
+          </p>
+          <h2 className="mt-1.5 text-2xl font-semibold leading-tight text-text-primary">
+            Researching <u className="nz-u">&ldquo;{query}&rdquo;</u>
           </h2>
-          
         </div>
 
-        {/* Animated stage label — encrypted text reveal */}
-        {!done && !error && stages[stageIndex] && (
-          <div className="text-center mb-2">
-            <EncryptedText
-              key={`stage-${stageIndex}`}
-              text={stages[stageIndex].label}
-              revealDelayMs={40}
-              className="text-sm text-text-muted"
-            />
-          </div>
-        )}
-
-        {/* Real-time pipeline stepper (primary view — reads actual DB state) */}
+        {/* Live console — replaces the previous spinner / encrypted text /
+            stepper / progress-bar combo with a single transparent surface
+            that exposes what's happening server-side. */}
         {!done && !error && (
-          <PipelineStepper searchId={searchId} />
+          <ResearchConsole stages={stages} stageIndex={stageIndex} />
         )}
 
-        {/* Progress bar — solid cyan (brand accent), no purple tail. */}
-        <div className="mt-5 h-1.5 rounded-full bg-surface-hover overflow-hidden">
-          <div
-            className="h-full rounded-full bg-accent transition-all duration-300 ease-out"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-
-        {/* Progress info row */}
-        <div className="mt-1.5 flex items-center justify-between">
-          <span className="text-xs text-text-muted tabular-nums">{formatElapsed(elapsed)} elapsed</span>
-          <span className="text-xs text-text-muted tabular-nums">{Math.round(progress)}%</span>
-        </div>
-
-        {/* Done state — no auto-redirect, user clicks through explicitly. */}
-        {done && (
-          <div className="mt-5 flex flex-col items-center gap-3 animate-fade-slide-in">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/15">
-                <Check size={12} className="text-emerald-400" />
-              </div>
-              <span className="text-sm text-emerald-400 font-medium">
-                Research complete
-              </span>
+        {/* Thin progress + elapsed row. Lives just under the console as a
+            secondary indicator — the console itself is the primary signal. */}
+        {!done && !error && (
+          <>
+            <div className="mt-4 h-[3px] overflow-hidden rounded-full bg-surface-hover">
+              <div
+                className="h-full rounded-full bg-accent transition-all duration-300 ease-out"
+                style={{ width: `${progress}%` }}
+              />
             </div>
+            <div className="mt-1.5 flex items-center justify-between font-mono text-[11px] text-text-muted">
+              <span className="tabular-nums">{formatElapsed(elapsed)} elapsed</span>
+              <span className="tabular-nums">{Math.round(progress)}%</span>
+            </div>
+          </>
+        )}
+
+        {/* Done state — sits in the same vertical slot as the console so
+            the layout doesn't jump on completion. */}
+        {done && (
+          <div className="rounded-2xl border border-accent/30 bg-accent/5 px-6 py-8 text-center animate-fade-slide-in">
+            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-accent/15">
+              <Check size={18} className="text-accent-text" />
+            </div>
+            <p className="mt-3 text-sm font-medium text-text-primary">Research complete</p>
+            <p className="mt-1 font-mono text-[11px] text-text-muted">
+              {formatElapsed(elapsed)} · {stages.length} stages
+            </p>
             <Button
               size="sm"
+              className="mt-4"
               onClick={() => router.push(`${redirectPrefix}/search/${searchId}`)}
             >
               View results
@@ -553,7 +550,8 @@ export function SearchProcessing({
           </div>
         )}
 
-        {/* Action buttons — visible from the start */}
+        {/* Action buttons — visible from the start. Sentence case per house
+            style. */}
         {!done && !error && (
           <div className="mt-6 flex items-center justify-center gap-3">
             <Button variant="ghost" size="sm" onClick={goBackAndTrack}>
@@ -566,7 +564,7 @@ export function SearchProcessing({
                 Email me when done
               </Button>
             ) : (
-              <span className="text-xs text-emerald-400 flex items-center gap-1">
+              <span className="flex items-center gap-1 text-xs text-accent-text">
                 <Check size={12} /> We&apos;ll email you
               </span>
             )}

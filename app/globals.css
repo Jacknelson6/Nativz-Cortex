@@ -414,6 +414,17 @@ body {
   animation: fadeSlideIn 0.4s var(--ease-out-expo) forwards;
 }
 
+/* Cortex pipeline cursor — solid bar that blinks on the active console line.
+   Snappy on/off rather than a fade so it reads as a terminal caret, not a
+   pulsing dot. Disabled under prefers-reduced-motion further below. */
+@keyframes cortexCursor {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.animate-cortex-cursor {
+  animation: cortexCursor 1s steps(1, end) infinite;
+}
+
 /* Stagger fade-in for list items (Pattern #4) */
 @keyframes staggerFadeIn {
   from { opacity: 0; transform: translateY(8px); }
@@ -794,6 +805,11 @@ dialog:not([open]) {
   .animate-tooltip-in {
     opacity: 1;
     transform: none;
+    animation: none;
+  }
+  .animate-cortex-cursor {
+    /* Static caret instead of blink for users who prefer reduced motion. */
+    opacity: 1;
     animation: none;
   }
 }
