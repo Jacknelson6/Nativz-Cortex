@@ -54,13 +54,23 @@ export default async function AdminDashboardPage() {
 
     return (
       <div className="cortex-page-gutter space-y-5">
-        {/* Header — weekday highlighted with Nativz cyan underline signature */}
-        <div>
-          <h1 className="ui-page-title nz-highlight">
-            Dashboard <span className="text-text-muted font-normal">·</span>{' '}
-            <u>{weekday}</u>
-          </h1>
-          <p className="text-sm text-text-muted mt-0.5">{monthDay}</p>
+        {/* Header — weekday highlighted with Nativz cyan underline signature.
+            ⌘K hint surfaces the command palette so keyboard users discover
+            the shortcut without hunting through the sidebar. */}
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <h1 className="ui-page-title nz-highlight">
+              Dashboard <span className="text-text-muted font-normal">·</span>{' '}
+              <u>{weekday}</u>
+            </h1>
+            <p className="text-sm text-text-muted mt-0.5">{monthDay}</p>
+          </div>
+          <p className="hidden sm:inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-text-muted">
+            <kbd className="inline-flex items-center rounded-md border border-nativz-border bg-surface-hover px-1.5 py-0.5 font-mono text-[10px] text-text-secondary">
+              ⌘K
+            </kbd>
+            to search
+          </p>
         </div>
 
         {/* Quick actions — responsive: 1 col phone, 2 col tablet,
