@@ -1,22 +1,31 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
+  Bookmark,
+  ChevronDown,
   Copy,
   Check,
   ExternalLink,
+  FileStack,
   Loader2,
   Plus,
   RefreshCw,
+  Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ClientLogo } from '@/components/clients/client-logo';
+import {
+  OnboardingEmailTemplatesPanel,
+  type EmailTemplate,
+} from '@/components/onboarding/onboarding-email-templates-panel';
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -27,16 +36,24 @@ type TrackerStatus = 'active' | 'paused' | 'completed' | 'archived';
 
 export type Tracker = {
   id: string;
-  client_id: string;
+  client_id: string | null;
   service: string;
   title: string | null;
   status: TrackerStatus;
   share_token: string;
   started_at: string | null;
   completed_at: string | null;
+  is_template: boolean;
+  template_name: string | null;
   created_at: string;
   updated_at: string;
   clients: { name: string; slug: string; logo_url: string | null } | null;
+};
+
+export type AvailableTemplate = {
+  id: string;
+  service: string;
+  template_name: string | null;
 };
 
 export type Phase = {
@@ -81,16 +98,29 @@ export function OnboardingEditor({
   initialPhases,
   initialGroups,
   initialItems,
+  emailTemplates = [],
+  availableTemplates = [],
 }: {
   initialTracker: Tracker;
   initialPhases: Phase[];
   initialGroups: Group[];
   initialItems: Item[];
+  emailTemplates?: EmailTemplate[];
+  availableTemplates?: AvailableTemplate[];
 }) {
+  const router = useRouter();
   const [tracker, setTracker] = useState<Tracker>(initialTracker);
   const [phases, setPhases] = useState<Phase[]>(initialPhases);
   const [groups, setGroups] = useState<Group[]>(initialGroups);
   const [items, setItems] = useState<Item[]>(initialItems);
+
+  // Sync if parent data refreshed (e.g. after router.refresh following
+  // an apply-template POST). Shallow replace is fine — no local-only
+  // diffs exist while the page is mounted.
+  useEffect(() => { setTracker(initialTracker); }, [initialTracker]);
+  useEffect(() => { setPhases(initialPhases); }, [initialPhases]);
+  useEffect(() => { setGroups(initialGroups); }, [initialGroups]);
+  useEffect(() => { setItems(initialItems); }, [initialItems]);
 
   // ─── Tracker mutations ──────────────────────────────────────────────
 
@@ -245,6 +275,47 @@ export function OnboardingEditor({
     }
   }, [items]);
 
+  // ─── Template actions (only valid on non-template trackers) ─────────
+
+  const applyTemplate = useCallback(async (templateId: string) => {
+    try {
+      const res = await fetch(`/api/onboarding/trackers/${tracker.id}/apply-template`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template_id: templateId }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast.error((d as { error?: string }).error || 'Failed to apply template');
+        return;
+      }
+      toast.success('Template applied');
+      router.refresh();
+    } catch {
+      toast.error('Failed to apply template');
+    }
+  }, [tracker.id, router]);
+
+  const saveAsTemplate = useCallback(async () => {
+    const name = window.prompt('Template name:');
+    if (!name || !name.trim()) return;
+    try {
+      const res = await fetch(`/api/onboarding/trackers/${tracker.id}/save-as-template`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template_name: name.trim() }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast.error((d as { error?: string }).error || 'Failed to save template');
+        return;
+      }
+      toast.success(`Saved "${name.trim()}" as template`);
+    } catch {
+      toast.error('Failed to save template');
+    }
+  }, [tracker.id]);
+
   // ─── Derived ────────────────────────────────────────────────────────
 
   const totalItems = items.length;
@@ -274,7 +345,10 @@ export function OnboardingEditor({
           totalItems={totalItems}
           doneItems={doneItems}
           shareUrl={shareUrl}
+          availableTemplates={availableTemplates}
           onUpdate={updateTracker}
+          onApplyTemplate={applyTemplate}
+          onSaveAsTemplate={saveAsTemplate}
         />
       </div>
 
@@ -340,6 +414,28 @@ export function OnboardingEditor({
           </div>
         )}
       </section>
+
+      {/* Email templates — hidden on templates themselves (they have no
+          client context to interpolate against). */}
+      {!tracker.is_template && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-base font-semibold text-text-primary">Email templates</h2>
+            <p className="text-[13px] text-text-muted">
+              Pre-filled emails for this tracker — copy and paste into Gmail.
+            </p>
+          </div>
+          <OnboardingEmailTemplatesPanel
+            templates={emailTemplates}
+            context={{
+              clientName: tracker.clients?.name ?? 'Client',
+              service: tracker.service,
+              shareUrl,
+              contactFirstName: null,
+            }}
+          />
+        </section>
+      )}
     </div>
   );
 }
@@ -352,14 +448,20 @@ function TrackerHeader({
   totalItems,
   doneItems,
   shareUrl,
+  availableTemplates,
   onUpdate,
+  onApplyTemplate,
+  onSaveAsTemplate,
 }: {
   tracker: Tracker;
   progressPct: number;
   totalItems: number;
   doneItems: number;
   shareUrl: string;
+  availableTemplates: AvailableTemplate[];
   onUpdate: (fields: Partial<Tracker> & { regenerate_share_token?: boolean }) => void | Promise<void>;
+  onApplyTemplate: (templateId: string) => void | Promise<void>;
+  onSaveAsTemplate: () => void | Promise<void>;
 }) {
   const [copied, setCopied] = useState(false);
   const [rotating, setRotating] = useState(false);
@@ -384,6 +486,40 @@ function TrackerHeader({
     }
   }
 
+  // ─── Template branch — much slimmer header ─────────────────────────
+
+  if (tracker.is_template) {
+    return (
+      <div className="rounded-[10px] border border-nativz-border bg-surface p-5 space-y-4">
+        <div className="flex items-start gap-4 flex-wrap">
+          <div className="h-14 w-14 shrink-0 rounded-2xl bg-accent-surface text-accent-text flex items-center justify-center">
+            <FileStack size={22} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge variant="purple">Template</Badge>
+              <Badge variant="default">{tracker.service}</Badge>
+            </div>
+            <input
+              defaultValue={tracker.template_name ?? ''}
+              onBlur={(e) => {
+                const v = e.target.value.trim();
+                if (v && v !== (tracker.template_name ?? '')) onUpdate({ template_name: v });
+              }}
+              placeholder="Template name"
+              className="mt-1 w-full max-w-md bg-transparent text-[22px] font-semibold text-text-primary placeholder:text-text-muted/60 focus:outline-none border-b border-transparent focus:border-accent-border/50 pb-0.5 transition-colors"
+            />
+            <p className="mt-2 text-[13px] text-text-muted">
+              Templates don&apos;t run against a client — they seed new trackers when applied.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Regular tracker header ───────────────────────────────────────
+
   return (
     <div className="rounded-[10px] border border-nativz-border bg-surface p-5 space-y-4">
       <div className="flex items-start gap-4 flex-wrap">
@@ -407,7 +543,12 @@ function TrackerHeader({
             className="mt-1 w-full max-w-md bg-transparent text-[14px] text-text-secondary placeholder:text-text-muted focus:outline-none border-b border-transparent focus:border-accent-border/50 pb-0.5 transition-colors"
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <TemplateMenu
+            availableTemplates={availableTemplates}
+            onApply={onApplyTemplate}
+            onSaveAs={onSaveAsTemplate}
+          />
           <select
             value={tracker.status}
             onChange={(e) => onUpdate({ status: e.target.value as TrackerStatus })}
@@ -469,6 +610,83 @@ function TrackerHeader({
           Anyone with this link can view the timeline. Rotate to revoke the old URL.
         </p>
       </div>
+    </div>
+  );
+}
+
+// ─── Template apply + save-as menu ──────────────────────────────────
+
+function TemplateMenu({
+  availableTemplates,
+  onApply,
+  onSaveAs,
+}: {
+  availableTemplates: AvailableTemplate[];
+  onApply: (templateId: string) => void | Promise<void>;
+  onSaveAs: () => void | Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <Bookmark size={13} />
+        Templates
+        <ChevronDown size={12} />
+      </Button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-30 min-w-[240px] rounded-lg border border-nativz-border bg-surface shadow-xl animate-[popIn_150ms_ease-out] py-1">
+          <div className="px-3 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-text-muted/70">
+            Apply template
+          </div>
+          {availableTemplates.length === 0 ? (
+            <p className="px-3 pb-2 text-[12px] text-text-muted italic">
+              No templates yet for this service.
+            </p>
+          ) : (
+            availableTemplates.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => { setOpen(false); void onApply(t.id); }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-primary hover:bg-surface-hover transition-colors text-left"
+              >
+                <Sparkles size={12} className="text-accent-text shrink-0" />
+                <span className="truncate">{t.template_name ?? 'Untitled template'}</span>
+              </button>
+            ))
+          )}
+          <div className="my-1 h-px bg-nativz-border/60" />
+          <button
+            type="button"
+            onClick={() => { setOpen(false); void onSaveAs(); }}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-primary hover:bg-surface-hover transition-colors text-left"
+          >
+            <Plus size={12} />
+            Save current as template…
+          </button>
+        </div>
+      )}
     </div>
   );
 }

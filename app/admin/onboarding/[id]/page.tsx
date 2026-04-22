@@ -46,15 +46,6 @@ export default async function OnboardingEditorPage({
 
   if (!trackerRes.data) notFound();
 
-  const groupIds = (groupsRes.data ?? []).map((g) => g.id);
-  const { data: items } = groupIds.length
-    ? await admin
-        .from('onboarding_checklist_items')
-        .select('id, group_id, task, description, owner, status, sort_order')
-        .in('group_id', groupIds)
-        .order('sort_order', { ascending: true })
-    : { data: [] };
-
   // Supabase types `!inner` joins as arrays; they're 1:1 here so unwrap.
   const rawTracker = trackerRes.data as unknown as Record<string, unknown> & {
     clients: { name: string; slug: string; logo_url: string | null } | Array<{ name: string; slug: string; logo_url: string | null }>;
@@ -64,12 +55,43 @@ export default async function OnboardingEditorPage({
     clients: Array.isArray(rawTracker.clients) ? rawTracker.clients[0] ?? null : rawTracker.clients,
   } as Parameters<typeof OnboardingEditor>[0]['initialTracker'];
 
+  // Fetch items + email templates + applicable templates in parallel.
+  const groupIds = (groupsRes.data ?? []).map((g) => g.id);
+  const [itemsRes, emailTemplatesRes, availableTemplatesRes] = await Promise.all([
+    groupIds.length
+      ? admin
+          .from('onboarding_checklist_items')
+          .select('id, group_id, task, description, owner, status, sort_order')
+          .in('group_id', groupIds)
+          .order('sort_order', { ascending: true })
+      : Promise.resolve({ data: [] as unknown[] }),
+    // Email templates: skip on template pages (not useful there).
+    initialTracker.is_template
+      ? Promise.resolve({ data: [] as unknown[] })
+      : admin
+          .from('onboarding_email_templates')
+          .select('id, service, name, subject, body')
+          .eq('service', initialTracker.service)
+          .order('sort_order', { ascending: true }),
+    // Applicable service templates for "Apply template" picker.
+    initialTracker.is_template
+      ? Promise.resolve({ data: [] as unknown[] })
+      : admin
+          .from('onboarding_trackers')
+          .select('id, service, template_name')
+          .eq('is_template', true)
+          .eq('service', initialTracker.service)
+          .order('created_at', { ascending: false }),
+  ]);
+
   return (
     <OnboardingEditor
       initialTracker={initialTracker}
       initialPhases={phasesRes.data ?? []}
       initialGroups={groupsRes.data ?? []}
-      initialItems={items ?? []}
+      initialItems={(itemsRes.data as Parameters<typeof OnboardingEditor>[0]['initialItems']) ?? []}
+      emailTemplates={(emailTemplatesRes.data as Parameters<typeof OnboardingEditor>[0]['emailTemplates']) ?? []}
+      availableTemplates={(availableTemplatesRes.data as Parameters<typeof OnboardingEditor>[0]['availableTemplates']) ?? []}
     />
   );
 }

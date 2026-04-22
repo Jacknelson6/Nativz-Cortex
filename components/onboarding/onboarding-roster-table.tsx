@@ -11,14 +11,16 @@ import { formatRelativeTime } from '@/lib/utils/format';
 
 type TrackerRow = {
   id: string;
-  client_id: string;
+  client_id: string | null;
   service: string;
   title: string | null;
   status: string;
   started_at: string | null;
   completed_at: string | null;
+  is_template: boolean;
+  template_name: string | null;
   created_at: string;
-  share_token?: string; // Present on the roster fetch? We don't display it here.
+  share_token?: string;
   clients: { name: string; slug: string; logo_url: string | null } | null;
 };
 
@@ -44,22 +46,28 @@ const STATUS_VARIANTS: Record<string, { label: string; variant: 'success' | 'war
 export function OnboardingRosterTable({
   trackers,
   clients,
+  view = 'trackers',
 }: {
   trackers: TrackerRow[];
   clients: ClientOption[];
+  view?: 'trackers' | 'templates';
 }) {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [showNew, setShowNew] = useState(false);
   const [creating, setCreating] = useState(false);
 
+  const isTemplatesView = view === 'templates';
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return trackers;
     return trackers.filter((t) => {
       const cname = t.clients?.name?.toLowerCase() ?? '';
+      const tname = (t.template_name ?? '').toLowerCase();
       return (
         cname.includes(q) ||
+        tname.includes(q) ||
         t.service.toLowerCase().includes(q) ||
         (t.title ?? '').toLowerCase().includes(q)
       );
@@ -88,6 +96,28 @@ export function OnboardingRosterTable({
     }
   }
 
+  async function handleCreateTemplate(name: string, service: string) {
+    if (!name.trim() || !service) return;
+    setCreating(true);
+    try {
+      const res = await fetch('/api/onboarding/trackers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_template: true, template_name: name.trim(), service }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast.error((d as { error?: string }).error || 'Failed to create template');
+        return;
+      }
+      const { tracker } = await res.json() as { tracker: { id: string } };
+      toast.success('Template created');
+      router.push(`/admin/onboarding/${tracker.id}`);
+    } finally {
+      setCreating(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -97,7 +127,7 @@ export function OnboardingRosterTable({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search trackers..."
+            placeholder={isTemplatesView ? 'Search templates...' : 'Search trackers...'}
             className="w-full rounded-lg border border-nativz-border bg-surface-primary pl-9 pr-4 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-border focus:outline-none focus:ring-1 focus:ring-accent-border transition-colors"
           />
         </div>
@@ -108,22 +138,34 @@ export function OnboardingRosterTable({
           onClick={() => setShowNew((v) => !v)}
         >
           <Plus size={14} />
-          {showNew ? 'Close' : 'New tracker'}
+          {showNew ? 'Close' : isTemplatesView ? 'New template' : 'New tracker'}
         </Button>
       </div>
 
       {showNew && (
-        <NewTrackerForm clients={clients} creating={creating} onCreate={handleCreate} />
+        isTemplatesView ? (
+          <NewTemplateForm creating={creating} onCreate={handleCreateTemplate} />
+        ) : (
+          <NewTrackerForm clients={clients} creating={creating} onCreate={handleCreate} />
+        )
       )}
 
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center rounded-[10px] border border-dashed border-nativz-border/60">
           <Search size={28} className="text-text-muted/60 mb-3" />
           <p className="text-sm text-text-secondary">
-            {trackers.length === 0 ? 'No onboarding trackers yet.' : 'No trackers match your search.'}
+            {trackers.length === 0
+              ? isTemplatesView
+                ? 'No templates yet.'
+                : 'No onboarding trackers yet.'
+              : 'No results.'}
           </p>
           {trackers.length === 0 && (
-            <p className="text-xs text-text-muted mt-1">Click &ldquo;New tracker&rdquo; to start one.</p>
+            <p className="text-xs text-text-muted mt-1">
+              {isTemplatesView
+                ? 'Click "New template" to save a reusable preset.'
+                : 'Click "New tracker" to start one.'}
+            </p>
           )}
         </div>
       ) : (
@@ -132,10 +174,10 @@ export function OnboardingRosterTable({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-nativz-border bg-surface-hover/30">
-                  <Th>Client</Th>
+                  <Th>{isTemplatesView ? 'Template' : 'Client'}</Th>
                   <Th>Service</Th>
-                  <Th>Status</Th>
-                  <Th>Started</Th>
+                  {!isTemplatesView && <Th>Status</Th>}
+                  {!isTemplatesView && <Th>Started</Th>}
                   <Th>Updated</Th>
                   <Th className="text-right pr-4">{''}</Th>
                 </tr>
@@ -150,33 +192,43 @@ export function OnboardingRosterTable({
                       className="border-b border-nativz-border last:border-b-0 hover:bg-surface-hover/20 cursor-pointer transition-colors"
                     >
                       <Td>
-                        <div className="flex items-center gap-3">
-                          <ClientLogo
-                            src={t.clients?.logo_url ?? null}
-                            name={t.clients?.name ?? ''}
-                            size="sm"
-                          />
-                          <div className="min-w-0">
-                            <p className="text-[14px] font-medium text-text-primary truncate">
-                              {t.clients?.name ?? 'Unknown'}
-                            </p>
-                            {t.title && (
-                              <p className="text-[12px] text-text-muted truncate">{t.title}</p>
-                            )}
+                        {isTemplatesView ? (
+                          <p className="text-[14px] font-medium text-text-primary truncate">
+                            {t.template_name ?? 'Untitled template'}
+                          </p>
+                        ) : (
+                          <div className="flex items-center gap-3">
+                            <ClientLogo
+                              src={t.clients?.logo_url ?? null}
+                              name={t.clients?.name ?? ''}
+                              size="sm"
+                            />
+                            <div className="min-w-0">
+                              <p className="text-[14px] font-medium text-text-primary truncate">
+                                {t.clients?.name ?? 'Unknown'}
+                              </p>
+                              {t.title && (
+                                <p className="text-[12px] text-text-muted truncate">{t.title}</p>
+                              )}
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </Td>
                       <Td>
                         <Badge variant="default">{t.service}</Badge>
                       </Td>
-                      <Td>
-                        <Badge variant={status.variant}>{status.label}</Badge>
-                      </Td>
-                      <Td>
-                        <span className="text-[12px] text-text-muted tabular-nums">
-                          {t.started_at ? formatRelativeTime(t.started_at) : '—'}
-                        </span>
-                      </Td>
+                      {!isTemplatesView && (
+                        <Td>
+                          <Badge variant={status.variant}>{status.label}</Badge>
+                        </Td>
+                      )}
+                      {!isTemplatesView && (
+                        <Td>
+                          <span className="text-[12px] text-text-muted tabular-nums">
+                            {t.started_at ? formatRelativeTime(t.started_at) : '—'}
+                          </span>
+                        </Td>
+                      )}
                       <Td>
                         <span className="text-[12px] text-text-muted tabular-nums">
                           {formatRelativeTime(t.created_at)}
@@ -265,6 +317,66 @@ function NewTrackerForm({
           size="sm"
           onClick={() => void onCreate(clientId, service)}
           disabled={!clientId || !service || creating}
+        >
+          {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+          Create
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── New template inline form ────────────────────────────────────────
+
+function NewTemplateForm({
+  creating,
+  onCreate,
+}: {
+  creating: boolean;
+  onCreate: (name: string, service: string) => Promise<void>;
+}) {
+  const [name, setName] = useState('');
+  const [service, setService] = useState('');
+  const canonical = ['SMM', 'Paid Media', 'Editing', 'Affiliates'];
+
+  return (
+    <div className="rounded-[10px] border border-nativz-border bg-surface p-4 space-y-3">
+      <h3 className="text-sm font-semibold text-text-primary">New onboarding template</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-1.5">
+            Template name
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Social standard launch"
+            className="w-full rounded-lg border border-nativz-border bg-surface-primary px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-border focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-1.5">
+            Service
+          </label>
+          <select
+            value={service}
+            onChange={(e) => setService(e.target.value)}
+            className="w-full rounded-lg border border-nativz-border bg-surface-primary px-3 py-2 text-sm text-text-primary focus:border-accent-border focus:outline-none cursor-pointer"
+          >
+            <option value="">Select a service…</option>
+            {canonical.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => void onCreate(name, service)}
+          disabled={!name.trim() || !service || creating}
         >
           {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
           Create

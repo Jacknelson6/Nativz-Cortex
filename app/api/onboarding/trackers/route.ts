@@ -2,16 +2,29 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireOnboardingAdmin } from '@/lib/onboarding/require-admin';
 
-const CreateBody = z.object({
-  client_id: z.string().uuid(),
-  service: z.string().trim().min(1).max(60),
-  title: z.string().trim().max(120).optional(),
-});
+// Two create shapes:
+//   1. Real tracker — needs client_id + service.
+//   2. Template    — is_template=true, template_name + service, no client.
+const CreateBody = z.union([
+  z.object({
+    is_template: z.literal(false).optional(),
+    client_id: z.string().uuid(),
+    service: z.string().trim().min(1).max(60),
+    title: z.string().trim().max(120).optional(),
+  }),
+  z.object({
+    is_template: z.literal(true),
+    template_name: z.string().trim().min(1).max(120),
+    service: z.string().trim().min(1).max(60),
+  }),
+]);
 
 /**
  * GET /api/onboarding/trackers — list all trackers across all clients,
  * with client name + slug joined for the list page. Admin-only.
- * Optional ?client_id= filter.
+ * Optional query params:
+ *   ?client_id=<uuid>     — scope to one client
+ *   ?is_template=true|false — default false (real trackers only).
  */
 export async function GET(request: NextRequest) {
   try {
@@ -19,10 +32,14 @@ export async function GET(request: NextRequest) {
     if (gate.error) return gate.error;
     const { admin } = gate;
 
-    const clientId = new URL(request.url).searchParams.get('client_id');
+    const params = new URL(request.url).searchParams;
+    const clientId = params.get('client_id');
+    const isTemplate = params.get('is_template') === 'true';
+
     let query = admin
       .from('onboarding_trackers')
-      .select('id, client_id, service, title, status, share_token, started_at, completed_at, created_at, updated_at, clients!inner(name, slug, logo_url)')
+      .select('id, client_id, service, title, status, share_token, started_at, completed_at, is_template, template_name, created_at, updated_at, clients(name, slug, logo_url)')
+      .eq('is_template', isTemplate)
       .order('created_at', { ascending: false });
     if (clientId) query = query.eq('client_id', clientId);
 
@@ -39,8 +56,10 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST /api/onboarding/trackers — create a new tracker for a client +
- * service. DB unique constraint prevents duplicates on (client_id, service).
+ * POST /api/onboarding/trackers — create a real tracker OR a template.
+ * DB unique constraint prevents duplicates on (client_id, service) for
+ * real trackers; templates are allowed in unlimited number per service
+ * because NULL client_id is distinct in Postgres unique indexes.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -53,23 +72,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid body' }, { status: 400 });
     }
 
+    const body = parsed.data;
+    const insert = body.is_template
+      ? {
+          client_id: null,
+          service: body.service,
+          template_name: body.template_name,
+          is_template: true,
+          created_by: userId,
+        }
+      : {
+          client_id: body.client_id,
+          service: body.service,
+          title: body.title ?? null,
+          created_by: userId,
+          started_at: new Date().toISOString(),
+        };
+
     const { data, error } = await admin
       .from('onboarding_trackers')
-      .insert({
-        client_id: parsed.data.client_id,
-        service: parsed.data.service,
-        title: parsed.data.title ?? null,
-        created_by: userId,
-        started_at: new Date().toISOString(),
-      })
-      .select('id, client_id, service, title, status, share_token, started_at, completed_at, created_at, updated_at')
+      .insert(insert)
+      .select('id, client_id, service, title, status, share_token, started_at, completed_at, is_template, template_name, created_at, updated_at')
       .single();
 
     if (error) {
-      // Unique-violation = tracker already exists for this client+service.
       if (error.code === '23505') {
         return NextResponse.json(
-          { error: `A ${parsed.data.service} onboarding already exists for this client.` },
+          { error: `A ${body.service} onboarding already exists for this client.` },
           { status: 409 },
         );
       }
