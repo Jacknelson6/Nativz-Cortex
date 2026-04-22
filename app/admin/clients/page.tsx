@@ -86,7 +86,7 @@ export default async function AdminClientsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="ui-page-title">Clients</h1>
-            <p className="text-sm text-text-muted mt-0.5">
+            <p className="text-[15px] text-text-muted mt-1">
               Manage your client roster and brand profiles
               {clients.length > 0 && (
                 <span className="ml-2 text-text-muted/60 tabular-nums">· {clients.length}</span>

@@ -6,5 +6,5 @@ export default async function ClientSettingsRootPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  redirect(`/admin/clients/${slug}/settings/general`);
+  redirect(`/admin/clients/${slug}/settings/info`);
 }

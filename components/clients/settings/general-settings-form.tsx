@@ -19,7 +19,7 @@ type GeneralPayload = {
   logo_url: string | null;
 };
 
-export function GeneralSettingsForm({ slug }: { slug: string }) {
+export function GeneralSettingsForm({ slug, embedded }: { slug: string; embedded?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [client, setClient] = useState<GeneralPayload | null>(null);
@@ -113,38 +113,43 @@ export function GeneralSettingsForm({ slug }: { slug: string }) {
     .toUpperCase()
     .slice(0, 2);
 
+  const actionButtons = editing ? (
+    <div className="flex items-center gap-2">
+      <Button type="button" variant="ghost" size="sm" onClick={() => {
+        setIndustry(client.industry ?? '');
+        setWebsiteUrl(client.website_url ?? '');
+        setAgency(client.agency ?? '');
+        setLogoUrl(client.logo_url);
+        setEditing(false);
+      }}>
+        <X size={14} />
+        Cancel
+      </Button>
+      <Button type="submit" size="sm" disabled={saving}>
+        <Save size={14} />
+        {saving ? 'Saving…' : 'Save'}
+      </Button>
+    </div>
+  ) : (
+    <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(true)}>
+      <Pencil size={14} />
+      Edit
+    </Button>
+  );
+
   return (
     <form onSubmit={handleSave} noValidate className="space-y-6">
-      <SettingsPageHeader
-        icon={Building2}
-        title="General"
-        subtitle="Core identity, website, and agency assignment for this client."
-        action={
-          editing ? (
-            <div className="flex items-center gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={() => {
-                setIndustry(client.industry ?? '');
-                setWebsiteUrl(client.website_url ?? '');
-                setAgency(client.agency ?? '');
-                setLogoUrl(client.logo_url);
-                setEditing(false);
-              }}>
-                <X size={14} />
-                Cancel
-              </Button>
-              <Button type="submit" size="sm" disabled={saving}>
-                <Save size={14} />
-                {saving ? 'Saving…' : 'Save'}
-              </Button>
-            </div>
-          ) : (
-            <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(true)}>
-              <Pencil size={14} />
-              Edit
-            </Button>
-          )
-        }
-      />
+      {!embedded && (
+        <SettingsPageHeader
+          icon={Building2}
+          title="General"
+          subtitle="Core identity, website, and agency assignment for this client."
+          action={actionButtons}
+        />
+      )}
+      {embedded && (
+        <div className="flex justify-end">{actionButtons}</div>
+      )}
 
       <Card>
         <div className="flex items-start gap-4">

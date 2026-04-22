@@ -24,7 +24,7 @@ type BrandPayload = {
   google_drive_calendars_url: string | null;
 };
 
-export function BrandSettingsForm({ slug }: { slug: string }) {
+export function BrandSettingsForm({ slug, embedded }: { slug: string; embedded?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [client, setClient] = useState<BrandPayload | null>(null);
@@ -127,21 +127,32 @@ export function BrandSettingsForm({ slug }: { slug: string }) {
 
   return (
     <section className="space-y-5">
-      <SettingsPageHeader
-        icon={Palette}
-        title="Brand profile"
-        subtitle="Audience, voice, keywords — the context every AI flow in Cortex uses for this client."
-        action={
-          client.website_url ? (
-            <Button type="button" variant="outline" size="sm" onClick={handleGenerateAI} disabled={analyzing}>
-              {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-              {analyzing ? 'Analyzing…' : 'Generate from website'}
-            </Button>
-          ) : null
-        }
-      />
+      {!embedded && (
+        <SettingsPageHeader
+          icon={Palette}
+          title="Brand profile"
+          subtitle="Audience, voice, keywords — the context every AI flow in Cortex uses for this client."
+          action={
+            client.website_url ? (
+              <Button type="button" variant="outline" size="sm" onClick={handleGenerateAI} disabled={analyzing}>
+                {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                {analyzing ? 'Analyzing…' : 'Generate from website'}
+              </Button>
+            ) : null
+          }
+        />
+      )}
 
-      <SettingsSectionHeader title="Identity" />
+      {embedded && client.website_url && (
+        <div className="flex justify-end">
+          <Button type="button" variant="outline" size="sm" onClick={handleGenerateAI} disabled={analyzing}>
+            {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+            {analyzing ? 'Analyzing…' : 'Generate from website'}
+          </Button>
+        </div>
+      )}
+
+      {!embedded && <SettingsSectionHeader title="Identity" />}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Textarea

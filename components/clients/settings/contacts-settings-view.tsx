@@ -20,7 +20,7 @@ type PortalContact = {
   last_login: string | null;
 };
 
-export function ContactsSettingsView({ slug }: { slug: string }) {
+export function ContactsSettingsView({ slug, embedded }: { slug: string; embedded?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [client, setClient] = useState<ContactsPayload | null>(null);
@@ -68,11 +68,13 @@ export function ContactsSettingsView({ slug }: { slug: string }) {
 
   return (
     <div className="space-y-6">
-      <SettingsPageHeader
-        icon={Users}
-        title="Contacts"
-        subtitle={`Company contacts and people with portal access for ${client.name}.`}
-      />
+      {!embedded && (
+        <SettingsPageHeader
+          icon={Users}
+          title="Contacts"
+          subtitle={`Company contacts and people with portal access for ${client.name}.`}
+        />
+      )}
 
       <ClientContactsCard
         clientId={client.id}

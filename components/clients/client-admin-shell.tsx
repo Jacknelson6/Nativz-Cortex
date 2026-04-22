@@ -7,40 +7,50 @@ import {
   AlertTriangle,
   ArrowLeft,
   Bell,
-  FileText,
-  Palette,
-  Plug,
-  ShieldCheck,
-  Users,
+  FileUser,
+  Handshake,
 } from 'lucide-react';
 import {
   ClientAdminShellProvider,
   type ClientAdminShellValue,
 } from '@/components/clients/client-admin-shell-context';
 import { ClientLogo } from '@/components/clients/client-logo';
-import { ImpersonateButton } from '@/components/clients/impersonate-button';
-import { InviteButton } from '@/components/clients/invite-button';
+import { ClientIdentityHeader } from '@/components/clients/client-identity-header';
 
 type NavItem = {
   key: string;
   label: string;
+  /** Primary route + legacy routes that should still mark this item active. */
   path: string;
+  matches?: string[];
   icon: LucideIcon;
   danger?: boolean;
   /** Render a hairline separator *before* this item. */
   separator?: boolean;
 };
 
-// Client area is pure admin/settings — operational features (notes, knowledge,
-// ad creatives) live at their own top-level routes. Brand DNA data is folded
-// into Brand profile and generated during onboarding in the background.
+// Consolidated nav — four items mapped to user mental model:
+//   Info         = who the client is        (identity + brand + contacts + integrations)
+//   Partnership  = what we do for them       (services + contract)
+//   Notifications, Archive/delete stay standalone.
+// Onboarding lives under a top-level /admin/onboarding admin tool (not
+// per-client), so it's not in this nav.
 const NAV: NavItem[] = [
-  { key: 'brand', label: 'Brand profile', path: '/settings/brand', icon: Palette },
-  { key: 'contacts', label: 'Contacts', path: '/settings/contacts', icon: Users },
-  { key: 'integrations', label: 'Integrations', path: '/settings/integrations', icon: Plug },
-  { key: 'access', label: 'Access & services', path: '/settings/access', icon: ShieldCheck },
-  { key: 'contract', label: 'Contract', path: '/contract', icon: FileText, separator: true },
-  { key: 'notifications', label: 'Notifications', path: '/settings/notifications', icon: Bell },
+  {
+    key: 'info',
+    label: 'Info',
+    path: '/settings/info',
+    matches: ['/settings/brand', '/settings/contacts', '/settings/integrations', '/settings/general'],
+    icon: FileUser,
+  },
+  {
+    key: 'partnership',
+    label: 'Partnership',
+    path: '/settings/partnership',
+    matches: ['/settings/access', '/contract'],
+    icon: Handshake,
+  },
+  { key: 'notifications', label: 'Notifications', path: '/settings/notifications', icon: Bell, separator: true },
   { key: 'danger', label: 'Archive / delete', path: '/settings/danger', icon: AlertTriangle, danger: true, separator: true },
 ];
 
@@ -48,10 +58,17 @@ function hrefFor(slug: string, path: string) {
   return `/admin/clients/${slug}${path}`;
 }
 
-function isActive(pathname: string | null, slug: string, path: string) {
+function isActive(pathname: string | null, slug: string, path: string, matches?: string[]) {
   if (!pathname) return false;
-  const full = hrefFor(slug, path);
-  return pathname === full || pathname.startsWith(`${full}/`);
+  const primary = hrefFor(slug, path);
+  if (pathname === primary || pathname.startsWith(`${primary}/`)) return true;
+  if (matches) {
+    for (const m of matches) {
+      const legacy = hrefFor(slug, m);
+      if (pathname === legacy || pathname.startsWith(`${legacy}/`)) return true;
+    }
+  }
+  return false;
 }
 
 function itemClass(active: boolean, danger: boolean | undefined) {
@@ -71,7 +88,7 @@ function SidebarNav({ slug }: { slug: string }) {
     <ul className="space-y-0.5">
       {NAV.map((item) => {
         const href = hrefFor(slug, item.path);
-        const active = isActive(pathname, slug, item.path);
+        const active = isActive(pathname, slug, item.path, item.matches);
         const Icon = item.icon;
         return (
           <li key={item.key}>
@@ -99,7 +116,7 @@ function MobileNav({ slug }: { slug: string }) {
       <div className="flex gap-1 min-w-max pb-1">
         {NAV.map((item) => {
           const href = hrefFor(slug, item.path);
-          const active = isActive(pathname, slug, item.path);
+          const active = isActive(pathname, slug, item.path, item.matches);
           const Icon = item.icon;
           return (
             <Link
@@ -124,7 +141,7 @@ export function ClientAdminShell({
   value: ClientAdminShellValue;
   children: React.ReactNode;
 }) {
-  const { slug, clientName, clientId, organizationId, logoUrl } = value;
+  const { slug, clientName, logoUrl } = value;
 
   return (
     <ClientAdminShellProvider value={value}>
@@ -138,7 +155,7 @@ export function ClientAdminShell({
             <ArrowLeft size={13} />
             All clients
           </Link>
-          <div className="flex items-start gap-2.5 mb-4 min-w-0">
+          <div className="flex items-start gap-2.5 mb-5 min-w-0">
             <ClientLogo src={logoUrl} name={clientName} size="md" className="mt-0.5" />
             <h1
               className="ui-chrome-title leading-tight min-w-0 flex-1 [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden"
@@ -148,33 +165,18 @@ export function ClientAdminShell({
             </h1>
           </div>
 
-          {/* Shortcut actions — Invite (with bulk paste/upload + email preview)
-              and Impersonate. Previously lived on the Overview dashboard;
-              moved into the sidebar so they're reachable from every
-              settings subpage without a round-trip. */}
-          <div className="mb-4 space-y-2">
-            <InviteButton
-              clientId={clientId}
-              clientName={clientName}
-              variant="compact"
-            />
-            {organizationId && (
-              <ImpersonateButton
-                organizationId={organizationId}
-                clientSlug={slug}
-              />
-            )}
-          </div>
+          {/* Invite + Impersonate are now surfaced in the ClientIdentityHeader
+              card at the top of every page — see client-identity-header.tsx.
+              Keeping the sidebar focused on navigation. */}
 
           <SidebarNav slug={slug} />
         </nav>
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
           {/* Uniform page container — left-aligned to the sidebar with a
-              generous admin-cockpit max width. Replaces per-page
-              `max-w-5xl mx-auto` wrappers so settings pages use the
-              available horizontal space on wide monitors instead of
-              floating in a narrow centered reading column. */}
-          <div className="max-w-[1440px] px-5 lg:px-8 py-6">
+              generous admin-cockpit max width. Identity header is always
+              the first child; each page adds its own rhythm below. */}
+          <div className="max-w-[1440px] px-5 lg:px-8 py-6 space-y-6">
+            <ClientIdentityHeader />
             {children}
           </div>
         </div>

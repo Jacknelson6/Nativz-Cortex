@@ -242,6 +242,10 @@ function ClientCard({
   onRequestDelete,
   onMoveGroup,
   deleting,
+  draggable,
+  dragging,
+  onDragStart,
+  onDragEnd,
 }: {
   client: ClientItem;
   i: number;
@@ -253,6 +257,11 @@ function ClientCard({
   onRequestDelete: () => void;
   onMoveGroup: (groupId: string | null) => void;
   deleting?: boolean;
+  /** Only true when groups exist — drag targets don't exist otherwise. */
+  draggable?: boolean;
+  dragging?: boolean;
+  onDragStart?: (dbId: string) => void;
+  onDragEnd?: () => void;
 }) {
   const staggerDelay = `${Math.min(i, STAGGER_CAP) * STAGGER_MS}ms`;
 
@@ -296,30 +305,38 @@ function ClientCard({
       <div
         role="button"
         tabIndex={0}
+        draggable={draggable && !!client.dbId}
+        onDragStart={(e) => {
+          if (!draggable || !client.dbId) return;
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', client.dbId);
+          onDragStart?.(client.dbId);
+        }}
+        onDragEnd={() => onDragEnd?.()}
         onClick={onNavigate}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate(); } }}
-        className={`group w-full text-left cursor-pointer focus:outline-none animate-stagger-in ${deleting ? 'pointer-events-none opacity-50' : ''}`}
+        className={`group w-full text-left cursor-pointer focus:outline-none animate-stagger-in ${deleting ? 'pointer-events-none opacity-50' : ''} ${dragging ? 'opacity-40 scale-[0.99]' : ''} transition-[opacity,transform] duration-150`}
         style={{ animationDelay: staggerDelay }}
       >
         <div
-          className={`flex items-center gap-3 rounded-[10px] border border-nativz-border-light px-4 py-2.5 hover:bg-surface-hover focus-visible:ring-1 focus-visible:ring-accent-border transition-colors ${dimmed ? 'opacity-55 hover:opacity-80' : ''}`}
+          className={`flex items-center gap-3 rounded-[10px] border border-nativz-border-light px-4 py-3 hover:bg-surface-hover focus-visible:ring-1 focus-visible:ring-accent-border transition-colors ${dimmed ? 'opacity-55 hover:opacity-80' : ''}`}
         >
           <ClientLogo src={client.logoUrl} name={client.name} abbreviation={client.abbreviation} size="sm" />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
-              <p className="text-sm font-medium text-text-primary truncate" title={client.name}>{client.name}</p>
-              {client.abbreviation && <span className="shrink-0 text-[10px] font-medium text-text-muted">{client.abbreviation}</span>}
+              <p className="text-[15px] font-medium text-text-primary truncate" title={client.name}>{client.name}</p>
+              {client.abbreviation && <span className="shrink-0 text-[11px] font-medium text-text-muted">{client.abbreviation}</span>}
             </div>
-            <p className="text-[11px] text-text-muted truncate">{client.industry || 'General'}</p>
+            <p className="text-[12px] text-text-muted truncate">{client.industry || 'General'}</p>
           </div>
           <AgencyAssignmentLabel agency={client.agency} showWhenUnassigned className="shrink-0 hidden sm:block" />
           {client.services.length > 0 && (
             <div className="hidden md:flex gap-1 shrink-0">
-              {client.services.map((s) => <Badge key={s} className="text-[10px] px-1.5 py-0">{s}</Badge>)}
+              {client.services.map((s) => <Badge key={s} className="text-[11px] px-1.5 py-0">{s}</Badge>)}
             </div>
           )}
           {client.lastActivityAt && (
-            <span className="text-[11px] text-text-muted shrink-0 hidden lg:block tabular-nums">
+            <span className="text-[12px] text-text-muted shrink-0 hidden lg:block tabular-nums">
               {formatRelativeTime(client.lastActivityAt)}
             </span>
           )}
@@ -334,9 +351,17 @@ function ClientCard({
     <div
       role="button"
       tabIndex={0}
+      draggable={draggable && !!client.dbId}
+      onDragStart={(e) => {
+        if (!draggable || !client.dbId) return;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', client.dbId);
+        onDragStart?.(client.dbId);
+      }}
+      onDragEnd={() => onDragEnd?.()}
       onClick={onNavigate}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate(); } }}
-      className={`group w-full text-left cursor-pointer focus:outline-none animate-stagger-in ${deleting ? 'pointer-events-none opacity-50' : ''}`}
+      className={`group w-full text-left focus:outline-none animate-stagger-in ${deleting ? 'pointer-events-none opacity-50' : ''} ${dragging ? 'opacity-40 scale-[0.98]' : ''} ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} transition-[opacity,transform] duration-150`}
       style={{ animationDelay: staggerDelay }}
     >
       <SpotlightCard
@@ -349,10 +374,10 @@ function ClientCard({
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
-                  <p className="text-sm font-medium text-text-primary truncate" title={client.name}>{client.name}</p>
-                  {client.abbreviation && <span className="shrink-0 text-[10px] font-medium text-text-muted">{client.abbreviation}</span>}
+                  <p className="text-[15px] font-medium text-text-primary truncate leading-tight" title={client.name}>{client.name}</p>
+                  {client.abbreviation && <span className="shrink-0 text-[11px] font-medium text-text-muted">{client.abbreviation}</span>}
                 </div>
-                <p className="text-xs text-text-muted truncate">{client.industry || 'General'}</p>
+                <p className="text-[13px] text-text-muted truncate mt-0.5">{client.industry || 'General'}</p>
               </div>
               <HealthBadge
                 healthScore={client.healthScore}
@@ -360,15 +385,15 @@ function ClientCard({
               />
             </div>
 
-            <div className="mt-2 flex items-center gap-2 flex-wrap">
+            <div className="mt-2.5 flex items-center gap-2 flex-wrap">
               <AgencyAssignmentLabel agency={client.agency} showWhenUnassigned />
               {client.services.length > 0 && (
                 <div className="flex gap-1 flex-wrap">
-                  {client.services.map((s) => <Badge key={s} className="text-[10px] px-1.5 py-0 shrink-0">{s}</Badge>)}
+                  {client.services.map((s) => <Badge key={s} className="text-[11px] px-1.5 py-0 shrink-0">{s}</Badge>)}
                 </div>
               )}
               {client.lastActivityAt && (
-                <span className="ml-auto text-[10px] text-text-muted tabular-nums">
+                <span className="ml-auto text-[11px] text-text-muted tabular-nums">
                   {formatRelativeTime(client.lastActivityAt)}
                 </span>
               )}
@@ -448,15 +473,15 @@ function GroupSectionHeader({
 
   return (
     <div ref={rootRef} className="relative flex items-center gap-2 pb-1">
-      <span className={`h-2 w-2 rounded-full ${s.dot} shrink-0`} />
+      <span className={`h-2.5 w-2.5 rounded-full ${s.dot} shrink-0`} />
       <h2
-        className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted cursor-pointer hover:text-text-secondary"
+        className="text-[12px] font-semibold uppercase tracking-[0.12em] text-text-muted cursor-pointer hover:text-text-secondary"
         onClick={() => setRenaming(true)}
         title="Rename"
       >
         {group.name}
       </h2>
-      <span className="text-[11px] text-text-muted/60 tabular-nums">{count}</span>
+      <span className="text-[12px] text-text-muted/60 tabular-nums">{count}</span>
       <div className="flex-1 h-px bg-nativz-border/40 ml-1" />
       <button
         type="button"
@@ -597,8 +622,8 @@ function SectionHeader({
   return (
     <div className="flex items-center gap-2 pb-1">
       {icon}
-      <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">{label}</h2>
-      <span className="text-[11px] text-text-muted/60 tabular-nums">{count}</span>
+      <h2 className="text-[12px] font-semibold uppercase tracking-[0.12em] text-text-muted">{label}</h2>
+      <span className="text-[12px] text-text-muted/60 tabular-nums">{count}</span>
       <div className="flex-1 h-px bg-nativz-border/40 ml-1" />
     </div>
   );
@@ -630,6 +655,10 @@ export function ClientSearchGrid({
   const [agencyFilter, setAgencyFilter] = useState<AgencyFilter>('all');
   const [listView, setListView] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
+  // Drag-drop state — a single card dragged at a time; target key is either
+  // a group id, the sentinel 'unassigned', or null (no target).
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
 
   const legacyClientParam = searchParams.get('client');
   useEffect(() => {
@@ -733,6 +762,21 @@ export function ClientSearchGrid({
     }
   }, [groups]);
 
+  const handleDropOnKey = useCallback(
+    (targetKey: string | null) => {
+      const dbId = draggingId;
+      setDraggingId(null);
+      setDropTargetKey(null);
+      if (!dbId) return;
+      const client = allClients.find((c) => c.dbId === dbId);
+      if (!client) return;
+      const nextGroupId = targetKey === 'unassigned' || targetKey === null ? null : targetKey;
+      if ((client.groupId ?? null) === nextGroupId) return;
+      void handleMoveGroup(dbId, nextGroupId);
+    },
+    [draggingId, allClients, handleMoveGroup],
+  );
+
   const handleDeleteGroup = useCallback(async (id: string) => {
     const prev = groups;
     const prevClients = allClients;
@@ -805,23 +849,26 @@ export function ClientSearchGrid({
   const gridClasses = 'grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3';
 
   function renderBucket(items: typeof active, dimmed: boolean, indexBase = 0) {
+    const commonCardProps = (client: (typeof items)[number], i: number) => ({
+      client,
+      i: indexBase + i,
+      dimmed,
+      groups,
+      deleting: deletingId === client.dbId,
+      draggable: useGroupSections,
+      dragging: draggingId === client.dbId,
+      onDragStart: (dbId: string) => setDraggingId(dbId),
+      onDragEnd: () => { setDraggingId(null); setDropTargetKey(null); },
+      onNavigate: () => router.push(`/admin/clients/${client.slug}`),
+      onImpersonate: () => client.organizationId && handleImpersonate(client.organizationId, client.slug),
+      onRequestDelete: () => client.dbId && setPendingDelete({ dbId: client.dbId, name: client.name }),
+      onMoveGroup: (gid: string | null) => client.dbId && handleMoveGroup(client.dbId, gid),
+    });
     if (listView) {
       return (
         <div className="space-y-1">
           {items.map((client, i) => (
-            <ClientCard
-              key={client.slug}
-              client={client}
-              i={indexBase + i}
-              dimmed={dimmed}
-              listView
-              groups={groups}
-              deleting={deletingId === client.dbId}
-              onNavigate={() => router.push(`/admin/clients/${client.slug}`)}
-              onImpersonate={() => client.organizationId && handleImpersonate(client.organizationId, client.slug)}
-              onRequestDelete={() => client.dbId && setPendingDelete({ dbId: client.dbId, name: client.name })}
-              onMoveGroup={(gid) => client.dbId && handleMoveGroup(client.dbId, gid)}
-            />
+            <ClientCard key={client.slug} listView {...commonCardProps(client, i)} />
           ))}
         </div>
       );
@@ -829,19 +876,49 @@ export function ClientSearchGrid({
     return (
       <div className={gridClasses}>
         {items.map((client, i) => (
-          <ClientCard
-            key={client.slug}
-            client={client}
-            i={indexBase + i}
-            dimmed={dimmed}
-            groups={groups}
-            deleting={deletingId === client.dbId}
-            onNavigate={() => router.push(`/admin/clients/${client.slug}`)}
-            onImpersonate={() => client.organizationId && handleImpersonate(client.organizationId, client.slug)}
-            onRequestDelete={() => client.dbId && setPendingDelete({ dbId: client.dbId, name: client.name })}
-            onMoveGroup={(gid) => client.dbId && handleMoveGroup(client.dbId, gid)}
-          />
+          <ClientCard key={client.slug} {...commonCardProps(client, i)} />
         ))}
+      </div>
+    );
+  }
+
+  // Drop-zone wrapper for a section. Adds HTML5 dnd handlers + a subtle
+  // ring highlight while hovering. Keyboard users still have the
+  // "Move to…" menu on each card.
+  function DropZone({
+    targetKey,
+    empty,
+    children,
+  }: {
+    targetKey: string;
+    empty?: boolean;
+    children: React.ReactNode;
+  }) {
+    const isTarget = dropTargetKey === targetKey && draggingId !== null;
+    return (
+      <div
+        onDragOver={(e) => {
+          if (!draggingId) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          if (dropTargetKey !== targetKey) setDropTargetKey(targetKey);
+        }}
+        onDragLeave={(e) => {
+          // Only clear if leaving to outside this element.
+          if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+          if (dropTargetKey === targetKey) setDropTargetKey(null);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          handleDropOnKey(targetKey);
+        }}
+        className={`rounded-[12px] transition-all duration-150 ${
+          isTarget
+            ? 'ring-2 ring-accent-border/70 ring-offset-2 ring-offset-background bg-accent-surface/10'
+            : ''
+        } ${empty && draggingId ? 'min-h-[80px] border border-dashed border-nativz-border/60 p-3' : ''}`}
+      >
+        {children}
       </div>
     );
   }
@@ -948,19 +1025,30 @@ export function ClientSearchGrid({
                         memberCount: gs.items.length,
                       })}
                     />
-                    {gs.items.length > 0
-                      ? renderBucket(gs.items, false, offset)
-                      : <p className="text-xs text-text-muted italic pl-4">Empty — move clients here with the arrow button on each card.</p>
-                    }
+                    <DropZone targetKey={gs.group.id} empty={gs.items.length === 0}>
+                      {gs.items.length > 0 ? (
+                        renderBucket(gs.items, false, offset)
+                      ) : (
+                        <p className="text-[13px] text-text-muted italic pl-2">
+                          {draggingId ? 'Drop here to move into this group.' : 'Empty — drag a card here or use the arrow button.'}
+                        </p>
+                      )}
+                    </DropZone>
                   </section>
                 );
               })}
-              {unassigned.length > 0 && (
-                <section className="space-y-2">
-                  <SectionHeader label="Unassigned" count={unassigned.length} />
-                  {renderBucket(unassigned, false)}
-                </section>
-              )}
+              <section className="space-y-2">
+                <SectionHeader label="Unassigned" count={unassigned.length} />
+                <DropZone targetKey="unassigned" empty={unassigned.length === 0}>
+                  {unassigned.length > 0 ? (
+                    renderBucket(unassigned, false)
+                  ) : (
+                    <p className="text-[13px] text-text-muted italic pl-2">
+                      {draggingId ? 'Drop here to remove from a group.' : 'No unassigned clients.'}
+                    </p>
+                  )}
+                </DropZone>
+              </section>
             </>
           ) : agencyBuckets.length > 0 ? (
             agencyBuckets.map((g, gi) => {
