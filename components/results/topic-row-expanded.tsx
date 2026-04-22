@@ -31,10 +31,13 @@ interface TopicRowExpandedProps {
   searchId?: string;
 }
 
+// Source type icons — muted by default since the source URL text is the
+// actual signal. The prior rainbow (blue/emerald/purple) was decorative
+// drift; it made every source list look like a toy.
 const SOURCE_TYPE_ICON: Record<string, React.ReactNode> = {
-  web: <Globe size={12} className="text-blue-400 shrink-0" />,
-  discussion: <MessageCircle size={12} className="text-emerald-400 shrink-0" />,
-  video: <Video size={12} className="text-accent2-text shrink-0" />,
+  web: <Globe size={12} className="text-text-muted shrink-0" />,
+  discussion: <MessageCircle size={12} className="text-text-muted shrink-0" />,
+  video: <Video size={12} className="text-accent-text shrink-0" />,
 };
 
 function getPlatformBadge(platform: string): { label: string; className: string } | null {
@@ -256,16 +259,19 @@ function VideoIdeaListItem({
               {displayIdeaFormat(idea.format)}
             </span>
             {virality !== 'low' && (
+              // viral_potential now reads as coral (brand "accent / urgency"
+              // token) instead of accent2/purple — matches the VideoIdeaCard
+              // ring swap, keeps purple reserved for actual CTAs.
               <span className={`inline-flex items-center gap-1 text-xs font-medium ${
-                virality === 'viral_potential' ? 'text-accent2-text' :
+                virality === 'viral_potential' ? 'text-coral-300' :
                 virality === 'high' ? 'text-emerald-400' :
-                virality === 'medium' ? 'text-blue-400' :
+                virality === 'medium' ? 'text-accent-text' :
                 'text-text-muted'
               }`}>
                 <span className={`inline-block h-1 w-1 rounded-full ${
-                  virality === 'viral_potential' ? 'bg-accent2' :
+                  virality === 'viral_potential' ? 'bg-coral-400' :
                   virality === 'high' ? 'bg-emerald-400' :
-                  virality === 'medium' ? 'bg-blue-400' :
+                  virality === 'medium' ? 'bg-accent' :
                   'bg-text-muted'
                 }`} />
                 {displayIdeaVirality(idea.virality)}
