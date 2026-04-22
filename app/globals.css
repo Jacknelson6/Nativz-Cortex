@@ -44,11 +44,14 @@ summary {
   --nz-btn-letter-spacing: 0.125em;
 
   /* Radius scale — matches live nativz.io ROUNDED corners.
-     Buttons override with a full-pill shape (see .nz-btn-pill). */
+     Buttons use --nz-btn-radius which overrides per brand mode. */
   --nz-radius-sm: 5px;
   --nz-radius-md: 10px;
   --nz-radius-lg: 20px;
   --nz-radius-pill: 9999px;
+
+  /* Button shape per brand. Nativz = pill. Anderson overrides to 0. */
+  --nz-btn-radius: var(--nz-radius-pill);
 }
 
 :root {
@@ -139,50 +142,71 @@ summary {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   Anderson Collaborative — Official Design Tokens
-   Source: AC 2023 Style Guide + Rough Style Guide PDFs
-   #36D1C2 teal · #00161F navy · #FEF9F6 off-white
-   #B3BEC9 silver · #E54B4B red · #617792 blue-gray
+   Anderson Collaborative — Official Design Tokens v1.0 (April 2026)
+   Source: AC token paste from Jack. Locked per brand spec.
+
+   Teal #36D1C2 = signature primary accent · Orange #FF7A45 = secondary
+   Navy #001631 = primary dark / headlines · Paper #FFFFFF · Stone #F9F8FA
+   Fonts: Sora (display) · Roboto (body) · Rubik (UI sans)
+   Buttons: SHARP RECTANGLES (radius 0), not pills.
    ═══════════════════════════════════════════════════════════ */
 [data-brand-mode="anderson"] {
-  /* Backgrounds — cool off-white */
-  --background: #F4F6F8;
-  --foreground: #00161F;
-  --surface: #FFFFFF;
-  --surface-hover: #EDF0F3;
-  --border: #D6DCE2;
-  --border-light: #E4E8EC;
+  /* Backgrounds — cool off-white on top of ac-stone page tint */
+  --background: #F9F8FA;        /* ac-stone */
+  --foreground: #001631;        /* ac-navy-600 */
+  --surface: #FFFFFF;           /* ac-paper */
+  --surface-hover: #F0F4F8;     /* ac-navy-50 */
+  --surface-elevated: #F0F4F8;  /* ac-navy-50 — skeletons, inset tracks */
+  --border: #E6E6E6;            /* ac-line */
+  --border-light: #EFEFEF;      /* ac-line-2 */
 
-  /* Text hierarchy — muted is blue-gray, not silver */
-  --text-primary: #00161F;
-  --text-secondary: #617792;
-  --text-muted: #617792;
+  /* Text hierarchy — muted is AC slate blue-gray */
+  --text-primary: #001631;      /* ac-navy-600 */
+  --text-secondary: #111013;    /* ac-ink */
+  --text-muted: #617792;        /* ac-navy-300 */
 
-  /* Accent — teal primary */
-  --accent: #36D1C2;
-  --accent-hover: #2BB5A8;
+  /* Accent — AC teal primary */
+  --accent: #36D1C2;            /* ac-teal-400 */
+  --accent-hover: #2AB5A7;      /* ac-teal-500 */
   --accent-surface: rgba(54, 209, 194, 0.10);
-  --accent-text: #1A9E91;
+  --accent-text: #1F9489;       /* ac-teal-600 — contrast text on paper */
 
-  /* Secondary accent — teal (same as primary in AC, no purple) */
-  --accent2: #2BB5A8;
-  --accent2-hover: #239E93;
-  --accent2-surface: rgba(43, 181, 168, 0.12);
-  --accent2-text: #36D1C2;
-  --accent2-ring: rgba(54, 209, 194, 0.25);
+  /* Secondary accent — AC orange (not teal) for warmth + energy moments */
+  --accent2: #FF7A45;           /* ac-orange-400 */
+  --accent2-hover: #E85F2C;     /* ac-orange-500 */
+  --accent2-surface: rgba(255, 122, 69, 0.10);
+  --accent2-text: #C24819;      /* ac-orange-600 */
+  --accent2-ring: rgba(255, 122, 69, 0.25);
 
   /* Focus ring glow */
-  --focus-ring: rgba(54, 209, 194, 0.15);
+  --focus-ring: rgba(54, 209, 194, 0.25);
 
-  /* Error — AC red */
-  --error: #E54B4B;
-  --error-hover: #c73d3d;
+  /* Error — AC danger red */
+  --error: #D9534F;
+  --error-hover: #C44642;
 
-  /* Shadows — lighter for light theme */
-  --shadow-card: 0 1px 3px rgba(0, 22, 31, 0.06), 0 1px 2px rgba(0, 22, 31, 0.04);
-  --shadow-card-hover: 0 4px 12px rgba(0, 22, 31, 0.08), 0 2px 4px rgba(0, 22, 31, 0.04);
-  --shadow-elevated: 0 8px 24px rgba(0, 22, 31, 0.10), 0 4px 8px rgba(0, 22, 31, 0.06);
-  --shadow-dropdown: 0 4px 16px rgba(0, 22, 31, 0.10), 0 0 1px rgba(0, 22, 31, 0.08);
+  /* Status palette — AC-specific so widgets + badges stop leaning Tailwind */
+  --status-success: #36D1C2;    /* brand teal doubles as success */
+  --status-warning: #E8A93C;    /* ac-warn amber */
+  --status-danger:  #D9534F;    /* ac-danger */
+  --status-info:    #617792;    /* ac slate blue-gray */
+  --status-trending: #FF7A45;   /* ac-orange — trending = energy */
+
+  /* Elevation — AC is still flat-ish but uses navy-tinted shadows on light */
+  --shadow-card: none;
+  --shadow-card-hover: 0 8px 24px rgba(0, 22, 49, 0.08);
+  --shadow-elevated: 0 24px 60px rgba(0, 22, 49, 0.12);
+  --shadow-dropdown: 0 12px 32px rgba(0, 22, 49, 0.14);
+
+  /* Typography — Sora display + Roboto body + Rubik UI. The semantic font
+     tokens (read by Tailwind `font-display`, `font-sans`) are remapped so
+     every `ui-page-title` etc. picks up Sora in AC mode automatically. */
+  --font-nz-display: var(--font-ac-display);  /* Sora */
+  --font-nz-body: var(--font-ac-body);        /* Roboto */
+  /* --font-nz-sans stays on Rubik (AC uses it too) */
+
+  /* Button shape — AC CTAs are SHARP RECTANGLES per ac-btn spec. */
+  --nz-btn-radius: 0;
 }
 
 /* Anderson mode — scrollbar & element overrides */
@@ -349,11 +373,12 @@ body {
   background: #475569;
 }
 
-/* Focus-visible for keyboard navigation (skip inputs/textareas — they style their own focus) */
-:focus-visible:not(input):not(textarea):not(select) {
+/* Focus-visible for keyboard navigation (skip inputs/textareas — they style
+   their own focus). Buttons/links carry their own border-radius; do NOT
+   override it here or pill buttons square off on keyboard focus. */
+:focus-visible:not(input):not(textarea):not(select):not(button):not(a):not([role="button"]) {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 4px;
 }
 
 /* Smooth chart fade-in */
@@ -902,40 +927,15 @@ dialog:not([open]) {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   Action buttons = Nativz purple.
-   Any button / link / role=button styled with `bg-accent` is treated as
-   a CTA and rendered in the Nativz primary-action purple. Pills, badges,
-   chips, and tab indicators live on <div>/<span> elements so they keep
-   the brand cyan fill from --accent. This is a one-rule override —
-   flip the selector off to revert to cyan CTAs.
+   Action button shape override
+   Any button / link / role=button styled with `bg-accent` is a CTA and
+   picks up the brand-mode button radius: pill on Nativz, rectangle on
+   Anderson. Inline `rounded-lg` on the element is overridden. Colors
+   are left alone — the element's own `bg-accent` class still drives
+   the fill via the semantic --accent token.
    ═══════════════════════════════════════════════════════════ */
 button.bg-accent,
 a.bg-accent,
 [role="button"].bg-accent {
-  background-color: var(--nz-purple);
-  /* Nativz signature: action buttons are full-pill shapes. Overrides any
-     inline rounded-lg / rounded-md / rounded-xl on the same element. */
-  border-radius: var(--nz-radius-pill);
-}
-button.bg-accent:hover,
-a.bg-accent:hover,
-[role="button"].bg-accent:hover {
-  background-color: var(--nz-purple-700);
-}
-
-/* Cover the common hover escape hatches inline CTAs use:
-   `hover:bg-accent-hover`, `hover:bg-accent/90`, etc. */
-button:is(.hover\:bg-accent-hover, .hover\:bg-accent\/90, .hover\:bg-accent\/80, .hover\:bg-accent\/60):hover,
-a:is(.hover\:bg-accent-hover, .hover\:bg-accent\/90, .hover\:bg-accent\/80, .hover\:bg-accent\/60):hover,
-[role="button"]:is(.hover\:bg-accent-hover, .hover\:bg-accent\/90, .hover\:bg-accent\/80, .hover\:bg-accent\/60):hover {
-  background-color: var(--nz-purple-700);
-}
-
-/* Focus ring on CTA buttons tracks the purple too so keyboard focus feels
-   consistent with the fill. Pills / tabs keep their cyan focus ring. */
-button.bg-accent:focus-visible,
-a.bg-accent:focus-visible,
-[role="button"].bg-accent:focus-visible {
-  outline-color: var(--nz-purple);
-  box-shadow: 0 0 0 3px var(--accent2-ring);
+  border-radius: var(--nz-btn-radius, var(--nz-radius-pill));
 }

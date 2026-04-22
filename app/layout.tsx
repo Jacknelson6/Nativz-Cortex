@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Jost, Poppins, Rubik } from 'next/font/google';
+import { Jost, Poppins, Rubik, Sora, Roboto } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { Analytics } from '@vercel/analytics/next';
 import { headers } from 'next/headers';
@@ -8,10 +8,9 @@ import { BrandModeProvider } from '@/components/layout/brand-mode-provider';
 import { MobileBlocker } from '@/components/shared/mobile-blocker';
 import { getSupabaseUrl } from '@/lib/supabase/public-env';
 
-// Nativz brand typography — Jost (display, Futura PT open substitute),
-// Poppins (body), Rubik (UI sans). See .impeccable.md.
-// `--font-geist-sans` is kept as a compatibility alias so existing
-// component code keeps compiling; it now points at Rubik (the UI sans).
+// Nativz brand typography — Jost (display), Poppins (body), Rubik (UI sans).
+// Anderson Collaborative typography — Sora (display), Roboto (body), Rubik shared.
+// Both sets load always; brand-mode CSS remaps the semantic font tokens.
 const jost = Jost({
   variable: '--font-nz-display',
   weight: ['300', '400', '500', '600', '700', '800'],
@@ -29,6 +28,20 @@ const poppins = Poppins({
 const rubik = Rubik({
   variable: '--font-nz-sans',
   weight: ['300', '400', '500', '600', '700'],
+  subsets: ['latin'],
+  display: 'swap',
+});
+
+const sora = Sora({
+  variable: '--font-ac-display',
+  weight: ['300', '400', '500', '600', '700', '800'],
+  subsets: ['latin'],
+  display: 'swap',
+});
+
+const roboto = Roboto({
+  variable: '--font-ac-body',
+  weight: ['300', '400', '500', '700'],
   subsets: ['latin'],
   display: 'swap',
 });
@@ -129,7 +142,7 @@ export default async function RootLayout({
         />
       </head>
       <body
-        className={`${jost.variable} ${poppins.variable} ${rubik.variable} ${legacySansAlias.variable} font-sans antialiased`}
+        className={`${jost.variable} ${poppins.variable} ${rubik.variable} ${sora.variable} ${roboto.variable} ${legacySansAlias.variable} font-sans antialiased`}
       >
         <BrandModeProvider forcedMode={forcedMode}>
           <MobileBlocker />

@@ -11,12 +11,13 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   shape?: Shape;
 }
 
-// Primary = Nativz flat purple CTA. Uppercase Jost-700, 2px letter-spacing.
-// Secondary/outline/ghost stay neutral so non-primary actions don't compete
-// with primary CTAs. Danger stays red for destructive semantics.
+// Primary = brand accent (cyan in Nativz, teal in Anderson). Uppercase Jost-700
+// with 2px letter-spacing keeps the CTA feeling distinctive vs secondary/ghost.
+// Purple remains an available accent token (--nz-purple) but is NOT used on
+// action buttons — Nativz CTAs are cyan, AC CTAs are teal. Danger stays red.
 const variantStyles: Record<Variant, string> = {
   primary:
-    'bg-[color:var(--nz-purple)] text-white shadow-[var(--shadow-card)] hover:bg-[color:var(--nz-purple-700)] hover:shadow-[var(--shadow-card-hover)] nz-btn-label',
+    'bg-accent text-white shadow-[var(--shadow-card)] hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] nz-btn-label',
   secondary: 'bg-surface-hover text-text-primary hover:bg-nativz-border',
   outline: 'border border-nativz-border text-text-secondary hover:bg-surface-hover',
   ghost: 'text-text-secondary hover:bg-surface-hover hover:text-text-primary',
@@ -33,17 +34,16 @@ const sizeStyles: Record<Size, string> = {
   lg: 'px-6 py-3 text-base',
 };
 
-// Nativz signature: action buttons are full-pill shapes. `default` maps to
-// pill to match the brand; `pill` is an explicit alias. The older rounded-lg
-// look is kept via the `rectangle` opt-out for contexts where a pill would
-// feel wrong (e.g. dense toolbar buttons).
+// Button shape routes through --nz-btn-radius so each brand mode can pick.
+// Nativz: --nz-btn-radius = 9999px (pill). Anderson: overrides to 0 (rectangle).
+// `pill` variant is an explicit always-pill opt-in that ignores the brand.
 const shapeStyles: Record<Shape, string> = {
-  default: 'rounded-full',
+  default: 'rounded-[var(--nz-btn-radius)]',
   pill: 'rounded-full',
 };
 
 const focusRing =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--nz-purple)] focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:shadow-[0_0_0_3px_var(--focus-ring)]';
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:shadow-[0_0_0_3px_var(--focus-ring)]';
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   (
