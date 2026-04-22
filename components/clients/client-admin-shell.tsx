@@ -7,7 +7,6 @@ import {
   AlertTriangle,
   ArrowLeft,
   Bell,
-  Building2,
   FileText,
   Palette,
   Plug,
@@ -18,6 +17,7 @@ import {
   ClientAdminShellProvider,
   type ClientAdminShellValue,
 } from '@/components/clients/client-admin-shell-context';
+import { ClientLogo } from '@/components/clients/client-logo';
 import { ImpersonateButton } from '@/components/clients/impersonate-button';
 import { InviteButton } from '@/components/clients/invite-button';
 
@@ -27,6 +27,8 @@ type NavItem = {
   path: string;
   icon: LucideIcon;
   danger?: boolean;
+  /** Render a hairline separator *before* this item. */
+  separator?: boolean;
 };
 
 // Client area is pure admin/settings — operational features (notes, knowledge,
@@ -37,9 +39,9 @@ const NAV: NavItem[] = [
   { key: 'contacts', label: 'Contacts', path: '/settings/contacts', icon: Users },
   { key: 'integrations', label: 'Integrations', path: '/settings/integrations', icon: Plug },
   { key: 'access', label: 'Access & services', path: '/settings/access', icon: ShieldCheck },
-  { key: 'contract', label: 'Contract', path: '/contract', icon: FileText },
+  { key: 'contract', label: 'Contract', path: '/contract', icon: FileText, separator: true },
   { key: 'notifications', label: 'Notifications', path: '/settings/notifications', icon: Bell },
-  { key: 'danger', label: 'Archive / delete', path: '/settings/danger', icon: AlertTriangle, danger: true },
+  { key: 'danger', label: 'Archive / delete', path: '/settings/danger', icon: AlertTriangle, danger: true, separator: true },
 ];
 
 function hrefFor(slug: string, path: string) {
@@ -73,6 +75,9 @@ function SidebarNav({ slug }: { slug: string }) {
         const Icon = item.icon;
         return (
           <li key={item.key}>
+            {item.separator && (
+              <div aria-hidden className="my-2 h-px bg-nativz-border/60 mx-2" />
+            )}
             <Link
               href={href}
               className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${itemClass(active, item.danger)}`}
@@ -119,7 +124,7 @@ export function ClientAdminShell({
   value: ClientAdminShellValue;
   children: React.ReactNode;
 }) {
-  const { slug, clientName, clientId, organizationId } = value;
+  const { slug, clientName, clientId, organizationId, logoUrl } = value;
 
   return (
     <ClientAdminShellProvider value={value}>
@@ -128,20 +133,20 @@ export function ClientAdminShell({
         <nav className="hidden lg:flex w-56 shrink-0 flex-col border-r border-nativz-border p-4 overflow-y-auto">
           <Link
             href="/admin/clients"
-            className="mb-4 inline-flex items-center gap-2 text-xs text-text-muted hover:text-text-secondary transition-colors"
+            className="mb-4 inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-text-primary transition-colors"
           >
-            <ArrowLeft size={14} />
+            <ArrowLeft size={13} />
             All clients
           </Link>
-          <div className="flex items-center gap-2 mb-1 min-w-0">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover border border-nativz-border">
-              <Building2 size={16} className="text-accent-text" />
-            </div>
-            <h1 className="ui-chrome-title truncate" title={clientName}>
+          <div className="flex items-start gap-2.5 mb-4 min-w-0">
+            <ClientLogo src={logoUrl} name={clientName} size="md" className="mt-0.5" />
+            <h1
+              className="ui-chrome-title leading-tight min-w-0 flex-1 [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden"
+              title={clientName}
+            >
               {clientName}
             </h1>
           </div>
-          <p className="text-xs text-text-muted mb-4">Settings</p>
 
           {/* Shortcut actions — Invite (with bulk paste/upload + email preview)
               and Impersonate. Previously lived on the Overview dashboard;
@@ -164,7 +169,14 @@ export function ClientAdminShell({
           <SidebarNav slug={slug} />
         </nav>
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-          {children}
+          {/* Uniform page container — left-aligned to the sidebar with a
+              generous admin-cockpit max width. Replaces per-page
+              `max-w-5xl mx-auto` wrappers so settings pages use the
+              available horizontal space on wide monitors instead of
+              floating in a narrow centered reading column. */}
+          <div className="max-w-[1440px] px-5 lg:px-8 py-6">
+            {children}
+          </div>
         </div>
       </div>
     </ClientAdminShellProvider>

@@ -3,7 +3,10 @@ import { ClientAccessServicesPanel } from '@/components/clients/client-access-se
 import { RevisionWebhookSettings } from '@/components/clients/revision-webhook-settings';
 import { notFound } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { SettingsPageHeader } from '@/components/clients/settings/settings-primitives';
+import {
+  SettingsPageHeader,
+  SettingsSectionHeader,
+} from '@/components/clients/settings/settings-primitives';
 
 export default async function ClientSettingsAccessPage({
   params,
@@ -25,10 +28,13 @@ export default async function ClientSettingsAccessPage({
 
       <ClientAccessServicesPanel slug={slug} />
 
-      <div className="pt-2">
-        <h3 className="text-base font-semibold text-text-primary mb-2">Webhooks</h3>
+      <section className="space-y-3 pt-2">
+        <SettingsSectionHeader
+          title="Webhooks"
+          description="Fire an outbound request when revision state changes."
+        />
         <RevisionWebhookSettings clientId={client.id} />
-      </div>
+      </section>
     </div>
   );
 }

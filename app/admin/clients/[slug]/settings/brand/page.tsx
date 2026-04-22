@@ -5,6 +5,7 @@ import { BrandDNAView } from '@/components/brand-dna/brand-dna-view';
 import { LinkedSocialsSection } from '@/components/clients/linked-socials-section';
 import { CompetitorsSection } from '@/components/clients/competitors-section';
 import { BrandEssenceSection } from '@/components/clients/brand-essence-section';
+import { SettingsSectionHeader } from '@/components/clients/settings/settings-primitives';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,46 +66,53 @@ export default async function ClientSettingsBrandPage({
   }
 
   return (
-    // NAT-57 follow-up: constrain the page to a sensible reading
-    // width. Client-admin-shell was leaving this full-width, which
-    // made long textareas (description, mission) stretch across 2000+px
-    // on wide monitors — painful to read and type. max-w-5xl matches
-    // the portal brand-profile view so both surfaces share the same
-    // layout rhythm.
-    <div className="max-w-5xl mx-auto space-y-6">
-      {/* 1. Brand information — name, website, description, budget. */}
+    // Outer width + gutter owned by ClientAdminShell. This page just
+    // orchestrates five logical groups with quiet section dividers.
+    //   1. Brand profile (core identity + commercial)
+    //   2. Brand essence (tagline / value prop / mission)
+    //   3. AI generation preferences (writing style, image style, location)
+    //   4. Social presence
+    //   5. Brand DNA (AI artifact)
+    <div className="space-y-10">
+      {/* 1. Brand profile — always editable inline, no edit-mode toggle. */}
       <BrandSettingsForm slug={slug} />
 
-      {/* 2-5. Essence, products, content generation, location. This
-          component owns its own internal section stack + spacing. */}
-      <BrandEssenceSection clientId={client.id} />
+      {/* 2-3. Essence, products, aliases, content generation, location. */}
+      <section className="space-y-4">
+        <SettingsSectionHeader
+          title="Essence & AI preferences"
+          description="How the brand describes itself and how Cortex writes for it."
+        />
+        <BrandEssenceSection clientId={client.id} />
+      </section>
 
-      {/* 6. Social presence. Two-column grid on lg+; stacks on smaller
-          screens. Wrapped in a header so the pair reads as one section
-          rather than two orphaned cards. */}
-      <section className="space-y-3">
-        <header>
-          <h2 className="text-sm font-semibold text-text-primary">Social presence</h2>
-          <p className="text-xs text-text-muted mt-0.5">
-            One linked account per platform unlocks analytics; tracked
-            competitors auto-suggest in spying tools.
-          </p>
-        </header>
+      {/* 4. Social presence. Two-column grid on lg+; stacks on smaller. */}
+      <section className="space-y-4">
+        <SettingsSectionHeader
+          title="Social presence"
+          description="One linked account per platform unlocks analytics; tracked competitors auto-suggest in spying tools."
+        />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <LinkedSocialsSection clientId={client.id} />
           <CompetitorsSection clientId={client.id} />
         </div>
       </section>
 
-      {/* 7. Brand DNA — the AI-distilled visual + verbal identity. */}
-      <BrandDNAView
-        clientId={client.id}
-        clientName={client.name ?? ''}
-        clientSlug={client.slug ?? slug}
-        websiteUrl={client.website_url ?? ''}
-        brandDnaStatus={client.brand_dna_status ?? 'none'}
-        guideline={guideline}
-      />
+      {/* 5. Brand DNA — the AI-distilled visual + verbal identity. */}
+      <section className="space-y-4">
+        <SettingsSectionHeader
+          title="Brand DNA"
+          description="AI-distilled visual + verbal identity, generated from the fields above."
+        />
+        <BrandDNAView
+          clientId={client.id}
+          clientName={client.name ?? ''}
+          clientSlug={client.slug ?? slug}
+          websiteUrl={client.website_url ?? ''}
+          brandDnaStatus={client.brand_dna_status ?? 'none'}
+          guideline={guideline}
+        />
+      </section>
     </div>
   );
 }

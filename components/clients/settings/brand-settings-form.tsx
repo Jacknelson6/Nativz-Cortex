@@ -1,14 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { Save, Loader2, Pencil, X, Sparkles, DollarSign, ExternalLink, Palette } from 'lucide-react';
-import { Card } from '@/components/ui/card';
+import { Loader2, Sparkles, DollarSign, ExternalLink, Palette } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input, Textarea } from '@/components/ui/input';
-import { ProfileField } from '@/components/clients/client-profile-fields';
-import { SettingsPageHeader } from '@/components/clients/settings/settings-primitives';
+import {
+  SettingsPageHeader,
+  SettingsSectionHeader,
+} from '@/components/clients/settings/settings-primitives';
 
 type BrandPayload = {
   id: string;
@@ -28,18 +28,8 @@ export function BrandSettingsForm({ slug }: { slug: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [client, setClient] = useState<BrandPayload | null>(null);
-
-  const [targetAudience, setTargetAudience] = useState('');
-  const [brandVoice, setBrandVoice] = useState('');
-  const [topicKeywords, setTopicKeywords] = useState('');
-  const [description, setDescription] = useState('');
-  const [boostingBudget, setBoostingBudget] = useState('');
-  const [brandingUrl, setBrandingUrl] = useState('');
-  const [calendarsUrl, setCalendarsUrl] = useState('');
-
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [, startTransition] = useTransition();
 
   useEffect(() => {
     let cancelled = false;
@@ -52,15 +42,7 @@ export function BrandSettingsForm({ slug }: { slug: string }) {
         }
         const d = (await res.json()) as { client: BrandPayload };
         if (cancelled) return;
-        const c = d.client;
-        setClient(c);
-        setTargetAudience(c.target_audience ?? '');
-        setBrandVoice(c.brand_voice ?? '');
-        setTopicKeywords((c.topic_keywords ?? []).join(', '));
-        setDescription(c.description ?? '');
-        setBoostingBudget(c.monthly_boosting_budget != null ? String(c.monthly_boosting_budget) : '');
-        setBrandingUrl(c.google_drive_branding_url ?? '');
-        setCalendarsUrl(c.google_drive_calendars_url ?? '');
+        setClient(d.client);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load');
       } finally {
@@ -72,6 +54,29 @@ export function BrandSettingsForm({ slug }: { slug: string }) {
       cancelled = true;
     };
   }, [slug]);
+
+  function patch(fields: Partial<BrandPayload>) {
+    if (!client) return;
+    const prev = client;
+    setClient({ ...client, ...fields });
+    startTransition(async () => {
+      try {
+        const res = await fetch(`/api/clients/${client.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(fields),
+        });
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          toast.error((d as { error?: string }).error || 'Failed to save');
+          setClient(prev);
+        }
+      } catch {
+        toast.error('Something went wrong');
+        setClient(prev);
+      }
+    });
+  }
 
   async function handleGenerateAI() {
     if (!client?.website_url) {
@@ -91,46 +96,20 @@ export function BrandSettingsForm({ slug }: { slug: string }) {
         return;
       }
       const data = await res.json();
-      if (data.target_audience) setTargetAudience(data.target_audience);
-      if (data.brand_voice) setBrandVoice(data.brand_voice);
-      if (data.topic_keywords) setTopicKeywords(data.topic_keywords.join(', '));
-      toast.success('Fields generated from website.');
+      const next: Partial<BrandPayload> = {};
+      if (data.target_audience) next.target_audience = data.target_audience;
+      if (data.brand_voice) next.brand_voice = data.brand_voice;
+      if (data.topic_keywords) next.topic_keywords = data.topic_keywords;
+      if (Object.keys(next).length > 0) {
+        patch(next);
+        toast.success('Fields generated from website.');
+      } else {
+        toast.info('AI returned nothing — add more brand data first.');
+      }
     } catch {
       toast.error('Something went wrong');
     } finally {
       setAnalyzing(false);
-    }
-  }
-
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-    if (!client) return;
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/clients/${client.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          target_audience: targetAudience || null,
-          brand_voice: brandVoice || null,
-          topic_keywords: topicKeywords.split(',').map((k) => k.trim()).filter(Boolean),
-          description: description.trim() || null,
-          monthly_boosting_budget: boostingBudget.trim() ? Number(boostingBudget.trim()) : null,
-          google_drive_branding_url: brandingUrl.trim() || null,
-          google_drive_calendars_url: calendarsUrl.trim() || null,
-        }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        toast.error((d as { error?: string }).error || 'Failed to save');
-        return;
-      }
-      toast.success('Brand profile saved');
-      setEditing(false);
-    } catch {
-      toast.error('Something went wrong');
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -147,175 +126,190 @@ export function BrandSettingsForm({ slug }: { slug: string }) {
   }
 
   return (
-    <form onSubmit={handleSave} noValidate className="space-y-6">
+    <section className="space-y-5">
       <SettingsPageHeader
         icon={Palette}
         title="Brand profile"
         subtitle="Audience, voice, keywords — the context every AI flow in Cortex uses for this client."
         action={
-          editing ? (
-            <div className="flex items-center gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={() => {
-                setTargetAudience(client.target_audience ?? '');
-                setBrandVoice(client.brand_voice ?? '');
-                setTopicKeywords((client.topic_keywords ?? []).join(', '));
-                setDescription(client.description ?? '');
-                setBoostingBudget(client.monthly_boosting_budget != null ? String(client.monthly_boosting_budget) : '');
-                setBrandingUrl(client.google_drive_branding_url ?? '');
-                setCalendarsUrl(client.google_drive_calendars_url ?? '');
-                setEditing(false);
-              }}>
-                <X size={14} />
-                Cancel
-              </Button>
-              {client.website_url && (
-                <Button type="button" variant="outline" size="sm" onClick={handleGenerateAI} disabled={analyzing}>
-                  {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                  {analyzing ? 'Analyzing…' : 'Generate with AI'}
-                </Button>
-              )}
-              <Button type="submit" size="sm" disabled={saving}>
-                <Save size={14} />
-                {saving ? 'Saving…' : 'Save'}
-              </Button>
-            </div>
-          ) : (
-            <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(true)}>
-              <Pencil size={14} />
-              Edit
+          client.website_url ? (
+            <Button type="button" variant="outline" size="sm" onClick={handleGenerateAI} disabled={analyzing}>
+              {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+              {analyzing ? 'Analyzing…' : 'Generate from website'}
             </Button>
-          )
+          ) : null
         }
       />
 
-      <Card>
-        {editing ? (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Textarea
-                id="target_audience"
-                label="Target audience"
-                value={targetAudience}
-                onChange={(e) => setTargetAudience(e.target.value)}
-                placeholder="Describe the target audience…"
-                rows={3}
-              />
-              <Textarea
-                id="brand_voice"
-                label="Brand voice"
-                value={brandVoice}
-                onChange={(e) => setBrandVoice(e.target.value)}
-                placeholder="Describe the brand voice and tone…"
-                rows={3}
-              />
+      <SettingsSectionHeader title="Identity" />
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Textarea
+          id="target_audience"
+          label="Target audience"
+          defaultValue={client.target_audience ?? ''}
+          onBlur={(e) => {
+            const v = e.target.value.trim();
+            if (v !== (client.target_audience ?? '')) patch({ target_audience: v || null });
+          }}
+          placeholder="Who this brand serves and what they're trying to accomplish."
+          rows={3}
+        />
+        <Textarea
+          id="brand_voice"
+          label="Brand voice"
+          defaultValue={client.brand_voice ?? ''}
+          onBlur={(e) => {
+            const v = e.target.value.trim();
+            if (v !== (client.brand_voice ?? '')) patch({ brand_voice: v || null });
+          }}
+          placeholder="Tone, register, personality — how they sound in writing."
+          rows={3}
+        />
+      </div>
+
+      <Input
+        id="topic_keywords"
+        label="Topic keywords"
+        defaultValue={(client.topic_keywords ?? []).join(', ')}
+        onBlur={(e) => {
+          const next = e.target.value.split(',').map((k) => k.trim()).filter(Boolean);
+          const prev = client.topic_keywords ?? [];
+          if (next.join('|') !== prev.join('|')) patch({ topic_keywords: next });
+        }}
+        placeholder="Comma-separated. e.g. fitness, nutrition, wellness"
+      />
+
+      <Textarea
+        id="description"
+        label="Description"
+        defaultValue={client.description ?? ''}
+        onBlur={(e) => {
+          const v = e.target.value.trim();
+          if (v !== (client.description ?? '')) patch({ description: v || null });
+        }}
+        placeholder="Optional long-form background — history, positioning, anything the AI should know."
+        rows={3}
+      />
+
+      <SettingsSectionHeader title="Commercial" />
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div>
+          <span className="block text-sm font-medium text-text-secondary mb-1.5">Services</span>
+          {(client.services ?? []).length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {(client.services ?? []).map((svc) => (
+                <span
+                  key={svc}
+                  className="inline-flex items-center rounded-full bg-surface-hover text-text-muted ring-1 ring-inset ring-nativz-border px-2.5 py-0.5 text-xs font-medium"
+                >
+                  {svc}
+                </span>
+              ))}
             </div>
-            <Input
-              id="topic_keywords"
-              label="Topic keywords (comma-separated)"
-              value={topicKeywords}
-              onChange={(e) => setTopicKeywords(e.target.value)}
-              placeholder="fitness, nutrition, wellness"
+          ) : (
+            <p className="text-xs text-text-muted">
+              Managed from{' '}
+              <span className="text-text-secondary">Access &amp; services</span>.
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label
+            htmlFor="boosting_budget"
+            className="block text-sm font-medium text-text-secondary mb-1.5"
+          >
+            Boosting budget
+          </label>
+          <div className="relative">
+            <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+            <input
+              id="boosting_budget"
+              type="text"
+              inputMode="numeric"
+              defaultValue={client.monthly_boosting_budget != null ? String(client.monthly_boosting_budget) : ''}
+              onBlur={(e) => {
+                const raw = e.target.value.trim();
+                const next = raw ? Number(raw) : null;
+                if (next !== client.monthly_boosting_budget) patch({ monthly_boosting_budget: next });
+              }}
+              placeholder="e.g. 500"
+              className="block w-full rounded-lg border border-nativz-border bg-surface pl-8 pr-3 py-2 text-sm text-text-primary placeholder-text-muted transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
             />
-            <Textarea
-              id="description"
-              label="Description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional: long-form description of the brand…"
-              rows={3}
-            />
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">Boosting budget</label>
-              <div className="relative max-w-xs">
-                <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-                <input
-                  type="text"
-                  value={boostingBudget}
-                  onChange={(e) => setBoostingBudget(e.target.value)}
-                  placeholder="e.g. 500"
-                  className="block w-full rounded-lg border border-nativz-border bg-surface pl-8 pr-3 py-2 text-sm text-text-primary placeholder-text-muted transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                />
-              </div>
-              <p className="text-xs text-text-muted mt-1">Monthly. Used for reporting + recommendations.</p>
-            </div>
-            <div className="pt-2 border-t border-nativz-border">
-              <p className="text-xs font-medium text-text-muted mb-3">Shared drive links</p>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Input
-                  id="google_drive_branding_url"
-                  label="Branding assets"
-                  type="url"
-                  value={brandingUrl}
-                  onChange={(e) => setBrandingUrl(e.target.value)}
-                  placeholder="https://drive.google.com/…"
-                />
-                <Input
-                  id="google_drive_calendars_url"
-                  label="Content calendars"
-                  type="url"
-                  value={calendarsUrl}
-                  onChange={(e) => setCalendarsUrl(e.target.value)}
-                  placeholder="https://drive.google.com/…"
-                />
-              </div>
-            </div>
           </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <ProfileField label="Target audience" value={client.target_audience ?? ''} />
-              <ProfileField label="Brand voice" value={client.brand_voice ?? ''} />
-            </div>
-            <ProfileField label="Topic keywords" value={(client.topic_keywords ?? []).join(', ')} />
-            <ProfileField label="Description" value={client.description ?? ''} />
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <span className="block text-xs font-medium text-text-muted mb-1.5">Services</span>
-                {(client.services ?? []).length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5">
-                    {(client.services ?? []).map((svc) => (
-                      <Badge key={svc} variant="default">
-                        {svc}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-text-muted italic">Not set</p>
-                )}
-              </div>
-              <ProfileField
-                label="Boosting budget"
-                value={client.monthly_boosting_budget ? `$${client.monthly_boosting_budget.toLocaleString()}/mo` : ''}
-              />
-            </div>
-            <div className="pt-3 mt-1 border-t border-nativz-border grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <DriveLink label="Branding assets" href={client.google_drive_branding_url} />
-              <DriveLink label="Content calendars" href={client.google_drive_calendars_url} />
-            </div>
-          </div>
-        )}
-      </Card>
-    </form>
+          <p className="text-[11px] text-text-muted mt-1">Monthly spend target — drives reporting and recs.</p>
+        </div>
+      </div>
+
+      <SettingsSectionHeader
+        title="Shared drive links"
+        description="Quick jumps to the drive folders your team uses during production."
+      />
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <DriveLinkInput
+          id="google_drive_branding_url"
+          label="Branding assets"
+          defaultValue={client.google_drive_branding_url ?? ''}
+          current={client.google_drive_branding_url}
+          onSave={(v) => patch({ google_drive_branding_url: v })}
+        />
+        <DriveLinkInput
+          id="google_drive_calendars_url"
+          label="Content calendars"
+          defaultValue={client.google_drive_calendars_url ?? ''}
+          current={client.google_drive_calendars_url}
+          onSave={(v) => patch({ google_drive_calendars_url: v })}
+        />
+      </div>
+    </section>
   );
 }
 
-function DriveLink({ label, href }: { label: string; href: string | null }) {
+function DriveLinkInput({
+  id,
+  label,
+  defaultValue,
+  current,
+  onSave,
+}: {
+  id: string;
+  label: string;
+  defaultValue: string;
+  current: string | null;
+  onSave: (v: string | null) => void;
+}) {
   return (
-    <div>
-      <span className="block text-xs font-medium text-text-muted mb-1">{label}</span>
-      {href ? (
-        <a
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 text-sm text-accent-text hover:underline break-all"
-        >
-          <ExternalLink size={12} />
-          Open in Drive
-        </a>
-      ) : (
-        <p className="text-sm text-text-muted italic">Not set</p>
-      )}
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <label htmlFor={id} className="block text-sm font-medium text-text-secondary">
+          {label}
+        </label>
+        {current && (
+          <a
+            href={current}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-[11px] text-accent-text hover:underline"
+          >
+            <ExternalLink size={11} />
+            Open
+          </a>
+        )}
+      </div>
+      <input
+        id={id}
+        type="url"
+        defaultValue={defaultValue}
+        onBlur={(e) => {
+          const v = e.target.value.trim();
+          if ((v || null) !== (current ?? null)) onSave(v || null);
+        }}
+        placeholder="https://drive.google.com/…"
+        className="block w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+      />
     </div>
   );
 }

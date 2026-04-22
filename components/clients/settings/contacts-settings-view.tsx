@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, Users, ShieldCheck } from 'lucide-react';
+import { Loader2, Users } from 'lucide-react';
 import { ClientContactsCard } from '@/components/clients/client-contacts-card';
 import { PortalAccessCard } from '@/components/clients/client-settings-section';
-import { SettingsPageHeader } from '@/components/clients/settings/settings-primitives';
+import { SettingsPageHeader, SettingsSectionHeader } from '@/components/clients/settings/settings-primitives';
 
 type ContactsPayload = {
   id: string;
@@ -80,16 +80,13 @@ export function ContactsSettingsView({ slug }: { slug: string }) {
         portalContacts={portalContacts}
       />
 
-      <div className="flex items-center gap-3 pt-2">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-surface border border-nativz-border">
-          <ShieldCheck size={16} className="text-accent-text" />
-        </div>
-        <div>
-          <h2 className="text-base font-semibold text-text-primary">Portal invites & users</h2>
-          <p className="text-xs text-text-muted">People from this client who can sign in to the portal.</p>
-        </div>
-      </div>
-      <PortalAccessCard clientId={client.id} />
+      <section className="space-y-3 pt-2">
+        <SettingsSectionHeader
+          title="Portal invites & users"
+          description="People from this client who can sign in to the portal."
+        />
+        <PortalAccessCard clientId={client.id} />
+      </section>
     </div>
   );
 }

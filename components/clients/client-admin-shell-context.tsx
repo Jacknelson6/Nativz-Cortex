@@ -10,6 +10,8 @@ export type ClientAdminShellValue = {
   clientId: string;
   /** Organization UUID — needed by Impersonate in the sidebar. */
   organizationId: string | null;
+  /** Real client logo (fallback renders initials). */
+  logoUrl?: string | null;
   /** Normalized visibility for admin workspace nav (sidebar + mobile). */
   adminWorkspaceModules: Record<AdminWorkspaceToggleKey, boolean>;
 };

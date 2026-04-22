@@ -161,8 +161,8 @@ export function BrandEssenceSection({ clientId }: { clientId: string }) {
   return (
     <div className="space-y-4">
       <EssenceTrioCard profile={profile} patch={patch} generate={generateEssence} generating={generating} />
-      <ProductsServicesCard profile={profile} patch={patch} />
-      <AliasesCategoriesCard profile={profile} patch={patch} />
+      <ProductsCard profile={profile} patch={patch} />
+      <AliasesCard profile={profile} patch={patch} />
       <ContentGenerationCard profile={profile} patch={patch} />
       <DefaultLocationCard profile={profile} patch={patch} />
     </div>
@@ -223,19 +223,19 @@ function EssenceTrioCard({
   );
 }
 
-function ProductsServicesCard({
+function ProductsCard({
   profile, patch,
 }: {
   profile: BrandProfile;
   patch: (fields: Partial<BrandProfile>) => Promise<void>;
 }) {
   return (
-    <section className="rounded-xl border border-nativz-border bg-surface p-5 space-y-4">
+    <section className="rounded-xl border border-nativz-border bg-surface p-5 space-y-3">
       <div>
-        <h3 className="text-sm font-semibold text-text-primary">Products &amp; services</h3>
+        <h3 className="text-sm font-semibold text-text-primary">Products</h3>
         <p className="text-xs text-text-muted mt-1">
-          Split into two lists so AI-generated content can reference the
-          right one in context.
+          Named offerings so AI content can reference the right one in
+          context. Services are managed above; add discrete products here.
         </p>
       </div>
       <TagListField
@@ -244,47 +244,30 @@ function ProductsServicesCard({
         onCommit={(next) => patch({ products: next })}
         placeholder="e.g. Fix-and-flip loan"
       />
-      <TagListField
-        label="Services"
-        values={profile.services}
-        onCommit={async () => {
-          // Services lives on the existing BrandSettingsForm above;
-          // show read-only here so two edit surfaces don't race.
-        }}
-        placeholder="Managed above in Brand Information"
-        readOnly
-      />
     </section>
   );
 }
 
-function AliasesCategoriesCard({
+function AliasesCard({
   profile, patch,
 }: {
   profile: BrandProfile;
   patch: (fields: Partial<BrandProfile>) => Promise<void>;
 }) {
   return (
-    <section className="rounded-xl border border-nativz-border bg-surface p-5 space-y-4">
+    <section className="rounded-xl border border-nativz-border bg-surface p-5 space-y-3">
       <div>
-        <h3 className="text-sm font-semibold text-text-primary">Aliases &amp; categories</h3>
+        <h3 className="text-sm font-semibold text-text-primary">Brand aliases</h3>
         <p className="text-xs text-text-muted mt-1">
-          Aliases help AI identify brand mentions across platforms.
-          Categories frame what topics content should cover.
+          Alternate names the brand goes by — helps AI spot mentions across
+          platforms.
         </p>
       </div>
       <TagListField
-        label="Brand aliases"
+        label="Aliases"
         values={profile.brand_aliases}
         onCommit={(next) => patch({ brand_aliases: next })}
         placeholder="e.g. Nivasa, Nivasa Brand"
-      />
-      <TagListField
-        label="Categories (topic keywords)"
-        values={profile.topic_keywords}
-        onCommit={async () => {}}
-        placeholder="Managed in Brand Information"
-        readOnly
       />
     </section>
   );

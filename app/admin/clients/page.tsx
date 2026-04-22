@@ -64,11 +64,16 @@ export default async function AdminClientsPage() {
     }));
 
     return (
-      <div className="cortex-page-gutter space-y-6">
+      <div className="cortex-page-gutter space-y-5">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="ui-page-title">Clients</h1>
-            <p className="text-sm text-text-muted mt-0.5">Manage your client roster and brand profiles</p>
+            <p className="text-sm text-text-muted mt-0.5">
+              Manage your client roster and brand profiles
+              {clients.length > 0 && (
+                <span className="ml-2 text-text-muted/60 tabular-nums">· {clients.length}</span>
+              )}
+            </p>
           </div>
           {isSuperAdmin && (
             <Link href="/admin/clients/onboard">
