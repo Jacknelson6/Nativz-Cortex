@@ -926,3 +926,61 @@ Jack override: **do NOT push to main.** Run dev server on 3001 at the end for ma
 - All primary buttons across the app now render UPPERCASE (`.nz-btn-label`). Per brand spec — may feel shouty in some contexts, easy to soften by dropping `nz-btn-label` from the primary variant if desired.
 - `ui-page-title*` helpers now use Jost site-wide. Any page composed against Plus Jakarta Sans heading proportions may shift slightly. Visual spot-check recommended on settings / analytics / strategy-lab pages.
 - Ad creative, activity-feed, pipeline-widget, idea-actions components still use raw Tailwind status colors (out of audit scope — can be swept in a follow-up pass).
+
+### Iteration 11.6 — 2026-04-22 · Action-button purple override
+
+**Focus:** Jack pointed at a screenshot of `/admin/users` where the "Invite users" button was cyan. Raw `bg-accent` CTAs (not going through the `<Button>` component) were inheriting cyan because `--accent → --nz-cyan`. Needed a way to make action buttons purple without flipping tabs/pills/chips to purple too.
+
+**Shipped:** CSS selector-based override in `globals.css`:
+```css
+button.bg-accent, a.bg-accent, [role="button"].bg-accent {
+  background-color: var(--nz-purple);
+}
+```
+
+- Targets `<button>`, `<a>`, `role="button"` elements carrying `bg-accent`
+- Leaves `bg-accent` on `<div>`/`<span>` (pills, tabs, chips, sort indicators) untouched → stays cyan
+- One-line revert if needed
+- Covers all 89 files with raw `bg-accent` action buttons without touching JSX
+
+Also reverted the Button component's secondary/outline/ghost variants back to neutral (they had been purple-tinted as an exploration; Jack's real ask was only about action buttons).
+
+### Iteration 11.7 — 2026-04-22 · Live nativz.io extract refinements
+
+**Focus:** Jack shared two full-page screenshots of the live nativz.io marketing site. Cross-referenced against `.impeccable.md` tokens; three corrections needed.
+
+**Live-site corrections:**
+1. **Buttons are FULL PILLS** — every CTA on nativz.io ("APPLY TODAY", "LEARN MORE", "OUR SERVICES", "CONTACT US") is fully rounded. Radius tokens from the original paste (5/10/20) apply to cards/chips, NOT buttons.
+2. **Icon tiles are FULL CIRCLES** — the little service-block icons are `rounded-full`, not rounded squares. Cortex dashboards were using `rounded-xl`.
+3. **Elevation is FLAT** — zero resting shadow on cards. Previously `--shadow-card` had a subtle 1-3px drop. Nativz is print-flat — shadows only on hover lift.
+4. **Cyan italic eyebrow** above H1/H2 sections is a signature Nativz move ("We're committed to…" tagline above "Social Media Management" heading). Not previously captured.
+
+**Shipped:** `feat(brand): live-site refinements` (addc550)
+
+- `.impeccable.md` Radius + Elevation + Icon-tile + Eyebrow sections rewritten
+- `--nz-radius-sm/md/lg` (5/10/20) + `--nz-radius-pill` (9999) installed
+- `.nz-eyebrow` utility (cyan Jost italic 14px)
+- `.nz-icon-tile` utility (circle + accent-surface)
+- `.nz-btn-pill` utility
+- `--shadow-card: none` — resting shadow removed from all cards
+- `Button` default shape → `rounded-full`
+- `button.bg-accent` CSS rule now also forces pill radius (overrides inline `rounded-lg`)
+- Admin BentoTile, NerdTile, StatCard icon tiles → `rounded-full` + ring
+- `.nz-eyebrow` available for future section usage (not yet applied anywhere — held off per "workspace not showcase" direction)
+
+**Skeleton consolidation (Jack's explicit ask: "one skeleton for every loader, not multiple"):**
+- TodoWidget 3-row skeleton → single h-24 block
+- NotificationsWidget 3-row skeleton → single h-40 block
+- PipelineWidget 5-tile + 3-row stack → single h-44 block
+- UpcomingShoots 3-row nested skeleton → single h-24 block
+- ActivityFeed 5-row skeleton → single h-40 block
+
+**Held back (per "workspace not showcase"):**
+- Did NOT add count-up animations to StatCard
+- Did NOT add typewriter-reveal to NerdTile
+- Did NOT apply `.nz-eyebrow` anywhere yet — left as an opt-in utility
+
+**Verification:** `npx tsc --noEmit` clean, dev server on 3005 healthy.
+
+**Still held back (Jack to apply selectively):**
+- Where exactly to drop `.nz-eyebrow` — candidates: above portal "Recent reports", above portal "Content strategy", above admin "Today's tasks" / "Notifications" widget headings. Should be rare, each placement a deliberate brand moment.
