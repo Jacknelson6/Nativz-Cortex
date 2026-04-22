@@ -3,20 +3,36 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { BotMessageSquare, ArrowUpRight } from 'lucide-react';
-import { formatRelativeTime } from '@/lib/utils/format';
 
 interface NerdStats {
   total: number;
   lastActive: string | null;
 }
 
+// Compact relative time: "3m" / "17h" / "2d" — fits a single instrument line.
+function compactAgo(iso: string | null): string | null {
+  if (!iso) return null;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return null;
+  const diffMs = Math.max(0, Date.now() - then);
+  const mins = Math.round(diffMs / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.round(days / 30);
+  return `${months}mo ago`;
+}
+
 // Bento tile for the Nerd — replaces the old animated-ping + gradient-orb glow
 // with a terminal-prompt instrument. Per .impeccable.md principle 3:
 // "Nerdy details earn their place. Instrument, don't decorate."
 //
-// Shows real data (conversation count + last-active timestamp) so the tile
-// means something. If the fetch fails, gracefully degrades to a static
-// "ready ." line — no silent failure, the cursor still blinks.
+// Layout: 140px tile. Top row = icon + arrow. Bottom = title + single
+// terminal caption ("> 16 convos · 17h ago"). Graceful fallback to "ready"
+// when the fetch errors so the tile still feels alive on first paint.
 export function NerdTile({ className = '' }: { className?: string }) {
   const [stats, setStats] = useState<NerdStats | null>(null);
   const [errored, setErrored] = useState(false);
@@ -45,20 +61,19 @@ export function NerdTile({ className = '' }: { className?: string }) {
     };
   }, []);
 
-  const countLine = errored
+  const countPart = errored
     ? 'ready'
     : stats
-      ? `${stats.total} ${stats.total === 1 ? 'conversation' : 'conversations'}`
+      ? `${stats.total} ${stats.total === 1 ? 'convo' : 'convos'}`
       : '—';
-  const lastLine =
-    !errored && stats?.lastActive
-      ? `last · ${formatRelativeTime(stats.lastActive)}`
-      : null;
+  const agoPart = !errored ? compactAgo(stats?.lastActive ?? null) : null;
+  const caption = agoPart ? `${countPart} · ${agoPart}` : countPart;
 
   return (
     <Link href="/admin/nerd" className={`group block ${className}`}>
       <div className="relative h-full overflow-hidden rounded-2xl border border-accent/30 bg-surface transition-all duration-300 hover:-translate-y-0.5 hover:border-accent/55 hover:shadow-[var(--shadow-card-hover)]">
         <div className="relative flex h-full flex-col justify-between p-5">
+          {/* Top row — icon + navigate arrow */}
           <div className="flex items-start justify-between">
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-accent/12 ring-1 ring-accent/20">
               <BotMessageSquare size={20} className="text-accent-text" />
@@ -68,26 +83,19 @@ export function NerdTile({ className = '' }: { className?: string }) {
               className="text-text-muted/0 transition-all duration-300 group-hover:text-text-muted group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
             />
           </div>
-          {/* Instrument — terminal prompt with live conversation count */}
-          <div
-            aria-live="polite"
-            className="mt-4 font-mono text-[10px] uppercase tracking-[0.14em] text-accent-text/85 flex items-center gap-1.5"
-          >
-            <span className="nerd-prompt-cursor" aria-hidden>
-              &gt;
-            </span>
-            <span>{countLine}</span>
-          </div>
-          {lastLine ? (
-            <p className="mt-0.5 font-mono text-[10px] text-text-muted/85 tabular-nums pl-3">
-              {lastLine}
-            </p>
-          ) : null}
-          <div className="mt-auto pt-4">
+
+          {/* Title + terminal caption — fits in one block, no overflow */}
+          <div className="mt-auto">
             <h3 className="text-sm font-semibold text-text-primary">Talk to the Nerd</h3>
-            <p className="text-xs text-text-muted mt-0.5">
-              Your AI agent with full Cortex access
-            </p>
+            <div
+              aria-live="polite"
+              className="mt-1 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-accent-text/85 tabular-nums"
+            >
+              <span className="nerd-prompt-cursor" aria-hidden>
+                &gt;
+              </span>
+              <span className="truncate">{caption}</span>
+            </div>
           </div>
         </div>
       </div>
