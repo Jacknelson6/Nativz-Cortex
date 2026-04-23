@@ -3,10 +3,13 @@
 import { useState } from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { pdf } from '@react-pdf/renderer';
 import { Button } from '@/components/ui/button';
-import { StrategyPdf } from './strategy-pdf';
 import type { ClientStrategy } from '@/lib/types/strategy';
+
+// Lazy-load @react-pdf/renderer + the PDF document — both ship ~500KB+ of JS
+// that's only needed when the user clicks "Download PDF". Eager imports
+// would ship the entire PDF engine with the onboard bundle, regressing TTI
+// on the client portal for every user including the many who never download.
 
 interface PdfDownloadButtonProps {
   strategy: ClientStrategy;
@@ -19,6 +22,10 @@ export function PdfDownloadButton({ strategy, clientName }: PdfDownloadButtonPro
   async function handleDownload() {
     setGenerating(true);
     try {
+      const [{ pdf }, { StrategyPdf }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('./strategy-pdf'),
+      ]);
       const blob = await pdf(
         <StrategyPdf strategy={strategy} clientName={clientName} />
       ).toBlob();

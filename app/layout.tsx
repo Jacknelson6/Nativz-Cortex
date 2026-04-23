@@ -10,47 +10,49 @@ import { getSupabaseUrl } from '@/lib/supabase/public-env';
 
 // Nativz brand typography — Jost (display), Poppins (body), Rubik (UI sans).
 // Anderson Collaborative typography — Sora (display), Roboto (body), Rubik shared.
-// Both sets load always; brand-mode CSS remaps the semantic font tokens.
+//
+// Both sets load always (agency is decided server-side; a static layout can't
+// conditionally import fonts). We DO trim weights aggressively — a repo-wide
+// audit on 2026-04-23 found:
+//   • 0 uses of `font-extrabold` (800) or `font-black` (900)
+//   • 3 uses of `font-light` (300) total across the whole codebase
+//   • 1222 uses of `font-medium` (500) — keep
+// Weights 400/500/600/700 cover 99%+ of the UI. Dropping 300/800 from every
+// family removes ~5 woff2 requests on first paint. See also:
+// Rubik used to load twice (once as `--font-nz-sans`, once as the
+// `--font-geist-sans` legacy alias) — the alias was never actually
+// referenced, so it's deleted.
 const jost = Jost({
   variable: '--font-nz-display',
-  weight: ['300', '400', '500', '600', '700', '800'],
+  weight: ['400', '500', '600', '700'],
   subsets: ['latin'],
   display: 'swap',
 });
 
 const poppins = Poppins({
   variable: '--font-nz-body',
-  weight: ['300', '400', '500', '600', '700'],
+  weight: ['400', '500', '600', '700'],
   subsets: ['latin'],
   display: 'swap',
 });
 
 const rubik = Rubik({
   variable: '--font-nz-sans',
-  weight: ['300', '400', '500', '600', '700'],
+  weight: ['400', '500', '600', '700'],
   subsets: ['latin'],
   display: 'swap',
 });
 
 const sora = Sora({
   variable: '--font-ac-display',
-  weight: ['300', '400', '500', '600', '700', '800'],
+  weight: ['400', '500', '600', '700'],
   subsets: ['latin'],
   display: 'swap',
 });
 
 const roboto = Roboto({
   variable: '--font-ac-body',
-  weight: ['300', '400', '500', '700'],
-  subsets: ['latin'],
-  display: 'swap',
-});
-
-// Legacy alias — components reference `--font-geist-sans` via Tailwind `font-sans`.
-// Point it at Rubik so nothing breaks while the UI migrates to brand tokens.
-const legacySansAlias = Rubik({
-  variable: '--font-geist-sans',
-  weight: ['300', '400', '500', '600', '700'],
+  weight: ['400', '500', '700'],
   subsets: ['latin'],
   display: 'swap',
 });
@@ -142,7 +144,7 @@ export default async function RootLayout({
         />
       </head>
       <body
-        className={`${jost.variable} ${poppins.variable} ${rubik.variable} ${sora.variable} ${roboto.variable} ${legacySansAlias.variable} font-sans antialiased`}
+        className={`${jost.variable} ${poppins.variable} ${rubik.variable} ${sora.variable} ${roboto.variable} font-sans antialiased`}
       >
         <BrandModeProvider forcedMode={forcedMode}>
           <MobileBlocker />
