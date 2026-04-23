@@ -268,6 +268,7 @@ function ClientCard({
   dragging,
   onDragStart,
   onDragEnd,
+  animate = true,
 }: {
   client: ClientItem;
   i: number;
@@ -284,8 +285,15 @@ function ClientCard({
   dragging?: boolean;
   onDragStart?: (dbId: string) => void;
   onDragEnd?: () => void;
+  /**
+   * When false, skip the entrance stagger animation. We turn this off after
+   * the initial mount so cards don't re-animate every time a drop causes them
+   * to remount in a different row.
+   */
+  animate?: boolean;
 }) {
-  const staggerDelay = `${Math.min(i, STAGGER_CAP) * STAGGER_MS}ms`;
+  const staggerDelay = animate ? `${Math.min(i, STAGGER_CAP) * STAGGER_MS}ms` : undefined;
+  const staggerClass = animate ? 'animate-stagger-in' : '';
 
   const actionButtons = (
     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200">
@@ -337,8 +345,8 @@ function ClientCard({
         onDragEnd={() => onDragEnd?.()}
         onClick={onNavigate}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate(); } }}
-        className={`group w-full text-left cursor-pointer focus:outline-none animate-stagger-in ${deleting ? 'pointer-events-none opacity-50' : ''} ${dragging ? 'opacity-40 scale-[0.99]' : ''} transition-[opacity,transform] duration-150`}
-        style={{ animationDelay: staggerDelay }}
+        className={`group w-full text-left cursor-pointer focus:outline-none ${staggerClass} ${deleting ? 'pointer-events-none opacity-50' : ''} ${dragging ? 'opacity-40 scale-[0.99]' : ''} transition-[opacity,transform] duration-150`}
+        style={staggerDelay ? { animationDelay: staggerDelay } : undefined}
       >
         <div
           className={`flex items-center gap-3 rounded-[10px] border border-nativz-border-light px-4 py-3 hover:bg-surface-hover focus-visible:ring-1 focus-visible:ring-accent-border transition-colors ${dimmed ? 'opacity-55 hover:opacity-80' : ''}`}
@@ -383,8 +391,8 @@ function ClientCard({
       onDragEnd={() => onDragEnd?.()}
       onClick={onNavigate}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate(); } }}
-      className={`group w-full text-left focus:outline-none animate-stagger-in ${deleting ? 'pointer-events-none opacity-50' : ''} ${dragging ? 'opacity-40 scale-[0.98]' : ''} ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} transition-[opacity,transform] duration-150`}
-      style={{ animationDelay: staggerDelay }}
+      className={`group w-full text-left focus:outline-none ${staggerClass} ${deleting ? 'pointer-events-none opacity-50' : ''} ${dragging ? 'opacity-40 scale-[0.98]' : ''} ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} transition-[opacity,transform] duration-150`}
+      style={staggerDelay ? { animationDelay: staggerDelay } : undefined}
     >
       <SpotlightCard
         dimmed={dimmed}
@@ -681,6 +689,13 @@ export function ClientSearchGrid({
   // a group id, the sentinel 'unassigned', or null (no target).
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
+  // Once the initial stagger has had time to play, turn it off. Otherwise every
+  // card would re-animate each time a drop causes it to remount in a new row.
+  const [canAnimateIn, setCanAnimateIn] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setCanAnimateIn(false), STAGGER_CAP * STAGGER_MS + 400);
+    return () => clearTimeout(t);
+  }, []);
 
   const legacyClientParam = searchParams.get('client');
   useEffect(() => {
@@ -964,6 +979,7 @@ export function ClientSearchGrid({
       deleting: deletingId === client.dbId,
       draggable: true,
       dragging: draggingId === client.dbId,
+      animate: canAnimateIn,
       onDragStart: (dbId: string) => setDraggingId(dbId),
       onDragEnd: () => { setDraggingId(null); setDropTargetKey(null); },
       onNavigate: () => router.push(`/admin/clients/${client.slug}`),
