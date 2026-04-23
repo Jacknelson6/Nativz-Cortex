@@ -326,11 +326,6 @@ export function AdminResultsClient({
           </div>
         ) : null}
 
-        <IdeationPipelinePanel
-          searchId={search.id}
-          clientId={clientInfo?.id ?? null}
-        />
-
         {(() => {
           const platformSources = ((search.platform_data as Record<string, unknown> | null)?.sources ?? []) as PlatformSource[];
           const hasPlatformSources = platformSources.length > 0;
@@ -386,6 +381,15 @@ export function AdminResultsClient({
             </>
           );
         })()}
+
+        {/* "Next step" CTA — sits after every research section so the reader
+            only lands on it once they've absorbed the findings. Moved down
+            from its previous mid-page slot per Jack's "feels bolted-on"
+            feedback. */}
+        <IdeationPipelinePanel
+          searchId={search.id}
+          clientId={clientInfo?.id ?? null}
+        />
       </div>
 
       <ScrollToTop />

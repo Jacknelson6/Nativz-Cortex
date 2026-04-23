@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { SourceMentionCard } from '@/components/results/source-mention-card';
 import type { PlatformSource } from '@/lib/types/search';
 import { sortSources } from '@/lib/search/source-sources-sort';
+import { isSourceLikelyEnglish } from '@/lib/search/is-likely-english';
 import { VideoAnalysisPanel } from '@/components/research/video-analysis-panel';
 import { TikTokEmbedCarousel } from '@/components/results/tiktok-embed-carousel';
 
@@ -45,8 +46,14 @@ export function SourceBrowser({
   // (views/likes/ER), so they're surfaced as standalone summary cards
   // (WebSearchSummaryCard / RedditScanSummaryCard) above this grid instead
   // of being rendered with "0 views / — ER" in the video card layout.
+  //
+  // Also drop non-English sources — the Apify scrapers pull from any locale
+  // that matches the keyword, and Arabic/CJK/etc. results aren't useful to a
+  // US-focused agency and add noise to the grid. Filter is a Latin-letter
+  // ratio heuristic (see lib/search/is-likely-english.ts) — intentionally
+  // permissive for very short titles so we don't lose emoji-heavy English.
   const listSources = (sources ?? []).filter(
-    (s) => s.platform !== 'reddit' && s.platform !== 'web',
+    (s) => s.platform !== 'reddit' && s.platform !== 'web' && isSourceLikelyEnglish(s),
   );
 
   const allSorted = useMemo(

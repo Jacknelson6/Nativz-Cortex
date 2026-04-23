@@ -279,7 +279,7 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
                           e.stopPropagation();
                           sendTopicToStrategyLab(topic);
                         }}
-                        className="shrink-0 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-cyan-500/10 hover:text-cyan-300 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-text-muted"
+                        className="shrink-0 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-accent-surface hover:text-accent-text disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-text-muted"
                         aria-label="Send topic to Strategy Lab"
                         disabled={!clientId}
                       >
