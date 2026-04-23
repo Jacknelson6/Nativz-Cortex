@@ -92,7 +92,7 @@ function SectionTabsInner<T extends readonly SectionTabDef[]>({
             className={
               'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ' +
               (isActive
-                ? 'bg-cyan-500/15 text-cyan-200 shadow-[inset_0_0_0_1px_rgba(34,211,238,0.35)]'
+                ? 'bg-accent/15 text-accent-text ring-1 ring-inset ring-accent/40'
                 : 'text-text-secondary hover:bg-surface-hover/60 hover:text-text-primary')
             }
             aria-current={isActive ? 'page' : undefined}
@@ -182,7 +182,7 @@ export function SectionTile({ href, icon, title, status = 'ok', primary, seconda
       scroll={false}
       className="group flex items-start gap-4 rounded-xl border border-nativz-border bg-surface p-5 transition-colors hover:border-accent/40 hover:bg-surface-hover/30"
     >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cyan-500/10 text-cyan-300">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent-text">
         {icon}
       </div>
       <div className="min-w-0 flex-1">
