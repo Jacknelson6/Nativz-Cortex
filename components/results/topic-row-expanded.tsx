@@ -259,17 +259,19 @@ function VideoIdeaListItem({
               {displayIdeaFormat(idea.format)}
             </span>
             {virality !== 'low' && (
-              // viral_potential now reads as coral (brand "accent / urgency"
-              // token) instead of accent2/purple — matches the VideoIdeaCard
-              // ring swap, keeps purple reserved for actual CTAs.
+              // No coral per Jack's 2026-04-22 feedback. viral_potential now
+              // reads as bright cyan-200 (lighter, more attention-getting),
+              // high stays semantic emerald (success = "good signal"),
+              // medium uses brand cyan. The text label itself carries the
+              // signal — colors are reinforcement.
               <span className={`inline-flex items-center gap-1 text-xs font-medium ${
-                virality === 'viral_potential' ? 'text-coral-300' :
+                virality === 'viral_potential' ? 'text-cyan-200' :
                 virality === 'high' ? 'text-emerald-400' :
                 virality === 'medium' ? 'text-accent-text' :
                 'text-text-muted'
               }`}>
                 <span className={`inline-block h-1 w-1 rounded-full ${
-                  virality === 'viral_potential' ? 'bg-coral-400' :
+                  virality === 'viral_potential' ? 'bg-cyan-200' :
                   virality === 'high' ? 'bg-emerald-400' :
                   virality === 'medium' ? 'bg-accent' :
                   'bg-text-muted'

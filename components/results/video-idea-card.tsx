@@ -17,20 +17,24 @@ interface VideoIdeaCardProps {
   initialReaction?: Reaction;
 }
 
-const VIRALITY_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info' | 'coral'> = {
+// Variant scale stays inside cyan + the existing semantic success treatment.
+// Per Jack's 2026-04-22 feedback ("don't use coral really anywhere"),
+// viral_potential reads as a brighter cyan badge ('info' = bg-accent-surface)
+// rather than the brief coral stint. The text label "viral potential" carries
+// the actual signal — the ring + badge are just visual loudness.
+const VIRALITY_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
   low: 'default',
   medium: 'info',
   high: 'success',
-  viral_potential: 'coral',
+  viral_potential: 'info',
 };
 
-// "viral_potential" cards get a full-perimeter coral ring instead of the
-// previous left-stripe accent. The 3px border-left pattern is a banned
-// AI-design tell (.impeccable.md BAN 1) and using --accent2 (purple)
-// also violated "purple is CTA only". Whole-card ring keeps the visual
-// signal without the slop.
+// Ring intensity is the differentiator now: viral_potential gets a brighter,
+// fully-opaque cyan ring; high gets a subtle one. Whole-card ring (not a
+// border-left stripe — banned per .impeccable.md BAN 1) so the signal lands
+// without the AI-design tell.
 const VIRALITY_RING: Record<string, string> = {
-  viral_potential: 'ring-1 ring-inset ring-coral-500/30',
+  viral_potential: 'ring-1 ring-inset ring-accent/50',
   high: 'ring-1 ring-inset ring-accent/20',
 };
 

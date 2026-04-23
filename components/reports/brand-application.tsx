@@ -25,16 +25,16 @@ export function BrandApplication({ content, clientName }: BrandApplicationProps)
 
   return (
     <div className="flex h-full min-h-[4rem] items-start gap-3 sm:gap-4 lg:border-l lg:border-nativz-border/50 lg:pl-8">
-      {/* Icon tile — coral instead of accent2/purple. Coral is the brand's
-          accent / urgency color (.impeccable.md), and using it here keeps
-          the executive-summary | brand-application pair visually distinct
-          while staying inside the cyan-purple-coral palette ("don't blur
-          them" — purple is reserved for CTAs, not chrome). */}
-      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-coral-500/10 ring-1 ring-coral-500/25">
-        <Target size={16} className="text-coral-300" />
+      {/* Icon tile — same cyan treatment as ExecutiveSummary on purpose.
+          Per Jack's 2026-04-22 feedback ("don't use coral really anywhere"),
+          the executive-summary | brand-application pair are differentiated
+          by ICON (Sparkles vs Target) + label, NOT by accent color. Both
+          read as cyan brand chrome side by side. */}
+      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-surface ring-1 ring-accent/20">
+        <Target size={16} className="text-accent-text" />
       </div>
       <div className="min-w-0 flex-1">
-        <h3 className="mb-2.5 font-mono text-[10px] uppercase tracking-[0.2em] text-coral-300/90">
+        <h3 className="mb-2.5 font-mono text-[10px] uppercase tracking-[0.2em] text-accent-text/90">
           Brand application
         </h3>
         <div className="leading-relaxed text-text-primary [&_p]:text-text-primary [&_p]:m-0 [&_strong]:font-semibold">
