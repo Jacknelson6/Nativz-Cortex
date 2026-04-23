@@ -55,9 +55,9 @@ export default async function OnboardingEditorPage({
     clients: Array.isArray(rawTracker.clients) ? rawTracker.clients[0] ?? null : rawTracker.clients,
   } as Parameters<typeof OnboardingEditor>[0]['initialTracker'];
 
-  // Fetch items + email templates + applicable templates + contact name in parallel.
+  // Fetch items + email templates + applicable templates + contact name + uploads in parallel.
   const groupIds = (groupsRes.data ?? []).map((g) => g.id);
-  const [itemsRes, emailTemplatesRes, availableTemplatesRes, contactRes] = await Promise.all([
+  const [itemsRes, emailTemplatesRes, availableTemplatesRes, contactRes, uploadsRes] = await Promise.all([
     groupIds.length
       ? admin
           .from('onboarding_checklist_items')
@@ -93,6 +93,14 @@ export default async function OnboardingEditorPage({
           .order('created_at', { ascending: true })
           .limit(1)
           .maybeSingle(),
+    // Uploads — client-posted assets. Skip for templates.
+    initialTracker.is_template
+      ? Promise.resolve({ data: [] as unknown[] })
+      : admin
+          .from('onboarding_uploads')
+          .select('id, filename, mime_type, size_bytes, note, uploaded_by, created_at')
+          .eq('tracker_id', id)
+          .order('created_at', { ascending: false }),
   ]);
 
   // Pull "Jack" out of "Jack Nelson" — anything before the first space.
@@ -111,6 +119,7 @@ export default async function OnboardingEditorPage({
       availableTemplates={(availableTemplatesRes.data as Parameters<typeof OnboardingEditor>[0]['availableTemplates']) ?? []}
       contactFirstName={contactFirstName}
       contactEmail={contactEmail}
+      initialUploads={(uploadsRes.data as Parameters<typeof OnboardingEditor>[0]['initialUploads']) ?? []}
     />
   );
 }

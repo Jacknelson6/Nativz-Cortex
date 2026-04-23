@@ -71,13 +71,20 @@ export default async function PublicOnboardingPage({
   ]);
 
   const groupIds = (groupsRes.data ?? []).map((g) => g.id);
-  const { data: items } = groupIds.length
-    ? await admin
-        .from('onboarding_checklist_items')
-        .select('id, group_id, task, description, owner, status, sort_order')
-        .in('group_id', groupIds)
-        .order('sort_order', { ascending: true })
-    : { data: [] };
+  const [{ data: items }, { data: uploads }] = await Promise.all([
+    groupIds.length
+      ? admin
+          .from('onboarding_checklist_items')
+          .select('id, group_id, task, description, owner, status, sort_order')
+          .in('group_id', groupIds)
+          .order('sort_order', { ascending: true })
+      : Promise.resolve({ data: [] as unknown[] }),
+    admin
+      .from('onboarding_uploads')
+      .select('id, filename, size_bytes, mime_type, created_at')
+      .eq('tracker_id', tracker.id)
+      .order('created_at', { ascending: false }),
+  ]);
 
   // Supabase types `!inner` joins as arrays; 1:1 here so unwrap.
   const raw = tracker as unknown as Record<string, unknown> & {
@@ -98,7 +105,8 @@ export default async function PublicOnboardingPage({
       tracker={normalized}
       phases={phasesRes.data ?? []}
       groups={groupsRes.data ?? []}
-      items={items ?? []}
+      items={(items ?? []) as Parameters<typeof OnboardingPublicView>[0]['items']}
+      uploads={(uploads ?? []) as Parameters<typeof OnboardingPublicView>[0]['uploads']}
       agency={agency}
     />
   );

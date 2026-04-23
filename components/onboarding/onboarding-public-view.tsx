@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
+import { OnboardingPublicUploads } from '@/components/onboarding/onboarding-public-uploads';
 
 type PhaseStatus = 'not_started' | 'in_progress' | 'done';
 type ItemOwner = 'agency' | 'client';
@@ -83,12 +84,20 @@ export function OnboardingPublicView({
   phases,
   groups,
   items: initialItems,
+  uploads = [],
   agency = 'nativz',
 }: {
   tracker: Tracker;
   phases: Phase[];
   groups: Group[];
   items: Item[];
+  uploads?: {
+    id: string;
+    filename: string;
+    size_bytes: number | null;
+    mime_type: string | null;
+    created_at: string;
+  }[];
   agency?: 'nativz' | 'anderson';
 }) {
   const clientName = tracker.clients?.name ?? 'Client';
@@ -277,6 +286,11 @@ export function OnboardingPublicView({
             })}
           </section>
         )}
+
+        <OnboardingPublicUploads
+          shareToken={tracker.share_token}
+          initialUploads={uploads}
+        />
 
         <footer className="pt-6 text-center text-[11px] text-text-muted/70">
           Powered by {brandName}

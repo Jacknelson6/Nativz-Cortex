@@ -95,6 +95,16 @@ const PHASE_STATUS_LABELS: Record<PhaseStatus, { label: string; className: strin
 
 // ─── Root editor ────────────────────────────────────────────────────────
 
+export type UploadRow = {
+  id: string;
+  filename: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  note: string | null;
+  uploaded_by: 'client' | 'admin';
+  created_at: string;
+};
+
 export function OnboardingEditor({
   initialTracker,
   initialPhases,
@@ -104,6 +114,7 @@ export function OnboardingEditor({
   availableTemplates = [],
   contactFirstName = null,
   contactEmail = null,
+  initialUploads = [],
 }: {
   initialTracker: Tracker;
   initialPhases: Phase[];
@@ -113,6 +124,7 @@ export function OnboardingEditor({
   availableTemplates?: AvailableTemplate[];
   contactFirstName?: string | null;
   contactEmail?: string | null;
+  initialUploads?: UploadRow[];
 }) {
   const router = useRouter();
   const [tracker, setTracker] = useState<Tracker>(initialTracker);
@@ -530,6 +542,21 @@ export function OnboardingEditor({
             initial={tracker.notify_emails ?? []}
             onChange={(emails) => void updateTracker({ notify_emails: emails })}
           />
+        </section>
+      )}
+
+      {/* Uploads — client-posted assets. Hidden on templates. */}
+      {!tracker.is_template && (
+        <section className="space-y-3">
+          <div className="flex items-end justify-between flex-wrap gap-2">
+            <div>
+              <h2 className="text-base font-semibold text-text-primary">Uploads</h2>
+              <p className="text-[13px] text-text-muted">
+                Files the client has dropped into the public onboarding page.
+              </p>
+            </div>
+          </div>
+          <UploadsCard trackerId={tracker.id} initial={initialUploads} />
         </section>
       )}
 
@@ -1269,4 +1296,107 @@ function EmptyBlock({ label }: { label: string }) {
       {label}
     </div>
   );
+}
+
+// ─── Uploads card (admin view) ─────────────────────────────────────────
+// Lists client-uploaded files; clicking a row fetches a short-lived signed
+// download URL and opens it. Delete removes the row + the storage object.
+
+function UploadsCard({
+  trackerId,
+  initial,
+}: {
+  trackerId: string;
+  initial: UploadRow[];
+}) {
+  const [uploads, setUploads] = useState<UploadRow[]>(initial);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  useEffect(() => { setUploads(initial); }, [initial]);
+
+  async function download(u: UploadRow) {
+    setBusyId(u.id);
+    try {
+      const res = await fetch(`/api/onboarding/trackers/${trackerId}/uploads/${u.id}`);
+      if (!res.ok) throw new Error('Failed to get download link');
+      const { url } = await res.json() as { url: string };
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Download failed');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function remove(u: UploadRow) {
+    if (!window.confirm(`Delete \u201C${u.filename}\u201D? This can\u2019t be undone.`)) return;
+    const prev = uploads;
+    setUploads((xs) => xs.filter((x) => x.id !== u.id));
+    try {
+      const res = await fetch(`/api/onboarding/trackers/${trackerId}/uploads/${u.id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete');
+      toast.success('Deleted');
+    } catch (err) {
+      setUploads(prev);
+      toast.error(err instanceof Error ? err.message : 'Delete failed');
+    }
+  }
+
+  if (uploads.length === 0) {
+    return (
+      <div className="rounded-[10px] border border-dashed border-nativz-border/60 py-8 text-center text-[13px] text-text-muted">
+        No uploads yet. Clients drop files on the public page and they\u2019ll show here.
+      </div>
+    );
+  }
+
+  return (
+    <ul className="rounded-[10px] border border-nativz-border bg-surface overflow-hidden divide-y divide-nativz-border">
+      {uploads.map((u) => (
+        <li key={u.id} className="flex items-center gap-3 px-4 py-2.5">
+          <div
+            className={`h-8 w-8 shrink-0 rounded-md flex items-center justify-center ${
+              u.uploaded_by === 'client'
+                ? 'bg-accent-surface text-accent-text'
+                : 'bg-surface-hover text-text-muted'
+            }`}
+          >
+            <Bookmark size={14} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] text-text-primary truncate">{u.filename}</p>
+            <p className="text-[11px] text-text-muted">
+              {u.uploaded_by === 'client' ? 'From client' : 'From admin'}
+              {u.size_bytes != null ? ` \u00b7 ${formatBytes(u.size_bytes)}` : ''}
+              {u.mime_type ? ` \u00b7 ${u.mime_type}` : ''}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void download(u)}
+            disabled={busyId === u.id}
+            className="rounded-md border border-nativz-border bg-surface-primary px-2.5 py-1 text-[12px] text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors disabled:opacity-60"
+          >
+            {busyId === u.id ? <Loader2 size={11} className="inline animate-spin" /> : 'Open'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void remove(u)}
+            className="rounded-md p-1 text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
+            aria-label={`Delete ${u.filename}`}
+          >
+            <Trash2 size={13} />
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
