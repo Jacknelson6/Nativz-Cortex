@@ -18,11 +18,11 @@ export interface EmailHubClientOption {
 }
 
 const NOTIFICATIONS_TABS = [
-  { slug: 'banners',   label: 'Banners',   icon: Megaphone },
-  { slug: 'contacts',  label: 'Contacts',  icon: Contact },
-  { slug: 'emails',    label: 'Emails',    icon: Mail },
-  { slug: 'templates', label: 'Templates', icon: FileText },
-  { slug: 'setup',     label: 'Setup',     icon: Settings },
+  { slug: 'banners',   label: 'Banners',   icon: <Megaphone size={13} /> },
+  { slug: 'contacts',  label: 'Contacts',  icon: <Contact size={13} /> },
+  { slug: 'emails',    label: 'Emails',    icon: <Mail size={13} /> },
+  { slug: 'templates', label: 'Templates', icon: <FileText size={13} /> },
+  { slug: 'setup',     label: 'Setup',     icon: <Settings size={13} /> },
 ] as const satisfies readonly SectionTabDef[];
 
 type TabKey = (typeof NOTIFICATIONS_TABS)[number]['slug'];

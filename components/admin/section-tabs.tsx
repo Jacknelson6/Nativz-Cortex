@@ -14,13 +14,17 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect } from 'react';
-import type { ComponentType } from 'react';
-import type { LucideProps } from 'lucide-react';
 
 export interface SectionTabDef {
   slug: string;
   label: string;
-  icon: ComponentType<LucideProps>;
+  /**
+   * Pre-rendered icon element (e.g. `<Activity size={13} />`). Must be a
+   * rendered element, not a component reference — RSC serializer cannot
+   * pass component functions across the server→client boundary, but
+   * rendered React elements serialize cleanly.
+   */
+  icon: React.ReactNode;
 }
 
 interface SectionTabsProps<T extends readonly SectionTabDef[]> {
@@ -80,7 +84,6 @@ function SectionTabsInner<T extends readonly SectionTabDef[]>({
         const isActive = t.slug === active;
         const qs = new URLSearchParams(params);
         qs.set('tab', t.slug);
-        const Icon = t.icon;
         return (
           <Link
             key={t.slug}
@@ -94,7 +97,7 @@ function SectionTabsInner<T extends readonly SectionTabDef[]>({
             }
             aria-current={isActive ? 'page' : undefined}
           >
-            <Icon size={13} />
+            {t.icon}
             {t.label}
           </Link>
         );

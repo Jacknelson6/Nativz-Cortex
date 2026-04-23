@@ -17,8 +17,8 @@ import { SectionTabs, SectionHeader } from '@/components/admin/section-tabs';
 import type { SectionTabDef } from '@/components/admin/section-tabs';
 
 const USERS_PAGE_TABS = [
-  { slug: 'users',     label: 'All users',        icon: Users },
-  { slug: 'scheduled', label: 'Scheduled emails', icon: CalendarClock },
+  { slug: 'users',     label: 'All users',        icon: <Users size={13} /> },
+  { slug: 'scheduled', label: 'Scheduled emails', icon: <CalendarClock size={13} /> },
 ] as const satisfies readonly SectionTabDef[];
 
 type UsersPageTab = (typeof USERS_PAGE_TABS)[number]['slug'];
