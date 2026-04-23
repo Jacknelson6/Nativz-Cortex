@@ -111,7 +111,18 @@ export async function POST(request: NextRequest) {
       platform,
       ts: Date.now(),
     });
-    const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/scheduler/connect/callback?state=${stateToken}`;
+    // Derive the origin from the request first, falling back to env
+    // (NEXT_PUBLIC_APP_URL or NEXT_PUBLIC_SITE_URL). The request-origin path
+    // makes this robust in previews + any reverse-proxy setup where a static
+    // env var might be wrong.
+    const reqUrl = new URL(request.url);
+    const originFromRequest = `${reqUrl.protocol}//${reqUrl.host}`;
+    const origin =
+      originFromRequest ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      'https://cortex.nativz.io';
+    const callbackUrl = `${origin.replace(/\/$/, '')}/api/scheduler/connect/callback?state=${stateToken}`;
     const result = await service.connectProfile({
       platform: platform as SocialPlatform,
       callbackUrl,
@@ -120,7 +131,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ authUrl: result.authorizationUrl });
   } catch (error) {
+    // Surface the underlying message to the UI so admins debugging in
+    // console see the specific Zernio error instead of a generic 500.
+    const msg = error instanceof Error ? error.message : 'Failed to start connection';
     console.error('POST /api/onboarding/public/connect error:', error);
-    return NextResponse.json({ error: 'Failed to start connection' }, { status: 500 });
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
