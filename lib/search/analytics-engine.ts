@@ -146,7 +146,7 @@ const STOP_WORDS = new Set([
   'asp', 'jsp', 'htm', 'url', 'link', 'site', 'page', 'blog',
   // Platform / format noise
   'shorts', 'short', 'reels', 'reel', 'tiktok', 'youtube', 'instagram',
-  'reddit', 'quora', 'twitter', 'facebook', 'clip', 'clips', 'content',
+  'reddit', 'twitter', 'facebook', 'clip', 'clips', 'content',
   'posts', 'channel', 'likes', 'views', 'viral', 'trending',
   // Common noise
   'people', 'really', 'getting', 'making', 'trying', 'looking', 'saying',
@@ -193,7 +193,7 @@ function extractTopics(
           existing.sources.push({
             url: source.url,
             title: source.title,
-            type: source.platform === 'web' ? 'web' : source.platform === 'reddit' || source.platform === 'quora' ? 'discussion' : 'video',
+            type: source.platform === 'web' ? 'web' : source.platform === 'reddit' ? 'discussion' : 'video',
             relevance: `${source.engagement.views ?? source.engagement.score ?? 0} engagement`,
             platform: source.platform,
           });
@@ -205,7 +205,7 @@ function extractTopics(
           sources: [{
             url: source.url,
             title: source.title,
-            type: source.platform === 'web' ? 'web' : source.platform === 'reddit' || source.platform === 'quora' ? 'discussion' : 'video',
+            type: source.platform === 'web' ? 'web' : source.platform === 'reddit' ? 'discussion' : 'video',
             relevance: `${source.engagement.views ?? source.engagement.score ?? 0} engagement`,
             platform: source.platform,
           }],
@@ -298,7 +298,7 @@ function computeContentBreakdown(sources: PlatformSource[]): ContentBreakdown {
       formatCounts['Short-form video'] = formatCounts['Short-form video'] || { count: 0, engagement: 0 };
       formatCounts['Short-form video'].count++;
       formatCounts['Short-form video'].engagement += engagement;
-    } else if (source.platform === 'reddit' || source.platform === 'quora') {
+    } else if (source.platform === 'reddit') {
       formatCounts['Discussion thread'] = formatCounts['Discussion thread'] || { count: 0, engagement: 0 };
       formatCounts['Discussion thread'].count++;
       formatCounts['Discussion thread'].engagement += engagement;

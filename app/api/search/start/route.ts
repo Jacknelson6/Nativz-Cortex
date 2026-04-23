@@ -4,6 +4,13 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { assertViewerCanCreateSearchForClient } from '@/lib/api/topic-search-access';
 
+/**
+ * POST /api/search/start — create a pending topic search.
+ *
+ * Per-platform volumes are NOT part of the request anymore. They come from
+ * `scraper_settings` (admin UI at /admin/settings/ai). The legacy `volume`
+ * field is accepted and ignored for clients still sending it.
+ */
 const searchSchema = z.object({
   query: z.string().min(1, 'Search query is required').max(500),
   source: z.string().default('all'),
@@ -12,8 +19,10 @@ const searchSchema = z.object({
   country: z.string().default('us'),
   client_id: z.string().uuid().nullable().optional(),
   search_mode: z.enum(['general', 'client_strategy']).default('general'),
-  platforms: z.array(z.enum(['web', 'reddit', 'youtube', 'tiktok', 'quora'])).default(['web']),
-  volume: z.enum(['light', 'medium', 'deep', 'quick']).default('medium'),
+  platforms: z.array(z.enum(['web', 'reddit', 'youtube', 'tiktok'])).default(['web']),
+  // Accepted but unused — kept so existing clients don't 400. Remove once
+  // all callers (internal UI + any seed scripts) stop sending it.
+  volume: z.string().optional(),
 });
 
 /**
@@ -52,7 +61,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { query, source, time_range, language, country, client_id, search_mode, platforms, volume } = parsed.data;
+    const { query, source, time_range, language, country, client_id, search_mode, platforms } = parsed.data;
     const adminClient = createAdminClient();
 
     const clientCheck = await assertViewerCanCreateSearchForClient(adminClient, user.id, client_id);
@@ -74,7 +83,6 @@ export async function POST(request: NextRequest) {
         client_id: client_id || null,
         search_mode,
         platforms,
-        volume,
         search_version: 3,
         topic_pipeline: 'llm_v1',
         status: 'pending_subtopics',

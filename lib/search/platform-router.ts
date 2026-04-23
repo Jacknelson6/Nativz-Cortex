@@ -1,60 +1,52 @@
-// lib/search/platform-router.ts — Orchestrates multi-platform data gathering
-
-import type { SearchPlatform, SearchVolume, PlatformSource, PlatformComment } from '@/lib/types/search';
+/**
+ * lib/search/platform-router.ts
+ *
+ * Fans a topic-search query out to every selected platform in parallel,
+ * normalises the results into a single `PlatformSource[]` shape, and
+ * returns per-platform stats for downstream analytics + prompts.
+ *
+ * Policy (Jack, 2026-04-23):
+ *   • There are NO volume presets. Per-platform counts come exclusively
+ *     from `scraper_settings` (singleton row id=1), edited by admins in
+ *     /admin/settings/ai. If the row is missing or unreachable, the
+ *     `SCRAPER_DEFAULTS` fallback kicks in — but admin intent always wins.
+ *   • Quora is not a supported platform.
+ *   • Every platform has its own try/catch and records a stats row even
+ *     on failure, so the merger LLM can distinguish "no data" from "no
+ *     attempt".
+ *
+ * The router used to carry a `volume: 'light' | 'medium' | 'deep'` param
+ * that each scraper translated into internal counts. That indirection was
+ * the root cause of the 2026-04-23 cost incident (override=0 fell through
+ * to deep defaults). We deleted it; the router now reads explicit counts
+ * from settings and passes them by value to each fetcher.
+ */
+import type {
+  SearchPlatform,
+  PlatformSource,
+  PlatformComment,
+} from '@/lib/types/search';
 import { inferYoutubeVideoFormat } from '@/lib/search/source-mention-utils';
 
-/**
- * Centralized volume config — single source of truth for per-platform source counts.
- * Matches the three-tier depth system: Light / Medium (default) / Deep.
- *
- * 2026-04-22 — Aggressive cap on `medium.tiktok.transcriptVideos` from 500 → 50.
- * Investigation on the "immersive art attraction" run showed platform_scrapers
- * eating 80% of wall-clock (3m 19s of 4m 11s total). The dominant cost was
- * the TikTok transcript loop: 500 videos × ~250ms per fetch ≈ 2 minutes of
- * sequential transcript work. Dropping to 50 transcripts on medium cuts ~90s
- * off the critical path with negligible report-quality loss (the merger LLM
- * uses the first ~30 transcripts heavily; the long tail is mostly noise).
- *
- * `medium.tiktok.videos` also capped 500 → 200 — we still get the engagement-
- * tail data from the full 200, but we stop pulling metadata for the bottom 300
- * of an already-noisy ranked list.
- */
-export const VOLUME_CONFIG = {
-  light: {
-    reddit: { posts: 20, commentPosts: 5 },
-    youtube: { videos: 15, commentVideos: 5, transcriptVideos: 3 },
-    tiktok: { videos: 15, commentVideos: 5, transcriptVideos: 3 },
-    web: { results: 15 },
-  },
-  medium: {
-    reddit: { posts: 100, commentPosts: 20 },
-    youtube: { videos: 100, commentVideos: 30, transcriptVideos: 20 },
-    tiktok: { videos: 200, commentVideos: 30, transcriptVideos: 50 },
-    web: { results: 30 },
-  },
-  deep: {
-    reddit: { posts: 500, commentPosts: 50 },
-    youtube: { videos: 500, commentVideos: 100, transcriptVideos: 50 },
-    tiktok: { videos: 500, commentVideos: 100, transcriptVideos: 100 },
-    web: { results: 50 },
-  },
-  // backward compat alias
-  quick: {
-    reddit: { posts: 20, commentPosts: 5 },
-    youtube: { videos: 15, commentVideos: 5, transcriptVideos: 3 },
-    tiktok: { videos: 15, commentVideos: 5, transcriptVideos: 3 },
-    web: { results: 15 },
-  },
-} as const;
 import { gatherRedditData } from '@/lib/reddit/client';
 import { gatherYouTubeData } from '@/lib/youtube/search';
 import { gatherTikTokData } from '@/lib/tiktok/search';
 import { gatherSerpData } from '@/lib/serp/client';
-import { gatherQuoraData } from '@/lib/quora/client';
 import { gatherSerperData } from '@/lib/serper/client';
 import { getScraperSettings } from '@/lib/search/scraper-settings';
 import type { SerpData } from '@/lib/serp/types';
 import type { SerperPeopleAlsoAsk } from '@/lib/serper/client';
+
+// ── Types ───────────────────────────────────────────────────────────────
+
+export interface ApifyRunContext {
+  /** UUID of the `topic_searches` row driving this fan-out (for apify_runs). */
+  topicSearchId?: string | null;
+  /** UUID of the client the search is bound to (for billing + audits). */
+  clientId?: string | null;
+  /** Confirmed subtopics — used by Reddit's LLM subreddit-discovery step. */
+  subtopics?: string[];
+}
 
 export interface PlatformResults {
   sources: PlatformSource[];
@@ -67,319 +59,351 @@ export interface PlatformResults {
     topChannels?: string[];
     topHashtags?: string[];
   }[];
-  /** Google "People Also Ask" questions — great for content ideation */
+  /** Google "People Also Ask" questions — gold for content ideation. */
   peopleAlsoAsk?: SerperPeopleAlsoAsk[];
-  /** Related search queries from Google */
+  /** Related search queries surfaced by Google. */
   relatedSearches?: string[];
 }
 
-/**
- * Gather data from all selected platforms in parallel.
- * Each platform has its own timeout and fallback — if one fails,
- * the search still completes with available data.
- */
-export interface ApifyRunContext {
-  topicSearchId?: string | null;
-  clientId?: string | null;
-}
+// ── Public API ──────────────────────────────────────────────────────────
 
+/**
+ * Gather data from every requested platform in parallel. One platform
+ * failing never blocks the others.
+ */
 export async function gatherPlatformData(
   query: string,
   platforms: SearchPlatform[],
   timeRange: string,
-  volume: SearchVolume = 'medium',
   runContext: ApifyRunContext = {},
 ): Promise<PlatformResults> {
-  const allSources: PlatformSource[] = [];
+  const settings = await getScraperSettings();
+
+  const sources: PlatformSource[] = [];
   const platformStats: PlatformResults['platformStats'] = [];
   let serpData: SerpData | null = null;
   let peopleAlsoAsk: SerperPeopleAlsoAsk[] = [];
   let relatedSearches: string[] = [];
 
-  // Admin-editable per-platform volume + cost targets. Falls back to legacy
-  // tier defaults if the DB row is missing. See lib/search/scraper-settings.ts.
-  const settings = await getScraperSettings();
+  const runs: Promise<void>[] = [];
 
-  // Build platform fetch promises
-  const promises: Promise<void>[] = [];
-
-  // Web — runs SearXNG + Serper (Google SERP) in parallel
   if (platforms.includes('web')) {
-    promises.push(
-      (async () => {
-        try {
-          // Apify SERP (Google via scraperlink) + Serper (Google PAA) in parallel.
-          const [searxngResult, serperResult] = await Promise.allSettled([
-            gatherSerpData(query, { timeRange, limit: settings.web.results, runContext }),
-            process.env.SERPER_API_KEY ? gatherSerperData(query, timeRange, volume) : Promise.resolve(null),
-          ]);
-
-          // Process SearXNG results
-          if (searxngResult.status === 'fulfilled') {
-            serpData = searxngResult.value;
-            const webSources = normalizeSerpToSources(searxngResult.value);
-            if (webSources.length === 0) {
-              console.warn('[platform-router] SearXNG returned 0 web sources for query');
-            }
-            allSources.push(...webSources);
-          } else {
-            console.error('[platform-router] SearXNG search failed:', searxngResult.reason);
-          }
-
-          // Process Serper results (People Also Ask + Google organic)
-          if (serperResult.status === 'fulfilled' && serperResult.value) {
-            peopleAlsoAsk = serperResult.value.peopleAlsoAsk;
-            relatedSearches = serperResult.value.relatedSearches;
-
-            if (serperResult.value.peopleAlsoAsk.length === 0) {
-              console.warn('[platform-router] Serper returned 0 People Also Ask results');
-            }
-
-            // Add People Also Ask as web sources (questions people are searching)
-            for (const paa of serperResult.value.peopleAlsoAsk) {
-              allSources.push({
-                platform: 'web',
-                id: `paa-${paa.link}`,
-                url: paa.link,
-                title: `❓ ${paa.question}`,
-                content: paa.snippet,
-                author: '',
-                engagement: {},
-                createdAt: '',
-                comments: [],
-              });
-            }
-          } else if (serperResult.status === 'rejected') {
-            console.error('[platform-router] Serper search failed:', serperResult.reason);
-          }
-
-          const webCount = allSources.filter(s => s.platform === 'web').length;
-          console.log(`[platform-router] Web sources total: ${webCount} (SearXNG: ${serpData ? serpData.webResults.length + serpData.discussions.length + serpData.videos.length : 0}, Serper PAA: ${peopleAlsoAsk.length})`);
-          platformStats.push({
-            platform: 'web',
-            postCount: webCount,
-            commentCount: 0,
-          });
-        } catch (err) {
-          console.error('Web search failed:', err);
+    runs.push(
+      runWebGather(query, timeRange, settings.web.results, runContext).then((result) => {
+        if (!result) {
           platformStats.push({ platform: 'web', postCount: 0, commentCount: 0 });
+          return;
         }
-      })(),
+        serpData = result.serpData;
+        peopleAlsoAsk = result.peopleAlsoAsk;
+        relatedSearches = result.relatedSearches;
+        sources.push(...result.sources);
+        platformStats.push({
+          platform: 'web',
+          postCount: result.sources.length,
+          commentCount: 0,
+        });
+      }),
     );
   }
 
-  // Reddit — delayed 1s to stagger requests (web handler goes first)
   if (platforms.includes('reddit')) {
-    promises.push(
-      (async () => {
-        try {
-          await new Promise(r => setTimeout(r, 1000));
-          const redditData = await gatherRedditData(query, timeRange, volume, {
-            ...runContext,
-            postsOverride: settings.reddit.posts,
-            commentsPerPostOverride: settings.reddit.commentPosts,
-          });
-          console.log(`[platform-router] Reddit raw: ${redditData.posts.length} posts, ${redditData.postsWithComments.length} with comments, subreddits: ${redditData.topSubreddits.join(', ') || 'none'}`);
-
-          const redditSources: PlatformSource[] = redditData.postsWithComments.map((post) => ({
-            platform: 'reddit' as const,
-            id: post.id,
-            url: `https://reddit.com${post.permalink}`,
-            title: post.title,
-            content: post.selftext || post.title,
-            author: post.author,
-            subreddit: post.subreddit,
-            engagement: {
-              score: post.score,
-              comments: post.num_comments,
-            },
-            createdAt: new Date(post.created_utc * 1000).toISOString(),
-            comments: post.top_comments.map((c): PlatformComment => ({
-              id: c.id,
-              text: c.body,
-              author: c.author,
-              likes: c.score,
-              createdAt: new Date(c.created_utc * 1000).toISOString(),
-            })),
-          }));
-
-          allSources.push(...redditSources);
-
-          const totalComments = redditSources.reduce((sum, s) => sum + s.comments.length, 0);
-          platformStats.push({
-            platform: 'reddit',
-            postCount: redditSources.length,
-            commentCount: totalComments,
-            topSubreddits: redditData.topSubreddits,
-          });
-        } catch (err) {
-          console.error('Reddit search failed:', err);
-          platformStats.push({ platform: 'reddit', postCount: 0, commentCount: 0 });
-        }
-      })(),
+    runs.push(
+      runRedditGather(query, timeRange, settings.reddit, runContext).then((result) => {
+        sources.push(...result.sources);
+        platformStats.push({
+          platform: 'reddit',
+          postCount: result.sources.length,
+          commentCount: result.commentCount,
+          topSubreddits: result.topSubreddits,
+        });
+      }),
     );
   }
 
-  // YouTube
   if (platforms.includes('youtube')) {
-    promises.push(
-      (async () => {
-        try {
-          const ytData = await gatherYouTubeData(query, timeRange, volume);
-
-          const ytSources: PlatformSource[] = ytData.videos.map((vid) => ({
-            platform: 'youtube' as const,
-            id: vid.id,
-            url: `https://www.youtube.com/watch?v=${vid.id}`,
-            title: vid.title,
-            content: vid.description,
-            author: vid.channelTitle,
-            thumbnailUrl: vid.thumbnailUrl,
-            videoFormat: inferYoutubeVideoFormat(vid.title),
-            engagement: {
-              views: vid.viewCount,
-              likes: vid.likeCount,
-              comments: vid.commentCount,
-            },
-            createdAt: vid.publishedAt,
-            comments: vid.top_comments.map((c): PlatformComment => ({
-              id: c.id,
-              text: c.text,
-              author: c.authorName,
-              likes: c.likeCount,
-              createdAt: c.publishedAt,
-            })),
-            transcript: vid.transcript,
-          }));
-
-          allSources.push(...ytSources);
-
-          const totalComments = ytSources.reduce((sum, s) => sum + s.comments.length, 0);
-          const topChannels = [...new Set(ytData.videos.map((v) => v.channelTitle))].slice(0, 10);
-          platformStats.push({
-            platform: 'youtube',
-            postCount: ytSources.length,
-            commentCount: totalComments,
-            topChannels,
-          });
-        } catch (err) {
-          console.error('YouTube search failed:', err);
-          platformStats.push({ platform: 'youtube', postCount: 0, commentCount: 0 });
-        }
-      })(),
+    runs.push(
+      runYouTubeGather(query, timeRange, settings.youtube).then((result) => {
+        sources.push(...result.sources);
+        platformStats.push({
+          platform: 'youtube',
+          postCount: result.sources.length,
+          commentCount: result.commentCount,
+          topChannels: result.topChannels,
+        });
+      }),
     );
   }
 
-  // TikTok (via Apify)
   if (platforms.includes('tiktok')) {
-    promises.push(
-      (async () => {
-        try {
-          const ttData = await gatherTikTokData(query, timeRange, volume);
-
-          const ttSources: PlatformSource[] = ttData.videos.map((vid) => ({
-            platform: 'tiktok' as const,
-            id: vid.id,
-            url: `https://www.tiktok.com/@${vid.author.uniqueId}/video/${vid.id}`,
-            title: vid.desc.slice(0, 100),
-            content: vid.desc,
-            author: vid.author.nickname || vid.author.uniqueId,
-            thumbnailUrl: vid.coverUrl ?? undefined,
-            videoFormat: 'short' as const,
-            engagement: {
-              views: vid.stats.playCount,
-              likes: vid.stats.diggCount,
-              comments: vid.stats.commentCount,
-              shares: vid.stats.shareCount,
-            },
-            createdAt: new Date(vid.createTime * 1000).toISOString(),
-            comments: vid.top_comments.map((c): PlatformComment => ({
-              id: `tt-${vid.id}-${c.createTime}`,
-              text: c.text,
-              author: c.user,
-              likes: c.diggCount,
-              createdAt: new Date(c.createTime * 1000).toISOString(),
-            })),
-            transcript: vid.transcript,
-          }));
-
-          allSources.push(...ttSources);
-
-          const totalComments = ttSources.reduce((sum, s) => sum + s.comments.length, 0);
-          platformStats.push({
-            platform: 'tiktok',
-            postCount: ttSources.length,
-            commentCount: totalComments,
-            topHashtags: ttData.topHashtags,
-          });
-        } catch (err) {
-          console.error('TikTok search failed:', err);
-          platformStats.push({ platform: 'tiktok', postCount: 0, commentCount: 0 });
-        }
-      })(),
+    runs.push(
+      runTikTokGather(query, timeRange, settings.tiktok).then((result) => {
+        sources.push(...result.sources);
+        platformStats.push({
+          platform: 'tiktok',
+          postCount: result.sources.length,
+          commentCount: result.commentCount,
+          topHashtags: result.topHashtags,
+        });
+      }),
     );
   }
 
-  // Quora — delayed 2s to stagger requests (web + reddit go first)
-  if (platforms.includes('quora')) {
-    promises.push(
-      (async () => {
-        try {
-          await new Promise(r => setTimeout(r, 2000));
-          const quoraData = await gatherQuoraData(query, timeRange, volume);
-          console.log(`[platform-router] Quora raw: ${quoraData.threads.length} threads (total: ${quoraData.totalResults})`);
+  await Promise.allSettled(runs);
 
-          const quoraSources: PlatformSource[] = quoraData.threads.map((thread) => ({
-            platform: 'quora' as const,
-            id: thread.id,
-            url: thread.url,
-            title: thread.question,
-            content: thread.topAnswer,
-            author: '',
-            engagement: {
-              comments: thread.answerCount ?? undefined,
-            },
-            createdAt: '',
-            comments: [],
-          }));
-
-          allSources.push(...quoraSources);
-
-          platformStats.push({
-            platform: 'quora',
-            postCount: quoraSources.length,
-            commentCount: 0,
-          });
-        } catch (err) {
-          console.error('Quora search failed:', err);
-          platformStats.push({ platform: 'quora', postCount: 0, commentCount: 0 });
-        }
-      })(),
-    );
-  }
-
-  // Execute all platform fetches in parallel
-  await Promise.allSettled(promises);
-
-  // Deduplicate sources by URL (keep first occurrence)
-  const seenUrls = new Set<string>();
-  const dedupedSources = allSources.filter((s) => {
-    const key = s.url.toLowerCase();
-    if (seenUrls.has(key)) return false;
-    seenUrls.add(key);
-    return true;
-  });
-
-  return { sources: dedupedSources, serpData, platformStats, peopleAlsoAsk, relatedSearches };
+  return {
+    sources: dedupeByUrl(sources),
+    serpData,
+    platformStats,
+    peopleAlsoAsk,
+    relatedSearches,
+  };
 }
 
-/**
- * Convert SearXNG SERP data into normalized PlatformSource format.
- */
+// ── Per-platform gatherers ──────────────────────────────────────────────
+
+async function runWebGather(
+  query: string,
+  timeRange: string,
+  webResultsCap: number,
+  runContext: ApifyRunContext,
+): Promise<{
+  sources: PlatformSource[];
+  serpData: SerpData | null;
+  peopleAlsoAsk: SerperPeopleAlsoAsk[];
+  relatedSearches: string[];
+} | null> {
+  try {
+    const [serpResult, serperResult] = await Promise.allSettled([
+      gatherSerpData(query, {
+        timeRange,
+        limit: webResultsCap,
+        runContext: { topicSearchId: runContext.topicSearchId, clientId: runContext.clientId },
+      }),
+      process.env.SERPER_API_KEY
+        ? gatherSerperData(query, timeRange, Math.min(30, Math.max(10, webResultsCap)))
+        : Promise.resolve(null),
+    ]);
+
+    const sources: PlatformSource[] = [];
+    let serpData: SerpData | null = null;
+    let peopleAlsoAsk: SerperPeopleAlsoAsk[] = [];
+    let relatedSearches: string[] = [];
+
+    if (serpResult.status === 'fulfilled') {
+      serpData = serpResult.value;
+      sources.push(...normalizeSerpToSources(serpResult.value));
+      if (sources.length === 0) {
+        console.warn('[platform-router] SERP returned 0 sources');
+      }
+    } else {
+      console.error('[platform-router] SERP failed:', serpResult.reason);
+    }
+
+    if (serperResult.status === 'fulfilled' && serperResult.value) {
+      peopleAlsoAsk = serperResult.value.peopleAlsoAsk;
+      relatedSearches = serperResult.value.relatedSearches;
+      for (const paa of peopleAlsoAsk) {
+        sources.push({
+          platform: 'web',
+          id: `paa-${paa.link}`,
+          url: paa.link,
+          title: `❓ ${paa.question}`,
+          content: paa.snippet,
+          author: '',
+          engagement: {},
+          createdAt: '',
+          comments: [],
+        });
+      }
+    } else if (serperResult.status === 'rejected') {
+      console.error('[platform-router] Serper failed:', serperResult.reason);
+    }
+
+    console.log(
+      `[platform-router] Web: ${sources.length} sources` +
+        ` (SERP: ${serpData ? serpData.webResults.length + serpData.discussions.length + serpData.videos.length : 0}, PAA: ${peopleAlsoAsk.length})`,
+    );
+    return { sources, serpData, peopleAlsoAsk, relatedSearches };
+  } catch (err) {
+    console.error('[platform-router] Web gather threw:', err);
+    return null;
+  }
+}
+
+async function runRedditGather(
+  query: string,
+  timeRange: string,
+  redditSettings: { posts: number; commentPosts: number },
+  runContext: ApifyRunContext,
+): Promise<{ sources: PlatformSource[]; commentCount: number; topSubreddits: string[] }> {
+  try {
+    // 1s stagger lets the web handler land first — reduces spiky concurrency.
+    await wait(1000);
+    const data = await gatherRedditData(query, timeRange, {
+      topicSearchId: runContext.topicSearchId,
+      clientId: runContext.clientId,
+      subtopics: runContext.subtopics,
+      postsOverride: redditSettings.posts,
+      commentsPerPostOverride: redditSettings.commentPosts,
+    });
+
+    const sources: PlatformSource[] = data.postsWithComments.map((post) => ({
+      platform: 'reddit',
+      id: post.id,
+      url: `https://reddit.com${post.permalink}`,
+      title: post.title,
+      content: post.selftext || post.title,
+      author: post.author,
+      subreddit: post.subreddit,
+      engagement: { score: post.score, comments: post.num_comments },
+      createdAt: new Date(post.created_utc * 1000).toISOString(),
+      comments: post.top_comments.map(
+        (c): PlatformComment => ({
+          id: c.id,
+          text: c.body,
+          author: c.author,
+          likes: c.score,
+          createdAt: new Date(c.created_utc * 1000).toISOString(),
+        }),
+      ),
+    }));
+
+    const commentCount = sources.reduce((sum, s) => sum + s.comments.length, 0);
+    console.log(
+      `[platform-router] Reddit: ${sources.length} posts, ${commentCount} comments, subreddits: ${data.topSubreddits.join(', ') || 'none'}`,
+    );
+    return { sources, commentCount, topSubreddits: data.topSubreddits };
+  } catch (err) {
+    console.error('[platform-router] Reddit failed:', err);
+    return { sources: [], commentCount: 0, topSubreddits: [] };
+  }
+}
+
+async function runYouTubeGather(
+  query: string,
+  timeRange: string,
+  ytSettings: { videos: number; commentVideos: number; transcriptVideos: number },
+): Promise<{ sources: PlatformSource[]; commentCount: number; topChannels: string[] }> {
+  try {
+    const data = await gatherYouTubeData(query, timeRange, {
+      videos: ytSettings.videos,
+      commentVideos: ytSettings.commentVideos,
+      transcriptVideos: ytSettings.transcriptVideos,
+    });
+
+    const sources: PlatformSource[] = data.videos.map((vid) => ({
+      platform: 'youtube',
+      id: vid.id,
+      url: `https://www.youtube.com/watch?v=${vid.id}`,
+      title: vid.title,
+      content: vid.description,
+      author: vid.channelTitle,
+      thumbnailUrl: vid.thumbnailUrl,
+      videoFormat: inferYoutubeVideoFormat(vid.title),
+      engagement: {
+        views: vid.viewCount,
+        likes: vid.likeCount,
+        comments: vid.commentCount,
+      },
+      createdAt: vid.publishedAt,
+      comments: vid.top_comments.map(
+        (c): PlatformComment => ({
+          id: c.id,
+          text: c.text,
+          author: c.authorName,
+          likes: c.likeCount,
+          createdAt: c.publishedAt,
+        }),
+      ),
+      transcript: vid.transcript,
+    }));
+
+    const commentCount = sources.reduce((sum, s) => sum + s.comments.length, 0);
+    const topChannels = [...new Set(data.videos.map((v) => v.channelTitle))].slice(0, 10);
+    console.log(
+      `[platform-router] YouTube: ${sources.length} videos, ${commentCount} comments`,
+    );
+    return { sources, commentCount, topChannels };
+  } catch (err) {
+    console.error('[platform-router] YouTube failed:', err);
+    return { sources: [], commentCount: 0, topChannels: [] };
+  }
+}
+
+async function runTikTokGather(
+  query: string,
+  timeRange: string,
+  ttSettings: { videos: number; commentVideos: number; transcriptVideos: number },
+): Promise<{ sources: PlatformSource[]; commentCount: number; topHashtags: string[] }> {
+  try {
+    const data = await gatherTikTokData(query, timeRange, {
+      videos: ttSettings.videos,
+      commentVideos: ttSettings.commentVideos,
+      transcriptVideos: ttSettings.transcriptVideos,
+    });
+
+    const sources: PlatformSource[] = data.videos.map((vid) => ({
+      platform: 'tiktok',
+      id: vid.id,
+      url: `https://www.tiktok.com/@${vid.author.uniqueId}/video/${vid.id}`,
+      title: vid.desc.slice(0, 100),
+      content: vid.desc,
+      author: vid.author.nickname || vid.author.uniqueId,
+      thumbnailUrl: vid.coverUrl ?? undefined,
+      videoFormat: 'short',
+      engagement: {
+        views: vid.stats.playCount,
+        likes: vid.stats.diggCount,
+        comments: vid.stats.commentCount,
+        shares: vid.stats.shareCount,
+      },
+      createdAt: new Date(vid.createTime * 1000).toISOString(),
+      comments: vid.top_comments.map(
+        (c): PlatformComment => ({
+          id: `tt-${vid.id}-${c.createTime}`,
+          text: c.text,
+          author: c.user,
+          likes: c.diggCount,
+          createdAt: new Date(c.createTime * 1000).toISOString(),
+        }),
+      ),
+      transcript: vid.transcript,
+    }));
+
+    const commentCount = sources.reduce((sum, s) => sum + s.comments.length, 0);
+    console.log(
+      `[platform-router] TikTok: ${sources.length} videos, ${commentCount} comments`,
+    );
+    return { sources, commentCount, topHashtags: data.topHashtags };
+  } catch (err) {
+    console.error('[platform-router] TikTok failed:', err);
+    return { sources: [], commentCount: 0, topHashtags: [] };
+  }
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function dedupeByUrl(sources: PlatformSource[]): PlatformSource[] {
+  const seen = new Set<string>();
+  const out: PlatformSource[] = [];
+  for (const s of sources) {
+    const key = s.url.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out;
+}
+
+/** Convert SERP data into normalized `PlatformSource` rows. */
 function normalizeSerpToSources(serpData: SerpData): PlatformSource[] {
   const sources: PlatformSource[] = [];
 
-  // Web results
   for (const item of serpData.webResults) {
     sources.push({
       platform: 'web',
@@ -394,7 +418,6 @@ function normalizeSerpToSources(serpData: SerpData): PlatformSource[] {
     });
   }
 
-  // Discussion results
   for (const item of serpData.discussions) {
     sources.push({
       platform: 'web',
@@ -403,15 +426,12 @@ function normalizeSerpToSources(serpData: SerpData): PlatformSource[] {
       title: item.title,
       content: item.description,
       author: '',
-      engagement: {
-        comments: item.answers ?? undefined,
-      },
+      engagement: { comments: item.answers ?? undefined },
       createdAt: '',
       comments: [],
     });
   }
 
-  // Video results
   for (const item of serpData.videos) {
     sources.push({
       platform: 'web',
@@ -421,7 +441,9 @@ function normalizeSerpToSources(serpData: SerpData): PlatformSource[] {
       content: item.description ?? '',
       author: item.creator ?? '',
       engagement: {
-        views: item.views ? parseInt(item.views.replace(/[^0-9]/g, ''), 10) || undefined : undefined,
+        views: item.views
+          ? parseInt(item.views.replace(/[^0-9]/g, ''), 10) || undefined
+          : undefined,
       },
       createdAt: '',
       comments: [],
@@ -431,9 +453,13 @@ function normalizeSerpToSources(serpData: SerpData): PlatformSource[] {
   return sources;
 }
 
+// ── Prompt formatting (kept from the original router) ──────────────────
+
 /**
- * Format platform sources into context blocks for the AI prompt.
- * Clusters by platform and summarizes engagement metrics.
+ * Format platform sources into context blocks for the merger/research LLM.
+ * Groups by platform, ranks by engagement, and includes top comments +
+ * transcript snippets inline. Token budget scales with active platform
+ * count to keep the overall prompt under the research model's context.
  */
 export function formatPlatformContext(
   sources: PlatformSource[],
@@ -441,27 +467,23 @@ export function formatPlatformContext(
 ): string {
   const blocks: string[] = [];
 
-  // Group by platform
   const byPlatform: Record<string, PlatformSource[]> = {};
   for (const source of sources) {
     const key = source.platform;
-    if (!byPlatform[key]) byPlatform[key] = [];
-    byPlatform[key].push(source);
+    (byPlatform[key] ??= []).push(source);
   }
 
-  // Scale items per platform inversely with platform count to stay within token budget
-  const activePlatforms = stats.filter((s) => (byPlatform[s.platform]?.length ?? 0) > 0).length;
-  const itemsPerPlatform = activePlatforms <= 1 ? 60 : activePlatforms === 2 ? 40 : 25;
+  const activePlatforms = stats.filter(
+    (s) => (byPlatform[s.platform]?.length ?? 0) > 0,
+  ).length;
+  const itemsPerPlatform =
+    activePlatforms <= 1 ? 60 : activePlatforms === 2 ? 40 : 25;
 
   for (const stat of stats) {
     const platformSources = byPlatform[stat.platform] ?? [];
     if (platformSources.length === 0) continue;
 
-    const label = stat.platform === 'web' ? 'Web' :
-      stat.platform === 'reddit' ? 'Reddit' :
-      stat.platform === 'youtube' ? 'YouTube' :
-      stat.platform === 'tiktok' ? 'TikTok' :
-      stat.platform === 'quora' ? 'Quora' : stat.platform;
+    const label = platformLabel(stat.platform);
 
     const header = `## ${label} (${stat.postCount} posts${stat.commentCount > 0 ? `, ${stat.commentCount} comments` : ''})`;
     const subInfo = stat.topSubreddits?.length
@@ -472,47 +494,63 @@ export function formatPlatformContext(
           ? `Top hashtags: ${stat.topHashtags.slice(0, 5).map((h) => `#${h}`).join(', ')}`
           : '';
 
-    // Sort by engagement and take top items for the prompt
     const sorted = [...platformSources].sort((a, b) => {
-      const aEng = (a.engagement.score ?? 0) + (a.engagement.likes ?? 0) + (a.engagement.views ?? 0);
-      const bEng = (b.engagement.score ?? 0) + (b.engagement.likes ?? 0) + (b.engagement.views ?? 0);
+      const aEng =
+        (a.engagement.score ?? 0) + (a.engagement.likes ?? 0) + (a.engagement.views ?? 0);
+      const bEng =
+        (b.engagement.score ?? 0) + (b.engagement.likes ?? 0) + (b.engagement.views ?? 0);
       return bEng - aEng;
     });
 
     const topItems = sorted.slice(0, itemsPerPlatform);
 
-    const items = topItems.map((s) => {
-      const eng: string[] = [];
-      if (s.engagement.score) eng.push(`↑${s.engagement.score}`);
-      if (s.engagement.views) eng.push(`${formatNum(s.engagement.views)} views`);
-      if (s.engagement.likes) eng.push(`${formatNum(s.engagement.likes)} likes`);
-      if (s.engagement.comments) eng.push(`${s.engagement.comments} comments`);
-      const engStr = eng.length ? ` [${eng.join(', ')}]` : '';
-      const sub = s.subreddit ? ` (r/${s.subreddit})` : '';
+    const items = topItems
+      .map((s) => {
+        const eng: string[] = [];
+        if (s.engagement.score) eng.push(`↑${s.engagement.score}`);
+        if (s.engagement.views) eng.push(`${formatNum(s.engagement.views)} views`);
+        if (s.engagement.likes) eng.push(`${formatNum(s.engagement.likes)} likes`);
+        if (s.engagement.comments) eng.push(`${s.engagement.comments} comments`);
+        const engStr = eng.length ? ` [${eng.join(', ')}]` : '';
+        const sub = s.subreddit ? ` (r/${s.subreddit})` : '';
 
-      let entry = `- ${s.title}${sub}${engStr}\n  ${s.content.slice(0, 300)}`;
+        let entry = `- ${s.title}${sub}${engStr}\n  ${s.content.slice(0, 300)}`;
 
-      // Include transcript snippet if available
-      if (s.transcript) {
-        entry += `\n  Transcript: "${s.transcript.slice(0, 300)}${s.transcript.length > 300 ? '...' : ''}"`;
-      }
+        if (s.transcript) {
+          entry += `\n  Transcript: "${s.transcript.slice(0, 300)}${s.transcript.length > 300 ? '...' : ''}"`;
+        }
 
-      // Include top comments
-      if (s.comments.length > 0) {
-        const commentTexts = s.comments
-          .slice(0, 3)
-          .map((c) => `    > "${c.text.slice(0, 200)}" [${c.likes} likes]`)
-          .join('\n');
-        entry += `\n  Top comments:\n${commentTexts}`;
-      }
+        if (s.comments.length > 0) {
+          const commentTexts = s.comments
+            .slice(0, 3)
+            .map((c) => `    > "${c.text.slice(0, 200)}" [${c.likes} likes]`)
+            .join('\n');
+          entry += `\n  Top comments:\n${commentTexts}`;
+        }
 
-      return entry;
-    }).join('\n\n');
+        return entry;
+      })
+      .join('\n\n');
 
     blocks.push(`${header}\n${subInfo ? subInfo + '\n' : ''}\n${items}`);
   }
 
   return blocks.join('\n\n---\n\n');
+}
+
+function platformLabel(p: SearchPlatform): string {
+  switch (p) {
+    case 'web':
+      return 'Web';
+    case 'reddit':
+      return 'Reddit';
+    case 'youtube':
+      return 'YouTube';
+    case 'tiktok':
+      return 'TikTok';
+    default:
+      return String(p);
+  }
 }
 
 function formatNum(n: number): string {

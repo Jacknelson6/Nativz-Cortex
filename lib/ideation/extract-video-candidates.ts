@@ -158,9 +158,7 @@ export function extractVideoCandidatesFromSearch(search: TopicSearch): VideoCand
  */
 export function isConversationHeavyBreakdown(breakdown: PlatformBreakdown[] | undefined): boolean {
   if (!breakdown?.length) return false;
-  const conv = breakdown.filter((p) =>
-    ['reddit', 'quora', 'web'].includes(p.platform),
-  );
+  const conv = breakdown.filter((p) => ['reddit', 'web'].includes(p.platform));
   const convPosts = conv.reduce((s, p) => s + p.post_count, 0);
   const total = breakdown.reduce((s, p) => s + p.post_count, 0);
   return total > 0 && convPosts / total >= 0.35;

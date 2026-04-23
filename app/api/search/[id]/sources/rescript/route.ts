@@ -12,7 +12,7 @@ import type { SearchPlatform } from '@/lib/types/search';
 export const maxDuration = 120;
 
 const bodySchema = z.object({
-  platform: z.enum(['reddit', 'youtube', 'tiktok', 'web', 'quora']),
+  platform: z.enum(['reddit', 'youtube', 'tiktok', 'web']),
   source_id: z.string().min(1),
   client_id: z.string().uuid().optional(),
   brand_voice: z.string().optional(),

@@ -221,13 +221,28 @@ function parseApidojoRow(item: Record<string, unknown>): BaseVideoRow | null {
   };
 }
 
+export interface TikTokGatherCounts {
+  /** Total videos to pull metadata for (cap). */
+  videos: number;
+  /** Of those, how many to pull comment threads for (top-by-engagement). */
+  commentVideos: number;
+  /** Of those, how many to transcribe (top-by-engagement). */
+  transcriptVideos: number;
+}
+
 /**
- * Search TikTok for videos via Apify actor, then enrich with comments + transcripts.
+ * Search TikTok via Apify, then enrich the top videos with comments +
+ * transcripts. All counts are explicit — no volume tier; admin settings
+ * are the source of truth. The platform router reads `scraper_settings`
+ * and passes the counts here.
+ *
+ * Default actor: apidojo/tiktok-scraper (pay-per-result, ~$0.30/1k posts).
+ * Override with APIFY_TIKTOK_ACTOR_ID for the legacy clockworks actor.
  */
 export async function gatherTikTokData(
   query: string,
   timeRange: string,
-  volume: string = 'medium',
+  counts: TikTokGatherCounts,
 ): Promise<TikTokSearchResult> {
   const apiKey = getApiKey();
   if (!apiKey) {
@@ -239,10 +254,10 @@ export async function gatherTikTokData(
   const inputMode = getTikTokInputMode(actorId);
   const sortPref = getTikTokSortPreferenceFromEnv();
 
-  // Apify: API Dojo is pay-per-result; volume caps match platform-router expectations.
-  let maxResults = volume === 'deep' ? 200 : volume === 'medium' ? 200 : 50;
+  let maxResults = Math.max(0, counts.videos);
+  if (maxResults === 0) return { videos: [], topHashtags: [], totalResults: 0 };
   if (inputMode === 'apidojo') {
-    // Actor recommends at least 10 items per keyword for stability.
+    // apidojo requires at least 10 items per keyword for stability.
     maxResults = Math.max(maxResults, 10);
   }
 
@@ -255,7 +270,9 @@ export async function gatherTikTokData(
     const runId = await startApifyActorRun(actorId, apifyInput, apiKey);
     if (!runId) return { videos: [], topHashtags: [], totalResults: 0 };
 
-    const maxWaitMs = volume === 'deep' ? 300000 : 180000;
+    // Wait budget scales with the target count — huge admin configs need
+    // more Apify time, but 200 videos comfortably finishes in 3 minutes.
+    const maxWaitMs = maxResults > 200 ? 300_000 : 180_000;
     const pollMs = 3000;
     const runSucceeded = await waitForApifyRunSuccess(runId, apiKey, maxWaitMs, pollMs);
     if (!runSucceeded) return { videos: [], topHashtags: [], totalResults: 0 };
@@ -277,13 +294,13 @@ export async function gatherTikTokData(
 
     if (baseVideos.length === 0) return { videos: [], topHashtags: [], totalResults: 0 };
 
-    const commentBatchSize = volume === 'deep' ? 20 : volume === 'medium' ? 15 : 5;
-
+    // Rank by (plays + likes) then slice for comments + transcripts.
     const sorted = [...baseVideos].sort(
       (a, b) => b.stats.playCount + b.stats.diggCount - (a.stats.playCount + a.stats.diggCount),
     );
 
-    const commentFetchCount = volume === 'deep' ? 100 : volume === 'medium' ? 30 : 5;
+    const commentFetchCount = Math.max(0, counts.commentVideos);
+    const commentBatchSize = Math.min(20, Math.max(5, Math.ceil(commentFetchCount / 4)));
     const topForComments = sorted.slice(0, commentFetchCount);
     const commentsMap = new Map<string, TikTokComment[]>();
     for (let i = 0; i < topForComments.length; i += commentBatchSize) {
@@ -303,9 +320,9 @@ export async function gatherTikTokData(
       // bursts of ~15 concurrent fetches fine in practice).
     }
 
-    // Transcripts: prefer embedded captions / tikwm (no marginal $). Groq Whisper only when captions missing.
-    const transcriptCap =
-      volume === 'deep' ? 200 : volume === 'medium' ? 100 : 15;
+    // Transcripts: prefer embedded captions / tikwm (no marginal $). Groq Whisper only
+    // runs when captions are missing. Cap from admin settings.
+    const transcriptCap = Math.max(0, counts.transcriptVideos);
     const transcriptMap = new Map<string, string>();
     const transcriptTargets = sorted.slice(
       0,

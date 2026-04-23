@@ -16,7 +16,6 @@ interface SearchProcessingProps {
   searchId: string;
   query: string;
   redirectPrefix: string;
-  volume?: string;
   platforms?: string[];
   /** `llm_v1` = subtopic pipeline; `legacy` = multi-platform scrape + analytics */
   pipeline?: 'legacy' | 'llm_v1';
@@ -26,13 +25,6 @@ interface SearchProcessingProps {
   webResearchMode?: 'searxng' | 'openrouter' | 'llm_only';
 }
 
-const TIME_ESTIMATES: Record<string, { label: string }> = {
-  light: { label: '30 sec – 1 min' },
-  medium: { label: '1–3 min' },
-  deep: { label: '3–8 min' },
-  quick: { label: '30 sec – 1 min' },
-};
-
 interface Stage {
   label: string;
   icon: React.ReactNode;
@@ -40,72 +32,58 @@ interface Stage {
   duration: number;
 }
 
-function buildStages(platforms: string[], volume: string): Stage[] {
-  const isDeep = volume === 'deep';
-  const isMedium = volume === 'medium';
+/**
+ * Build the animated progress-bar stages for the legacy scrape pipeline.
+ * Timing is a best-effort ETA used purely for UX — the actual run can take
+ * longer or shorter; the real `done` signal comes from the poller.
+ */
+function buildStages(platforms: string[]): Stage[] {
   const stages: Stage[] = [];
   let cumulative = 0;
-  // Base timeline — multi-platform + LLM often needs several minutes; avoid jumping to “final” in <1 min.
-  const platformCount = Math.max(1, platforms.filter((p) => p !== 'quora').length);
-  const platformBoost = (platformCount - 1) * 45000;
-  const totalEst =
-    (isDeep ? 300000 : isMedium ? 180000 : 90000) + platformBoost;
+  const platformCount = Math.max(1, platforms.length);
+  const totalEst = 180_000 + (platformCount - 1) * 45_000;
 
   const add = (label: string, icon: React.ReactNode, duration: number) => {
     cumulative += duration;
     stages.push({ label, icon, target: Math.min(92, (cumulative / totalEst) * 92), duration });
   };
 
-  if (platforms.includes('web')) add('Searching the web', <Search size={14} />, isDeep ? 5000 : 3000);
-  if (platforms.includes('reddit')) add('Scanning Reddit discussions', <MessageSquare size={14} />, isDeep ? 15000 : isMedium ? 8000 : 3000);
+  if (platforms.includes('web')) add('Searching the web', <Search size={14} />, 3000);
+  if (platforms.includes('reddit')) add('Scanning Reddit discussions', <MessageSquare size={14} />, 8000);
   if (platforms.includes('youtube')) {
     const YT = PLATFORM_CONFIG.youtube.icon;
-    add('Fetching YouTube videos & transcripts', <YT size={14} />, isDeep ? 30000 : isMedium ? 15000 : 5000);
+    add('Fetching YouTube videos & transcripts', <YT size={14} />, 15_000);
   }
   if (platforms.includes('tiktok')) {
     const TT = PLATFORM_CONFIG.tiktok.icon;
-    add('Scraping TikTok & comments', <TT size={14} />, isDeep ? 45000 : isMedium ? 20000 : 8000);
+    add('Scraping TikTok & comments', <TT size={14} />, 20_000);
   }
-  add('Computing analytics', <Brain size={14} />, isDeep ? 5000 : 3000);
-  add('Generating video ideas with AI', <Sparkles size={14} />, isDeep ? 20000 : isMedium ? 12000 : 8000);
-  add('Building your report', <FileText size={14} />, isDeep ? 120000 : isMedium ? 90000 : 60000);
+  add('Computing analytics', <Brain size={14} />, 3000);
+  add('Generating video ideas with AI', <Sparkles size={14} />, 12_000);
+  add('Building your report', <FileText size={14} />, 90_000);
 
   return stages;
 }
 
+/**
+ * Build stages for the llm_v1 pipeline. Scales per-subtopic research time
+ * by whether we're hitting a live SERP or doing LLM-only research.
+ */
 function buildLlmStages(
-  volume: string,
   subtopicCount: number,
-  webResearch: 'searxng' | 'openrouter' | 'llm_only'
+  webResearch: 'searxng' | 'openrouter' | 'llm_only',
 ): Stage[] {
-  const isDeep = volume === 'deep';
-  const isMedium = volume === 'medium';
   const n = Math.max(1, subtopicCount);
-  const stages: Stage[] = [];
-  let cumulative = 0;
-
   const liveWeb = webResearch === 'searxng' || webResearch === 'openrouter';
-
-  const perSubtopic =
-    liveWeb
-      ? isDeep
-        ? 52000
-        : isMedium
-          ? 38000
-          : 24000
-      : isDeep
-        ? 22000
-        : isMedium
-          ? 16000
-          : 11000;
-
+  const perSubtopic = liveWeb ? 38_000 : 16_000;
   const researchBlock = perSubtopic * n;
-  const mergeMs = isDeep ? 35000 : isMedium ? 22000 : 14000;
-  const ideasMs = isDeep ? 22000 : isMedium ? 14000 : 9000;
-  const reportMs = isDeep ? 95000 : isMedium ? 70000 : 45000;
-
+  const mergeMs = 22_000;
+  const ideasMs = 14_000;
+  const reportMs = 70_000;
   const totalEst = researchBlock + mergeMs + ideasMs + reportMs;
 
+  const stages: Stage[] = [];
+  let cumulative = 0;
   const add = (label: string, icon: React.ReactNode, duration: number) => {
     cumulative += duration;
     stages.push({ label, icon, target: Math.min(92, (cumulative / totalEst) * 92), duration });
@@ -163,7 +141,6 @@ export function SearchProcessing({
   searchId,
   query,
   redirectPrefix,
-  volume = 'medium',
   platforms = ['web'],
   pipeline = 'legacy',
   subtopicCount = 3,
@@ -198,13 +175,10 @@ export function SearchProcessing({
 
   const stages = useMemo(() => {
     if (pipeline === 'llm_v1') {
-      return buildLlmStages(volume, subtopicCount, webResearchMode);
+      return buildLlmStages(subtopicCount, webResearchMode);
     }
-    return buildStages(platforms, volume);
-  }, [pipeline, platforms, volume, subtopicCount, webResearchMode]);
-
-  const timeEstimate = TIME_ESTIMATES[volume] ?? TIME_ESTIMATES.medium;
-  const isLlmPipeline = pipeline === 'llm_v1';
+    return buildStages(platforms);
+  }, [pipeline, platforms, subtopicCount, webResearchMode]);
 
   function clearIntervals() {
     if (intervalsRef.current.progress) clearInterval(intervalsRef.current.progress);

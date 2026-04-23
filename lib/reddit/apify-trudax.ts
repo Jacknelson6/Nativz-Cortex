@@ -77,36 +77,25 @@ const HARD_MAX_POSTS_PER_RUN = 200;
 const HARD_MAX_COMMENTS_PER_POST = 10;
 
 /**
- * Target total posts. Priority:
- *   1. explicit admin override (any numeric value >=0 wins — 0 means
- *      "skip Reddit entirely", which is a valid admin choice and MUST NOT
- *      fall through to the volume default)
- *   2. volume-tier fallback (for callers that don't pass settings)
- *
- * Always clamped to HARD_MAX_POSTS_PER_RUN at the end.
+ * Resolve the target post count. The admin-configured `scraper_settings` row
+ * is the single source of truth (see lib/search/scraper-settings.ts). 0 is
+ * a valid explicit choice meaning "skip Reddit entirely" — it must NOT
+ * fall through to any preset. When no override is provided at all, we use
+ * the SCRAPER_DEFAULTS fallback (the `getScraperSettings()` caller already
+ * applies the default before we see the value, so hitting this branch
+ * means the caller intentionally skipped settings). Always clamped to
+ * HARD_MAX_POSTS_PER_RUN.
  */
-function targetPosts(volume: string, override?: number): number {
+function targetPosts(override?: number): number {
   const chosen =
-    typeof override === 'number' && !Number.isNaN(override)
-      ? Math.max(0, override)
-      : volume === 'deep'
-        ? 150
-        : volume === 'medium'
-          ? 80
-          : 20;
+    typeof override === 'number' && !Number.isNaN(override) ? Math.max(0, override) : 80;
   return Math.min(chosen, HARD_MAX_POSTS_PER_RUN);
 }
 
 /** Max comments per post. Same rules as targetPosts + hard cap. */
-function commentsPerPost(volume: string, override?: number): number {
+function commentsPerPost(override?: number): number {
   const chosen =
-    typeof override === 'number' && !Number.isNaN(override)
-      ? Math.max(0, override)
-      : volume === 'deep'
-        ? 8
-        : volume === 'medium'
-          ? 5
-          : 3;
+    typeof override === 'number' && !Number.isNaN(override) ? Math.max(0, override) : 5;
   return Math.min(chosen, HARD_MAX_COMMENTS_PER_POST);
 }
 
@@ -207,7 +196,6 @@ function parseTrudaxDataset(
 export async function gatherRedditViaTrudaxApify(
   query: string,
   timeRange: string,
-  volume: string,
   apiKey: string,
   runContext: { topicSearchId?: string | null; clientId?: string | null } = {},
   overrides: { postsOverride?: number; commentsPerPostOverride?: number } = {},
@@ -215,8 +203,8 @@ export async function gatherRedditViaTrudaxApify(
   const actorId = getActorId();
   const sort = getSort();
   const { actorTime, cutoffMs } = mapTimeRangeForActor(timeRange);
-  const maxItems = targetPosts(volume, overrides.postsOverride);
-  const maxComments = commentsPerPost(volume, overrides.commentsPerPostOverride);
+  const maxItems = targetPosts(overrides.postsOverride);
+  const maxComments = commentsPerPost(overrides.commentsPerPostOverride);
 
   // maxItems caps the *total* dataset rows (posts + comments). Budget for
   // every post bringing back up to maxComments rows. Capped HARD at
@@ -257,7 +245,9 @@ export async function gatherRedditViaTrudaxApify(
     return null;
   }
 
-  const maxWaitMs = volume === 'deep' ? 300_000 : 180_000;
+  // Wait budget scales with the admin-configured target — bigger runs need
+  // more Apify time, but the HARD_MAX_POSTS_PER_RUN cap bounds this.
+  const maxWaitMs = maxItems > 120 ? 300_000 : 180_000;
   const ok = await waitForApifyRunSuccess(runId, apiKey, maxWaitMs, 3000);
 
   // Record cost regardless of success/fail — we're billed for compute either way.

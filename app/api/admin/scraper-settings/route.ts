@@ -47,7 +47,6 @@ export async function GET() {
       tiktok_comment_videos: SCRAPER_DEFAULTS.tiktok.commentVideos,
       tiktok_transcript_videos: SCRAPER_DEFAULTS.tiktok.transcriptVideos,
       web_results: SCRAPER_DEFAULTS.web.results,
-      quora_threads: SCRAPER_DEFAULTS.quora.threads,
     },
   });
 }
@@ -64,7 +63,6 @@ const UpdateSchema = z.object({
   tiktok_comment_videos: posInt.optional(),
   tiktok_transcript_videos: posInt.optional(),
   web_results: posInt.optional(),
-  quora_threads: posInt.optional(),
 });
 
 export async function PUT(req: Request) {

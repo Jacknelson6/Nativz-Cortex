@@ -25,7 +25,7 @@ export default async function PortalSearchProcessingPage({
 
   const { data: search, error } = await adminClient
     .from('topic_searches')
-    .select('id, query, status, client_id, volume, platforms, topic_pipeline, subtopics')
+    .select('id, query, status, client_id, platforms, topic_pipeline, subtopics')
     .eq('id', id)
     .single();
 
@@ -67,7 +67,6 @@ export default async function PortalSearchProcessingPage({
       searchId={id}
       query={search.query}
       redirectPrefix="/portal"
-      volume={(search.volume as string) ?? 'medium'}
       platforms={(search.platforms as string[]) ?? ['web']}
       pipeline={topicPipeline}
       subtopicCount={subtopicCount}

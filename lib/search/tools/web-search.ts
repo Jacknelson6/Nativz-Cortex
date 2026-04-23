@@ -62,7 +62,15 @@ export type OpenRouterWebSearchResult = {
 
 /**
  * OpenRouter web plugin (or `:online` model) — real URLs from response annotations when available.
- * Default model: `TOPIC_SEARCH_OPENROUTER_WEB_MODEL` or `google/gemini-2.0-flash-001`.
+ * Default model: `TOPIC_SEARCH_OPENROUTER_WEB_MODEL` or `openai/gpt-5.4-mini`.
+ *
+ * Previously defaulted to `google/gemini-2.0-flash-001`, but in practice each
+ * research call pulls ~40K SERP tokens into context and OpenRouter's Gemini
+ * routing was billing ~$0.04/call (see 2026-04-23 usage log). GPT-5.4 Mini at
+ * $0.75/M input delivers better-quality synthesis on dense web context at
+ * comparable token cost, and the rest of the topic-search pipeline already
+ * standardises on GPT-5.4 Mini (`DEFAULT_OPENROUTER_MODEL`), so this just
+ * aligns the web plugin with the planner + merger.
  */
 export async function searchWebOpenRouter(
   query: string,
@@ -70,7 +78,7 @@ export async function searchWebOpenRouter(
 ): Promise<OpenRouterWebSearchResult> {
   const count = Math.min(Math.max(options.count ?? 10, 1), 20);
   const envModel = process.env.TOPIC_SEARCH_OPENROUTER_WEB_MODEL?.trim();
-  const base = envModel || 'google/gemini-2.0-flash-001';
+  const base = envModel || 'openai/gpt-5.4-mini';
   const model = base.includes(':online') ? base.replace(/:online$/i, '') : base;
 
   const recency =

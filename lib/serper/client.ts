@@ -136,23 +136,22 @@ export async function searchGoogle(
 /**
  * Gather Google SERP data for the platform router.
  * Returns normalized PlatformSource-compatible data + People Also Ask questions.
+ * Counts come from admin settings (passed explicitly by the caller); no volume tier.
  */
 export async function gatherSerperData(
   query: string,
   timeRange: string,
-  volume: string = 'medium',
+  num: number,
 ): Promise<{
   results: SerperSearchResult;
   peopleAlsoAsk: SerperPeopleAlsoAsk[];
   relatedSearches: string[];
 }> {
-  const num = volume === 'deep' ? 30 : volume === 'medium' ? 20 : 10;
-
-  const results = await searchGoogle(query, { timeRange, num });
+  const results = await searchGoogle(query, { timeRange, num: Math.max(1, num) });
 
   return {
     results,
     peopleAlsoAsk: results.peopleAlsoAsk,
-    relatedSearches: results.relatedSearches.map(r => r.query),
+    relatedSearches: results.relatedSearches.map((r) => r.query),
   };
 }

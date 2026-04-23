@@ -54,12 +54,15 @@ export interface RedditRunContext {
  * (no subreddit allowlist — trudax handles relevance). Returns posts with
  * inline top_comments when the actor includes them.
  *
+ * Per-search counts come from `scraper_settings` via the caller's
+ * `postsOverride` / `commentsPerPostOverride`. There is no volume tier —
+ * admin settings are the single source of truth (Jack's 2026-04-23 policy).
+ *
  * Cost: every run writes a row to `apify_runs` for billing.
  */
 export async function gatherRedditData(
   query: string,
   timeRange: string,
-  volume: string = 'medium',
   runContext: RedditRunContext = {},
 ): Promise<RedditSearchResult & { postsWithComments: (RedditPost & { top_comments: RedditComment[] })[] }> {
   const apiKey = process.env.APIFY_API_KEY?.trim();
@@ -107,7 +110,6 @@ export async function gatherRedditData(
     const result = await gatherRedditViaTrudaxApify(
       query,
       timeRange,
-      volume,
       apiKey,
       { topicSearchId, clientId },
       { postsOverride, commentsPerPostOverride },

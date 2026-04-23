@@ -33,8 +33,12 @@ export async function discoverSubredditsForTopic(
   const apiKey = opts.apiKey ?? process.env.OPENROUTER_API_KEY;
   if (!apiKey) return [];
 
-  // Cheap, fast model — Gemini Flash or equivalent. Keep the call tiny.
-  const model = opts.model ?? 'google/gemini-2.0-flash-001';
+  // Tiny, well-bounded task (pick 5–8 subreddit names) — use the cheapest
+  // tier in the routing policy. GPT-5.4 Nano at $0.20/$1.25 per 1M is ~3–4×
+  // cheaper than GPT-5.4 Mini and more than capable of producing a short
+  // JSON array. Env override via SUBREDDIT_DISCOVERY_MODEL kept for ops.
+  const model =
+    opts.model ?? process.env.SUBREDDIT_DISCOVERY_MODEL?.trim() ?? 'openai/gpt-5.4-nano';
 
   const prompt = buildPrompt(query, subtopics);
 

@@ -17,15 +17,20 @@ export interface ScraperSettings {
   youtube: { videos: number; commentVideos: number; transcriptVideos: number };
   tiktok: { videos: number; commentVideos: number; transcriptVideos: number };
   web: { results: number };
-  quora: { threads: number };
 }
 
+/**
+ * Sane fallbacks — only hit when the `scraper_settings` row is missing OR the
+ * DB is unreachable. Jack's explicit policy (2026-04-23): per-platform counts
+ * come from admin settings, not from volume=deep/medium/shallow tiers. These
+ * numbers should match the "medium" intuition but they are no longer tied to
+ * any preset system. Update them if the product default shifts.
+ */
 export const SCRAPER_DEFAULTS: ScraperSettings = {
   reddit: { posts: 100, commentPosts: 15 },
   youtube: { videos: 100, commentVideos: 30, transcriptVideos: 20 },
   tiktok: { videos: 200, commentVideos: 30, transcriptVideos: 50 },
   web: { results: 30 },
-  quora: { threads: 25 },
 };
 
 let cached: { value: ScraperSettings; expiresAt: number } | null = null;
@@ -68,7 +73,6 @@ export async function getScraperSettings(): Promise<ScraperSettings> {
         transcriptVideos: Number(data.tiktok_transcript_videos ?? SCRAPER_DEFAULTS.tiktok.transcriptVideos),
       },
       web: { results: Number(data.web_results ?? SCRAPER_DEFAULTS.web.results) },
-      quora: { threads: Number(data.quora_threads ?? SCRAPER_DEFAULTS.quora.threads) },
     };
 
     cached = { value, expiresAt: now + TTL_MS };
@@ -92,7 +96,6 @@ export function estimateSearchCost(settings: ScraperSettings): {
     youtube: settings.youtube.videos * PER_UNIT_COST_USD.youtube,
     tiktok: settings.tiktok.videos * PER_UNIT_COST_USD.tiktok,
     web: settings.web.results * PER_UNIT_COST_USD.web,
-    quora: settings.quora.threads * PER_UNIT_COST_USD.quora,
   };
   const totalUsd = Object.values(perPlatformUsd).reduce((a, b) => a + b, 0);
   return { perPlatformUsd, totalUsd };

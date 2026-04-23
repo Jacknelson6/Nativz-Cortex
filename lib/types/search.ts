@@ -7,15 +7,13 @@ export type SearchMode = 'general' | 'client_strategy';
 
 // ── v2 Multi-platform types ────────────────────────────────────────────────
 
-export type SearchPlatform = 'reddit' | 'youtube' | 'tiktok' | 'web' | 'quora';
-export type SearchVolume = 'light' | 'medium' | 'deep' | 'quick'; // 'quick' kept for backward compat
+export type SearchPlatform = 'reddit' | 'youtube' | 'tiktok' | 'web';
 
 export const PLATFORM_OPTIONS: { value: SearchPlatform; label: string; available: boolean }[] = [
   { value: 'web', label: 'Web', available: true },
   { value: 'reddit', label: 'Reddit', available: true },
   { value: 'youtube', label: 'YouTube', available: true },
   { value: 'tiktok', label: 'TikTok', available: true },
-  { value: 'quora', label: 'Quora', available: true },
 ];
 
 export interface PlatformSource {
@@ -160,7 +158,12 @@ export interface TopicSearch {
   platforms?: SearchPlatform[];
   search_version?: number;
   platform_data?: Record<string, PlatformSource[]>;
-  volume?: SearchVolume;
+  /**
+   * @deprecated Kept so old rows read cleanly; per-platform counts now come
+   * from `scraper_settings` admin config, not from volume tiers. New searches
+   * leave this empty. See lib/search/scraper-settings.ts.
+   */
+  volume?: string;
   /** legacy | llm_v1 */
   topic_pipeline?: TopicPipeline;
   /** Confirmed subtopics (1–5) for llm_v1 */

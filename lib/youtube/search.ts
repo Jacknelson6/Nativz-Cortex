@@ -241,16 +241,29 @@ async function fetchTranscript(videoId: string): Promise<string | null> {
   }
 }
 
+export interface YouTubeGatherCounts {
+  /** Total videos to pull metadata/stats for. */
+  videos: number;
+  /** Of those videos, how many we fetch comment threads for (top-by-views). */
+  commentVideos: number;
+  /** Of those videos, how many we transcribe (top-by-views). Transcripts are free. */
+  transcriptVideos: number;
+  /** Comments per video (top-rated). Fixed cap to avoid long tails. */
+  commentsPerVideo?: number;
+}
+
 /**
  * Full YouTube data gathering — search + stats + comments + transcripts.
- * This is the main entry point for the platform router.
- *
- * Quota cost: ~136 units for quick (25 videos), ~342 for deep (100 videos)
+ * The platform router reads `scraper_settings` and passes explicit counts
+ * here; there are no volume tiers. Quota cost per call: `videos` search
+ * units + 1 stats call + `commentVideos` comment-thread calls. A typical
+ * admin config (100 videos / 30 comments / 20 transcripts) costs ~130
+ * quota units, well inside the 10K/day YouTube Data API free quota.
  */
 export async function gatherYouTubeData(
   query: string,
   timeRange: string,
-  volume: string = 'medium',
+  counts: YouTubeGatherCounts,
 ): Promise<YouTubeSearchResult> {
   const apiKey = getApiKey();
   if (!apiKey) {
@@ -258,10 +271,9 @@ export async function gatherYouTubeData(
     return { videos: [], totalResults: 0 };
   }
 
-  // Smart split: YouTube gives good trend signals + transcripts are free
-  // Quota: deep (~1,100 units), medium (~342 units), light (~70 units) — well within 10K/day free quota
-  const maxResults = volume === 'deep' ? 20 : volume === 'medium' ? 20 : 10;
-  const commentLimit = volume === 'deep' ? 20 : volume === 'medium' ? 10 : 5;
+  const maxResults = Math.max(0, counts.videos);
+  const commentLimit = Math.max(1, counts.commentsPerVideo ?? 10);
+  if (maxResults === 0) return { videos: [], totalResults: 0 };
 
   // Step 1: Search for video IDs
   const { videoIds, totalResults } = await searchVideos(query, timeRange, maxResults);
@@ -276,8 +288,8 @@ export async function gatherYouTubeData(
     .filter((v): v is { id: string; details: NonNullable<typeof v.details> } => !!v.details)
     .sort((a, b) => b.details.viewCount - a.details.viewCount);
 
-  // Fetch comments for top most viewed videos — matches VOLUME_CONFIG commentVideos
-  const commentFetchCount = volume === 'deep' ? 100 : volume === 'medium' ? 30 : 5;
+  // Fetch comments for top most-viewed videos — count controlled by admin settings.
+  const commentFetchCount = Math.max(0, counts.commentVideos);
   const topForComments = videosWithDetails.slice(0, commentFetchCount);
 
   const commentsMap = new Map<string, YouTubeComment[]>();
@@ -288,8 +300,8 @@ export async function gatherYouTubeData(
     }),
   );
 
-  // Step 4: Fetch transcripts for top videos (free — no quota cost) — matches VOLUME_CONFIG transcriptVideos
-  const transcriptCount = volume === 'deep' ? 50 : volume === 'medium' ? 20 : 3;
+  // Step 4: Fetch transcripts for top videos (free — no quota cost). Count from admin settings.
+  const transcriptCount = Math.max(0, counts.transcriptVideos);
   const topForTranscripts = videosWithDetails.slice(0, transcriptCount);
   const transcriptMap = new Map<string, string>();
   await Promise.allSettled(

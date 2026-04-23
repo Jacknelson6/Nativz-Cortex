@@ -7,7 +7,8 @@ export function guessPlatformFromUrl(url: string): SearchPlatform {
   if (u.includes('reddit.com')) return 'reddit';
   if (u.includes('youtube.com') || u.includes('youtu.be')) return 'youtube';
   if (u.includes('tiktok.com')) return 'tiktok';
-  if (u.includes('quora.com')) return 'quora';
+  // quora.com and other discussion sites fold into `web` — we don't maintain
+  // a dedicated Quora pipeline anymore.
   return 'web';
 }
 

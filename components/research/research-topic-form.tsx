@@ -19,7 +19,7 @@ import type { ClientOption } from '@/components/ui/client-picker';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils/cn';
 import { TIME_RANGE_OPTIONS } from '@/lib/types/search';
-import type { SearchPlatform, SearchVolume } from '@/lib/types/search';
+import type { SearchPlatform } from '@/lib/types/search';
 import { PLATFORM_CONFIG } from '@/components/search/platform-icon';
 
 interface ResearchTopicFormProps {
@@ -90,7 +90,6 @@ export function ResearchTopicForm({
     // the top-bar pill already pointed somewhere else.
     const clientId = portalMode ? fixedClientId : initialClientId;
     const platforms = new Set<SearchPlatform>(['web', 'reddit', 'youtube', 'tiktok']);
-    const volume: SearchVolume = 'deep';
     const [timeRange, setTimeRange] = useState('last_3_months');
     const [language] = useState('all');
     const [country] = useState('us');
@@ -121,8 +120,9 @@ export function ResearchTopicForm({
           country,
           client_id: portalMode ? fixedClientId : clientId,
           search_mode: searchMode,
-          platforms: Array.from(new Set([...platforms, 'web'])).filter((p) => p !== 'quora'),
-          volume,
+          // Always include web; per-platform counts are admin-controlled via
+          // scraper_settings, so we no longer send a volume tier.
+          platforms: Array.from(new Set([...platforms, 'web'])),
         };
 
         const res = await fetch('/api/search/start', {
@@ -176,7 +176,7 @@ export function ResearchTopicForm({
       tiktok: Music,
     };
 
-    /** Web first (always on); Quora not offered in UI. */
+    /** Web first (always on). */
     const platformPopoverRows: { value: keyof typeof platformPopoverIcons; label: string }[] = [
       { value: 'web', label: 'Web' },
       { value: 'reddit', label: 'Reddit' },

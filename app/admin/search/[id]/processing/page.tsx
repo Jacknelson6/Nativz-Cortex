@@ -18,7 +18,7 @@ export default async function AdminSearchProcessingPage({
 
   const { data: search, error } = await supabase
     .from('topic_searches')
-    .select('id, query, status, volume, platforms, topic_pipeline, subtopics')
+    .select('id, query, status, platforms, topic_pipeline, subtopics')
     .eq('id', id)
     .single();
 
@@ -44,7 +44,6 @@ export default async function AdminSearchProcessingPage({
       searchId={id}
       query={search.query}
       redirectPrefix="/admin"
-      volume={(search.volume as string) ?? 'medium'}
       platforms={(search.platforms as string[]) ?? ['web']}
       pipeline={topicPipeline}
       subtopicCount={subtopicCount}

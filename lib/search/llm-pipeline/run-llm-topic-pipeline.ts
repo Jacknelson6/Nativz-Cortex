@@ -26,7 +26,6 @@ import {
   type PlatformSource,
   type ResearchSourceRecord,
   type SearchPlatform,
-  type SearchVolume,
   type TopicSearchAIResponse,
   type TopicSource,
   type TrendingTopic,
@@ -46,14 +45,6 @@ function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
   return out;
-}
-
-/** Map DB volume (incl. legacy `quick`) to platform-router tier for Apify + scrapers. */
-function volumeForPlatformScrapers(raw: string | undefined): SearchVolume {
-  const v = (raw ?? 'medium').toLowerCase();
-  if (v === 'quick') return 'medium';
-  if (v === 'light' || v === 'medium' || v === 'deep') return v;
-  return 'medium';
 }
 
 function buildTopicSources(urls: string[], titleByUrl: Map<string, string>): TopicSource[] {
@@ -524,8 +515,6 @@ export async function runLlmTopicPipeline(args: {
   clientContext?: { name: string; industry: string | null; brandVoice: string | null } | null;
   /** Platforms to scrape (from search record). Defaults to ["web"]. */
   platforms?: SearchPlatform[];
-  /** Volume tier for platform scrapers. Defaults to "medium". */
-  volume?: string;
 }): Promise<RunLlmTopicPipelineResult> {
   let subtopics = Array.isArray(args.search.subtopics)
     ? (args.search.subtopics as string[]).map((s) => s.trim()).filter(Boolean)
@@ -647,15 +636,14 @@ Rules: 2–4 words each, specific to the topic, no numbering, no full sentences.
     ? (async () => {
         const t0 = Date.now();
         try {
-          const scraperVolume = volumeForPlatformScrapers(args.volume);
           const result = await gatherPlatformData(
             args.search.query,
             platforms as SearchPlatform[],
             args.search.time_range,
-            scraperVolume,
             {
               topicSearchId: args.searchId,
               clientId: args.search.client_id ?? null,
+              subtopics: subtopics.length > 0 ? subtopics : undefined,
             },
           );
           const durationMs = Date.now() - t0;
@@ -828,7 +816,7 @@ Time scope: The user chose **${timeRangeLabel}**. Emphasize themes, debates, and
 IMPORTANT: This report is exclusively for **short-form vertical video content** (TikTok, Reels, Shorts). Every video idea, content type, and format recommendation must be for short-form video only. Do NOT recommend blog posts, listicles, articles, long-form YouTube, podcasts, newsletters, threads, or any non-video format. If the evidence mentions those formats, ignore them — only surface what can be filmed as a short-form vertical video.
 ${clientContextBlock ? `${clientContextBlock}\n\n` : ''}Research-angle findings:
 ${subtopicBlock}
-${platformContextBlock ? `\n---\n\nPlatform-specific data (Reddit threads, TikTok videos, YouTube content, Quora discussions):\n${platformContextBlock}` : ''}${groundedPillarBlock}
+${platformContextBlock ? `\n---\n\nPlatform-specific data (Reddit threads, TikTok videos, YouTube content):\n${platformContextBlock}` : ''}${groundedPillarBlock}
 
 Return ONLY valid JSON matching:
 {
@@ -1081,7 +1069,7 @@ Rules:
     ],
   };
 
-  const VALID_PLATFORMS = new Set<SearchPlatform>(['reddit', 'youtube', 'tiktok', 'web', 'quora']);
+  const VALID_PLATFORMS = new Set<SearchPlatform>(['reddit', 'youtube', 'tiktok', 'web']);
   const coercePlatform = (p: string): SearchPlatform =>
     VALID_PLATFORMS.has(p as SearchPlatform) ? (p as SearchPlatform) : 'web';
 

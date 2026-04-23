@@ -85,8 +85,6 @@ export function sourceCategoryLabel(source: PlatformSource): string {
       return 'Short-form video';
     case 'reddit':
       return source.subreddit ? `r/${source.subreddit}` : 'Discussion';
-    case 'quora':
-      return 'Q&A';
     case 'web':
       return 'Web article';
     default:
@@ -102,8 +100,6 @@ export function sourcePlaceLabel(source: PlatformSource): string {
       return source.author || 'YouTube';
     case 'tiktok':
       return source.author ? `@${source.author.replace(/^@/, '')}` : 'TikTok';
-    case 'quora':
-      return 'Quora';
     case 'web': {
       try {
         return new URL(source.url).hostname.replace(/^www\./, '');
@@ -125,8 +121,6 @@ export function sourceHeaderLabel(source: PlatformSource): string {
       return 'YouTube';
     case 'tiktok':
       return 'TikTok';
-    case 'quora':
-      return 'Quora';
     case 'web': {
       try {
         return new URL(source.url).hostname.replace(/^www\./, '');

@@ -127,9 +127,10 @@ export async function POST(
       }
     }
 
-    // Read platforms/volume from the search record
+    // Read platforms from the search record. Per-platform volumes now come
+    // from scraper_settings (admin UI), not from the search record — the
+    // legacy `volume` column is left unused for backward compat.
     const platforms: string[] = search.platforms ?? ['web'];
-    const volume: string = search.volume ?? 'medium';
 
     // Per-search budget guard — projects total Apify spend from current
     // scraper_settings and rejects the search if it would exceed
@@ -194,7 +195,6 @@ export async function POST(
                 }
               : null,
             platforms: platforms as import('@/lib/types/search').SearchPlatform[],
-            volume,
           });
           lastError = null;
           break;
@@ -249,10 +249,10 @@ export async function POST(
       const tiktokSources = allPlatformSources.filter((s) => s.platform === 'tiktok');
       const nonTikTokSources = allPlatformSources.filter((s) => s.platform !== 'tiktok');
 
-      // Batch 1: all non-TikTok sources (Reddit/YouTube/Quora — no transcripts
+      // Batch 1: all non-TikTok sources (Reddit/YouTube — no transcripts
       // so they're small) + top 8 TikTok videos + essentials. Previously this
       // filtered to TikTok-only, which meant the 3m+ we just spent scraping
-      // Reddit/YouTube/Quora was silently discarded — those platforms were
+      // Reddit/YouTube was silently discarded — those platforms were
       // collected into allPlatformSources but never persisted.
       // Batch 2: next 42 TikTok videos (50 TikTok cap — keeps payload under
       // PostgREST limits because TikTok rows carry transcripts + comments).
