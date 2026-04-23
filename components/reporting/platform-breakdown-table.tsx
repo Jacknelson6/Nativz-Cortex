@@ -59,14 +59,22 @@ function PlatformIcon({ platform }: { platform: SocialPlatform }) {
 }
 
 /**
- * Compute engagement rate from the raw totals rather than trusting whatever
- * Zernio returned in `engagement_rate` — the stored value was averaging to 0
- * on platforms with a tiny follower base, which obscured real performance.
+ * Compute engagement rate from the raw totals.
  *
- * Formula: engagement / followers × 100. Falls back to the stored ER when
- * followers is unknown, and to 0 when neither input is usable.
+ * Formula priority:
+ *   1. engagement / views × 100  — universal, stable across account size
+ *   2. engagement / followers × 100  — fallback when we don't have views (rare)
+ *   3. the stored rate as last resort
+ *
+ * We previously used engagement/followers for everything, which produced
+ * absurd numbers like 768% ER on a 50-follower TikTok — correct math,
+ * useless signal. ER by views is what TikTok, YouTube, and IG analytics
+ * dashboards actually show, and it doesn't blow up for small accounts.
  */
 function computeEngagementRate(row: PlatformBreakdownRow): number {
+  if (row.views > 0) {
+    return (row.engagement / row.views) * 100;
+  }
   if (row.followers > 0) {
     return (row.engagement / row.followers) * 100;
   }
