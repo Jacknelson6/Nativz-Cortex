@@ -1,1 +1,5 @@
-export { default } from '@/components/shared/page-loading';
+import { TabbedPageSkeleton } from '@/components/admin/shared/tabbed-page-skeleton';
+
+export default function Loading() {
+  return <TabbedPageSkeleton tileCount={6} tabCount={6} />;
+}

@@ -1,7 +1,8 @@
 import { unstable_cache } from 'next/cache';
-import { Activity, CheckCircle2, ClipboardList, LayoutTemplate, Mail, Timer } from 'lucide-react';
+import { CheckCircle2, ClipboardList, LayoutTemplate, Mail, PauseCircle, Timer } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { SectionTile } from '@/components/admin/section-tabs';
+import { OnboardingActivityFeed } from '@/components/admin/onboarding/activity-feed';
 import { ONBOARDING_CACHE_TAG, ONBOARDING_CACHE_TTL } from './cache';
 
 const loadStats = unstable_cache(
@@ -29,16 +30,20 @@ async function loadStatsUncached() {
     ]);
 
     const trackers = trackersRes.data ?? [];
-    const total = trackers.length;
-    const inProgress = trackers.filter((t) => t.status === 'in_progress' || t.status === 'active').length;
-    const notStarted = trackers.filter((t) => t.status === 'not_started' || t.status === 'pending').length;
-    const completed = trackers.filter((t) => t.status === 'completed' || t.status === 'complete').length;
+    // Tracker statuses are constrained to: active | paused | completed | archived
+    // (see migration 136). Previously this filtered on phase-level statuses
+    // which never matched, so "Not started" was always 0.
+    const active = trackers.filter((t) => t.status === 'active').length;
+    const paused = trackers.filter((t) => t.status === 'paused').length;
+    const completed = trackers.filter((t) => t.status === 'completed').length;
+    const archived = trackers.filter((t) => t.status === 'archived').length;
 
     return {
-      totalTrackers: total,
-      inProgress,
-      notStarted,
+      totalTrackers: trackers.length - archived, // archived hidden from main count
+      active,
+      paused,
       completed,
+      archived,
       templateCount: templatesRes.count ?? 0,
       emailTemplateCount: emailTemplatesRes.count ?? 0,
     };
@@ -46,9 +51,10 @@ async function loadStatsUncached() {
     console.error('[onboarding overview] loadStats failed (returning empty):', err);
     return {
       totalTrackers: 0,
-      inProgress: 0,
-      notStarted: 0,
+      active: 0,
+      paused: 0,
       completed: 0,
+      archived: 0,
       templateCount: 0,
       emailTemplateCount: 0,
     };
@@ -60,7 +66,7 @@ export async function OnboardingOverviewTab() {
   const base = '/admin/onboarding';
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
       <p className="text-sm text-text-muted">
         Per-service onboarding state across every client. Click a tile to drill in.
       </p>
@@ -68,26 +74,26 @@ export async function OnboardingOverviewTab() {
         <SectionTile
           href={`${base}?tab=trackers`}
           icon={<ClipboardList size={18} />}
-          title="Active trackers"
+          title="Trackers in play"
           status={s.totalTrackers > 0 ? 'ok' : 'soon'}
           primary={`${s.totalTrackers} total`}
-          secondary={`${s.inProgress} in progress · ${s.completed} complete`}
+          secondary={`${s.active} active · ${s.paused} paused · ${s.completed} complete`}
         />
         <SectionTile
           href={`${base}?tab=trackers`}
           icon={<Timer size={18} />}
-          title="In progress"
-          status={s.inProgress > 0 ? 'ok' : 'soon'}
-          primary={`${s.inProgress} tracker${s.inProgress === 1 ? '' : 's'}`}
-          secondary="Live client setups"
+          title="Active"
+          status={s.active > 0 ? 'ok' : 'soon'}
+          primary={`${s.active} tracker${s.active === 1 ? '' : 's'}`}
+          secondary="Live client onboardings"
         />
         <SectionTile
           href={`${base}?tab=trackers`}
-          icon={<Activity size={18} />}
-          title="Not started"
-          status={s.notStarted > 0 ? 'warn' : 'ok'}
-          primary={`${s.notStarted} tracker${s.notStarted === 1 ? '' : 's'}`}
-          secondary="Pending kickoff"
+          icon={<PauseCircle size={18} />}
+          title="Paused"
+          status={s.paused > 0 ? 'warn' : 'ok'}
+          primary={`${s.paused} tracker${s.paused === 1 ? '' : 's'}`}
+          secondary="Temporarily on hold"
         />
         <SectionTile
           href={`${base}?tab=trackers`}
@@ -111,6 +117,8 @@ export async function OnboardingOverviewTab() {
           secondary="Onboarding email composer"
         />
       </div>
+
+      <OnboardingActivityFeed />
     </div>
   );
 }
