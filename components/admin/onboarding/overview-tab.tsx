@@ -1,8 +1,16 @@
+import { unstable_cache } from 'next/cache';
 import { Activity, CheckCircle2, ClipboardList, LayoutTemplate, Mail, Timer } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { SectionTile } from '@/components/admin/section-tabs';
+import { ONBOARDING_CACHE_TAG, ONBOARDING_CACHE_TTL } from './cache';
 
-async function loadStats() {
+const loadStats = unstable_cache(
+  loadStatsUncached,
+  ['onboarding-overview-stats'],
+  { revalidate: ONBOARDING_CACHE_TTL, tags: [ONBOARDING_CACHE_TAG] },
+);
+
+async function loadStatsUncached() {
   try {
     const admin = createAdminClient();
 

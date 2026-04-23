@@ -18,6 +18,8 @@ import {
   type ClientsTabSlug,
 } from '@/components/admin/clients/clients-tabs';
 import { ClientsOverviewTab } from '@/components/admin/clients/overview-tab';
+import { RefreshButton } from '@/components/admin/shared/refresh-button';
+import { refreshClients } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -111,14 +113,17 @@ export default async function AdminClientsPage({
           title="Clients"
           description={`Manage your client roster and brand profiles${clients.length > 0 ? ` · ${clients.length} total` : ''}. Pick a tab to drill in.`}
           action={
-            isSuperAdmin ? (
-              <Link href="/admin/clients/onboard">
-                <Button size="sm">
-                  <Plus size={14} />
-                  Onboard
-                </Button>
-              </Link>
-            ) : null
+            <div className="flex items-center gap-2">
+              <RefreshButton action={refreshClients} />
+              {isSuperAdmin ? (
+                <Link href="/admin/clients/onboard">
+                  <Button size="sm">
+                    <Plus size={14} />
+                    Onboard
+                  </Button>
+                </Link>
+              ) : null}
+            </div>
           }
         />
 

@@ -1,5 +1,5 @@
 import { TabbedPageSkeleton } from '@/components/admin/shared/tabbed-page-skeleton';
 
 export default function Loading() {
-  return <TabbedPageSkeleton tileCount={0} tabCount={2} />;
+  return <TabbedPageSkeleton tileCount={6} tabCount={4} />;
 }

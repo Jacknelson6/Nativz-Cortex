@@ -14,6 +14,8 @@ import {
   type OnboardingTabSlug,
 } from '@/components/admin/onboarding/onboarding-tabs';
 import { OnboardingOverviewTab } from '@/components/admin/onboarding/overview-tab';
+import { RefreshButton } from '@/components/admin/shared/refresh-button';
+import { refreshOnboarding } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,6 +72,7 @@ export default async function OnboardingRosterPage({
       <SectionHeader
         title="Onboarding"
         description="Per-service setup for every client — checklist + timeline + shareable client view. Pick a tab to drill in."
+        action={<RefreshButton action={refreshOnboarding} />}
       />
 
       <SectionTabs tabs={ONBOARDING_TABS} active={activeTab} memoryKey="cortex:onboarding:last-tab" />

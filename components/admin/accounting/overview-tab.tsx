@@ -1,14 +1,22 @@
+import { unstable_cache } from 'next/cache';
 import { CalendarDays, DollarSign, Lock, CheckCircle2 } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { SectionTile } from '@/components/admin/section-tabs';
 import { centsToDollars } from '@/lib/accounting/periods';
+import { ACCOUNTING_CACHE_TAG, ACCOUNTING_CACHE_TTL } from './cache';
 
 /**
  * At-a-glance accounting tiles. Counts pull from payroll_periods +
  * payroll_entries, scoped to the last 90 days so historical rows don't
  * dominate the "current state" read.
  */
-async function loadStats() {
+const loadStats = unstable_cache(
+  loadStatsUncached,
+  ['accounting-overview-stats'],
+  { revalidate: ACCOUNTING_CACHE_TTL, tags: [ACCOUNTING_CACHE_TAG] },
+);
+
+async function loadStatsUncached() {
   try {
     const admin = createAdminClient();
     const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);

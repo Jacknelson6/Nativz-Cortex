@@ -1,8 +1,16 @@
+import { unstable_cache } from 'next/cache';
 import { Activity, Building2, LayoutGrid, Plus, Users } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { SectionTile } from '@/components/admin/section-tabs';
+import { CLIENTS_CACHE_TAG, CLIENTS_CACHE_TTL } from './cache';
 
-async function loadStats() {
+const loadStats = unstable_cache(
+  loadStatsUncached,
+  ['clients-overview-stats'],
+  { revalidate: CLIENTS_CACHE_TTL, tags: [CLIENTS_CACHE_TAG] },
+);
+
+async function loadStatsUncached() {
   try {
     const admin = createAdminClient();
 

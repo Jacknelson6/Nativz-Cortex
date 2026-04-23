@@ -7,10 +7,12 @@
  * aggregates) so the Overview stays fast.
  */
 
+import { unstable_cache } from 'next/cache';
 import { BookOpen, Cpu, DollarSign, Gauge, Key, TrendingUp } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getScraperSettings, estimateSearchCost } from '@/lib/search/scraper-settings';
 import { SectionTile } from '@/components/admin/section-tabs';
+import { AI_SETTINGS_CACHE_TAG, AI_SETTINGS_CACHE_TTL } from './cache';
 
 function formatUsd(n: number | null | undefined): string {
   if (n == null) return '—';
@@ -49,7 +51,13 @@ async function tolerant<T>(fn: () => PromiseLike<T>): Promise<T | null> {
   }
 }
 
-async function loadStats(): Promise<OverviewStats> {
+const loadStats = unstable_cache(
+  loadStatsUncached,
+  ['ai-settings-overview-stats'],
+  { revalidate: AI_SETTINGS_CACHE_TTL, tags: [AI_SETTINGS_CACHE_TAG] },
+);
+
+async function loadStatsUncached(): Promise<OverviewStats> {
   const empty: OverviewStats = {
     modelSlug: null,
     hasKey: false,

@@ -12,6 +12,8 @@ import {
   type AiSettingsTabSlug,
 } from '@/components/admin/ai-settings/ai-settings-tabs';
 import { AiSettingsOverviewTab } from '@/components/admin/ai-settings/overview-tab';
+import { RefreshButton } from '@/components/admin/shared/refresh-button';
+import { refreshAiSettings } from './actions';
 import { AiRoutingSection } from '@/components/settings/ai-routing-section';
 import { LlmCredentialsSection } from '@/components/settings/llm-credentials-section';
 import { UsageDashboard } from '@/components/settings/usage-dashboard';
@@ -58,6 +60,7 @@ export default async function AISettingsPage({
       <SectionHeader
         title="AI settings"
         description="Model routing, credentials, skills, search cost, and usage — everything the Nerd and its harnesses read from. Pick a tab to drill in."
+        action={<RefreshButton action={refreshAiSettings} />}
       />
 
       <SectionTabs tabs={AI_SETTINGS_TABS} active={activeTab} memoryKey="cortex:ai-settings:last-tab" />

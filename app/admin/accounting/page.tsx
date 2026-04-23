@@ -14,6 +14,8 @@ import {
   type AccountingTabSlug,
 } from '@/components/admin/accounting/accounting-tabs';
 import { AccountingOverviewTab } from '@/components/admin/accounting/overview-tab';
+import { RefreshButton } from '@/components/admin/shared/refresh-button';
+import { refreshAccounting } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,6 +82,7 @@ export default async function AccountingIndexPage({
       <SectionHeader
         title="Accounting"
         description="Bi-monthly payroll periods. First half (1–15) and second half (16–end of month). Pick a tab to drill in."
+        action={<RefreshButton action={refreshAccounting} />}
       />
 
       <SectionTabs tabs={ACCOUNTING_TABS} active={activeTab} memoryKey="cortex:accounting:last-tab" />
