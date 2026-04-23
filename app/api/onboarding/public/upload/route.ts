@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { notifyManagers } from '@/lib/onboarding/notify-managers';
+import { queueOnboardingNotification } from '@/lib/onboarding/queue-notification';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -117,14 +117,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Audit event is awaited so it's durable (a `void` promise gets
-    // cancelled when the serverless function returns on Vercel). Notification
-    // email stays fire-and-forget because Resend latency shouldn't block the
-    // client UI response and a failed email is recoverable.
-    const trackerWithClient = tracker as typeof tracker & {
-      clients: { name: string; slug: string } | { name: string; slug: string }[] | null;
-    };
-    const client = Array.isArray(trackerWithClient.clients) ? trackerWithClient.clients[0] : trackerWithClient.clients;
-
+    // cancelled when the serverless function returns on Vercel). The
+    // batched notification queue coalesces rapid uploads into one email.
     await admin.from('onboarding_events').insert({
       tracker_id: tracker.id,
       kind: 'file_uploaded',
@@ -133,18 +127,10 @@ export async function POST(request: NextRequest) {
       actor: 'client',
     });
 
-    if (client) {
-      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://cortex.nativz.io';
-      const shareUrl = `${baseUrl}/onboarding/${client.slug}?token=${shareToken}`;
-      void notifyManagers({
-        notifyEmails: ((trackerWithClient as { notify_emails?: string[] | null }).notify_emails) ?? [],
-        clientName: client.name,
-        service: (trackerWithClient as { service: string }).service,
-        kind: 'file_uploaded',
-        detail: safeName,
-        shareUrl,
-      });
-    }
+    await queueOnboardingNotification(admin, tracker.id, {
+      kind: 'file_uploaded',
+      detail: safeName,
+    });
 
     return NextResponse.json({ ok: true, upload: row });
   } catch (error) {

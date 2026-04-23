@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireOnboardingAdmin } from '@/lib/onboarding/require-admin';
+import { recomputePhaseStatuses } from '@/lib/onboarding/recompute-phase-statuses';
 
 const PatchBody = z.object({
   task: z.string().trim().min(1).max(200).optional(),
@@ -36,6 +37,20 @@ export async function PATCH(
       console.error('PATCH /api/onboarding/items/[id] error:', error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    // When status changes, re-bucket phase statuses across the tracker.
+    // Follow the group → tracker chain since items don't carry tracker_id.
+    if (parsed.data.status !== undefined && data) {
+      const { data: group } = await admin
+        .from('onboarding_checklist_groups')
+        .select('tracker_id')
+        .eq('id', data.group_id)
+        .maybeSingle();
+      if (group?.tracker_id) {
+        await recomputePhaseStatuses(admin, group.tracker_id);
+      }
+    }
+
     return NextResponse.json({ item: data });
   } catch (error) {
     console.error('PATCH /api/onboarding/items/[id] error:', error);

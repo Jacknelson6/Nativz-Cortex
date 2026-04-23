@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { notifyManagers } from '@/lib/onboarding/notify-managers';
+import { queueOnboardingNotification } from '@/lib/onboarding/queue-notification';
+import { recomputePhaseStatuses } from '@/lib/onboarding/recompute-phase-statuses';
 
 export const dynamic = 'force-dynamic';
 
@@ -96,27 +97,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to update' }, { status: 500 });
     }
 
-    // Fire-and-forget manager notification on the completed direction only.
-    // Uncompleted events stay silent — they'd be noise. We don't await so
-    // a slow Resend never blocks the client UI response.
+    // Queue a batched notification on completion only. Un-ticks stay silent.
+    // The cron at /api/cron/onboarding-notifications drains the queue every
+    // minute — multiple completions inside that window ship as one email.
     if (target === 'done') {
-      const trackerWithClient = tracker as typeof tracker & {
-        clients: { name: string; slug: string } | { name: string; slug: string }[] | null;
-      };
-      const client = Array.isArray(trackerWithClient.clients) ? trackerWithClient.clients[0] : trackerWithClient.clients;
-      if (client) {
-        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://cortex.nativz.io';
-        const shareUrl = `${baseUrl}/onboarding/${client.slug}?token=${share_token}`;
-        void notifyManagers({
-          notifyEmails: (trackerWithClient.notify_emails as string[] | null) ?? [],
-          clientName: client.name,
-          service: (trackerWithClient as { service: string }).service,
-          kind: 'item_completed',
-          detail: item.task,
-          shareUrl,
-        });
-      }
+      await queueOnboardingNotification(admin, tracker.id, {
+        kind: 'item_completed',
+        detail: item.task,
+      });
     }
+
+    // Re-bucket phase statuses based on the new overall progress. Runs on
+    // both done and pending flips so unchecking an item demotes phases too.
+    await recomputePhaseStatuses(admin, tracker.id);
 
     return NextResponse.json({ ok: true, status: target });
   } catch (error) {
