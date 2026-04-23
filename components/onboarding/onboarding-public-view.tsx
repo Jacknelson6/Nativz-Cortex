@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Check, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { OnboardingPublicUploads } from '@/components/onboarding/onboarding-public-uploads';
+import { OnboardingPublicConnections } from '@/components/onboarding/onboarding-public-connections';
 
 type PhaseStatus = 'not_started' | 'in_progress' | 'done';
 type ItemOwner = 'agency' | 'client';
@@ -132,27 +133,41 @@ export function OnboardingPublicView({
 
   async function toggleItem(item: Item) {
     if (item.owner !== 'client') return; // UI should prevent, but be safe.
-    const nextStatus: ItemStatus = item.status === 'done' ? 'pending' : 'done';
-    // Optimistic flip.
-    setItems((xs) => xs.map((it) => (it.id === item.id ? { ...it, status: nextStatus } : it)));
+    const next = item.status === 'done' ? false : true;
+    await toggleItemById(item.id, next);
+  }
+
+  // Lifted so connection cards can share the same optimistic flow.
+  // Returns true on success so the connection card can fire its confetti toast
+  // only after the server actually accepted the change.
+  async function toggleItemById(itemId: string, done: boolean): Promise<boolean> {
+    const current = items.find((it) => it.id === itemId);
+    if (!current) return false;
+    if (current.owner !== 'client') return false;
+    const prevStatus = current.status;
+    const nextStatus: ItemStatus = done ? 'done' : 'pending';
+    if (prevStatus === nextStatus) return true;
+
+    setItems((xs) => xs.map((it) => (it.id === itemId ? { ...it, status: nextStatus } : it)));
     try {
       const res = await fetch('/api/onboarding/public/item-toggle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           share_token: tracker.share_token,
-          item_id: item.id,
-          done: nextStatus === 'done',
+          item_id: itemId,
+          done,
         }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         throw new Error((d as { error?: string }).error || 'Failed to save');
       }
+      return true;
     } catch (err) {
-      // Rollback + gentle toast. Never a full-page error — keeps trust.
-      setItems((xs) => xs.map((it) => (it.id === item.id ? { ...it, status: item.status } : it)));
+      setItems((xs) => xs.map((it) => (it.id === itemId ? { ...it, status: prevStatus } : it)));
       toast.error(err instanceof Error ? err.message : "Couldn't save that yet. Try again?");
+      return false;
     }
   }
 
@@ -237,6 +252,13 @@ export function OnboardingPublicView({
             </ul>
           </section>
         )}
+
+        {/* Platform connections — zero-config, detected from task text */}
+        <OnboardingPublicConnections
+          shareToken={tracker.share_token}
+          items={items}
+          onToggle={toggleItemById}
+        />
 
         {/* Checklist */}
         {groups.length > 0 && (

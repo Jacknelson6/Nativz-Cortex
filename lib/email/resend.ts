@@ -4,8 +4,10 @@ import { getEmailBrand, getEmailLogoUrl } from '@/lib/email/brand-tokens';
 import { buildAffiliateWeeklyReportCardHtml } from '@/lib/email/templates/affiliate-weekly-report-html';
 import { buildWeeklySocialReportCardHtml } from '@/lib/email/templates/weekly-social-report-html';
 import { buildCompetitorReportCardHtml } from '@/lib/email/templates/competitor-report-html';
+import { buildTrendReportCardHtml } from '@/lib/email/templates/trend-report-html';
 import { buildUserEmailHtml } from '@/lib/email/templates/user-email';
 import type { CompetitorReportData } from '@/lib/reporting/competitor-report-types';
+import type { TrendReportData } from '@/lib/reporting/trend-report-types';
 import { getSecret } from '@/lib/secrets/store';
 import type { WeeklySocialReport } from '@/lib/reporting/weekly-social-report';
 import type { AgencyBrand } from '@/lib/agency/detect';
@@ -497,6 +499,7 @@ export async function sendCompetitorReportEmail(opts: {
   to: string[];
   data: CompetitorReportData;
   analyticsUrl: string;
+  pdfAttachment?: { filename: string; content: Buffer } | null;
   isTestOverride?: boolean;
   agency?: AgencyBrand;
 }): Promise<{ ok: true; id: string; html: string } | { ok: false; error: string; html: string }> {
@@ -517,13 +520,83 @@ export async function sendCompetitorReportEmail(opts: {
   const html = layout(cardHtml, agency);
 
   try {
-    const result = await (await getResend()).emails.send({
+    const sendPayload: Record<string, unknown> = {
       from: getFromAddress(agency),
       replyTo: getReplyTo(agency),
       to: opts.to,
       subject,
       html,
-    });
+    };
+    if (opts.pdfAttachment) {
+      sendPayload.attachments = [
+        {
+          filename: opts.pdfAttachment.filename,
+          content: opts.pdfAttachment.content,
+        },
+      ];
+    }
+    // @ts-expect-error - Resend SDK accepts attachments; typed as generic Record for flexibility
+    const result = await (await getResend()).emails.send(sendPayload);
+    logUsage({
+      service: 'resend',
+      model: 'email-api',
+      feature: 'email_delivery',
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      costUsd: 0,
+    }).catch(() => {});
+    const id = result?.data?.id ?? '';
+    return { ok: true, id, html };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : 'Unknown send error',
+      html,
+    };
+  }
+}
+
+// ── Recurring trend report ─────────────────────────────────────────────────
+
+export async function sendTrendReportEmail(opts: {
+  to: string[];
+  data: TrendReportData;
+  dashboardUrl: string;
+  pdfAttachment?: { filename: string; content: Buffer } | null;
+  isTestOverride?: boolean;
+  agency?: AgencyBrand;
+}): Promise<{ ok: true; id: string; html: string } | { ok: false; error: string; html: string }> {
+  const agency =
+    opts.agency ?? (opts.data.client_agency === 'anderson' ? 'anderson' : 'nativz');
+  const subjectPrefix = opts.isTestOverride ? '[Test] ' : '';
+  const fmt = (iso: string) =>
+    new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const range = `${fmt(opts.data.period_start)} – ${fmt(opts.data.period_end)}`;
+  const subject = `${subjectPrefix}${opts.data.subscription_name} — ${range}`;
+
+  const cardHtml = buildTrendReportCardHtml({
+    data: opts.data,
+    agency,
+    dashboardUrl: opts.dashboardUrl,
+  });
+  const html = layout(cardHtml, agency);
+
+  try {
+    const sendPayload: Record<string, unknown> = {
+      from: getFromAddress(agency),
+      replyTo: getReplyTo(agency),
+      to: opts.to,
+      subject,
+      html,
+    };
+    if (opts.pdfAttachment) {
+      sendPayload.attachments = [
+        { filename: opts.pdfAttachment.filename, content: opts.pdfAttachment.content },
+      ];
+    }
+    // @ts-expect-error - Resend SDK accepts attachments; typed as generic Record
+    const result = await (await getResend()).emails.send(sendPayload);
     logUsage({
       service: 'resend',
       model: 'email-api',
