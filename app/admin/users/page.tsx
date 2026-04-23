@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { Suspense, useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -49,6 +49,14 @@ function getInitials(name: string): string {
 }
 
 export default function UsersPage() {
+  return (
+    <Suspense fallback={<div className="cortex-page-gutter max-w-6xl mx-auto py-10 text-sm text-text-muted">Loading…</div>}>
+      <UsersPageInner />
+    </Suspense>
+  );
+}
+
+function UsersPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const rawTab = searchParams.get('tab');

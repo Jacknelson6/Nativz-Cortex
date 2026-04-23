@@ -7,18 +7,13 @@
  * into drill-in tabs. The active tab is stored in the URL (`?tab=slug`) so
  * every tab is deep-linkable and back-navigable.
  *
- * For a new page:
- *   1. Define tabs: `const TABS = [{ slug, label, icon }, ...] as const;`
- *   2. Pass to this component: `<SectionTabs tabs={TABS} active={activeSlug} />`
- *   3. On the server, resolve `?tab=` → valid slug and render the right tab.
- *
- * Each page keeps its own overview/tile layout and tab contents; this
- * component owns only the chrome.
+ * `useSearchParams` requires a Suspense boundary — we wrap the inner
+ * implementation so callers don't have to remember that.
  */
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import type { ComponentType } from 'react';
 import type { LucideProps } from 'lucide-react';
 
@@ -35,7 +30,31 @@ interface SectionTabsProps<T extends readonly SectionTabDef[]> {
   memoryKey?: string;
 }
 
-export function SectionTabs<T extends readonly SectionTabDef[]>({
+export function SectionTabs<T extends readonly SectionTabDef[]>(props: SectionTabsProps<T>) {
+  return (
+    <Suspense fallback={<SectionTabsSkeleton count={props.tabs.length} />}>
+      <SectionTabsInner {...props} />
+    </Suspense>
+  );
+}
+
+function SectionTabsSkeleton({ count }: { count: number }) {
+  return (
+    <nav
+      aria-label="Section tabs"
+      className="flex flex-wrap items-center gap-1 rounded-full border border-nativz-border bg-surface/70 p-1 backdrop-blur"
+    >
+      {Array.from({ length: count }).map((_, i) => (
+        <span
+          key={i}
+          className="inline-flex h-7 w-20 items-center gap-2 rounded-full bg-surface-hover/30 px-3"
+        />
+      ))}
+    </nav>
+  );
+}
+
+function SectionTabsInner<T extends readonly SectionTabDef[]>({
   tabs,
   active,
   memoryKey,

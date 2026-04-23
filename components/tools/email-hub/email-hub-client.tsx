@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Contact, FileText, Mail, Megaphone, Settings } from 'lucide-react';
 import { BannersTab } from './banners-tab';
@@ -31,7 +32,15 @@ interface Props {
   clients: EmailHubClientOption[];
 }
 
-export function EmailHubClient({ clients }: Props) {
+export function EmailHubClient(props: Props) {
+  return (
+    <Suspense fallback={<div className="cortex-page-gutter max-w-6xl mx-auto py-10 text-sm text-text-muted">Loading…</div>}>
+      <EmailHubClientInner {...props} />
+    </Suspense>
+  );
+}
+
+function EmailHubClientInner({ clients }: Props) {
   const params = useSearchParams();
   const raw = params.get('tab');
   const tab: TabKey = (TAB_SLUGS as readonly string[]).includes(raw ?? '') ? (raw as TabKey) : 'banners';
