@@ -6,7 +6,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PageError } from '@/components/shared/page-error';
-import { ClientSearchGrid } from '@/components/clients/client-search-grid';
+import { ClientKanbanBoard } from '@/components/clients/client-kanban-board';
 import { SectionHeader } from '@/components/admin/section-tabs';
 
 export const dynamic = 'force-dynamic';
@@ -25,13 +25,6 @@ type AdminClientsDbRow = {
   group_id: string | null;
 };
 
-type ClientGroupRow = {
-  id: string;
-  name: string;
-  color: string;
-  sort_order: number;
-};
-
 export default async function AdminClientsPage() {
   try {
     const adminClient = createAdminClient();
@@ -44,30 +37,20 @@ export default async function AdminClientsPage() {
       isSuperAdmin = sa?.is_super_admin === true;
     }
 
-    const [
-      { data: dbClients, error: dbError },
-      { data: groupsData },
-    ] = await Promise.all([
-      selectClientsWithRosterVisibility<AdminClientsDbRow>(adminClient, {
+    const { data: dbClients, error: dbError } = await selectClientsWithRosterVisibility<AdminClientsDbRow>(
+      adminClient,
+      {
         select: 'id, name, slug, industry, is_active, logo_url, services, agency, health_score, organization_id, group_id',
         orderBy: { column: 'name' },
-      }),
-      adminClient
-        .from('client_groups')
-        .select('id, name, color, sort_order')
-        .order('sort_order', { ascending: true })
-        .order('created_at', { ascending: true }),
-    ]);
+      },
+    );
 
     if (dbError) {
       console.error('Database error fetching clients:', JSON.stringify(dbError, null, 2));
       throw dbError;
     }
 
-    const groups: ClientGroupRow[] = (groupsData as ClientGroupRow[] | null) ?? [];
-
     const clients = (dbClients ?? []).map((c) => ({
-      id: c.slug,
       dbId: c.id,
       name: c.name,
       slug: c.slug,
@@ -75,10 +58,8 @@ export default async function AdminClientsPage() {
       isActive: c.is_active ?? true,
       logoUrl: c.logo_url ?? null,
       services: (c.services as string[]) ?? [],
-      agency: c.agency ?? undefined,
+      agency: c.agency ?? null,
       healthScore: c.health_score != null ? String(c.health_score) : null,
-      organizationId: c.organization_id ?? null,
-      groupId: c.group_id ?? null,
     }));
 
     return (
@@ -113,7 +94,7 @@ export default async function AdminClientsPage() {
             }
           />
         ) : (
-          <ClientSearchGrid clients={clients} groups={groups} />
+          <ClientKanbanBoard clients={clients} />
         )}
       </div>
     );
