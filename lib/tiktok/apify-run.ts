@@ -1,6 +1,11 @@
 /**
  * Shared Apify run lifecycle: start run, poll until SUCCEEDED, fetch dataset items.
+ *
+ * Most new code should use `runAndLogApifyActor` (at the bottom of this file)
+ * which also writes a row to `apify_runs` for cost tracking — without it we
+ * go blind on actors that aren't reddit or SERP.
  */
+import { recordApifyRun, type ApifyRunContext } from '@/lib/apify/record-run';
 
 export async function startApifyActorRun(
   actorId: string,
@@ -84,6 +89,57 @@ export async function fetchApifyDatasetItems(
   if (!datasetRes.ok) return [];
   const items = await datasetRes.json();
   return Array.isArray(items) ? items : [];
+}
+
+/**
+ * One-shot helper: start an actor run, wait for success, fetch items, and
+ * log the run to `apify_runs` — all with a single call.
+ *
+ * Use this from new scraper code so we capture every actor's cost, not
+ * just reddit + SERP. On failure (start failed, timed out, aborted) we
+ * still record the row so we can see dollars spent even on partial runs.
+ */
+export async function runAndLogApifyActor(
+  actorId: string,
+  input: Record<string, unknown>,
+  apiKey: string,
+  options: {
+    /** Defaults to 4 minutes — most scrapers finish well under this. */
+    maxWaitMs?: number;
+    pollIntervalMs?: number;
+    /** Defaults to 1000 — increase only when you know you need more. */
+    fetchLimit?: number;
+    context: ApifyRunContext;
+  },
+): Promise<{ runId: string | null; items: unknown[]; succeeded: boolean }> {
+  const { context } = options;
+  const runId = await startApifyActorRun(actorId, input, apiKey);
+
+  if (!runId) {
+    await recordApifyRun({
+      runId: '',
+      actorId,
+      apiKey,
+      context,
+      startFailure: { error: `Actor ${actorId} failed to start` },
+    });
+    return { runId: null, items: [], succeeded: false };
+  }
+
+  const succeeded = await waitForApifyRunSuccess(
+    runId,
+    apiKey,
+    options.maxWaitMs ?? 240_000,
+    options.pollIntervalMs ?? 3000,
+  );
+
+  // Log regardless of success — we're billed for compute either way.
+  await recordApifyRun({ runId, actorId, apiKey, context });
+
+  if (!succeeded) return { runId, items: [], succeeded: false };
+
+  const items = await fetchApifyDatasetItems(runId, apiKey, options.fetchLimit ?? 1000);
+  return { runId, items, succeeded: true };
 }
 
 /**

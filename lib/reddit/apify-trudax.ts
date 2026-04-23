@@ -66,20 +66,48 @@ export function mapTimeRangeForActor(timeRange: string): {
   }
 }
 
-/** Target total posts. Priority: explicit override > volume tier fallback. */
+/**
+ * Hard cap on a single Reddit run. trudax pricing is ~$0.004/item, so 200 items
+ * per run keeps each run <$0.80 even on deep. Fix for the 2026-04-23 incident
+ * where volume=deep with 50 comments blew up a single run to ~1,268 items /
+ * $4.86 because the item-budget formula (posts × (1 + comments)) inflated
+ * way past what the admin configured.
+ */
+const HARD_MAX_POSTS_PER_RUN = 200;
+const HARD_MAX_COMMENTS_PER_POST = 10;
+
+/**
+ * Target total posts. Priority:
+ *   1. explicit admin override (any numeric value >=0 wins — 0 means
+ *      "skip Reddit entirely", which is a valid admin choice and MUST NOT
+ *      fall through to the volume default)
+ *   2. volume-tier fallback (for callers that don't pass settings)
+ *
+ * Always clamped to HARD_MAX_POSTS_PER_RUN at the end.
+ */
 function targetPosts(volume: string, override?: number): number {
-  if (typeof override === 'number' && override > 0) return override;
-  if (volume === 'deep') return 500;
-  if (volume === 'medium') return 100;
-  return 20;
+  const chosen =
+    typeof override === 'number' && !Number.isNaN(override)
+      ? Math.max(0, override)
+      : volume === 'deep'
+        ? 150
+        : volume === 'medium'
+          ? 80
+          : 20;
+  return Math.min(chosen, HARD_MAX_POSTS_PER_RUN);
 }
 
-/** Max comments per post. Priority: explicit override > volume tier fallback. */
+/** Max comments per post. Same rules as targetPosts + hard cap. */
 function commentsPerPost(volume: string, override?: number): number {
-  if (typeof override === 'number' && override > 0) return override;
-  if (volume === 'deep') return 25;
-  if (volume === 'medium') return 15;
-  return 5;
+  const chosen =
+    typeof override === 'number' && !Number.isNaN(override)
+      ? Math.max(0, override)
+      : volume === 'deep'
+        ? 8
+        : volume === 'medium'
+          ? 5
+          : 3;
+  return Math.min(chosen, HARD_MAX_COMMENTS_PER_POST);
 }
 
 function parseIsoToUnix(s: unknown): number {
@@ -191,9 +219,11 @@ export async function gatherRedditViaTrudaxApify(
   const maxComments = commentsPerPost(volume, overrides.commentsPerPostOverride);
 
   // maxItems caps the *total* dataset rows (posts + comments). Budget for
-  // every post bringing back up to maxComments rows, so we don't get stuck
-  // with 20 mixed rows when the caller asked for 20 posts.
-  const itemBudget = Math.min(2000, maxItems * (1 + maxComments));
+  // every post bringing back up to maxComments rows. Capped HARD at
+  // maxItems × 4 (so 150 posts + 8 comments budgets to 600 rows, not 1350).
+  // The actor stops early anyway when it exhausts the search space;
+  // over-budgeting just lets it pull more noise without more signal.
+  const itemBudget = Math.min(800, maxItems * 4);
 
   const input: Record<string, unknown> = {
     searches: [query],

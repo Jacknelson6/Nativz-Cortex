@@ -14,9 +14,7 @@
  */
 
 import {
-  startApifyActorRun,
-  waitForApifyRunSuccess,
-  fetchApifyDatasetItems,
+  runAndLogApifyActor,
   getApifyRunFailureReason,
 } from '@/lib/tiktok/apify-run';
 import type { ProspectProfile, ProspectVideo } from './types';
@@ -112,20 +110,23 @@ function extractHashtagsFromCaption(caption: string): string[] {
 }
 
 async function fetchProfile(username: string, apiKey: string): Promise<IGProfileItem | null> {
-  const runId = await startApifyActorRun(PROFILE_ACTOR_ID, { usernames: [username] }, apiKey);
+  const { runId, items, succeeded } = await runAndLogApifyActor(
+    PROFILE_ACTOR_ID,
+    { usernames: [username] },
+    apiKey,
+    { maxWaitMs: 240_000, fetchLimit: 5, context: { purpose: 'audit_ig_profile' } },
+  );
   if (!runId) return null;
-  const ok = await waitForApifyRunSuccess(runId, apiKey, 240000, 3000);
-  if (!ok) {
+  if (!succeeded) {
     const reason = await getApifyRunFailureReason(runId, apiKey);
     console.error(`[audit] IG profile actor failed for @${username}: ${reason}`);
     return null;
   }
-  const items = (await fetchApifyDatasetItems(runId, apiKey, 5)) as IGProfileItem[];
-  return items[0] ?? null;
+  return (items as IGProfileItem[])[0] ?? null;
 }
 
 async function fetchPosts(username: string, apiKey: string): Promise<IGPostItem[]> {
-  const runId = await startApifyActorRun(
+  const { runId, items, succeeded } = await runAndLogApifyActor(
     POSTS_ACTOR_ID,
     {
       directUrls: [`https://www.instagram.com/${username}/`],
@@ -134,15 +135,15 @@ async function fetchPosts(username: string, apiKey: string): Promise<IGPostItem[
       addParentData: false,
     },
     apiKey,
+    { maxWaitMs: 240_000, fetchLimit: 50, context: { purpose: 'audit_ig_posts' } },
   );
   if (!runId) return [];
-  const ok = await waitForApifyRunSuccess(runId, apiKey, 240000, 3000);
-  if (!ok) {
+  if (!succeeded) {
     const reason = await getApifyRunFailureReason(runId, apiKey);
     console.error(`[audit] IG posts actor failed for @${username}: ${reason}`);
     return [];
   }
-  return (await fetchApifyDatasetItems(runId, apiKey, 50)) as IGPostItem[];
+  return items as IGPostItem[];
 }
 
 export async function scrapeInstagramProfile(profileUrl: string): Promise<InstagramProfileResult> {

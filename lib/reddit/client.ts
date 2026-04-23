@@ -1,9 +1,14 @@
-// lib/reddit/client.ts — Reddit data via Apify (trudax/reddit-scraper-lite).
+// lib/reddit/client.ts — Reddit data via Apify.
 //
-// Entry point called by the platform router. SearXNG + direct-scrape paths
-// were removed 2026-04-23: we never ran SearXNG in production (localhost only),
-// and the Apify path is cheaper + more reliable. See apify-trudax.ts for the
-// actor-specific logic and lib/apify/record-run.ts for cost tracking.
+// Default path: macrocosmos/reddit-scraper (~$0.0005/item, ~7× cheaper than
+// trudax). Falls back to trudax/reddit-scraper-lite if macrocosmos returns
+// nothing — trudax also includes top_comments which some downstream use
+// cases prefer.
+//
+// Opt out of macrocosmos with APIFY_REDDIT_PROVIDER=trudax (useful while
+// validating the swap on a per-environment basis). See apify-macrocosmos.ts
+// + apify-trudax.ts for the actor-specific logic and lib/apify/record-run.ts
+// for cost tracking.
 
 export interface RedditPost {
   id: string;
@@ -40,6 +45,8 @@ export interface RedditRunContext {
   postsOverride?: number;
   /** Override per-run comments-per-post ceiling (from scraper_settings). */
   commentsPerPostOverride?: number;
+  /** Topic subtopics passed to the LLM subreddit-discovery step. */
+  subtopics?: string[];
 }
 
 /**
@@ -62,8 +69,39 @@ export async function gatherRedditData(
     return { posts: [], topSubreddits: [], totalPosts: 0, postsWithComments: [] };
   }
 
-  const { topicSearchId, clientId, postsOverride, commentsPerPostOverride } = runContext;
+  const { topicSearchId, clientId, postsOverride, commentsPerPostOverride, subtopics } = runContext;
 
+  // Provider choice — macrocosmos by default (cheaper). Set
+  // APIFY_REDDIT_PROVIDER=trudax to pin the old path (e.g. when a specific
+  // downstream use needs comment threads).
+  const provider = (process.env.APIFY_REDDIT_PROVIDER ?? 'macrocosmos').toLowerCase();
+
+  if (provider === 'macrocosmos') {
+    try {
+      const [{ gatherRedditViaMacrocosmosApify }, { discoverSubredditsForTopic }] = await Promise.all([
+        import('@/lib/reddit/apify-macrocosmos'),
+        import('@/lib/reddit/discover-subreddits'),
+      ]);
+      // Fire subreddit discovery in parallel with the rest of setup — the
+      // LLM call + the Apify actor run both take ~a few seconds.
+      const subreddits = await discoverSubredditsForTopic(query, subtopics ?? []);
+      const limit = typeof postsOverride === 'number' && postsOverride > 0
+        ? Math.min(250, postsOverride)
+        : 150;
+      const result = await gatherRedditViaMacrocosmosApify(query, apiKey, {
+        subreddits,
+        limit,
+        sort: 'top',
+        runContext: { topicSearchId, clientId },
+      });
+      if (result && result.postsWithComments.length > 0) return result;
+      console.warn('[reddit] macrocosmos returned empty; falling back to trudax');
+    } catch (err) {
+      console.error('[reddit] macrocosmos failed, falling back to trudax:', err);
+    }
+  }
+
+  // Fallback (or explicit provider=trudax) — original path with comments
   try {
     const { gatherRedditViaTrudaxApify } = await import('@/lib/reddit/apify-trudax');
     const result = await gatherRedditViaTrudaxApify(

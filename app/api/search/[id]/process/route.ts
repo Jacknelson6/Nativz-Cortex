@@ -131,6 +131,39 @@ export async function POST(
     const platforms: string[] = search.platforms ?? ['web'];
     const volume: string = search.volume ?? 'medium';
 
+    // Per-search budget guard — projects total Apify spend from current
+    // scraper_settings and rejects the search if it would exceed
+    // SEARCH_BUDGET_USD (default $2). Stops the kind of runaway spend
+    // that caused the 2026-04-23 $37 Apify bill incident.
+    try {
+      const { getScraperSettings } = await import('@/lib/search/scraper-settings');
+      const { checkSearchBudget } = await import('@/lib/search/budget-guard');
+      const settings = await getScraperSettings();
+      const budget = checkSearchBudget(settings);
+      if (!budget.ok) {
+        console.warn('[search:process] budget guard tripped:', budget.reason);
+        await adminClient
+          .from('topic_searches')
+          .update({
+            status: 'failed',
+            error_message: budget.reason ?? 'Projected cost exceeds per-search budget',
+          })
+          .eq('id', id);
+        return NextResponse.json(
+          {
+            error: budget.reason ?? 'Over budget',
+            projected_usd: budget.projectedUsd,
+            drop_suggestions: budget.dropSuggestions,
+          },
+          { status: 402 }, // Payment Required is the honest status here
+        );
+      }
+    } catch (err) {
+      // Budget guard is belt-and-braces — a failure here shouldn't block a
+      // search from running. Log and proceed.
+      console.warn('[search:process] budget guard errored (ignoring):', err);
+    }
+
     try {
       const MAX_RETRIES = 3;
       let lastError: Error | null = null;

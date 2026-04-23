@@ -22,9 +22,7 @@
  */
 
 import {
-  startApifyActorRun,
-  waitForApifyRunSuccess,
-  fetchApifyDatasetItems,
+  runAndLogApifyActor,
   getApifyRunFailureReason,
 } from '@/lib/tiktok/apify-run';
 import type { ProspectProfile, ProspectVideo } from './types';
@@ -133,15 +131,19 @@ async function fetchPageProfile(pageUrl: string, apiKey: string): Promise<FBPage
     ? { endpoint: 'details_by_url', urls_text: pageUrl }
     : { startUrls: [{ url: pageUrl }] };
 
-  const runId = await startApifyActorRun(PROFILE_ACTOR_ID, input, apiKey);
+  const { runId, items: rawItems, succeeded } = await runAndLogApifyActor(
+    PROFILE_ACTOR_ID,
+    input,
+    apiKey,
+    { maxWaitMs: 180_000, fetchLimit: 5, context: { purpose: 'audit_fb_profile' } },
+  );
   if (!runId) return null;
-  const ok = await waitForApifyRunSuccess(runId, apiKey, 180_000, 3_000);
-  if (!ok) {
+  if (!succeeded) {
     const reason = await getApifyRunFailureReason(runId, apiKey);
     console.warn(`[audit] FB profile actor failed: ${reason}`);
     return null;
   }
-  const items = (await fetchApifyDatasetItems(runId, apiKey, 5)) as FBPageItem[];
+  const items = rawItems as FBPageItem[];
 
   // Field-drift telemetry — log raw top-level keys once per run so actor
   // schema changes show up in logs before they silently produce empty cards.
@@ -187,22 +189,22 @@ interface FBReelItem {
 
 async function fetchPageReels(pageUrl: string, apiKey: string): Promise<FBReelItem[]> {
   console.log(`[audit] FB reels actor → ${pageUrl}`);
-  const runId = await startApifyActorRun(
+  const { runId, items: rawItems, succeeded } = await runAndLogApifyActor(
     REELS_ACTOR_ID,
     {
       startUrls: [{ url: pageUrl }],
       resultsLimit: 25,
     },
     apiKey,
+    { maxWaitMs: 180_000, fetchLimit: 50, context: { purpose: 'audit_fb_reels' } },
   );
   if (!runId) return [];
-  const ok = await waitForApifyRunSuccess(runId, apiKey, 180_000, 3_000);
-  if (!ok) {
+  if (!succeeded) {
     const reason = await getApifyRunFailureReason(runId, apiKey);
     console.warn(`[audit] FB reels actor failed: ${reason}`);
     return [];
   }
-  const items = (await fetchApifyDatasetItems(runId, apiKey, 50)) as FBReelItem[];
+  const items = rawItems as FBReelItem[];
   // Drop error-only items (reels scraper uses the same {url, error, errorDescription}
   // failure shape as the posts scraper).
   return items.filter((i) => !i.error && (i.topLevelReelUrl || i.id || i.text));

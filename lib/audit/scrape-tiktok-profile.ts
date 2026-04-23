@@ -12,9 +12,7 @@
  */
 
 import {
-  startApifyActorRun,
-  waitForApifyRunSuccess,
-  fetchApifyDatasetItems,
+  runAndLogApifyActor,
   getApifyRunFailureReason,
 } from '@/lib/tiktok/apify-run';
 import type { ProspectProfile, ProspectVideo } from './types';
@@ -120,7 +118,11 @@ export async function scrapeTikTokProfile(profileUrl: string): Promise<TikTokPro
   const apiKey = getApiKey();
   console.log(`[audit] Scraping TikTok profile @${username} via Apify (${ACTOR_ID})`);
 
-  const runId = await startApifyActorRun(
+  // Uses the tracked wrapper so every run lands in `apify_runs` — prior to
+  // 2026-04-23 this path was unlogged and accounted for the biggest slice
+  // of the $37 Apify spike ($9.75 from 32,484 apidojo/tiktok-profile-scraper
+  // events). Still costs what it costs; we just get visibility now.
+  const { runId, items: rawItems, succeeded } = await runAndLogApifyActor(
     ACTOR_ID,
     {
       startUrls: [`https://www.tiktok.com/@${username}`],
@@ -131,17 +133,19 @@ export async function scrapeTikTokProfile(profileUrl: string): Promise<TikTokPro
       shouldDownloadSlideshowImages: false,
     },
     apiKey,
+    {
+      maxWaitMs: 240_000,
+      fetchLimit: 50,
+      context: { purpose: 'audit_tiktok_profile' },
+    },
   );
 
   if (!runId) throw new Error(`Failed to start Apify actor for TikTok @${username}`);
-
-  const success = await waitForApifyRunSuccess(runId, apiKey, 240000, 3000);
-  if (!success) {
+  if (!succeeded) {
     const reason = await getApifyRunFailureReason(runId, apiKey);
     throw new Error(`TikTok scrape failed for @${username}: ${reason}`);
   }
-
-  const items = (await fetchApifyDatasetItems(runId, apiKey, 50)) as TikTokActorItem[];
+  const items = rawItems as TikTokActorItem[];
   if (items.length === 0) {
     throw new Error(`No videos returned for TikTok @${username}. The profile may be private or have no public content.`);
   }
