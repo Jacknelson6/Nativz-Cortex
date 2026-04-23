@@ -44,9 +44,12 @@ export async function syncSocialProfile(
   const platform = profile.platform;
   const lateAccountId = profile.late_account_id;
 
-  // Follower stats + daily metrics + IG insights in parallel.
+  // Follower stats + daily metrics + IG insights + per-post analytics in parallel.
+  // Posts are pulled here (instead of in a later try/catch) so YouTube can fan
+  // out to per-video daily-views endpoints without serializing an extra round-
+  // trip.
   try {
-    const [followerStats, dailyMetrics, igInsights] = await Promise.all([
+    const [followerStats, dailyMetrics, igInsights, posts] = await Promise.all([
       service.getFollowerStats(lateAccountId, dateRange.start, dateRange.end),
       service.getDailyMetrics({
         accountId: lateAccountId,
@@ -56,7 +59,66 @@ export async function syncSocialProfile(
       platform === 'instagram'
         ? zernio.getInstagramInsights(lateAccountId, dateRange.start, dateRange.end)
         : Promise.resolve({ profileVisits: [], reachSeries: [] }),
+      service.getPostAnalytics({
+        accountId: lateAccountId,
+        startDate: dateRange.start,
+        endDate: dateRange.end,
+      }),
     ]);
+
+    // Per-video watch time + retention for YouTube posts.
+    //
+    // Zernio's standard /analytics endpoint only returns views/likes/etc for
+    // each post; watch time lives on /analytics/youtube/daily-views?videoId=X.
+    // We fan out in parallel — typical account has 10–40 YT videos in the
+    // window. TikTok has no equivalent watch-time endpoint in Zernio, so
+    // ytAggregates stays empty for non-YT profiles and the post_metrics rows
+    // are upserted with zeros.
+    interface YtAgg {
+      watchSec: number;
+      avgViewDur: number;
+      subsG: number;
+      subsL: number;
+    }
+    const ytAggregates = new Map<string, YtAgg>();
+    const ytWatchMinutesByDay = new Map<string, number>();
+
+    if (platform === 'youtube' && posts.length > 0) {
+      const videoPosts = posts.filter((p) => !!p.platformPostId);
+      const pulls = await Promise.all(
+        videoPosts.map(async (p) => {
+          const rows = await zernio.getYoutubeDailyViews(lateAccountId, p.platformPostId!);
+          return { p, rows };
+        }),
+      );
+      for (const { p, rows } of pulls) {
+        if (rows.length === 0) continue;
+        const watchSec = Math.round(
+          rows.reduce((s, r) => s + r.estimatedMinutesWatched * 60, 0),
+        );
+        const totalViewsInSeries = rows.reduce((s, r) => s + r.views, 0);
+        // View-weighted average so one day with 5k views dominates a day with 10.
+        const avgViewDur =
+          totalViewsInSeries > 0
+            ? rows.reduce((s, r) => s + r.averageViewDuration * r.views, 0) /
+              totalViewsInSeries
+            : 0;
+        const subsG = rows.reduce((s, r) => s + r.subscribersGained, 0);
+        const subsL = rows.reduce((s, r) => s + r.subscribersLost, 0);
+        ytAggregates.set(p.postId, {
+          watchSec,
+          avgViewDur: Math.round(avgViewDur * 100) / 100,
+          subsG,
+          subsL,
+        });
+        for (const r of rows) {
+          ytWatchMinutesByDay.set(
+            r.date,
+            (ytWatchMinutesByDay.get(r.date) ?? 0) + r.estimatedMinutesWatched,
+          );
+        }
+      }
+    }
 
     const followersByDay = new Map<string, number>();
     for (const p of followerStats.series) followersByDay.set(p.date, p.followers);
@@ -115,7 +177,10 @@ export async function syncSocialProfile(
         impressions_count: day.impressions,
         link_clicks_count: day.clicks,
         profile_visits_count: profileVisitsByDay.get(day.date) ?? 0,
-        watch_time_seconds: 0,
+        // Only YouTube exposes per-day watch time right now. Summed in seconds
+        // across every video that got views on this day. Stays 0 for TikTok /
+        // IG / FB because Zernio doesn't expose watch-time for those platforms.
+        watch_time_seconds: Math.round((ytWatchMinutesByDay.get(day.date) ?? 0) * 60),
         follower_growth_percent: followerStats.growthPercent,
       }));
 
@@ -159,38 +224,36 @@ export async function syncSocialProfile(
         .from('platform_follower_daily')
         .upsert(rows, { onConflict: 'social_profile_id,day' });
     }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    result.errors.push(`Failed to sync insights for ${platform}: ${message}`);
-  }
 
-  // Per-post analytics → post_metrics.
-  try {
-    const posts = await service.getPostAnalytics({
-      accountId: lateAccountId,
-      startDate: dateRange.start,
-      endDate: dateRange.end,
-    });
-
+    // Per-post analytics — merge YT video-detail aggregates in here so the
+    // post_metrics upsert carries watch time + retention in one write.
     if (posts.length > 0) {
-      const postRows = posts.map((p) => ({
-        social_profile_id: profile.id,
-        client_id: clientId,
-        platform,
-        external_post_id: p.postId,
-        post_url: p.postUrl,
-        thumbnail_url: p.thumbnailUrl,
-        caption: p.caption,
-        post_type: p.postType,
-        published_at: p.publishedAt,
-        views_count: p.views ?? p.impressions ?? 0,
-        likes_count: p.likes ?? 0,
-        comments_count: p.comments ?? 0,
-        shares_count: p.shares ?? 0,
-        saves_count: p.saves ?? 0,
-        reach_count: p.reach ?? 0,
-        fetched_at: new Date().toISOString(),
-      }));
+      const postRows = posts.map((p) => {
+        const yt = ytAggregates.get(p.postId);
+        return {
+          social_profile_id: profile.id,
+          client_id: clientId,
+          platform,
+          external_post_id: p.postId,
+          post_url: p.postUrl,
+          thumbnail_url: p.thumbnailUrl,
+          caption: p.caption,
+          post_type: p.postType,
+          published_at: p.publishedAt,
+          views_count: p.views ?? p.impressions ?? 0,
+          likes_count: p.likes ?? 0,
+          comments_count: p.comments ?? 0,
+          shares_count: p.shares ?? 0,
+          saves_count: p.saves ?? 0,
+          reach_count: p.reach ?? 0,
+          impressions_count: p.impressions ?? 0,
+          watch_time_seconds: yt?.watchSec ?? 0,
+          avg_view_duration_seconds: yt?.avgViewDur ?? 0,
+          subscribers_gained: yt?.subsG ?? 0,
+          subscribers_lost: yt?.subsL ?? 0,
+          fetched_at: new Date().toISOString(),
+        };
+      });
 
       const { error: postsError } = await adminClient
         .from('post_metrics')
@@ -208,7 +271,7 @@ export async function syncSocialProfile(
     result.platforms.push(platform);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    result.errors.push(`Failed to sync posts for ${platform}: ${message}`);
+    result.errors.push(`Failed to sync insights for ${platform}: ${message}`);
   }
 }
 

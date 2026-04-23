@@ -150,7 +150,7 @@ export async function GET(request: NextRequest) {
     const { data: postRows } = await supabase
       .from('post_metrics')
       .select(
-        'social_profile_id, platform, published_at, thumbnail_url, post_url, caption, views_count',
+        'social_profile_id, platform, published_at, thumbnail_url, post_url, caption, views_count, watch_time_seconds, avg_view_duration_seconds',
       )
       .eq('client_id', clientId)
       .gte('published_at', `${start}T00:00:00`)
@@ -158,6 +158,12 @@ export async function GET(request: NextRequest) {
       .order('published_at', { ascending: true });
 
     const postsByProfile = new Map<string, TimelinePost[]>();
+    // Per-profile view-weighted avg watch duration. Only YouTube populates
+    // avg_view_duration_seconds on post_metrics today, so this stays at 0 for
+    // other platforms until Zernio exposes equivalent data.
+    const avgWatchDurationByProfile = new Map<string, number>();
+    const watchDurationAccumByProfile = new Map<string, { weightedSum: number; totalViews: number }>();
+
     for (const row of postRows ?? []) {
       if (!row.social_profile_id || !row.published_at) continue;
       const date = String(row.published_at).split('T')[0];
@@ -170,6 +176,21 @@ export async function GET(request: NextRequest) {
         views: row.views_count ?? 0,
       });
       postsByProfile.set(row.social_profile_id, list);
+
+      const avgDur = Number(row.avg_view_duration_seconds ?? 0);
+      const views = row.views_count ?? 0;
+      if (avgDur > 0 && views > 0) {
+        const acc = watchDurationAccumByProfile.get(row.social_profile_id) ?? {
+          weightedSum: 0,
+          totalViews: 0,
+        };
+        acc.weightedSum += avgDur * views;
+        acc.totalViews += views;
+        watchDurationAccumByProfile.set(row.social_profile_id, acc);
+      }
+    }
+    for (const [id, acc] of watchDurationAccumByProfile) {
+      avgWatchDurationByProfile.set(id, acc.totalViews > 0 ? acc.weightedSum / acc.totalViews : 0);
     }
 
     const snapshots = (currentSnapshots ?? []) as PlatformSnapshot[];
@@ -345,6 +366,12 @@ export async function GET(request: NextRequest) {
         })(),
       };
 
+      const totalWatchTimeSeconds = snaps.reduce(
+        (sum, s) => sum + (s.watch_time_seconds ?? 0),
+        0,
+      );
+      const avgViewDurationSeconds = avgWatchDurationByProfile.get(profileId) ?? 0;
+
       platformSummaries.push({
         platform: profile.platform,
         username: profile.username ?? '',
@@ -355,6 +382,8 @@ export async function GET(request: NextRequest) {
         totalEngagement,
         engagementRate: Math.round(avgEngRate * 100) / 100,
         postsCount,
+        watchTimeSeconds: totalWatchTimeSeconds,
+        avgViewDurationSeconds: Math.round(avgViewDurationSeconds * 100) / 100,
         metrics,
         posts: postsByProfile.get(profileId) ?? [],
       });
@@ -484,6 +513,8 @@ export async function GET(request: NextRequest) {
       engagement: p.totalEngagement,
       engagementRate: p.engagementRate,
       postsCount: p.postsCount,
+      watchTimeSeconds: p.watchTimeSeconds,
+      avgViewDurationSeconds: p.avgViewDurationSeconds,
     }));
 
     const report: SummaryReport = {

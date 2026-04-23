@@ -156,6 +156,9 @@ export interface InstagramInsights {
 
 export interface PostAnalyticsItem {
   postId: string;
+  /** Native platform post id (YouTube videoId, TikTok videoId, IG media id, etc.).
+   * Needed to drill into platform-specific endpoints like YT daily-views. */
+  platformPostId: string | null;
   platform: SocialPlatform;
   postUrl: string | null;
   thumbnailUrl: string | null;
@@ -206,6 +209,7 @@ export interface LateAnalyticsPost {
   platforms: Array<{
     platform: string;
     status: string;
+    platformPostId: string | null;
     accountId: string;
     accountUsername: string;
     analytics: {

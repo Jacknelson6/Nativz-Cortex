@@ -162,6 +162,7 @@ function mapZernioAnalyticsPost(raw: unknown): LateAnalyticsPost | null {
     return {
       platform: pickString(pr, 'platform') ?? 'unknown',
       status: pickString(pr, 'status') ?? 'unknown',
+      platformPostId: pickString(pr, 'platformPostId', 'platform_post_id'),
       accountId: pickString(pr, 'accountId', 'account_id') ?? '',
       accountUsername: pickString(pr, 'accountUsername', 'account_username') ?? '',
       analytics: a
@@ -855,6 +856,7 @@ export class ZernioPostingService implements PostingService {
         const analytics = platformEntry?.analytics ?? mapped.analytics;
         out.push({
           postId: mapped._id,
+          platformPostId: platformEntry?.platformPostId ?? null,
           platform: (platformEntry?.platform ?? mapped.platform ?? 'instagram') as SocialPlatform,
           postUrl: mapped.platformPostUrl ?? null,
           thumbnailUrl: mapped.thumbnailUrl ?? null,

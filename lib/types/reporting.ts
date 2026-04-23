@@ -120,7 +120,12 @@ export interface PlatformSummary {
     reach?: MetricCard;
     impressions?: MetricCard;
     profileVisits?: MetricCard;
+    watchTime?: MetricCard;
   };
+  /** YouTube-only: total seconds watched across all videos in the window. */
+  watchTimeSeconds?: number;
+  /** YouTube-only: view-weighted mean watch duration (seconds). */
+  avgViewDurationSeconds?: number;
   /** Posts that published in the window (for the thumbnail overlay). */
   posts?: TimelinePost[];
 }
@@ -141,6 +146,11 @@ export interface PlatformBreakdownRow {
   engagement: number;
   engagementRate: number;
   postsCount: number;
+  /** Total video watch time in the window, in seconds. YouTube only — Zernio
+   * doesn't surface this for TikTok/IG/FB. Rendered as minutes in the UI. */
+  watchTimeSeconds?: number;
+  /** View-weighted average watch duration in seconds. YouTube only. */
+  avgViewDurationSeconds?: number;
 }
 
 export interface SummaryReport {

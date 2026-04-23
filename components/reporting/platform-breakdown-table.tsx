@@ -14,6 +14,24 @@ function formatNumber(n: number): string {
   return String(Math.round(n));
 }
 
+/** Format seconds as "12m" / "1h 23m" / "12:03" depending on magnitude. */
+function formatWatchTime(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const mins = Math.round(seconds / 60);
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  const remainder = mins % 60;
+  return remainder === 0 ? `${hours}h` : `${hours}h ${remainder}m`;
+}
+
+/** Format a short "avg view" like 14s or 1:23 for longer. */
+function formatAvgDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds.toFixed(0)}s`;
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.round(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
 const PLATFORM_LABELS: Record<string, string> = {
   facebook: 'Facebook',
   instagram: 'Instagram',
@@ -63,6 +81,12 @@ export function PlatformBreakdownTable({ rows }: PlatformBreakdownTableProps) {
   if (!rows.length) return null;
   const sorted = [...rows].sort((a, b) => b.followers - a.followers);
 
+  // Only show the video columns when at least one platform reports watch time.
+  // Keeps the table visually quieter for clients without YouTube.
+  const hasVideoData = sorted.some(
+    (r) => (r.watchTimeSeconds ?? 0) > 0 || (r.avgViewDurationSeconds ?? 0) > 0,
+  );
+
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between px-5 py-3 border-b border-nativz-border/70">
@@ -78,6 +102,22 @@ export function PlatformBreakdownTable({ rows }: PlatformBreakdownTableProps) {
               <th className="text-right font-medium px-3 py-2">Gained</th>
               <th className="text-right font-medium px-3 py-2">Posts</th>
               <th className="text-right font-medium px-3 py-2">Views</th>
+              {hasVideoData && (
+                <>
+                  <th
+                    className="text-right font-medium px-3 py-2"
+                    title="Total watch time across all videos in the window. YouTube only — Zernio doesn't expose this for TikTok or Instagram."
+                  >
+                    Watch time
+                  </th>
+                  <th
+                    className="text-right font-medium px-3 py-2"
+                    title="View-weighted average watch duration per video. YouTube only."
+                  >
+                    Avg view
+                  </th>
+                </>
+              )}
               <th className="text-right font-medium px-3 py-2">Engagement</th>
               <th className="text-right font-medium px-5 py-2">ER</th>
             </tr>
@@ -86,6 +126,8 @@ export function PlatformBreakdownTable({ rows }: PlatformBreakdownTableProps) {
             {sorted.map((r) => {
               const er = computeEngagementRate(r);
               const label = PLATFORM_LABELS[r.platform] ?? r.platform;
+              const watchTime = r.watchTimeSeconds ?? 0;
+              const avgDur = r.avgViewDurationSeconds ?? 0;
               return (
                 <tr key={`${r.platform}-${r.username}`} className="hover:bg-surface-hover/40 transition-colors">
                   <td className="px-5 py-3">
@@ -103,6 +145,16 @@ export function PlatformBreakdownTable({ rows }: PlatformBreakdownTableProps) {
                   </td>
                   <td className="px-3 py-3 text-right tabular-nums text-text-muted">{r.postsCount}</td>
                   <td className="px-3 py-3 text-right tabular-nums text-text-primary">{formatNumber(r.views)}</td>
+                  {hasVideoData && (
+                    <>
+                      <td className="px-3 py-3 text-right tabular-nums text-text-primary">
+                        {watchTime > 0 ? formatWatchTime(watchTime) : <span className="text-text-muted/60">—</span>}
+                      </td>
+                      <td className="px-3 py-3 text-right tabular-nums text-text-primary">
+                        {avgDur > 0 ? formatAvgDuration(avgDur) : <span className="text-text-muted/60">—</span>}
+                      </td>
+                    </>
+                  )}
                   <td className="px-3 py-3 text-right tabular-nums text-text-primary">{formatNumber(r.engagement)}</td>
                   <td className="px-5 py-3 text-right tabular-nums text-text-primary">{er.toFixed(2)}%</td>
                 </tr>
