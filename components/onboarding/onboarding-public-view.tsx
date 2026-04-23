@@ -1,6 +1,8 @@
 'use client';
 
-import { Check } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Check, Loader2, Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
 
 type PhaseStatus = 'not_started' | 'in_progress' | 'done';
 type ItemOwner = 'agency' | 'client';
@@ -12,6 +14,7 @@ type Tracker = {
   service: string;
   title: string | null;
   status: string;
+  share_token: string;
   started_at: string | null;
   completed_at: string | null;
   clients: { name: string; slug: string; logo_url: string | null } | null;
@@ -66,17 +69,20 @@ const STATUS_STYLE: Record<PhaseStatus, {
 };
 
 /**
- * Public client-facing onboarding view. Mirrors the layout RankPrompt
- * ships (vertical timeline with alternating left/right phase cards,
- * numbered status nodes, action buttons, "what we need from you"
- * callouts, a checklist below the timeline). Read-only — clients can't
- * edit anything here.
+ * Public client-facing onboarding view. Vertical timeline (alternating left/
+ * right on md+, stacked on mobile) + a below-the-fold checklist. Client-owned
+ * tasks are **tappable** — the client ticks them and the change round-trips
+ * through /api/onboarding/public/item-toggle, guarded by the share token.
+ *
+ * Agency-owned tasks stay read-only here; the admin marks those done from the
+ * editor. The UI makes the difference obvious (tap affordance on client tasks,
+ * plain state dot on agency tasks).
  */
 export function OnboardingPublicView({
   tracker,
   phases,
   groups,
-  items,
+  items: initialItems,
   agency = 'nativz',
 }: {
   tracker: Tracker;
@@ -89,9 +95,57 @@ export function OnboardingPublicView({
   const logoUrl = tracker.clients?.logo_url;
   const brandName = agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz Cortex';
 
+  // Items are local state so client-side toggles feel instant. Server is the
+  // source of truth — we rollback on error and resync on mount.
+  const [items, setItems] = useState<Item[]>(initialItems);
+  useEffect(() => { setItems(initialItems); }, [initialItems]);
+
   const totalItems = items.length;
   const doneItems = items.filter((it) => it.status === 'done').length;
   const progressPct = totalItems === 0 ? 0 : Math.round((doneItems / totalItems) * 100);
+
+  // Completion celebration — one-time, reset on fresh page load. Ticks when
+  // the last item of the last-rendered checklist flips. Keeps state local so
+  // it doesn't re-fire if the server reloads progress.
+  const [celebrated, setCelebrated] = useState(false);
+  useEffect(() => {
+    if (progressPct === 100 && !celebrated && totalItems > 0) {
+      setCelebrated(true);
+      toast.success("You're all set. We've got it from here.");
+    }
+  }, [progressPct, celebrated, totalItems]);
+
+  const clientOwnedTotal = useMemo(() => items.filter((it) => it.owner === 'client').length, [items]);
+  const clientOwnedDone = useMemo(
+    () => items.filter((it) => it.owner === 'client' && it.status === 'done').length,
+    [items],
+  );
+
+  async function toggleItem(item: Item) {
+    if (item.owner !== 'client') return; // UI should prevent, but be safe.
+    const nextStatus: ItemStatus = item.status === 'done' ? 'pending' : 'done';
+    // Optimistic flip.
+    setItems((xs) => xs.map((it) => (it.id === item.id ? { ...it, status: nextStatus } : it)));
+    try {
+      const res = await fetch('/api/onboarding/public/item-toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          share_token: tracker.share_token,
+          item_id: item.id,
+          done: nextStatus === 'done',
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error((d as { error?: string }).error || 'Failed to save');
+      }
+    } catch (err) {
+      // Rollback + gentle toast. Never a full-page error — keeps trust.
+      setItems((xs) => xs.map((it) => (it.id === item.id ? { ...it, status: item.status } : it)));
+      toast.error(err instanceof Error ? err.message : "Couldn't save that yet. Try again?");
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background text-text-primary">
@@ -123,24 +177,39 @@ export function OnboardingPublicView({
       <main className="max-w-4xl mx-auto px-6 py-10 md:py-14 space-y-10">
         {/* Hero */}
         <section className="text-center space-y-3">
-          <h1 className="text-[40px] md:text-[48px] font-semibold tracking-tight">
-            Your onboarding progress
+          <h1 className="text-[40px] md:text-[52px] font-semibold tracking-tight leading-[1.08]">
+            {progressPct === 100
+              ? "You're fully onboarded."
+              : progressPct > 0
+                ? 'Getting there.'
+                : "Let's get you set up."}
           </h1>
-          <p className="text-[16px] text-text-muted max-w-xl mx-auto">
-            Here&apos;s where we are in getting {tracker.service.toLowerCase()} up and running.
+          <p className="text-[16px] text-text-muted max-w-xl mx-auto leading-relaxed">
+            {progressPct === 100
+              ? `Everything's connected and approved. ${tracker.service} is live.`
+              : `Here's where we are with your ${tracker.service.toLowerCase()} rollout. Tap items below when you finish them — we'll take it from there.`}
           </p>
           {totalItems > 0 && (
             <div className="max-w-md mx-auto pt-3">
               <div className="flex items-center justify-between text-[12px] mb-1.5">
-                <span className="text-text-muted">Checklist</span>
-                <span className="text-text-secondary tabular-nums">{doneItems} of {totalItems} · {progressPct}%</span>
+                <span className="text-text-muted">Progress</span>
+                <span className="text-text-secondary tabular-nums">
+                  {doneItems} of {totalItems} · {progressPct}%
+                </span>
               </div>
-              <div className="h-1.5 rounded-full bg-surface-hover overflow-hidden">
+              <div className="h-2 rounded-full bg-surface-hover overflow-hidden">
                 <div
-                  className="h-full bg-accent-text transition-all duration-300"
+                  className={`h-full transition-all duration-500 ease-out ${
+                    progressPct === 100 ? 'bg-emerald-500' : 'bg-accent-text'
+                  }`}
                   style={{ width: `${progressPct}%` }}
                 />
               </div>
+              {clientOwnedTotal > 0 && progressPct < 100 && (
+                <p className="text-[11px] text-text-muted mt-2">
+                  {clientOwnedDone} of {clientOwnedTotal} things in your court are done.
+                </p>
+              )}
             </div>
           )}
         </section>
@@ -148,7 +217,6 @@ export function OnboardingPublicView({
         {/* Timeline */}
         {phases.length > 0 && (
           <section className="relative py-4">
-            {/* Center rail */}
             <div
               aria-hidden
               className="absolute left-4 md:left-1/2 top-0 bottom-0 w-px bg-nativz-border md:-translate-x-px"
@@ -164,7 +232,21 @@ export function OnboardingPublicView({
         {/* Checklist */}
         {groups.length > 0 && (
           <section className="space-y-6">
-            <h2 className="text-[22px] font-semibold">Checklist</h2>
+            <div className="flex items-end justify-between flex-wrap gap-2">
+              <div>
+                <h2 className="text-[22px] font-semibold">Checklist</h2>
+                <p className="text-[13px] text-text-muted">
+                  Tap your tasks when they're done. We'll handle the ones marked{' '}
+                  <span className="text-text-secondary font-medium">Us</span>.
+                </p>
+              </div>
+              {clientOwnedTotal > 0 && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-surface/60 text-accent-text text-[11px] font-semibold px-3 py-1 ring-1 ring-inset ring-accent/25">
+                  <Sparkles size={11} />
+                  You: {clientOwnedDone} / {clientOwnedTotal}
+                </span>
+              )}
+            </div>
             {groups.map((g) => {
               const groupItems = items.filter((it) => it.group_id === g.id);
               const groupDone = groupItems.filter((it) => it.status === 'done').length;
@@ -186,38 +268,7 @@ export function OnboardingPublicView({
                   ) : (
                     <ul className="divide-y divide-nativz-border">
                       {groupItems.map((it) => (
-                        <li key={it.id} className="flex items-center gap-3 px-4 py-2.5">
-                          <span
-                            className={`h-4 w-4 shrink-0 rounded-full border-2 flex items-center justify-center ${
-                              it.status === 'done'
-                                ? 'bg-emerald-500 border-emerald-500'
-                                : 'border-nativz-border'
-                            }`}
-                          >
-                            {it.status === 'done' && (
-                              <Check size={10} className="text-white" strokeWidth={3} />
-                            )}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p
-                              className={`text-[14px] ${
-                                it.status === 'done' ? 'line-through text-text-muted' : 'text-text-primary'
-                              }`}
-                            >
-                              {it.task}
-                            </p>
-                            {it.description && (
-                              <p className="text-[12px] text-text-muted mt-0.5">{it.description}</p>
-                            )}
-                          </div>
-                          <span
-                            className={`text-[10px] font-semibold uppercase tracking-wider shrink-0 ${
-                              it.owner === 'client' ? 'text-accent-text' : 'text-text-muted'
-                            }`}
-                          >
-                            {it.owner === 'client' ? 'You' : 'Us'}
-                          </span>
-                        </li>
+                        <ChecklistRow key={it.id} item={it} onToggle={toggleItem} />
                       ))}
                     </ul>
                   )}
@@ -235,16 +286,90 @@ export function OnboardingPublicView({
   );
 }
 
+// ─── Checklist row ────────────────────────────────────────────────────────
+
+function ChecklistRow({
+  item,
+  onToggle,
+}: {
+  item: Item;
+  onToggle: (item: Item) => void | Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const done = item.status === 'done';
+  const interactive = item.owner === 'client';
+
+  async function handleClick() {
+    if (!interactive || busy) return;
+    setBusy(true);
+    try { await onToggle(item); } finally { setBusy(false); }
+  }
+
+  const wrapperCls = interactive
+    ? 'group flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-surface-hover/40 transition-colors'
+    : 'flex items-center gap-3 px-4 py-3';
+
+  return (
+    <li
+      className={wrapperCls}
+      onClick={handleClick}
+      onKeyDown={(e) => {
+        if (!interactive) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          void handleClick();
+        }
+      }}
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      aria-pressed={interactive ? done : undefined}
+    >
+      <span
+        className={`h-5 w-5 shrink-0 rounded-full border-2 flex items-center justify-center transition-all duration-150 ${
+          done
+            ? 'bg-emerald-500 border-emerald-500 scale-100'
+            : interactive
+              ? 'border-accent-border/60 group-hover:border-accent-text group-hover:scale-110'
+              : 'border-nativz-border'
+        }`}
+      >
+        {busy ? (
+          <Loader2 size={11} className="animate-spin text-white" />
+        ) : done ? (
+          <Check size={12} className="text-white" strokeWidth={3} />
+        ) : null}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p
+          className={`text-[14px] transition-colors ${
+            done ? 'line-through text-text-muted' : 'text-text-primary'
+          }`}
+        >
+          {item.task}
+        </p>
+        {item.description && (
+          <p className="text-[12px] text-text-muted mt-0.5">{item.description}</p>
+        )}
+      </div>
+      <span
+        className={`text-[10px] font-semibold uppercase tracking-wider shrink-0 ${
+          item.owner === 'client' ? 'text-accent-text' : 'text-text-muted'
+        }`}
+      >
+        {item.owner === 'client' ? 'You' : 'Us'}
+      </span>
+    </li>
+  );
+}
+
 // ─── Phase item (alternating sides) ───────────────────────────────────────
 
 function PhaseItem({ phase, index }: { phase: Phase; index: number }) {
   const s = STATUS_STYLE[phase.status];
-  // Alternate sides on md+; stack on small screens.
   const right = index % 2 === 1;
 
   return (
     <li className="relative md:grid md:grid-cols-2 md:gap-10">
-      {/* Status node on the rail */}
       <span
         className={`absolute left-4 md:left-1/2 top-0 -translate-x-1/2 h-7 w-7 rounded-full border-2 flex items-center justify-center text-[12px] font-semibold tabular-nums z-10 ${s.node}`}
       >
@@ -307,7 +432,6 @@ function PhaseItem({ phase, index }: { phase: Phase; index: number }) {
         )}
       </div>
 
-      {/* Status pill on the opposite side */}
       <div className={`hidden md:flex items-start ${right ? 'md:order-first md:justify-end md:pr-10' : 'md:col-start-2'}`}>
         <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold ${s.pill}`}>
           <span className="h-1.5 w-1.5 rounded-full bg-current" />
@@ -315,7 +439,6 @@ function PhaseItem({ phase, index }: { phase: Phase; index: number }) {
         </span>
       </div>
 
-      {/* On small screens, pill is stacked under the card */}
       <span
         className={`md:hidden inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold mt-2 ml-12 ${s.pill}`}
       >

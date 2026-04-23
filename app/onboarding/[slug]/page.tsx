@@ -12,6 +12,7 @@ type Tracker = {
   service: string;
   title: string | null;
   status: string;
+  share_token: string;
   started_at: string | null;
   completed_at: string | null;
   clients: { name: string; slug: string; logo_url: string | null } | null;
@@ -43,7 +44,7 @@ export default async function PublicOnboardingPage({
   const admin = createAdminClient();
   const { data: tracker, error } = await admin
     .from('onboarding_trackers')
-    .select('id, client_id, service, title, status, started_at, completed_at, clients!inner(name, slug, logo_url)')
+    .select('id, client_id, service, title, status, share_token, started_at, completed_at, clients!inner(name, slug, logo_url)')
     .eq('share_token', token)
     .maybeSingle();
 
