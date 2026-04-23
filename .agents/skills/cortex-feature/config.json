@@ -1,0 +1,6 @@
+{
+  "adminBasePath": "app/admin",
+  "portalBasePath": "app/portal",
+  "libBasePath": "lib",
+  "componentsBasePath": "components"
+}

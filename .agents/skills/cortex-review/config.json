@@ -1,0 +1,15 @@
+{
+  "checks": {
+    "auth_before_data": { "severity": "critical", "enabled": true },
+    "portal_org_scoping": { "severity": "critical", "enabled": true },
+    "zod_before_processing": { "severity": "critical", "enabled": true },
+    "ai_null_safety": { "severity": "warning", "enabled": true },
+    "usage_tracking": { "severity": "warning", "enabled": true },
+    "error_responses": { "severity": "warning", "enabled": true },
+    "dynamic_params": { "severity": "warning", "enabled": true },
+    "error_log_format": { "severity": "warning", "enabled": true },
+    "max_duration": { "severity": "warning", "enabled": true },
+    "admin_client_scope": { "severity": "warning", "enabled": true },
+    "jsdoc": { "severity": "info", "enabled": true }
+  }
+}

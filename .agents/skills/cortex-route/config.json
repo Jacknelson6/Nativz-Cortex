@@ -1,0 +1,13 @@
+{
+  "defaultVariant": "standard",
+  "trackedServices": [
+    "openrouter",
+    "groq",
+    "gemini",
+    "brave",
+    "apify",
+    "cloudflare",
+    "resend",
+    "youtube"
+  ]
+}
