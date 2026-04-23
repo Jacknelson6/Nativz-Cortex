@@ -1,6 +1,17 @@
 import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import {
+  SectionTabs,
+  SectionHeader,
+  SectionPanel,
+} from '@/components/admin/section-tabs';
+import {
+  AI_SETTINGS_TABS,
+  AI_SETTINGS_TAB_SLUGS,
+  type AiSettingsTabSlug,
+} from '@/components/admin/ai-settings/ai-settings-tabs';
+import { AiSettingsOverviewTab } from '@/components/admin/ai-settings/overview-tab';
 import { AiRoutingSection } from '@/components/settings/ai-routing-section';
 import { LlmCredentialsSection } from '@/components/settings/llm-credentials-section';
 import { UsageDashboard } from '@/components/settings/usage-dashboard';
@@ -11,11 +22,14 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Unified AI settings — one page for model routing, credentials, skills,
- * and usage. Admin-only. `buildDbSkillsContext` in the chat route filters
- * skills by harness + client at request time so the portal never receives
- * admin-only skill context unless explicitly shared.
+ * search cost, and usage. Tabbed to match the Infrastructure page pattern:
+ * Overview tiles link into each drill-in tab.
  */
-export default async function AISettingsPage() {
+export default async function AISettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/admin/login');
@@ -30,6 +44,9 @@ export default async function AISettingsPage() {
     redirect('/admin/dashboard');
   }
 
+  const params = await searchParams;
+  const activeTab = resolveTab(params.tab);
+
   const { data: clients } = await admin
     .from('clients')
     .select('id, name, slug')
@@ -37,62 +54,68 @@ export default async function AISettingsPage() {
     .order('name');
 
   return (
-    <div className="cortex-page-gutter max-w-5xl mx-auto space-y-10">
-      <div>
-        <h1 className="text-2xl font-semibold text-text-primary">AI settings</h1>
-        <p className="mt-1 text-sm text-text-muted max-w-2xl">
-          Model routing, credentials, skills, and usage — everything the Nerd
-          and its harnesses read from.
-        </p>
-      </div>
+    <div className="cortex-page-gutter max-w-6xl mx-auto space-y-8">
+      <SectionHeader
+        title="AI settings"
+        description="Model routing, credentials, skills, search cost, and usage — everything the Nerd and its harnesses read from. Pick a tab to drill in."
+      />
 
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-base font-semibold text-text-primary">Model</h2>
-          <p className="mt-1 text-xs text-text-muted">One OpenRouter slug runs every Cortex feature.</p>
-        </div>
-        <AiRoutingSection />
-      </section>
+      <SectionTabs tabs={AI_SETTINGS_TABS} active={activeTab} memoryKey="cortex:ai-settings:last-tab" />
 
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-base font-semibold text-text-primary">API key</h2>
-          <p className="mt-1 text-xs text-text-muted">A single OpenRouter key powers the model above.</p>
-        </div>
-        <LlmCredentialsSection />
-      </section>
-
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-base font-semibold text-text-primary">Skills</h2>
-          <p className="mt-1 text-xs text-text-muted max-w-2xl">
-            Markdown context loaded into the Nerd's system prompt. Each skill picks which
-            harnesses it applies to — the admin Nerd, admin Strategy Lab, and/or the portal
-            Strategy Lab — and can be scoped to a single client.
-          </p>
-        </div>
-        <AISettingsSkillsClient clients={clients ?? []} />
-      </section>
-
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-base font-semibold text-text-primary">Search volumes &amp; cost</h2>
-          <p className="mt-1 text-xs text-text-muted max-w-2xl">
-            How many posts, videos, and pages each search pulls per platform. The right
-            card estimates the Apify cost per search based on observed per-unit pricing.
-            Real billing reads from the <code className="rounded bg-background/60 px-1">apify_runs</code> table.
-          </p>
-        </div>
-        <ScraperVolumesSection />
-      </section>
-
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-base font-semibold text-text-primary">Usage</h2>
-          <p className="mt-1 text-xs text-text-muted">Model spend and token counts across the platform.</p>
-        </div>
-        <UsageDashboard />
-      </section>
+      <div>{renderTab(activeTab, clients ?? [])}</div>
     </div>
   );
+}
+
+function resolveTab(raw: string | undefined): AiSettingsTabSlug {
+  if (raw && (AI_SETTINGS_TAB_SLUGS as readonly string[]).includes(raw)) {
+    return raw as AiSettingsTabSlug;
+  }
+  return 'overview';
+}
+
+function renderTab(
+  slug: AiSettingsTabSlug,
+  clients: Array<{ id: string; name: string; slug: string }>,
+): React.ReactNode {
+  switch (slug) {
+    case 'overview':
+      return <AiSettingsOverviewTab />;
+    case 'model':
+      return (
+        <SectionPanel title="Model" description="One OpenRouter slug runs every Cortex feature.">
+          <AiRoutingSection />
+        </SectionPanel>
+      );
+    case 'credentials':
+      return (
+        <SectionPanel title="API key" description="A single OpenRouter key powers the model above.">
+          <LlmCredentialsSection />
+        </SectionPanel>
+      );
+    case 'skills':
+      return (
+        <SectionPanel
+          title="Skills"
+          description="Markdown context loaded into the Nerd's system prompt. Each skill picks which harnesses it applies to — the admin Nerd, admin Strategy Lab, and/or the portal Strategy Lab — and can be scoped to a single client."
+        >
+          <AISettingsSkillsClient clients={clients} />
+        </SectionPanel>
+      );
+    case 'search-cost':
+      return (
+        <SectionPanel
+          title="Search volumes & cost"
+          description="How many posts, videos, and pages each search pulls per platform. Right card estimates Apify cost per search from observed per-unit pricing. Real billing reads from the apify_runs table."
+        >
+          <ScraperVolumesSection />
+        </SectionPanel>
+      );
+    case 'usage':
+      return (
+        <SectionPanel title="Usage" description="Model spend and token counts across the platform.">
+          <UsageDashboard />
+        </SectionPanel>
+      );
+  }
 }
