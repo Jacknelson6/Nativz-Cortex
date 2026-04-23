@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { notifyManagers } from '@/lib/onboarding/notify-managers';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
     // 1. Share token → tracker
     const { data: tracker } = await admin
       .from('onboarding_trackers')
-      .select('id, status, is_template')
+      .select('id, status, is_template, service, notify_emails, clients!inner(name, slug)')
       .eq('share_token', share_token)
       .maybeSingle();
     if (!tracker || tracker.is_template || tracker.status === 'archived') {
@@ -93,6 +94,28 @@ export async function POST(request: NextRequest) {
     if (updateRes.error) {
       console.error('public item-toggle update error:', updateRes.error);
       return NextResponse.json({ error: 'Failed to update' }, { status: 500 });
+    }
+
+    // Fire-and-forget manager notification on the completed direction only.
+    // Uncompleted events stay silent — they'd be noise. We don't await so
+    // a slow Resend never blocks the client UI response.
+    if (target === 'done') {
+      const trackerWithClient = tracker as typeof tracker & {
+        clients: { name: string; slug: string } | { name: string; slug: string }[] | null;
+      };
+      const client = Array.isArray(trackerWithClient.clients) ? trackerWithClient.clients[0] : trackerWithClient.clients;
+      if (client) {
+        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://cortex.nativz.io';
+        const shareUrl = `${baseUrl}/onboarding/${client.slug}?token=${share_token}`;
+        void notifyManagers({
+          notifyEmails: (trackerWithClient.notify_emails as string[] | null) ?? [],
+          clientName: client.name,
+          service: (trackerWithClient as { service: string }).service,
+          kind: 'item_completed',
+          detail: item.task,
+          shareUrl,
+        });
+      }
     }
 
     return NextResponse.json({ ok: true, status: target });

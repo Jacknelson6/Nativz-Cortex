@@ -7,6 +7,7 @@ const PatchBody = z.object({
   status: z.enum(['active', 'paused', 'completed', 'archived']).optional(),
   started_at: z.string().datetime().nullable().optional(),
   completed_at: z.string().datetime().nullable().optional(),
+  notify_emails: z.array(z.string().trim().email()).max(20).optional(),
   // Regenerate share token — clears the old one.
   regenerate_share_token: z.boolean().optional(),
 }).refine(
@@ -93,7 +94,7 @@ export async function PATCH(
     }
 
     const updates: Record<string, unknown> = {};
-    for (const key of ['title', 'status', 'started_at', 'completed_at'] as const) {
+    for (const key of ['title', 'status', 'started_at', 'completed_at', 'notify_emails'] as const) {
       if (key in parsed.data) updates[key] = parsed.data[key];
     }
     if (parsed.data.regenerate_share_token) {
@@ -105,7 +106,7 @@ export async function PATCH(
       .from('onboarding_trackers')
       .update(updates)
       .eq('id', id)
-      .select('id, client_id, service, title, status, share_token, started_at, completed_at, created_at, updated_at')
+      .select('id, client_id, service, title, status, share_token, notify_emails, started_at, completed_at, created_at, updated_at')
       .single();
 
     if (error) {

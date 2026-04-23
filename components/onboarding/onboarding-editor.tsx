@@ -42,6 +42,7 @@ export type Tracker = {
   title: string | null;
   status: TrackerStatus;
   share_token: string;
+  notify_emails: string[];
   started_at: string | null;
   completed_at: string | null;
   is_template: boolean;
@@ -516,6 +517,22 @@ export function OnboardingEditor({
         )}
       </section>
 
+      {/* Notifications — hidden on templates. */}
+      {!tracker.is_template && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-base font-semibold text-text-primary">Notifications</h2>
+            <p className="text-[13px] text-text-muted">
+              Emails sent automatically when the client ticks a task, uploads a file, or confirms a connection.
+            </p>
+          </div>
+          <NotifyEmailsCard
+            initial={tracker.notify_emails ?? []}
+            onChange={(emails) => void updateTracker({ notify_emails: emails })}
+          />
+        </section>
+      )}
+
       {/* Email templates — hidden on templates themselves (they have no
           client context to interpolate against). */}
       {!tracker.is_template && (
@@ -539,6 +556,85 @@ export function OnboardingEditor({
           />
         </section>
       )}
+    </div>
+  );
+}
+
+// ─── Notify emails card ─────────────────────────────────────────────────
+// Manages the notify_emails[] list on the tracker. Each email is a chip;
+// a text input below accepts new entries on Enter or blur. We only persist
+// on list change (add or remove), not on every keystroke.
+
+function NotifyEmailsCard({
+  initial,
+  onChange,
+}: {
+  initial: string[];
+  onChange: (next: string[]) => void | Promise<void>;
+}) {
+  const [emails, setEmails] = useState<string[]>(initial);
+  const [draft, setDraft] = useState('');
+  useEffect(() => { setEmails(initial); }, [initial]);
+
+  function commit(next: string[]) {
+    setEmails(next);
+    onChange(next);
+  }
+
+  function add() {
+    const v = draft.trim();
+    if (!v) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return;
+    if (emails.includes(v)) { setDraft(''); return; }
+    commit([...emails, v]);
+    setDraft('');
+  }
+
+  function remove(target: string) {
+    commit(emails.filter((e) => e !== target));
+  }
+
+  return (
+    <div className="rounded-[10px] border border-nativz-border bg-surface p-4 space-y-3">
+      <div className="flex flex-wrap gap-1.5">
+        {emails.length === 0 && (
+          <p className="text-[12px] text-text-muted italic">No one&rsquo;s subscribed yet. Add an email below.</p>
+        )}
+        {emails.map((e) => (
+          <span
+            key={e}
+            className="inline-flex items-center gap-1.5 rounded-full bg-accent-surface/60 text-accent-text ring-1 ring-inset ring-accent/20 px-3 py-1 text-[12px]"
+          >
+            <span className="font-medium">{e}</span>
+            <button
+              type="button"
+              onClick={() => remove(e)}
+              className="text-text-muted hover:text-red-400 transition-colors"
+              aria-label={`Remove ${e}`}
+            >
+              &times;
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <input
+          type="email"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+          onBlur={add}
+          placeholder="onboarding-manager@nativz.io"
+          className="flex-1 min-w-[220px] rounded-lg border border-nativz-border bg-surface-primary px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-border focus:outline-none focus:ring-1 focus:ring-accent-border"
+        />
+        <Button type="button" size="sm" variant="outline" onClick={add} disabled={!draft.trim()}>
+          <Plus size={12} />
+          Add
+        </Button>
+      </div>
+      <p className="text-[11px] text-text-muted">
+        Notifications fire only on completions (not un-ticks). Keeps the inbox quiet.
+      </p>
     </div>
   );
 }

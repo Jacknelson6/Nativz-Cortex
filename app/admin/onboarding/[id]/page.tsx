@@ -29,7 +29,7 @@ export default async function OnboardingEditorPage({
   const [trackerRes, phasesRes, groupsRes] = await Promise.all([
     admin
       .from('onboarding_trackers')
-      .select('id, client_id, service, title, status, share_token, started_at, completed_at, created_at, updated_at, clients!inner(name, slug, logo_url)')
+      .select('id, client_id, service, title, status, share_token, notify_emails, started_at, completed_at, created_at, updated_at, clients!inner(name, slug, logo_url)')
       .eq('id', id)
       .maybeSingle(),
     admin
