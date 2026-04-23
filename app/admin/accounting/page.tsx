@@ -3,6 +3,19 @@ import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { currentPeriod, labelFor, centsToDollars } from '@/lib/accounting/periods';
+import {
+  SectionTabs,
+  SectionHeader,
+  SectionPanel,
+} from '@/components/admin/section-tabs';
+import {
+  ACCOUNTING_TABS,
+  ACCOUNTING_TAB_SLUGS,
+  type AccountingTabSlug,
+} from '@/components/admin/accounting/accounting-tabs';
+import { AccountingOverviewTab } from '@/components/admin/accounting/overview-tab';
+
+export const dynamic = 'force-dynamic';
 
 interface PeriodRow {
   id: string;
@@ -21,10 +34,22 @@ interface EntryRow {
   margin_cents: number;
 }
 
-export default async function AccountingIndexPage() {
+function resolveTab(raw: string | undefined): AccountingTabSlug {
+  if (raw && (ACCOUNTING_TAB_SLUGS as readonly string[]).includes(raw)) {
+    return raw as AccountingTabSlug;
+  }
+  return 'overview';
+}
+
+export default async function AccountingIndexPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/admin/login');
+
   const adminClient = createAdminClient();
   const { data: userRow } = await adminClient
     .from('users')
@@ -33,7 +58,7 @@ export default async function AccountingIndexPage() {
     .single();
   if (userRow?.role !== 'admin') redirect('/admin/dashboard');
 
-  // Ensure the current period exists so a fresh install isn't empty.
+  // Ensure current period exists.
   const cur = currentPeriod();
   await adminClient
     .from('payroll_periods')
@@ -42,6 +67,47 @@ export default async function AccountingIndexPage() {
       { onConflict: 'start_date,end_date', ignoreDuplicates: true },
     );
 
+  const params = await searchParams;
+  const activeTab = resolveTab(params.tab);
+
+  return (
+    <div className="cortex-page-gutter max-w-6xl mx-auto space-y-8">
+      <SectionHeader
+        title="Accounting"
+        description="Bi-monthly payroll periods. First half (1–15) and second half (16–end of month). Pick a tab to drill in."
+      />
+
+      <SectionTabs tabs={ACCOUNTING_TABS} active={activeTab} memoryKey="cortex:accounting:last-tab" />
+
+      <div>{await renderTab(activeTab, adminClient)}</div>
+    </div>
+  );
+}
+
+async function renderTab(slug: AccountingTabSlug, adminClient: ReturnType<typeof createAdminClient>): Promise<React.ReactNode> {
+  switch (slug) {
+    case 'overview':
+      return <AccountingOverviewTab />;
+    case 'year':
+      return (
+        <SectionPanel
+          title="Year view"
+          description="Monthly payout + margin roll-up across the calendar year."
+        >
+          <Link
+            href="/admin/accounting/year"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-sm font-medium text-accent-text transition-colors hover:border-accent/60 hover:bg-accent/20"
+          >
+            Open year view →
+          </Link>
+        </SectionPanel>
+      );
+    case 'periods':
+      return <PeriodsTab adminClient={adminClient} />;
+  }
+}
+
+async function PeriodsTab({ adminClient }: { adminClient: ReturnType<typeof createAdminClient> }) {
   const { data: periods } = await adminClient
     .from('payroll_periods')
     .select('id, start_date, end_date, half, status, notes, locked_at, paid_at')
@@ -65,22 +131,10 @@ export default async function AccountingIndexPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl p-6 space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-text-primary">Accounting</h1>
-          <p className="text-base text-text-secondary mt-2">
-            Bi-monthly payroll periods. First half (1–15) and second half (16–end of month).
-          </p>
-        </div>
-        <Link
-          href="/admin/accounting/year"
-          className="rounded-lg border border-nativz-border bg-surface px-4 py-2 text-base font-medium text-text-primary hover:bg-surface-hover"
-        >
-          Year view
-        </Link>
-      </div>
-
+    <SectionPanel
+      title="Periods"
+      description="Recent 24 bi-monthly periods. Click a row to open entries, lock, or mark paid."
+    >
       <div className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
         <table className="w-full text-base">
           <thead className="bg-background/50 text-text-secondary">
@@ -130,7 +184,7 @@ export default async function AccountingIndexPage() {
           </tbody>
         </table>
       </div>
-    </div>
+    </SectionPanel>
   );
 }
 
