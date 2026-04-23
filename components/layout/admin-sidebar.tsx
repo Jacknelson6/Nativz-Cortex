@@ -28,6 +28,7 @@ import {
   Gauge,
   ListChecks,
   Telescope,
+  Radar,
 } from 'lucide-react';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
@@ -92,6 +93,15 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'Brand tools',
     items: [
       { href: '/admin/search/new', label: 'Trend Finder', icon: TrendingUp },
+      {
+        // Trend monitors — recurring brand / topic listening reports.
+        // Sits directly below Trend Finder so the relationship is obvious:
+        // one is ad-hoc search, the other is ongoing listening on the same
+        // underlying Apify + LLM stack.
+        href: '/admin/search/monitors',
+        label: 'Trend Monitors',
+        icon: Radar,
+      },
       { href: '/admin/strategy-lab', label: 'Strategy Lab', icon: MessagesSquare },
       {
         // NAT-62 (2026-04-22): unified landing page. Renamed back to
@@ -208,6 +218,7 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/knowledge',
   '/admin/analyze-social',
   '/admin/competitor-intelligence',
+  '/admin/search/monitors',
   '/admin/notifications',
   '/admin/infrastructure',
   // Settings is reachable from the avatar popover — it doesn't need its
