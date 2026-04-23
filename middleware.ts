@@ -182,7 +182,14 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/invites/accept') ||
     pathname.startsWith('/api/invites/link') ||
     pathname.startsWith('/api/auth/send-email') ||
-    pathname.startsWith('/api/auth/forgot-password')
+    pathname.startsWith('/api/auth/forgot-password') ||
+    // Public onboarding page + its share-token-gated API routes. The page
+    // itself is server-rendered with the admin client after validating the
+    // token; the /api/onboarding/public/* routes validate the token on every
+    // write. Both need to work without a Supabase auth session because the
+    // client has no account — the share token is the access credential.
+    pathname.startsWith('/onboarding/') ||
+    pathname.startsWith('/api/onboarding/public/')
   ) {
     if (pathname.startsWith('/api/')) {
       setCorsHeaders(supabaseResponse, requestOrigin);

@@ -84,7 +84,7 @@ export function OnboardingPublicUploads({
       <div>
         <h2 className="text-[22px] font-semibold">Share files</h2>
         <p className="text-[13px] text-text-muted">
-          Drop anything useful here — brand assets, reference videos, product shots. Up to 50 MB per file.
+          Drop anything useful here — brand assets, reference clips, product shots. Up to 10 MB per file.
         </p>
       </div>
 
