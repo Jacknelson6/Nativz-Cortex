@@ -47,12 +47,20 @@ export function MetricSparklineCard({
   const suffix = format === 'percent' ? '%' : '';
   const change = card.changePercent;
   const hasSeries = card.series.length > 1;
-  // Suppress the delta chip when the comparison is meaningless: either the
-  // prior period had zero (so any current value reads as "+∞%", displayed
-  // as a misleading capped number) or we just don't have enough points for
-  // a week-over-week read (<4 days of series).
+  // Suppress the delta chip when the comparison is meaningless:
+  //  - prior period had zero (any current value reads as "+∞%")
+  //  - <4 days of series (not enough for a weekly read)
+  //  - prior period was < 10% of current (almost certainly missing historical
+  //    coverage, not a real 10× spike — shows up as +900%+ which looks like a
+  //    bug. Happens when the account was connected mid-window or Zernio's
+  //    retention didn't reach that far back).
+  const priorCoverageLooksShort =
+    card.previousTotal > 0 && card.total > 0 && card.previousTotal / card.total < 0.1;
   const showDelta =
-    change !== 0 && card.previousTotal !== 0 && card.series.length >= 4;
+    change !== 0 &&
+    card.previousTotal !== 0 &&
+    card.series.length >= 4 &&
+    !priorCoverageLooksShort;
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
 
   // date → first post on that day. Multiple posts/day collapse so markers
