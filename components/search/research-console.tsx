@@ -3,15 +3,20 @@
 import { useEffect, useRef, useState } from 'react';
 
 /**
- * Research console — a terminal-style live log of what the topic-search
- * pipeline is doing. Replaces the generic spinner + progress-bar treatment
- * with a "we did the reading" surface that exposes the machinery instead of
- * hiding it. Drives off the parent's `stages` + `stageIndex` (already
- * computed in search-processing); within a long-running stage, an interval
- * fires canned sub-narratives so the feed stays alive between transitions.
+ * Research console — a terminal-style live log shown while a topic search
+ * runs. The lines are intentionally broad-strokes ("scanning the open web",
+ * "checking TikTok", "drafting the summary"). They give the user a sense
+ * that work is happening without exposing internal tool names, table
+ * names, or proprietary scoring terminology — Jack flagged the original
+ * version (e.g. "querying SearXNG · DuckDuckGo backend", "persisting to
+ * topic_searches") as leaking too much. Treat this surface as a public
+ * marketing register, not a developer log.
  *
- * Brand: dark surface, cyan brand accent (no purple), monospace for machine
- * values per .impeccable.md ("nerdy details earn their place").
+ * The feed is driven off the parent's stage timeline (already computed in
+ * search-processing); on each stage transition we open a new line, and an
+ * 8s interval emits broad sub-narratives so long phases don't freeze the
+ * console. Lines do not need to be 1:1 accurate — the goal is "we are
+ * working on your behalf", not full instrumentation.
  */
 
 interface Stage {
@@ -33,15 +38,17 @@ interface LogLine {
   closed?: boolean;
 }
 
-// Short ALL-CAPS tag per stage label. Falls back to the first word uppercased
-// if a stage label isn't in the table — easier than maintaining an exhaustive
-// map for every variant the pipeline might emit.
+// Short ALL-CAPS action tag per stage label. Generic verbs / surfaces, no
+// tool names. Falls back to the first word uppercased if a label isn't in
+// the table — keeps the console alive even if the pipeline's stage labels
+// drift. Tags are deliberately friendly action words (SEARCH, READ, WRITE)
+// rather than internal pipeline phases (DEDUPE, SYNTH, MERGE_RETRY).
 const STAGE_TAGS: Record<string, string> = {
   // llm_v1 pipeline
-  'Gathering live web sources for your angles': 'WEB',
-  'Exploring each angle you set in your gameplan': 'EXPLORE',
-  'Tightening sources and trimming overlap': 'DEDUPE',
-  'Weaving findings into themes and narrative': 'SYNTH',
+  'Gathering live web sources for your angles': 'SEARCH',
+  'Exploring each angle you set in your gameplan': 'THINK',
+  'Tightening sources and trimming overlap': 'CHECK',
+  'Weaving findings into themes and narrative': 'WRITE',
   'Shaping video directions from what we found': 'IDEAS',
   'Assembling your report': 'BUILD',
   // legacy multi-platform
@@ -54,46 +61,50 @@ const STAGE_TAGS: Record<string, string> = {
   'Building your report': 'BUILD',
 };
 
-// Sub-narratives shown ~every 8s while a stage is active. Keep them concrete
-// and machine-flavoured ("querying X", "computing Y") — generic affirmations
-// like "thinking…" are exactly the AI-slop register we're trying to avoid.
+// Broad-strokes sub-narratives shown ~every 8s while a stage is active.
+// These do NOT need to be 1:1 accurate to what the pipeline is actually
+// doing — the goal is to communicate "work is happening on your behalf"
+// without exposing internal tool names (SearXNG, DuckDuckGo, Apify, Groq),
+// internal data (evidence buffer, allowlist, JSON payload), or DB table
+// names (topic_searches). Mention public-facing surfaces (web, TikTok,
+// Reddit, YouTube, Instagram) freely — those are user-comprehensible.
 const STAGE_SUBLINES: Record<string, string[]> = {
   'Gathering live web sources for your angles': [
-    'querying SearXNG · DuckDuckGo backend',
-    'fanning out URL fetches',
-    'reading page text into evidence buffer',
-    'scoring relevance per angle',
+    'scanning the open web',
+    'checking news and forums',
+    'reading top sources',
+    'pulling key passages',
   ],
   'Exploring each angle you set in your gameplan': [
-    'probing each angle independently',
-    'extracting findings per angle',
-    'tagging supporting quotes',
+    'thinking through each angle',
+    'drawing on prior research',
+    'noting key findings',
   ],
   'Tightening sources and trimming overlap': [
-    'computing URL similarity',
-    'merging duplicate citations',
+    'comparing what we found',
+    'trimming duplicates',
   ],
   'Weaving findings into themes and narrative': [
-    'clustering claims into themes',
-    'composing the executive summary',
-    'verifying every citation against the allowlist',
+    'finding common themes',
+    'drafting the summary',
+    'shaping the narrative',
   ],
   'Shaping video directions from what we found': [
-    'deriving short-form angles',
-    'ranking ideas by predicted resonance',
+    'sketching video angles',
+    'ranking ideas by traction',
   ],
   'Assembling your report': [
-    'serializing the JSON payload',
-    'persisting to topic_searches',
-    'splitting platform sources across batches',
+    'putting it all together',
+    'polishing the layout',
+    'final formatting',
   ],
-  'Searching the web': ['fetching SERP results', 'scoring candidates'],
-  'Scanning Reddit discussions': ['fetching subreddit feeds', 'pulling top comments'],
-  'Fetching YouTube videos & transcripts': ['enumerating channel uploads', 'pulling captions'],
-  'Scraping TikTok & comments': ['hashtag enumeration', 'pulling top comments'],
-  'Computing analytics': ['aggregating engagement', 'computing sentiment'],
-  'Generating video ideas with AI': ['drafting hooks', 'ranking by virality'],
-  'Building your report': ['rendering layout', 'persisting'],
+  'Searching the web': ['scanning the open web', 'reading top results'],
+  'Scanning Reddit discussions': ['reading top threads', 'pulling community signals'],
+  'Fetching YouTube videos & transcripts': ['scanning YouTube', 'watching key videos'],
+  'Scraping TikTok & comments': ['checking TikTok', 'reading top comments'],
+  'Computing analytics': ['crunching the numbers', 'measuring engagement'],
+  'Generating video ideas with AI': ['drafting hooks', 'shortlisting angles'],
+  'Building your report': ['assembling the report', 'wrapping up'],
 };
 
 function tagFor(label: string): string {
@@ -117,10 +128,11 @@ const MAX_LINES = 40;
 
 export function ResearchConsole({ stages, stageIndex }: ResearchConsoleProps) {
   const [lines, setLines] = useState<LogLine[]>(() => [
+    // Marketing-register opener — no internal pipeline identifiers leak.
     {
       ts: Date.now(),
-      tag: 'INIT',
-      text: 'cortex pipeline · llm_v1 — opening session',
+      tag: 'START',
+      text: 'starting your research session',
       closed: true,
     },
   ]);
@@ -130,27 +142,27 @@ export function ResearchConsole({ stages, stageIndex }: ResearchConsoleProps) {
 
   // On stage change: close out the previous active line and append a new
   // "stage opening" line. Reset the subline counter so the next stage starts
-  // its own narrative cycle.
+  // its own narrative cycle. Trim defensively so any accidental whitespace
+  // in the source string doesn't show up as misaligned text in the console.
   useEffect(() => {
     if (stageIndex < 0 || stageIndex >= stages.length) return;
     if (stageIndex === lastStageRef.current) return;
     const stage = stages[stageIndex];
     const tag = tagFor(stage.label);
+    const text = stage.label.trim().toLowerCase() + '…';
     setLines((prev) => {
       const next = prev.length > 0
         ? [...prev.slice(0, -1), { ...prev[prev.length - 1], closed: true }]
         : prev;
-      return [
-        ...next,
-        { ts: Date.now(), tag, text: stage.label.toLowerCase() + '…' },
-      ].slice(-MAX_LINES);
+      return [...next, { ts: Date.now(), tag, text }].slice(-MAX_LINES);
     });
     lastStageRef.current = stageIndex;
     sublinesEmittedRef.current = 0;
   }, [stageIndex, stages]);
 
-  // Within a stage: emit canned sublines on an interval so the feed doesn't
-  // freeze during long phases (the merger LLM call can take 30–90s).
+  // Within a stage: emit broad sub-narratives on an interval so the feed
+  // doesn't freeze during long phases (the merger LLM call can run 30–90s).
+  // Same defensive .trim() as the stage opener.
   useEffect(() => {
     const interval = setInterval(() => {
       if (stageIndex < 0 || stageIndex >= stages.length) return;
@@ -159,7 +171,7 @@ export function ResearchConsole({ stages, stageIndex }: ResearchConsoleProps) {
       if (!subs?.length) return;
       const idx = sublinesEmittedRef.current;
       if (idx >= subs.length) return;
-      const text = subs[idx];
+      const text = subs[idx].trim();
       sublinesEmittedRef.current = idx + 1;
       const tag = tagFor(stage.label);
       setLines((prev) => {
@@ -200,7 +212,10 @@ export function ResearchConsole({ stages, stageIndex }: ResearchConsoleProps) {
         </span>
       </div>
 
-      {/* Log surface */}
+      {/* Log surface — fixed-width timestamp + tag columns so message text
+          starts at the same horizontal position on every line regardless
+          of tag length (INIT vs SEARCH vs IDEAS). Without explicit widths
+          the ALL-CAPS tag would shift the message column slightly. */}
       <div
         ref={scrollRef}
         className="max-h-[300px] min-h-[180px] overflow-y-auto px-4 py-3 font-mono text-[12px] leading-[1.7]"
@@ -210,12 +225,12 @@ export function ResearchConsole({ stages, stageIndex }: ResearchConsoleProps) {
           return (
             <div
               key={`${line.ts}-${i}`}
-              className={`flex gap-3 ${line.closed ? 'opacity-60' : 'opacity-100'} animate-fade-slide-in`}
+              className={`flex items-baseline gap-3 ${line.closed ? 'opacity-60' : 'opacity-100'} animate-fade-slide-in`}
             >
-              <span className="shrink-0 tabular-nums text-text-muted/60">
+              <span className="w-[64px] shrink-0 tabular-nums text-text-muted/60">
                 {formatClock(line.ts)}
               </span>
-              <span className="w-[68px] shrink-0 truncate text-accent-text">
+              <span className="w-[72px] shrink-0 truncate text-accent-text">
                 {line.tag}
               </span>
               <span className="min-w-0 flex-1 break-words text-text-secondary">
