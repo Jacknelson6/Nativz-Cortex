@@ -1,10 +1,10 @@
 /**
  * Web retrieval for topic search (llm_v1):
- * - **SearXNG** (`searchWebSearxng`) — self-hosted SearXNG instance; our primary SERP integration.
+ * - **Apify SERP** (`searchWebSearxng` — name kept for backward compat) —
+ *   Google SERP via scraperlink/google-search-results-serp-scraper.
  * - **OpenRouter** (`searchWebOpenRouter`) — OpenRouter chat + web plugin (optional; uses OpenRouter key, not OpenAI).
  */
-import { searxngSearch } from '@/lib/serp/client';
-import { getSearxngWebEngines } from '@/lib/config/searxng-web-engines';
+import { gatherSerpDataViaApify } from '@/lib/serp/apify-scraperlink';
 import { createCompletion } from '@/lib/ai/client';
 import { extractUrlsFromPlainText } from '@/lib/ai/openrouter-citations';
 import { dedupeUrls, normalizeUrlForMatch } from '@/lib/search/tools/urls';
@@ -26,25 +26,27 @@ export interface WebSearchOptions {
 }
 
 /**
- * SearXNG SERP for topic search (uses `SEARXNG_URL` or defaults to localhost:8888).
+ * Google SERP for topic search, via Apify scraperlink actor.
+ * Function name retained for backward compat with earlier SearXNG calls.
  */
 export async function searchWebSearxng(query: string, options: WebSearchOptions = {}): Promise<WebSearchHit[]> {
   const count = Math.min(Math.max(options.count ?? 10, 1), 20);
 
-  const res = await searxngSearch(query, {
+  const res = await gatherSerpDataViaApify(query, {
     timeRange: options.timeRange,
-    language: options.language && options.language !== 'all' ? options.language : undefined,
-    categories: 'general',
-    engines: getSearxngWebEngines(),
+    limit: count,
+    country: options.country,
   });
 
+  if (!res) return [];
+
   const hits: WebSearchHit[] = [];
-  for (const r of res.results) {
+  for (const r of res.webResults) {
     if (!r.url) continue;
     hits.push({
       url: normalizeUrlForMatch(r.url),
       title: r.title ?? r.url,
-      snippet: (r.content ?? '').slice(0, 500),
+      snippet: (r.description ?? '').slice(0, 500),
     });
     if (hits.length >= count) break;
   }
@@ -120,5 +122,5 @@ Query: ${query}`;
   };
 }
 
-/** @deprecated Prefer `searchWebSearxng` or `searchWebOpenRouter` — SearXNG-backed alias. */
+/** @deprecated Prefer `searchWebSearxng` (now Apify-backed) or `searchWebOpenRouter`. */
 export const searchWeb = searchWebSearxng;

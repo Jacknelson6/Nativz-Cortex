@@ -1,11 +1,9 @@
-// lib/quora/client.ts — Quora data gathering via SearXNG + Google Serper
+// lib/quora/client.ts — Quora data gathering via Apify SERP + Google Serper
 //
 // Quora has no public API and actively blocks scrapers.
-// Strategy: use SearXNG to find Quora threads + Google Serper for extra coverage.
-// This gives us questions, answers, and engagement signals without scraping.
+// Strategy: Apify Google SERP finds Quora threads, Serper gives extra coverage.
 
-import { searxngSearch } from '@/lib/serp/client';
-import { getSearxngWebEngines } from '@/lib/config/searxng-web-engines';
+import { gatherSerpDataViaApify } from '@/lib/serp/apify-scraperlink';
 
 export interface QuoraThread {
   id: string;
@@ -22,39 +20,40 @@ export interface QuoraSearchResult {
 }
 
 /**
- * Search SearXNG for Quora discussions specifically.
+ * Find Quora threads via Apify Google SERP (site:quora.com + query).
+ * Name-retained source: 'searxng' in the return shape is a legacy tag — the
+ * actual provider is now Apify. Keeping it stable avoids churn downstream.
  */
 async function searchSearxngQuora(query: string, timeRange: string, count: number): Promise<QuoraThread[]> {
   try {
-    const res = await searxngSearch(`${query} quora answers`, {
+    const res = await gatherSerpDataViaApify(`site:quora.com ${query}`, {
       timeRange,
-      categories: 'general',
-      engines: getSearxngWebEngines(),
+      limit: Math.max(10, count),
     });
 
     const threads: QuoraThread[] = [];
     const seenUrls = new Set<string>();
-    const resultCount = res.results?.length ?? 0;
-    console.log(`[quora] SearXNG response — results: ${resultCount}`);
+    const results = res?.webResults ?? [];
+    console.log(`[quora] Apify SERP response — results: ${results.length}`);
 
-    for (const r of res.results ?? []) {
+    for (const r of results) {
       if (!r.url?.includes('quora.com') || seenUrls.has(r.url)) continue;
       seenUrls.add(r.url);
       threads.push({
-        id: `quora-searxng-${r.url}`,
+        id: `quora-apify-${r.url}`,
         question: r.title?.replace(' - Quora', '') ?? '',
         url: r.url,
-        topAnswer: r.content ?? '',
+        topAnswer: r.description ?? '',
         answerCount: null,
         source: 'searxng',
       });
       if (threads.length >= count) break;
     }
 
-    console.log(`[quora] Total SearXNG threads found: ${threads.length}`);
+    console.log(`[quora] Total Apify threads found: ${threads.length}`);
     return threads;
   } catch (err) {
-    console.error('[quora] SearXNG search error:', err);
+    console.error('[quora] Apify SERP error:', err);
     return [];
   }
 }

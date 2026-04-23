@@ -1,4 +1,6 @@
-import { searxngSearch } from '@/lib/serp/client';
+import { searchWebSearxng } from '@/lib/search/tools/web-search';
+import { fetchUrlText } from '@/lib/search/tools/fetch-url';
+import { dedupeUrls, normalizeUrlForMatch } from '@/lib/search/tools/urls';
 import { createCompletion } from '@/lib/ai/client';
 import type {
   TrendReportCadence,
@@ -12,6 +14,14 @@ const CADENCE_DAYS: Record<TrendReportCadence, number> = {
   biweekly: 14,
   monthly: 30,
 };
+
+/** How many SERP hits we ask Apify for per run. */
+const SERP_LIMIT = 25;
+
+/** How many of those hits we enrich with a real URL fetch. Each fetch is
+ *  ~12KB and ~12s timeout; parallelised. Keep this tight so the cron fits
+ *  in the 300s budget even with many subscriptions. */
+const FETCH_ENRICH_COUNT = 6;
 
 export function nextTrendRunAt(from: Date, cadence: TrendReportCadence): Date {
   const d = new Date(from);
@@ -76,82 +86,98 @@ interface BuildTrendParams {
 }
 
 /**
- * Run a lightweight SERP + LLM summarization pass for a trend-monitoring
- * subscription. Designed to fit comfortably inside a 300s cron: single
- * SearXNG query + a single LLM call. Falls back gracefully when SearXNG
- * or the LLM is unavailable.
+ * Run the brand-listening retrieval + summarisation pipeline for a single
+ * subscription. Reuses the Trend Finder stack end-to-end:
+ *
+ *   1. `searchWebSearxng` — Google SERP via Apify scraperlink (same actor
+ *      Trend Finder uses for topic research).
+ *   2. `fetchUrlText`     — deepen the top N results with actual page text
+ *      so the LLM summarises real content, not SERP snippets.
+ *   3. `createCompletion` — OpenRouter (admin-configured model) for the
+ *      summary + theme extraction.
+ *
+ * Graceful fallbacks at every step: Apify down → empty mentions; fetch
+ * timeouts → snippet only; LLM error → canned summary. Report always ships.
  */
 export async function buildTrendReportData(params: BuildTrendParams): Promise<TrendReportData> {
   const query = buildQuery(params);
   const timeRange = cadenceToTimeRange(params.cadence);
 
-  // 1. Fetch web results from SearXNG. If SearXNG is unreachable we fall
-  //    back to an empty list — the report still generates with a note.
-  const rawResults: Array<{
-    url: string;
-    title: string;
-    content: string;
-    engine: string;
-    publishedDate?: string;
-  }> = [];
-
+  // 1. Apify Google SERP via the shared Trend Finder abstraction. Returns
+  //    normalised WebSearchHit[] { url, title, snippet }.
+  let hits: Array<{ url: string; title: string; snippet: string }> = [];
   try {
-    const response = await searxngSearch(query, { timeRange });
-    rawResults.push(...(response.results ?? []).slice(0, 25));
+    hits = await searchWebSearxng(query, { count: SERP_LIMIT, timeRange });
   } catch (err) {
-    console.error('[trend-report] searxng failed', err);
+    console.error('[trend-report] Apify SERP failed', err);
   }
 
-  // 2. Normalize into mentions + tag with keyword/brand hits + sentiment.
+  // 2. Deepen the top N hits with fetchUrlText. Parallelised. Falls back to
+  //    the SERP snippet if the fetch times out or returns non-OK.
+  const enrichUrls = dedupeUrls(hits.slice(0, FETCH_ENRICH_COUNT).map((h) => h.url));
+  const fetchedByUrl = new Map<string, string>();
+  await Promise.all(
+    enrichUrls.map(async (url) => {
+      const res = await fetchUrlText(url, { maxChars: 4000, timeoutMs: 10_000 });
+      if (res.ok && res.text) fetchedByUrl.set(normalizeUrlForMatch(url), res.text);
+    }),
+  );
+
+  // 3. Normalise into mentions + tag with keyword/brand hits + sentiment.
   const seenUrls = new Set<string>();
   const mentions: TrendReportMention[] = [];
-  for (const r of rawResults) {
-    if (!r.url || seenUrls.has(r.url)) continue;
-    seenUrls.add(r.url);
-    const text = `${r.title} ${r.content}`;
-    const matchedBrands = matchList(text, params.brandNames);
-    const matchedKeywords = matchList(text, params.keywords);
+  for (const h of hits) {
+    if (!h.url) continue;
+    const normalized = normalizeUrlForMatch(h.url);
+    if (seenUrls.has(normalized)) continue;
+    seenUrls.add(normalized);
+
+    const fetched = fetchedByUrl.get(normalized);
+    // Content used for match + sentiment prefers fetched page text over the
+    // SERP snippet; snippet stays displayed in the email for readability.
+    const matchText = `${h.title} ${fetched ?? h.snippet}`;
+    const matchedBrands = matchList(matchText, params.brandNames);
+    const matchedKeywords = matchList(matchText, params.keywords);
     mentions.push({
-      url: r.url,
-      title: r.title ?? r.url,
-      snippet: (r.content ?? '').slice(0, 280),
-      engine: r.engine ?? 'unknown',
-      source_domain: extractDomain(r.url),
-      publishedDate: r.publishedDate ?? null,
+      url: h.url,
+      title: h.title ?? h.url,
+      snippet: (h.snippet ?? '').slice(0, 280),
+      engine: 'google',
+      source_domain: extractDomain(h.url),
+      publishedDate: null,
       matchedBrands,
       matchedKeywords,
-      sentimentGuess: guessSentiment(text, params.brandNames),
+      sentimentGuess: guessSentiment(matchText, params.brandNames),
     });
   }
 
-  // 3. Buckets + findings.
+  // 4. Buckets + findings.
   const findings: TrendReportFindings = {
     total_mentions: mentions.length,
     brand_buckets: params.brandNames.map((brand) => {
-      const hits = mentions.filter((m) => m.matchedBrands.includes(brand));
+      const hitsForBrand = mentions.filter((m) => m.matchedBrands.includes(brand));
       return {
         brand_name: brand,
-        mention_count: hits.length,
-        top_urls: hits.slice(0, 5).map((h) => h.url),
+        mention_count: hitsForBrand.length,
+        top_urls: hitsForBrand.slice(0, 5).map((h) => h.url),
       };
     }),
     keyword_buckets: params.keywords.map((keyword) => {
-      const hits = mentions.filter((m) => m.matchedKeywords.includes(keyword));
+      const hitsForKw = mentions.filter((m) => m.matchedKeywords.includes(keyword));
       return {
         keyword,
-        mention_count: hits.length,
-        top_urls: hits.slice(0, 5).map((h) => h.url),
+        mention_count: hitsForKw.length,
+        top_urls: hitsForKw.slice(0, 5).map((h) => h.url),
       };
     }),
     top_mentions: mentions.slice(0, 10),
     themes: [],
   };
 
-  // 4. LLM summary + theme extraction. If the LLM fails we still ship the
-  //    email with a stub summary.
+  // 5. LLM summary + theme extraction. Feeds fetched content when available.
   let summary = '';
   try {
-    const llmOut = await summarizeFindings(params, findings);
+    const llmOut = await summarizeFindings(params, findings, fetchedByUrl);
     summary = llmOut.summary;
     findings.themes = llmOut.themes;
   } catch (err) {
@@ -202,6 +228,7 @@ function fallbackSummary(params: BuildTrendParams, findings: TrendReportFindings
 async function summarizeFindings(
   params: BuildTrendParams,
   findings: TrendReportFindings,
+  fetchedByUrl: Map<string, string>,
 ): Promise<{ summary: string; themes: string[] }> {
   if (findings.total_mentions === 0) {
     return {
@@ -212,8 +239,16 @@ async function summarizeFindings(
 
   const topMentionsText = findings.top_mentions
     .slice(0, 8)
-    .map((m, i) => `${i + 1}. [${m.source_domain}] ${m.title}\n   ${m.snippet}`)
-    .join('\n');
+    .map((m, i) => {
+      const normalized = normalizeUrlForMatch(m.url);
+      const fetched = fetchedByUrl.get(normalized);
+      // Feed the LLM the enriched page content when we have it — this is
+      // the whole point of the fetchUrlText pass. Cap each chunk so the
+      // prompt stays well under the model's context.
+      const body = fetched ? fetched.slice(0, 1500) : m.snippet;
+      return `${i + 1}. [${m.source_domain}] ${m.title}\n   ${body}`;
+    })
+    .join('\n\n');
 
   const brandContext = params.brandNames.length
     ? `Listen specifically for mentions of: ${params.brandNames.join(', ')}.`
@@ -236,7 +271,7 @@ ${keywordContext}
 
 Period: ${params.periodStart.toISOString().slice(0, 10)} → ${params.periodEnd.toISOString().slice(0, 10)} (${params.cadence}).
 
-Here are the top web mentions this period:
+Here are the top web mentions this period (snippets drawn from the actual page content where available):
 
 ${topMentionsText}
 

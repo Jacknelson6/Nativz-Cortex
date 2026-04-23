@@ -52,6 +52,7 @@ import { gatherTikTokData } from '@/lib/tiktok/search';
 import { gatherSerpData } from '@/lib/serp/client';
 import { gatherQuoraData } from '@/lib/quora/client';
 import { gatherSerperData } from '@/lib/serper/client';
+import { getScraperSettings } from '@/lib/search/scraper-settings';
 import type { SerpData } from '@/lib/serp/types';
 import type { SerperPeopleAlsoAsk } from '@/lib/serper/client';
 
@@ -77,17 +78,27 @@ export interface PlatformResults {
  * Each platform has its own timeout and fallback — if one fails,
  * the search still completes with available data.
  */
+export interface ApifyRunContext {
+  topicSearchId?: string | null;
+  clientId?: string | null;
+}
+
 export async function gatherPlatformData(
   query: string,
   platforms: SearchPlatform[],
   timeRange: string,
   volume: SearchVolume = 'medium',
+  runContext: ApifyRunContext = {},
 ): Promise<PlatformResults> {
   const allSources: PlatformSource[] = [];
   const platformStats: PlatformResults['platformStats'] = [];
   let serpData: SerpData | null = null;
   let peopleAlsoAsk: SerperPeopleAlsoAsk[] = [];
   let relatedSearches: string[] = [];
+
+  // Admin-editable per-platform volume + cost targets. Falls back to legacy
+  // tier defaults if the DB row is missing. See lib/search/scraper-settings.ts.
+  const settings = await getScraperSettings();
 
   // Build platform fetch promises
   const promises: Promise<void>[] = [];
@@ -97,9 +108,9 @@ export async function gatherPlatformData(
     promises.push(
       (async () => {
         try {
-          // Run SearXNG (general web via DuckDuckGo engine by default) + Serper (Google) in parallel for maximum coverage
+          // Apify SERP (Google via scraperlink) + Serper (Google PAA) in parallel.
           const [searxngResult, serperResult] = await Promise.allSettled([
-            gatherSerpData(query, { timeRange }),
+            gatherSerpData(query, { timeRange, limit: settings.web.results, runContext }),
             process.env.SERPER_API_KEY ? gatherSerperData(query, timeRange, volume) : Promise.resolve(null),
           ]);
 
@@ -163,7 +174,11 @@ export async function gatherPlatformData(
       (async () => {
         try {
           await new Promise(r => setTimeout(r, 1000));
-          const redditData = await gatherRedditData(query, timeRange, volume);
+          const redditData = await gatherRedditData(query, timeRange, volume, {
+            ...runContext,
+            postsOverride: settings.reddit.posts,
+            commentsPerPostOverride: settings.reddit.commentPosts,
+          });
           console.log(`[platform-router] Reddit raw: ${redditData.posts.length} posts, ${redditData.postsWithComments.length} with comments, subreddits: ${redditData.topSubreddits.join(', ') || 'none'}`);
 
           const redditSources: PlatformSource[] = redditData.postsWithComments.map((post) => ({

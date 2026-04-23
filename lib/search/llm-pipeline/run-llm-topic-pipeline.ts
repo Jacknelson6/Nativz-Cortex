@@ -653,6 +653,10 @@ Rules: 2–4 words each, specific to the topic, no numbering, no full sentences.
             platforms as SearchPlatform[],
             args.search.time_range,
             scraperVolume,
+            {
+              topicSearchId: args.searchId,
+              clientId: args.search.client_id ?? null,
+            },
           );
           const durationMs = Date.now() - t0;
           logLlmV1({

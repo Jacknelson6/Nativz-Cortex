@@ -20,6 +20,8 @@ import { ContentPillars } from '@/components/results/content-pillars';
 import { NicheInsights } from '@/components/results/niche-insights';
 import { SourcesPanel } from '@/components/results/sources-panel';
 import { SourceBrowser } from '@/components/results/source-browser';
+import { WebSearchSummaryCard } from '@/components/results/web-search-summary-card';
+import { RedditScanSummaryCard } from '@/components/results/reddit-scan-summary-card';
 import { ActivityChart } from '@/components/charts/activity-chart';
 import { ExportPdfButton } from '@/components/results/export-pdf-button';
 import { ShareButton } from '@/components/results/share-button';
@@ -324,30 +326,61 @@ export function AdminResultsClient({
           clientId={clientInfo?.id ?? null}
         />
 
-        {/* Source browser — browse posts by platform */}
-        {Boolean(
-          search.platform_data && (search.platform_data as Record<string, unknown>).sources,
-        ) ? (
-          <SourceBrowser
-            sources={(search.platform_data as Record<string, unknown>).sources as PlatformSource[]}
-            searchId={search.id}
-            searchQuery={search.query}
-            clientContext={
-              clientInfo
-                ? {
-                    name: clientInfo.name,
-                    industry: clientInfo.industry,
-                    topicKeywords: clientInfo.topic_keywords ?? undefined,
-                  }
-                : null
-            }
-            defaultClientId={search.client_id}
-          />
-        ) : null}
+        {(() => {
+          const platformSources = ((search.platform_data as Record<string, unknown> | null)?.sources ?? []) as PlatformSource[];
+          const hasPlatformSources = platformSources.length > 0;
+          const redditSources = platformSources.filter((s) => s.platform === 'reddit');
+          const serpData = hasSerp(search) ? search.serp_data : null;
+          const hasWebResults = Boolean(serpData?.webResults?.length);
+          const hasSummaryCards = hasWebResults || redditSources.length > 0;
 
-        {hasSerp(search) && search.serp_data ? (
-          <SourcesPanel serpData={search.serp_data} />
-        ) : null}
+          return (
+            <>
+              {/* Web + Reddit summary cards — sit just above the short-form
+                  video grid. These platforms don't have video engagement
+                  metrics, so they get their own summary surface. */}
+              {hasSummaryCards ? (
+                <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-2">
+                  {hasWebResults && serpData ? (
+                    <WebSearchSummaryCard
+                      query={search.query}
+                      completedAt={search.completed_at}
+                      serpData={serpData}
+                    />
+                  ) : null}
+                  {redditSources.length > 0 ? (
+                    <RedditScanSummaryCard
+                      redditSources={redditSources}
+                      completedAt={search.completed_at}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+
+              {/* Source browser — short-form video cards. Reddit + web are
+                  filtered out inside SourceBrowser since they surface above. */}
+              {hasPlatformSources ? (
+                <SourceBrowser
+                  sources={platformSources}
+                  searchId={search.id}
+                  searchQuery={search.query}
+                  clientContext={
+                    clientInfo
+                      ? {
+                          name: clientInfo.name,
+                          industry: clientInfo.industry,
+                          topicKeywords: clientInfo.topic_keywords ?? undefined,
+                        }
+                      : null
+                  }
+                  defaultClientId={search.client_id}
+                />
+              ) : null}
+
+              {serpData ? <SourcesPanel serpData={serpData} /> : null}
+            </>
+          );
+        })()}
       </div>
 
       <ScrollToTop />

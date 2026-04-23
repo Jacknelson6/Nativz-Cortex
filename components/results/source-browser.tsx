@@ -41,7 +41,13 @@ export function SourceBrowser({
   const [analysisSource, setAnalysisSource] = useState<PlatformSource | null>(null);
   const [carouselIndex, setCarouselIndex] = useState<number | null>(null);
 
-  const listSources = sources ?? [];
+  // Reddit + web results don't have meaningful video engagement metrics
+  // (views/likes/ER), so they're surfaced as standalone summary cards
+  // (WebSearchSummaryCard / RedditScanSummaryCard) above this grid instead
+  // of being rendered with "0 views / — ER" in the video card layout.
+  const listSources = (sources ?? []).filter(
+    (s) => s.platform !== 'reddit' && s.platform !== 'web',
+  );
 
   const allSorted = useMemo(
     () =>

@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { AiRoutingSection } from '@/components/settings/ai-routing-section';
 import { LlmCredentialsSection } from '@/components/settings/llm-credentials-section';
 import { UsageDashboard } from '@/components/settings/usage-dashboard';
+import { ScraperVolumesSection } from '@/components/settings/scraper-volumes-section';
 import { AISettingsSkillsClient } from './skills-client';
 
 export const dynamic = 'force-dynamic';
@@ -71,6 +72,18 @@ export default async function AISettingsPage() {
           </p>
         </div>
         <AISettingsSkillsClient clients={clients ?? []} />
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-text-primary">Search volumes &amp; cost</h2>
+          <p className="mt-1 text-xs text-text-muted max-w-2xl">
+            How many posts, videos, and pages each search pulls per platform. The right
+            card estimates the Apify cost per search based on observed per-unit pricing.
+            Real billing reads from the <code className="rounded bg-background/60 px-1">apify_runs</code> table.
+          </p>
+        </div>
+        <ScraperVolumesSection />
       </section>
 
       <section className="space-y-4">
