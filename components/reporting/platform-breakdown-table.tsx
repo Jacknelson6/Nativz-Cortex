@@ -107,7 +107,12 @@ export function PlatformBreakdownTable({ rows }: PlatformBreakdownTableProps) {
             <tr className="text-xs uppercase tracking-wide text-text-muted/70 border-b border-nativz-border/50">
               <th className="text-left font-medium px-5 py-2">Platform</th>
               <th className="text-right font-medium px-3 py-2">Followers</th>
-              <th className="text-right font-medium px-3 py-2">Gained</th>
+              <th
+                className="text-right font-medium px-3 py-2"
+                title="Gross follow events in the window (matches Meta Business Suite 'Follows'). Instagram returns this directly; other platforms fall back to net follower change."
+              >
+                Follows
+              </th>
               <th className="text-right font-medium px-3 py-2">Posts</th>
               <th className="text-right font-medium px-3 py-2">Views</th>
               {hasVideoData && (
@@ -149,7 +154,9 @@ export function PlatformBreakdownTable({ rows }: PlatformBreakdownTableProps) {
                     {formatNumber(r.followers)}
                   </td>
                   <td className="px-3 py-3 text-right tabular-nums text-text-primary">
-                    {r.followerChange > 0 ? '+' : ''}{r.followerChange}
+                    {r.newFollows != null
+                      ? formatNumber(r.newFollows)
+                      : `${r.followerChange > 0 ? '+' : ''}${r.followerChange}`}
                   </td>
                   <td className="px-3 py-3 text-right tabular-nums text-text-muted">{r.postsCount}</td>
                   <td className="px-3 py-3 text-right tabular-nums text-text-primary">{formatNumber(r.views)}</td>

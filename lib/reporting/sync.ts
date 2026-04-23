@@ -49,7 +49,7 @@ export async function syncSocialProfile(
   // out to per-video daily-views endpoints without serializing an extra round-
   // trip.
   try {
-    const [followerStats, dailyMetrics, igInsights, posts] = await Promise.all([
+    const [followerStats, dailyMetrics, igInsights, igAccountMetrics, posts] = await Promise.all([
       service.getFollowerStats(lateAccountId, dateRange.start, dateRange.end),
       service.getDailyMetrics({
         accountId: lateAccountId,
@@ -59,6 +59,11 @@ export async function syncSocialProfile(
       platform === 'instagram'
         ? zernio.getInstagramInsights(lateAccountId, dateRange.start, dateRange.end)
         : Promise.resolve({ profileVisits: [], reachSeries: [] }),
+      // MBS-equivalent account-wide totals for IG. Null for other platforms —
+      // Zernio doesn't expose account-level insights for TikTok / FB / YouTube.
+      platform === 'instagram'
+        ? zernio.getInstagramAccountMetrics(lateAccountId, dateRange.start, dateRange.end)
+        : Promise.resolve(null),
       service.getPostAnalytics({
         accountId: lateAccountId,
         startDate: dateRange.start,
@@ -174,27 +179,52 @@ export async function syncSocialProfile(
         d.setUTCDate(d.getUTCDate() - 1);
         return followerForDay(d.toISOString().split('T')[0]);
       };
-      const rows = dailyMetrics.map((day) => ({
-        social_profile_id: profile.id,
-        client_id: clientId,
-        platform,
-        snapshot_date: day.date,
-        followers_count: followerForDay(day.date),
-        followers_change: followerForDay(day.date) - followerForPrevDay(day.date),
-        views_count: day.views,
-        engagement_count: day.engagement,
-        engagement_rate: day.engagementRate,
-        posts_count: day.postsCount,
-        reach_count: igReachByDay.get(day.date) ?? day.reach,
-        impressions_count: day.impressions,
-        link_clicks_count: day.clicks,
-        profile_visits_count: profileVisitsByDay.get(day.date) ?? 0,
-        // Only YouTube exposes per-day watch time right now. Summed in seconds
-        // across every video that got views on this day. Stays 0 for TikTok /
-        // IG / FB because Zernio doesn't expose watch-time for those platforms.
-        watch_time_seconds: Math.round((ytWatchMinutesByDay.get(day.date) ?? 0) * 60),
-        follower_growth_percent: followerStats.growthPercent,
-      }));
+      // Compute window length so the end-of-window row can be identified later.
+      const winStart = new Date(`${dateRange.start}T00:00:00Z`).getTime();
+      const winEnd = new Date(`${dateRange.end}T00:00:00Z`).getTime();
+      const windowDays = Math.max(1, Math.round((winEnd - winStart) / 86_400_000) + 1);
+      // Pick the end-of-window snapshot to receive the account-level totals
+      // (IG Graph only returns these as window aggregates, not per-day).
+      const endOfWindowDate = dailyMetrics
+        .map((d) => d.date)
+        .sort((a, b) => b.localeCompare(a))[0];
+
+      const rows = dailyMetrics.map((day) => {
+        const isWindowEnd = day.date === endOfWindowDate;
+        const igTotals = isWindowEnd ? igAccountMetrics : null;
+        return {
+          social_profile_id: profile.id,
+          client_id: clientId,
+          platform,
+          snapshot_date: day.date,
+          followers_count: followerForDay(day.date),
+          followers_change: followerForDay(day.date) - followerForPrevDay(day.date),
+          views_count: day.views,
+          engagement_count: day.engagement,
+          engagement_rate: day.engagementRate,
+          posts_count: day.postsCount,
+          reach_count: igReachByDay.get(day.date) ?? day.reach,
+          impressions_count: day.impressions,
+          link_clicks_count: day.clicks,
+          profile_visits_count: profileVisitsByDay.get(day.date) ?? 0,
+          // Only YouTube exposes per-day watch time right now. Summed in seconds
+          // across every video that got views on this day. Stays 0 for TikTok /
+          // IG / FB because Zernio doesn't expose watch-time for those platforms.
+          watch_time_seconds: Math.round((ytWatchMinutesByDay.get(day.date) ?? 0) * 60),
+          follower_growth_percent: followerStats.growthPercent,
+          // IG account-wide window totals — mirrors what Meta Business Suite
+          // shows. Populated on the end-of-window row only because Zernio's
+          // endpoint returns aggregates, not per-day values.
+          new_follows_count: igTotals?.newFollows ?? null,
+          unfollows_count: igTotals?.unfollows ?? null,
+          account_views_count: igTotals?.views ?? null,
+          account_engagement_count: igTotals?.totalInteractions ?? null,
+          account_reach_count: igTotals?.reach ?? null,
+          account_profile_visits_count: igTotals?.profileLinksTaps ?? null,
+          accounts_engaged_count: igTotals?.accountsEngaged ?? null,
+          window_days: igTotals ? windowDays : null,
+        };
+      });
 
       const { error: snapshotError } = await adminClient
         .from('platform_snapshots')

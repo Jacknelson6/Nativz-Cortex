@@ -52,6 +52,16 @@ export interface PlatformSnapshot {
   profile_visits_count: number | null;
   watch_time_seconds: number | null;
   follower_growth_percent: number | null;
+  /** IG only, populated on the end-of-window snapshot: gross follow events. */
+  new_follows_count: number | null;
+  unfollows_count: number | null;
+  /** IG only, end-of-window: account-wide window totals matching MBS. */
+  account_views_count: number | null;
+  account_engagement_count: number | null;
+  account_reach_count: number | null;
+  account_profile_visits_count: number | null;
+  accounts_engaged_count: number | null;
+  window_days: number | null;
   created_at: string;
 }
 
@@ -107,6 +117,10 @@ export interface PlatformSummary {
   avatarUrl: string | null;
   followers: number;
   followerChange: number;
+  /** Gross follow events in the window (IG only today — MBS-style). */
+  newFollows?: number;
+  /** Unfollow events in the window (IG only). */
+  unfollows?: number;
   totalViews: number;
   totalEngagement: number;
   engagementRate: number;
@@ -141,7 +155,15 @@ export interface PlatformBreakdownRow {
   platform: SocialPlatform;
   username: string;
   followers: number;
+  /** Net change in follower count over the window (follows − unfollows).
+   * Kept for platforms where we can't get a gross number. */
   followerChange: number;
+  /** Gross follow events in the window (matches Meta Business Suite's
+   * "Follows" card). IG only today — falls back to `followerChange` on
+   * platforms where Zernio doesn't expose it. */
+  newFollows?: number;
+  /** Unfollow events in the window. IG only. */
+  unfollows?: number;
   views: number;
   engagement: number;
   engagementRate: number;

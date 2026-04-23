@@ -829,6 +829,100 @@ export class ZernioPostingService implements PostingService {
   }
 
   /**
+   * GET /v1/analytics/instagram/account-insights — MBS-style account-wide
+   * window totals (Views / Reach / Content interactions / Follows / Visits).
+   *
+   * These come from Instagram Graph API at the account level — they count
+   * every event that happened in the account during the window, including
+   * views of older evergreen content and follow events on the profile
+   * itself. This is what Meta Business Suite displays. Our per-post sums
+   * from `getPostAnalytics` undercount because they only see posts that
+   * published inside the window.
+   *
+   * Two requests because Zernio's endpoint only breaks down one metric at
+   * a time, and `follows_and_unfollows` requires `breakdown=follow_type`
+   * to split gross follows from unfollows. Both calls fail soft — missing
+   * analytics add-on or unsupported account types 404/402 gracefully.
+   */
+  async getInstagramAccountMetrics(
+    accountId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<{
+    views: number;
+    reach: number;
+    accountsEngaged: number;
+    totalInteractions: number;
+    profileLinksTaps: number;
+    newFollows: number;
+    unfollows: number;
+  } | null> {
+    const totalsParams = new URLSearchParams({
+      accountId,
+      metrics: 'views,reach,accounts_engaged,total_interactions,profile_links_taps',
+      since: startDate,
+      until: endDate,
+      metricType: 'total_value',
+    });
+    const followsParams = new URLSearchParams({
+      accountId,
+      metrics: 'follows_and_unfollows',
+      since: startDate,
+      until: endDate,
+      metricType: 'total_value',
+      breakdown: 'follow_type',
+    });
+
+    try {
+      const [rawTotals, rawFollows] = await Promise.all([
+        zernioRequest<unknown>(`/analytics/instagram/account-insights?${totalsParams}`).catch(() => null),
+        zernioRequest<unknown>(`/analytics/instagram/account-insights?${followsParams}`).catch(() => null),
+      ]);
+
+      const totalsMetrics = asRecord(asRecord(rawTotals)?.metrics) ?? {};
+      const pickTotal = (key: string): number => {
+        const entry = asRecord(totalsMetrics[key]);
+        return pickNum(entry, 'total') || pickNum(entry, 'value');
+      };
+
+      let newFollows = 0;
+      let unfollows = 0;
+      const followsMetrics = asRecord(asRecord(rawFollows)?.metrics) ?? {};
+      const followsEntry = asRecord(followsMetrics.follows_and_unfollows);
+      if (followsEntry) {
+        const breakdowns = Array.isArray(followsEntry.breakdowns) ? followsEntry.breakdowns : [];
+        for (const b of breakdowns) {
+          const r = asRecord(b);
+          if (!r) continue;
+          const dim = (pickString(r, 'dimension') ?? '').toUpperCase();
+          const val = pickNum(r, 'value');
+          // Meta returns the confusingly-labeled FOLLOWER / NON_FOLLOWER pair.
+          // Live probe against Weston Funding (MBS showed 44 follows) confirmed
+          // FOLLOWER = new follows and NON_FOLLOWER = unfollows.
+          if (dim === 'FOLLOWER') newFollows = val;
+          else if (dim === 'NON_FOLLOWER') unfollows = val;
+        }
+      }
+
+      return {
+        views: pickTotal('views'),
+        reach: pickTotal('reach'),
+        accountsEngaged: pickTotal('accounts_engaged'),
+        totalInteractions: pickTotal('total_interactions'),
+        profileLinksTaps: pickTotal('profile_links_taps'),
+        newFollows,
+        unfollows,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('402') && !msg.includes('404') && !msg.includes('501')) {
+        console.warn(`[zernio] IG account metrics failed for ${accountId}: ${msg}`);
+      }
+      return null;
+    }
+  }
+
+  /**
    * Per-account paginated pull of /v1/analytics. Bypasses the 120-day
    * `fetchMergedAnalytics` cache so historical backfills see every indexed
    * post. Zernio caps each query at 100 results/page and 1-year range.

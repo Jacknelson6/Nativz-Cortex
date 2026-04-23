@@ -372,14 +372,28 @@ export async function GET(request: NextRequest) {
       );
       const avgViewDurationSeconds = avgWatchDurationByProfile.get(profileId) ?? 0;
 
+      // Prefer account-level window totals from the end-of-window snapshot
+      // when Zernio exposed them (IG only today). These match Meta Business
+      // Suite's "Follows / Views / Content interactions" numbers because
+      // they count events across the whole account, not just posts published
+      // inside the window. Falls back to post-aggregate sums on other
+      // platforms.
+      const endSnap = snapsAsc.length > 0 ? snapsAsc[snapsAsc.length - 1] : null;
+      const accountFollows = endSnap?.new_follows_count ?? null;
+      const accountUnfollows = endSnap?.unfollows_count ?? null;
+      const accountViews = endSnap?.account_views_count ?? null;
+      const accountEngagement = endSnap?.account_engagement_count ?? null;
+
       platformSummaries.push({
         platform: profile.platform,
         username: profile.username ?? '',
         avatarUrl: profile.avatar_url ?? null,
         followers: latestSnap?.followers_count ?? 0,
         followerChange: totalFollowerChange,
-        totalViews,
-        totalEngagement,
+        newFollows: accountFollows ?? undefined,
+        unfollows: accountUnfollows ?? undefined,
+        totalViews: accountViews ?? totalViews,
+        totalEngagement: accountEngagement ?? totalEngagement,
         engagementRate: Math.round(avgEngRate * 100) / 100,
         postsCount,
         watchTimeSeconds: totalWatchTimeSeconds,
@@ -509,6 +523,8 @@ export async function GET(request: NextRequest) {
       username: p.username,
       followers: p.followers,
       followerChange: p.followerChange,
+      newFollows: p.newFollows,
+      unfollows: p.unfollows,
       views: p.totalViews,
       engagement: p.totalEngagement,
       engagementRate: p.engagementRate,
