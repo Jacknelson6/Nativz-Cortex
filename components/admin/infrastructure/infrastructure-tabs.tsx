@@ -9,12 +9,14 @@ import {
   Layers,
   Plug,
   Timer,
+  Zap,
 } from 'lucide-react';
 import { useEffect } from 'react';
 
 const TABS = [
   { slug: 'overview', label: 'Overview', icon: Activity },
   { slug: 'topic-search', label: 'Topic search', icon: Gauge },
+  { slug: 'apify', label: 'Apify', icon: Zap },
   { slug: 'ai-providers', label: 'AI providers', icon: Layers },
   { slug: 'crons', label: 'Crons', icon: Timer },
   { slug: 'integrations', label: 'Integrations', icon: Plug },

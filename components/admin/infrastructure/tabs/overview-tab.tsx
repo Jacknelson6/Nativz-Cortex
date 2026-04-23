@@ -1,8 +1,8 @@
 import { unstable_cache } from 'next/cache';
 import Link from 'next/link';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { Activity, Database, Gauge, Layers, Plug, Timer } from 'lucide-react';
-import { HealthDot } from '../stat';
+import { Activity, Database, DollarSign, Gauge, Layers, Plug, Timer } from 'lucide-react';
+import { HealthDot, Stat } from '../stat';
 import { INFRA_CACHE_TAG } from '../cache';
 
 type SubsystemState = 'healthy' | 'degraded' | 'error' | 'unknown';
@@ -20,37 +20,77 @@ interface SubsystemRollup {
 const getOverviewData = unstable_cache(
   async () => {
     const admin = createAdminClient();
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const now = Date.now();
+    const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const twentyFourHoursAgo = new Date(now - 24 * 60 * 60 * 1000).toISOString();
 
-    const [topic, cron, benchmarks, clients] = await Promise.all([
-      admin
-        .from('topic_searches')
-        .select('status', { count: 'exact', head: false })
-        .gte('created_at', sevenDaysAgo)
-        .limit(500),
-      admin
-        .from('cron_runs')
-        .select('route, status, started_at')
-        .gte('started_at', sevenDaysAgo)
-        .order('started_at', { ascending: false })
-        .limit(200),
-      admin
-        .from('client_benchmarks')
-        .select('id', { count: 'exact', head: true })
-        .eq('is_active', true),
-      admin.from('clients').select('id', { count: 'exact', head: true }).eq('is_active', true),
-    ]);
+    const [topic, cron, benchmarks, clients, apify24h, apify30d, ai24h, ai30d, inFlight] =
+      await Promise.all([
+        admin
+          .from('topic_searches')
+          .select('status', { count: 'exact', head: false })
+          .gte('created_at', sevenDaysAgo)
+          .limit(500),
+        admin
+          .from('cron_runs')
+          .select('route, status, started_at')
+          .gte('started_at', sevenDaysAgo)
+          .order('started_at', { ascending: false })
+          .limit(200),
+        admin
+          .from('client_benchmarks')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true),
+        admin.from('clients').select('id', { count: 'exact', head: true }).eq('is_active', true),
+        admin
+          .from('apify_runs')
+          .select('cost_usd')
+          .gte('started_at', twentyFourHoursAgo),
+        admin
+          .from('apify_runs')
+          .select('cost_usd, started_at')
+          .gte('started_at', thirtyDaysAgo),
+        admin
+          .from('api_usage_logs')
+          .select('cost_usd')
+          .gte('created_at', twentyFourHoursAgo),
+        admin
+          .from('api_usage_logs')
+          .select('cost_usd, created_at')
+          .gte('created_at', thirtyDaysAgo),
+        admin
+          .from('topic_searches')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'processing'),
+      ]);
+
+    const sumCost = (rows: { cost_usd: number | string | null }[] | null): number =>
+      (rows ?? []).reduce((acc, r) => acc + Number(r.cost_usd ?? 0), 0);
 
     return {
       topicRuns: topic.data ?? [],
       cronRuns: cron.data ?? [],
       activeBenchmarks: benchmarks.count ?? 0,
       activeClients: clients.count ?? 0,
+      apifyCost24h: sumCost(apify24h.data as { cost_usd: number | string | null }[] | null),
+      apifyCost30d: sumCost(apify30d.data as { cost_usd: number | string | null }[] | null),
+      aiCost24h: sumCost(ai24h.data as { cost_usd: number | string | null }[] | null),
+      aiCost30d: sumCost(ai30d.data as { cost_usd: number | string | null }[] | null),
+      searchesInFlight: inFlight.count ?? 0,
     };
   },
   ['infrastructure-overview-rollup'],
   { revalidate: 60, tags: [INFRA_CACHE_TAG] },
 );
+
+function formatUsd(n: number): string {
+  if (!Number.isFinite(n) || n === 0) return '$0.00';
+  if (n < 0.01) return '<$0.01';
+  if (n < 10) return `$${n.toFixed(2)}`;
+  if (n < 1000) return `$${n.toFixed(0)}`;
+  return `$${(n / 1000).toFixed(1)}k`;
+}
 
 export async function OverviewTab() {
   const data = await getOverviewData();
@@ -136,11 +176,63 @@ export async function OverviewTab() {
     },
   ];
 
+  // ── Command-center money strip ──
+  //
+  // 24h + 30d spend split between Apify (scrapers) and AI (OpenRouter /
+  // OpenAI / Gemini / Groq, anything that writes to api_usage_logs). The
+  // projected monthly burn extrapolates from the 30d trailing sum — it's
+  // a smoother signal than 24h×30 since scrapes are bursty.
+  const totalCost24h = data.apifyCost24h + data.aiCost24h;
+  const totalCost30d = data.apifyCost30d + data.aiCost30d;
+  const projectedMonthly = totalCost30d; // trailing 30d IS a monthly estimate
+  const sevenDayRuns = data.topicRuns.length;
+  const sevenDaySuccessPct = sevenDayRuns
+    ? Math.round(
+        (data.topicRuns.filter((r) => r.status === 'completed').length / sevenDayRuns) * 100,
+      )
+    : 0;
+
   return (
     <div className="space-y-6">
       <p className="text-sm text-text-muted">
         At-a-glance health for every subsystem Cortex runs on. Click a tile to drill in.
       </p>
+
+      {/* Money + health tiles — the "command center" row */}
+      <section className="rounded-2xl border border-nativz-border bg-surface/60 p-5">
+        <div className="mb-4 flex items-center gap-2">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-300">
+            <DollarSign size={14} />
+          </span>
+          <h2 className="text-sm font-semibold text-text-primary">Command center</h2>
+          <span className="text-[11px] text-text-muted">
+            · live spend + activity
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <Stat
+            label="Spend / 24h"
+            value={formatUsd(totalCost24h)}
+            sub={`Apify ${formatUsd(data.apifyCost24h)} · AI ${formatUsd(data.aiCost24h)}`}
+          />
+          <Stat
+            label="Projected / month"
+            value={formatUsd(projectedMonthly)}
+            sub={`Trailing 30d · ${formatUsd(totalCost30d)} spent`}
+          />
+          <Stat
+            label="Searches in flight"
+            value={`${data.searchesInFlight}`}
+            sub={`${sevenDayRuns} runs / 7d · ${sevenDaySuccessPct}% success`}
+          />
+          <Stat
+            label="Active clients"
+            value={`${data.activeClients}`}
+            sub={`${data.activeBenchmarks} active benchmarks`}
+          />
+        </div>
+      </section>
+
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {rollups.map((r) => (
           <Link

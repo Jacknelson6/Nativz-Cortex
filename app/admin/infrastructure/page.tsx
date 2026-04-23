@@ -8,6 +8,7 @@ import {
 import { RefreshButton } from '@/components/admin/infrastructure/refresh-button';
 import { OverviewTab } from '@/components/admin/infrastructure/tabs/overview-tab';
 import { TopicSearchTab } from '@/components/admin/infrastructure/tabs/topic-search-tab';
+import { ApifyTab } from '@/components/admin/infrastructure/tabs/apify-tab';
 import { AiProvidersTab } from '@/components/admin/infrastructure/tabs/ai-providers-tab';
 import { CronsTab } from '@/components/admin/infrastructure/tabs/crons-tab';
 import { IntegrationsTab } from '@/components/admin/infrastructure/tabs/integrations-tab';
@@ -22,6 +23,7 @@ export const dynamic = 'force-dynamic';
 const VALID_TABS: readonly InfrastructureTabSlug[] = [
   'overview',
   'topic-search',
+  'apify',
   'ai-providers',
   'crons',
   'integrations',
@@ -93,6 +95,8 @@ function renderTab(slug: InfrastructureTabSlug) {
       return <OverviewTab />;
     case 'topic-search':
       return <TopicSearchTab />;
+    case 'apify':
+      return <ApifyTab />;
     case 'ai-providers':
       return <AiProvidersTab />;
     case 'crons':
