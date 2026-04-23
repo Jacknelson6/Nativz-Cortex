@@ -52,7 +52,7 @@ export function getZernioApiKey(): string {
   return key.trim();
 }
 
-async function zernioRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function zernioRequest<T>(path: string, options: RequestInit = {}, retryAttempt = 0): Promise<T> {
   const response = await fetch(`${getZernioApiBase()}${path}`, {
     ...options,
     headers: {
@@ -61,6 +61,24 @@ async function zernioRequest<T>(path: string, options: RequestInit = {}): Promis
       ...options.headers,
     },
   });
+
+  // Rate-limited — Zernio returns `retryAfterSeconds` in the body. We honor
+  // that up to 3 times; beyond that, surface the error so the caller logs it
+  // instead of blocking forever.
+  if (response.status === 429 && retryAttempt < 3) {
+    const body = await response.text();
+    let waitSeconds = 3;
+    try {
+      const parsed = JSON.parse(body) as { details?: { retryAfterSeconds?: number } };
+      if (typeof parsed.details?.retryAfterSeconds === 'number') {
+        waitSeconds = parsed.details.retryAfterSeconds;
+      }
+    } catch {
+      /* use default */
+    }
+    await new Promise((r) => setTimeout(r, (waitSeconds + 0.5) * 1000));
+    return zernioRequest<T>(path, options, retryAttempt + 1);
+  }
 
   if (!response.ok) {
     const body = await response.text();

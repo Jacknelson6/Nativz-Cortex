@@ -85,12 +85,24 @@ export async function syncSocialProfile(
 
     if (platform === 'youtube' && posts.length > 0) {
       const videoPosts = posts.filter((p) => !!p.platformPostId);
-      const pulls = await Promise.all(
-        videoPosts.map(async (p) => {
-          const rows = await zernio.getYoutubeDailyViews(lateAccountId, p.platformPostId!);
-          return { p, rows };
-        }),
-      );
+
+      // Zernio rate-limits at 600 requests per window. One client can have
+      // hundreds of YT videos, so fanning out with unbounded parallelism
+      // trips the limiter immediately. Batch through a 5-wide window — the
+      // zernioRequest layer will also retry individual 429s, but this keeps
+      // us out of the retry path most of the time.
+      const pulls: Array<{ p: (typeof videoPosts)[number]; rows: Awaited<ReturnType<typeof zernio.getYoutubeDailyViews>> }> = [];
+      const CONCURRENCY = 5;
+      for (let i = 0; i < videoPosts.length; i += CONCURRENCY) {
+        const batch = videoPosts.slice(i, i + CONCURRENCY);
+        const results = await Promise.all(
+          batch.map(async (p) => {
+            const rows = await zernio.getYoutubeDailyViews(lateAccountId, p.platformPostId!);
+            return { p, rows };
+          }),
+        );
+        pulls.push(...results);
+      }
       for (const { p, rows } of pulls) {
         if (rows.length === 0) continue;
         const watchSec = Math.round(
