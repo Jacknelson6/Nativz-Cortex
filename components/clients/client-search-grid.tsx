@@ -15,6 +15,8 @@ import {
   Check,
   FolderPlus,
   ArrowRight,
+  Sparkles,
+  Clock,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -38,6 +40,8 @@ interface ClientItem {
   lastActivityAt?: string | null;
   organizationId?: string | null;
   groupId?: string | null;
+  /** Derived server-side — true if the client has an active or paused onboarding tracker. */
+  inOnboarding?: boolean;
 }
 
 interface ClientGroup {
@@ -92,24 +96,42 @@ function normalizeServices(raw: string[]): string[] {
   return STANDARD_SERVICES.filter((s) => result.has(s));
 }
 
-type AgencyBucket = 'nativz' | 'anderson' | 'internal' | 'other';
+type AgencyBucket = 'prospect' | 'onboarding' | 'nativz' | 'anderson' | 'internal';
 
-function bucketFor(agency?: string | null): AgencyBucket {
-  const a = (agency ?? '').toLowerCase();
+/**
+ * Bucket each client into a pipeline row.
+ * Onboarding wins over agency — a client with an active tracker is "in flight"
+ * regardless of which agency will eventually own them. When the tracker
+ * completes, the client naturally falls back into their agency row.
+ */
+function bucketFor(agency: string | null | undefined, inOnboarding?: boolean): AgencyBucket {
+  if (inOnboarding) return 'onboarding';
+  const a = (agency ?? '').trim().toLowerCase();
+  if (!a) return 'prospect';
   if (a.includes('nativz')) return 'nativz';
   if (a.includes('anderson') || a === 'ac') return 'anderson';
   if (a === 'internal') return 'internal';
-  return 'other';
+  return 'prospect';
 }
 
 const BUCKET_LABEL: Record<AgencyBucket, string> = {
+  prospect: 'Prospect',
+  onboarding: 'Onboarding',
   nativz: 'Nativz',
   anderson: 'Anderson Collaborative',
   internal: 'Internal',
-  other: 'Unassigned',
 };
 
-const BUCKET_ORDER: AgencyBucket[] = ['nativz', 'anderson', 'internal', 'other'];
+const BUCKET_ORDER: AgencyBucket[] = ['prospect', 'onboarding', 'nativz', 'anderson', 'internal'];
+
+/** DB `agency` value to write when a card is dropped on a bucket. `null` clears the field. */
+const BUCKET_AGENCY_VALUE: Record<AgencyBucket, string | null> = {
+  prospect: null,
+  onboarding: null, // read-only; drops here are rejected
+  nativz: 'Nativz',
+  anderson: 'Anderson Collaborative',
+  internal: 'Internal',
+};
 
 // ─── Spotlight card — ref-based, zero re-renders on mouse move ─────────────
 
@@ -762,6 +784,75 @@ export function ClientSearchGrid({
     }
   }, [groups]);
 
+  const handleMoveAgency = useCallback(
+    async (client: ClientItem, bucket: AgencyBucket) => {
+      const dbId = client.dbId;
+      if (!dbId) return;
+      if (bucket === 'onboarding') {
+        toast.error('Start an onboarding from /admin/onboarding to move a client here.');
+        return;
+      }
+
+      const targetAgency = BUCKET_AGENCY_VALUE[bucket];
+      const wasInOnboarding = client.inOnboarding === true;
+      const prevAgency = client.agency;
+
+      // Optimistic: flip agency + clear onboarding flag if we're promoting out.
+      setAllClients((xs) =>
+        xs.map((c) =>
+          c.dbId === dbId
+            ? {
+                ...c,
+                agency: targetAgency ?? undefined,
+                inOnboarding: wasInOnboarding ? false : c.inOnboarding,
+              }
+            : c,
+        ),
+      );
+
+      try {
+        if (wasInOnboarding) {
+          const res = await fetch(`/api/clients/${dbId}/promote-onboarding`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agency: targetAgency }),
+          });
+          if (!res.ok) {
+            const data = (await res.json().catch(() => ({}))) as { error?: string };
+            throw new Error(data.error ?? `HTTP ${res.status}`);
+          }
+          const data = (await res.json()) as { completed_trackers: number };
+          toast.success(
+            data.completed_trackers > 0
+              ? `${client.name} onboarded → ${BUCKET_LABEL[bucket]} (${data.completed_trackers} tracker${data.completed_trackers === 1 ? '' : 's'} completed)`
+              : `${client.name} → ${BUCKET_LABEL[bucket]}`,
+          );
+        } else {
+          const res = await fetch(`/api/clients/${dbId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agency: targetAgency }),
+          });
+          if (!res.ok) {
+            const data = (await res.json().catch(() => ({}))) as { error?: string };
+            throw new Error(data.error ?? `HTTP ${res.status}`);
+          }
+          toast.success(`${client.name} → ${BUCKET_LABEL[bucket]}`);
+        }
+      } catch (err) {
+        setAllClients((xs) =>
+          xs.map((c) =>
+            c.dbId === dbId
+              ? { ...c, agency: prevAgency, inOnboarding: wasInOnboarding }
+              : c,
+          ),
+        );
+        toast.error(`Move failed: ${(err as Error).message}`);
+      }
+    },
+    [],
+  );
+
   const handleDropOnKey = useCallback(
     (targetKey: string | null) => {
       const dbId = draggingId;
@@ -770,11 +861,22 @@ export function ClientSearchGrid({
       if (!dbId) return;
       const client = allClients.find((c) => c.dbId === dbId);
       if (!client) return;
+
+      // Agency-bucket drops use a prefixed key so we can tell them apart from
+      // group drops (which are bare group ids or the 'unassigned' sentinel).
+      if (typeof targetKey === 'string' && targetKey.startsWith('agency:')) {
+        const bucket = targetKey.slice('agency:'.length) as AgencyBucket;
+        const currentBucket = bucketFor(client.agency, client.inOnboarding);
+        if (currentBucket === bucket) return;
+        void handleMoveAgency(client, bucket);
+        return;
+      }
+
       const nextGroupId = targetKey === 'unassigned' || targetKey === null ? null : targetKey;
       if ((client.groupId ?? null) === nextGroupId) return;
       void handleMoveGroup(dbId, nextGroupId);
     },
-    [draggingId, allClients, handleMoveGroup],
+    [draggingId, allClients, handleMoveGroup, handleMoveAgency],
   );
 
   const handleDeleteGroup = useCallback(async (id: string) => {
@@ -806,8 +908,10 @@ export function ClientSearchGrid({
 
     if (agencyFilter !== 'all') {
       list = list.filter((c) => {
-        const b = bucketFor(c.agency);
-        return agencyFilter === 'nativz' ? b === 'nativz' : b === 'anderson';
+        const a = (c.agency ?? '').trim().toLowerCase();
+        return agencyFilter === 'nativz'
+          ? a.includes('nativz')
+          : a.includes('anderson') || a === 'ac';
       });
     }
 
@@ -837,10 +941,13 @@ export function ClientSearchGrid({
 
   const agencyBuckets = useMemo(() => {
     if (useGroupSections || agencyFilter !== 'all') return [];
-    return BUCKET_ORDER.flatMap((key) => {
-      const items = active.filter((c) => bucketFor(c.agency) === key);
-      return items.length ? [{ key, items }] : [];
-    });
+    // Include every bucket (even empty ones) so every row is a visible drop
+    // target. Prospect and Onboarding especially need to be there at zero-count
+    // so new cards have somewhere to land.
+    return BUCKET_ORDER.map((key) => ({
+      key,
+      items: active.filter((c) => bucketFor(c.agency, c.inOnboarding) === key),
+    }));
   }, [useGroupSections, active, agencyFilter]);
 
   const totalShown = filtered.length;
@@ -855,7 +962,7 @@ export function ClientSearchGrid({
       dimmed,
       groups,
       deleting: deletingId === client.dbId,
-      draggable: useGroupSections,
+      draggable: true,
       dragging: draggingId === client.dbId,
       onDragStart: (dbId: string) => setDraggingId(dbId),
       onDragEnd: () => { setDraggingId(null); setDropTargetKey(null); },
@@ -888,23 +995,29 @@ export function ClientSearchGrid({
   function DropZone({
     targetKey,
     empty,
+    readOnly,
     children,
   }: {
     targetKey: string;
     empty?: boolean;
+    /** Visual-only — we still let the drop fire so `handleDropOnKey` can show the
+     * proper toast instead of the drop silently bouncing at the browser level. */
+    readOnly?: boolean;
     children: React.ReactNode;
   }) {
     const isTarget = dropTargetKey === targetKey && draggingId !== null;
+    const targetHighlight = readOnly
+      ? 'ring-2 ring-red-500/50 ring-offset-2 ring-offset-background bg-red-500/5'
+      : 'ring-2 ring-accent-border/70 ring-offset-2 ring-offset-background bg-accent-surface/10';
     return (
       <div
         onDragOver={(e) => {
           if (!draggingId) return;
           e.preventDefault();
-          e.dataTransfer.dropEffect = 'move';
+          e.dataTransfer.dropEffect = readOnly ? 'none' : 'move';
           if (dropTargetKey !== targetKey) setDropTargetKey(targetKey);
         }}
         onDragLeave={(e) => {
-          // Only clear if leaving to outside this element.
           if (e.currentTarget.contains(e.relatedTarget as Node)) return;
           if (dropTargetKey === targetKey) setDropTargetKey(null);
         }}
@@ -913,9 +1026,7 @@ export function ClientSearchGrid({
           handleDropOnKey(targetKey);
         }}
         className={`rounded-[12px] transition-all duration-150 ${
-          isTarget
-            ? 'ring-2 ring-accent-border/70 ring-offset-2 ring-offset-background bg-accent-surface/10'
-            : ''
+          isTarget ? targetHighlight : ''
         } ${empty && draggingId ? 'min-h-[80px] border border-dashed border-nativz-border/60 p-3' : ''}`}
       >
         {children}
@@ -1053,10 +1164,28 @@ export function ClientSearchGrid({
           ) : agencyBuckets.length > 0 ? (
             agencyBuckets.map((g, gi) => {
               const offset = agencyBuckets.slice(0, gi).reduce((n, x) => n + x.items.length, 0);
+              const readOnly = g.key === 'onboarding';
+              const icon =
+                g.key === 'onboarding' ? (
+                  <Clock size={12} className="text-amber-400" />
+                ) : g.key === 'prospect' ? (
+                  <Sparkles size={12} className="text-text-muted" />
+                ) : undefined;
+              const emptyMessage = readOnly
+                ? 'Start an onboarding from the Onboarding page.'
+                : draggingId
+                  ? `Drop here to move into ${BUCKET_LABEL[g.key]}.`
+                  : 'No clients in this row yet.';
               return (
                 <section key={g.key} className="space-y-2">
-                  <SectionHeader label={BUCKET_LABEL[g.key]} count={g.items.length} />
-                  {renderBucket(g.items, false, offset)}
+                  <SectionHeader label={BUCKET_LABEL[g.key]} count={g.items.length} icon={icon} />
+                  <DropZone targetKey={`agency:${g.key}`} empty={g.items.length === 0} readOnly={readOnly}>
+                    {g.items.length > 0 ? (
+                      renderBucket(g.items, false, offset)
+                    ) : (
+                      <p className="text-[13px] text-text-muted italic pl-2">{emptyMessage}</p>
+                    )}
+                  </DropZone>
                 </section>
               );
             })
