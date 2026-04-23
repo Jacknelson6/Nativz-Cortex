@@ -3,19 +3,24 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { SectionTile } from '@/components/admin/section-tabs';
 
 async function loadStats() {
-  const admin = createAdminClient();
+  try {
+    const admin = createAdminClient();
 
-  const [clientsRes, activeRes, groupsRes] = await Promise.all([
-    admin.from('clients').select('id', { count: 'exact', head: true }),
-    admin.from('clients').select('id', { count: 'exact', head: true }).eq('is_active', true),
-    admin.from('client_groups').select('id', { count: 'exact', head: true }),
-  ]);
+    const [clientsRes, activeRes, groupsRes] = await Promise.all([
+      admin.from('clients').select('id', { count: 'exact', head: true }),
+      admin.from('clients').select('id', { count: 'exact', head: true }).eq('is_active', true),
+      admin.from('client_groups').select('id', { count: 'exact', head: true }),
+    ]);
 
-  const totalClients = clientsRes.count ?? 0;
-  const activeClients = activeRes.count ?? 0;
-  const groupCount = groupsRes.count ?? 0;
+    const totalClients = clientsRes.count ?? 0;
+    const activeClients = activeRes.count ?? 0;
+    const groupCount = groupsRes.count ?? 0;
 
-  return { totalClients, activeClients, inactiveClients: totalClients - activeClients, groupCount };
+    return { totalClients, activeClients, inactiveClients: totalClients - activeClients, groupCount };
+  } catch (err) {
+    console.error('[clients overview] loadStats failed (returning empty):', err);
+    return { totalClients: 0, activeClients: 0, inactiveClients: 0, groupCount: 0 };
+  }
 }
 
 export async function ClientsOverviewTab() {

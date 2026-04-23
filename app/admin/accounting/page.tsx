@@ -58,14 +58,19 @@ export default async function AccountingIndexPage({
     .single();
   if (userRow?.role !== 'admin') redirect('/admin/dashboard');
 
-  // Ensure current period exists.
-  const cur = currentPeriod();
-  await adminClient
-    .from('payroll_periods')
-    .upsert(
-      { start_date: cur.startDate, end_date: cur.endDate, half: cur.half, status: 'draft', created_by: user.id },
-      { onConflict: 'start_date,end_date', ignoreDuplicates: true },
-    );
+  // Ensure current period exists — non-fatal if it fails (e.g. unique
+  // constraint race, offline RPC) so the page still renders.
+  try {
+    const cur = currentPeriod();
+    await adminClient
+      .from('payroll_periods')
+      .upsert(
+        { start_date: cur.startDate, end_date: cur.endDate, half: cur.half, status: 'draft', created_by: user.id },
+        { onConflict: 'start_date,end_date', ignoreDuplicates: true },
+      );
+  } catch (err) {
+    console.error('[accounting] current-period upsert failed (non-fatal):', err);
+  }
 
   const params = await searchParams;
   const activeTab = resolveTab(params.tab);

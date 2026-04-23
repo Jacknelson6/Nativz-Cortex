@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Loader2, Save } from 'lucide-react';
-import { PER_UNIT_COST_USD } from '@/lib/search/scraper-settings';
+import { PER_UNIT_COST_USD } from '@/lib/search/scraper-cost-constants';
 
 /**
  * Admin volume + cost editor. Fields write to `scraper_settings` (singleton

@@ -7,7 +7,10 @@
  * See migration 148_scraper_settings.sql.
  */
 
+import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
+export { PER_UNIT_COST_USD } from './scraper-cost-constants';
+import { PER_UNIT_COST_USD } from './scraper-cost-constants';
 
 export interface ScraperSettings {
   reddit: { posts: number; commentPosts: number };
@@ -28,20 +31,9 @@ export const SCRAPER_DEFAULTS: ScraperSettings = {
 let cached: { value: ScraperSettings; expiresAt: number } | null = null;
 const TTL_MS = 30_000;
 
-/**
- * Per-unit cost estimates (USD) for the cost calculator UI. Measured from
- * real production runs on 2026-04-23 — revise when actor pricing changes.
- *
- * Reddit is *per-post* (comments bundle into the same dataset rows but the
- * ceiling is posts). Web is roughly free. TikTok/YouTube per video.
- */
-export const PER_UNIT_COST_USD = {
-  reddit: 0.021,     // $0.42 / 20 posts observed on trudax-lite
-  youtube: 0.0005,   // estimate; revise once measured
-  tiktok: 0.0003,    // apidojo/tiktok-scraper ~$0.30/1k
-  web: 0.0,          // scraperlink SERP is free-tier at our usage levels
-  quora: 0.0,        // piggybacks on web SERP
-} as const;
+// Per-unit cost constants now live in ./scraper-cost-constants (client-safe)
+// so components with 'use client' can import them without pulling in the
+// server-only createAdminClient path above.
 
 export async function getScraperSettings(): Promise<ScraperSettings> {
   const now = Date.now();

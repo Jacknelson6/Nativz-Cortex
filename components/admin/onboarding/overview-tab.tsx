@@ -3,36 +3,48 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { SectionTile } from '@/components/admin/section-tabs';
 
 async function loadStats() {
-  const admin = createAdminClient();
+  try {
+    const admin = createAdminClient();
 
-  const [trackersRes, templatesRes, emailTemplatesRes] = await Promise.all([
-    admin
-      .from('onboarding_trackers')
-      .select('id, status')
-      .eq('is_template', false),
-    admin
-      .from('onboarding_trackers')
-      .select('id', { count: 'exact', head: true })
-      .eq('is_template', true),
-    admin
-      .from('onboarding_email_templates')
-      .select('id', { count: 'exact', head: true }),
-  ]);
+    const [trackersRes, templatesRes, emailTemplatesRes] = await Promise.all([
+      admin
+        .from('onboarding_trackers')
+        .select('id, status')
+        .eq('is_template', false),
+      admin
+        .from('onboarding_trackers')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_template', true),
+      admin
+        .from('onboarding_email_templates')
+        .select('id', { count: 'exact', head: true }),
+    ]);
 
-  const trackers = trackersRes.data ?? [];
-  const total = trackers.length;
-  const inProgress = trackers.filter((t) => t.status === 'in_progress' || t.status === 'active').length;
-  const notStarted = trackers.filter((t) => t.status === 'not_started' || t.status === 'pending').length;
-  const completed = trackers.filter((t) => t.status === 'completed' || t.status === 'complete').length;
+    const trackers = trackersRes.data ?? [];
+    const total = trackers.length;
+    const inProgress = trackers.filter((t) => t.status === 'in_progress' || t.status === 'active').length;
+    const notStarted = trackers.filter((t) => t.status === 'not_started' || t.status === 'pending').length;
+    const completed = trackers.filter((t) => t.status === 'completed' || t.status === 'complete').length;
 
-  return {
-    totalTrackers: total,
-    inProgress,
-    notStarted,
-    completed,
-    templateCount: templatesRes.count ?? 0,
-    emailTemplateCount: emailTemplatesRes.count ?? 0,
-  };
+    return {
+      totalTrackers: total,
+      inProgress,
+      notStarted,
+      completed,
+      templateCount: templatesRes.count ?? 0,
+      emailTemplateCount: emailTemplatesRes.count ?? 0,
+    };
+  } catch (err) {
+    console.error('[onboarding overview] loadStats failed (returning empty):', err);
+    return {
+      totalTrackers: 0,
+      inProgress: 0,
+      notStarted: 0,
+      completed: 0,
+      templateCount: 0,
+      emailTemplateCount: 0,
+    };
+  }
 }
 
 export async function OnboardingOverviewTab() {

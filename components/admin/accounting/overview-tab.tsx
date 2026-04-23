@@ -9,21 +9,22 @@ import { centsToDollars } from '@/lib/accounting/periods';
  * dominate the "current state" read.
  */
 async function loadStats() {
-  const admin = createAdminClient();
-  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  try {
+    const admin = createAdminClient();
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  const [periodsRes, entriesRes] = await Promise.all([
-    admin
-      .from('payroll_periods')
-      .select('id, status, start_date')
-      .gte('start_date', ninetyDaysAgo),
-    admin
-      .from('payroll_entries')
-      .select('period_id, amount_cents, margin_cents'),
-  ]);
+    const [periodsRes, entriesRes] = await Promise.all([
+      admin
+        .from('payroll_periods')
+        .select('id, status, start_date')
+        .gte('start_date', ninetyDaysAgo),
+      admin
+        .from('payroll_entries')
+        .select('period_id, amount_cents, margin_cents'),
+    ]);
 
-  const periods = periodsRes.data ?? [];
-  const entries = entriesRes.data ?? [];
+    const periods = periodsRes.data ?? [];
+    const entries = entriesRes.data ?? [];
 
   const periodIds = new Set(periods.map((p) => p.id));
   const recentEntries = entries.filter((e) => periodIds.has(e.period_id));
@@ -34,15 +35,27 @@ async function loadStats() {
   const lockedCount = periods.filter((p) => p.status === 'locked').length;
   const paidCount = periods.filter((p) => p.status === 'paid').length;
 
-  return {
-    periodCount: periods.length,
-    draftCount,
-    lockedCount,
-    paidCount,
-    totalPayoutCents,
-    totalMarginCents,
-    entryCount: recentEntries.length,
-  };
+    return {
+      periodCount: periods.length,
+      draftCount,
+      lockedCount,
+      paidCount,
+      totalPayoutCents,
+      totalMarginCents,
+      entryCount: recentEntries.length,
+    };
+  } catch (err) {
+    console.error('[accounting overview] loadStats failed (returning empty):', err);
+    return {
+      periodCount: 0,
+      draftCount: 0,
+      lockedCount: 0,
+      paidCount: 0,
+      totalPayoutCents: 0,
+      totalMarginCents: 0,
+      entryCount: 0,
+    };
+  }
 }
 
 export async function AccountingOverviewTab() {
