@@ -1,19 +1,27 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import {
-  Users, Search, Shield, Crown, Trash2, KeyRound, Mail,
+  Users, Search, Crown, Trash2, KeyRound, Mail,
   Clock, FileSearch, Building2, Loader2, ChevronDown, ChevronUp,
-  Copy, Check, X, Briefcase, ArrowUpDown, UserPlus, Pencil,
+  Copy, Check, X, Briefcase, ArrowUpDown, UserPlus, Pencil, Activity, CalendarClock,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { InviteUsersDialog } from '@/components/users/invite-users-dialog';
 import { EmailComposerModal, type Recipient } from '@/components/users/email-composer-modal';
 import { ScheduledEmailsTab } from '@/components/users/scheduled-emails-tab';
-import { cn } from '@/lib/utils/cn';
+import { SectionTabs, SectionHeader } from '@/components/admin/section-tabs';
+import type { SectionTabDef } from '@/components/admin/section-tabs';
+
+const USERS_PAGE_TABS = [
+  { slug: 'users',     label: 'All users',        icon: Users },
+  { slug: 'scheduled', label: 'Scheduled emails', icon: CalendarClock },
+] as const satisfies readonly SectionTabDef[];
+
+type UsersPageTab = (typeof USERS_PAGE_TABS)[number]['slug'];
 
 interface UserRow {
   id: string;
@@ -42,6 +50,10 @@ function getInitials(name: string): string {
 
 export default function UsersPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const rawTab = searchParams.get('tab');
+  const pageTab: UsersPageTab = rawTab === 'scheduled' ? 'scheduled' : 'users';
+
   const [isSuperAdmin, setIsSuperAdmin] = useState<boolean | null>(null);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,7 +63,6 @@ export default function UsersPage() {
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [pageTab, setPageTab] = useState<'users' | 'scheduled'>('users');
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerRecipients, setComposerRecipients] = useState<Recipient[]>([]);
 
@@ -154,54 +165,22 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="cortex-page-gutter space-y-5 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="ui-page-title flex items-center gap-2">
-            <Users size={22} className="text-accent-text" />
-            All users
-          </h1>
-          <p className="text-base text-text-muted mt-1">
-            {teamCount} team · {viewerCount} portal user{viewerCount !== 1 ? 's' : ''} · {users.length} total
-          </p>
-        </div>
-        <button
-          onClick={() => setInviteOpen(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-white hover:bg-accent/90 transition-colors cursor-pointer shrink-0"
-        >
-          <UserPlus size={14} />
-          Invite users
-        </button>
-      </div>
+    <div className="cortex-page-gutter max-w-6xl mx-auto space-y-8">
+      <SectionHeader
+        title="Users"
+        description={`${teamCount} team · ${viewerCount} portal user${viewerCount !== 1 ? 's' : ''} · ${users.length} total. Pick a tab to drill in.`}
+        action={
+          <button
+            onClick={() => setInviteOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-white hover:bg-accent/90 transition-colors cursor-pointer shrink-0"
+          >
+            <UserPlus size={14} />
+            Invite users
+          </button>
+        }
+      />
 
-      {/* Tab nav */}
-      <nav className="mb-4 flex items-center gap-1 border-b border-nativz-border">
-        <button
-          type="button"
-          onClick={() => setPageTab('users')}
-          className={cn(
-            'border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
-            pageTab === 'users'
-              ? 'border-accent text-text-primary'
-              : 'border-transparent text-text-muted hover:text-text-secondary',
-          )}
-        >
-          All users
-        </button>
-        <button
-          type="button"
-          onClick={() => setPageTab('scheduled')}
-          className={cn(
-            'border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
-            pageTab === 'scheduled'
-              ? 'border-accent text-text-primary'
-              : 'border-transparent text-text-muted hover:text-text-secondary',
-          )}
-        >
-          Scheduled emails
-        </button>
-      </nav>
+      <SectionTabs tabs={USERS_PAGE_TABS} active={pageTab} memoryKey="cortex:users:last-tab" />
 
       {pageTab === 'scheduled' ? (
         <ScheduledEmailsTab />

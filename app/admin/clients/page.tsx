@@ -7,6 +7,19 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { PageError } from '@/components/shared/page-error';
 import { ClientSearchGrid } from '@/components/clients/client-search-grid';
+import {
+  SectionTabs,
+  SectionHeader,
+  SectionPanel,
+} from '@/components/admin/section-tabs';
+import {
+  CLIENTS_TABS,
+  CLIENTS_TAB_SLUGS,
+  type ClientsTabSlug,
+} from '@/components/admin/clients/clients-tabs';
+import { ClientsOverviewTab } from '@/components/admin/clients/overview-tab';
+
+export const dynamic = 'force-dynamic';
 
 type AdminClientsDbRow = {
   id: string;
@@ -29,11 +42,21 @@ type ClientGroupRow = {
   sort_order: number;
 };
 
-export default async function AdminClientsPage() {
+function resolveTab(raw: string | undefined): ClientsTabSlug {
+  if (raw && (CLIENTS_TAB_SLUGS as readonly string[]).includes(raw)) {
+    return raw as ClientsTabSlug;
+  }
+  return 'overview';
+}
+
+export default async function AdminClientsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   try {
     const adminClient = createAdminClient();
 
-    // Check super admin status
     const supabase = await createServerSupabaseClient();
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     let isSuperAdmin = false;
@@ -42,7 +65,9 @@ export default async function AdminClientsPage() {
       isSuperAdmin = sa?.is_super_admin === true;
     }
 
-    // Fetch all clients + pipeline groups in parallel (independent I/O).
+    const sp = await searchParams;
+    const activeTab = resolveTab(sp.tab);
+
     const [
       { data: dbClients, error: dbError },
       { data: groupsData },
@@ -65,7 +90,6 @@ export default async function AdminClientsPage() {
 
     const groups: ClientGroupRow[] = (groupsData as ClientGroupRow[] | null) ?? [];
 
-    // Transform DB results to match the grid component's expectations
     const clients = (dbClients ?? []).map((c) => ({
       id: c.slug,
       dbId: c.id,
@@ -82,44 +106,78 @@ export default async function AdminClientsPage() {
     }));
 
     return (
-      <div className="cortex-page-gutter space-y-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="ui-page-title">Clients</h1>
-            <p className="text-[15px] text-text-muted mt-1">
-              Manage your client roster and brand profiles
-              {clients.length > 0 && (
-                <span className="ml-2 text-text-muted/60 tabular-nums">· {clients.length}</span>
-              )}
-            </p>
-          </div>
-          {isSuperAdmin && (
-            <Link href="/admin/clients/onboard">
-              <Button size="sm">
-                <Plus size={14} />
-                Onboard
-              </Button>
-            </Link>
-          )}
-        </div>
-
-        {clients.length === 0 ? (
-          <EmptyState
-            icon={<Building2 size={32} />}
-            title="No clients yet"
-            description="Add your first client to start running searches for them."
-            action={
+      <div className="cortex-page-gutter max-w-6xl mx-auto space-y-8">
+        <SectionHeader
+          title="Clients"
+          description={`Manage your client roster and brand profiles${clients.length > 0 ? ` · ${clients.length} total` : ''}. Pick a tab to drill in.`}
+          action={
+            isSuperAdmin ? (
               <Link href="/admin/clients/onboard">
                 <Button size="sm">
                   <Plus size={14} />
-                  Onboard client
+                  Onboard
                 </Button>
               </Link>
-            }
-          />
-        ) : (
-          <ClientSearchGrid clients={clients} groups={groups} />
-        )}
+            ) : null
+          }
+        />
+
+        <SectionTabs tabs={CLIENTS_TABS} active={activeTab} memoryKey="cortex:clients:last-tab" />
+
+        <div>
+          {activeTab === 'overview' ? (
+            <ClientsOverviewTab />
+          ) : activeTab === 'groups' ? (
+            <SectionPanel
+              title="Pipeline groups"
+              description={`${groups.length} group${groups.length === 1 ? '' : 's'} defining board columns and segmentation.`}
+            >
+              {groups.length === 0 ? (
+                <p className="text-sm text-text-muted">No groups yet.</p>
+              ) : (
+                <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {groups.map((g) => (
+                    <li
+                      key={g.id}
+                      className="flex items-center gap-3 rounded-xl border border-nativz-border bg-surface px-4 py-3"
+                    >
+                      <span
+                        aria-hidden
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: g.color || '#888' }}
+                      />
+                      <span className="text-sm font-medium text-text-primary">{g.name}</span>
+                      <span className="ml-auto tabular-nums text-xs text-text-muted">#{g.sort_order}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </SectionPanel>
+          ) : (
+            <SectionPanel
+              title="All clients"
+              description={`${clients.length} client${clients.length === 1 ? '' : 's'} on the roster.`}
+            >
+              {clients.length === 0 ? (
+                <EmptyState
+                  icon={<Building2 size={32} />}
+                  title="No clients yet"
+                  description="Add your first client to start running searches for them."
+                  action={
+                    <Link href="/admin/clients/onboard">
+                      <Button size="sm">
+                        <Plus size={14} />
+                        Onboard client
+                      </Button>
+                    </Link>
+                  }
+                />
+              ) : (
+                <ClientSearchGrid clients={clients} groups={groups} />
+              )}
+            </SectionPanel>
+          )}
+        </div>
       </div>
     );
   } catch (error: unknown) {

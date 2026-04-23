@@ -1,9 +1,19 @@
-import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { notFound } from 'next/navigation';
-import { ListChecks, Mail } from 'lucide-react';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { OnboardingRosterTable } from '@/components/onboarding/onboarding-roster-table';
+import {
+  SectionTabs,
+  SectionHeader,
+  SectionPanel,
+} from '@/components/admin/section-tabs';
+import {
+  ONBOARDING_TABS,
+  ONBOARDING_TAB_SLUGS,
+  type OnboardingTabSlug,
+} from '@/components/admin/onboarding/onboarding-tabs';
+import { OnboardingOverviewTab } from '@/components/admin/onboarding/overview-tab';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,21 +31,30 @@ type TrackerRow = {
   clients: { name: string; slug: string; logo_url: string | null } | null;
 };
 
+function resolveTab(raw: string | undefined): OnboardingTabSlug {
+  if (raw && (ONBOARDING_TAB_SLUGS as readonly string[]).includes(raw)) {
+    return raw as OnboardingTabSlug;
+  }
+  return 'overview';
+}
+
 /**
- * /admin/onboarding — top-level admin tool that lists every onboarding
- * tracker across all clients. Dedicated admin surface (not per-client)
- * so the ops team can triage everything in flight from one screen.
+ * /admin/onboarding — top-level admin page for every onboarding tracker
+ * across clients. Tabbed to match the Infrastructure page pattern.
  *
- * ?view=templates flips the roster to show service templates (reusable
- * presets) instead of real trackers. Same editor handles both.
+ * Legacy ?view=templates query keeps working by redirecting once.
  */
 export default async function OnboardingRosterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ tab?: string; view?: string }>;
 }) {
   const sp = await searchParams;
-  const view: 'trackers' | 'templates' = sp.view === 'templates' ? 'templates' : 'trackers';
+
+  // Back-compat: legacy ?view=templates → ?tab=templates
+  if (sp.view === 'templates' && !sp.tab) {
+    redirect('/admin/onboarding?tab=templates');
+  }
 
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -44,11 +63,47 @@ export default async function OnboardingRosterPage({
   const { data: me } = await admin.from('users').select('role').eq('id', user.id).single();
   if (me?.role !== 'admin') notFound();
 
+  const activeTab = resolveTab(sp.tab);
+
+  return (
+    <div className="cortex-page-gutter max-w-6xl mx-auto space-y-8">
+      <SectionHeader
+        title="Onboarding"
+        description="Per-service setup for every client — checklist + timeline + shareable client view. Pick a tab to drill in."
+      />
+
+      <SectionTabs tabs={ONBOARDING_TABS} active={activeTab} memoryKey="cortex:onboarding:last-tab" />
+
+      <div>{await renderTab(activeTab, admin)}</div>
+    </div>
+  );
+}
+
+async function renderTab(slug: OnboardingTabSlug, admin: ReturnType<typeof createAdminClient>): Promise<React.ReactNode> {
+  switch (slug) {
+    case 'overview':
+      return <OnboardingOverviewTab />;
+    case 'trackers':
+      return <TrackersOrTemplatesTab admin={admin} mode="trackers" />;
+    case 'templates':
+      return <TrackersOrTemplatesTab admin={admin} mode="templates" />;
+    case 'email-templates':
+      return <EmailTemplatesTab />;
+  }
+}
+
+async function TrackersOrTemplatesTab({
+  admin,
+  mode,
+}: {
+  admin: ReturnType<typeof createAdminClient>;
+  mode: 'trackers' | 'templates';
+}) {
   const [{ data: trackersRaw }, { data: clientsRaw }] = await Promise.all([
     admin
       .from('onboarding_trackers')
       .select('id, client_id, service, title, status, started_at, completed_at, is_template, template_name, created_at, clients(name, slug, logo_url)')
-      .eq('is_template', view === 'templates')
+      .eq('is_template', mode === 'templates')
       .order('created_at', { ascending: false }),
     admin
       .from('clients')
@@ -64,9 +119,7 @@ export default async function OnboardingRosterPage({
     services: Array.isArray(c.services) ? (c.services as string[]) : [],
   }));
 
-  // Aggregate child counts for preview badges. We fetch phase rows and
-  // group rows scoped to the visible trackers, then count items via
-  // group_id. Keeps all three queries in parallel so the page stays fast.
+  // Aggregate child counts for preview badges.
   const trackerIds = trackers.map((t) => t.id);
   let stats: Record<string, { phases: number; groups: number; items: number }> = {};
   if (trackerIds.length > 0) {
@@ -109,60 +162,31 @@ export default async function OnboardingRosterPage({
   }
 
   return (
-    <div className="cortex-page-gutter space-y-6">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="ui-page-title flex items-center gap-2">
-            <ListChecks size={22} className="text-accent-text" />
-            Onboarding
-          </h1>
-          <p className="text-[15px] text-text-muted mt-1">
-            Track per-service setup for every client — checklist + timeline + shareable client view.
-          </p>
-        </div>
-        <Link
-          href="/admin/onboarding/email-templates"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-nativz-border bg-surface-primary px-3 py-1.5 text-sm text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
-        >
-          <Mail size={14} />
-          Email templates
-        </Link>
-      </div>
-
-      {/* Segmented toggle: Trackers | Templates */}
-      <div className="inline-flex rounded-full border border-nativz-border bg-surface p-0.5">
-        <SegmentLink active={view === 'trackers'} href="/admin/onboarding">
-          Trackers
-        </SegmentLink>
-        <SegmentLink active={view === 'templates'} href="/admin/onboarding?view=templates">
-          Templates
-        </SegmentLink>
-      </div>
-
-      <OnboardingRosterTable trackers={trackers} clients={clients} view={view} stats={stats} />
-    </div>
+    <SectionPanel
+      title={mode === 'templates' ? 'Service templates' : 'Active trackers'}
+      description={
+        mode === 'templates'
+          ? 'Reusable onboarding presets per service. Clone into a tracker on assignment.'
+          : 'Live onboarding in flight across every client.'
+      }
+    >
+      <OnboardingRosterTable trackers={trackers} clients={clients} view={mode} stats={stats} />
+    </SectionPanel>
   );
 }
 
-function SegmentLink({
-  active,
-  href,
-  children,
-}: {
-  active: boolean;
-  href: string;
-  children: React.ReactNode;
-}) {
+function EmailTemplatesTab() {
   return (
-    <Link
-      href={href}
-      className={`rounded-full px-3.5 py-1 text-[13px] font-medium transition-colors ${
-        active
-          ? 'bg-accent-surface text-accent-text'
-          : 'text-text-muted hover:text-text-primary'
-      }`}
+    <SectionPanel
+      title="Email templates"
+      description="Shared templates used by the onboarding email composer."
     >
-      {children}
-    </Link>
+      <a
+        href="/admin/onboarding/email-templates"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-sm font-medium text-accent-text transition-colors hover:border-accent/60 hover:bg-accent/20"
+      >
+        Open email templates →
+      </a>
+    </SectionPanel>
   );
 }
