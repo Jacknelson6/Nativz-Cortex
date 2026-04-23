@@ -217,16 +217,20 @@ export function OnboardingPublicView({
           <h1 className="text-[36px] sm:text-[44px] md:text-[56px] font-semibold tracking-tight leading-[1.05]">
             {progressPct === 100
               ? "You\u2019re fully onboarded."
-              : progressPct > 0
-                ? 'Looking good.'
-                : "Welcome in."}
+              : clientOwnedTotal > 0 && clientOwnedDone === clientOwnedTotal
+                ? 'Your part is done.'
+                : progressPct > 0
+                  ? 'Looking good.'
+                  : "Welcome in."}
           </h1>
           <p className="text-[15px] md:text-[16px] text-text-muted max-w-xl mx-auto leading-relaxed">
             {progressPct === 100
               ? `Everything\u2019s connected. ${tracker.service} is live \u2014 we\u2019ll take it from here.`
-              : progressPct > 0
-                ? `A few things still in your court. Tap as you finish them \u2014 we get notified instantly.`
-                : `Here\u2019s your ${tracker.service.toLowerCase()} onboarding. Tap items as you finish them. Upload anything we need. We handle the rest.`}
+              : clientOwnedTotal > 0 && clientOwnedDone === clientOwnedTotal
+                ? `You\u2019ve handed over everything we asked for. We\u2019re on the rest \u2014 keep an eye on this page.`
+                : progressPct > 0
+                  ? `A few things still in your court. Tap as you finish them \u2014 we get notified instantly.`
+                  : `Here\u2019s your ${tracker.service.toLowerCase()} onboarding. Tap items as you finish them. Upload anything we need. We handle the rest.`}
           </p>
           {totalItems > 0 && (
             <div className="max-w-md mx-auto pt-3">
