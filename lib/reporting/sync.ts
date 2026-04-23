@@ -89,13 +89,24 @@ export async function syncSocialProfile(
     };
 
     if (dailyMetrics.length > 0) {
+      // Compute per-day follower delta from the Zernio series. Previously this
+      // was hardcoded to 0, which meant the summary route's sum (which drives
+      // the "Gained" column on the Analytics page) always came out to 0 even
+      // when the series itself showed growth. Summing `today - yesterday`
+      // across the window is algebraically equivalent to `last - first`, so
+      // the total matches what Zernio reports for the period.
+      const followerForPrevDay = (date: string): number => {
+        const d = new Date(`${date}T00:00:00Z`);
+        d.setUTCDate(d.getUTCDate() - 1);
+        return followerForDay(d.toISOString().split('T')[0]);
+      };
       const rows = dailyMetrics.map((day) => ({
         social_profile_id: profile.id,
         client_id: clientId,
         platform,
         snapshot_date: day.date,
         followers_count: followerForDay(day.date),
-        followers_change: 0,
+        followers_change: followerForDay(day.date) - followerForPrevDay(day.date),
         views_count: day.views,
         engagement_count: day.engagement,
         engagement_rate: day.engagementRate,

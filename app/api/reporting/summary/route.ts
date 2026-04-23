@@ -218,19 +218,24 @@ export async function GET(request: NextRequest) {
         (sum, s) => sum + (s.engagement_count ?? 0),
         0,
       );
-      const totalFollowerChange = snaps.reduce(
-        (sum, s) => sum + (s.followers_change ?? 0),
-        0,
-      );
       const postsCount = snaps.reduce(
         (sum, s) => sum + (s.posts_count ?? 0),
         0,
       );
 
-      // Latest snapshot for current follower count
-      const latestSnap = snaps.sort(
-        (a, b) => b.snapshot_date.localeCompare(a.snapshot_date),
-      )[0];
+      // Sort oldest → newest so we can compute a window delta from the
+      // endpoints. Historical rows had `followers_change` hardcoded to 0
+      // (fixed forward in lib/reporting/sync.ts), so summing that column
+      // would silently return 0 for every older window. Subtracting the
+      // first follower count from the last gives the right answer whether
+      // the per-row delta is populated or not.
+      const snapsAsc = [...snaps].sort((a, b) =>
+        a.snapshot_date.localeCompare(b.snapshot_date),
+      );
+      const latestSnap = snapsAsc[snapsAsc.length - 1];
+      const firstSnap = snapsAsc[0];
+      const totalFollowerChange =
+        (latestSnap?.followers_count ?? 0) - (firstSnap?.followers_count ?? 0);
 
       const avgEngRate =
         snaps.length > 0
@@ -247,10 +252,12 @@ export async function GET(request: NextRequest) {
         (sum, s) => sum + (s.engagement_count ?? 0),
         0,
       );
-      const prevFollowerChange = prevSnapsForProfile.reduce(
-        (sum, s) => sum + (s.followers_change ?? 0),
-        0,
+      const prevSnapsAsc = [...prevSnapsForProfile].sort((a, b) =>
+        a.snapshot_date.localeCompare(b.snapshot_date),
       );
+      const prevFollowerChange =
+        (prevSnapsAsc[prevSnapsAsc.length - 1]?.followers_count ?? 0) -
+        (prevSnapsAsc[0]?.followers_count ?? 0);
       const prevAvgEngRate =
         prevSnapsForProfile.length > 0
           ? prevSnapsForProfile.reduce(
@@ -279,11 +286,28 @@ export async function GET(request: NextRequest) {
           prevSnapsForProfile,
           (s) => s.engagement_count ?? 0,
         ),
-        followersGained: buildMetricCard(
-          snaps,
-          prevSnapsForProfile,
-          (s) => s.followers_change ?? 0,
-        ),
+        followersGained: (() => {
+          // Follower gains aren't summable — the series's `followers_change`
+          // column was hardcoded to 0 for a long time. Derive the card from
+          // consecutive-day deltas of `followers_count` instead. Works for
+          // both current (backfilled) and historical (all-zero) rows.
+          if (totalFollowerChange === 0 && prevFollowerChange === 0) return undefined;
+          const series: MetricSeriesPoint[] = [];
+          for (let i = 1; i < snapsAsc.length; i++) {
+            const curr = snapsAsc[i];
+            const prev = snapsAsc[i - 1];
+            series.push({
+              date: curr.snapshot_date,
+              value: (curr.followers_count ?? 0) - (prev.followers_count ?? 0),
+            });
+          }
+          return {
+            total: totalFollowerChange,
+            previousTotal: prevFollowerChange,
+            changePercent: calcChange(totalFollowerChange, prevFollowerChange),
+            series,
+          };
+        })(),
         reach: buildMetricCard(snaps, prevSnapsForProfile, (s) => s.reach_count ?? 0),
         impressions: buildMetricCard(
           snaps,
