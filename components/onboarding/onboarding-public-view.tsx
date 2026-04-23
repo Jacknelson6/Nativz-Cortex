@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import { Check, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { OnboardingPublicUploads } from '@/components/onboarding/onboarding-public-uploads';
 import { OnboardingPublicConnections } from '@/components/onboarding/onboarding-public-connections';
+import { OnboardingConfetti } from '@/components/onboarding/onboarding-confetti';
 
 type PhaseStatus = 'not_started' | 'in_progress' | 'done';
 type ItemOwner = 'agency' | 'client';
@@ -118,10 +120,15 @@ export function OnboardingPublicView({
   // the last item of the last-rendered checklist flips. Keeps state local so
   // it doesn't re-fire if the server reloads progress.
   const [celebrated, setCelebrated] = useState(false);
+  const [fireConfetti, setFireConfetti] = useState(false);
   useEffect(() => {
     if (progressPct === 100 && !celebrated && totalItems > 0) {
       setCelebrated(true);
+      setFireConfetti(true);
       toast.success("You're all set. We've got it from here.");
+      // Reset the fire prop so it's one-shot; the confetti component
+      // cleans itself up after its animation.
+      setTimeout(() => setFireConfetti(false), 3000);
     }
   }, [progressPct, celebrated, totalItems]);
 
@@ -173,8 +180,9 @@ export function OnboardingPublicView({
 
   return (
     <div className="min-h-screen bg-background text-text-primary">
+      <OnboardingConfetti fire={fireConfetti} />
       {/* Top bar — neutral, not the admin chrome */}
-      <header className="border-b border-nativz-border px-6 py-4 flex items-center gap-3">
+      <header className="sticky top-0 z-20 backdrop-blur-md bg-background/80 border-b border-nativz-border px-5 md:px-6 py-3.5 flex items-center gap-3">
         {logoUrl ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
@@ -198,20 +206,27 @@ export function OnboardingPublicView({
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-10 md:py-14 space-y-10">
+      <main className="max-w-4xl mx-auto px-5 md:px-6 py-10 md:py-14 space-y-12">
         {/* Hero */}
-        <section className="text-center space-y-3">
-          <h1 className="text-[40px] md:text-[52px] font-semibold tracking-tight leading-[1.08]">
+        <motion.section
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: 'easeOut' }}
+          className="text-center space-y-3"
+        >
+          <h1 className="text-[36px] sm:text-[44px] md:text-[56px] font-semibold tracking-tight leading-[1.05]">
             {progressPct === 100
-              ? "You're fully onboarded."
+              ? "You\u2019re fully onboarded."
               : progressPct > 0
-                ? 'Getting there.'
-                : "Let's get you set up."}
+                ? 'Looking good.'
+                : "Welcome in."}
           </h1>
-          <p className="text-[16px] text-text-muted max-w-xl mx-auto leading-relaxed">
+          <p className="text-[15px] md:text-[16px] text-text-muted max-w-xl mx-auto leading-relaxed">
             {progressPct === 100
-              ? `Everything's connected and approved. ${tracker.service} is live.`
-              : `Here's where we are with your ${tracker.service.toLowerCase()} rollout. Tap items below when you finish them — we'll take it from there.`}
+              ? `Everything\u2019s connected. ${tracker.service} is live \u2014 we\u2019ll take it from here.`
+              : progressPct > 0
+                ? `A few things still in your court. Tap as you finish them \u2014 we get notified instantly.`
+                : `Here\u2019s your ${tracker.service.toLowerCase()} onboarding. Tap items as you finish them. Upload anything we need. We handle the rest.`}
           </p>
           {totalItems > 0 && (
             <div className="max-w-md mx-auto pt-3">
@@ -236,7 +251,7 @@ export function OnboardingPublicView({
               )}
             </div>
           )}
-        </section>
+        </motion.section>
 
         {/* Timeline */}
         {phases.length > 0 && (
@@ -360,12 +375,15 @@ function ChecklistRow({
       tabIndex={interactive ? 0 : undefined}
       aria-pressed={interactive ? done : undefined}
     >
-      <span
-        className={`h-5 w-5 shrink-0 rounded-full border-2 flex items-center justify-center transition-all duration-150 ${
+      <motion.span
+        initial={false}
+        animate={{ scale: done ? [1, 1.25, 1] : 1, rotate: done ? [0, 8, 0] : 0 }}
+        transition={{ duration: 0.35, ease: 'easeOut' }}
+        className={`h-5 w-5 shrink-0 rounded-full border-2 flex items-center justify-center ${
           done
-            ? 'bg-emerald-500 border-emerald-500 scale-100'
+            ? 'bg-emerald-500 border-emerald-500'
             : interactive
-              ? 'border-accent-border/60 group-hover:border-accent-text group-hover:scale-110'
+              ? 'border-accent-border/60 group-hover:border-accent-text'
               : 'border-nativz-border'
         }`}
       >
@@ -374,7 +392,7 @@ function ChecklistRow({
         ) : done ? (
           <Check size={12} className="text-white" strokeWidth={3} />
         ) : null}
-      </span>
+      </motion.span>
       <div className="min-w-0 flex-1">
         <p
           className={`text-[14px] transition-colors ${
