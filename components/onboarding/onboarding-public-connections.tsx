@@ -3,7 +3,8 @@
 import { useMemo, useState } from 'react';
 import { Check, ExternalLink, Loader2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
-import { detectPlatform, type PlatformSpec } from '@/lib/onboarding/platform-matcher';
+import { detectPlatform, type PlatformKey, type PlatformSpec } from '@/lib/onboarding/platform-matcher';
+import { platformToZernio } from '@/lib/onboarding/platform-to-zernio';
 
 type Item = {
   id: string;
@@ -12,6 +13,12 @@ type Item = {
   owner: 'agency' | 'client';
   status: 'pending' | 'done';
 };
+
+// Connected-social map keyed by our PlatformKey. Passed down from the
+// server page (reads social_profiles for the tracker's client). When an
+// item's detected platform has an entry here AND its status is done, we
+// show "Connected as @handle" instead of just "Connected".
+export type ConnectedHandles = Partial<Record<PlatformKey, { username: string }>>;
 
 /**
  * Renders above the generic checklist. Detects which client-owned tasks map
@@ -26,10 +33,12 @@ export function OnboardingPublicConnections({
   shareToken,
   items,
   onToggle,
+  connected = {},
 }: {
   shareToken: string;
   items: Item[];
   onToggle: (itemId: string, done: boolean) => Promise<boolean>; // returns true on success
+  connected?: ConnectedHandles;
 }) {
   // Find items that map to a platform AND are client-owned. Agency-owned
   // platform items stay invisible here — they're the agency's job.
@@ -67,6 +76,7 @@ export function OnboardingPublicConnections({
             platform={platform}
             shareToken={shareToken}
             onToggle={onToggle}
+            connectedUsername={connected[platform.key]?.username}
           />
         ))}
       </div>
@@ -77,16 +87,23 @@ export function OnboardingPublicConnections({
 function ConnectionCard({
   item,
   platform,
-  shareToken: _shareToken,
+  shareToken,
   onToggle,
+  connectedUsername,
 }: {
   item: Item;
   platform: PlatformSpec;
   shareToken: string;
   onToggle: (itemId: string, done: boolean) => Promise<boolean>;
+  connectedUsername?: string;
 }) {
   const [busy, setBusy] = useState(false);
   const done = item.status === 'done';
+
+  // Zernio-capable platforms get the real hosted-connect button. The rest
+  // (Google Analytics, Shopify, etc.) stay on the manual confirm flow.
+  const zernioPlatform = platformToZernio(platform.key);
+  const hasZernioFlow = zernioPlatform !== null;
 
   async function confirm() {
     if (busy) return;
@@ -95,6 +112,32 @@ function ConnectionCard({
       const ok = await onToggle(item.id, !done);
       if (!ok) return;
       if (!done) toast.success(`Thanks! ${platform.name} marked connected.`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function connectViaZernio() {
+    if (busy || !zernioPlatform) return;
+    setBusy(true);
+    try {
+      const res = await fetch('/api/onboarding/public/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ share_token: shareToken, platform: zernioPlatform }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error((d as { error?: string }).error || 'Failed to start connection');
+      }
+      const { authUrl } = (await res.json()) as { authUrl?: string };
+      if (!authUrl) throw new Error('No auth URL returned');
+      // New tab keeps the onboarding page alive so the confirmation toast
+      // lands on their original view when the webhook eventually ticks the item.
+      window.open(authUrl, '_blank', 'noopener,noreferrer');
+      toast.success(`Finish connecting ${platform.name} in the new tab. We\u2019ll tick this off when you\u2019re done.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : `Couldn\u2019t start ${platform.name}`);
     } finally {
       setBusy(false);
     }
@@ -111,7 +154,9 @@ function ConnectionCard({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[14px] font-semibold text-text-primary truncate">{platform.name}</p>
-          <p className="text-[12px] text-emerald-400">Connected</p>
+          <p className="text-[12px] text-emerald-400 truncate">
+            {connectedUsername ? `Connected as @${connectedUsername}` : 'Connected'}
+          </p>
         </div>
         <button
           type="button"
@@ -159,15 +204,27 @@ function ConnectionCard({
       </div>
 
       <div className="px-4 py-3 border-t border-nativz-border flex items-center gap-2 flex-wrap">
-        <a
-          href={platform.deepLink}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-full bg-accent-text text-background px-3.5 py-1.5 text-[12px] font-semibold hover:brightness-110 transition"
-        >
-          Open {platform.name}
-          <ExternalLink size={11} />
-        </a>
+        {hasZernioFlow ? (
+          <button
+            type="button"
+            onClick={() => void connectViaZernio()}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 rounded-full bg-accent-text text-background px-3.5 py-1.5 text-[12px] font-semibold hover:brightness-110 transition-colors disabled:opacity-60"
+          >
+            {busy ? <Loader2 size={11} className="animate-spin" /> : <Zap size={11} />}
+            Connect {platform.name}
+          </button>
+        ) : (
+          <a
+            href={platform.deepLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-full bg-accent-text text-background px-3.5 py-1.5 text-[12px] font-semibold hover:brightness-110 transition"
+          >
+            Open {platform.name}
+            <ExternalLink size={11} />
+          </a>
+        )}
         <button
           type="button"
           onClick={confirm}
@@ -175,7 +232,7 @@ function ConnectionCard({
           className="inline-flex items-center gap-1.5 rounded-full border border-nativz-border bg-surface-primary text-text-primary px-3.5 py-1.5 text-[12px] font-semibold hover:bg-surface-hover transition-colors disabled:opacity-60"
         >
           {busy ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
-          I&rsquo;ve granted access
+          {hasZernioFlow ? 'Skip auto-connect' : 'I\u2019ve granted access'}
         </button>
       </div>
     </div>

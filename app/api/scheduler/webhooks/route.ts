@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { notifyZernioWebhookRecipients } from '@/lib/social/zernio-webhook-notify';
+import { zernioToPlatformKeys } from '@/lib/onboarding/platform-to-zernio';
+import { detectPlatform } from '@/lib/onboarding/platform-matcher';
+import { queueOnboardingNotification } from '@/lib/onboarding/queue-notification';
+import { recomputePhaseStatuses } from '@/lib/onboarding/recompute-phase-statuses';
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
@@ -182,6 +186,13 @@ export async function POST(request: NextRequest) {
             .from('social_profiles')
             .update({ is_active: true })
             .eq('late_account_id', accountId);
+
+          // Auto-advance onboarding: find the social profile we just
+          // flipped, figure out its client + platform, then tick the
+          // matching client-owned checklist item across any active
+          // onboarding tracker for that client. Event + manager
+          // notification fire automatically.
+          await autoTickOnboardingForConnection(adminClient, accountId, accountPayload);
         }
         break;
       }
@@ -231,5 +242,105 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('POST /api/scheduler/webhooks error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+/**
+ * When a Zernio account.connected fires, cross-reference the newly-linked
+ * social_profile back to an onboarding tracker and tick the matching
+ * client-owned checklist item. "Matching" means the item's task text
+ * contains the platform keyword (e.g. a task named "Instagram account
+ * access" matches platform=instagram).
+ *
+ * Silent no-op when:
+ *   - No social_profile row found (webhook landed before callback upserted it — the
+ *     callback is what creates the row; we rely on its ordering holding)
+ *   - No active non-template tracker for the client
+ *   - No matching checklist item (the admin didn't add one; still valid)
+ *   - Item is owner='agency' (we never tick agency items from webhooks)
+ *
+ * Errors are swallowed + logged — notifications and checklist side-effects
+ * should never bubble up and fail the webhook response, which Zernio
+ * retries on non-2xx.
+ */
+async function autoTickOnboardingForConnection(
+  admin: ReturnType<typeof createAdminClient>,
+  accountId: string,
+  accountPayload: Record<string, unknown> | null,
+): Promise<void> {
+  try {
+    // Resolve the social_profile we just flipped → client + platform
+    const { data: profile } = await admin
+      .from('social_profiles')
+      .select('client_id, platform, username')
+      .eq('late_account_id', accountId)
+      .maybeSingle();
+    if (!profile?.client_id || !profile.platform) return;
+
+    // Find active trackers for this client (can be multiple services).
+    const { data: trackers } = await admin
+      .from('onboarding_trackers')
+      .select('id')
+      .eq('client_id', profile.client_id)
+      .eq('is_template', false)
+      .in('status', ['active', 'paused']);
+    const trackerIds = (trackers ?? []).map((t) => t.id);
+    if (trackerIds.length === 0) return;
+
+    const platformKeys = zernioToPlatformKeys(profile.platform);
+    if (platformKeys.length === 0) return;
+
+    // Pull all groups for these trackers, then all client-owned pending items
+    // in those groups whose platform-detected key is one we're matching.
+    const { data: groups } = await admin
+      .from('onboarding_checklist_groups')
+      .select('id, tracker_id')
+      .in('tracker_id', trackerIds);
+    const groupIds = (groups ?? []).map((g) => g.id);
+    if (groupIds.length === 0) return;
+    const groupToTracker = new Map((groups ?? []).map((g) => [g.id, g.tracker_id]));
+
+    const { data: items } = await admin
+      .from('onboarding_checklist_items')
+      .select('id, task, group_id, owner, status')
+      .in('group_id', groupIds)
+      .eq('owner', 'client')
+      .eq('status', 'pending');
+
+    const displayName =
+      pickStr(accountPayload, 'username', 'handle', 'display_name', 'displayName') ||
+      (typeof profile.username === 'string' ? profile.username : '');
+
+    for (const item of items ?? []) {
+      const detected = detectPlatform(item.task);
+      if (!detected) continue;
+      if (!platformKeys.includes(detected.key)) continue;
+
+      // Tick it.
+      await admin.from('onboarding_checklist_items').update({ status: 'done' }).eq('id', item.id);
+
+      const trackerId = groupToTracker.get(item.group_id);
+      if (!trackerId) continue;
+
+      // Event + batched notification so the admin feed + digests reflect it.
+      await admin.from('onboarding_events').insert({
+        tracker_id: trackerId,
+        kind: 'connection_confirmed',
+        item_id: item.id,
+        metadata: {
+          task: item.task,
+          platform: profile.platform,
+          username: displayName || null,
+        },
+        actor: 'client',
+      });
+      await queueOnboardingNotification(admin, trackerId, {
+        kind: 'connection_confirmed',
+        detail: displayName ? `${detected.name} (@${displayName})` : detected.name,
+      });
+      await recomputePhaseStatuses(admin, trackerId);
+    }
+  } catch (err) {
+    console.error('[webhook account.connected] auto-tick failed:', err);
   }
 }

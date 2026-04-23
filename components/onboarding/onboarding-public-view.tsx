@@ -5,7 +5,10 @@ import { motion } from 'framer-motion';
 import { Check, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { OnboardingPublicUploads } from '@/components/onboarding/onboarding-public-uploads';
-import { OnboardingPublicConnections } from '@/components/onboarding/onboarding-public-connections';
+import {
+  OnboardingPublicConnections,
+  type ConnectedHandles,
+} from '@/components/onboarding/onboarding-public-connections';
 import { OnboardingConfetti } from '@/components/onboarding/onboarding-confetti';
 
 type PhaseStatus = 'not_started' | 'in_progress' | 'done';
@@ -88,6 +91,7 @@ export function OnboardingPublicView({
   groups,
   items: initialItems,
   uploads = [],
+  connected = {},
   agency = 'nativz',
 }: {
   tracker: Tracker;
@@ -101,6 +105,7 @@ export function OnboardingPublicView({
     mime_type: string | null;
     created_at: string;
   }[];
+  connected?: ConnectedHandles;
   agency?: 'nativz' | 'anderson';
 }) {
   const clientName = tracker.clients?.name ?? 'Client';
@@ -277,6 +282,7 @@ export function OnboardingPublicView({
           shareToken={tracker.share_token}
           items={items}
           onToggle={toggleItemById}
+          connected={connected}
         />
 
         {/* Checklist */}
