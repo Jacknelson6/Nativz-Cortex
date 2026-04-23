@@ -6,6 +6,18 @@ import { inferYoutubeVideoFormat } from '@/lib/search/source-mention-utils';
 /**
  * Centralized volume config — single source of truth for per-platform source counts.
  * Matches the three-tier depth system: Light / Medium (default) / Deep.
+ *
+ * 2026-04-22 — Aggressive cap on `medium.tiktok.transcriptVideos` from 500 → 50.
+ * Investigation on the "immersive art attraction" run showed platform_scrapers
+ * eating 80% of wall-clock (3m 19s of 4m 11s total). The dominant cost was
+ * the TikTok transcript loop: 500 videos × ~250ms per fetch ≈ 2 minutes of
+ * sequential transcript work. Dropping to 50 transcripts on medium cuts ~90s
+ * off the critical path with negligible report-quality loss (the merger LLM
+ * uses the first ~30 transcripts heavily; the long tail is mostly noise).
+ *
+ * `medium.tiktok.videos` also capped 500 → 200 — we still get the engagement-
+ * tail data from the full 200, but we stop pulling metadata for the bottom 300
+ * of an already-noisy ranked list.
  */
 export const VOLUME_CONFIG = {
   light: {
@@ -17,13 +29,13 @@ export const VOLUME_CONFIG = {
   medium: {
     reddit: { posts: 100, commentPosts: 20 },
     youtube: { videos: 100, commentVideos: 30, transcriptVideos: 20 },
-    tiktok: { videos: 500, commentVideos: 50, transcriptVideos: 500 },
+    tiktok: { videos: 200, commentVideos: 30, transcriptVideos: 50 },
     web: { results: 30 },
   },
   deep: {
     reddit: { posts: 500, commentPosts: 50 },
     youtube: { videos: 500, commentVideos: 100, transcriptVideos: 50 },
-    tiktok: { videos: 500, commentVideos: 100, transcriptVideos: 30 },
+    tiktok: { videos: 500, commentVideos: 100, transcriptVideos: 100 },
     web: { results: 50 },
   },
   // backward compat alias

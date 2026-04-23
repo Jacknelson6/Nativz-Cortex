@@ -15,7 +15,6 @@ import {
   Scissors,
   TrendingUp,
   MessagesSquare,
-  ScanSearch,
   Receipt,
   Settings as SettingsIcon,
   Users,
@@ -28,6 +27,7 @@ import {
   Cpu,
   Gauge,
   ListChecks,
+  Telescope,
 } from 'lucide-react';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
@@ -89,16 +89,15 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/admin/search/new', label: 'Trend Finder', icon: TrendingUp },
       { href: '/admin/strategy-lab', label: 'Strategy Lab', icon: MessagesSquare },
       {
-        // NAT-62 (2026-04-22): unified landing page — "Competitor intelligence"
-        // replaces the old collapsible. Audits live at /admin/analyze-social,
-        // watches in /admin/analytics?tab=benchmarking, reports in
-        // /admin/competitor-intelligence/reports — the landing page at
-        // /admin/competitor-intelligence is the hub that routes between them.
-        // TikTok Shop tracker is still reachable via a footer link on that
-        // landing page.
+        // NAT-62 (2026-04-22): unified landing page. Renamed back to
+        // "Competitor spying" 2026-04-22 evening per Jack — feels more
+        // on-brand and matches the product's irreverent register vs.
+        // the corporate-sounding "intelligence". Telescope icon ("we're
+        // watching from afar") replaces ScanSearch — the magnifying-
+        // glass-with-arrows didn't read as surveillance.
         href: '/admin/competitor-intelligence',
-        label: 'Competitor intelligence',
-        icon: ScanSearch,
+        label: 'Competitor spying',
+        icon: Telescope,
       },
       { href: '/admin/ad-creatives', label: 'Ad Generator', icon: ImagePlus },
       { href: '/admin/knowledge', label: 'Brain', icon: Brain },
@@ -110,7 +109,7 @@ const NAV_SECTIONS: NavSection[] = [
       // closer to "profile page" than the generic Building we started
       // with. Keeps the visual theme (outlined lucide) consistent with
       // the rest of the rail.
-      { href: '/admin/brand-profile', label: 'Brand Profile', icon: BookUser },
+      { href: '/admin/brand-profile', label: 'Brand profile', icon: BookUser },
       { href: '/admin/notes', label: 'Notes', icon: StickyNote },
     ],
   },
@@ -129,7 +128,7 @@ const NAV_SECTIONS: NavSection[] = [
           { href: '/admin/tasks', label: 'Tasks', icon: CheckSquare },
           { href: '/admin/pipeline', label: 'Edits', icon: Scissors },
           { href: '/admin/shoots', label: 'Shoots', icon: Camera },
-          { href: '/admin/scheduler', label: 'Content calendars', icon: Calendar },
+          { href: '/admin/scheduler', label: 'Scheduling', icon: Calendar },
           { href: '/admin/clients', label: 'Clients', icon: Contact },
           { href: '/admin/onboarding', label: 'Onboarding', icon: ListChecks },
           { href: '/admin/users', label: 'Users', icon: Users },
