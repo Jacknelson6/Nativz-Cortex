@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     const service = new URL(request.url).searchParams.get('service');
     let query = admin
       .from('onboarding_email_templates')
-      .select('id, service, name, subject, body, sort_order, created_at, updated_at')
+      .select('id, service, name, subject, body, blocks, sort_order, created_at, updated_at')
       .order('service', { ascending: true })
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: true });
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
         sort_order: nextSort,
         created_by: userId,
       })
-      .select('id, service, name, subject, body, sort_order, created_at, updated_at')
+      .select('id, service, name, subject, body, blocks, sort_order, created_at, updated_at')
       .single();
 
     if (error) {

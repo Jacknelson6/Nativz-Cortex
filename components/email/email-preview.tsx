@@ -20,6 +20,11 @@ type OnboardingInput = {
   kind: 'onboarding';
   subject: string;
   body: string;
+  /**
+   * When populated, preview renders from rich blocks instead of markdown body.
+   * Null/undefined = markdown mode (the body field is used).
+   */
+  blocks?: Record<string, unknown>[] | null;
   trackerId?: string | null;
 };
 
@@ -180,6 +185,7 @@ function mapToApiBody(input: EmailPreviewInput): Record<string, unknown> {
         kind: 'onboarding',
         subject: input.subject,
         body: input.body,
+        blocks: input.blocks ?? null,
         tracker_id: input.trackerId ?? null,
       };
     case 'weekly_social':

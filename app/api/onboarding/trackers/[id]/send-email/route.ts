@@ -3,6 +3,12 @@ import { z } from 'zod';
 import { requireOnboardingAdmin } from '@/lib/onboarding/require-admin';
 import { interpolateEmail } from '@/lib/onboarding/interpolate-email';
 import { sendOnboardingEmail } from '@/lib/email/resend';
+import { layout } from '@/lib/email/resend';
+import {
+  buildOnboardingBlocksHtml,
+  interpolateBlocks,
+  isValidBlockArray,
+} from '@/lib/email/templates/onboarding-blocks';
 import { resolveAgencyForRequest } from '@/lib/agency/detect';
 
 export const dynamic = 'force-dynamic';
@@ -52,7 +58,7 @@ export async function POST(
         .maybeSingle(),
       admin
         .from('onboarding_email_templates')
-        .select('id, service, subject, body')
+        .select('id, service, subject, body, blocks')
         .eq('id', template_id)
         .maybeSingle(),
     ]);
@@ -115,14 +121,35 @@ export async function POST(
       contactFirstName,
     };
     const resolvedSubject = interpolateEmail(template.subject, ctx);
-    const resolvedBody = interpolateEmail(template.body, ctx);
-
     const agency = resolveAgencyForRequest(request);
+
+    // If the template ships with rich blocks, prefer that path — it skips
+    // markdown and uses the branded block renderer. Fall back to the
+    // markdown body otherwise. We log the resolved body either way so the
+    // audit trail remains useful.
+    let resolvedBody: string;
+    let html: string | undefined;
+    const rawBlocks = (template as { blocks?: unknown }).blocks;
+    if (rawBlocks && Array.isArray(rawBlocks) && rawBlocks.length > 0 && isValidBlockArray(rawBlocks)) {
+      const mergeCtx: Record<string, string> = {
+        client_name: ctx.clientName,
+        service: ctx.service,
+        share_url: ctx.shareUrl,
+        contact_first_name: ctx.contactFirstName ?? 'there',
+      };
+      const resolvedBlocks = interpolateBlocks(rawBlocks, mergeCtx);
+      const inner = buildOnboardingBlocksHtml(resolvedBlocks, agency);
+      html = layout(inner, agency);
+      resolvedBody = JSON.stringify(resolvedBlocks);
+    } else {
+      resolvedBody = interpolateEmail(template.body, ctx);
+    }
 
     const sendResult = await sendOnboardingEmail({
       to,
       subject: resolvedSubject,
-      bodyMarkdown: resolvedBody,
+      bodyMarkdown: html ? undefined : resolvedBody,
+      html,
       agency,
     });
 

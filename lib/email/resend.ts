@@ -458,14 +458,20 @@ export async function sendSearchCompletedEmail(opts: {
 export async function sendOnboardingEmail(opts: {
   to: string;
   subject: string;
-  bodyMarkdown: string;
+  /** Markdown body — used when `html` is not provided. */
+  bodyMarkdown?: string;
+  /** Pre-rendered HTML override. Block-rendered templates pass this in. */
+  html?: string;
   agency?: AgencyBrand;
 }): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   if (!opts.to.trim()) return { ok: false, error: 'Recipient email is empty' };
+  if (!opts.html && !opts.bodyMarkdown) {
+    return { ok: false, error: 'Either html or bodyMarkdown is required' };
+  }
   const agency = opts.agency ?? 'nativz';
 
   try {
-    const html = buildUserEmailHtml(opts.bodyMarkdown, agency);
+    const html = opts.html ?? buildUserEmailHtml(opts.bodyMarkdown!, agency);
     const result = await (await getResend()).emails.send({
       from: getFromAddress(agency),
       replyTo: getReplyTo(agency),

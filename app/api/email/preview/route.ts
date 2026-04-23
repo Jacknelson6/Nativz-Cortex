@@ -6,6 +6,12 @@ import { layout } from '@/lib/email/resend';
 import { buildUserEmailHtml } from '@/lib/email/templates/user-email';
 import { buildWeeklySocialReportCardHtml } from '@/lib/email/templates/weekly-social-report-html';
 import { buildAffiliateWeeklyReportCardHtml } from '@/lib/email/templates/affiliate-weekly-report-html';
+import {
+  buildOnboardingBlocksHtml,
+  findUnresolvedBlockPlaceholders,
+  interpolateBlocks,
+  isValidBlockArray,
+} from '@/lib/email/templates/onboarding-blocks';
 import { fetchWeeklySocialReport, rollingSevenDayRangeUtc } from '@/lib/reporting/weekly-social-report';
 import { fetchAffiliateAnalyticsRange } from '@/lib/affiliates/fetch-affiliate-analytics-range';
 import { interpolateEmail } from '@/lib/onboarding/interpolate-email';
@@ -33,6 +39,9 @@ const Body = z.discriminatedUnion('kind', [
     kind: z.literal('onboarding'),
     subject: z.string().max(300),
     body: z.string().max(10_000),
+    // When blocks is present + non-null, renderer uses it instead of body.
+    // Shape validated at runtime via isValidBlockArray, kept permissive here.
+    blocks: z.array(z.record(z.string(), z.unknown())).max(50).nullable().optional(),
     tracker_id: z.string().uuid().nullable().optional(),
   }),
   z.object({
@@ -91,7 +100,12 @@ type AdminClient = ReturnType<typeof createAdminClient>;
 type Agency = 'nativz' | 'anderson';
 
 async function renderOnboarding(
-  input: { subject: string; body: string; tracker_id?: string | null | undefined },
+  input: {
+    subject: string;
+    body: string;
+    blocks?: Record<string, unknown>[] | null | undefined;
+    tracker_id?: string | null | undefined;
+  },
   admin: AdminClient,
   agency: Agency,
 ) {
@@ -137,6 +151,27 @@ async function renderOnboarding(
   }
 
   const resolvedSubject = interpolateEmail(input.subject, ctx);
+
+  // Block path: when the template has a blocks array, it wins. The rendered
+  // HTML goes through layout() for the branded shell + logo + footer.
+  if (input.blocks && Array.isArray(input.blocks) && input.blocks.length > 0 && isValidBlockArray(input.blocks)) {
+    const mergeCtx: Record<string, string> = {
+      client_name: ctx.clientName,
+      service: ctx.service,
+      share_url: ctx.shareUrl,
+      contact_first_name: ctx.contactFirstName,
+    };
+    const resolvedBlocks = interpolateBlocks(input.blocks, mergeCtx);
+    const inner = buildOnboardingBlocksHtml(resolvedBlocks, agency);
+    const html = layout(inner, agency);
+    const unresolved = findUnresolvedBlockPlaceholders(resolvedBlocks);
+    return NextResponse.json({
+      subject: resolvedSubject,
+      html,
+      unresolved,
+    });
+  }
+
   const resolvedBody = interpolateEmail(input.body, ctx);
   const html = buildUserEmailHtml(resolvedBody, agency);
 

@@ -13,6 +13,7 @@ type Row = {
   name: string;
   subject: string;
   body: string;
+  blocks: unknown;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -33,7 +34,7 @@ export default async function OnboardingEmailTemplatesPage() {
 
   const { data } = await admin
     .from('onboarding_email_templates')
-    .select('id, service, name, subject, body, sort_order, created_at, updated_at')
+    .select('id, service, name, subject, body, blocks, sort_order, created_at, updated_at')
     .order('service', { ascending: true })
     .order('sort_order', { ascending: true });
 
