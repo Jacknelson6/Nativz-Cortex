@@ -75,6 +75,11 @@ interface NavSection {
 // inside a single "Admin" dropdown at the bottom. The dropdown keeps the
 // sidebar tight — the working brand is the center of attention, admin surfaces
 // are one click away without cluttering the rail.
+//
+// Capitalization: sidebar labels use **Title Case** ("Brand Profile",
+// "AI Settings", "Competitor Spying"). This intentionally overrides the
+// general sentence-case rule in CLAUDE.md — Jack prefers Title Case for
+// nav items specifically (confirmed 2026-04-23). Don't normalize back.
 const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Dashboard',
@@ -96,7 +101,7 @@ const NAV_SECTIONS: NavSection[] = [
         // watching from afar") replaces ScanSearch — the magnifying-
         // glass-with-arrows didn't read as surveillance.
         href: '/admin/competitor-intelligence',
-        label: 'Competitor spying',
+        label: 'Competitor Spying',
         icon: Telescope,
       },
       { href: '/admin/ad-creatives', label: 'Ad Generator', icon: ImagePlus },
@@ -109,7 +114,7 @@ const NAV_SECTIONS: NavSection[] = [
       // closer to "profile page" than the generic Building we started
       // with. Keeps the visual theme (outlined lucide) consistent with
       // the rest of the rail.
-      { href: '/admin/brand-profile', label: 'Brand profile', icon: BookUser },
+      { href: '/admin/brand-profile', label: 'Brand Profile', icon: BookUser },
       { href: '/admin/notes', label: 'Notes', icon: StickyNote },
     ],
   },
@@ -135,7 +140,7 @@ const NAV_SECTIONS: NavSection[] = [
           { href: '/admin/accounting', label: 'Accounting', icon: Receipt },
           { href: '/admin/notifications', label: 'Notifications', icon: Bell },
           { href: '/admin/infrastructure', label: 'Infrastructure', icon: Gauge },
-          { href: '/admin/settings/ai', label: 'AI settings', icon: Cpu },
+          { href: '/admin/settings/ai', label: 'AI Settings', icon: Cpu },
         ],
       },
     ],
