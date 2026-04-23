@@ -1,13 +1,15 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { ChevronDown, ChevronRight, ChevronUp, Copy } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ChevronDown, ChevronRight, ChevronUp, Copy, FlaskConical } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
 import { TooltipCard } from '@/components/ui/tooltip-card';
 import { TOOLTIPS } from '@/lib/tooltips';
 import { TopicRowExpanded } from './topic-row-expanded';
 import { SentimentSplitBar } from './sentiment-split-bar';
+import { contentLabTopicSearchStorageKey } from '@/lib/content-lab/topic-search-selection-storage';
 import { formatTopicReach, getTopicReachValue, RESONANCE_LABEL } from '@/lib/search/topic-metrics';
 import type { TrendingTopic, LegacyTrendingTopic } from '@/lib/types/search';
 
@@ -24,25 +26,29 @@ const RESONANCE_ORDER: Record<string, number> = {
   viral: 3,
 };
 
-const TOPIC_FALLBACK_EMOJI = ['🔍', '🤖', '📣', '💡', '🎯', '✨', '📊', '🎬', '🎨', '📈'];
-
 type SortKey = 'resonance' | 'sentiment' | 'reach';
 type SortDir = 'asc' | 'desc';
 
 /** Shared grid keeps Views / Resonance / Sentiment / actions aligned on header and rows. */
 const METRICS_GRID =
-  'grid shrink-0 grid-cols-[minmax(5rem,7.5rem)_minmax(4.75rem,6rem)_minmax(152px,172px)_minmax(4.75rem,5.5rem)] gap-x-4 gap-y-1 items-center sm:gap-x-6 lg:gap-x-8';
+  'grid shrink-0 grid-cols-[minmax(5rem,7.5rem)_minmax(4.75rem,6rem)_minmax(152px,172px)_minmax(4.75rem,7rem)] gap-x-4 gap-y-1 items-center sm:gap-x-6 lg:gap-x-8';
 
+/** Per-row index anchor — replaces the former emoji column.
+ *  The emoji treatment (user-prefix detection + a hard-coded fallback pool
+ *  of 🔍🤖📣💡🎯✨📊🎬🎨📈) read as AI slop next to the data-first Nativz
+ *  aesthetic. A muted 2-digit monospace rank keeps the row scannable without
+ *  the chroma. Any leading emoji still emitted by the LLM is stripped. */
 function TopicTitleCell({ name, index }: { name: string; index: number }) {
   const leading = name.match(/^(\p{Extended_Pictographic})\s*/u);
-  const emoji = leading?.[1];
-  const label = emoji ? name.slice(leading![0].length) : name;
-  const displayEmoji = emoji ?? TOPIC_FALLBACK_EMOJI[index % TOPIC_FALLBACK_EMOJI.length];
+  const label = leading ? name.slice(leading[0].length) : name;
 
   return (
-    <span className="flex min-w-0 items-center gap-2.5">
-      <span className="text-xl leading-none shrink-0 sm:text-2xl" aria-hidden>
-        {displayEmoji}
+    <span className="flex min-w-0 items-center gap-3">
+      <span
+        aria-hidden
+        className="w-7 shrink-0 font-mono text-[11px] tabular-nums text-text-muted/70"
+      >
+        {String(index + 1).padStart(2, '0')}
       </span>
       <span className="min-w-0 text-base font-semibold leading-snug text-text-primary break-words whitespace-normal">
         {label}
@@ -94,6 +100,7 @@ function SortHeader({
 }
 
 export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopicsTableProps): React.JSX.Element | null {
+  const router = useRouter();
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('resonance');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -114,6 +121,29 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
     } catch {
       toast.error('Could not copy');
     }
+  }
+
+  /** Route a single topic straight into Strategy Lab. Pins the parent
+   *  search so the lab workspace auto-attaches it, same pattern as the
+   *  page-level "Open in Strategy Lab" button. */
+  function sendTopicToStrategyLab(topic: TrendingTopic | LegacyTrendingTopic) {
+    if (!clientId) {
+      toast.info('Attach a client to this search first to send topics to Strategy Lab.');
+      return;
+    }
+    if (searchId) {
+      try {
+        const key = contentLabTopicSearchStorageKey(clientId);
+        window.localStorage.setItem(key, JSON.stringify([searchId]));
+      } catch {
+        /* quota / JSON — non-fatal, user still lands on the lab */
+      }
+    }
+    const params = new URLSearchParams();
+    if (searchId) params.set('searchId', searchId);
+    params.set('topic', topic.name);
+    const qs = params.toString();
+    router.push(`/admin/strategy-lab/${clientId}${qs ? `?${qs}` : ''}`);
   }
 
   const sortedTopics = useMemo(() => {
@@ -206,12 +236,16 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
                   <span className="min-w-0 text-right text-base font-semibold tabular-nums text-text-primary">
                     {formatTopicReach(topic)}
                   </span>
-                  <span className="min-w-0 text-center text-base font-medium text-text-secondary">
+                  {/* Resonance aligned with Views — same weight + colour so the row
+                      reads as rhythmic values instead of three competing styles. */}
+                  <span className="min-w-0 text-center text-base font-semibold text-text-primary">
                     {RESONANCE_LABEL[topic.resonance] ?? topic.resonance}
                   </span>
                   <div className="min-w-0 flex justify-end">
                     <SentimentSplitBar sentiment={topic.sentiment} />
                   </div>
+                  {/* Row actions — copy + send to Strategy Lab. Disabled when no
+                      client is attached (you can't pin a search without one). */}
                   <div className="flex min-w-0 items-center justify-end gap-0.5">
                     <TooltipCard
                       iconTrigger
@@ -228,6 +262,28 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
                         aria-label="Copy topic title"
                       >
                         <Copy size={16} />
+                      </button>
+                    </TooltipCard>
+                    <TooltipCard
+                      iconTrigger
+                      title="Send to Strategy Lab"
+                      description={
+                        clientId
+                          ? 'Open Strategy Lab with this topic pre-selected so you can generate scripts and ideas from it.'
+                          : 'Attach a client to this search first.'
+                      }
+                    >
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          sendTopicToStrategyLab(topic);
+                        }}
+                        className="shrink-0 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-cyan-500/10 hover:text-cyan-300 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-text-muted"
+                        aria-label="Send topic to Strategy Lab"
+                        disabled={!clientId}
+                      >
+                        <FlaskConical size={16} />
                       </button>
                     </TooltipCard>
                   </div>

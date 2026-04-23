@@ -211,8 +211,14 @@ export function AdminResultsClient({
                 {formatRelativeTime(search.completed_at)}
               </span>
             )}
-            <button
-              type="button"
+            {/* Header CTA uses `variant="outline"` — same visual tier as
+                Export PDF + Share so the three actions read as one system.
+                The primary filled "Open in Strategy Lab" pill lives at the
+                bottom of the results inside IdeationPipelinePanel so there
+                is exactly one filled CTA on the page. */}
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => {
                 if (!clientInfo) {
                   // No client attached yet — open the inline picker so the
@@ -233,12 +239,11 @@ export function AdminResultsClient({
                 // Route param is the client UUID, not the slug.
                 router.push(`/admin/strategy-lab/${clientInfo.id}`);
               }}
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-sm font-medium text-accent-text transition-colors hover:border-accent/60 hover:bg-accent/20"
               title={clientInfo ? `Open this search in Strategy Lab with ${clientInfo.name}` : 'Pick a client and open in Strategy Lab'}
             >
               <FlaskConical size={14} aria-hidden />
               Open in Strategy Lab
-            </button>
+            </Button>
             <ContentLabAttachClientDialog
               open={attachDialogOpen}
               onClose={() => setAttachDialogOpen(false)}
