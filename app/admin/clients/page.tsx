@@ -37,18 +37,30 @@ export default async function AdminClientsPage() {
       isSuperAdmin = sa?.is_super_admin === true;
     }
 
-    const { data: dbClients, error: dbError } = await selectClientsWithRosterVisibility<AdminClientsDbRow>(
-      adminClient,
-      {
+    const [{ data: dbClients, error: dbError }, { data: activeTrackers }] = await Promise.all([
+      selectClientsWithRosterVisibility<AdminClientsDbRow>(adminClient, {
         select: 'id, name, slug, industry, is_active, logo_url, services, agency, health_score, organization_id, group_id',
         orderBy: { column: 'name' },
-      },
-    );
+      }),
+      // Trackers in flight — anything not completed or archived. We derive
+      // the "Onboarding" Kanban column from this set so a tracker hitting
+      // completed anywhere in the app auto-removes the client from that
+      // column on next render.
+      adminClient
+        .from('onboarding_trackers')
+        .select('client_id')
+        .in('status', ['active', 'paused'])
+        .not('client_id', 'is', null),
+    ]);
 
     if (dbError) {
       console.error('Database error fetching clients:', JSON.stringify(dbError, null, 2));
       throw dbError;
     }
+
+    const onboardingClientIds = new Set(
+      (activeTrackers ?? []).map((t) => t.client_id).filter((id): id is string => Boolean(id)),
+    );
 
     const clients = (dbClients ?? []).map((c) => ({
       dbId: c.id,
@@ -60,6 +72,7 @@ export default async function AdminClientsPage() {
       services: (c.services as string[]) ?? [],
       agency: c.agency ?? null,
       healthScore: c.health_score != null ? String(c.health_score) : null,
+      inOnboarding: onboardingClientIds.has(c.id),
     }));
 
     return (

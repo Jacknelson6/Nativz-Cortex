@@ -32,32 +32,48 @@ interface KanbanClient {
   isActive: boolean;
   logoUrl: string | null;
   healthScore: string | null;
+  /** Derived server-side: has at least one active/paused onboarding tracker. */
+  inOnboarding: boolean;
 }
 
 interface ColumnDef {
   id: string;
   label: string;
-  /** The exact `agency` value written to the DB when a card drops here. */
+  /**
+   * Exact `agency` value written to the DB when a card drops here. `null`
+   * means clear agency (Unassigned). The Onboarding column does NOT have
+   * an agency value — it represents a derived state (active tracker), so
+   * dragging INTO it isn't allowed.
+   */
   agencyValue: string | null;
-  /** Tailwind colour tokens for the header dot + count. */
   dot: string;
   text: string;
+  /** When true, cards can't be dropped here (column is derived, not writable). */
+  readOnly?: boolean;
 }
 
 const COLUMNS: ColumnDef[] = [
   { id: 'unassigned', label: 'Unassigned',             agencyValue: null,                      dot: 'bg-slate-500',   text: 'text-slate-300' },
-  { id: 'nativz',     label: 'Nativz',                 agencyValue: 'Nativz',                  dot: 'bg-accent',       text: 'text-accent-text' },
-  { id: 'ac',         label: 'Anderson Collaborative', agencyValue: 'Anderson Collaborative',  dot: 'bg-teal-400',     text: 'text-teal-300' },
-  { id: 'internal',   label: 'Internal',               agencyValue: 'Internal',                dot: 'bg-purple-500',   text: 'text-purple-300' },
+  { id: 'onboarding', label: 'Onboarding',             agencyValue: null,                      dot: 'bg-amber-400',   text: 'text-amber-300', readOnly: true },
+  { id: 'nativz',     label: 'Nativz',                 agencyValue: 'Nativz',                  dot: 'bg-accent',      text: 'text-accent-text' },
+  { id: 'ac',         label: 'Anderson Collaborative', agencyValue: 'Anderson Collaborative',  dot: 'bg-teal-400',    text: 'text-teal-300' },
+  { id: 'internal',   label: 'Internal',               agencyValue: 'Internal',                dot: 'bg-purple-500',  text: 'text-purple-300' },
 ];
 
-/** Decide which column a client lives in based on its agency value. */
-function columnForClient(agency: string | null): ColumnDef {
+/**
+ * Decide which column a client lives in. Onboarding wins over agency —
+ * a client with an active tracker is "in flight" regardless of which
+ * agency eventually owns them. When the tracker completes, they fall
+ * back to their agency column naturally on next render.
+ */
+function columnForClient(client: KanbanClient): ColumnDef {
+  if (client.inOnboarding) return COLUMNS[1];
+  const agency = client.agency;
   if (!agency) return COLUMNS[0];
   const a = agency.trim().toLowerCase();
-  if (a.includes('nativz')) return COLUMNS[1];
-  if (a.includes('anderson') || a === 'ac') return COLUMNS[2];
-  if (a === 'internal') return COLUMNS[3];
+  if (a.includes('nativz')) return COLUMNS[2];
+  if (a.includes('anderson') || a === 'ac') return COLUMNS[3];
+  if (a === 'internal') return COLUMNS[4];
   return COLUMNS[0];
 }
 
@@ -115,27 +131,69 @@ export function ClientKanbanBoard({ clients: initialClients }: ClientKanbanBoard
     const client = clients.find((c) => c.dbId === id);
     if (!client) return;
 
-    const current = columnForClient(client.agency);
+    const current = columnForClient(client);
     if (current.id === col.id) return; // no-op drop
 
-    // Optimistic update — flip the card immediately.
+    // Onboarding column is derived from tracker state, so we don't let users
+    // drag cards INTO it — new onboardings start from the Onboarding page.
+    if (col.readOnly) {
+      toast.error('Start an onboarding from /admin/onboarding to move a client into this column.');
+      return;
+    }
+
+    const wasInOnboarding = client.inOnboarding;
+
+    // Optimistic update: flip agency + clear onboarding if we're promoting.
     const prevAgency = client.agency;
-    setClients((cs) => cs.map((c) => (c.dbId === id ? { ...c, agency: col.agencyValue } : c)));
+    setClients((cs) =>
+      cs.map((c) =>
+        c.dbId === id
+          ? { ...c, agency: col.agencyValue, inOnboarding: wasInOnboarding ? false : c.inOnboarding }
+          : c,
+      ),
+    );
 
     try {
-      const res = await fetch(`/api/clients/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agency: col.agencyValue }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? `HTTP ${res.status}`);
+      if (wasInOnboarding) {
+        // Dragging OUT of Onboarding → complete all active trackers + set agency
+        // in one server round-trip. When the tracker flips to completed, the
+        // client naturally lands in the target agency column on next render.
+        const res = await fetch(`/api/clients/${id}/promote-onboarding`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agency: col.agencyValue }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error ?? `HTTP ${res.status}`);
+        }
+        const data = (await res.json()) as { completed_trackers: number };
+        toast.success(
+          data.completed_trackers > 0
+            ? `${client.name} onboarded → ${col.label} (${data.completed_trackers} tracker${data.completed_trackers === 1 ? '' : 's'} completed)`
+            : `${client.name} → ${col.label}`,
+        );
+      } else {
+        // Plain agency swap.
+        const res = await fetch(`/api/clients/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agency: col.agencyValue }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error ?? `HTTP ${res.status}`);
+        }
+        toast.success(`${client.name} → ${col.label}`);
       }
-      toast.success(`${client.name} → ${col.label}`);
     } catch (err) {
-      // Revert on failure.
-      setClients((cs) => cs.map((c) => (c.dbId === id ? { ...c, agency: prevAgency } : c)));
+      setClients((cs) =>
+        cs.map((c) =>
+          c.dbId === id
+            ? { ...c, agency: prevAgency, inOnboarding: wasInOnboarding }
+            : c,
+        ),
+      );
       toast.error(`Move failed: ${(err as Error).message}`);
     }
   }
@@ -161,8 +219,8 @@ export function ClientKanbanBoard({ clients: initialClients }: ClientKanbanBoard
       {/* Board */}
       <div className="flex gap-4 overflow-x-auto pb-2">
         {COLUMNS.map((col) => {
-          const colClients = filtered.filter((c) => columnForClient(c.agency).id === col.id);
-          const total = clients.filter((c) => columnForClient(c.agency).id === col.id).length;
+          const colClients = filtered.filter((c) => columnForClient(c).id === col.id);
+          const total = clients.filter((c) => columnForClient(c).id === col.id).length;
           const isDropTarget = dragOverCol === col.id;
 
           return (
@@ -173,7 +231,9 @@ export function ClientKanbanBoard({ clients: initialClients }: ClientKanbanBoard
               onDrop={(e) => handleDrop(e, col)}
               className={`w-[280px] shrink-0 rounded-xl border bg-background/40 transition-colors ${
                 isDropTarget
-                  ? 'border-accent/50 bg-accent/5'
+                  ? col.readOnly
+                    ? 'border-red-500/30 bg-red-500/5'
+                    : 'border-accent/50 bg-accent/5'
                   : 'border-nativz-border'
               }`}
             >
