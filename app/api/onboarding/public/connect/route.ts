@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getPostingService, getZernioApiBase, getZernioApiKey } from '@/lib/posting';
+import { getPostingService } from '@/lib/posting';
 import { signState } from '@/lib/scheduler/oauth-state';
+import { ensureZernioProfile } from '@/lib/onboarding/ensure-zernio-profile';
 import type { SocialPlatform } from '@/lib/posting/types';
 
 export const dynamic = 'force-dynamic';
@@ -38,40 +39,6 @@ const Body = z.object({
   platform: z.enum(['tiktok', 'instagram', 'facebook', 'youtube']),
 });
 
-async function ensureLateProfile(
-  admin: ReturnType<typeof createAdminClient>,
-  clientId: string,
-  clientName: string,
-): Promise<string> {
-  const { data: client } = await admin
-    .from('clients')
-    .select('late_profile_id')
-    .eq('id', clientId)
-    .single();
-
-  if (client?.late_profile_id) return client.late_profile_id;
-
-  const res = await fetch(`${getZernioApiBase()}/profiles`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${getZernioApiKey()}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ name: clientName }),
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to create Zernio profile: ${await res.text()}`);
-  }
-  const body = (await res.json()) as { profile?: { _id?: string; id?: string } };
-  const profileId = body.profile?._id ?? body.profile?.id;
-  if (!profileId) {
-    throw new Error('Zernio create profile: missing profile id in response');
-  }
-
-  await admin.from('clients').update({ late_profile_id: profileId }).eq('id', clientId);
-  return profileId;
-}
-
 export async function POST(request: NextRequest) {
   try {
     const parsed = Body.safeParse(await request.json().catch(() => ({})));
@@ -100,8 +67,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Client missing' }, { status: 404 });
     }
 
-    // Make sure there's a Zernio profile for this client.
-    const profileId = await ensureLateProfile(admin, client.id, client.name);
+    // Make sure there's a Zernio profile for this client. Usually already
+    // exists from eager creation at tracker-create time; re-check here
+    // defensively because older trackers pre-date that hook.
+    const profileId = await ensureZernioProfile(admin, client.id, client.name);
 
     // Sign the same OAuth state token shape the admin connect route uses
     // so the callback doesn't need any changes.

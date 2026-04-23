@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireOnboardingAdmin } from '@/lib/onboarding/require-admin';
+import { ensureZernioProfile } from '@/lib/onboarding/ensure-zernio-profile';
 
 // Two create shapes:
 //   1. Real tracker — needs client_id + service.
@@ -105,6 +106,25 @@ export async function POST(request: NextRequest) {
       console.error('POST /api/onboarding/trackers error:', error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    // Eagerly ensure this client has a Zernio profile so the later "Connect
+    // TikTok" tap on the public page completes faster (no Zernio profile
+    // create round-trip at click time). Fire-and-forget: a failure here
+    // (Zernio down, network blip) should never fail the tracker creation —
+    // the connect endpoint will retry via ensureZernioProfile anyway.
+    if (!body.is_template && data && data.client_id) {
+      const { data: clientRow } = await admin
+        .from('clients')
+        .select('name, late_profile_id')
+        .eq('id', data.client_id)
+        .single();
+      if (clientRow && !clientRow.late_profile_id) {
+        void ensureZernioProfile(admin, data.client_id, clientRow.name ?? 'Client').catch(
+          (err) => console.error('[onboarding] eager ensureZernioProfile failed:', err),
+        );
+      }
+    }
+
     return NextResponse.json({ tracker: data }, { status: 201 });
   } catch (error) {
     console.error('POST /api/onboarding/trackers error:', error);

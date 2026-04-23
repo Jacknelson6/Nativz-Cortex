@@ -1,56 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getPostingService, getZernioApiBase, getZernioApiKey } from '@/lib/posting';
+import { getPostingService } from '@/lib/posting';
 import { z } from 'zod';
 import type { SocialPlatform } from '@/lib/posting/types';
 import { signState } from '@/lib/scheduler/oauth-state';
+import { ensureZernioProfile } from '@/lib/onboarding/ensure-zernio-profile';
 
 const ConnectSchema = z.object({
   platform: z.enum(['facebook', 'instagram', 'tiktok', 'youtube']),
   client_id: z.string().uuid(),
 });
 
-/** Create a Zernio profile for a client if one doesn't exist yet (stored as late_profile_id). */
-async function ensureLateProfile(clientId: string, clientName: string): Promise<string> {
-  const adminClient = createAdminClient();
-
-  // Check if client already has a Zernio/Late profile id
-  const { data: client } = await adminClient
-    .from('clients')
-    .select('late_profile_id')
-    .eq('id', clientId)
-    .single();
-
-  if (client?.late_profile_id) return client.late_profile_id;
-
-  const res = await fetch(`${getZernioApiBase()}/profiles`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${getZernioApiKey()}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ name: clientName }),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Failed to create Zernio profile: ${await res.text()}`);
-  }
-
-  const body = (await res.json()) as { profile?: { _id?: string; id?: string } };
-  const lateProfileId = body.profile?._id ?? body.profile?.id;
-  if (!lateProfileId) {
-    throw new Error('Zernio create profile: missing profile id in response');
-  }
-
-  // Save it to our DB
-  await adminClient
-    .from('clients')
-    .update({ late_profile_id: lateProfileId })
-    .eq('id', clientId);
-
-  return lateProfileId;
-}
+// Zernio profile creation is now centralised in
+// lib/onboarding/ensure-zernio-profile.ts — used by this route, the public
+// onboarding connect route, and the tracker-create eager hook.
 
 /**
  * POST /api/scheduler/connect
@@ -85,9 +49,10 @@ export async function POST(request: NextRequest) {
       .eq('id', parsed.data.client_id)
       .single();
 
-    const profileId = await ensureLateProfile(
+    const profileId = await ensureZernioProfile(
+      adminClient,
       parsed.data.client_id,
-      clientRow?.name ?? 'Client'
+      clientRow?.name ?? 'Client',
     );
 
     const service = getPostingService();
