@@ -26,11 +26,7 @@
  * `snake_case` and `camelCase` variants and log raw keys on first hit.
  */
 
-import {
-  startApifyActorRun,
-  waitForApifyRunSuccess,
-  fetchApifyDatasetItems,
-} from '@/lib/tiktok/apify-run';
+import { runAndLogApifyActor } from '@/lib/tiktok/apify-run';
 import type { CreatorDemographic, CreatorEnrichment } from './types';
 
 const ACTOR_ID = 'lemur/tiktok-shop-creators';
@@ -116,20 +112,24 @@ export async function scrapeCreatorEnrichment(
 
   console.log(`[tiktok-shop] enriching @${handle} (region=${region})`);
 
-  const runId = await startApifyActorRun(
+  const { runId, items: rawItems, succeeded } = await runAndLogApifyActor(
     ACTOR_ID,
     { username: handle, region },
     apiKey,
+    {
+      maxWaitMs: 60_000,
+      pollIntervalMs: 3_000,
+      fetchLimit: 3,
+      context: { purpose: 'tiktok_shop_creator_enrichment' },
+    },
   );
   if (!runId) return null;
-
-  const ok = await waitForApifyRunSuccess(runId, apiKey, 60_000, 3_000);
-  if (!ok) {
-    console.warn(`[tiktok-shop] enrichment timed out for @${handle}`);
+  if (!succeeded) {
+    console.warn(`[tiktok-shop] enrichment timed out / failed for @${handle}`);
     return null;
   }
 
-  const items = (await fetchApifyDatasetItems(runId, apiKey, 3)) as RawLemurItem[];
+  const items = rawItems as RawLemurItem[];
   if (items.length === 0) {
     console.warn(`[tiktok-shop] enrichment returned 0 items for @${handle}`);
     return null;

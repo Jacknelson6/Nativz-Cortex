@@ -8,11 +8,7 @@
 
 import { extractTikTokTranscript } from './scraper';
 import { logUsage } from '@/lib/ai/usage';
-import {
-  fetchApifyDatasetItems,
-  startApifyActorRun,
-  waitForApifyRunSuccess,
-} from '@/lib/tiktok/apify-run';
+import { runAndLogApifyActor } from '@/lib/tiktok/apify-run';
 import {
   buildApidojoInput,
   buildClockworksInput,
@@ -267,17 +263,22 @@ export async function gatherTikTokData(
         ? buildClockworksInput(query, maxResults, timeRange, sortPref)
         : buildApidojoInput(query, maxResults, timeRange, sortPref);
 
-    const runId = await startApifyActorRun(actorId, apifyInput, apiKey);
-    if (!runId) return { videos: [], topHashtags: [], totalResults: 0 };
-
     // Wait budget scales with the target count — huge admin configs need
     // more Apify time, but 200 videos comfortably finishes in 3 minutes.
     const maxWaitMs = maxResults > 200 ? 300_000 : 180_000;
-    const pollMs = 3000;
-    const runSucceeded = await waitForApifyRunSuccess(runId, apiKey, maxWaitMs, pollMs);
-    if (!runSucceeded) return { videos: [], topHashtags: [], totalResults: 0 };
-
-    const items = await fetchApifyDatasetItems(runId, apiKey, maxResults);
+    const { runId, items: rawItems, succeeded } = await runAndLogApifyActor(
+      actorId,
+      apifyInput,
+      apiKey,
+      {
+        maxWaitMs,
+        pollIntervalMs: 3000,
+        fetchLimit: maxResults,
+        context: { purpose: 'tiktok_search' },
+      },
+    );
+    if (!runId || !succeeded) return { videos: [], topHashtags: [], totalResults: 0 };
+    const items = rawItems;
     if (!Array.isArray(items) || items.length === 0) return { videos: [], topHashtags: [], totalResults: 0 };
 
     const hashtagCounts: Record<string, number> = {};

@@ -14,11 +14,7 @@
  * for drift detection.
  */
 
-import {
-  startApifyActorRun,
-  waitForApifyRunSuccess,
-  fetchApifyDatasetItems,
-} from '@/lib/tiktok/apify-run';
+import { runAndLogApifyActor } from '@/lib/tiktok/apify-run';
 import type { AffiliateCreator, AffiliateProduct } from './types';
 
 const ACTOR_ID = 'george.the.developer/tiktok-shop-affiliate-sales-scraper';
@@ -140,7 +136,7 @@ export async function scrapeAffiliateProducts(
     `[tiktok-shop] affiliate products: query="${params.searchQuery}" maxProducts=${maxProducts} maxAffiliates=${maxAffiliatesPerProduct}`,
   );
 
-  const runId = await startApifyActorRun(
+  const { runId, items: rawItems, succeeded } = await runAndLogApifyActor(
     ACTOR_ID,
     {
       searchQuery: params.searchQuery,
@@ -154,18 +150,22 @@ export async function scrapeAffiliateProducts(
       maxAffiliatesPerProduct,
     },
     apiKey,
+    {
+      maxWaitMs: 180_000,
+      pollIntervalMs: 4_000,
+      fetchLimit: 50,
+      context: { purpose: 'tiktok_shop_affiliate_products' },
+    },
   );
 
   if (!runId) {
     throw new Error(`Failed to start ${ACTOR_ID}`);
   }
-
-  const ok = await waitForApifyRunSuccess(runId, apiKey, 180_000, 4_000);
-  if (!ok) {
+  if (!succeeded) {
     throw new Error(`Affiliate scraper run did not succeed (timed out or failed)`);
   }
 
-  const items = (await fetchApifyDatasetItems(runId, apiKey, 50)) as RawProductItem[];
+  const items = rawItems as RawProductItem[];
   if (items.length > 0) {
     console.log(
       `[tiktok-shop] affiliate scraper raw keys: ${Object.keys(items[0]).join(', ')}`,

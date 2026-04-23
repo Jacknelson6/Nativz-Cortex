@@ -6,11 +6,7 @@
  *
  * @see https://console.apify.com/actors/XtaWFhbtfxyzqrFmd/input
  */
-import {
-  fetchApifyDatasetItems,
-  startApifyActorRun,
-  waitForApifyRunSuccess,
-} from '@/lib/tiktok/apify-run';
+import { runAndLogApifyActor } from '@/lib/tiktok/apify-run';
 
 const DEFAULT_ACTOR = 'curious_coder/facebook-ad-library-scraper';
 const DEFAULT_COUNT = 40;
@@ -169,17 +165,18 @@ export async function scrapeMetaAdLibrary(opts: {
     // Expose as env-driven extension when we need them.
   };
 
-  const runId = await startApifyActorRun(getActorId(), input, apiKey);
-  if (!runId) return null;
-
-  const ok = await waitForApifyRunSuccess(
-    runId,
+  const fetchLimit = opts.count ?? maxAds();
+  const { runId, items, succeeded } = await runAndLogApifyActor(
+    getActorId(),
+    input,
     apiKey,
-    opts.maxWaitMs ?? DEFAULT_MAX_WAIT_MS,
-    DEFAULT_POLL_MS,
+    {
+      maxWaitMs: opts.maxWaitMs ?? DEFAULT_MAX_WAIT_MS,
+      pollIntervalMs: DEFAULT_POLL_MS,
+      fetchLimit,
+      context: { purpose: 'meta_ads_library' },
+    },
   );
-  if (!ok) return null;
-
-  const items = await fetchApifyDatasetItems(runId, apiKey, opts.count ?? maxAds());
+  if (!runId || !succeeded) return null;
   return normaliseMetaAdDatasetItems(items);
 }

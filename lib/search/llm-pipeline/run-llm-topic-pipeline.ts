@@ -1006,7 +1006,7 @@ Rules:
     const resonance: TrendingTopic['resonance'] =
       t.resonance ?? (idx === 0 ? 'high' : idx < 3 ? 'medium' : 'low');
 
-    let sources = buildTopicSources(urls, titleByUrl);
+    const sources = buildTopicSources(urls, titleByUrl);
 
     // If the LLM didn't cite platform sources, inject matching TikTok/YouTube results
     const hasPlatformSource = sources.some(

@@ -1,3 +1,4 @@
+import { withWorkflow } from "workflow/next";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -150,4 +151,8 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Wrap with the Vercel Workflow SDK so "use workflow" + "use step" directives
+// compile correctly. See docs/spec-vercel-workflow-migration.md for the full
+// migration plan for the topic-search pipeline. The wrapper is a no-op at
+// runtime until a server route calls `start(...)` from `workflow/api`.
+export default withWorkflow(nextConfig);

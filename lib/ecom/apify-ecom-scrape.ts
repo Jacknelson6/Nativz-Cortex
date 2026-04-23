@@ -11,11 +11,7 @@
  * @see https://apify.com/apify/e-commerce-scraping-tool
  * @see https://console.apify.com/actors/2APbAvDfNDOWXbkWf
  */
-import {
-  fetchApifyDatasetItems,
-  startApifyActorRun,
-  waitForApifyRunSuccess,
-} from '@/lib/tiktok/apify-run';
+import { runAndLogApifyActor } from '@/lib/tiktok/apify-run';
 
 const DEFAULT_ACTOR = 'apify/e-commerce-scraping-tool';
 const DEFAULT_MAX_PRODUCTS = 60;
@@ -181,17 +177,17 @@ export async function scrapeEcomCompetitor(opts: {
     scrapeMode: 'Auto',
   };
 
-  const runId = await startApifyActorRun(getActorId(), input, apiKey);
-  if (!runId) return null;
-
-  const ok = await waitForApifyRunSuccess(
-    runId,
+  const { runId, items, succeeded } = await runAndLogApifyActor(
+    getActorId(),
+    input,
     apiKey,
-    opts.maxWaitMs ?? DEFAULT_MAX_WAIT_MS,
-    DEFAULT_POLL_MS,
+    {
+      maxWaitMs: opts.maxWaitMs ?? DEFAULT_MAX_WAIT_MS,
+      pollIntervalMs: DEFAULT_POLL_MS,
+      fetchLimit: maxProducts(),
+      context: { purpose: 'ecom_shopify_scrape' },
+    },
   );
-  if (!ok) return null;
-
-  const items = await fetchApifyDatasetItems(runId, apiKey, maxProducts());
+  if (!runId || !succeeded) return null;
   return normaliseEcomDatasetItems(items);
 }

@@ -165,6 +165,35 @@ export async function POST(
       console.warn('[search:process] budget guard errored (ignoring):', err);
     }
 
+    // Feature flag: hand the pipeline off to Vercel Workflow instead of
+    // running the inline retry loop. See docs/spec-vercel-workflow-migration.md
+    // for the migration plan and the flip-the-flag checklist. Default OFF —
+    // prod stays on the inline path until explicitly opted in.
+    const useWorkflow = process.env.USE_WORKFLOW_PIPELINE === '1';
+
+    if (useWorkflow) {
+      try {
+        const [{ start }, { topicSearchWorkflow }] = await Promise.all([
+          import('workflow/api'),
+          import('@/lib/search/workflows/topic-search-workflow'),
+        ]);
+        await start(topicSearchWorkflow, [id, user.id, user.email ?? undefined]);
+        // Return immediately — the UI already polls `topic_searches.status`
+        // to detect completion, so fire-and-forget is safe. The workflow
+        // writes to the same row via the same pipeline code.
+        return NextResponse.json({
+          id,
+          status: 'processing',
+          workflow: 'started',
+        });
+      } catch (err) {
+        // Any failure wiring workflow → fall through to the inline path so
+        // a broken workflow install can't take prod down. Loud log so we
+        // notice.
+        console.error('[search:process] workflow start failed, falling back to inline:', err);
+      }
+    }
+
     try {
       const MAX_RETRIES = 3;
       let lastError: Error | null = null;

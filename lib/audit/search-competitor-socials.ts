@@ -12,11 +12,7 @@
  * run and adds ~15-30s wall time (TT + IG run in parallel).
  */
 
-import {
-  startApifyActorRun,
-  waitForApifyRunSuccess,
-  fetchApifyDatasetItems,
-} from '@/lib/tiktok/apify-run';
+import { runAndLogApifyActor } from '@/lib/tiktok/apify-run';
 import type { AuditPlatform, SocialLink } from './types';
 
 export { diceCoefficient };
@@ -98,12 +94,18 @@ function guessHandles(brandName: string): string[] {
 export async function tryTikTokHandleDetailed(handle: string, brandName: string): Promise<SocialCandidate | null> {
   const key = getApifyKey();
   const url = `https://www.tiktok.com/@${handle}`;
-  const runId = await startApifyActorRun(TT_PROFILE_ACTOR, { startUrls: [url] }, key);
-  if (!runId) return null;
-  const ok = await waitForApifyRunSuccess(runId, key, 60_000, 3000);
-  if (!ok) return null;
-  const items = await fetchApifyDatasetItems(runId, key, 3);
-  if (items.length === 0) return null;
+  const { runId, items, succeeded } = await runAndLogApifyActor(
+    TT_PROFILE_ACTOR,
+    { startUrls: [url] },
+    key,
+    {
+      maxWaitMs: 60_000,
+      pollIntervalMs: 3000,
+      fetchLimit: 3,
+      context: { purpose: 'audit_tiktok_handle_detailed' },
+    },
+  );
+  if (!runId || !succeeded || items.length === 0) return null;
   const first = items[0] as { channel?: { username?: string; name?: string; avatar?: string; followers?: number } };
   const username = first?.channel?.username ?? handle;
   const displayName = first?.channel?.name ?? username;
@@ -120,12 +122,18 @@ export async function tryTikTokHandleDetailed(handle: string, brandName: string)
 
 export async function tryInstagramHandleDetailed(handle: string, brandName: string): Promise<SocialCandidate | null> {
   const key = getApifyKey();
-  const runId = await startApifyActorRun(IG_PROFILE_ACTOR, { usernames: [handle] }, key);
-  if (!runId) return null;
-  const ok = await waitForApifyRunSuccess(runId, key, 60_000, 3000);
-  if (!ok) return null;
-  const items = await fetchApifyDatasetItems(runId, key, 1);
-  if (items.length === 0) return null;
+  const { runId, items, succeeded } = await runAndLogApifyActor(
+    IG_PROFILE_ACTOR,
+    { usernames: [handle] },
+    key,
+    {
+      maxWaitMs: 60_000,
+      pollIntervalMs: 3000,
+      fetchLimit: 1,
+      context: { purpose: 'audit_ig_handle_detailed' },
+    },
+  );
+  if (!runId || !succeeded || items.length === 0) return null;
   const first = items[0] as { username?: string; fullName?: string; profilePicUrl?: string; followersCount?: number };
   const username = first?.username ?? handle;
   const displayName = first?.fullName ?? username;
@@ -233,12 +241,18 @@ export async function lookupYouTubeByHandle(handle: string): Promise<SocialCandi
 async function tryTikTokHandle(handle: string, brandName: string): Promise<SocialLink | null> {
   const key = getApifyKey();
   const url = `https://www.tiktok.com/@${handle}`;
-  const runId = await startApifyActorRun(TT_PROFILE_ACTOR, { startUrls: [url] }, key);
-  if (!runId) return null;
-  const ok = await waitForApifyRunSuccess(runId, key, 60_000, 3000);
-  if (!ok) return null;
-  const items = await fetchApifyDatasetItems(runId, key, 3);
-  if (items.length === 0) return null;
+  const { runId, items, succeeded } = await runAndLogApifyActor(
+    TT_PROFILE_ACTOR,
+    { startUrls: [url] },
+    key,
+    {
+      maxWaitMs: 60_000,
+      pollIntervalMs: 3000,
+      fetchLimit: 3,
+      context: { purpose: 'audit_tiktok_handle_match' },
+    },
+  );
+  if (!runId || !succeeded || items.length === 0) return null;
   const first = items[0] as { channel?: { username?: string; name?: string } };
   const username = first?.channel?.username ?? handle;
   const displayName = first?.channel?.name ?? username;
@@ -252,12 +266,18 @@ async function tryTikTokHandle(handle: string, brandName: string): Promise<Socia
 
 async function tryInstagramHandle(handle: string, brandName: string): Promise<SocialLink | null> {
   const key = getApifyKey();
-  const runId = await startApifyActorRun(IG_PROFILE_ACTOR, { usernames: [handle] }, key);
-  if (!runId) return null;
-  const ok = await waitForApifyRunSuccess(runId, key, 60_000, 3000);
-  if (!ok) return null;
-  const items = await fetchApifyDatasetItems(runId, key, 1);
-  if (items.length === 0) return null;
+  const { runId, items, succeeded } = await runAndLogApifyActor(
+    IG_PROFILE_ACTOR,
+    { usernames: [handle] },
+    key,
+    {
+      maxWaitMs: 60_000,
+      pollIntervalMs: 3000,
+      fetchLimit: 1,
+      context: { purpose: 'audit_ig_handle_match' },
+    },
+  );
+  if (!runId || !succeeded || items.length === 0) return null;
   const first = items[0] as { username?: string; fullName?: string };
   const username = first?.username ?? handle;
   const displayName = first?.fullName ?? username;
