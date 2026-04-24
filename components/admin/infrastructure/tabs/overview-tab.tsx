@@ -304,7 +304,7 @@ export async function OverviewTab() {
   const rollups: SubsystemRollup[] = [
     {
       slug: 'compute',
-      name: 'Compute',
+      name: 'Vercel',
       href: '/admin/infrastructure?tab=compute',
       state: cronState,
       primary: process.env.VERCEL_GIT_COMMIT_REF ?? 'local',

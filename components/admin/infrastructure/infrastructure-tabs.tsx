@@ -14,7 +14,7 @@ import { useEffect, useState, useTransition } from 'react';
 
 const TABS = [
   { slug: 'overview',     label: 'Overview',     icon: Activity },
-  { slug: 'compute',      label: 'Compute',      icon: Server },
+  { slug: 'compute',      label: 'Vercel',       icon: Server },
   { slug: 'ai',           label: 'AI',           icon: Layers },
   { slug: 'apify',        label: 'Scrapers',     icon: Zap },
   { slug: 'trend-finder', label: 'Trend finder', icon: Sliders },

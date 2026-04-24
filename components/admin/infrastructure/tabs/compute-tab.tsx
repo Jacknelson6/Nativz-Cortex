@@ -180,7 +180,7 @@ export async function ComputeTab() {
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat
           label="Uptime"
-          value={uptimeValue}
+          value={uptimeValue.toUpperCase()}
           sub={prod ? `${prod.target} · ${formatAge(prod.createdAt)}` : productionUrl.replace('https://', '')}
         />
         <Stat

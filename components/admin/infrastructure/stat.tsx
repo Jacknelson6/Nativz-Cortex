@@ -1,8 +1,7 @@
 export function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="group relative overflow-hidden rounded-xl border border-nativz-border bg-surface px-5 py-4 transition-all duration-200 hover:-translate-y-px hover:border-nativz-border/90 hover:bg-surface-hover/30">
-      <span aria-hidden className="absolute left-3 top-3 h-1 w-1 rounded-full bg-accent/60" />
-      <div className="pl-3 font-mono text-[11px] uppercase tracking-[0.18em] text-text-muted/85">
+      <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-text-muted/85">
         {label}
       </div>
       <div className="mt-2 text-3xl font-semibold leading-none tabular-nums text-text-primary">
