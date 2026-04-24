@@ -38,30 +38,29 @@ interface Stage {
  * longer or shorter; the real `done` signal comes from the poller.
  */
 function buildStages(platforms: string[]): Stage[] {
-  const stages: Stage[] = [];
-  let cumulative = 0;
-  const platformCount = Math.max(1, platforms.length);
-  const totalEst = 180_000 + (platformCount - 1) * 45_000;
-
-  const add = (label: string, icon: React.ReactNode, duration: number) => {
-    cumulative += duration;
-    stages.push({ label, icon, target: Math.min(92, (cumulative / totalEst) * 92), duration });
-  };
-
-  if (platforms.includes('web')) add('Searching the web', <Search size={14} />, 3000);
-  if (platforms.includes('reddit')) add('Scanning Reddit discussions', <MessageSquare size={14} />, 8000);
+  // Target ~4m31s total so the bar pacing matches the real average run.
+  const entries: { label: string; icon: React.ReactNode; duration: number }[] = [];
+  if (platforms.includes('web')) entries.push({ label: 'Searching the web', icon: <Search size={14} />, duration: 6000 });
+  if (platforms.includes('reddit')) entries.push({ label: 'Scanning Reddit discussions', icon: <MessageSquare size={14} />, duration: 14_000 });
   if (platforms.includes('youtube')) {
     const YT = PLATFORM_CONFIG.youtube.icon;
-    add('Fetching YouTube videos & transcripts', <YT size={14} />, 15_000);
+    entries.push({ label: 'Fetching YouTube videos & transcripts', icon: <YT size={14} />, duration: 25_000 });
   }
   if (platforms.includes('tiktok')) {
     const TT = PLATFORM_CONFIG.tiktok.icon;
-    add('Scraping TikTok & comments', <TT size={14} />, 20_000);
+    entries.push({ label: 'Scraping TikTok & comments', icon: <TT size={14} />, duration: 30_000 });
   }
-  add('Computing analytics', <Brain size={14} />, 3000);
-  add('Generating video ideas with AI', <Sparkles size={14} />, 12_000);
-  add('Building your report', <FileText size={14} />, 90_000);
+  entries.push({ label: 'Computing analytics', icon: <Brain size={14} />, duration: 6000 });
+  entries.push({ label: 'Generating video ideas with AI', icon: <Sparkles size={14} />, duration: 20_000 });
+  entries.push({ label: 'Building your report', icon: <FileText size={14} />, duration: 170_000 });
 
+  const totalEst = entries.reduce((a, b) => a + b.duration, 0);
+  const stages: Stage[] = [];
+  let cumulative = 0;
+  for (const e of entries) {
+    cumulative += e.duration;
+    stages.push({ label: e.label, icon: e.icon, target: Math.min(92, (cumulative / totalEst) * 92), duration: e.duration });
+  }
   return stages;
 }
 
@@ -75,11 +74,12 @@ function buildLlmStages(
 ): Stage[] {
   const n = Math.max(1, subtopicCount);
   const liveWeb = webResearch === 'searxng' || webResearch === 'openrouter';
-  const perSubtopic = liveWeb ? 38_000 : 16_000;
+  // Target ~4m31s total run so the bar's pacing matches real averages.
+  const perSubtopic = liveWeb ? 40_000 : 35_000;
   const researchBlock = perSubtopic * n;
   const mergeMs = 22_000;
-  const ideasMs = 14_000;
-  const reportMs = 70_000;
+  const ideasMs = 20_000;
+  const reportMs = liveWeb ? 111_000 : 121_000;
   const totalEst = researchBlock + mergeMs + ideasMs + reportMs;
 
   const stages: Stage[] = [];
@@ -467,14 +467,8 @@ export function SearchProcessing({
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 animate-fade-slide-in">
       <div className="w-full max-w-2xl">
-        {/* Heading — eyebrow + display title with cyan highlighter underline
-            on the user's query. Matches the rest of the brand surface vs. the
-            old centered "Researching X" treatment. */}
         <div className="mb-5">
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-text/80">
-            Cortex pipeline
-          </p>
-          <h2 className="mt-1.5 text-2xl font-semibold leading-tight text-text-primary">
+          <h2 className="text-2xl font-semibold leading-tight text-text-primary">
             Researching <u className="nz-u">&ldquo;{query}&rdquo;</u>
           </h2>
         </div>

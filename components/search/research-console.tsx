@@ -71,40 +71,145 @@ const STAGE_TAGS: Record<string, string> = {
 const STAGE_SUBLINES: Record<string, string[]> = {
   'Gathering live web sources for your angles': [
     'scanning the open web',
-    'checking news and forums',
+    'checking news outlets and industry blogs',
     'reading top sources',
     'pulling key passages',
+    'cross-referencing niche forums',
+    'sampling community threads',
+    'queuing pages for closer reading',
+    'tracking signal across outlets',
+    'noting recurring phrases',
+    'dropping low-signal pages',
+    're-ranking by relevance',
+    'highlighting credible voices',
+    'capturing quotes that matter',
+    'watching for contradictions',
+    'logging source freshness',
   ],
   'Exploring each angle you set in your gameplan': [
     'thinking through each angle',
     'drawing on prior research',
     'noting key findings',
+    'testing assumptions against evidence',
+    'surfacing edge cases',
+    'looking for under-covered takes',
+    'sanity-checking the framing',
+    'widening the lens a bit',
+    'returning to the strongest threads',
   ],
   'Tightening sources and trimming overlap': [
     'comparing what we found',
     'trimming duplicates',
+    'merging near-identical passages',
+    'flagging weak citations',
+    'consolidating the short list',
+    'picking the cleanest source per point',
+    'dropping anything we can\'t verify',
   ],
   'Weaving findings into themes and narrative': [
     'finding common themes',
     'drafting the summary',
     'shaping the narrative',
+    'ordering points for clarity',
+    'tightening the throughline',
+    'swapping in stronger phrasing',
+    'pressure-testing the angle',
+    'checking flow between sections',
+    'rereading for tone',
   ],
   'Shaping video directions from what we found': [
     'sketching video angles',
     'ranking ideas by traction',
+    'writing candidate hooks',
+    'shortlisting hooks worth testing',
+    'pairing angles with formats',
+    'matching ideas to audience mood',
+    'refining the one-line pitches',
+    'filing weaker ideas for later',
   ],
   'Assembling your report': [
     'putting it all together',
     'polishing the layout',
     'final formatting',
+    'stacking the ideas in order',
+    'pulling stat callouts forward',
+    'checking headline phrasing',
+    'rebalancing sections',
+    'setting the cover context',
+    'wiring up the appendix',
+    'dry-running the hand-off copy',
+    'checking spacing and rhythm',
+    'spot-checking the examples',
+    'trimming anything redundant',
+    'fixing small wording quirks',
+    'verifying hook attributions',
+    'locking in the recommended angle',
+    'doing a final pass on the summary',
+    'cleaning up citations',
+    'last look before we hand it over',
   ],
-  'Searching the web': ['scanning the open web', 'reading top results'],
-  'Scanning Reddit discussions': ['reading top threads', 'pulling community signals'],
-  'Fetching YouTube videos & transcripts': ['scanning YouTube', 'watching key videos'],
-  'Scraping TikTok & comments': ['checking TikTok', 'reading top comments'],
-  'Computing analytics': ['crunching the numbers', 'measuring engagement'],
-  'Generating video ideas with AI': ['drafting hooks', 'shortlisting angles'],
-  'Building your report': ['assembling the report', 'wrapping up'],
+  'Searching the web': [
+    'scanning the open web',
+    'reading top results',
+    'pulling headlines worth a look',
+    'skimming the first page of hits',
+    'sorting by recency',
+    'saving passages with signal',
+  ],
+  'Scanning Reddit discussions': [
+    'reading top threads',
+    'pulling community signals',
+    'checking what people actually argue about',
+    'noting repeated complaints',
+    'tagging the most upvoted takes',
+    'filtering out off-topic noise',
+  ],
+  'Fetching YouTube videos & transcripts': [
+    'scanning YouTube',
+    'watching key videos',
+    'pulling transcripts',
+    'clipping standout moments',
+    'noting creator angles',
+    'watching engagement spikes',
+    'flagging hooks that worked',
+  ],
+  'Scraping TikTok & comments': [
+    'checking TikTok',
+    'reading top comments',
+    'spotting viral formats',
+    'noting sounds people reuse',
+    'tagging the high-save posts',
+    'watching for comment patterns',
+  ],
+  'Computing analytics': [
+    'crunching the numbers',
+    'measuring engagement',
+    'normalizing across platforms',
+    'computing topic lift',
+    'double-checking outliers',
+  ],
+  'Generating video ideas with AI': [
+    'drafting hooks',
+    'shortlisting angles',
+    'pairing angles with formats',
+    'writing one-line pitches',
+    'scoring ideas against the brief',
+  ],
+  'Building your report': [
+    'assembling the report',
+    'wrapping up',
+    'putting sections in order',
+    'lining up the stat callouts',
+    'tightening the exec summary',
+    'checking the layout',
+    'trimming filler',
+    'polishing hook phrasing',
+    'setting the cover context',
+    'dry-running the hand-off copy',
+    'spot-checking examples',
+    'last pass on citations',
+    'final look before we hand it over',
+  ],
 };
 
 function tagFor(label: string): string {
@@ -123,7 +228,7 @@ function formatClock(ts: number): string {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-const SUBLINE_INTERVAL_MS = 8000;
+const SUBLINE_INTERVAL_MS = 5000;
 const MAX_LINES = 40;
 
 export function ResearchConsole({ stages, stageIndex }: ResearchConsoleProps) {
@@ -161,8 +266,9 @@ export function ResearchConsole({ stages, stageIndex }: ResearchConsoleProps) {
   }, [stageIndex, stages]);
 
   // Within a stage: emit broad sub-narratives on an interval so the feed
-  // doesn't freeze during long phases (the merger LLM call can run 30–90s).
-  // Same defensive .trim() as the stage opener.
+  // doesn't freeze during long phases (the merger LLM call can run 30–90s,
+  // and the final report stage sits for ~2 minutes on average). Sublines
+  // cycle with modulo so the feed keeps emitting updates indefinitely.
   useEffect(() => {
     const interval = setInterval(() => {
       if (stageIndex < 0 || stageIndex >= stages.length) return;
@@ -170,8 +276,7 @@ export function ResearchConsole({ stages, stageIndex }: ResearchConsoleProps) {
       const subs = STAGE_SUBLINES[stage.label];
       if (!subs?.length) return;
       const idx = sublinesEmittedRef.current;
-      if (idx >= subs.length) return;
-      const text = subs[idx].trim();
+      const text = subs[idx % subs.length].trim();
       sublinesEmittedRef.current = idx + 1;
       const tag = tagFor(stage.label);
       setLines((prev) => {

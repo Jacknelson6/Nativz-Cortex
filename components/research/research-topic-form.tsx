@@ -4,10 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowRight,
-  ChevronDown,
   Clock,
   Globe,
-  HelpCircle,
   Plus,
   Loader2,
   MessageCircle,
@@ -95,7 +93,6 @@ export function ResearchTopicForm({
     const [country] = useState('us');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [showBestPractices, setShowBestPractices] = useState(false);
     const [suggestions, setSuggestions] = useState<string[]>([]);
     const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
@@ -198,12 +195,9 @@ export function ResearchTopicForm({
     return (
       <div className="w-full">
         <div className="text-center">
-          <p className="text-sm font-medium text-text-muted">Hey, {greetingName}</p>
+          <p className="text-base font-medium text-text-muted md:text-lg">Hey, {greetingName}</p>
           <p className="mt-1.5 text-xl font-semibold tracking-tight text-text-primary md:text-2xl">
             Find out what&apos;s trending
-          </p>
-          <p className="mx-auto mt-1 max-w-md text-xs text-text-muted md:text-sm">
-            We scan the web, Reddit, YouTube, and TikTok for what&apos;s resonating right now.
           </p>
         </div>
 
@@ -275,16 +269,15 @@ export function ResearchTopicForm({
                 </PopoverContent>
               </Popover>
 
-              {/* Platforms — Web / Reddit / YouTube / TikTok. Each icon    */}
-              {/* tints to its Trend-finder breakdown colour so the pill     */}
-              {/* reads as a legend the user sees everywhere else.           */}
+              {/* Platforms — Web / Reddit / YouTube / TikTok. Muted so the */}
+              {/* pill reads as a quiet indicator, not a brand-colored legend. */}
               <div className={pillBtn}>
                 {(['web', 'reddit', 'youtube', 'tiktok'] as const).map((p) => {
                   const cfg = PLATFORM_CONFIG[p];
                   if (!cfg) return null;
                   const Icon = cfg.icon;
                   return (
-                    <span key={p} title={cfg.label} className={cfg.color}>
+                    <span key={p} title={cfg.label} className="text-text-secondary">
                       <Icon size={15} />
                     </span>
                   );
@@ -383,81 +376,6 @@ export function ResearchTopicForm({
                     {topic}
                   </button>
                 ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {portalMode && (
-          <div className="mx-auto mt-3 w-full max-w-xl">
-            <button
-              type="button"
-              onClick={() => setShowBestPractices((v) => !v)}
-              className="mx-auto flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-text-muted transition hover:bg-surface-hover hover:text-text-secondary"
-            >
-              <HelpCircle size={14} aria-hidden />
-              <span>Search best practices</span>
-              <ChevronDown
-                size={13}
-                className={cn(
-                  'transition-transform duration-200',
-                  showBestPractices && 'rotate-180',
-                )}
-                aria-hidden
-              />
-            </button>
-
-            {showBestPractices && (
-              <div className="mt-2 rounded-2xl border border-nativz-border bg-surface/60 px-5 py-4 text-sm leading-relaxed text-text-secondary backdrop-blur-sm">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
-                  How to get great results
-                </p>
-
-                <ol className="list-none space-y-3 pl-0">
-                  <li className="flex gap-3">
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent/15 text-[11px] font-bold text-accent-text">1</span>
-                    <div>
-                      <p className="font-medium text-text-primary">Define your objective first</p>
-                      <p className="mt-0.5 text-xs text-text-muted">
-                        Before you type anything, know what you&apos;re looking for. Are you gathering brand sentiment? Finding content gaps? Looking for new video ideas? Developing a strategy? Your goal shapes your search.
-                      </p>
-                    </div>
-                  </li>
-                  <li className="flex gap-3">
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent/15 text-[11px] font-bold text-accent-text">2</span>
-                    <div>
-                      <p className="font-medium text-text-primary">Search a specific topic</p>
-                      <p className="mt-0.5 text-xs text-text-muted">
-                        Once you know your goal, search for the specific topic you want content around. For example, &quot;avocado toast&quot; or &quot;avocado toast recipes.&quot; The more specific you are, the more targeted your results.
-                      </p>
-                    </div>
-                  </li>
-                  <li className="flex gap-3">
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent/15 text-[11px] font-bold text-accent-text">3</span>
-                    <div>
-                      <p className="font-medium text-text-primary">Adjust the date range</p>
-                      <p className="mt-0.5 text-xs text-text-muted">
-                        Don&apos;t forget you can change the time range filter to surface what&apos;s trending right now vs. what&apos;s performed well over time.
-                      </p>
-                    </div>
-                  </li>
-                </ol>
-
-                <div className="mt-4 border-t border-nativz-border/60 pt-3">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
-                    Common mistakes to avoid
-                  </p>
-                  <ul className="space-y-1.5 pl-0 text-xs text-text-muted">
-                    <li className="flex items-start gap-2">
-                      <span className="mt-1 block h-1 w-1 shrink-0 rounded-full bg-red-400/70" />
-                      <span><strong className="text-text-secondary">Too vague.</strong> Single-word or generic searches give broad results. Be specific about the topic you want content around.</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="mt-1 block h-1 w-1 shrink-0 rounded-full bg-red-400/70" />
-                      <span><strong className="text-text-secondary">Too narrow.</strong> Extremely niche topics may not have much existing content. Cortex will still build a strategy, but results work best with topics that have an active content landscape.</span>
-                    </li>
-                  </ul>
-                </div>
               </div>
             )}
           </div>
