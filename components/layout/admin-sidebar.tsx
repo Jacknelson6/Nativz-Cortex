@@ -155,8 +155,8 @@ const NAV_SECTIONS: NavSection[] = [
           { href: '/admin/tasks', label: 'Tasks', icon: CheckSquare },
           { href: '/admin/edits', label: 'Edits', icon: Scissors },
           { href: '/admin/shoots', label: 'Shoots', icon: Camera },
-          { href: '/admin/infrastructure', label: 'Usage', icon: Gauge },
-          { href: '/admin/settings/ai', label: 'Settings', icon: Cpu },
+          { href: '/admin/usage', label: 'Usage', icon: Gauge },
+          { href: '/admin/settings', label: 'Settings', icon: Cpu },
         ],
       },
     ],
@@ -194,7 +194,7 @@ function isActivePath(pathname: string, href: string, searchParams?: URLSearchPa
   }
 
   // NOTE: the old "Competitor Tracking → /admin/analyze-social" and
-  // "Settings → /admin/settings/ai" broad-match blocks were removed. They
+  // "Settings → /admin/settings" broad-match blocks were removed. They
   // previously made the first sub-item (which shared an href with its parent
   // group) light up for every sibling route, so "Organic Social" appeared
   // selected when the user was actually on Meta Ads / Ecom / TikTok Shop.
@@ -237,11 +237,12 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/competitor-spying',
   '/admin/finder/monitors',
   '/admin/notifications',
-  '/admin/infrastructure',
+  '/admin/usage',
   // Settings is reachable from the avatar popover — it doesn't need its
   // own nav row on the portal. Keeping it on the admin side where the gear
   // is the primary entry point to the agency settings secondary rail.
-  '/admin/settings/ai',
+  '/admin/settings',
+  '/admin/account',
   // Competitor Tracking secondary rail — all children are admin-only.
   '/admin/competitor-tracking',
   '/admin/competitor-tracking/tiktok-shop',
@@ -333,7 +334,7 @@ interface AdminSidebarProps {
 
 /** Items that can never be hidden — there'd be no way back to Settings otherwise. */
 const UNHIDABLE_HREFS = new Set([
-  '/admin/settings/ai',
+  '/admin/settings',
   '/admin/dashboard',
   '/portal/settings',
 ]);
@@ -349,7 +350,7 @@ export function AdminSidebar({
   role = 'admin',
   routePrefix = '/admin',
   logoutPath: _logoutPath = '/admin/login',
-  settingsPath: _settingsPath = '/admin/settings',
+  settingsPath: _settingsPath = '/admin/account',
   brands,
   activeBrandId,
   hiddenSidebarItems = [],

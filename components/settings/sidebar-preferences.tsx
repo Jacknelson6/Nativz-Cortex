@@ -31,7 +31,7 @@ const ADMIN_SIDEBAR_ITEMS = [
     { href: '/admin/edits', label: 'Edits' },
     { href: '/admin/tasks', label: 'Tasks' },
     { href: '/admin/tools', label: 'Tools' },
-    { href: '/admin/settings/ai', label: 'Settings', unhidable: true },
+    { href: '/admin/settings', label: 'Settings', unhidable: true },
   ] },
 ] as const;
 

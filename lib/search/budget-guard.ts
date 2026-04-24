@@ -58,6 +58,6 @@ export function checkSearchBudget(settings: ScraperSettings): BudgetCheckResult 
     projectedUsd: totalUsd,
     perPlatformUsd,
     dropSuggestions,
-    reason: `Projected cost $${totalUsd.toFixed(2)} exceeds per-search budget $${SEARCH_BUDGET_USD.toFixed(2)}. Drop ${dropSuggestions.join(', ')} or lower volumes in /admin/settings/ai.`,
+    reason: `Projected cost $${totalUsd.toFixed(2)} exceeds per-search budget $${SEARCH_BUDGET_USD.toFixed(2)}. Drop ${dropSuggestions.join(', ')} or lower volumes in /admin/usage.`,
   };
 }

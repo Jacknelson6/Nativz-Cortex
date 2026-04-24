@@ -306,7 +306,7 @@ export async function ApifyTab({ range, preset }: { range: DateRange; preset: Da
               <span>
                 Scraping volume knobs live in the{' '}
                 <a
-                  href="/admin/infrastructure?tab=trend-finder"
+                  href="/admin/usage?tab=trend-finder"
                   className="text-accent-text underline decoration-dotted"
                 >
                   Trend finder

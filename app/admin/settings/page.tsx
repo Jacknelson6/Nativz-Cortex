@@ -1,385 +1,114 @@
-'use client';
-
-import { useState, useEffect, useRef } from 'react';
-import { toast } from 'sonner';
+import { redirect } from 'next/navigation';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import {
-  Save,
-  Key,
-  KeyRound,
-  User,
-  Link as LinkIcon,
-  Bell,
-  Sidebar as SidebarIcon,
-} from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { AvatarEditor } from '@/components/ui/avatar-editor';
-import { NotificationPreferencesSection } from '@/components/settings/notification-preferences';
-import { SidebarPreferencesSection } from '@/components/settings/sidebar-preferences';
-import { TodoistSection } from '@/components/settings/todoist-section';
-import { ApiKeysSection } from '@/components/settings/api-keys-section';
-import { TrustPolicyModal } from '@/components/settings/trust-policy-modal';
+  SectionTabs,
+  SectionHeader,
+  SectionPanel,
+} from '@/components/admin/section-tabs';
+import {
+  AI_SETTINGS_TABS,
+  AI_SETTINGS_TAB_SLUGS,
+  type AiSettingsTabSlug,
+} from '@/components/admin/ai-settings/ai-settings-tabs';
+import { RefreshButton } from '@/components/admin/shared/refresh-button';
+import { refreshAiSettings } from './actions';
+import { AiRoutingSection } from '@/components/settings/ai-routing-section';
+import { LlmCredentialsSection } from '@/components/settings/llm-credentials-section';
+import { AISettingsSkillsClient } from './skills-client';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+export const dynamic = 'force-dynamic';
 
-interface UserData {
-  full_name: string;
-  email: string;
-  avatar_url: string | null;
-  job_title: string | null;
-  todoist_api_key: string | null;
-  todoist_project_id: string | null;
-  todoist_synced_at: string | null;
-}
+/**
+ * Admin Settings — the levers that configure Cortex:
+ *   Model, API key, Skills. (Personal account settings moved to
+ *   /admin/account on 2026-04-24.)
+ *
+ * Overview, Search cost, and Usage tabs were retired and moved to
+ * /admin/usage (usage lives under the AI tab there; scraper volumes
+ * live under the Trend finder tab). Legacy slugs redirect.
+ */
+const LEGACY_REDIRECTS: Record<string, string> = {
+  overview: '/admin/settings',
+  'search-cost': '/admin/usage?tab=trend-finder',
+  usage: '/admin/usage?tab=cost',
+};
 
-const SECTIONS = [
-  { id: 'profile', label: 'Profile', icon: User },
-  { id: 'sidebar', label: 'Sidebar', icon: SidebarIcon },
-  { id: 'connections', label: 'Connections', icon: LinkIcon },
-  { id: 'api-keys', label: 'API keys', icon: Key },
-  { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'security', label: 'Security', icon: KeyRound },
-] as const;
+export default async function AISettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect('/admin/login');
 
-// ---------------------------------------------------------------------------
-// Main Page
-// ---------------------------------------------------------------------------
-
-export default function AdminSettingsPage() {
-  const [user, setUser] = useState<UserData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [changingPassword, setChangingPassword] = useState(false);
-  const [activeSection, setActiveSection] = useState('profile');
-
-  // Profile form state
-  const [fullName, setFullName] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [jobTitle, setJobTitle] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-
-  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
-
-  useEffect(() => {
-    async function fetchUser() {
-      const supabase = createClient();
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) return;
-
-      const { data } = await supabase
-        .from('users')
-        .select('full_name, email, avatar_url, job_title')
-        .eq('id', authUser.id)
-        .single();
-
-      let todoistData = { connected: false, project_id: null as string | null, synced_at: null as string | null };
-      try {
-        const todoistRes = await fetch('/api/todoist/connect');
-        if (todoistRes.ok) {
-          const td = await todoistRes.json();
-          todoistData = { connected: td.connected, project_id: td.project_id ?? null, synced_at: td.synced_at ?? null };
-        }
-      } catch { /* silent */ }
-
-      if (data) {
-        setUser({
-          ...data,
-          todoist_api_key: todoistData.connected ? 'connected' : null,
-          todoist_project_id: todoistData.project_id,
-          todoist_synced_at: todoistData.synced_at,
-        });
-        setFullName(data.full_name);
-        setAvatarUrl(data.avatar_url);
-        setJobTitle(data.job_title || '');
-      }
-      setLoading(false);
-    }
-    fetchUser();
-  }, []);
-
-  // Scroll-driven active section tracking
-  useEffect(() => {
-    const scrollContainer = document.querySelector('[data-settings-scroll]');
-    if (!scrollContainer) return;
-
-    function handleScroll() {
-      const container = scrollContainer!;
-      const scrollTop = container.scrollTop;
-      const containerHeight = container.clientHeight;
-
-      // If scrolled to the very bottom, highlight the last section
-      if (container.scrollHeight - scrollTop - containerHeight < 40) {
-        setActiveSection(SECTIONS[SECTIONS.length - 1].id);
-        return;
-      }
-
-      // Find the section whose top is closest to (but above) 20% from the top
-      const threshold = scrollTop + containerHeight * 0.2;
-      let current: string = SECTIONS[0].id;
-      for (const section of SECTIONS) {
-        const el = sectionRefs.current[section.id];
-        if (el && el.offsetTop <= threshold) {
-          current = section.id;
-        }
-      }
-      setActiveSection(current);
-    }
-
-    scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
-    handleScroll(); // set initial state
-
-    return () => {
-      scrollContainer.removeEventListener('scroll', handleScroll);
-    };
-  }, [loading]);
-
-  function scrollToSection(id: string) {
-    sectionRefs.current[id]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const admin = createAdminClient();
+  const [{ data: me }, { data: clients }, params] = await Promise.all([
+    admin.from('users').select('role, is_super_admin').eq('id', user.id).single(),
+    admin.from('clients').select('id, name, slug').eq('is_active', true).order('name'),
+    searchParams,
+  ]);
+  if (me?.role !== 'admin' && !me?.is_super_admin) {
+    redirect('/admin/dashboard');
   }
 
-  async function handleSaveProfile(e: React.FormEvent) {
-    e.preventDefault();
-    if (!fullName.trim()) {
-      toast.error('Name is required.');
-      return;
-    }
-    setSaving(true);
-    try {
-      const res = await fetch('/api/account', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          full_name: fullName.trim(),
-          avatar_url: avatarUrl,
-          job_title: jobTitle.trim() || null,
-        }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        toast.error(data.error || 'Failed to update profile.');
-      } else {
-        toast.success('Profile updated.');
-      }
-    } catch {
-      toast.error('Something went wrong. Try again.');
-    } finally {
-      setSaving(false);
-    }
+  const rawTab = params.tab ?? '';
+  if (rawTab && rawTab in LEGACY_REDIRECTS && LEGACY_REDIRECTS[rawTab] !== '/admin/settings') {
+    redirect(LEGACY_REDIRECTS[rawTab]);
   }
 
-  async function handleChangePassword(e: React.FormEvent) {
-    e.preventDefault();
-    if (newPassword.length < 6) {
-      toast.error('Password must be at least 6 characters.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      toast.error('Passwords do not match.');
-      return;
-    }
-    setChangingPassword(true);
-    try {
-      const res = await fetch('/api/account', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: newPassword }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        toast.error(data.error || 'Failed to change password.');
-      } else {
-        toast.success('Password changed.');
-        setNewPassword('');
-        setConfirmPassword('');
-      }
-    } catch {
-      toast.error('Something went wrong. Try again.');
-    } finally {
-      setChangingPassword(false);
-    }
-  }
-
-  if (loading) {
-    return <div className="cortex-page-gutter text-sm text-text-muted">Loading...</div>;
-  }
-
-  if (!user) {
-    return <div className="cortex-page-gutter text-sm text-red-400">Could not load account.</div>;
-  }
+  const activeTab = resolveTab(rawTab);
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)]">
-      {/* Left sidebar nav */}
-      <nav className="hidden lg:flex flex-col w-56 shrink-0 border-r border-nativz-border p-4 overflow-y-auto">
-        <h1 className="ui-section-title mb-1">Settings</h1>
-        <p className="text-xs text-text-muted mb-6">Manage your account</p>
-        <ul className="space-y-0.5">
-          {SECTIONS.map((s) => {
-            const Icon = s.icon;
-            const isActive = activeSection === s.id;
-            return (
-              <li key={s.id}>
-                <button
-                  type="button"
-                  onClick={() => scrollToSection(s.id)}
-                  className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors cursor-pointer ${
-                    isActive
-                      ? 'bg-accent/10 text-accent-text font-medium'
-                      : 'text-text-muted hover:bg-surface-hover hover:text-text-secondary'
-                  }`}
-                >
-                  <Icon size={15} />
-                  {s.label}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
+    <div className="cortex-page-gutter max-w-6xl mx-auto space-y-8">
+      <SectionHeader
+        title="AI"
+        description="Pick the model, hold the key, wire the skills — that's the whole surface. Usage and search cost live under the Usage page."
+        action={<RefreshButton action={refreshAiSettings} />}
+      />
 
-      {/* Main content */}
-      <div className="flex-1 overflow-y-auto min-w-0" data-settings-scroll>
-      <div className="max-w-2xl mx-auto p-6 space-y-10">
-        {/* Mobile header */}
-        <div className="lg:hidden">
-          <h1 className="ui-page-title">Settings</h1>
-          <p className="text-sm text-text-muted mt-0.5">Manage your account</p>
-        </div>
+      <SectionTabs tabs={AI_SETTINGS_TABS} active={activeTab} memoryKey="cortex:ai-settings:last-tab" />
 
-        {/* Profile */}
-        <div id="profile" ref={(el) => { sectionRefs.current['profile'] = el; }}>
-          <form onSubmit={handleSaveProfile} className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-text-primary">Profile</h2>
-              <Button type="submit" disabled={saving} size="sm">
-                <Save size={14} />
-                {saving ? 'Saving...' : 'Save'}
-              </Button>
-            </div>
-            <Card>
-              <div className="space-y-4">
-                <div className="flex justify-center">
-                  <AvatarEditor value={avatarUrl} onChange={setAvatarUrl} size="lg" />
-                </div>
-                <Input
-                  id="full_name"
-                  label="Full name"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  required
-                />
-                <Input
-                  id="job_title"
-                  label="Role"
-                  value={jobTitle}
-                  onChange={(e) => setJobTitle(e.target.value)}
-                  placeholder="e.g. Chief Editing Officer"
-                />
-                <Input
-                  id="email"
-                  label="Email"
-                  type="email"
-                  value={user.email}
-                  disabled
-                />
-                <p className="text-xs text-text-muted">Email cannot be changed. Contact support if needed.</p>
-              </div>
-            </Card>
-          </form>
-        </div>
-
-        {/* Sidebar — per-user nav visibility */}
-        <div id="sidebar" ref={(el) => { sectionRefs.current['sidebar'] = el; }}>
-          <h2 className="text-base font-semibold text-text-primary mb-4">Sidebar</h2>
-          <SidebarPreferencesSection role="admin" />
-        </div>
-
-        {/* Connections */}
-        <div id="connections" ref={(el) => { sectionRefs.current['connections'] = el; }}>
-          <h2 className="text-base font-semibold text-text-primary mb-4">Connections</h2>
-          <div className="space-y-4">
-            <TodoistSection
-              connected={!!user.todoist_api_key}
-              projectId={user.todoist_project_id}
-              syncedAt={user.todoist_synced_at}
-              onConnectionChange={(connected) =>
-                setUser((prev) =>
-                  prev
-                    ? {
-                        ...prev,
-                        todoist_api_key: connected ? 'connected' : null,
-                        todoist_project_id: connected ? prev.todoist_project_id : null,
-                        todoist_synced_at: connected ? prev.todoist_synced_at : null,
-                      }
-                    : prev,
-                )
-              }
-              onSyncComplete={(syncedAt) =>
-                setUser((prev) => (prev ? { ...prev, todoist_synced_at: syncedAt } : prev))
-              }
-            />
-          </div>
-        </div>
-
-        {/* API Keys */}
-        <div id="api-keys" ref={(el) => { sectionRefs.current['api-keys'] = el; }}>
-          <h2 className="text-base font-semibold text-text-primary mb-4">API keys</h2>
-          <ApiKeysSection />
-        </div>
-
-        {/* Notifications */}
-        <div id="notifications" ref={(el) => { sectionRefs.current['notifications'] = el; }}>
-          <h2 className="text-base font-semibold text-text-primary mb-4">Notifications</h2>
-          <NotificationPreferencesSection />
-        </div>
-
-        {/* Security */}
-        <div id="security" ref={(el) => { sectionRefs.current['security'] = el; }}>
-          <form onSubmit={handleChangePassword} className="space-y-4">
-            <h2 className="text-base font-semibold text-text-primary">Security</h2>
-            <Card>
-              <h3 className="text-sm font-medium text-text-primary mb-4">Change password</h3>
-              <div className="space-y-4">
-                <Input
-                  id="new_password"
-                  label="New password"
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="At least 6 characters"
-                />
-                <Input
-                  id="confirm_password"
-                  label="Confirm password"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Re-enter new password"
-                />
-              </div>
-            </Card>
-            <div className="flex items-center gap-3">
-              <Button type="submit" variant="secondary" disabled={changingPassword || !newPassword}>
-                <KeyRound size={16} />
-                {changingPassword ? 'Changing...' : 'Change password'}
-              </Button>
-            </div>
-          </form>
-          <div className="mt-2">
-            <TrustPolicyModal />
-          </div>
-        </div>
-
-
-        {/* Bottom spacer */}
-        <div className="h-20" />
-      </div>
-      </div>
+      <div>{renderTab(activeTab, clients ?? [])}</div>
     </div>
   );
+}
+
+function resolveTab(raw: string | undefined): AiSettingsTabSlug {
+  if (raw && (AI_SETTINGS_TAB_SLUGS as readonly string[]).includes(raw)) {
+    return raw as AiSettingsTabSlug;
+  }
+  return 'model';
+}
+
+function renderTab(
+  slug: AiSettingsTabSlug,
+  clients: Array<{ id: string; name: string; slug: string }>,
+): React.ReactNode {
+  switch (slug) {
+    case 'model':
+      return (
+        <SectionPanel title="Model" description="One OpenRouter slug runs every Cortex feature.">
+          <AiRoutingSection />
+        </SectionPanel>
+      );
+    case 'credentials':
+      return (
+        <SectionPanel title="API key" description="A single OpenRouter key powers the model above.">
+          <LlmCredentialsSection />
+        </SectionPanel>
+      );
+    case 'skills':
+      return (
+        <SectionPanel
+          title="Skills"
+          description="Markdown context loaded into the Nerd's system prompt. Each skill picks which harnesses it applies to — the admin Nerd, admin Strategy Lab, and/or the portal Strategy Lab — and can be scoped to a single client."
+        >
+          <AISettingsSkillsClient clients={clients} />
+        </SectionPanel>
+      );
+  }
 }

@@ -10,7 +10,7 @@ export default function CalendarSettingsPage() {
   return (
     <div className="cortex-page-gutter max-w-2xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
-        <Link href="/admin/settings">
+        <Link href="/admin/account">
           <Button variant="ghost" size="sm">
             <ArrowLeft size={14} />
           </Button>
