@@ -1,12 +1,23 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Loader2, Check, ExternalLink } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Loader2, Check, ExternalLink, Cloud, CloudOff, ArrowDownFromLine } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import type { LlmProviderKeyBucket } from '@/lib/ai/provider-keys';
 
 type Masked = { configured: boolean; masked: string | null };
 type MaskedBlock = Record<LlmProviderKeyBucket, Masked>;
+
+interface VercelMirror {
+  available: boolean;
+  envKey?: string;
+  configured?: boolean;
+  masked?: string | null;
+  updatedAt?: number | null;
+  targets?: string[];
+  differsFromDb?: boolean;
+  dbEmpty?: boolean;
+}
 
 const ALL_BUCKETS: LlmProviderKeyBucket[] = ['default', 'topic_search', 'nerd'];
 
@@ -24,32 +35,58 @@ function pickRepresentativeKey(block: MaskedBlock): Masked {
   return { configured: false, masked: null };
 }
 
+function relativeTime(ts: number | null | undefined): string {
+  if (!ts) return '';
+  const diff = Date.now() - ts;
+  const m = Math.floor(diff / 60_000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
 /**
- * Single-key OpenRouter credentials UI. Saves the same key to every legacy
- * bucket (default / topic_search / nerd) so the whole pipeline reads from one
- * source. Drops the OpenAI direct path from the UI — paste an `openai/…` slug
- * in the model picker and OpenRouter will proxy it.
+ * Single-key OpenRouter credentials UI with bi-directional Vercel env sync.
+ *
+ *   • Type a new key + Save → writes to DB AND pushes up to Vercel's
+ *     OPENROUTER_API_KEY env var (production + preview + development).
+ *   • "Use Vercel value" button (shown when Vercel's env differs from DB) →
+ *     pulls the decrypted Vercel value into the DB so the dashboard matches.
+ *
+ * This keeps the two storage locations — agency_settings.llm_provider_keys
+ * in Postgres, and OPENROUTER_API_KEY on Vercel — from silently drifting.
  */
 export function LlmCredentialsSection() {
   const [current, setCurrent] = useState<Masked>({ configured: false, masked: null });
+  const [mirror, setMirror] = useState<VercelMirror>({ available: false });
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const applyResponse = useCallback((data: Record<string, unknown>) => {
+    const block = (data.openrouter as MaskedBlock | undefined) ?? {
+      default: { configured: false, masked: null },
+      topic_search: { configured: false, masked: null },
+      nerd: { configured: false, masked: null },
+    };
+    setCurrent(pickRepresentativeKey(block));
+    const mirrorBlock =
+      (data.vercelMirror as { openrouter?: VercelMirror } | undefined)?.openrouter ?? {
+        available: false,
+      };
+    setMirror(mirrorBlock);
+  }, []);
 
   useEffect(() => {
     async function load() {
       try {
         const res = await fetch('/api/settings/llm-credentials');
         if (!res.ok) throw new Error('Failed to load');
-        const data = await res.json();
-        const block: MaskedBlock = data.openrouter ?? {
-          default: { configured: false, masked: null },
-          topic_search: { configured: false, masked: null },
-          nerd: { configured: false, masked: null },
-        };
-        setCurrent(pickRepresentativeKey(block));
+        applyResponse(await res.json());
       } catch {
         setError('Failed to load API key');
       } finally {
@@ -57,44 +94,52 @@ export function LlmCredentialsSection() {
       }
     }
     load();
-  }, []);
+  }, [applyResponse]);
 
   const dirty = input.trim() !== '';
 
-  async function patch(value: string | null) {
+  async function patch(body: Record<string, unknown>, successMessage: string) {
     setSaving(true);
     setError(null);
-    setSuccess(false);
+    setSuccess(null);
     try {
-      // Fan the key out to every legacy bucket so the loader picks it up
-      // regardless of which slot a downstream consumer reads from.
-      const openrouter = ALL_BUCKETS.reduce<Record<string, string | null>>(
-        (acc, b) => ({ ...acc, [b]: value }),
-        {},
-      );
       const res = await fetch('/api/settings/llm-credentials', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ openrouter }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || 'Failed to save');
       }
-      const data = await res.json();
-      const block: MaskedBlock = data.openrouter ?? {
-        default: { configured: false, masked: null },
-        topic_search: { configured: false, masked: null },
-        nerd: { configured: false, masked: null },
-      };
-      setCurrent(pickRepresentativeKey(block));
+      applyResponse(await res.json());
       setInput('');
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+      setSuccess(successMessage);
+      setTimeout(() => setSuccess(null), 3000);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveFromInput(value: string | null) {
+    const openrouter = ALL_BUCKETS.reduce<Record<string, string | null>>(
+      (acc, b) => ({ ...acc, [b]: value }),
+      {},
+    );
+    const msg = value === null ? 'Key removed.' : mirror.available
+      ? 'Key saved + mirrored to Vercel.'
+      : 'Key saved.';
+    await patch({ openrouter }, msg);
+  }
+
+  async function syncFromVercel() {
+    setSyncing(true);
+    try {
+      await patch({ syncFromVercel: { openrouter: true } }, 'Pulled from Vercel.');
+    } finally {
+      setSyncing(false);
     }
   }
 
@@ -117,33 +162,42 @@ export function LlmCredentialsSection() {
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <h2 className="text-sm font-semibold text-text-primary">OpenRouter API key</h2>
-            <p className="mt-1 text-xs text-text-muted">
-              One key drives every model call across Cortex. Stored encrypted; falls back to the{' '}
-              <code className="font-mono text-text-secondary">OPENROUTER_API_KEY</code> env var if blank.
+            <h2 className="text-[15px] font-semibold text-text-primary">OpenRouter API key</h2>
+            <p className="mt-1 text-[13px] text-text-muted">
+              One key drives every model call across Cortex. Saving here writes to the DB
+              <em> and</em> pushes the same value up to Vercel&apos;s{' '}
+              <code className="font-mono text-text-secondary">OPENROUTER_API_KEY</code>{' '}
+              env var — so the two sources never drift.
             </p>
           </div>
           <a
             href="https://openrouter.ai/settings/keys"
             target="_blank"
             rel="noreferrer"
-            className="inline-flex shrink-0 items-center gap-1.5 text-xs text-text-muted transition-colors hover:text-accent-text"
+            className="inline-flex shrink-0 items-center gap-1.5 text-[12px] text-text-muted transition-colors hover:text-accent-text"
           >
             <ExternalLink size={12} /> Manage keys on OpenRouter
           </a>
         </div>
 
+        <VercelMirrorPill
+          mirror={mirror}
+          dbConfigured={current.configured}
+          onSync={syncFromVercel}
+          syncing={syncing}
+        />
+
         <div className="rounded-lg border border-nativz-border/70 bg-surface-hover/25 p-4">
           {current.configured && (
             <div className="mb-3 flex items-center justify-between gap-3">
-              <p className="font-mono text-xs text-text-secondary">
-                Saved: {current.masked ?? '••••'}
+              <p className="font-mono text-[12px] text-text-secondary">
+                Saved in DB: {current.masked ?? '••••'}
               </p>
               <button
                 type="button"
-                onClick={() => void patch(null)}
+                onClick={() => void saveFromInput(null)}
                 disabled={saving}
-                className="text-xs text-text-muted hover:text-amber-400/90 disabled:opacity-40"
+                className="text-[12px] text-text-muted hover:text-amber-400/90 disabled:opacity-40"
               >
                 Remove key
               </button>
@@ -155,7 +209,7 @@ export function LlmCredentialsSection() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={current.configured ? 'Replace with a new key…' : 'sk-or-v1-…'}
-            className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent/30"
+            className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 font-mono text-[14px] text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent/30"
           />
         </div>
 
@@ -164,18 +218,105 @@ export function LlmCredentialsSection() {
             type="button"
             onClick={() => {
               if (!dirty) return;
-              void patch(input.trim());
+              void saveFromInput(input.trim());
             }}
             disabled={saving || !dirty}
-            className="flex items-center gap-2 rounded-lg bg-accent-surface px-5 py-2.5 text-sm font-medium text-accent-text transition-colors hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex items-center gap-2 rounded-lg bg-accent-surface px-5 py-2.5 text-[14px] font-medium text-accent-text transition-colors hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : success ? <Check size={14} /> : null}
             {saving ? 'Saving…' : success ? 'Saved' : 'Save API key'}
           </button>
-          {error && <p className="text-xs text-red-400">{error}</p>}
-          {success && <p className="text-xs text-emerald-400">Key updated.</p>}
+          {error && <p className="text-[12px] text-red-400">{error}</p>}
+          {success && <p className="text-[12px] text-emerald-400">{success}</p>}
         </div>
       </div>
     </Card>
+  );
+}
+
+function VercelMirrorPill({
+  mirror,
+  dbConfigured,
+  onSync,
+  syncing,
+}: {
+  mirror: VercelMirror;
+  dbConfigured: boolean;
+  onSync: () => void;
+  syncing: boolean;
+}) {
+  if (!mirror.available) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-nativz-border/60 bg-background/40 px-3 py-2 text-[12px] text-text-muted">
+        <CloudOff size={13} />
+        <span>
+          Vercel sync not configured — add <code className="font-mono">VERCEL_TOKEN</code> and{' '}
+          <code className="font-mono">VERCEL_PROJECT_ID</code> to enable two-way sync.
+        </span>
+      </div>
+    );
+  }
+
+  if (!mirror.configured) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-[12px] text-amber-200/90">
+        <Cloud size={13} />
+        <span>
+          Vercel&apos;s <code className="font-mono">{mirror.envKey}</code> is empty. Saving a key
+          here will create it.
+        </span>
+      </div>
+    );
+  }
+
+  const differs = mirror.differsFromDb && dbConfigured;
+  const matches = !differs && dbConfigured;
+  const envOnly = !dbConfigured && mirror.configured;
+
+  if (matches) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/5 px-3 py-2 text-[12px] text-emerald-300/95">
+        <Cloud size={13} />
+        <span>
+          In sync with Vercel{' '}
+          <code className="font-mono">{mirror.envKey}</code>
+          {mirror.targets && mirror.targets.length > 0 ? ` · ${mirror.targets.join(' · ')}` : ''}
+          {mirror.updatedAt ? ` · updated ${relativeTime(mirror.updatedAt)}` : ''}
+        </span>
+      </div>
+    );
+  }
+
+  // Either the two values differ, or DB is empty while Vercel has a value —
+  // in both cases the user probably wants to pull from Vercel.
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-200/95">
+      <div className="flex items-start gap-2">
+        <Cloud size={13} className="mt-0.5 shrink-0" />
+        <span>
+          {envOnly ? (
+            <>
+              Vercel has a value for <code className="font-mono">{mirror.envKey}</code>
+              {' '}({mirror.masked ?? '••••'}) but the DB is empty.
+            </>
+          ) : (
+            <>
+              Vercel&apos;s <code className="font-mono">{mirror.envKey}</code>{' '}
+              ({mirror.masked ?? '••••'}) differs from the DB key.
+              {mirror.updatedAt ? ` Vercel updated ${relativeTime(mirror.updatedAt)}.` : ''}
+            </>
+          )}
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={onSync}
+        disabled={syncing}
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 px-2.5 py-1 text-[12px] font-medium text-amber-100 transition-colors hover:border-amber-500/60 hover:bg-amber-500/25 disabled:opacity-50"
+      >
+        {syncing ? <Loader2 size={12} className="animate-spin" /> : <ArrowDownFromLine size={12} />}
+        Use Vercel value
+      </button>
+    </div>
   );
 }
