@@ -6,7 +6,7 @@ import { NATIVZ_LOGO_ON_LIGHT_PNG, AC_LOGO_PNG } from '@/lib/brand-logo';
 
 const colors = {
   primary: '#046BD2',
-  purple: '#8B5CF6',
+  purple: '#EC4899',
   bg: '#0f1117',
   surface: '#1a1d2e',
   border: '#2a2f45',

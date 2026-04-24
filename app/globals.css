@@ -20,9 +20,14 @@ summary {
   --nz-cyan-200:    #B2E7FA;
   --nz-cyan-50:     #E5F7FD;
 
-  --nz-purple:      #9314CE;
-  --nz-purple-700:  #7A0FB0;
-  --nz-purple-100:  #E6C9F3;
+  /* Purple was retired from the Nativz palette on 2026-04-24 per Jack —
+     the --nz-purple* token names stay for backwards-compat with any
+     lingering references but now alias to the fuchsia/pink family. New
+     work should reach for `accent2` (which points here) rather than
+     calling the token `purple`. */
+  --nz-purple:      #EC4899; /* fuchsia-500 */
+  --nz-purple-700:  #DB2777; /* fuchsia-600 — hover/pressed */
+  --nz-purple-100:  #FBCFE8; /* fuchsia-100 — tint */
 
   --nz-coral:       #ED6B63;
   --nz-coral-700:   #D84A42;
@@ -81,13 +86,16 @@ summary {
   --accent-surface: rgba(0, 174, 239, 0.12);
   --accent-text: #5BC7F2;
 
-  /* Secondary accent = primary CTA purple. Used for the one-and-only
-     "do this now" color on primary buttons and key actions. */
-  --accent2: var(--nz-purple);
-  --accent2-hover: var(--nz-purple-700);
-  --accent2-surface: rgba(147, 20, 206, 0.12);
-  --accent2-text: #C478E0;
-  --accent2-ring: rgba(147, 20, 206, 0.25);
+  /* Secondary accent — was purple, now fuchsia (retired 2026-04-24). Used
+     for categorical surfaces distinct from the brand accent (cyan) and
+     from emerald/amber/coral status tones. Primary CTAs use `accent`
+     (brand cyan) now; this `accent2` family is for tertiary categorical
+     tints like status pills and team-role badges. */
+  --accent2: #EC4899;              /* fuchsia-500 */
+  --accent2-hover: #DB2777;        /* fuchsia-600 */
+  --accent2-surface: rgba(236, 72, 153, 0.12);
+  --accent2-text: #F472B6;         /* fuchsia-400 — readable on dark */
+  --accent2-ring: rgba(236, 72, 153, 0.25);
 
   /* Focus ring glow (brand cyan, subtle) */
   --focus-ring: rgba(0, 174, 239, 0.18);

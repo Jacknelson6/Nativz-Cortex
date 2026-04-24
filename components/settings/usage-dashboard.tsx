@@ -59,18 +59,19 @@ interface UsageSummary {
   };
 }
 
-// Deterministic palette — first model seen gets slot 0, etc.
+// Deterministic palette — first model seen gets slot 0, etc. Purple +
+// violet were retired 2026-04-24; teal and pink fill the vacated slots.
 const CHART_COLORS = [
   '#00AEEF', // nz-cyan
-  '#9314CE', // nz-purple
+  '#EC4899', // fuchsia
   '#34D399', // emerald
   '#F59E0B', // amber
   '#ED6B63', // nz-coral
   '#38BDF8', // sky
-  '#A78BFA', // violet
+  '#14B8A6', // teal
   '#FB923C', // orange
   '#22D3EE', // cyan-300
-  '#F472B6', // pink
+  '#F472B6', // pink-400
 ];
 
 function colorForIndex(i: number): string {

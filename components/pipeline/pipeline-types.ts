@@ -88,7 +88,7 @@ export const APPROVAL_STATUSES: StatusConfig[] = [
   { value: 'client_approved', label: 'Client approved', color: 'bg-green-500/20 text-green-400 border-green-500/30' },
   { value: 'needs_revision', label: 'Needs revision', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
   { value: 'revised', label: 'Revised', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-  { value: 'sent_to_paid_media', label: 'Sent to paid media', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+  { value: 'sent_to_paid_media', label: 'Sent to paid media', color: 'bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/30' },
 ];
 
 export const BOOSTING_STATUSES: StatusConfig[] = [

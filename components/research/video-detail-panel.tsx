@@ -20,7 +20,7 @@ import type { TopicSearchVideoRow } from '@/lib/scrapers/types';
 const PLATFORM_COLORS: Record<string, string> = {
   tiktok: 'bg-pink-500/10 text-pink-400',
   youtube: 'bg-red-500/10 text-red-400',
-  instagram: 'bg-purple-500/10 text-purple-400',
+  instagram: 'bg-fuchsia-500/10 text-fuchsia-400',
 };
 
 const PLATFORM_LABELS: Record<string, string> = {

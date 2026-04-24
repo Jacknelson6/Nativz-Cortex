@@ -20,6 +20,7 @@ import { INFRA_CACHE_TAG, INFRA_CACHE_TTL } from '../cache';
 import type { DateRange } from '@/lib/types/reporting';
 import { presetLabel } from '@/lib/reporting/date-presets';
 import type { DateRangePreset } from '@/lib/types/reporting';
+import { rangeToUtcIso } from '@/lib/reporting/range-utc';
 
 interface ActorRollup {
   actor: string;
@@ -46,8 +47,8 @@ interface ApifyAccount {
 const getApifyData = unstable_cache(
   async (range: DateRange): Promise<{ actors: ActorRollup[]; account: ApifyAccount }> => {
     const admin = createAdminClient();
-    const startIso = new Date(`${range.start}T00:00:00`).toISOString();
-    const endIso = new Date(`${range.end}T23:59:59.999`).toISOString();
+    // Pin range to admin TZ (see lib/reporting/range-utc).
+    const { startIso, endIso } = rangeToUtcIso(range);
 
     const [runsRes, account] = await Promise.all([
       admin

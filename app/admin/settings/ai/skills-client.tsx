@@ -209,7 +209,7 @@ export function AISettingsSkillsClient({ clients }: { clients: ClientOption[] })
                       className={cn(
                         'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium',
                         s.source === 'upload'
-                          ? 'border-purple-400/30 bg-purple-400/10 text-purple-300'
+                          ? 'border-fuchsia-400/30 bg-fuchsia-400/10 text-fuchsia-300'
                           : 'border-nativz-border text-text-muted',
                       )}
                     >

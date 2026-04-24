@@ -68,13 +68,13 @@ export default function AdminLoginPage() {
         <div className={`absolute inset-0 ${
           isAC
             ? 'bg-gradient-to-br from-[#36D1C2]/25 via-transparent to-[#2BB5A8]/15'
-            : 'bg-gradient-to-br from-[#046BD2]/20 via-transparent to-[#8B5CF6]/10'
+            : 'bg-gradient-to-br from-[#046BD2]/20 via-transparent to-[#EC4899]/10'
         }`} />
         <div className={`absolute -top-40 -left-40 h-80 w-80 rounded-full blur-[100px] ${
           isAC ? 'bg-[#36D1C2]/20' : 'bg-[#046BD2]/15'
         }`} />
         <div className={`absolute -bottom-20 -right-20 h-60 w-60 rounded-full blur-[80px] ${
-          isAC ? 'bg-[#2BB5A8]/15' : 'bg-[#8B5CF6]/10'
+          isAC ? 'bg-[#2BB5A8]/15' : 'bg-[#EC4899]/10'
         }`} />
         <div className={`absolute top-1/3 right-1/4 h-40 w-40 rounded-full blur-[60px] ${
           isAC ? 'bg-[#36D1C2]/10' : 'bg-[#046BD2]/8'

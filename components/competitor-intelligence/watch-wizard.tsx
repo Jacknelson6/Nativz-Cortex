@@ -262,7 +262,7 @@ export function WatchWizard({ clients }: { clients: Client[] }) {
           type="button"
           onClick={submit}
           disabled={submitting || validRows.length === 0}
-          className="inline-flex items-center gap-2 rounded-full bg-[#9314CE] px-6 py-2.5 text-[11px] font-semibold uppercase tracking-[2px] text-white transition-colors hover:bg-[#7A0FB0] disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-full bg-accent px-6 py-2.5 text-[11px] font-semibold uppercase tracking-[2px] text-white transition-colors hover:bg-accent/90 disabled:opacity-60"
           style={{ fontFamily: 'Jost, system-ui, sans-serif' }}
         >
           {submitting ? 'Setting up…' : `Start watching ${validRows.length || ''}`.trim()}

@@ -5,8 +5,10 @@ type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'pur
 // Status variants route through brand tokens (--status-*) so they stop
 // reading as raw Tailwind. `emerald` is kept as an explicit alias to
 // `success` for historical call-sites that named it literally. `coral`
-// added 2026-04-22 for the brand's accent/urgency tone — replaces `purple`
-// as the "high signal" variant per .impeccable.md ("purple is CTA only").
+// added 2026-04-22 for the brand's accent/urgency tone. The `purple`
+// variant name is retained for backwards-compat with existing call
+// sites, but the token it points to (`--accent2`) was rewired to
+// fuchsia on 2026-04-24 — purple was retired from the palette.
 const variantStyles: Record<BadgeVariant, string> = {
   default: 'bg-surface-hover text-text-muted ring-1 ring-inset ring-nativz-border',
   mono: 'bg-surface-hover text-text-muted ring-1 ring-inset ring-nativz-border',

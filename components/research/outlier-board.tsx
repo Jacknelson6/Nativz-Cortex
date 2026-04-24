@@ -14,7 +14,7 @@ function formatNumber(n: number): string {
 const PLATFORM_COLORS: Record<string, string> = {
   tiktok: 'border-pink-500/30',
   youtube: 'border-red-500/30',
-  instagram: 'border-purple-500/30',
+  instagram: 'border-fuchsia-500/30',
 };
 
 function OutlierCard({ video, rank }: { video: TopicSearchVideoRow; rank: number }) {

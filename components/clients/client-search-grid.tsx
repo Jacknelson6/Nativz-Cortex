@@ -60,12 +60,14 @@ const STAGGER_MS = 28;
 // colors as literal class strings so Tailwind's JIT sees them and doesn't
 // tree-shake — `bg-${x}` patterns would break the build.
 
-type ColorKey = 'cyan' | 'purple' | 'coral' | 'emerald' | 'amber' | 'rose' | 'teal' | 'slate';
+// 'purple' key retained for backwards-compat with any clients already
+// tagged that color — renders as fuchsia now, no data migration needed.
+type ColorKey = 'cyan' | 'fuchsia' | 'coral' | 'emerald' | 'amber' | 'rose' | 'teal' | 'slate' | 'purple';
 
 const GROUP_COLORS: { key: ColorKey; label: string; dot: string; soft: string; text: string }[] = [
-  { key: 'cyan',    label: 'Cyan',    dot: 'bg-[#00AEEF]', soft: 'bg-[#00AEEF]/10',   text: 'text-[#5CC8F2]' },
-  { key: 'purple',  label: 'Purple',  dot: 'bg-[#9314CE]', soft: 'bg-[#9314CE]/10',   text: 'text-[#B85CE3]' },
-  { key: 'coral',   label: 'Coral',   dot: 'bg-[#ED6B63]', soft: 'bg-[#ED6B63]/10',   text: 'text-[#F08A83]' },
+  { key: 'cyan',    label: 'Cyan',    dot: 'bg-[#00AEEF]',   soft: 'bg-[#00AEEF]/10',   text: 'text-[#5CC8F2]' },
+  { key: 'fuchsia', label: 'Fuchsia', dot: 'bg-fuchsia-500', soft: 'bg-fuchsia-500/10', text: 'text-fuchsia-300' },
+  { key: 'coral',   label: 'Coral',   dot: 'bg-[#ED6B63]',   soft: 'bg-[#ED6B63]/10',   text: 'text-[#F08A83]' },
   { key: 'emerald', label: 'Emerald', dot: 'bg-emerald-500', soft: 'bg-emerald-500/10', text: 'text-emerald-400' },
   { key: 'amber',   label: 'Amber',   dot: 'bg-amber-500',   soft: 'bg-amber-500/10',   text: 'text-amber-400' },
   { key: 'rose',    label: 'Rose',    dot: 'bg-rose-500',    soft: 'bg-rose-500/10',    text: 'text-rose-400' },
@@ -73,8 +75,13 @@ const GROUP_COLORS: { key: ColorKey; label: string; dot: string; soft: string; t
   { key: 'slate',   label: 'Slate',   dot: 'bg-slate-500',   soft: 'bg-slate-500/10',   text: 'text-slate-300' },
 ];
 
+// Legacy: any row tagged `purple` in the DB renders with fuchsia styling
+// (the color picker no longer offers Purple). Same entry, swapped styling.
+const LEGACY_COLOR_MAP: Record<string, ColorKey> = { purple: 'fuchsia' };
+
 function colorStyles(key: string | undefined) {
-  return GROUP_COLORS.find((c) => c.key === key) ?? GROUP_COLORS[GROUP_COLORS.length - 1];
+  const resolved = key && LEGACY_COLOR_MAP[key] ? LEGACY_COLOR_MAP[key] : key;
+  return GROUP_COLORS.find((c) => c.key === resolved) ?? GROUP_COLORS[GROUP_COLORS.length - 1];
 }
 
 function normalizeServices(raw: string[]): string[] {

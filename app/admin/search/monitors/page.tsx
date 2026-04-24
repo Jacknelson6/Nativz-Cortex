@@ -67,7 +67,7 @@ export default async function TrendMonitorsPage() {
           </div>
           <Link
             href="/admin/search/monitors/new"
-            className="inline-flex items-center gap-2 rounded-full bg-[#9314CE] px-5 py-2 text-xs font-semibold uppercase tracking-[2px] text-white transition-colors hover:bg-[#7A0FB0]"
+            className="inline-flex items-center gap-2 rounded-full bg-accent px-5 py-2 text-xs font-semibold uppercase tracking-[2px] text-white transition-colors hover:bg-accent/90"
             style={{ fontFamily: 'Jost, system-ui, sans-serif' }}
           >
             + New monitor

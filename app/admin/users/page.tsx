@@ -470,7 +470,7 @@ function UserCard({
               {u.role}
             </span>
             {u.team_role && (
-              <span className="text-xs px-2 py-0.5 rounded-full shrink-0 bg-purple-500/10 text-purple-400 flex items-center gap-1">
+              <span className="text-xs px-2 py-0.5 rounded-full shrink-0 bg-fuchsia-500/10 text-fuchsia-400 flex items-center gap-1">
                 <Briefcase size={11} />
                 {u.team_role}
               </span>
@@ -609,7 +609,7 @@ function UserCard({
           {u.team_role && (
             <div>
               <p className="text-xs text-text-muted uppercase tracking-wide mb-1.5">Team role</p>
-              <span className="text-sm bg-purple-500/10 text-purple-400 px-3 py-1 rounded-lg inline-flex items-center gap-1.5">
+              <span className="text-sm bg-fuchsia-500/10 text-fuchsia-400 px-3 py-1 rounded-lg inline-flex items-center gap-1.5">
                 <Briefcase size={13} />
                 {u.team_role}
               </span>

@@ -24,7 +24,7 @@ const c = {
   borderLight: '#22222E',
   accent: '#046BD2',
   accentSoft: '#0A2A50',
-  purple: '#8B5CF6',
+  purple: '#EC4899',
   purpleSoft: '#2A1A50',
   green: '#10B981',
   greenSoft: '#0A2E22',

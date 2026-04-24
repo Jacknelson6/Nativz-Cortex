@@ -20,7 +20,7 @@ import type { AgencyBrand } from '@/lib/agency/detect';
 
 const TYPE_CONFIG: Record<ArtifactType, { label: string; icon: React.ReactNode; color: string }> = {
   script: { label: 'Script', icon: <FileText size={12} />, color: 'text-blue-400 bg-blue-400/10 border-blue-400/20' },
-  plan: { label: 'Plan', icon: <Workflow size={12} />, color: 'text-purple-400 bg-purple-400/10 border-purple-400/20' },
+  plan: { label: 'Plan', icon: <Workflow size={12} />, color: 'text-fuchsia-400 bg-fuchsia-400/10 border-fuchsia-400/20' },
   diagram: { label: 'Diagram', icon: <FlaskConical size={12} />, color: 'text-teal-400 bg-teal-400/10 border-teal-400/20' },
   ideas: { label: 'Ideas', icon: <Lightbulb size={12} />, color: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20' },
   hook: { label: 'Hook', icon: <Sparkles size={12} />, color: 'text-orange-400 bg-orange-400/10 border-orange-400/20' },

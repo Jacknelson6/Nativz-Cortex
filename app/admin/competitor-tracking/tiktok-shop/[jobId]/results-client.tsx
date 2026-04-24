@@ -538,7 +538,7 @@ function AccountTypeBadge({
     type === 'brand_store'
       ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
       : type === 'agency_operated'
-        ? 'border-purple-500/30 bg-purple-500/10 text-purple-300'
+        ? 'border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-300'
         : 'border-nativz-border bg-background text-text-muted';
   return (
     <span

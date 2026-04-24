@@ -26,7 +26,7 @@ type Tone = 'brand' | 'action' | 'warn' | 'err' | 'neutral';
 
 const TONE_STYLES: Record<Tone, string> = {
   brand: 'bg-accent/10 text-accent-text',
-  action: 'bg-nz-purple/15 text-nz-purple-100',
+  action: 'bg-accent/15 text-accent-text',
   warn: 'bg-amber-500/10 text-amber-300',
   err: 'bg-red-500/10 text-red-300',
   neutral: 'bg-white/5 text-text-secondary',

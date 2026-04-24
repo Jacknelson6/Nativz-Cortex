@@ -135,7 +135,7 @@ export function AdGeneratorWorkspace({
           <button
             type="button"
             onClick={() => setActiveTab('chat')}
-            className="shrink-0 inline-flex items-center gap-2 rounded-full bg-[#9314CE] px-5 py-2.5 text-xs font-bold uppercase tracking-[2px] text-white transition-colors hover:bg-[#7A0FB0] cursor-pointer"
+            className="shrink-0 inline-flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-xs font-bold uppercase tracking-[2px] text-white transition-colors hover:bg-accent/90 cursor-pointer"
             style={{ fontFamily: 'Jost, system-ui, sans-serif' }}
           >
             <Sparkles size={14} />
@@ -175,11 +175,11 @@ export function AdGeneratorWorkspace({
         {/* Brand DNA callout — elevated when missing, quiet when ready */}
         {dnaTone === 'missing' && (
           <div
-            className="animate-stagger-in rounded-xl border border-[#ED6B63]/35 bg-[#ED6B63]/[0.06] p-4"
+            className="animate-stagger-in rounded-xl border border-nz-coral/35 bg-nz-coral/[0.06] p-4"
             style={{ animationDelay: '200ms' }}
           >
             <div className="flex items-start gap-3">
-              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#ED6B63]/15 text-[#ED6B63]">
+              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-nz-coral/15 text-nz-coral">
                 <ShieldAlert size={17} />
               </span>
               <div className="min-w-0 flex-1">
@@ -318,7 +318,7 @@ function DnaBadge({ tone }: { tone: DnaTone }) {
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-[#ED6B63]/35 bg-[#ED6B63]/10 px-3 py-1.5 text-[11px] font-medium text-[#ED6B63]">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-nz-coral/35 bg-nz-coral/10 px-3 py-1.5 text-[11px] font-medium text-nz-coral">
       <ShieldAlert size={12} />
       Brand DNA missing
     </span>

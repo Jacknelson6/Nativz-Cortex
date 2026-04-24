@@ -49,7 +49,7 @@ function ActionCard({
 
   const ctaClasses =
     tone === 'primary'
-      ? 'bg-[#9314CE] text-white hover:bg-[#7A0FB0]'
+      ? 'bg-accent text-white hover:bg-accent/90'
       : 'border border-cyan-500/40 text-cyan-200 hover:border-cyan-400 hover:bg-cyan-500/10';
 
   return (

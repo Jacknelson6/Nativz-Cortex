@@ -309,8 +309,8 @@ export function ProspectAuditEditor({
             {/* Visual styles */}
             <div className="rounded-2xl border border-nativz-border bg-surface p-5 space-y-4">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-purple-500/15 flex items-center justify-center">
-                  <Palette size={16} className="text-purple-400" />
+                <div className="w-8 h-8 rounded-lg bg-fuchsia-500/15 flex items-center justify-center">
+                  <Palette size={16} className="text-fuchsia-400" />
                 </div>
                 <h3 className="text-base font-semibold text-foreground">Visual styles</h3>
               </div>

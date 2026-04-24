@@ -22,12 +22,14 @@ import { RangeToolbar } from '../range-toolbar';
 import { rangeFromSearchParams } from '../range-utils';
 import type { DateRange, DateRangePreset } from '@/lib/types/reporting';
 import { presetLabel } from '@/lib/reporting/date-presets';
+import { rangeToUtcIso } from '@/lib/reporting/range-utc';
 
 const getCostSummary = unstable_cache(
   async (range: DateRange) => {
     const admin = createAdminClient();
-    const startIso = new Date(`${range.start}T00:00:00`).toISOString();
-    const endIso = new Date(`${range.end}T23:59:59.999`).toISOString();
+    // Pin the local picker range to the admin's timezone so Vercel's UTC
+    // runtime doesn't shift the window by 5-6h vs. what the user sees.
+    const { startIso, endIso } = rangeToUtcIso(range);
 
     const [apifyRes, aiRes] = await Promise.all([
       admin.from('apify_runs').select('cost_usd').gte('started_at', startIso).lte('started_at', endIso),

@@ -147,7 +147,7 @@ function describe(kind: EventKind): { icon: React.ReactNode; tint: string; verb:
     case 'file_deleted':
       return { icon: <Upload size={14} />, tint: 'bg-red-500/15 text-red-400', verb: 'removed' };
     case 'connection_confirmed':
-      return { icon: <Link2 size={14} />, tint: 'bg-purple-500/15 text-purple-400', verb: 'connected' };
+      return { icon: <Link2 size={14} />, tint: 'bg-fuchsia-500/15 text-fuchsia-400', verb: 'connected' };
     case 'phase_viewed':
       return { icon: <Eye size={14} />, tint: 'bg-surface-hover text-text-muted', verb: 'opened' };
   }
