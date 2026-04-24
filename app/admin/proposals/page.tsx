@@ -4,7 +4,6 @@ import { FileText, Plus } from 'lucide-react';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { SectionHeader } from '@/components/admin/section-tabs';
-import { formatCentsCompact } from '@/lib/format/money';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +25,9 @@ export default async function ProposalsPage() {
 
   const { data: proposals } = await admin
     .from('proposals')
-    .select('id, slug, title, status, total_cents, currency, sent_at, signed_at, expires_at, client_id, clients(name, slug)')
+    .select(
+      'id, slug, title, status, agency, external_url, published_at, sent_at, viewed_at, signed_at, paid_at, client_id, clients(name, slug)',
+    )
     .order('created_at', { ascending: false })
     .limit(100);
 
@@ -34,7 +35,7 @@ export default async function ProposalsPage() {
     <div className="cortex-page-gutter max-w-6xl mx-auto space-y-6">
       <SectionHeader
         title="Proposals"
-        description="Cortex-native proposal + package flow. Inline-editable docs that link to Stripe deposits and trigger onboarding on sign."
+        description="Template-driven branded proposals. Pick a template, hit generate, and Cortex publishes a per-prospect folder to the docs repo, fires a branded email, and tracks sign + Stripe end-to-end."
         action={
           <Link
             href="/admin/proposals/new"
@@ -52,15 +53,17 @@ export default async function ProposalsPage() {
               <tr>
                 <th className="px-4 py-2.5 font-medium">Title</th>
                 <th className="px-4 py-2.5 font-medium">Client</th>
+                <th className="px-4 py-2.5 font-medium">Agency</th>
                 <th className="px-4 py-2.5 font-medium">Status</th>
-                <th className="px-4 py-2.5 font-medium text-right">Total</th>
                 <th className="px-4 py-2.5 font-medium">Sent</th>
                 <th className="px-4 py-2.5 font-medium">Signed</th>
+                <th className="px-4 py-2.5 font-medium">Paid</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {proposals.map((p) => {
                 const client = p.clients as { name?: string | null; slug?: string | null } | null;
+                const d = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-US') : '—');
                 return (
                   <tr key={p.id} className="hover:bg-white/5">
                     <td className="px-4 py-2.5">
@@ -69,16 +72,13 @@ export default async function ProposalsPage() {
                       </Link>
                     </td>
                     <td className="px-4 py-2.5 text-text-secondary">{client?.name ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-[11px] text-text-muted">
+                      {p.agency === 'anderson' ? 'AC' : p.agency === 'nativz' ? 'Nativz' : '—'}
+                    </td>
                     <td className="px-4 py-2.5 text-[11px] capitalize text-text-secondary">{p.status}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-text-secondary">
-                      {p.total_cents != null ? formatCentsCompact(p.total_cents, p.currency) : '—'}
-                    </td>
-                    <td className="px-4 py-2.5 text-text-muted">
-                      {p.sent_at ? new Date(p.sent_at).toLocaleDateString('en-US') : '—'}
-                    </td>
-                    <td className="px-4 py-2.5 text-text-muted">
-                      {p.signed_at ? new Date(p.signed_at).toLocaleDateString('en-US') : '—'}
-                    </td>
+                    <td className="px-4 py-2.5 text-text-muted">{d(p.sent_at)}</td>
+                    <td className="px-4 py-2.5 text-text-muted">{d(p.signed_at)}</td>
+                    <td className="px-4 py-2.5 text-text-muted">{d(p.paid_at)}</td>
                   </tr>
                 );
               })}
@@ -88,8 +88,7 @@ export default async function ProposalsPage() {
       ) : (
         <div className="rounded-xl border border-nativz-border bg-surface p-6 text-sm text-text-muted">
           <FileText size={18} className="mb-2 text-text-muted" />
-          No proposals yet. When the editor ships, this page becomes the hub for building and
-          sending them.
+          No proposals yet. Click <strong>New proposal</strong> to pick a template and send one.
         </div>
       )}
     </div>

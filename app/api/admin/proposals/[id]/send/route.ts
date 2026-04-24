@@ -13,5 +13,5 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   const { id } = await ctx.params;
   const result = await sendProposal(id, { admin });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
-  return NextResponse.json({ ok: true, url: result.url, paymentLinkUrl: result.paymentLinkUrl });
+  return NextResponse.json({ ok: true, url: result.url });
 }

@@ -28,15 +28,16 @@ export default async function NewProposalPage() {
     .order('name');
 
   return (
-    <div className="cortex-page-gutter max-w-3xl mx-auto space-y-6">
+    <div className="cortex-page-gutter max-w-4xl mx-auto space-y-6">
       <header className="space-y-2">
         <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-text/80">
           Cortex · admin · proposals
         </p>
         <h1 className="text-2xl font-semibold text-text-primary">New proposal</h1>
         <p className="text-sm text-text-muted">
-          Create a draft. You&rsquo;ll assemble packages + terms on the next screen, then send it
-          to the signer.
+          Pick a template and signer. Cortex clones the branded proposal folder into the docs repo,
+          commits it, and fires the &ldquo;Review &amp; sign&rdquo; email. Signing, PDF, and Stripe
+          happen on the docs host.
         </p>
       </header>
 
