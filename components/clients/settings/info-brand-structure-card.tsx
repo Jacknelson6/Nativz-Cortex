@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Boxes, Plus, X } from 'lucide-react';
@@ -11,6 +11,11 @@ import { InfoCard } from './info-card';
  * inline-edit (add chip, click X to remove), so this card has no Edit/Save
  * toggle — adds and removes commit immediately. The card chrome matches the
  * rest of the brand stack so visual rhythm stays consistent.
+ *
+ * Writes are serialized through `pendingRef` so two rapid adds can't race.
+ * Rollback values come from refs that mirror state synchronously — closure
+ * snapshots would freeze before the prior queued write committed and silently
+ * drop the most-recent entry on failure.
  */
 
 export function InfoBrandStructureCard({
@@ -25,30 +30,58 @@ export function InfoBrandStructureCard({
   const router = useRouter();
   const [products, setProducts] = useState<string[]>(initialProducts);
   const [aliases, setAliases] = useState<string[]>(initialAliases);
+  const productsRef = useRef(products);
+  const aliasesRef = useRef(aliases);
+  useEffect(() => { productsRef.current = products; }, [products]);
+  useEffect(() => { aliasesRef.current = aliases; }, [aliases]);
+  const pendingRef = useRef<Promise<unknown>>(Promise.resolve());
 
   async function patch(fields: { products?: string[]; brand_aliases?: string[] }) {
-    const prev = { products, aliases };
-    if (fields.products) setProducts(fields.products);
-    if (fields.brand_aliases) setAliases(fields.brand_aliases);
-    try {
-      const res = await fetch(`/api/clients/${clientId}/brand-profile`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(fields),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        toast.error((d as { error?: string }).error || 'Failed to save');
-        setProducts(prev.products);
-        setAliases(prev.aliases);
-        return;
+    const run = async () => {
+      const undoProducts = fields.products ? productsRef.current : undefined;
+      const undoAliases = fields.brand_aliases ? aliasesRef.current : undefined;
+      if (fields.products) {
+        productsRef.current = fields.products;
+        setProducts(fields.products);
       }
-      router.refresh();
-    } catch {
-      toast.error('Something went wrong');
-      setProducts(prev.products);
-      setAliases(prev.aliases);
-    }
+      if (fields.brand_aliases) {
+        aliasesRef.current = fields.brand_aliases;
+        setAliases(fields.brand_aliases);
+      }
+      try {
+        const res = await fetch(`/api/clients/${clientId}/brand-profile`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(fields),
+        });
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          toast.error((d as { error?: string }).error || 'Failed to save');
+          if (undoProducts !== undefined) {
+            productsRef.current = undoProducts;
+            setProducts(undoProducts);
+          }
+          if (undoAliases !== undefined) {
+            aliasesRef.current = undoAliases;
+            setAliases(undoAliases);
+          }
+          return;
+        }
+        router.refresh();
+      } catch {
+        toast.error('Something went wrong');
+        if (undoProducts !== undefined) {
+          productsRef.current = undoProducts;
+          setProducts(undoProducts);
+        }
+        if (undoAliases !== undefined) {
+          aliasesRef.current = undoAliases;
+          setAliases(undoAliases);
+        }
+      }
+    };
+    pendingRef.current = pendingRef.current.then(run, run);
+    return pendingRef.current;
   }
 
   return (

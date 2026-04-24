@@ -69,8 +69,10 @@ export const InfoCard = forwardRef<HTMLElement, InfoCardProps>(function InfoCard
   const localRef = useRef<HTMLElement | null>(null);
 
   // Keyboard shortcuts while editing:
-  //   Escape          → cancel
-  //   Cmd/Ctrl+Enter  → save (only when dirty)
+  //   Escape          → cancel (skipped during IME composition so CJK input
+  //                     popups dismiss naturally instead of cancelling the form)
+  //   Cmd/Ctrl+Enter  → save when dirty (matches Slack/GitHub conventions for
+  //                     submitting from inside multi-line text fields)
   // Scoped to focus within this card so one page with multiple cards in
   // edit mode doesn't fight over keystrokes.
   useEffect(() => {
@@ -78,6 +80,10 @@ export const InfoCard = forwardRef<HTMLElement, InfoCardProps>(function InfoCard
     const el = localRef.current;
     if (!el) return;
     function onKey(e: KeyboardEvent) {
+      // IME composition: Esc/Enter belong to the input method, not us.
+      // `keyCode === 229` covers older Safari that doesn't expose isComposing.
+      if (e.isComposing || e.keyCode === 229) return;
+
       if (e.key === 'Escape' && cancel?.onClick && !cancel.loading) {
         e.preventDefault();
         cancel.onClick();
@@ -86,6 +92,7 @@ export const InfoCard = forwardRef<HTMLElement, InfoCardProps>(function InfoCard
       if (
         (e.metaKey || e.ctrlKey) &&
         e.key === 'Enter' &&
+        !e.repeat &&
         save?.onClick &&
         save.dirty !== false &&
         !save.loading

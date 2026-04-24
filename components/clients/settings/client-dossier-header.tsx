@@ -99,7 +99,11 @@ export function ClientDossierHeader({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
-  const abbreviation = name.split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 2);
+  // Empty / whitespace-only names would map an empty array of word-firsts and
+  // call .toUpperCase() on undefined; guard so the dossier still paints.
+  const abbreviation = name.trim()
+    ? name.split(/\s+/).map((w) => w[0] ?? '').join('').toUpperCase().slice(0, 2)
+    : '?';
   const linkedSocials = socials?.filter((s) => s.status === 'linked') ?? [];
 
   return (

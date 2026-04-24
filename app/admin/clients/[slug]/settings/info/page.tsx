@@ -96,6 +96,7 @@ export default async function ClientSettingsInfoPage({
 
   // Parallel SSR queries — dossier counts + brand DNA timestamp. Pills hydrate
   // immediately so the page never renders a "—" first paint.
+  type DnaRow = { updated_at: string } | null;
   const [dnaRow, socialRows, competitorRows] = await Promise.all([
     client.brand_dna_status && client.brand_dna_status !== 'none'
       ? admin
@@ -106,8 +107,8 @@ export default async function ClientSettingsInfoPage({
         .is('metadata->superseded_by', null)
         .order('created_at', { ascending: false })
         .limit(1)
-        .maybeSingle()
-      : Promise.resolve({ data: null }),
+        .maybeSingle<DnaRow>()
+      : Promise.resolve({ data: null as DnaRow }),
     admin
       .from('social_profiles')
       .select('platform, username, no_account, late_account_id')
@@ -119,7 +120,7 @@ export default async function ClientSettingsInfoPage({
       .eq('client_id', client.id),
   ]);
 
-  const brandDnaUpdatedAt = (dnaRow.data as { updated_at?: string } | null)?.updated_at ?? null;
+  const brandDnaUpdatedAt = dnaRow.data?.updated_at ?? null;
 
   const initialSlots = PLATFORMS.map((platform) => {
     const row = (socialRows.data ?? []).find((r) => r.platform === platform);
@@ -275,7 +276,12 @@ export default async function ClientSettingsInfoPage({
           title="Contacts"
           description="Company contacts and roles."
         />
-        <ContactsSettingsView slug={slug} embedded companyOnly />
+        <ContactsSettingsView
+          slug={slug}
+          embedded
+          companyOnly
+          initialClient={{ id: client.id, name: client.name ?? '' }}
+        />
         <div className="flex items-center gap-2 pt-1">
           <Users size={12} className="text-text-muted" aria-hidden />
           <span className="text-[11px] italic text-text-muted">

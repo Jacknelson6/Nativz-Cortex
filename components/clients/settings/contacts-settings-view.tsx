@@ -30,17 +30,24 @@ export function ContactsSettingsView({
   slug,
   embedded,
   companyOnly,
+  initialClient,
 }: {
   slug: string;
   embedded?: boolean;
   companyOnly?: boolean;
+  /** Pre-fetched client identity. When supplied (typically from a server
+   *  component that already has it), the view skips the /api/clients/:slug
+   *  round-trip — and when `companyOnly` is also set, portal contacts are
+   *  never fetched at all. */
+  initialClient?: ContactsPayload;
 }) {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialClient);
   const [error, setError] = useState<string | null>(null);
-  const [client, setClient] = useState<ContactsPayload | null>(null);
+  const [client, setClient] = useState<ContactsPayload | null>(initialClient ?? null);
   const [portalContacts, setPortalContacts] = useState<PortalContact[]>([]);
 
   useEffect(() => {
+    if (initialClient && companyOnly) return;
     let cancelled = false;
     async function load() {
       try {
@@ -54,7 +61,7 @@ export function ContactsSettingsView({
           portalContacts?: PortalContact[];
         };
         if (cancelled) return;
-        setClient(d.client);
+        if (!initialClient) setClient(d.client);
         setPortalContacts(d.portalContacts ?? []);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load');
@@ -66,7 +73,7 @@ export function ContactsSettingsView({
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [slug, initialClient, companyOnly]);
 
   if (error) {
     return <div className="flex min-h-[20vh] items-center justify-center p-6 text-sm text-red-400">{error}</div>;

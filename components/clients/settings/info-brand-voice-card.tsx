@@ -48,13 +48,17 @@ export function InfoBrandVoiceCard({
 
   useEffect(() => {
     if (initial) return;
-    let cancelled = false;
+    const cancelled = { current: false };
     void load(cancelled);
-    return () => { cancelled = true; };
+    return () => { cancelled.current = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, initial]);
 
-  async function load(cancelledFlag?: boolean) {
+  // `cancelled` is passed as a ref-shaped object so the effect's cleanup can
+  // flip it after `load()` has already started — passing a boolean by value
+  // would freeze the flag at call-time and the late response would still
+  // overwrite state if the user switched clients mid-fetch.
+  async function load(cancelled?: { current: boolean }) {
     setError(null);
     try {
       const res = await fetch(`/api/clients/${encodeURIComponent(slug)}`);
@@ -63,14 +67,14 @@ export function InfoBrandVoiceCard({
         throw new Error((d as { error?: string }).error || 'Failed to load client');
       }
       const d = (await res.json()) as { client: VoicePayload };
-      if (cancelledFlag) return;
+      if (cancelled?.current) return;
       setSaved(d.client);
       setVoice(d.client.brand_voice ?? '');
       setAudience(d.client.target_audience ?? '');
       setKeywords((d.client.topic_keywords ?? []).join(', '));
       setDescription(d.client.description ?? '');
     } catch (e) {
-      if (cancelledFlag) return;
+      if (cancelled?.current) return;
       setError(e instanceof Error ? e.message : 'Failed to load');
     }
   }
