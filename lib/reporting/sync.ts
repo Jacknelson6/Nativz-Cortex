@@ -71,14 +71,14 @@ export async function syncSocialProfile(
       }),
     ]);
 
-    // Per-video watch time + retention for YouTube posts.
-    //
-    // Zernio's standard /analytics endpoint only returns views/likes/etc for
-    // each post; watch time lives on /analytics/youtube/daily-views?videoId=X.
-    // We fan out in parallel — typical account has 10–40 YT videos in the
-    // window. TikTok has no equivalent watch-time endpoint in Zernio, so
-    // ytAggregates stays empty for non-YT profiles and the post_metrics rows
-    // are upserted with zeros.
+    // Per-video watch time + retention. YouTube only — Zernio's standard
+    // /analytics endpoint returns views/likes/etc, but watch time lives on
+    // /analytics/youtube/daily-views?videoId=X. We fan out across every
+    // YouTube video we've ever indexed for this profile (not just the ones
+    // published in the sync window), because YT daily-views returns ~30
+    // days of per-day data per video and an evergreen video from months
+    // ago can still be getting views today. TikTok has no equivalent
+    // endpoint on Zernio, so ytAggregates stays empty for non-YT profiles.
     interface YtAgg {
       watchSec: number;
       avgViewDur: number;
@@ -89,26 +89,26 @@ export async function syncSocialProfile(
     const ytWatchMinutesByDay = new Map<string, number>();
 
     if (platform === 'youtube') {
-      // Video list to fan out watch-time fetches over:
-      //
-      //  1. Every YouTube video for this profile we've ever indexed
-      //     (post_metrics.platform_post_id — Zernio's native ID → YouTube
-      //     videoId). YT daily-views returns ~30 days of per-day data per
-      //     video, so an evergreen video published 6 months ago that's
-      //     still getting views today contributes its watch time to today's
-      //     account-level rollup. Without this, `watch_time_seconds` on
-      //     platform_snapshots only reflected videos published inside the
-      //     sync window — a big undercount for channels with any back catalog.
-      //
-      //  2. Any newly-published videos surfaced in this sync's `posts` that
-      //     haven't made it into post_metrics yet. We add them here so the
-      //     first sync after publish already has their watch data.
-      const historicalRows = await adminClient
+      // Sources for the video list:
+      //  1. Every YT video we've previously indexed for this profile, via
+      //     post_metrics.platform_post_id. Catches evergreen content.
+      //  2. Any new videos surfaced in this sync's `posts` that haven't
+      //     landed in post_metrics yet. First-sync after publish.
+      const { data: historicalData, error: historicalErr } = await adminClient
         .from('post_metrics')
         .select('external_post_id, platform_post_id')
         .eq('social_profile_id', profile.id)
         .eq('platform', 'youtube')
         .not('platform_post_id', 'is', null);
+
+      if (historicalErr) {
+        // Don't silently drop — a failed lookup means we fall back to
+        // window-only fan-out and undercount evergreen watch time. Surface
+        // it so ops can notice and fix.
+        result.errors.push(
+          `Failed to load historical YT videos for ${profile.id}: ${historicalErr.message}`,
+        );
+      }
 
       const videoMap = new Map<string, { postId: string; platformPostId: string }>();
       // Window posts first (freshest platformPostId lookup).
@@ -118,7 +118,7 @@ export async function syncSocialProfile(
         }
       }
       // Then historical — skip any already in the map.
-      for (const r of historicalRows.data ?? []) {
+      for (const r of historicalData ?? []) {
         const ppid = (r.platform_post_id as string | null) ?? null;
         const pid = (r.external_post_id as string | null) ?? null;
         if (!ppid || videoMap.has(ppid)) continue;
