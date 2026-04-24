@@ -91,3 +91,7 @@ vectors.db-wal
 # Local absolute paths to Goldback product shots (regenerate: find … > scripts/.goldback-idaho-image-pool.txt)
 scripts/.goldback-idaho-image-pool.txt
 tmp/
+
+# Accessibility / DOM snapshots dumped by Playwright MCP during local debugging.
+# These are working artifacts, not source — keep them out of commits.
+/*-snapshot.md

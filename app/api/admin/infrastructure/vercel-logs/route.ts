@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAdminRoute } from '@/lib/admin/require-admin';
 
 /**
  * Proxy for Vercel's deployment-events API so the client-side log stream
@@ -9,12 +8,24 @@ import { createAdminClient } from '@/lib/supabase/admin';
  * before every hit because logs can contain request payloads.
  *
  * Vercel docs: `GET /v3/deployments/{id}/events` returns build + runtime
- * events. We pass through `since`, `direction`, `limit`, `builds`, and
- * `follow` so the client can poll forward or fetch backward in one shape.
+ * events. We pass through `since`, `direction`, `limit`, and `builds` so
+ * the client can poll forward or fetch backward in one shape.
+ *
+ * Security posture:
+ *   1. Role-gated (requireAdminRoute).
+ *   2. Deployment ID is format-validated (must start with `dpl_`) and
+ *      verified to belong to VERCEL_PROJECT_ID before we proxy. Without
+ *      this, a leaked admin session could pull logs for any deployment
+ *      in the Vercel team.
+ *   3. Simple in-process rate limit (60 req/min per admin user) so a
+ *      runaway poll loop can't burn Vercel's API quota.
  */
 
 const QuerySchema = z.object({
-  deploymentId: z.string().min(1),
+  deploymentId: z
+    .string()
+    .min(1)
+    .regex(/^dpl_[A-Za-z0-9]+$/, 'deploymentId must start with dpl_ and be alphanumeric'),
   since: z.coerce.number().int().nonnegative().optional(),
   direction: z.enum(['forward', 'backward']).default('backward'),
   limit: z.coerce.number().int().min(1).max(200).default(60),
@@ -32,21 +43,81 @@ export interface VercelLogEvent {
   path?: string;
 }
 
-export async function GET(req: Request) {
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+// Per-user in-process rate limiter — token-bucket by-the-minute. Cortex
+// runs as a single Vercel function instance (Fluid Compute), so a Map is
+// sufficient. If we ever scale to multiple instances per region this
+// would need a shared store, but the limit here is a courtesy cap on our
+// own admins, not a security boundary.
+const RATE_LIMIT_MAX = 60; // requests per window
+const RATE_WINDOW_MS = 60_000;
+const rateState = new Map<string, { count: number; resetAt: number }>();
 
-  const admin = createAdminClient();
-  const { data: me } = await admin
-    .from('users')
-    .select('role, is_super_admin')
-    .eq('id', user.id)
-    .single();
-  if (me?.role !== 'admin' && !me?.is_super_admin) {
-    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+function checkRateLimit(userId: string): { ok: boolean; retryAfter?: number } {
+  const now = Date.now();
+  const entry = rateState.get(userId);
+  if (!entry || entry.resetAt <= now) {
+    rateState.set(userId, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    return { ok: true };
+  }
+  if (entry.count >= RATE_LIMIT_MAX) {
+    return { ok: false, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
+  }
+  entry.count += 1;
+  return { ok: true };
+}
+
+// Belt-and-braces check that the requested deployment actually belongs to
+// our project. One round-trip to Vercel's deployment-detail endpoint;
+// cached in-process for 10 minutes per deployment ID so the verification
+// doesn't dominate latency on the polling loop.
+const deploymentProjectCache = new Map<string, { ok: boolean; expires: number }>();
+const DEPLOYMENT_CACHE_MS = 10 * 60 * 1000;
+
+async function verifyDeploymentBelongsToProject(
+  deploymentId: string,
+  token: string,
+  teamId: string | null,
+  expectedProjectId: string,
+): Promise<boolean> {
+  const now = Date.now();
+  const cached = deploymentProjectCache.get(deploymentId);
+  if (cached && cached.expires > now) return cached.ok;
+
+  try {
+    const params = new URLSearchParams();
+    if (teamId) params.set('teamId', teamId);
+    const res = await fetch(
+      `https://api.vercel.com/v13/deployments/${deploymentId}?${params.toString()}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(5000),
+      },
+    );
+    if (!res.ok) {
+      deploymentProjectCache.set(deploymentId, { ok: false, expires: now + DEPLOYMENT_CACHE_MS });
+      return false;
+    }
+    const body = (await res.json()) as { projectId?: string };
+    const matches = body.projectId === expectedProjectId;
+    deploymentProjectCache.set(deploymentId, { ok: matches, expires: now + DEPLOYMENT_CACHE_MS });
+    return matches;
+  } catch {
+    // On verify-fetch failure, fail closed — better to reject a legit
+    // deployment than to expose unrelated logs on a transient error.
+    return false;
+  }
+}
+
+export async function GET(req: Request) {
+  const gate = await requireAdminRoute();
+  if (gate instanceof NextResponse) return gate;
+
+  const rate = checkRateLimit(gate.user.id);
+  if (!rate.ok) {
+    return NextResponse.json(
+      { error: 'rate limited — slow down the poll interval' },
+      { status: 429, headers: { 'Retry-After': String(rate.retryAfter ?? 60) } },
+    );
   }
 
   const url = new URL(req.url);
@@ -57,9 +128,23 @@ export async function GET(req: Request) {
   const { deploymentId, since, direction, limit, builds } = parsed.data;
 
   const token = process.env.VERCEL_TOKEN?.trim();
-  const teamId = process.env.VERCEL_ORG_ID?.trim() || process.env.VERCEL_TEAM_ID?.trim();
+  const teamId = process.env.VERCEL_ORG_ID?.trim() || process.env.VERCEL_TEAM_ID?.trim() || null;
+  const projectId = process.env.VERCEL_PROJECT_ID?.trim() || null;
   if (!token) {
     return NextResponse.json({ error: 'VERCEL_TOKEN not configured' }, { status: 503 });
+  }
+
+  // Only allow deployments tied to our project (when we know our project).
+  // If VERCEL_PROJECT_ID isn't set we fall back to relying on the team-
+  // scoped token — still bounded, just less specific.
+  if (projectId) {
+    const belongs = await verifyDeploymentBelongsToProject(deploymentId, token, teamId, projectId);
+    if (!belongs) {
+      return NextResponse.json(
+        { error: 'deployment does not belong to this project' },
+        { status: 404 },
+      );
+    }
   }
 
   const params = new URLSearchParams();

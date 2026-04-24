@@ -39,32 +39,43 @@ export function Sparkline({ data, state = 'healthy', width = 96, ariaLabel }: Pr
   const height = 28;
   const colorClass = STATE_COLOR[state];
 
+  // Summary readable by screen readers — the bars are graphical, so we
+  // follow them with a visually-hidden tabular readout.
+  const total = data.reduce((acc, v) => acc + v, 0);
+  const srSummary = ariaLabel
+    ? `${ariaLabel}: ${data.map((v, i) => `day ${i + 1} ${v}`).join(', ')}. Total ${total}.`
+    : null;
+
   return (
-    <svg
-      role={ariaLabel ? 'img' : 'presentation'}
-      aria-label={ariaLabel}
-      width={width}
-      height={height}
-      viewBox={`0 0 ${width} ${height}`}
-      className="block shrink-0"
-    >
-      {data.map((v, i) => {
-        // Floor to 2px minimum so empty days still register visually.
-        const h = Math.max(2, Math.round((v / max) * height));
-        const x = i * barW + (barW - barInnerW) / 2;
-        const y = height - h;
-        return (
-          <rect
-            key={i}
-            x={x}
-            y={y}
-            width={barInnerW}
-            height={h}
-            rx={0.75}
-            className={colorClass}
-          />
-        );
-      })}
-    </svg>
+    <span className="inline-flex items-center">
+      <svg
+        role={ariaLabel ? 'img' : 'presentation'}
+        aria-label={ariaLabel}
+        aria-hidden={ariaLabel ? undefined : true}
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        className="block shrink-0"
+      >
+        {data.map((v, i) => {
+          // Floor to 2px minimum so empty days still register visually.
+          const h = Math.max(2, Math.round((v / max) * height));
+          const x = i * barW + (barW - barInnerW) / 2;
+          const y = height - h;
+          return (
+            <rect
+              key={i}
+              x={x}
+              y={y}
+              width={barInnerW}
+              height={h}
+              rx={0.75}
+              className={colorClass}
+            />
+          );
+        })}
+      </svg>
+      {srSummary && <span className="sr-only">{srSummary}</span>}
+    </span>
   );
 }

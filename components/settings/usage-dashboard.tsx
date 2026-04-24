@@ -135,13 +135,45 @@ function daysInRange(range: DateRange): number {
 
 type ChartMetric = 'cost' | 'tokens';
 
-export function UsageDashboard() {
-  const [preset, setPreset] = useState<DateRangePreset>('last_30d');
-  const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined);
+interface UsageDashboardProps {
+  /**
+   * Controlled-mode preset. When provided, the dashboard reflects the
+   * caller's range instead of its internal state — used by the Cost tab
+   * to sync with its top-level DateRangePicker toolbar.
+   */
+  controlledPreset?: DateRangePreset;
+  controlledCustomRange?: DateRange;
+  /**
+   * When the caller drives the range from outside, hide the built-in
+   * picker so we don't show two duplicate controls. Settings/AI (where
+   * UsageDashboard stands alone) leaves this false to keep its picker.
+   */
+  hidePicker?: boolean;
+}
+
+export function UsageDashboard({
+  controlledPreset,
+  controlledCustomRange,
+  hidePicker = false,
+}: UsageDashboardProps = {}) {
+  const isControlled = controlledPreset !== undefined;
+  const [internalPreset, setInternalPreset] = useState<DateRangePreset>('last_30d');
+  const [internalCustomRange, setInternalCustomRange] = useState<DateRange | undefined>(undefined);
   const [metric, setMetric] = useState<ChartMetric>('cost');
   const [data, setData] = useState<UsageSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const preset = isControlled ? controlledPreset : internalPreset;
+  const customRange = isControlled ? controlledCustomRange : internalCustomRange;
+  const setPreset = (p: DateRangePreset) => {
+    if (isControlled) return; // parent is source of truth
+    setInternalPreset(p);
+  };
+  const setCustomRange = (r: DateRange) => {
+    if (isControlled) return;
+    setInternalCustomRange(r);
+  };
 
   const resolvedRange = useMemo<DateRange>(
     () => (preset === 'custom' && customRange ? customRange : resolvePresetRange(preset)),
@@ -292,14 +324,18 @@ export function UsageDashboard() {
       {/* Date range picker — same component analytics uses. Supports every */}
       {/* preset (Yesterday / Last 7/28/30/90 / This week/month/year / Last  */}
       {/* week/month) plus a full custom two-month calendar.                */}
-      <div className="flex flex-wrap items-center gap-2">
-        <DateRangePicker
-          value={preset}
-          onChange={setPreset}
-          customRange={customRange}
-          onCustomRangeChange={setCustomRange}
-        />
-      </div>
+      {/* Hidden when the parent (Cost tab) drives the range from a shared  */}
+      {/* toolbar — avoids showing two duplicate pickers on the same page.  */}
+      {!hidePicker && (
+        <div className="flex flex-wrap items-center gap-2">
+          <DateRangePicker
+            value={preset}
+            onChange={setPreset}
+            customRange={customRange}
+            onCustomRangeChange={setCustomRange}
+          />
+        </div>
+      )}
 
       {error && (
         <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4 text-[13px] text-red-300">

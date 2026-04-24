@@ -335,35 +335,43 @@ export async function ApifyTab({ range, preset }: { range: DateRange; preset: Da
               </span>
             </div>
           </header>
-          <div className="grid grid-cols-[minmax(0,1fr)_5rem_6rem_5rem_6rem] items-center gap-3 border-b border-nativz-border/40 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-text-muted">
-            <span>Actor</span>
-            <span className="text-right">Runs</span>
-            <span className="text-right">Spend</span>
-            <span className="text-right">Failures</span>
-            <span className="text-right">Last run</span>
-          </div>
-          {actors.map((a) => (
-            <div
-              key={a.actor}
-              className="grid grid-cols-[minmax(0,1fr)_5rem_6rem_5rem_6rem] items-center gap-3 border-b border-nativz-border/40 px-4 py-2.5 text-sm last:border-b-0"
-            >
-              <span className="truncate font-mono text-[12px] text-text-primary">{a.actor}</span>
-              <span className="text-right text-xs tabular-nums text-text-secondary">{a.runs}</span>
-              <span className="text-right text-xs tabular-nums font-semibold text-text-primary">
-                {formatUsd(a.cost)}
-              </span>
-              <span
-                className={`text-right text-xs tabular-nums ${
-                  a.failures > 0 ? 'text-red-300' : 'text-text-muted'
-                }`}
-              >
-                {a.failures}
-              </span>
-              <span className="text-right text-[12px] text-text-muted">
-                {formatRelative(a.lastSeen)}
-              </span>
+          {/* Below md: horizontal scroll keeps the tabular layout intact
+             rather than breaking the grid into an illegible stack. A
+             min-w-[36rem] inner wrapper forces scroll rather than column
+             crush on narrow viewports. */}
+          <div className="overflow-x-auto">
+            <div className="min-w-[36rem]">
+              <div className="grid grid-cols-[minmax(0,1fr)_5rem_6rem_5rem_6rem] items-center gap-3 border-b border-nativz-border/40 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-text-muted">
+                <span>Actor</span>
+                <span className="text-right">Runs</span>
+                <span className="text-right">Spend</span>
+                <span className="text-right">Failures</span>
+                <span className="text-right">Last run</span>
+              </div>
+              {actors.map((a) => (
+                <div
+                  key={a.actor}
+                  className="grid grid-cols-[minmax(0,1fr)_5rem_6rem_5rem_6rem] items-center gap-3 border-b border-nativz-border/40 px-4 py-2.5 text-sm last:border-b-0"
+                >
+                  <span className="truncate font-mono text-[12px] text-text-primary">{a.actor}</span>
+                  <span className="text-right text-xs tabular-nums text-text-secondary">{a.runs}</span>
+                  <span className="text-right text-xs tabular-nums font-semibold text-text-primary">
+                    {formatUsd(a.cost)}
+                  </span>
+                  <span
+                    className={`text-right text-xs tabular-nums ${
+                      a.failures > 0 ? 'text-red-300' : 'text-text-muted'
+                    }`}
+                  >
+                    {a.failures}
+                  </span>
+                  <span className="text-right text-[12px] text-text-muted">
+                    {formatRelative(a.lastSeen)}
+                  </span>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </section>
       )}
     </div>

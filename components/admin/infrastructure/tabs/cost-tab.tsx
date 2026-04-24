@@ -20,9 +20,8 @@ import { UsageDashboard } from '@/components/settings/usage-dashboard';
 import { ApifyTab } from './apify-tab';
 import { RangeToolbar } from '../range-toolbar';
 import { rangeFromSearchParams } from '../range-utils';
-import type { DateRange } from '@/lib/types/reporting';
+import type { DateRange, DateRangePreset } from '@/lib/types/reporting';
 import { presetLabel } from '@/lib/reporting/date-presets';
-import type { DateRangePreset } from '@/lib/types/reporting';
 
 const getCostSummary = unstable_cache(
   async (range: DateRange) => {
@@ -108,7 +107,11 @@ export async function CostTab({ preset, from, to }: Props) {
         <Stat
           label="Avg / day"
           value={formatUsd(avgPerDay)}
-          sub={`Projected month: ${formatUsd(avgPerDay * 30)}`}
+          sub={
+            days >= 7
+              ? `Projected month: ${formatUsd(avgPerDay * 30)}`
+              : `Based on ${days} day${days === 1 ? '' : 's'} — too short to project`
+          }
         />
       </section>
 
@@ -125,7 +128,13 @@ export async function CostTab({ preset, from, to }: Props) {
             {formatUsd(s.aiSpend)} · {label}
           </span>
         </header>
-        <UsageDashboard />
+        {/* Controlled by the toolbar at the top of this tab — hides the
+           dashboard's own picker so the page has a single canonical range. */}
+        <UsageDashboard
+          controlledPreset={resolvedPreset as DateRangePreset}
+          controlledCustomRange={range}
+          hidePicker
+        />
       </section>
 
       {/* Apify — range-driven, matches the toolbar above. */}

@@ -44,7 +44,16 @@ export function LiveLogStream({
   const scrollRef = useRef<HTMLDivElement>(null);
   const seenIdsRef = useRef<Set<string>>(new Set());
 
-  // Initial backfill + polling loop.
+  // Keep `paused` in a ref so the polling effect doesn't remount (and
+  // re-backfill 80 events) every time the user toggles Pause/Resume.
+  // The effect reads pausedRef.current instead of the closed-over state.
+  const pausedRef = useRef(paused);
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
+
+  // Initial backfill + polling loop. Runs once per deploymentId; pause
+  // state is read via ref so toggling doesn't re-enter the effect.
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -100,7 +109,7 @@ export function LiveLogStream({
       if (cancelled) return;
       function loop() {
         if (cancelled) return;
-        if (!paused) fetchLogs('poll');
+        if (!pausedRef.current) fetchLogs('poll');
         timer = setTimeout(loop, pollIntervalMs);
       }
       timer = setTimeout(loop, pollIntervalMs);
@@ -110,8 +119,7 @@ export function LiveLogStream({
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deploymentId, pollIntervalMs, maxEvents, paused]);
+  }, [deploymentId, pollIntervalMs, maxEvents]);
 
   // Auto-scroll to bottom on new events (unless the user scrolled up).
   useEffect(() => {

@@ -173,20 +173,28 @@ const getRecentRunsCached = unstable_cache(
   { revalidate: INFRA_CACHE_TTL, tags: [INFRA_CACHE_TAG] },
 );
 
+// Rollup capacity. Runs above this ceiling in-range get silently dropped,
+// which would quietly lie to the stats. We fetch up to ROLLUP_LIMIT rows
+// AND get an exact count so the UI can flag truncation rather than
+// pretending the range matches the sample.
+const ROLLUP_LIMIT = 5000;
+
 const getRangedRollupCached = unstable_cache(
   async (range: DateRange) => {
     const admin = createAdminClient();
     const startIso = new Date(`${range.start}T00:00:00`).toISOString();
     const endIso = new Date(`${range.end}T23:59:59.999`).toISOString();
+    // `head: false` returns rows + count in one trip; head: true skips
+    // rows. We want both, so we pay a single query for (rows, count).
     return admin
       .from('topic_searches')
-      .select('status, completed_at, processing_started_at, pipeline_state')
+      .select('status, completed_at, processing_started_at, pipeline_state', { count: 'exact' })
       .eq('topic_pipeline', 'llm_v1')
       .gte('created_at', startIso)
       .lte('created_at', endIso)
-      .limit(1000);
+      .limit(ROLLUP_LIMIT);
   },
-  ['infrastructure-ranged-rollup'],
+  ['infrastructure-ranged-rollup-v2'],
   { revalidate: INFRA_CACHE_TTL, tags: [INFRA_CACHE_TAG] },
 );
 
@@ -216,6 +224,8 @@ export async function TopicSearchTab({ range, preset }: { range: DateRange; pres
     SearchRow,
     'status' | 'completed_at' | 'processing_started_at' | 'pipeline_state'
   >[];
+  const totalInRange = rollupResult.count ?? rolled.length;
+  const truncated = totalInRange > rolled.length;
   const rangeWord = presetLabel(preset).toLowerCase();
 
   const completedRange = rolled.filter((r) => r.status === 'completed');
@@ -252,7 +262,7 @@ export async function TopicSearchTab({ range, preset }: { range: DateRange; pres
         <Stat
           label="Completed"
           value={String(completedRange.length)}
-          sub={rangeWord}
+          sub={truncated ? `sample of ${totalInRange.toLocaleString()} total · ${rangeWord}` : rangeWord}
         />
         <Stat
           label="Failed"
@@ -266,6 +276,12 @@ export async function TopicSearchTab({ range, preset }: { range: DateRange; pres
           sub={avgSubtopic != null ? `subtopic avg: ${formatMs(avgSubtopic)}` : undefined}
         />
       </section>
+      {truncated && (
+        <p className="text-[12px] text-amber-300/80">
+          Range has {totalInRange.toLocaleString()} runs; stats computed from the most recent{' '}
+          {rolled.length.toLocaleString()}. Narrow the range for an exact rollup.
+        </p>
+      )}
 
       <section className="rounded-xl border border-nativz-border bg-surface p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
