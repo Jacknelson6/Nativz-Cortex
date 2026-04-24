@@ -24,11 +24,11 @@ export default async function AdminSearchResultsPage({
   }
 
   if (search.status === 'pending_subtopics') {
-    redirect(`/admin/search/${id}/subtopics`);
+    redirect(`/admin/finder/${id}/subtopics`);
   }
 
   if (search.status === 'processing' || search.status === 'pending') {
-    redirect(`/admin/search/${id}/processing`);
+    redirect(`/admin/finder/${id}/processing`);
   }
 
   const adminClient = createAdminClient();

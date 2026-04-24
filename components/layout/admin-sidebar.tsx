@@ -94,13 +94,13 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Brand tools',
     items: [
-      { href: '/admin/search/new', label: 'Trend Finder', icon: TrendingUp },
+      { href: '/admin/finder/new', label: 'Trend Finder', icon: TrendingUp },
       {
         // Trend monitors — recurring brand / topic listening reports.
         // Sits directly below Trend Finder so the relationship is obvious:
         // one is ad-hoc search, the other is ongoing listening on the same
         // underlying Apify + LLM stack.
-        href: '/admin/search/monitors',
+        href: '/admin/finder/monitors',
         label: 'Trend Monitors',
         icon: Radar,
       },
@@ -164,10 +164,17 @@ const NAV_SECTIONS: NavSection[] = [
 ];
 
 function isActivePath(pathname: string, href: string, searchParams?: URLSearchParams) {
-  // Research — match /search/*
-  if (href.endsWith('/search/new')) {
-    const prefix = href.replace('/search/new', '/search');
-    return pathname.startsWith(prefix);
+  // Trend Finder — sidebar href points at /admin/finder/new; any /admin/finder/*
+  // pathname (monitors, [id] detail, subtopics) should highlight this item.
+  // Also match the legacy /admin/search/* pathname so a user landing on an
+  // old bookmarked URL (before redirect resolves) still sees the right item
+  // lit up while Next is processing the redirect.
+  if (href.endsWith('/finder/new')) {
+    const prefix = href.replace('/finder/new', '');
+    return (
+      pathname.startsWith(`${prefix}/finder`) ||
+      pathname.startsWith(`${prefix}/search`)
+    );
   }
 
   // Pipeline root "All stages" shares /admin/edits with ?stage=… filtered views
@@ -228,7 +235,7 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/brain',
   '/admin/analyze-social',
   '/admin/competitor-spying',
-  '/admin/search/monitors',
+  '/admin/finder/monitors',
   '/admin/notifications',
   '/admin/infrastructure',
   // Settings is reachable from the avatar popover — it doesn't need its

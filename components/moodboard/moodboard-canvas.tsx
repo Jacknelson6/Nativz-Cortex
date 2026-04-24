@@ -124,7 +124,7 @@ export function MoodboardCanvas({
       router.push(`/admin/clients/${clientSlug}`);
       return;
     }
-    router.push('/admin/search/new');
+    router.push('/admin/finder/new');
   }
 
   if (mb.loading) {
@@ -212,7 +212,7 @@ export function MoodboardCanvas({
           ) : null}
           {mb.board?.source_topic_search_id ? (
             <Link
-              href={`/admin/search/${mb.board.source_topic_search_id}`}
+              href={`/admin/finder/${mb.board.source_topic_search_id}`}
               className="hidden shrink-0 items-center gap-1 rounded-full border border-nativz-border bg-surface-hover px-2.5 py-0.5 text-[10px] font-medium text-text-secondary transition-colors hover:text-accent-text sm:inline-flex"
             >
               <Search size={10} />

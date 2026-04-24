@@ -48,7 +48,7 @@ export default async function NewTrendMonitorPage() {
           Define what to listen for. Cortex will search the web every cadence and deliver the findings.
         </p>
         <Link
-          href="/admin/search/monitors"
+          href="/admin/finder/monitors"
           className="inline-block text-xs text-text-muted hover:text-cyan-300"
         >
           ← Back to monitors

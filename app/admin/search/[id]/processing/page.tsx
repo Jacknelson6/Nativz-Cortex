@@ -28,11 +28,11 @@ export default async function AdminSearchProcessingPage({
 
   // If already completed, skip straight to results
   if (search.status === 'completed') {
-    redirect(`/admin/search/${id}`);
+    redirect(`/admin/finder/${id}`);
   }
 
   if (search.status === 'pending_subtopics') {
-    redirect(`/admin/search/${id}/subtopics`);
+    redirect(`/admin/finder/${id}/subtopics`);
   }
 
   const topicPipeline = (search.topic_pipeline as 'legacy' | 'llm_v1' | undefined) ?? 'legacy';

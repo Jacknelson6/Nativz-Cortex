@@ -30,10 +30,10 @@ export default async function AdminSearchSubtopicsPage({
   }
 
   if (search.status === 'completed') {
-    redirect(`/admin/search/${id}`);
+    redirect(`/admin/finder/${id}`);
   }
   if (search.status === 'processing' || search.status === 'pending') {
-    redirect(`/admin/search/${id}/processing`);
+    redirect(`/admin/finder/${id}/processing`);
   }
   if (search.status !== 'pending_subtopics') {
     notFound();

@@ -111,7 +111,7 @@ export async function generateAndSendTrendReport(
       periodEnd,
     });
 
-    const dashboardUrl = `${appBaseUrl()}/admin/search/monitors`;
+    const dashboardUrl = `${appBaseUrl()}/admin/finder/monitors`;
 
     const pdfBuffer = await renderTrendReportPdf(data);
     const pdfFilename = `trend-report-${data.subscription_name.toLowerCase().replace(/\s+/g, '-')}-${periodEnd.toISOString().slice(0, 10)}.pdf`;

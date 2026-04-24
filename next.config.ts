@@ -31,6 +31,11 @@ const nextConfig: NextConfig = {
       { source: '/admin/scheduler/:path*', destination: '/admin/scheduling/:path*', permanent: false },
       { source: '/admin/competitor-intelligence', destination: '/admin/competitor-spying', permanent: false },
       { source: '/admin/competitor-intelligence/:path*', destination: '/admin/competitor-spying/:path*', permanent: false },
+      // /admin/search → /admin/finder (2026-04-24). Covers Trend Finder
+      // (/admin/finder/new), Trend Monitors (/admin/finder/monitors), and
+      // topic-search detail pages (/admin/finder/[id]).
+      { source: '/admin/search', destination: '/admin/finder', permanent: false },
+      { source: '/admin/search/:path*', destination: '/admin/finder/:path*', permanent: false },
     ];
   },
   async rewrites() {
@@ -50,6 +55,8 @@ const nextConfig: NextConfig = {
       { source: '/admin/scheduling/:path*', destination: '/admin/scheduler/:path*' },
       { source: '/admin/competitor-spying', destination: '/admin/competitor-intelligence' },
       { source: '/admin/competitor-spying/:path*', destination: '/admin/competitor-intelligence/:path*' },
+      { source: '/admin/finder', destination: '/admin/search' },
+      { source: '/admin/finder/:path*', destination: '/admin/search/:path*' },
     ];
   },
   compiler: {

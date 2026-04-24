@@ -2,7 +2,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createAdminClient } from '@/lib/supabase/admin';
 
-/** Initial batch size for topic search hub history (`/admin/search/new`). */
+/** Initial batch size for topic search hub history (`/admin/finder/new`). */
 export const TOPIC_SEARCH_HUB_HISTORY_LIMIT = 40;
 
 export type HistoryItemType = 'brand_intel' | 'topic' | 'ideas';
@@ -152,10 +152,10 @@ export async function fetchHistory({
       createdAt: s.created_at,
       href:
         s.status === 'pending_subtopics'
-          ? `/admin/search/${s.id}/subtopics`
+          ? `/admin/finder/${s.id}/subtopics`
           : s.status === 'processing' || s.status === 'pending'
-            ? `/admin/search/${s.id}/processing`
-            : `/admin/search/${s.id}`,
+            ? `/admin/finder/${s.id}/processing`
+            : `/admin/finder/${s.id}`,
     });
   }
 
@@ -222,10 +222,10 @@ export function topicSearchRowToHistoryItem(s: TopicSearchRow): HistoryItem {
     createdAt: s.created_at,
     href:
       s.status === 'pending_subtopics'
-        ? `/admin/search/${s.id}/subtopics`
+        ? `/admin/finder/${s.id}/subtopics`
         : s.status === 'processing' || s.status === 'pending'
-          ? `/admin/search/${s.id}/processing`
-          : `/admin/search/${s.id}`,
+          ? `/admin/finder/${s.id}/processing`
+          : `/admin/finder/${s.id}`,
   };
 }
 

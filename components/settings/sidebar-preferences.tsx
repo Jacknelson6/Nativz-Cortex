@@ -20,7 +20,7 @@ const ADMIN_SIDEBAR_ITEMS = [
     { href: '/admin/analytics', label: 'Analytics' },
   ] },
   { section: 'Intelligence', items: [
-    { href: '/admin/search/new', label: 'Trend Finder' },
+    { href: '/admin/finder/new', label: 'Trend Finder' },
     { href: '/admin/strategy-lab', label: 'Strategy Lab' },
     { href: '/admin/analyze-social', label: 'Competitor Spying' },
     { href: '/admin/ad-creatives', label: 'Ad Generator' },
@@ -42,7 +42,7 @@ const ADMIN_SIDEBAR_ITEMS = [
 const PORTAL_SIDEBAR_ITEMS = [
   { section: '', items: [
     { href: '/admin/analytics', label: 'Analytics' },
-    { href: '/admin/search/new', label: 'Trend Finder' },
+    { href: '/admin/finder/new', label: 'Trend Finder' },
     { href: '/admin/strategy-lab', label: 'Strategy Lab' },
     { href: '/admin/notes', label: 'Notes' },
   ] },

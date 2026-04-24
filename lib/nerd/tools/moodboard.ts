@@ -406,7 +406,7 @@ export const moodboardTools: ToolDefinition[] = [
           .maybeSingle();
         const boardHref = itemRow?.board_id
           ? `/admin/moodboard/${itemRow.board_id}`
-          : '/admin/search/new';
+          : '/admin/finder/new';
         return {
           success: true,
           data: { itemId: params.item_id, hasTranscript: !!(r.item.transcript as string)?.length },
@@ -450,7 +450,7 @@ export const moodboardTools: ToolDefinition[] = [
           .maybeSingle();
         const boardHref = itemRow?.board_id
           ? `/admin/moodboard/${itemRow.board_id}`
-          : '/admin/search/new';
+          : '/admin/finder/new';
         return {
           success: true,
           data: {
@@ -506,7 +506,7 @@ export const moodboardTools: ToolDefinition[] = [
           .maybeSingle();
         const boardHref = itemRow?.board_id
           ? `/admin/moodboard/${itemRow.board_id}`
-          : '/admin/search/new';
+          : '/admin/finder/new';
         return {
           success: true,
           data: { scriptPreview: truncate(r.script, 400) },

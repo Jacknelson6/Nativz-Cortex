@@ -103,7 +103,7 @@ export function TopicSearchSelectionCard({
       {topicSearches.length === 0 ? (
         <p className="text-sm text-text-muted">
           No topic searches for this client yet.{' '}
-          <Link href="/admin/search/new" className="text-accent-text underline-offset-4 hover:underline">
+          <Link href="/admin/finder/new" className="text-accent-text underline-offset-4 hover:underline">
             Start a topic search
           </Link>{' '}
           and attach this client.
@@ -133,7 +133,7 @@ export function TopicSearchSelectionCard({
                     Replace
                   </Button>
                   <Link
-                    href={`/admin/search/${selectedSearch.id}`}
+                    href={`/admin/finder/${selectedSearch.id}`}
                     className={cn(
                       'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium',
                       'text-accent-text ring-1 ring-inset ring-accent/20 transition',

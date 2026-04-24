@@ -66,7 +66,7 @@ export default async function TrendMonitorsPage() {
             </p>
           </div>
           <Link
-            href="/admin/search/monitors/new"
+            href="/admin/finder/monitors/new"
             className="inline-flex items-center gap-2 rounded-full bg-accent px-5 py-2 text-xs font-semibold uppercase tracking-[2px] text-white transition-colors hover:bg-accent/90"
             style={{ fontFamily: 'Jost, system-ui, sans-serif' }}
           >
@@ -74,7 +74,7 @@ export default async function TrendMonitorsPage() {
           </Link>
         </div>
         <nav className="mt-4 flex flex-wrap gap-4 text-xs text-text-muted">
-          <Link href="/admin/search/new" className="hover:text-cyan-300">
+          <Link href="/admin/finder/new" className="hover:text-cyan-300">
             ← Back to Trend Finder
           </Link>
           <Link href="/admin/competitor-spying/reports" className="hover:text-cyan-300">

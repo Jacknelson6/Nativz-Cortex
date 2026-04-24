@@ -41,7 +41,7 @@ export const searchTools: ToolDefinition[] = [
         return {
           success: true,
           data: { id: data.id },
-          link: { href: `/admin/search/${data.id}`, label: 'View search' },
+          link: { href: `/admin/finder/${data.id}`, label: 'View search' },
           cardType: 'search' as const,
         };
       } catch (err) {
@@ -80,7 +80,7 @@ export const searchTools: ToolDefinition[] = [
         return {
           success: true,
           data,
-          link: { href: `/admin/search/${data.id}`, label: 'View search' },
+          link: { href: `/admin/finder/${data.id}`, label: 'View search' },
           cardType: 'search' as const,
         };
       } catch (err) {

@@ -107,7 +107,7 @@ export async function GET() {
         id: s.id,
         description: `Search completed: "${s.query}"${client ? ` for ${client.name}` : ''}`,
         created_at: s.created_at,
-        link: `/admin/search/${s.id}`,
+        link: `/admin/finder/${s.id}`,
       });
     }
     for (const s of recentShootEvents.data || []) {
@@ -127,7 +127,7 @@ export async function GET() {
         id: row.id,
         description: `Moodboard item added: "${row.title || 'Untitled'}"`,
         created_at: row.created_at,
-        link: row.board_id ? `/admin/moodboard/${row.board_id}` : '/admin/search/new',
+        link: row.board_id ? `/admin/moodboard/${row.board_id}` : '/admin/finder/new',
       });
     }
     for (const c of recentClients.data || []) {

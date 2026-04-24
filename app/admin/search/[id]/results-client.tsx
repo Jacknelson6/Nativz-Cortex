@@ -117,7 +117,7 @@ export function AdminResultsClient({
     return (
       <div className="flex min-h-full flex-col items-center justify-center px-4">
         <p className="text-sm text-red-400 mb-4">{search.summary || 'Search failed. Try again.'}</p>
-        <Link href="/admin/search/new">
+        <Link href="/admin/finder/new">
           <Button variant="outline">New search</Button>
         </Link>
       </div>
@@ -132,7 +132,7 @@ export function AdminResultsClient({
         <div className="flex flex-col gap-3 px-6 py-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <div className="flex min-w-0 flex-1 items-start gap-3">
             <Link
-              href="/admin/search/new"
+              href="/admin/finder/new"
               className="mt-1 shrink-0 text-text-muted hover:text-text-secondary transition-colors"
             >
               <ArrowLeft size={20} />
