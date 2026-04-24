@@ -1,7 +1,7 @@
 import { unstable_cache } from 'next/cache';
 import Link from 'next/link';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { ChevronRight } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, ChevronRight, Pencil, User as UserIcon } from 'lucide-react';
 import { Stat, StatusPill, Meta } from '../stat';
 import { INFRA_CACHE_TAG, INFRA_CACHE_TTL } from '../cache';
 
@@ -39,7 +39,19 @@ type SearchRow = {
   tokens_used: number | null;
   estimated_cost: number | null;
   pipeline_state: PipelineState | null;
+  created_by: string | null;
 };
+
+type UserLite = { id: string; full_name: string | null; email: string | null };
+
+function displayName(u: UserLite | undefined): string {
+  if (!u) return '—';
+  const name = u.full_name?.trim();
+  if (name) return name;
+  const email = u.email?.trim();
+  if (email) return email.split('@')[0] ?? email;
+  return '—';
+}
 
 const PHASE_LABELS: Record<string, string> = {
   subtopic_research: 'Subtopic research',
@@ -50,13 +62,16 @@ const PHASE_LABELS: Record<string, string> = {
   merge_retry: 'Merge retry',
 };
 
+// Distinct hue per stage so the bar + legend read as real data-viz rather
+// than a monochrome ramp. Keeps subtopic_research on the brand accent
+// (usually the dominant slice) and fans the rest across a tasteful palette.
 const PHASE_TINTS: Record<string, string> = {
-  subtopic_research: 'bg-accent-text/85',
-  platform_scrapers: 'bg-accent/85',
-  transcribe_all: 'bg-accent-text/60',
-  cluster_pillars: 'bg-accent',
-  merge: 'bg-accent/60',
-  merge_retry: 'bg-coral-500/70',
+  subtopic_research: 'bg-accent',
+  platform_scrapers: 'bg-fuchsia-500/85',
+  transcribe_all: 'bg-amber-400/90',
+  cluster_pillars: 'bg-emerald-400/85',
+  merge: 'bg-violet-400/85',
+  merge_retry: 'bg-red-500/80',
 };
 
 function formatMs(ms: number | null | undefined): string {
@@ -100,15 +115,6 @@ function groupStagesByPhase(stages: StageRow[] | undefined) {
     .sort((a, b) => b.total - a.total);
 }
 
-function longPole(stages: StageRow[] | undefined): { phase: string; ms: number; pct: number } | null {
-  const grouped = groupStagesByPhase(stages);
-  if (grouped.length === 0) return null;
-  const total = grouped.reduce((acc, g) => acc + g.total, 0);
-  if (total === 0) return null;
-  const top = grouped[0];
-  return { phase: top.phase, ms: top.total, pct: (top.total / total) * 100 };
-}
-
 function stageBar(stages: StageRow[] | undefined) {
   if (!stages?.length) return [] as Array<{ phase: string; pct: number; ms: number }>;
   const total = sumStageDurations(stages);
@@ -135,14 +141,31 @@ function timeAgo(iso: string): string {
 const getRecentRunsCached = unstable_cache(
   async () => {
     const admin = createAdminClient();
-    return admin
+    const searchRes = await admin
       .from('topic_searches')
       .select(
-        'id, query, status, topic_pipeline, created_at, completed_at, processing_started_at, tokens_used, estimated_cost, pipeline_state',
+        'id, query, status, topic_pipeline, created_at, completed_at, processing_started_at, tokens_used, estimated_cost, pipeline_state, created_by',
       )
       .eq('topic_pipeline', 'llm_v1')
       .order('created_at', { ascending: false })
       .limit(50);
+
+    // Look up the caller's name/email for every unique created_by in one
+    // shot. Avoids embedding a Supabase FK join (keeps the query flat).
+    const creatorIds = Array.from(
+      new Set((searchRes.data ?? []).map((r) => r.created_by).filter((x): x is string => !!x)),
+    );
+    const userMap: Record<string, UserLite> = {};
+    if (creatorIds.length > 0) {
+      const userRes = await admin
+        .from('users')
+        .select('id, full_name, email')
+        .in('id', creatorIds);
+      for (const u of (userRes.data ?? []) as UserLite[]) {
+        userMap[u.id] = u;
+      }
+    }
+    return { searchRes, userMap };
   },
   ['infrastructure-recent-runs'],
   { revalidate: INFRA_CACHE_TTL, tags: [INFRA_CACHE_TAG] },
@@ -183,7 +206,8 @@ export async function TopicSearchTab() {
     getConfiguredModelsCached(),
   ]);
 
-  const rows = (recentResult.data ?? []) as SearchRow[];
+  const rows = (recentResult.searchRes.data ?? []) as SearchRow[];
+  const userMap = recentResult.userMap;
   const weekly = (weeklyResult.data ?? []) as Pick<
     SearchRow,
     'status' | 'completed_at' | 'processing_started_at' | 'pipeline_state'
@@ -235,25 +259,32 @@ export async function TopicSearchTab() {
       </section>
 
       <section className="rounded-xl border border-nativz-border bg-surface p-5">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-text-muted">
-            Configured models (agency_settings)
+            Configured models
           </h2>
-          <span className="shrink-0 rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent-text">
-            All via OpenRouter
-          </span>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/admin/settings/ai"
+              className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-medium text-accent-text transition-colors hover:bg-accent/15"
+            >
+              <Pencil size={12} />
+              Edit models
+            </Link>
+            <Link
+              href="/admin/infrastructure?tab=ai"
+              className="inline-flex items-center gap-1.5 rounded-full border border-nativz-border bg-surface px-3 py-1 text-xs font-medium text-text-secondary transition-colors hover:border-nativz-border/90 hover:text-text-primary"
+            >
+              <ArrowUpRight size={12} />
+              AI usage
+            </Link>
+          </div>
         </div>
         <dl className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
           <ModelRow label="Planner" value={models?.topic_search_planner_model} />
           <ModelRow label="Research" value={models?.topic_search_research_model} />
           <ModelRow label="Merger" value={models?.topic_search_merger_model} />
         </dl>
-        <p className="mt-3 text-xs text-text-muted">
-          Edit these in <Link href="/admin/settings/ai" className="underline decoration-dotted">AI settings</Link>.
-          The slug prefix (<span className="font-mono">openai/…</span>, <span className="font-mono">anthropic/…</span>, <span className="font-mono">google/…</span>)
-          tells OpenRouter which provider to proxy to — the request itself always hits <span className="font-mono">openrouter.ai/api/v1/chat/completions</span>.
-          Merger has a hardcoded fallback chain (Gemini 2.5 Flash → Claude 3.5 Haiku) when the primary errors.
-        </p>
       </section>
 
       <section className="space-y-3">
@@ -272,7 +303,7 @@ export async function TopicSearchTab() {
               const stages = row.pipeline_state?.stages;
               const bar = stageBar(stages);
               const grouped = groupStagesByPhase(stages);
-              const longest = longPole(stages);
+              const creator = row.created_by ? userMap[row.created_by] : undefined;
               return (
                 <details
                   key={row.id}
@@ -293,14 +324,9 @@ export async function TopicSearchTab() {
                     <span className="w-20 shrink-0 text-right text-xs tabular-nums text-text-muted">
                       {formatMs(total)}
                     </span>
-                    <span className="hidden w-44 shrink-0 truncate text-right text-xs text-text-muted md:inline-block">
-                      {longest ? (
-                        <>
-                          long pole:{' '}
-                          <span className="text-accent-text">{PHASE_LABELS[longest.phase] ?? longest.phase}</span>{' '}
-                          <span className="tabular-nums">{Math.round(longest.pct)}%</span>
-                        </>
-                      ) : '—'}
+                    <span className="hidden w-36 shrink-0 items-center justify-end gap-1.5 truncate text-right text-xs text-text-muted md:inline-flex">
+                      <UserIcon size={11} className="shrink-0 opacity-70" />
+                      <span className="truncate">{displayName(creator)}</span>
                     </span>
                   </summary>
                   <div className="space-y-4 border-t border-nativz-border/60 px-4 py-4">
@@ -369,9 +395,10 @@ export async function TopicSearchTab() {
                     <div>
                       <Link
                         href={`/admin/search/${row.id}`}
-                        className="text-xs text-accent-text underline decoration-dotted"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3.5 py-1.5 text-xs font-medium text-accent-text transition-colors hover:bg-accent/15"
                       >
-                        Open report →
+                        Open report
+                        <ArrowRight size={12} />
                       </Link>
                     </div>
                   </div>

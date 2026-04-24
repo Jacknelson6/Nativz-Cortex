@@ -13,7 +13,11 @@ function parsePositiveInt(raw: string | undefined, fallback: number): number {
 const MAX_PARALLEL_HARD_CAP = 8;
 
 export function getLlmTopicPipelineLimits() {
-  const rawParallel = parsePositiveInt(process.env.TOPIC_SEARCH_MAX_PARALLEL, 4);
+  // Default bumped 4 → 8 (matches the hard cap) so a typical 5-subtopic
+  // search fits in a single Promise.all batch — wall-clock collapses to
+  // max(durations) instead of ~2× the slowest. OpenRouter rate limits
+  // comfortably handle 8 concurrent research calls.
+  const rawParallel = parsePositiveInt(process.env.TOPIC_SEARCH_MAX_PARALLEL, 8);
   return {
     maxParallel: Math.min(rawParallel, MAX_PARALLEL_HARD_CAP),
     maxSearchesPerSubtopic: parsePositiveInt(process.env.TOPIC_SEARCH_MAX_SEARCHES_PER_SUBTOPIC, 10),

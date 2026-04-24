@@ -14,16 +14,19 @@ export function Stat({ label, value, sub }: { label: string; value: string; sub?
 }
 
 export function StatusPill({ status }: { status: string }) {
-  const tone =
-    status === 'completed' || status === 'ok' || status === 'healthy'
-      ? 'border border-accent/30 bg-accent/10 text-accent-text'
-      : status === 'failed' || status === 'error'
-        ? 'border border-coral-500/30 bg-coral-500/10 text-coral-300'
-        : status === 'partial' || status === 'degraded'
-          ? 'border border-amber-500/30 bg-amber-500/10 text-amber-300'
-          : status === 'processing' || status === 'pending'
-            ? 'border border-text-muted/30 bg-surface-hover/60 text-text-secondary'
-            : 'border border-text-muted/20 bg-surface-hover/40 text-text-muted';
+  const s = status.toLowerCase();
+  const ok = s === 'completed' || s === 'ok' || s === 'healthy' || s === 'ready' || s === 'succeeded' || s === 'success';
+  const bad = s === 'failed' || s === 'error' || s === 'canceled' || s === 'cancelled';
+  const warn = s === 'partial' || s === 'degraded' || s === 'building' || s === 'queued' || s === 'initializing';
+  const tone = ok
+    ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+    : bad
+      ? 'border border-red-500/30 bg-red-500/10 text-red-300'
+      : warn
+        ? 'border border-amber-500/30 bg-amber-500/10 text-amber-300'
+        : s === 'processing' || s === 'pending' || s === 'running'
+          ? 'border border-text-muted/30 bg-surface-hover/60 text-text-secondary'
+          : 'border border-text-muted/20 bg-surface-hover/40 text-text-muted';
   return (
     <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${tone}`}>
       {status}
