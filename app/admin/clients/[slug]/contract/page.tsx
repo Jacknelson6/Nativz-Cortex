@@ -6,6 +6,7 @@ import {
   normalizeAdminWorkspaceModules,
 } from '@/lib/clients/admin-workspace-modules';
 import { ContractWorkspace } from '@/components/clients/contract/contract-workspace';
+import { ContractKitCard } from '@/components/clients/contract/contractkit-card';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,19 +21,16 @@ export default async function AdminClientContractPage({
   if (!user) notFound();
 
   const admin = createAdminClient();
-  const { data: me } = await admin
-    .from('users')
-    .select('role')
-    .eq('id', user.id)
-    .single();
+  const [{ data: me }, { data: client }] = await Promise.all([
+    admin.from('users').select('role').eq('id', user.id).single(),
+    admin
+      .from('clients')
+      .select('id, slug, name, services, admin_workspace_modules')
+      .eq('slug', slug)
+      .single(),
+  ]);
   const isAdmin = me?.role === 'admin' || me?.role === 'super_admin';
   if (!isAdmin) notFound();
-
-  const { data: client } = await admin
-    .from('clients')
-    .select('id, slug, name, services, admin_workspace_modules')
-    .eq('slug', slug)
-    .single();
   if (!client) notFound();
 
   const modules = normalizeAdminWorkspaceModules(
@@ -55,13 +53,29 @@ export default async function AdminClientContractPage({
         .order('sort_order', { ascending: true })
     : { data: [] as never[] };
 
+  const lifecycleContracts = (contracts ?? []).map((c) => ({
+    id: c.id as string,
+    label: (c.label as string | null) ?? null,
+    external_provider: (c.external_provider as string | null) ?? null,
+    external_url: (c.external_url as string | null) ?? null,
+    external_id: (c.external_id as string | null) ?? null,
+    sent_at: (c.sent_at as string | null) ?? null,
+    signed_at: (c.signed_at as string | null) ?? null,
+    total_cents: (c.total_cents as number | null) ?? null,
+    deposit_cents: (c.deposit_cents as number | null) ?? null,
+    deposit_invoice_id: (c.deposit_invoice_id as string | null) ?? null,
+  }));
+
   return (
-    <ContractWorkspace
-      slug={slug}
-      clientName={client.name ?? slug}
-      services={Array.isArray(client.services) ? (client.services as string[]) : []}
-      initialContracts={contracts ?? []}
-      initialDeliverables={deliverables ?? []}
-    />
+    <div className="space-y-6">
+      <ContractWorkspace
+        slug={slug}
+        clientName={client.name ?? slug}
+        services={Array.isArray(client.services) ? (client.services as string[]) : []}
+        initialContracts={contracts ?? []}
+        initialDeliverables={deliverables ?? []}
+      />
+      <ContractKitCard clientId={client.id} contracts={lifecycleContracts} />
+    </div>
   );
 }

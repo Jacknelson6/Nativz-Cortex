@@ -175,6 +175,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/monday/webhook') ||
     pathname.startsWith('/api/vault/webhook') ||
     pathname.startsWith('/api/knowledge/webhook') ||
+    pathname.startsWith('/api/webhooks/') ||
     pathname.startsWith('/api/google/callback') ||
     pathname.startsWith('/api/team/invite/validate') ||
     pathname.startsWith('/api/team/invite/accept') ||

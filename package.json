@@ -57,7 +57,9 @@
     "seed:goldback-search": "tsx scripts/seed-goldback-topic-search.ts",
     "setup:college-hunks": "tsx scripts/college-hunks-setup.ts",
     "seed:college-hunks-searches": "tsx scripts/seed-college-hunks-topic-searches.ts",
-    "pdf:avondale-video-ideas": "tsx scripts/generate-avondale-video-ideas-pdf.tsx"
+    "pdf:avondale-video-ideas": "tsx scripts/generate-avondale-video-ideas-pdf.tsx",
+    "revenue:backfill": "dotenv -e .env.local -- tsx scripts/stripe-backfill.ts",
+    "revenue:backfill:dry": "dotenv -e .env.local -- tsx scripts/stripe-backfill.ts --dry-run"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -117,6 +119,7 @@
     "sharp": "^0.34.5",
     "sigma": "^3.0.2",
     "sonner": "^2.0.7",
+    "stripe": "^22.1.0",
     "swr": "^2.4.1",
     "tailwind-merge": "^3.5.0",
     "three": "^0.183.2",

@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Bell,
+  CreditCard,
   FileUser,
   Handshake,
 } from 'lucide-react';
@@ -49,6 +50,12 @@ const NAV: NavItem[] = [
     path: '/settings/partnership',
     matches: ['/settings/access', '/contract'],
     icon: Handshake,
+  },
+  {
+    key: 'billing',
+    label: 'Billing',
+    path: '/billing',
+    icon: CreditCard,
   },
   { key: 'notifications', label: 'Notifications', path: '/settings/notifications', icon: Bell, separator: true },
   { key: 'danger', label: 'Archive / delete', path: '/settings/danger', icon: AlertTriangle, danger: true, separator: true },
