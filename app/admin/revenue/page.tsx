@@ -13,6 +13,7 @@ import { RevenueSubscriptionsTab } from '@/components/admin/revenue/subscription
 import { RevenueClientsTab } from '@/components/admin/revenue/clients-tab';
 import { AdSpendTab } from '@/components/admin/revenue/ad-spend-tab';
 import { RevenueActivityTab } from '@/components/admin/revenue/activity-tab';
+import { QuickBooksExportButton } from '@/components/admin/revenue/qb-export-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,6 +51,7 @@ export default async function RevenuePage({
       <SectionHeader
         title="Revenue"
         description="MRR, AR, Stripe invoices, contracts, ad spend, and the lifecycle loop from signed contract through active client."
+        action={<QuickBooksExportButton />}
       />
       <SectionTabs tabs={REVENUE_TABS} active={activeTab} memoryKey="cortex:revenue:last-tab" />
 

@@ -25,12 +25,18 @@ export default async function PortalBillingPage() {
   const { client } = portal;
 
   const admin = createAdminClient();
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const periodMonth = monthStart.toISOString().slice(0, 10);
+
   const [
     { data: clientRow },
     { data: invoices },
     { data: subs },
     { data: lifetimeRes },
     { data: openArRes },
+    { data: adSpendRows },
   ] = await Promise.all([
     admin
       .from('clients')
@@ -55,10 +61,20 @@ export default async function PortalBillingPage() {
       .select('amount_remaining_cents')
       .eq('client_id', client.id)
       .eq('status', 'open'),
+    admin
+      .from('client_ad_spend')
+      .select('platform, campaign_label, spend_cents, period_month, source')
+      .eq('client_id', client.id)
+      .order('period_month', { ascending: false })
+      .limit(200),
   ]);
 
   const lifetime = (lifetimeRes ?? []).reduce((s, r) => s + (r.amount_paid_cents ?? 0), 0);
   const openAr = (openArRes ?? []).reduce((s, r) => s + (r.amount_remaining_cents ?? 0), 0);
+  const adSpendMtd = (adSpendRows ?? [])
+    .filter((r) => r.period_month === periodMonth)
+    .reduce((s, r) => s + (r.spend_cents ?? 0), 0);
+  const boostBudget = clientRow?.boosting_budget_cents ?? 0;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
@@ -75,7 +91,7 @@ export default async function PortalBillingPage() {
         </p>
       </header>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiTile label="Current MRR" value={formatCents(clientRow?.mrr_cents ?? 0)} tone="brand" />
         <KpiTile label="Lifetime paid" value={formatCentsCompact(lifetime)} tone="good" />
         <KpiTile
@@ -83,7 +99,48 @@ export default async function PortalBillingPage() {
           value={formatCents(openAr)}
           tone={openAr > 0 ? 'warn' : 'neutral'}
         />
+        <KpiTile
+          label="Ads this month"
+          value={formatCents(adSpendMtd)}
+          sub={boostBudget > 0 ? `Budget ${formatCents(boostBudget)}` : 'No budget set'}
+          tone={boostBudget > 0 && adSpendMtd > boostBudget ? 'warn' : 'neutral'}
+        />
       </div>
+
+      {(adSpendRows && adSpendRows.length > 0) ? (
+        <section className="rounded-xl border border-nativz-border bg-surface p-5">
+          <h2 className="text-sm font-semibold text-text-primary">Ad spend</h2>
+          <p className="mt-1 text-[11px] text-text-muted">
+            Recorded spend per platform and month. Auto-synced from Meta where connected.
+          </p>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="text-[11px] uppercase tracking-wider text-text-muted">
+                <tr>
+                  <th className="py-2 font-medium">Month</th>
+                  <th className="py-2 font-medium">Platform</th>
+                  <th className="py-2 font-medium">Campaign</th>
+                  <th className="py-2 font-medium text-right">Spend</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {adSpendRows.slice(0, 30).map((r, i) => (
+                  <tr key={i}>
+                    <td className="py-2 font-mono text-[12px] text-text-secondary">
+                      {r.period_month}
+                    </td>
+                    <td className="py-2 capitalize text-text-secondary">{r.platform}</td>
+                    <td className="py-2 text-text-secondary">{r.campaign_label ?? '—'}</td>
+                    <td className="py-2 text-right font-mono text-text-primary">
+                      {formatCents(r.spend_cents)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
 
       <section className="rounded-xl border border-nativz-border bg-surface p-5">
         <h2 className="text-sm font-semibold text-text-primary">Subscriptions</h2>

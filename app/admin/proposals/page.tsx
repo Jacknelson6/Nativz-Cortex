@@ -34,29 +34,16 @@ export default async function ProposalsPage() {
     <div className="cortex-page-gutter max-w-6xl mx-auto space-y-6">
       <SectionHeader
         title="Proposals"
-        description="Cortex-native proposal + package flow. Replaces ContractKit with inline-editable docs that link to Stripe deposits and trigger onboarding on sign. Scaffolded today — full editor + signing UI ships next."
+        description="Cortex-native proposal + package flow. Inline-editable docs that link to Stripe deposits and trigger onboarding on sign."
         action={
-          <button
-            type="button"
-            disabled
-            title="Editor ships in the next revenue hub drop — see docs/superpowers/specs/2026-04-24-proposals-design.md"
-            className="inline-flex items-center gap-1 rounded-full border border-nativz-border bg-surface px-3 py-1.5 text-xs text-text-muted"
+          <Link
+            href="/admin/proposals/new"
+            className="inline-flex items-center gap-1 rounded-full bg-nz-cyan px-3 py-1.5 text-xs font-medium text-background hover:bg-nz-cyan/90"
           >
-            <Plus size={12} /> New proposal (coming soon)
-          </button>
+            <Plus size={12} /> New proposal
+          </Link>
         }
       />
-
-      <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-200">
-        <p className="font-medium">Scaffold only.</p>
-        <p className="mt-1 text-amber-200/80">
-          Data model + table are live (<code>proposals</code>, <code>proposal_packages</code>,{' '}
-          <code>proposal_deliverables</code>, <code>proposal_events</code>,{' '}
-          <code>proposal_package_templates</code>). The editor, public signing page, Stripe
-          Payment Link generation, and onboarding-on-sign trigger ship in a follow-up — see the
-          design doc for the full surface.
-        </p>
-      </div>
 
       {proposals && proposals.length > 0 ? (
         <div className="overflow-hidden rounded-xl border border-nativz-border bg-surface">

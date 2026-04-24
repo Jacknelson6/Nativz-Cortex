@@ -16,6 +16,7 @@ import {
   onSubscriptionResumed,
   onSubscriptionUpdated,
 } from '@/lib/lifecycle/state-machine';
+import { onProposalCheckoutCompleted } from '@/lib/proposals/on-paid';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -207,6 +208,10 @@ async function dispatch(event: Stripe.Event, admin: ReturnType<typeof createAdmi
     case 'refund.updated':
     case 'charge.refund.updated':
       await upsertRefundFromStripe(event.data.object as Stripe.Refund, admin);
+      return;
+
+    case 'checkout.session.completed':
+      await onProposalCheckoutCompleted(event.data.object as Stripe.Checkout.Session, admin);
       return;
 
     default:

@@ -190,7 +190,9 @@ export async function middleware(request: NextRequest) {
     // write. Both need to work without a Supabase auth session because the
     // client has no account — the share token is the access credential.
     pathname.startsWith('/onboarding/') ||
-    pathname.startsWith('/api/onboarding/public/')
+    pathname.startsWith('/api/onboarding/public/') ||
+    pathname.startsWith('/proposals/') ||
+    pathname.startsWith('/api/proposals/public/')
   ) {
     if (pathname.startsWith('/api/')) {
       setCorsHeaders(supabaseResponse, requestOrigin);
