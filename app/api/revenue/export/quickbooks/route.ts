@@ -35,6 +35,19 @@ export async function GET(req: NextRequest) {
   const { data, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // Pull refunds in the same window so totals row reflects bank-reconcilable
+  // net revenue. Individual invoice rows still show gross; refunds are
+  // itemized below.
+  let refundQ = admin
+    .from('stripe_refunds')
+    .select('amount_cents, currency, created_at, status, client_id, stripe_charges:charge_id(client_id), stripe_invoices:invoice_id(number, clients(name))')
+    .eq('status', 'succeeded')
+    .order('created_at', { ascending: true })
+    .limit(5000);
+  if (start) refundQ = refundQ.gte('created_at', start);
+  if (end) refundQ = refundQ.lte('created_at', end);
+  const { data: refunds } = await refundQ;
+
   const header = [
     'Date',
     'Invoice Number',
@@ -71,13 +84,55 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // Totals row per currency (QuickBooks ignores unknown rows on import; these
-  // are for humans eyeballing the CSV or pasting into a spreadsheet).
-  if (data && data.length > 0) {
+  // Refund rows (negative amounts) interleaved after invoice rows.
+  const refundsByCurrency = new Map<string, number>();
+  for (const r of refunds ?? []) {
+    const cents = r.amount_cents ?? 0;
+    const currency = (r.currency ?? 'usd').toUpperCase();
+    refundsByCurrency.set(currency, (refundsByCurrency.get(currency) ?? 0) + cents);
+    const invoice = r.stripe_invoices as { number?: string | null; clients?: { name?: string | null } | null } | null;
+    const customerName = invoice?.clients?.name ?? 'Unlinked customer';
+    rows.push(
+      [
+        r.created_at ? isoDate(r.created_at) : '',
+        invoice?.number ?? '',
+        customerName,
+        'Refund',
+        (-centsToDollars(cents)).toFixed(2),
+        currency,
+        'refunded',
+        '',
+      ]
+        .map(csvEscape)
+        .join(','),
+    );
+  }
+
+  // Totals row per currency — net (paid − refunded). QuickBooks ignores
+  // unknown rows on import; these are for humans eyeballing the CSV or
+  // pasting into a spreadsheet.
+  const hasAny = (data && data.length > 0) || (refunds && refunds.length > 0);
+  if (hasAny) {
     rows.push('');
-    for (const [currency, cents] of Array.from(totalsByCurrency.entries()).sort()) {
+    const allCurrencies = new Set<string>([
+      ...Array.from(totalsByCurrency.keys()),
+      ...Array.from(refundsByCurrency.keys()),
+    ]);
+    for (const currency of Array.from(allCurrencies).sort()) {
+      const paid = totalsByCurrency.get(currency) ?? 0;
+      const refunded = refundsByCurrency.get(currency) ?? 0;
+      const net = paid - refunded;
       rows.push(
-        ['', '', `TOTAL (${currency})`, `${data.length} invoices`, centsToDollars(cents).toFixed(2), currency, '', '']
+        [
+          '',
+          '',
+          `NET TOTAL (${currency})`,
+          `${data?.length ?? 0} paid − ${refunds?.length ?? 0} refunds`,
+          centsToDollars(net).toFixed(2),
+          currency,
+          '',
+          '',
+        ]
           .map(csvEscape)
           .join(','),
       );

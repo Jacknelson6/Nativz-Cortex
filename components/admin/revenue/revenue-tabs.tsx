@@ -1,4 +1,4 @@
-import { Activity, CreditCard, Repeat, Users, Megaphone, Clock3 } from 'lucide-react';
+import { Activity, CreditCard, Repeat, Users, Megaphone, Clock3, AlertTriangle } from 'lucide-react';
 import type { SectionTabDef } from '@/components/admin/section-tabs';
 
 export const REVENUE_TABS = [
@@ -8,6 +8,7 @@ export const REVENUE_TABS = [
   { slug: 'clients',       label: 'Clients',       icon: <Users size={13} /> },
   { slug: 'ad-spend',      label: 'Ad spend',      icon: <Megaphone size={13} /> },
   { slug: 'activity',      label: 'Activity',      icon: <Clock3 size={13} /> },
+  { slug: 'anomalies',     label: 'Anomalies',     icon: <AlertTriangle size={13} /> },
 ] as const satisfies readonly SectionTabDef[];
 
 export type RevenueTabSlug = (typeof REVENUE_TABS)[number]['slug'];

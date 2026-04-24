@@ -1,6 +1,7 @@
 import { TrendingUp, Wallet, AlertTriangle, Repeat, DollarSign, Clock } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { formatCents, formatCentsCompact } from '@/lib/format/money';
+import { netLifetimeRevenueCents } from '@/lib/revenue/aggregates';
 import { KpiTile } from './kpi-tile';
 
 export async function RevenueOverviewTab() {
@@ -12,8 +13,8 @@ export async function RevenueOverviewTab() {
   const [
     mrrAgg,
     activeSubsCount,
-    paidMtd,
-    paidYtd,
+    mtdCents,
+    ytdCents,
     openInvoices,
     overdueInvoices,
     recentEvents,
@@ -23,8 +24,8 @@ export async function RevenueOverviewTab() {
       .from('stripe_subscriptions')
       .select('id', { count: 'exact', head: true })
       .in('status', ['active', 'trialing', 'past_due']),
-    admin.from('stripe_invoices').select('amount_paid_cents').gte('paid_at', monthStart),
-    admin.from('stripe_invoices').select('amount_paid_cents').gte('paid_at', yearStart),
+    netLifetimeRevenueCents(admin, { since: monthStart }),
+    netLifetimeRevenueCents(admin, { since: yearStart }),
     admin.from('stripe_invoices').select('id, amount_remaining_cents').eq('status', 'open'),
     admin
       .from('stripe_invoices')
@@ -39,8 +40,6 @@ export async function RevenueOverviewTab() {
   ]);
 
   const mrrCents = (mrrAgg.data ?? []).reduce((s, r) => s + (r.mrr_cents ?? 0), 0);
-  const mtdCents = (paidMtd.data ?? []).reduce((s, r) => s + (r.amount_paid_cents ?? 0), 0);
-  const ytdCents = (paidYtd.data ?? []).reduce((s, r) => s + (r.amount_paid_cents ?? 0), 0);
   const arOpen = (openInvoices.data ?? []).reduce((s, r) => s + (r.amount_remaining_cents ?? 0), 0);
   const arOverdue = (overdueInvoices.data ?? []).reduce(
     (s, r) => s + (r.amount_remaining_cents ?? 0),

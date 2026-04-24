@@ -1,5 +1,11 @@
 import Stripe from 'stripe';
 
+// TODO(dual-stripe): this module assumes a single Stripe account (AC). When
+// Nativz moves to its own Stripe account, this needs refactoring:
+//   - stripe_* tables: add stripe_account_id column, composite PK (account, id)
+//   - webhook route: /api/webhooks/stripe/[agency] with per-agency secret lookup
+//   - getStripe(agency) with per-agency getSecret(`STRIPE_SECRET_KEY_${agency}`)
+// See docs/superpowers/specs/2026-04-24-revenue-hardening-design.md §2.6.
 type StripeCtorConfig = ConstructorParameters<typeof Stripe>[1];
 
 let cached: Stripe | null = null;

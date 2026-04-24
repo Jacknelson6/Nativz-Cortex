@@ -40,11 +40,18 @@ export default async function PortalBillingPage() {
   monthStart.setHours(0, 0, 0, 0);
   const periodMonth = monthStart.toISOString().slice(0, 10);
 
+  // Lifetime uses admin client for the aggregate so RLS doesn't silently
+  // undercount on edge-cases (still scoped to the viewer's client_id).
+  // Invoices/subs/ad-spend go through the RLS-aware client.
+  const { createAdminClient } = await import('@/lib/supabase/admin');
+  const adminForAggregate = createAdminClient();
+  const { netLifetimeRevenueCents } = await import('@/lib/revenue/aggregates');
+
   const [
     { data: clientRow },
     { data: invoices },
     { data: subs },
-    { data: lifetimeRes },
+    lifetime,
     { data: openArRes },
     { data: adSpendRows },
   ] = await Promise.all([
@@ -69,7 +76,7 @@ export default async function PortalBillingPage() {
       .eq('client_id', client.id)
       .order('status')
       .order('started_at', { ascending: false }),
-    db.from('stripe_invoices').select('amount_paid_cents').eq('client_id', client.id),
+    netLifetimeRevenueCents(adminForAggregate, { clientId: client.id }),
     db
       .from('stripe_invoices')
       .select('amount_remaining_cents')
@@ -83,7 +90,6 @@ export default async function PortalBillingPage() {
       .limit(200),
   ]);
 
-  const lifetime = (lifetimeRes ?? []).reduce((s, r) => s + (r.amount_paid_cents ?? 0), 0);
   const openAr = (openArRes ?? []).reduce((s, r) => s + (r.amount_remaining_cents ?? 0), 0);
   const adSpendMtd = (adSpendRows ?? [])
     .filter((r) => r.period_month === periodMonth)

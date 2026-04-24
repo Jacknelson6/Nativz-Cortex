@@ -11,7 +11,7 @@ export async function RevenueClientsTab() {
   monthStart.setHours(0, 0, 0, 0);
   const periodMonth = monthStart.toISOString().slice(0, 10);
 
-  const [clientsRes, lifetimeRes, openArRes, adSpendRes, subsRes] = await Promise.all([
+  const [clientsRes, paidRes, refundRes, openArRes, adSpendRes, subsRes] = await Promise.all([
     admin
       .from('clients')
       .select(
@@ -20,6 +20,11 @@ export async function RevenueClientsTab() {
       .order('mrr_cents', { ascending: false })
       .order('name', { ascending: true }),
     admin.from('stripe_invoices').select('client_id, amount_paid_cents').not('client_id', 'is', null),
+    admin
+      .from('stripe_refunds')
+      .select('client_id, amount_cents, status')
+      .eq('status', 'succeeded')
+      .not('client_id', 'is', null),
     admin
       .from('stripe_invoices')
       .select('client_id, amount_remaining_cents')
@@ -41,10 +46,14 @@ export async function RevenueClientsTab() {
     stats.set(id, fresh);
     return fresh;
   };
-  for (const r of lifetimeRes.data ?? []) if (r.client_id) get(r.client_id).lifetime += r.amount_paid_cents ?? 0;
+  for (const r of paidRes.data ?? []) if (r.client_id) get(r.client_id).lifetime += r.amount_paid_cents ?? 0;
+  for (const r of refundRes.data ?? []) if (r.client_id) get(r.client_id).lifetime -= r.amount_cents ?? 0;
   for (const r of openArRes.data ?? []) if (r.client_id) get(r.client_id).ar += r.amount_remaining_cents ?? 0;
   for (const r of adSpendRes.data ?? []) if (r.client_id) get(r.client_id).ad += r.spend_cents ?? 0;
   for (const r of subsRes.data ?? []) if (r.client_id) get(r.client_id).subs += 1;
+
+  // Clamp negative lifetime (e.g. refund exceeds paid) to zero for display.
+  for (const s of stats.values()) s.lifetime = Math.max(0, s.lifetime);
 
   const rows = (clientsRes.data ?? []).filter((c) => !c.hide_from_roster);
 

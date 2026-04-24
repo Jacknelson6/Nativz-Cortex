@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { logLifecycleEvent } from '@/lib/lifecycle/state-machine';
 import { checkRateLimit, ipFromRequest } from '@/lib/rate-limit/in-memory';
+import { notifyAdmins } from '@/lib/lifecycle/notify';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,6 +47,21 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
   if (proposal.expires_at && new Date(proposal.expires_at) < new Date()) {
     await admin.from('proposals').update({ status: 'expired' }).eq('id', proposal.id);
     return NextResponse.json({ error: 'Proposal expired' }, { status: 400 });
+  }
+
+  // Signer email must match the invited one (if admin set it at send time).
+  // Stops random visitors with the URL from signing as someone else. Full
+  // magic-link / OTP flow is a follow-up; this closes the "anyone can type
+  // anything" gap without shipping new infra.
+  if (
+    proposal.signer_email &&
+    proposal.signer_email.trim().toLowerCase() !==
+      parsed.data.signer_email.trim().toLowerCase()
+  ) {
+    return NextResponse.json(
+      { error: 'Email must match the invited signer. Reach out if you need this changed.' },
+      { status: 400 },
+    );
   }
 
   const ua = req.headers.get('user-agent') ?? null;
@@ -100,6 +116,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
         { onConflict: 'external_id' },
       );
   }
+
+  // Bonus fix: admin notification on sign. Previously admins had to watch
+  // the Activity tab; the signed event is the single most important sales
+  // signal, so fire a notification to every admin.
+  await notifyAdmins(admin, 'contract_signed', `Proposal signed: ${proposal.title}`, {
+    message: `${parsed.data.signer_name} signed "${proposal.title}". Deposit Payment Link ready.`,
+  });
 
   return NextResponse.json({
     ok: true,

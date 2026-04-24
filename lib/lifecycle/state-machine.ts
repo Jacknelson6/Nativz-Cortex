@@ -62,36 +62,17 @@ export async function logLifecycleEvent(
   if (error) console.error('[lifecycle] logLifecycleEvent failed:', error.message);
 }
 
+// notifyAdmins moved to lib/lifecycle/notify.ts — shared with proposal sign flow.
+// Re-export for existing call sites inside this module.
+import { notifyAdmins as notifyAdminsShared, type NotificationType } from './notify';
+
 async function notifyAdmins(
   admin: AdminClient,
-  type:
-    | 'payment_received'
-    | 'invoice_overdue'
-    | 'invoice_sent'
-    | 'invoice_due_soon'
-    | 'contract_signed'
-    | 'subscription_created'
-    | 'subscription_canceled'
-    | 'subscription_paused'
-    | 'subscription_resumed'
-    | 'subscription_updated',
+  type: NotificationType,
   title: string,
   message: string,
 ): Promise<void> {
-  const { data: admins } = await admin
-    .from('users')
-    .select('id')
-    .or('role.eq.admin,role.eq.super_admin,is_super_admin.eq.true');
-  if (!admins?.length) return;
-  const rows = admins.map((u) => ({
-    user_id: u.id,
-    type,
-    title,
-    message,
-    read: false,
-  }));
-  const { error } = await admin.from('notifications').insert(rows);
-  if (error) console.error('[lifecycle] notifyAdmins failed:', error.message);
+  await notifyAdminsShared(admin, type, title, { message });
 }
 
 export async function onInvoicePaid(
@@ -180,6 +161,17 @@ async function queueKickoffEmail(
   clientSlug: string,
   admin: AdminClient,
 ): Promise<void> {
+  // One-shot guard — once a kickoff email has been sent for this client,
+  // never send it again on a later invoice.paid. Monthly retainer clients
+  // would otherwise get the "welcome, let's schedule kickoff" email every
+  // billing cycle. See migration 160 for kickoff_email_sent_at column.
+  const { data: client } = await admin
+    .from('clients')
+    .select('name, kickoff_email_sent_at')
+    .eq('id', clientId)
+    .maybeSingle();
+  if (client?.kickoff_email_sent_at) return;
+
   const { data: contact } = await admin
     .from('contacts')
     .select('email, name')
@@ -194,12 +186,6 @@ async function queueKickoffEmail(
     .eq('name', 'kickoff_invitation')
     .maybeSingle();
   if (!template) return;
-
-  const { data: client } = await admin
-    .from('clients')
-    .select('name')
-    .eq('id', clientId)
-    .maybeSingle();
 
   const firstName = (contact.name ?? '').split(' ')[0] || 'there';
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://cortex.nativz.io';
@@ -216,6 +202,13 @@ async function queueKickoffEmail(
     html: body,
     agency: 'nativz',
   });
+
+  if (result.ok) {
+    await admin
+      .from('clients')
+      .update({ kickoff_email_sent_at: new Date().toISOString() })
+      .eq('id', clientId);
+  }
 
   await logLifecycleEvent(clientId, 'kickoff.scheduled', 'Kickoff email sent to client', {
     description: result.ok ? undefined : `send failed: ${result.error}`,

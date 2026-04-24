@@ -4,6 +4,7 @@ import { ExternalLink } from 'lucide-react';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { formatCents, formatCentsCompact } from '@/lib/format/money';
+import { netLifetimeRevenueCents } from '@/lib/revenue/aggregates';
 import { mrrForSubscription } from '@/lib/stripe/mrr';
 import { KpiTile } from '@/components/admin/revenue/kpi-tile';
 import {
@@ -54,7 +55,7 @@ export default async function ClientBillingPage({
     { data: invoices },
     { data: subs },
     { data: contracts },
-    { data: lifetimeRes },
+    lifetimeCents,
     { data: openArRes },
     { data: adSpendRes },
     { data: events },
@@ -76,7 +77,7 @@ export default async function ClientBillingPage({
       .select('id, label, status, effective_start, effective_end, external_provider, external_url, sent_at, signed_at, total_cents, deposit_cents')
       .eq('client_id', client.id)
       .order('uploaded_at', { ascending: false }),
-    admin.from('stripe_invoices').select('amount_paid_cents').eq('client_id', client.id),
+    netLifetimeRevenueCents(admin, { clientId: client.id }),
     admin
       .from('stripe_invoices')
       .select('amount_remaining_cents')
@@ -91,7 +92,6 @@ export default async function ClientBillingPage({
       .limit(30),
   ]);
 
-  const lifetimeCents = (lifetimeRes ?? []).reduce((s, r) => s + (r.amount_paid_cents ?? 0), 0);
   const openArCents = (openArRes ?? []).reduce((s, r) => s + (r.amount_remaining_cents ?? 0), 0);
   const adSpendMtdCents = (adSpendRes ?? []).reduce((s, r) => s + (r.spend_cents ?? 0), 0);
 

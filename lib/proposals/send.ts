@@ -31,7 +31,7 @@ export async function sendProposal(
   const { data: proposal, error } = await admin
     .from('proposals')
     .select(
-      'id, slug, title, status, signer_name, signer_email, total_cents, deposit_cents, currency, client_id, stripe_payment_link_id, stripe_payment_link_url, sent_snapshot',
+      'id, slug, title, status, signer_name, signer_email, total_cents, deposit_cents, currency, client_id, stripe_payment_link_id, stripe_payment_link_url, sent_snapshot, payment_link_deposit_cents',
     )
     .eq('id', proposalId)
     .maybeSingle();
@@ -59,10 +59,38 @@ export async function sendProposal(
     .order('sort_order');
 
   let paymentLinkUrl: string | null = proposal.stripe_payment_link_url;
+  let paymentLinkId: string | null = proposal.stripe_payment_link_id;
   // Deposit semantics: null → default to setup + first-month; 0 → explicit
   // "no deposit, no Payment Link". Any positive integer is treated as the
   // exact deposit amount.
   const depositCents = proposal.deposit_cents ?? defaultDeposit(packages ?? []);
+
+  // If the Payment Link was minted against a different deposit amount than
+  // what we're sending now, archive the old link + recreate so the signer
+  // pays the current amount. Handles: admin created a draft at $5k deposit,
+  // sent, then revised the draft (via DB or future admin UI) to $3k before
+  // a resend.
+  if (
+    paymentLinkId &&
+    proposal.payment_link_deposit_cents !== null &&
+    proposal.payment_link_deposit_cents !== depositCents
+  ) {
+    try {
+      await getStripe().paymentLinks.update(paymentLinkId, { active: false });
+    } catch (err) {
+      console.error('[proposals:send] failed to archive stale Payment Link:', err);
+    }
+    paymentLinkId = null;
+    paymentLinkUrl = null;
+    await admin
+      .from('proposals')
+      .update({
+        stripe_payment_link_id: null,
+        stripe_payment_link_url: null,
+        payment_link_deposit_cents: null,
+      })
+      .eq('id', proposal.id);
+  }
 
   if (depositCents > 0 && !paymentLinkUrl) {
     const result = await createDepositPaymentLink({
@@ -71,11 +99,13 @@ export async function sendProposal(
     });
     if (!result.ok) return { ok: false, error: result.error };
     paymentLinkUrl = result.url;
+    paymentLinkId = result.id;
     await admin
       .from('proposals')
       .update({
         stripe_payment_link_id: result.id,
         stripe_payment_link_url: result.url,
+        payment_link_deposit_cents: depositCents,
       })
       .eq('id', proposal.id);
   }

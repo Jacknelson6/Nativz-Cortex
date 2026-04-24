@@ -13,6 +13,7 @@ import { RevenueSubscriptionsTab } from '@/components/admin/revenue/subscription
 import { RevenueClientsTab } from '@/components/admin/revenue/clients-tab';
 import { AdSpendTab } from '@/components/admin/revenue/ad-spend-tab';
 import { RevenueActivityTab } from '@/components/admin/revenue/activity-tab';
+import { AnomaliesTab } from '@/components/admin/revenue/anomalies-tab';
 import { QuickBooksExportButton } from '@/components/admin/revenue/qb-export-button';
 
 export const dynamic = 'force-dynamic';
@@ -62,6 +63,7 @@ export default async function RevenuePage({
         {activeTab === 'clients' ? <RevenueClientsTab /> : null}
         {activeTab === 'ad-spend' ? <AdSpendClientLoader /> : null}
         {activeTab === 'activity' ? <RevenueActivityTab /> : null}
+        {activeTab === 'anomalies' ? <AnomaliesTab /> : null}
       </SectionPanel>
     </div>
   );

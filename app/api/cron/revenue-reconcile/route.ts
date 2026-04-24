@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { syncRecent } from '@/lib/stripe/backfill';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { onInvoiceOverdue, onInvoiceDueSoon } from '@/lib/lifecycle/state-machine';
+import { onInvoiceOverdue, onInvoiceDueSoon, logLifecycleEvent } from '@/lib/lifecycle/state-machine';
+import { notifyAdmins } from '@/lib/lifecycle/notify';
 import { recomputeClientMrr } from '@/lib/stripe/subscriptions';
 
 export const runtime = 'nodejs';
@@ -96,11 +97,73 @@ export async function GET(req: NextRequest) {
     await recomputeClientMrr(c.id, admin);
   }
 
+  // Bug 5: auto-expire proposals past their expires_at. Keeps the
+  // Proposals list and the public /proposals/[slug] page honest.
+  const { data: freshlyExpired } = await admin
+    .from('proposals')
+    .update({ status: 'expired' })
+    .in('status', ['sent', 'viewed'])
+    .lt('expires_at', nowIso)
+    .select('id, title, client_id, slug');
+
+  let proposalsExpired = 0;
+  for (const p of freshlyExpired ?? []) {
+    proposalsExpired += 1;
+    if (p.client_id) {
+      await logLifecycleEvent(p.client_id, 'proposal.expired', `Proposal expired: ${p.title}`, {
+        metadata: { proposal_id: p.id, slug: p.slug },
+        admin,
+      });
+    }
+    await admin.from('proposal_events').insert({
+      proposal_id: p.id,
+      type: 'expired',
+      metadata: { auto: true },
+    });
+  }
+
+  // Bug 5 (cont.): two-day pre-expiry warning — one notification per
+  // proposal, deduped via proposal_events so the cron running daily doesn't
+  // re-notify. Open: proposals in 'sent'/'viewed', expires within 48h.
+  const warningHorizon = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+  const { data: expiringSoon } = await admin
+    .from('proposals')
+    .select('id, title, client_id, slug, signer_email, expires_at')
+    .in('status', ['sent', 'viewed'])
+    .gte('expires_at', nowIso)
+    .lte('expires_at', warningHorizon)
+    .limit(100);
+
+  let proposalExpiryWarnings = 0;
+  for (const p of expiringSoon ?? []) {
+    const { data: existing } = await admin
+      .from('proposal_events')
+      .select('id')
+      .eq('proposal_id', p.id)
+      .eq('type', 'expiring_soon')
+      .limit(1);
+    if (existing && existing.length > 0) continue;
+    await admin.from('proposal_events').insert({
+      proposal_id: p.id,
+      type: 'expiring_soon',
+      metadata: { expires_at: p.expires_at },
+    });
+    await notifyAdmins(
+      admin,
+      'proposal_expiring',
+      `Proposal expiring soon: ${p.title}`,
+      { message: `Expires ${new Date(p.expires_at!).toLocaleDateString('en-US')} — nudge ${p.signer_email ?? 'signer'}?` },
+    );
+    proposalExpiryWarnings += 1;
+  }
+
   return NextResponse.json({
     ok: true,
     recent: recentCounts,
     overdueNotifications,
     dueSoonNotifications,
     mrrRecomputed: clientsWithMrr?.length ?? 0,
+    proposalsExpired,
+    proposalExpiryWarnings,
   });
 }
