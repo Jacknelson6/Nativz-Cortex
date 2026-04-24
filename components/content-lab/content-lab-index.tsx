@@ -129,7 +129,7 @@ export function ContentLabIndex({
                 {filtered.map((c) => (
                   <li key={c.id}>
                     <Link
-                      href={`/admin/strategy-lab/${c.id}`}
+                      href={`/lab/${c.id}`}
                       className={cn(
                         'group flex h-full min-h-[5.25rem] items-center gap-4 rounded-2xl border border-nativz-border/60 bg-surface/80 p-4',
                         'shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)] transition-all',

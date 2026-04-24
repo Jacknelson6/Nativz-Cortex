@@ -108,7 +108,7 @@ export function IdeasResultsClient({
           {generation.error_message ?? 'An unexpected error occurred. Please try again.'}
         </p>
         <Link
-          href={searchId ? `/admin/finder/${searchId}` : '/admin/finder/new'}
+          href={searchId ? `/finder/${searchId}` : '/finder/new'}
           className="mt-4 inline-flex items-center gap-1.5 text-sm text-accent2-text hover:text-accent2-text"
         >
           <ArrowLeft size={14} />
@@ -121,8 +121,8 @@ export function IdeasResultsClient({
   // ── Processing state ──
   if (generation.status === 'processing') {
     const returnHref = generation.search_id
-      ? `/admin/finder/${generation.search_id}`
-      : '/admin/finder/new';
+      ? `/finder/${generation.search_id}`
+      : '/finder/new';
 
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -465,7 +465,7 @@ export function IdeasResultsClient({
       {/* Breadcrumb + Header */}
       <div>
         <Link
-          href={searchId ? `/admin/finder/${searchId}` : '/admin/finder/new'}
+          href={searchId ? `/finder/${searchId}` : '/finder/new'}
           className="inline-flex items-center gap-1.5 text-sm text-text-muted hover:text-text-secondary transition-colors mb-3"
         >
           <ArrowLeft size={14} />

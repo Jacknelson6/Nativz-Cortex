@@ -37,7 +37,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const data = report.report_json as unknown as TrendReportData;
   const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://cortex.nativz.io';
-  const dashboardUrl = `${appBaseUrl}/admin/finder/monitors`;
+  const dashboardUrl = `${appBaseUrl}/finder/monitors`;
 
   const result = await sendTrendReportEmail({
     to: sub.recipients ?? [],

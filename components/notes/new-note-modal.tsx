@@ -8,7 +8,7 @@ type Scope = 'personal' | 'client' | 'team';
 /**
  * Create-note modal. Picks scope (personal / client / team) + optional client,
  * names the board, and POSTs to /api/moodboard/notes-boards. On success the
- * parent navigates to /admin/notes/[id].
+ * parent navigates to /notes/[id].
  */
 export function NewNoteModal({
   open,

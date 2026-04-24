@@ -100,7 +100,7 @@ export function ActiveWatchesStrip({ watches }: { watches: WatchCard[] }) {
         <div className="rounded-2xl border border-dashed border-nativz-border bg-surface/40 p-8 text-center text-sm text-text-muted">
           No competitors enrolled yet — run an audit and hit{' '}
           <span className="text-cyan-300">Watch this competitor</span> on any result, or jump into{' '}
-          <Link href="/admin/spying/watch" className="text-cyan-300 underline decoration-dotted">
+          <Link href="/spying/watch" className="text-cyan-300 underline decoration-dotted">
             set up watch
           </Link>
           .

@@ -158,8 +158,8 @@ export function ResearchHub({
       clientId: null,
       createdAt: new Date().toISOString(),
       href: needsSubtopics
-        ? `/admin/finder/${item.id}/subtopics`
-        : `/admin/finder/${item.id}/processing`,
+        ? `/finder/${item.id}/subtopics`
+        : `/finder/${item.id}/processing`,
     }, ...prev]);
   }, []);
 

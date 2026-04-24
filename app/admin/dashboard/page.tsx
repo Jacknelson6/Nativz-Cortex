@@ -89,7 +89,7 @@ export default async function AdminDashboardPage() {
             description="Plan and publish content"
           />
           <BentoTile
-            href="/admin/finder/new"
+            href="/finder/new"
             icon={<Search size={20} className="text-accent-text" />}
             label="Research topic"
             description="Social listening and trends"

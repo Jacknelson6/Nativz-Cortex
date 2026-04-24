@@ -41,7 +41,7 @@ export default async function AuditDetailPage({
           scopeType="audit"
           scopeId={audit.id}
           scopeLabel={drawerLabel}
-          strategyLabHref={`/admin/strategy-lab?attach=audit:${audit.id}`}
+          strategyLabHref={`/lab?attach=audit:${audit.id}`}
         />
       )}
     </>

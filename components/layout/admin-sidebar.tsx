@@ -94,17 +94,17 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Brand tools',
     items: [
-      { href: '/admin/finder/new', label: 'Trend Finder', icon: TrendingUp },
+      { href: '/finder/new', label: 'Trend Finder', icon: TrendingUp },
       {
         // Trend monitors — recurring brand / topic listening reports.
         // Sits directly below Trend Finder so the relationship is obvious:
         // one is ad-hoc search, the other is ongoing listening on the same
         // underlying Apify + LLM stack.
-        href: '/admin/finder/monitors',
+        href: '/finder/monitors',
         label: 'Trend Monitors',
         icon: Radar,
       },
-      { href: '/admin/strategy-lab', label: 'Strategy Lab', icon: MessagesSquare },
+      { href: '/lab', label: 'Strategy Lab', icon: MessagesSquare },
       {
         // NAT-62 (2026-04-22): unified landing page. Renamed back to
         // "Competitor spying" 2026-04-22 evening per Jack — feels more
@@ -112,12 +112,12 @@ const NAV_SECTIONS: NavSection[] = [
         // the corporate-sounding "intelligence". Telescope icon ("we're
         // watching from afar") replaces ScanSearch — the magnifying-
         // glass-with-arrows didn't read as surveillance.
-        href: '/admin/spying',
+        href: '/spying',
         label: 'Spying',
         icon: Telescope,
       },
-      { href: '/admin/ad-creatives', label: 'Ad Generator', icon: ImagePlus },
-      { href: '/admin/brain', label: 'Brain', icon: Brain },
+      { href: '/ads', label: 'Ad Generator', icon: ImagePlus },
+      { href: '/brain', label: 'Brain', icon: Brain },
       // NAT-57 follow-up: single entry point for the pinned brand's
       // profile. Sits between Brain (AI knowledge) and Notes (manual
       // notes) — both adjacent to it in the user's mental model as
@@ -126,8 +126,8 @@ const NAV_SECTIONS: NavSection[] = [
       // closer to "profile page" than the generic Building we started
       // with. Keeps the visual theme (outlined lucide) consistent with
       // the rest of the rail.
-      { href: '/admin/brand-profile', label: 'Brand Profile', icon: BookUser },
-      { href: '/admin/notes', label: 'Notes', icon: StickyNote },
+      { href: '/brand-profile', label: 'Brand Profile', icon: BookUser },
+      { href: '/notes', label: 'Notes', icon: StickyNote },
     ],
   },
   {
@@ -164,17 +164,11 @@ const NAV_SECTIONS: NavSection[] = [
 ];
 
 function isActivePath(pathname: string, href: string, searchParams?: URLSearchParams) {
-  // Trend Finder — sidebar href points at /admin/finder/new; any /admin/finder/*
+  // Trend Finder — sidebar href points at /finder/new; any /finder/*
   // pathname (monitors, [id] detail, subtopics) should highlight this item.
-  // Also match the legacy /admin/search/* pathname so a user landing on an
-  // old bookmarked URL (before redirect resolves) still sees the right item
-  // lit up while Next is processing the redirect.
   if (href.endsWith('/finder/new')) {
     const prefix = href.replace('/finder/new', '');
-    return (
-      pathname.startsWith(`${prefix}/finder`) ||
-      pathname.startsWith(`${prefix}/search`)
-    );
+    return pathname.startsWith(`${prefix}/finder`);
   }
 
   // Pipeline root "All stages" shares /admin/edits with ?stage=… filtered views
@@ -182,14 +176,12 @@ function isActivePath(pathname: string, href: string, searchParams?: URLSearchPa
     return !searchParams?.get('stage');
   }
 
-  // Brain (formerly Knowledge): graph and meetings are one area (single
-  // sidebar item). We keep the internal directory at /admin/knowledge and
-  // rewrite /admin/brain → /admin/knowledge; this active-path check works
-  // against the canonical public URL (/admin/brain).
+  // Brain (formerly Knowledge): graph and meetings roll up into a single
+  // sidebar item. Phase 1 of the brand-root migration renamed the directory
+  // to `/(app)/brain`, so the canonical URL and the filesystem dir match.
   if (href.endsWith('/brain')) {
     const prefix = href.replace('/brain', '');
     if (pathname === `${prefix}/meetings` || pathname.startsWith(`${prefix}/meetings/`)) return true;
-    if (pathname === `${prefix}/knowledge` || pathname.startsWith(`${prefix}/knowledge/`)) return true;
     return pathname === href || pathname.startsWith(href + '/');
   }
 
@@ -227,15 +219,15 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/tasks',
   '/admin/edits',
   '/admin/scheduling',
-  '/admin/ad-creatives',
+  '/ads',
   '/admin/clients',
   '/admin/users',
   '/admin/presentations',
   '/admin/shoots',
-  '/admin/brain',
+  '/brain',
   '/admin/analyze-social',
-  '/admin/spying',
-  '/admin/finder/monitors',
+  '/spying',
+  '/finder/monitors',
   '/admin/notifications',
   '/admin/usage',
   // Settings is reachable from the avatar popover — it doesn't need its
@@ -254,13 +246,17 @@ const COMING_SOON_HREFS = new Set([
 ]);
 
 /**
- * One-off href rewrites for portal viewers. Used when the portal route
- * doesn't share the admin path suffix (e.g. admin's /content-lab maps
- * to portal's /content-lab). Keyed on the admin href so the lookup
- * lines up with NAV_SECTIONS.
+ * One-off href rewrites for portal viewers. Phase 1 of the brand-root
+ * migration lifted admin brand tools out of /admin/* to the root, but
+ * the portal continues to serve its own copies under /portal/*. When a
+ * NAV_SECTIONS item points at a root URL that has no /admin/ prefix to
+ * rewrite, this table maps the root href to the portal equivalent.
  */
 const PORTAL_HREF_REWRITES: Record<string, string> = {
-  '/admin/strategy-lab': '/portal/strategy-lab',
+  '/finder/new': '/portal/search/new',
+  '/lab': '/portal/strategy-lab',
+  '/brand-profile': '/portal/brand-profile',
+  '/notes': '/portal/notes',
 };
 
 function getNavSectionsForRole(role: 'admin' | 'viewer', prefix: string): NavSection[] {

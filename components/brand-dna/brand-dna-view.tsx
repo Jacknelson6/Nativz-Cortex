@@ -58,7 +58,7 @@ export function BrandDNAView({
       {/* NAT-57 follow-up (polish pass 3, 2026-04-21): the internal
           "[Brand name] brand DNA" header + back-arrow + "Updated X days
           ago" timestamp were removed. This component is now always
-          rendered inside an outer SectionCard (on /admin/brand-profile
+          rendered inside an outer SectionCard (on /brand-profile
           and the settings page) which provides its own title, icon,
           and description — so repeating it here was redundant signage.
           Back-arrow was only useful when DNA had its own full-page

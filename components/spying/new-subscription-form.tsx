@@ -64,7 +64,7 @@ export function NewSubscriptionForm({
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? 'Create failed');
-      router.push('/admin/spying/reports');
+      router.push('/spying/reports');
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Create failed');

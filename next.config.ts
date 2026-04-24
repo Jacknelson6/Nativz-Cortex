@@ -11,56 +11,67 @@ const nextConfig: NextConfig = {
       { source: '/admin/audit', destination: '/admin/analyze-social', permanent: false },
       { source: '/admin/audit/:path*', destination: '/admin/analyze-social/:path*', permanent: false },
       { source: '/shared/audit/:path*', destination: '/shared/analyze-social/:path*', permanent: false },
-      // Content Lab → Strategy Lab (April 2026 rename). Internal file /
-      // folder names (components/content-lab/*, lib/content-lab/*) kept as-is
-      // to avoid churn on git blame and imports; only the public URL moved.
-      { source: '/admin/content-lab', destination: '/admin/strategy-lab', permanent: false },
-      { source: '/admin/content-lab/:path*', destination: '/admin/strategy-lab/:path*', permanent: false },
+      // Portal Content Lab alias — portal is untouched in phase 1 of the
+      // brand-root migration.
       { source: '/portal/content-lab', destination: '/portal/strategy-lab', permanent: false },
       { source: '/portal/content-lab/:path*', destination: '/portal/strategy-lab/:path*', permanent: false },
-      // Slug-matches-label renames (2026-04-24 per Jack). Same pattern as the
-      // content-lab rename above: the directory name stays to avoid churn on
-      // imports + git blame; only the public URL changes. Old URLs keep
-      // working via these redirects so bookmarks don't break. The rewrites
-      // block below serves the renamed URL from the existing directory.
+      // Admin-side rename pairs where the directory still lives under /admin/*
+      // (only the URL label changed). Rewrites below serve the canonical URL
+      // from the legacy directory.
       { source: '/admin/pipeline', destination: '/admin/edits', permanent: false },
       { source: '/admin/pipeline/:path*', destination: '/admin/edits/:path*', permanent: false },
-      { source: '/admin/knowledge', destination: '/admin/brain', permanent: false },
-      { source: '/admin/knowledge/:path*', destination: '/admin/brain/:path*', permanent: false },
       { source: '/admin/scheduler', destination: '/admin/scheduling', permanent: false },
       { source: '/admin/scheduler/:path*', destination: '/admin/scheduling/:path*', permanent: false },
-      // 2026-04-24: both legacy aliases collapse into /admin/spying (the
-      // real directory). The old bidirectional rewrite+redirect pair was
-      // cute but confusing — one short canonical URL beats a display-vs-
-      // storage split.
-      { source: '/admin/competitor-intelligence', destination: '/admin/spying', permanent: false },
-      { source: '/admin/competitor-intelligence/:path*', destination: '/admin/spying/:path*', permanent: false },
-      { source: '/admin/competitor-spying', destination: '/admin/spying', permanent: false },
-      { source: '/admin/competitor-spying/:path*', destination: '/admin/spying/:path*', permanent: false },
-      // /admin/search → /admin/finder (2026-04-24). Covers Trend Finder
-      // (/admin/finder/new), Trend Monitors (/admin/finder/monitors), and
-      // topic-search detail pages (/admin/finder/[id]).
-      { source: '/admin/search', destination: '/admin/finder', permanent: false },
-      { source: '/admin/search/:path*', destination: '/admin/finder/:path*', permanent: false },
+
+      // --- Brand-root migration phase 1 (2026-04-24) ---
+      // Brand-scoped tools lifted from /admin/* to the root. Each old URL
+      // (and any earlier alias) redirects to the new canonical root path so
+      // bookmarks, outbound notification links, email templates, and any
+      // hard-coded references keep working until they age out (~30 days).
+      //
+      // Trend Finder — directory renamed /admin/search → /(app)/finder.
+      { source: '/admin/search', destination: '/finder', permanent: false },
+      { source: '/admin/search/:path*', destination: '/finder/:path*', permanent: false },
+      { source: '/admin/finder', destination: '/finder', permanent: false },
+      { source: '/admin/finder/:path*', destination: '/finder/:path*', permanent: false },
+      // Strategy Lab — directory renamed /admin/strategy-lab → /(app)/lab.
+      { source: '/admin/content-lab', destination: '/lab', permanent: false },
+      { source: '/admin/content-lab/:path*', destination: '/lab/:path*', permanent: false },
+      { source: '/admin/strategy-lab', destination: '/lab', permanent: false },
+      { source: '/admin/strategy-lab/:path*', destination: '/lab/:path*', permanent: false },
+      // Spying — moved to /(app)/spying. Legacy competitor-* aliases ride along.
+      { source: '/admin/competitor-intelligence', destination: '/spying', permanent: false },
+      { source: '/admin/competitor-intelligence/:path*', destination: '/spying/:path*', permanent: false },
+      { source: '/admin/competitor-spying', destination: '/spying', permanent: false },
+      { source: '/admin/competitor-spying/:path*', destination: '/spying/:path*', permanent: false },
+      { source: '/admin/spying', destination: '/spying', permanent: false },
+      { source: '/admin/spying/:path*', destination: '/spying/:path*', permanent: false },
+      // Ads — directory renamed /admin/ad-creatives → /(app)/ads.
+      { source: '/admin/ad-creatives', destination: '/ads', permanent: false },
+      { source: '/admin/ad-creatives/:path*', destination: '/ads/:path*', permanent: false },
+      // Brain — directory renamed /admin/knowledge → /(app)/brain.
+      { source: '/admin/knowledge', destination: '/brain', permanent: false },
+      { source: '/admin/knowledge/:path*', destination: '/brain/:path*', permanent: false },
+      { source: '/admin/brain', destination: '/brain', permanent: false },
+      { source: '/admin/brain/:path*', destination: '/brain/:path*', permanent: false },
+      // Notes — moved to /(app)/notes.
+      { source: '/admin/notes', destination: '/notes', permanent: false },
+      { source: '/admin/notes/:path*', destination: '/notes/:path*', permanent: false },
+      // Brand profile — moved to /(app)/brand-profile (slug preserved per Jack).
+      { source: '/admin/brand-profile', destination: '/brand-profile', permanent: false },
+      { source: '/admin/brand-profile/:path*', destination: '/brand-profile/:path*', permanent: false },
     ];
   },
   async rewrites() {
     return [
-      // Serve the renamed public URLs from their existing directories. Paired
-      // with the redirects above, the new URL is canonical and the old one
-      // still works for bookmarked links. API routes (`/api/scheduler/**`)
-      // are intentionally left alone — scheduler provider webhooks hit them
-      // by exact URL and renaming would break third-party configs.
-      { source: '/admin/content-lab', destination: '/admin/strategy-lab' },
-      { source: '/admin/content-lab/:path*', destination: '/admin/strategy-lab/:path*' },
+      // Serve the canonical admin URL from the underlying directory where
+      // the directory name still differs from the label. API routes
+      // (`/api/scheduler/**`) are intentionally left alone — scheduler
+      // provider webhooks hit them by exact URL.
       { source: '/admin/edits', destination: '/admin/pipeline' },
       { source: '/admin/edits/:path*', destination: '/admin/pipeline/:path*' },
-      { source: '/admin/brain', destination: '/admin/knowledge' },
-      { source: '/admin/brain/:path*', destination: '/admin/knowledge/:path*' },
       { source: '/admin/scheduling', destination: '/admin/scheduler' },
       { source: '/admin/scheduling/:path*', destination: '/admin/scheduler/:path*' },
-      { source: '/admin/finder', destination: '/admin/search' },
-      { source: '/admin/finder/:path*', destination: '/admin/search/:path*' },
     ];
   },
   compiler: {

@@ -57,7 +57,7 @@ export const agencyKnowledgeTools: ToolDefinition[] = [
           domain: r.domain,
           similarity: Math.round(r.similarity * 100) / 100,
           preview: (r.content ?? '').length > 500 ? (r.content ?? '').substring(0, 500) + '...' : r.content,
-          link: `/admin/brain?node=${encodeURIComponent(r.id)}`,
+          link: `/brain?node=${encodeURIComponent(r.id)}`,
         }));
 
         return {
@@ -106,7 +106,7 @@ export const agencyKnowledgeTools: ToolDefinition[] = [
             client_id: node.client_id,
             created_at: node.created_at,
             updated_at: node.updated_at,
-            link: `/admin/brain?node=${encodeURIComponent(node.id)}`,
+            link: `/brain?node=${encodeURIComponent(node.id)}`,
           },
         };
       } catch (err) {
@@ -172,7 +172,7 @@ export const agencyKnowledgeTools: ToolDefinition[] = [
             id: node.id,
             title: node.title,
             kind: node.kind,
-            link: `/admin/brain?node=${encodeURIComponent(node.id)}`,
+            link: `/brain?node=${encodeURIComponent(node.id)}`,
           },
         };
       } catch (err) {

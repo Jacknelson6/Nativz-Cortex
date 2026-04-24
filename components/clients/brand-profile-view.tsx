@@ -10,7 +10,7 @@ import { BrandProfileSocialsView } from './brand-profile-socials-view';
 import { BrandProfileCompetitorsView } from './brand-profile-competitors-view';
 
 // NAT-57 follow-up (2026-04-21, polish pass 2): unified brand-profile
-// view used by both `/admin/brand-profile` and `/portal/brand-profile`.
+// view used by both `/brand-profile` and `/portal/brand-profile`.
 // Admin mode adds an "Edit in settings" CTA that deep-links to the edit
 // surface; portal mode hides it.
 //

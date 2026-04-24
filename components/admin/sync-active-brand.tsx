@@ -5,7 +5,7 @@ import { useActiveBrand } from '@/lib/admin/active-client-context';
 
 /**
  * Mount-time sync: if the page this component lives on was deep-linked with
- * a specific `clientId` in its URL (e.g. `/admin/strategy-lab/<uuid>`),
+ * a specific `clientId` in its URL (e.g. `/lab/<uuid>`),
  * push that brand into the active-brand context so the top-bar pill stays
  * in lockstep with the page's data.
  *

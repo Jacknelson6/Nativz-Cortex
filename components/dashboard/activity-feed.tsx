@@ -67,7 +67,7 @@ function getDescription(event: ActivityEvent): string {
 
 function getLink(event: ActivityEvent): string | null {
   switch (event.entity_type) {
-    case 'search': return `/admin/finder/${event.entity_id}`;
+    case 'search': return `/finder/${event.entity_id}`;
     case 'client': return `/admin/clients`;
     case 'shoot': return `/admin/shoots`;
     default: return null;

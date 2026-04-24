@@ -98,17 +98,17 @@ test.describe('Admin active-brand flow', () => {
 
     // Strategy Lab URL is flat now — no `[clientId]` segment. The page
     // reads the cookie server-side and renders the branded workspace at
-    // the plain /admin/strategy-lab URL.
-    await page.goto('/admin/strategy-lab', { waitUntil: 'domcontentloaded' });
+    // the plain /lab URL.
+    await page.goto('/lab', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/strategy-lab(\?|$)/);
     // Sanity — the workspace-specific "Strategy Lab" header chip should
     // render when a brand is pinned (general chat shows a different header).
     await expect(page.locator('text=/strategy lab/i').first()).toBeVisible({ timeout: 10_000 });
 
-    // Ad Creatives URL is flat too — /admin/ad-creatives reads the session
+    // Ad Creatives URL is flat too — /ads reads the session
     // brand server-side. Legacy /admin/ad-creatives-v2 redirects to the
     // flat URL.
-    await page.goto('/admin/ad-creatives', { waitUntil: 'domcontentloaded' });
+    await page.goto('/ads', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/ad-creatives(\?|$)/);
     await page.goto('/admin/ad-creatives-v2', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/ad-creatives(\?|$)/);
@@ -125,9 +125,9 @@ test.describe('Admin active-brand flow', () => {
     expect(clearRes.ok(), `clear-active-client: ${clearRes.status()}`).toBeTruthy();
 
     // Strategy Lab with no cookie renders the general chat at the
-    // flattened /admin/strategy-lab URL — no clientId segment.
-    await page.goto('/admin/strategy-lab', { waitUntil: 'domcontentloaded' });
-    expect(page.url()).not.toMatch(new RegExp(`/admin/strategy-lab/${UUID_RE.source}`));
+    // flattened /lab URL — no clientId segment.
+    await page.goto('/lab', { waitUntil: 'domcontentloaded' });
+    expect(page.url()).not.toMatch(new RegExp(`/lab/${UUID_RE.source}`));
     await expect(page).toHaveURL(/\/admin\/strategy-lab(\?|$)/);
   });
 

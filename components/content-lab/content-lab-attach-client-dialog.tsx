@@ -97,7 +97,7 @@ export function ContentLabAttachClientDialog({
         /* quota / JSON — non-fatal */
       }
       toast.success(`Attached to ${client.name}`);
-      router.push(`/admin/strategy-lab/${client.id}`);
+      router.push(`/lab/${client.id}`);
     } finally {
       setAttaching(false);
     }

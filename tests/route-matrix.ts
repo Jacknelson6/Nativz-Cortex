@@ -9,7 +9,7 @@ export const ADMIN_PROTECTED_ROUTES: string[] = [
   '/admin/clients',
   '/admin/clients/new',
   '/admin/clients/onboard',
-  '/admin/search/new',
+  '/finder/new',
   '/admin/settings',
   '/admin/settings/calendar',
   '/admin/settings/usage',
@@ -21,12 +21,12 @@ export const ADMIN_PROTECTED_ROUTES: string[] = [
   '/admin/pipeline',
   '/admin/tasks',
   '/admin/meetings',
-  '/admin/knowledge',
+  '/brain',
   '/admin/nerd',
   '/admin/nerd/api',
   '/admin/scheduler',
   '/admin/presentations',
-  '/admin/ad-creatives',
+  '/ads',
   '/admin/team',
   '/admin/tools',
   '/admin/users',
@@ -63,7 +63,7 @@ export const PORTAL_E2E_MINIMAL_STATIC_ROUTES: string[] = ['/portal/search/new',
  */
 export const ADMIN_E2E_FULL_STATIC_ROUTES: string[] = [
   ...ADMIN_PROTECTED_ROUTES.filter((p) => p !== '/admin/analytics'),
-  '/admin/strategy-lab',
+  '/lab',
 ];
 
 /** Full portal static shells for post-login crawl. */

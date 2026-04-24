@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
  * across organizations).
  *
  * Admins can also open any board from here, which mirrors how the admin
- * sidebar rewrites /admin/notes → /portal/notes during impersonation.
+ * sidebar rewrites /notes → /portal/notes during impersonation.
  */
 export default async function PortalNotesBoardPage({
   params,

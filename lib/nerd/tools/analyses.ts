@@ -485,7 +485,7 @@ const getTopicSearchSummary: ToolDefinition = {
         summary_markdown: lines.join('\n'),
       },
       link: {
-        href: `/admin/finder/${row.id}`,
+        href: `/finder/${row.id}`,
         label: 'Open search',
       },
     };

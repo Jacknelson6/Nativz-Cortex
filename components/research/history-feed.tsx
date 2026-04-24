@@ -596,10 +596,10 @@ export function HistoryFeed({
       if (item.type === 'ideas') return;
       if (item.clientId) {
         mergeTopicSearchSelectionIntoLocalStorage(item.clientId, [item.id]);
-        router.push(`/admin/strategy-lab/${item.clientId}`);
+        router.push(`/lab/${item.clientId}`);
       } else {
         toast.message('Pick a client in Content lab, then pin topic searches from your history.');
-        router.push('/admin/strategy-lab');
+        router.push('/lab');
       }
     },
     [router],
@@ -616,7 +616,7 @@ export function HistoryFeed({
     const clientIds = [...new Set(rows.map((r) => r.clientId).filter(Boolean))];
     if (clientIds.length === 0) {
       toast.message('Pick a client in Strategy Lab, then pin topic searches from your history.');
-      router.push('/admin/strategy-lab');
+      router.push('/lab');
       return;
     }
     if (clientIds.length > 1) {
@@ -627,7 +627,7 @@ export function HistoryFeed({
     mergeTopicSearchSelectionIntoLocalStorage(clientId, ids);
     setSelectionModeActive(false);
     setSelectedTopicSearchIds(new Set());
-    router.push(`/admin/strategy-lab/${clientId}`);
+    router.push(`/lab/${clientId}`);
   }, [orderedSelectedIds, mergedItems, router]);
 
   /**

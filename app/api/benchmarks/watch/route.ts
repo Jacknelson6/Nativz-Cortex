@@ -79,7 +79,7 @@ const CADENCE_DAYS = { weekly: 7, biweekly: 14, monthly: 30 } as const;
 /**
  * POST /api/benchmarks/watch — bulk-enrol multiple competitor URLs under
  * a single client_benchmarks row, created fresh (no audit origin).
- * Used by the /admin/spying/watch wizard.
+ * Used by the /spying/watch wizard.
  */
 export async function POST(request: NextRequest) {
   const supabase = await createServerSupabaseClient();

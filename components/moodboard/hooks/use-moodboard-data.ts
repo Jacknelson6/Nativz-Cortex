@@ -125,7 +125,7 @@ export function useMoodboardData(boardId: string) {
 
       if (!boardRes.ok) {
         toast.error('Board not found');
-        router.push('/admin/finder/new');
+        router.push('/finder/new');
         return;
       }
       const data = await boardRes.json();

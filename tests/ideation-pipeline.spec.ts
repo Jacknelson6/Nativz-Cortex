@@ -23,7 +23,7 @@ test.describe('Ideation pipeline', () => {
   });
 
   test('research hub loads after login', async ({ page }) => {
-    await page.goto('/admin/search/new', { waitUntil: 'domcontentloaded' });
+    await page.goto('/finder/new', { waitUntil: 'domcontentloaded' });
     expect(page.url()).not.toMatch(/\/admin\/login(\?|$)/);
     await expect(page.locator('body')).toBeVisible();
     // Research hub or dual-mode UI
@@ -36,7 +36,7 @@ test.describe('Ideation pipeline', () => {
     const history = await fetchJson<HistoryResponse>(page.request, '/api/research/history?limit=40');
     const completed = (history?.items ?? []).find(
       (item) =>
-        item.href?.startsWith('/admin/search/') &&
+        item.href?.startsWith('/finder/') &&
         !item.href.includes('/processing') &&
         item.status === 'completed' &&
         (item.type === 'topic' || item.type === 'brand_intel'),
@@ -50,7 +50,7 @@ test.describe('Ideation pipeline', () => {
   });
 
   test('strategy lab loads', async ({ page }) => {
-    await page.goto('/admin/strategy-lab', { waitUntil: 'domcontentloaded' });
+    await page.goto('/lab', { waitUntil: 'domcontentloaded' });
     expect(page.url()).not.toMatch(/\/admin\/login(\?|$)/);
     await expect(page.locator('body')).toBeVisible();
   });

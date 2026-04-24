@@ -86,7 +86,7 @@ export const scriptTools: ToolDefinition[] = [
           userEmail: profile?.email ?? undefined,
         });
 
-        // Persist so the script is retrievable from /admin/strategy-lab and the
+        // Persist so the script is retrievable from /lab and the
         // rest of the ideas pipeline, same shape the /api/ideas/generate-script
         // route saves.
         const { data: saved } = await admin
@@ -116,7 +116,7 @@ export const scriptTools: ToolDefinition[] = [
             scriptId: saved?.id ?? null,
             estimatedCost: result.estimatedCost,
           },
-          link: { href: '/admin/strategy-lab', label: 'Open Strategy Lab' },
+          link: { href: '/lab', label: 'Open Strategy Lab' },
           cardType: 'script' as const,
         };
       } catch (err) {

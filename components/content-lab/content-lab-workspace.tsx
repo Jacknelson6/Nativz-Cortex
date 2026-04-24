@@ -56,7 +56,7 @@ export function ContentLabWorkspace({
   vaultGraphData: KnowledgeGraphData;
   /**
    * Pre-pin a specific topic search on mount (e.g. drawer handoff from
-   * /admin/finder/[id]?attach=topic_search:<id>). Takes precedence over the
+   * /finder/[id]?attach=topic_search:<id>). Takes precedence over the
    * localStorage pin set so the handoff carries the brand + the exact
    * research the user was just looking at.
    */

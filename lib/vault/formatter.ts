@@ -137,7 +137,7 @@ export function formatResearchReport(
     search_mode: isBrand ? 'brand-intel' : 'topic-research',
     status: search.status,
     cortex_id: search.id,
-    cortex_link: `/admin/finder/${search.id}`,
+    cortex_link: `/finder/${search.id}`,
   });
 
   const sections: string[] = [

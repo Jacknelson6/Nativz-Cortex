@@ -87,7 +87,7 @@ async function main() {
       process.exit(1);
     }
     console.log('Updated demo topic search:', targetId);
-    console.log('Open:', `/admin/search/${targetId}`);
+    console.log('Open:', `/finder/${targetId}`);
     return;
   }
 
@@ -112,7 +112,7 @@ async function main() {
   }
 
   console.log('Inserted demo topic search:', inserted.id);
-  console.log('Open:', `/admin/search/${inserted.id}`);
+  console.log('Open:', `/finder/${inserted.id}`);
 }
 
 main();

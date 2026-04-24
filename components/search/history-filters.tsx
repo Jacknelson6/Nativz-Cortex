@@ -19,7 +19,7 @@ export function HistoryFilters({ clients }: HistoryFiltersProps) {
       params.set(key, value);
     }
     const q = params.toString();
-    router.push(q ? `/admin/finder/new?${q}` : '/admin/finder/new');
+    router.push(q ? `/finder/new?${q}` : '/finder/new');
   }
 
   const clientOptions = [

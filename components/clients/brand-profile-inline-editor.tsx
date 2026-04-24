@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { Building, Globe, Sparkles, Loader2, Pencil, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
 
-// NAT-57 follow-up — inline edit mode for /admin/brand-profile.
+// NAT-57 follow-up — inline edit mode for /brand-profile.
 //
 // UX model (revised per Jack, 2026-04-21):
 //   - Each section card is READ-ONLY by default. You see the brand's

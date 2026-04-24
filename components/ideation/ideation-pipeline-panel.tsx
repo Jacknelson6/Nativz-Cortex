@@ -24,8 +24,8 @@ export function IdeationPipelinePanel({
   clientId,
 }: IdeationPipelinePanelProps) {
   const labHref = clientId
-    ? `/admin/strategy-lab/${clientId}?searchId=${searchId}`
-    : `/admin/strategy-lab?searchId=${searchId}`;
+    ? `/lab/${clientId}?searchId=${searchId}`
+    : `/lab?searchId=${searchId}`;
 
   return (
     <section className="relative mx-auto w-full overflow-hidden rounded-xl border border-cyan-500/20 bg-surface">

@@ -56,14 +56,14 @@ async function upsertSearch(
     if (existing?.id) {
       const { error } = await admin.from('topic_searches').update(row).eq('id', existing.id);
       if (error) throw error;
-      console.log('Updated:', query, '→', `/admin/search/${existing.id}`);
+      console.log('Updated:', query, '→', `/finder/${existing.id}`);
       return existing.id;
     }
   }
 
   const { data: inserted, error } = await admin.from('topic_searches').insert(row).select('id').single();
   if (error) throw error;
-  console.log('Inserted:', query, '→', `/admin/search/${inserted?.id}`);
+  console.log('Inserted:', query, '→', `/finder/${inserted?.id}`);
   return inserted?.id;
 }
 

@@ -990,7 +990,7 @@ async function main() {
         process.exit(1);
       }
       console.log('Updated topic search by id:', targetId, row.query);
-      console.log(`Open: /admin/search/${targetId}`);
+      console.log(`Open: /finder/${targetId}`);
       return;
     }
 
@@ -1013,7 +1013,7 @@ async function main() {
         process.exit(1);
       }
       console.log('Inserted topic search:', inserted?.id, inserted?.query);
-      console.log(`Open: /admin/search/${inserted?.id}`);
+      console.log(`Open: /finder/${inserted?.id}`);
       return;
     }
 
@@ -1031,7 +1031,7 @@ async function main() {
       `Updated ${matches.length} topic search(es) for ${row.query}:`,
       matches.map((m) => m.id).join(', '),
     );
-    console.log(`Open: /admin/search/${matches[0]!.id}`);
+    console.log(`Open: /finder/${matches[0]!.id}`);
     return;
   }
 
@@ -1043,7 +1043,7 @@ async function main() {
   }
 
   console.log('Inserted topic search:', inserted?.id, inserted?.query);
-  console.log(`Open: /admin/search/${inserted?.id}`);
+  console.log(`Open: /finder/${inserted?.id}`);
 }
 
 main();

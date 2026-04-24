@@ -35,7 +35,7 @@ export function AdminTopBar({
   return (
     // NAT-57 bug hunt (2026-04-21): Jack hit an intermittent where the
     // top bar collapsed to 0px after client-side navigation, most
-    // reliably when opening /admin/strategy-lab. Belt-and-suspenders:
+    // reliably when opening /lab. Belt-and-suspenders:
     //   - h-14 sets the 56px height
     //   - min-h-14 asserts it as a MIN — flex can't squeeze below even
     //     if a child's layout calc is off

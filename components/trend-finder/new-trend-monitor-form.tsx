@@ -83,7 +83,7 @@ export function NewTrendMonitorForm({
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? 'Create failed');
-      router.push('/admin/finder/monitors');
+      router.push('/finder/monitors');
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Create failed');

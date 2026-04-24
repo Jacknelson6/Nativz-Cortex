@@ -45,7 +45,7 @@ export default async function PortalBrandProfilePage() {
         .maybeSingle(),
     ]);
 
-    // See note in app/admin/brand-profile/page.tsx — long select string
+    // See note in app/brand-profile/page.tsx — long select string
     // defeats supabase-js type inference, so we downcast.
     const raw = clientResult.data as Record<string, unknown> | null;
     if (!raw) return <PageError title="Could not load brand" />;

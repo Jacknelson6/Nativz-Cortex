@@ -30,7 +30,7 @@ export async function notifyTopicSearchFailedOnce(
     type: 'topic_search_failed',
     title: `Topic search failed: ${truncateTitle(row.query as string)}`,
     body: `A topic search did not complete successfully.\n\n${detail}`,
-    linkPath: `/admin/finder/${row.id}`,
+    linkPath: `/finder/${row.id}`,
     clientId: row.client_id ?? undefined,
   });
 
@@ -62,7 +62,7 @@ export async function notifyTopicSearchStuckOnce(
     body: truncateNotificationBody(
       `A topic search is taking longer than expected.\n\n${reason}`,
     ),
-    linkPath: `/admin/finder/${row.id}`,
+    linkPath: `/finder/${row.id}`,
     clientId: row.client_id ?? undefined,
   });
 

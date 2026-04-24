@@ -275,7 +275,7 @@ export async function TopicSearchTab({ range, preset }: { range: DateRange; pres
         {rows.length === 0 ? (
           <div className="rounded-xl border border-nativz-border bg-surface p-6 text-sm text-text-muted">
             No LLM v1 topic search runs yet. Run a search from{' '}
-            <Link href="/admin/finder/new" className="underline decoration-dotted">Trend Finder</Link> to see telemetry here.
+            <Link href="/finder/new" className="underline decoration-dotted">Trend Finder</Link> to see telemetry here.
           </div>
         ) : (
           <div className="overflow-hidden rounded-xl border border-nativz-border bg-surface">
@@ -374,7 +374,7 @@ export async function TopicSearchTab({ range, preset }: { range: DateRange; pres
 
                     <div className="flex justify-end">
                       <Link
-                        href={`/admin/finder/${row.id}`}
+                        href={`/finder/${row.id}`}
                         className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3.5 py-1.5 text-xs font-medium text-accent-text transition-colors hover:bg-accent/15"
                       >
                         Open report

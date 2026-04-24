@@ -9,13 +9,13 @@ import { test, expect } from '@playwright/test';
 
 const NEW_ROUTES = [
   // Spying (NAT-62)
-  '/admin/spying',
-  '/admin/spying/watch',
-  '/admin/spying/reports',
-  '/admin/spying/reports/new',
+  '/spying',
+  '/spying/watch',
+  '/spying/reports',
+  '/spying/reports/new',
   // Trend Finder monitors (2026-04-22 evening)
-  '/admin/finder/monitors',
-  '/admin/finder/monitors/new',
+  '/finder/monitors',
+  '/finder/monitors/new',
   // Infrastructure v2 (NAT-61) — tab variations
   '/admin/usage?tab=overview',
   '/admin/usage?tab=topic-search',
@@ -38,13 +38,13 @@ test.describe('Spying + monitors — route smoke', () => {
 });
 
 test.describe('Spying audits redirects', () => {
-  test('/admin/spying/audits → /admin/analyze-social', async ({ page }) => {
-    await page.goto('/admin/spying/audits', { waitUntil: 'domcontentloaded' });
+  test('/spying/audits → /admin/analyze-social', async ({ page }) => {
+    await page.goto('/spying/audits', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/(analyze-social|login)/);
   });
 
-  test('/admin/spying/audits/[id] → /admin/analyze-social/[id]', async ({ page }) => {
-    await page.goto('/admin/spying/audits/00000000-0000-0000-0000-000000000000', {
+  test('/spying/audits/[id] → /admin/analyze-social/[id]', async ({ page }) => {
+    await page.goto('/spying/audits/00000000-0000-0000-0000-000000000000', {
       waitUntil: 'domcontentloaded',
     });
     await expect(page).toHaveURL(/\/admin\/(analyze-social|login)/);

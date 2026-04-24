@@ -54,7 +54,7 @@ export function RelatedTopics({ searchId }: RelatedTopicsProps) {
   }
 
   function handleResearch(query: string) {
-    router.push(`/admin/finder/new?query=${encodeURIComponent(query)}`);
+    router.push(`/finder/new?query=${encodeURIComponent(query)}`);
   }
 
   return (

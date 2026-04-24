@@ -30,9 +30,9 @@ const SCOPE_ICON: Record<BoardCard['scope'], React.ComponentType<{ size?: number
 };
 
 /**
- * Dashboard at /admin/notes. Lists every Notes board the caller has access
+ * Dashboard at /notes. Lists every Notes board the caller has access
  * to, grouped by scope. Create flow opens a modal that picks scope +
- * (optionally) client, then navigates to /admin/notes/[id] on success.
+ * (optionally) client, then navigates to /notes/[id] on success.
  */
 export function NotesDashboard({
   clients,

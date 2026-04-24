@@ -52,10 +52,10 @@ const SUGGESTIONS = [
 ];
 
 /**
- * General Strategy Lab chat — no client scope. Used at /admin/strategy-lab
+ * General Strategy Lab chat — no client scope. Used at /lab
  * when the admin wants to ideate freely, work on a prospect that isn't
  * onboarded, or get the Nerd's take across the whole portfolio. Picking a
- * client routes into the per-client workspace at /admin/strategy-lab/[slug]
+ * client routes into the per-client workspace at /lab/[slug]
  * which spins up an isolated thread.
  */
 export function ContentLabGeneralChat({ clients: _clients, initialScope = null }: ContentLabGeneralChatProps) {
@@ -246,7 +246,7 @@ export function ContentLabGeneralChat({ clients: _clients, initialScope = null }
 
   // Note: "Pick a client" button removed — the top-bar brand pill handles
   // session-level brand selection now. Picking a brand there auto-redirects
-  // into /admin/strategy-lab/[clientId] via the index route's cookie check.
+  // into /lab/[clientId] via the index route's cookie check.
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-nativz-border/60 bg-background/40">
