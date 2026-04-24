@@ -88,21 +88,55 @@ export async function syncSocialProfile(
     const ytAggregates = new Map<string, YtAgg>();
     const ytWatchMinutesByDay = new Map<string, number>();
 
-    if (platform === 'youtube' && posts.length > 0) {
-      const videoPosts = posts.filter((p) => !!p.platformPostId);
+    if (platform === 'youtube') {
+      // Video list to fan out watch-time fetches over:
+      //
+      //  1. Every YouTube video for this profile we've ever indexed
+      //     (post_metrics.platform_post_id — Zernio's native ID → YouTube
+      //     videoId). YT daily-views returns ~30 days of per-day data per
+      //     video, so an evergreen video published 6 months ago that's
+      //     still getting views today contributes its watch time to today's
+      //     account-level rollup. Without this, `watch_time_seconds` on
+      //     platform_snapshots only reflected videos published inside the
+      //     sync window — a big undercount for channels with any back catalog.
+      //
+      //  2. Any newly-published videos surfaced in this sync's `posts` that
+      //     haven't made it into post_metrics yet. We add them here so the
+      //     first sync after publish already has their watch data.
+      const historicalRows = await adminClient
+        .from('post_metrics')
+        .select('external_post_id, platform_post_id')
+        .eq('social_profile_id', profile.id)
+        .eq('platform', 'youtube')
+        .not('platform_post_id', 'is', null);
 
-      // Zernio rate-limits at 600 requests per window. One client can have
-      // hundreds of YT videos, so fanning out with unbounded parallelism
-      // trips the limiter immediately. Batch through a 5-wide window — the
-      // zernioRequest layer will also retry individual 429s, but this keeps
-      // us out of the retry path most of the time.
-      const pulls: Array<{ p: (typeof videoPosts)[number]; rows: Awaited<ReturnType<typeof zernio.getYoutubeDailyViews>> }> = [];
+      const videoMap = new Map<string, { postId: string; platformPostId: string }>();
+      // Window posts first (freshest platformPostId lookup).
+      for (const p of posts) {
+        if (p.platformPostId) {
+          videoMap.set(p.platformPostId, { postId: p.postId, platformPostId: p.platformPostId });
+        }
+      }
+      // Then historical — skip any already in the map.
+      for (const r of historicalRows.data ?? []) {
+        const ppid = (r.platform_post_id as string | null) ?? null;
+        const pid = (r.external_post_id as string | null) ?? null;
+        if (!ppid || videoMap.has(ppid)) continue;
+        videoMap.set(ppid, { postId: pid ?? ppid, platformPostId: ppid });
+      }
+      const allVideos = [...videoMap.values()];
+
+      // Zernio rate-limits at 600 requests per window. Channels with large
+      // back catalogs can push 200+ videos; 5-wide concurrency keeps us out
+      // of the retry path while still being fast enough. zernioRequest also
+      // retries individual 429s as a safety net.
+      const pulls: Array<{ p: typeof allVideos[number]; rows: Awaited<ReturnType<typeof zernio.getYoutubeDailyViews>> }> = [];
       const CONCURRENCY = 5;
-      for (let i = 0; i < videoPosts.length; i += CONCURRENCY) {
-        const batch = videoPosts.slice(i, i + CONCURRENCY);
+      for (let i = 0; i < allVideos.length; i += CONCURRENCY) {
+        const batch = allVideos.slice(i, i + CONCURRENCY);
         const results = await Promise.all(
           batch.map(async (p) => {
-            const rows = await zernio.getYoutubeDailyViews(lateAccountId, p.platformPostId!);
+            const rows = await zernio.getYoutubeDailyViews(lateAccountId, p.platformPostId);
             return { p, rows };
           }),
         );
@@ -277,6 +311,7 @@ export async function syncSocialProfile(
           client_id: clientId,
           platform,
           external_post_id: p.postId,
+          platform_post_id: p.platformPostId,
           post_url: p.postUrl,
           thumbnail_url: p.thumbnailUrl,
           caption: p.caption,
