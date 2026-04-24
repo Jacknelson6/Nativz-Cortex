@@ -10,7 +10,8 @@
 
 import { ScraperVolumesSection } from '@/components/settings/scraper-volumes-section';
 import { TopicSearchTab } from './topic-search-tab';
-import { RangeToolbar, rangeFromSearchParams } from '../range-toolbar';
+import { RangeToolbar } from '../range-toolbar';
+import { rangeFromSearchParams } from '../range-utils';
 
 interface Props {
   preset?: string;

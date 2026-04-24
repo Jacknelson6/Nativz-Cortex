@@ -6,6 +6,11 @@ import { DateRangePicker } from '@/components/reporting/date-range-picker';
 import type { DateRangePreset, DateRange } from '@/lib/types/reporting';
 import { resolvePresetRange } from '@/lib/reporting/date-presets';
 
+// NOTE: the server-side rangeFromSearchParams helper lives in
+// ./range-utils so the 'use client' directive on this file doesn't brand
+// it as a client function (which would explode at server-component
+// import time).
+
 /**
  * URL-synced wrapper around the existing reporting DateRangePicker so the
  * Infrastructure tabs can keep rendering server-side while the picker
@@ -63,21 +68,3 @@ export function RangeToolbar() {
   );
 }
 
-/**
- * Server-side helper — mirror of RangeToolbar's URL parsing so tabs can
- * pull a DateRange out of their searchParams in one call without
- * re-implementing the preset/custom switch.
- */
-export function rangeFromSearchParams(params: {
-  preset?: string;
-  from?: string;
-  to?: string;
-}): { preset: DateRangePreset; range: DateRange } {
-  const preset = (params.preset ?? 'last_7d') as DateRangePreset;
-  const customRange: DateRange | undefined =
-    preset === 'custom' && params.from && params.to
-      ? { start: params.from, end: params.to }
-      : undefined;
-  const range = resolvePresetRange(preset, customRange);
-  return { preset, range };
-}
