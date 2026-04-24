@@ -8,7 +8,6 @@ import {
 } from '@/components/admin/infrastructure/infrastructure-tabs';
 import { InfrastructureTabSkeleton } from '@/components/admin/infrastructure/tab-skeleton';
 import { CostTab } from '@/components/admin/infrastructure/tabs/cost-tab';
-import { IntegrationsTab } from '@/components/admin/infrastructure/tabs/integrations-tab';
 import { TrendFinderSettingsTab } from '@/components/admin/infrastructure/tabs/trend-finder-settings-tab';
 
 // Auth must run per-request (otherwise non-admins could hit a cached admin
@@ -20,7 +19,6 @@ export const dynamic = 'force-dynamic';
 const VALID_TABS: readonly InfrastructureTabSlug[] = [
   'cost',
   'trend-finder',
-  'integrations',
 ];
 
 // Legacy slugs → current slug. Keeps bookmarks + the last-tab localStorage
@@ -29,7 +27,7 @@ const VALID_TABS: readonly InfrastructureTabSlug[] = [
 // localStorage value on every active admin will have rotated to a live slug.
 // Prune candidates (next cleanup ≥ 2026-05-24):
 //   overview, crons, compute, vercel, supabase, database, ai, apify,
-//   ai-providers, pipelines, topic-search, search-cost
+//   ai-providers, integrations, pipelines, topic-search, search-cost
 const LEGACY_TAB_ALIASES: Record<string, InfrastructureTabSlug> = {
   overview: 'cost',
   crons: 'cost',
@@ -40,6 +38,7 @@ const LEGACY_TAB_ALIASES: Record<string, InfrastructureTabSlug> = {
   ai: 'cost',
   apify: 'cost',
   'ai-providers': 'cost',
+  integrations: 'cost',
   pipelines: 'trend-finder',
   'topic-search': 'trend-finder',
   'search-cost': 'trend-finder',
@@ -113,7 +112,5 @@ function renderTab(
       return (
         <TrendFinderSettingsTab preset={params.preset} from={params.from} to={params.to} />
       );
-    case 'integrations':
-      return <IntegrationsTab />;
   }
 }

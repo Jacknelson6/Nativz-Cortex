@@ -4,7 +4,6 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   DollarSign,
   Loader2,
-  Plug,
   Sliders,
 } from 'lucide-react';
 import { useEffect, useState, useTransition } from 'react';
@@ -12,7 +11,6 @@ import { useEffect, useState, useTransition } from 'react';
 const TABS = [
   { slug: 'cost',         label: 'Cost',         icon: DollarSign },
   { slug: 'trend-finder', label: 'Trend finder', icon: Sliders },
-  { slug: 'integrations', label: 'Integrations', icon: Plug },
 ] as const;
 
 export type InfrastructureTabSlug = (typeof TABS)[number]['slug'];
