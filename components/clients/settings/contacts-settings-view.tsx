@@ -6,6 +6,12 @@ import { ClientContactsCard } from '@/components/clients/client-contacts-card';
 import { PortalAccessCard } from '@/components/clients/client-settings-section';
 import { SettingsPageHeader, SettingsSectionHeader } from '@/components/clients/settings/settings-primitives';
 
+/**
+ * `companyOnly` hides the Portal invites & users subsection. The info page
+ * uses this — portal access lives under Access & services, not Info. The
+ * standalone /settings/contacts page keeps both for backwards compat.
+ */
+
 type ContactsPayload = {
   id: string;
   name: string;
@@ -20,7 +26,15 @@ type PortalContact = {
   last_login: string | null;
 };
 
-export function ContactsSettingsView({ slug, embedded }: { slug: string; embedded?: boolean }) {
+export function ContactsSettingsView({
+  slug,
+  embedded,
+  companyOnly,
+}: {
+  slug: string;
+  embedded?: boolean;
+  companyOnly?: boolean;
+}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [client, setClient] = useState<ContactsPayload | null>(null);
@@ -79,16 +93,18 @@ export function ContactsSettingsView({ slug, embedded }: { slug: string; embedde
       <ClientContactsCard
         clientId={client.id}
         clientName={client.name}
-        portalContacts={portalContacts}
+        portalContacts={companyOnly ? [] : portalContacts}
       />
 
-      <section className="space-y-3 pt-2">
-        <SettingsSectionHeader
-          title="Portal invites & users"
-          description="People from this client who can sign in to the portal."
-        />
-        <PortalAccessCard clientId={client.id} />
-      </section>
+      {!companyOnly && (
+        <section className="space-y-3 pt-2">
+          <SettingsSectionHeader
+            title="Portal invites & users"
+            description="People from this client who can sign in to the portal."
+          />
+          <PortalAccessCard clientId={client.id} />
+        </section>
+      )}
     </div>
   );
 }

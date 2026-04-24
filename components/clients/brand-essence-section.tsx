@@ -73,7 +73,16 @@ const LANGUAGE_OPTIONS: { value: string; label: string }[] = [
   { value: 'ar', label: 'Arabic' },
 ];
 
-export function BrandEssenceSection({ clientId }: { clientId: string }) {
+export function BrandEssenceSection({
+  clientId,
+  skipEssence,
+}: {
+  clientId: string;
+  /** When true, the essence trio card (tagline/value prop/mission) is omitted —
+   *  the info page replaces it with InfoBrandEssenceCard. Other subcards render
+   *  as usual. */
+  skipEssence?: boolean;
+}) {
   const [profile, setProfile] = useState<BrandProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -160,7 +169,9 @@ export function BrandEssenceSection({ clientId }: { clientId: string }) {
 
   return (
     <div className="space-y-4">
-      <EssenceTrioCard profile={profile} patch={patch} generate={generateEssence} generating={generating} />
+      {!skipEssence && (
+        <EssenceTrioCard profile={profile} patch={patch} generate={generateEssence} generating={generating} />
+      )}
       <ProductsCard profile={profile} patch={patch} />
       <AliasesCard profile={profile} patch={patch} />
       <ContentGenerationCard profile={profile} patch={patch} />

@@ -16,7 +16,7 @@ export function StickySubnav({
   sections,
   offsetTop = 80,
 }: {
-  sections: { id: string; label: string }[];
+  sections: { id: string; label: string; hasData?: boolean }[];
   /** Vertical offset when scrolling to a section (accounts for sticky nav itself). */
   offsetTop?: number;
 }) {
@@ -72,17 +72,31 @@ export function StickySubnav({
       <ul className="flex gap-1 px-2 py-2 overflow-x-auto">
         {sections.map((s) => {
           const active = activeId === s.id;
+          // State-aware dot: filled accent if the section has data, hollow
+          // border if empty. Absent when `hasData` is not supplied (preserves
+          // the old label-only layout on other pages).
+          const hasDataDefined = typeof s.hasData === 'boolean';
           return (
             <li key={s.id} className="shrink-0">
               <a
                 href={`#${s.id}`}
                 onClick={(e) => handleClick(e, s.id)}
-                className={`inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${
                   active
                     ? 'bg-accent-surface text-accent-text'
                     : 'text-text-muted hover:text-text-primary hover:bg-surface-hover'
                 }`}
               >
+                {hasDataDefined && (
+                  <span
+                    aria-hidden
+                    className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                      s.hasData
+                        ? active ? 'bg-accent-text' : 'bg-accent'
+                        : 'border border-nativz-border'
+                    }`}
+                  />
+                )}
                 {s.label}
               </a>
             </li>
