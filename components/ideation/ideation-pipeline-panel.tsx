@@ -50,7 +50,7 @@ export function IdeationPipelinePanel({
             </p>
             <h3
               className="text-xl font-semibold leading-snug text-text-primary sm:text-2xl"
-              style={{ fontFamily: 'Jost, system-ui, sans-serif' }}
+              style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
             >
               Turn these findings into a content plan.
             </h3>

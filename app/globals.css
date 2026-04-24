@@ -85,6 +85,10 @@ summary {
   --accent-hover: var(--nz-cyan-700);
   --accent-surface: rgba(0, 174, 239, 0.12);
   --accent-text: #5BC7F2;
+  /* Readable foreground for text/icons sitting on --accent fills.
+     White works on Nativz cyan. AC overrides to navy because teal #36D1C2
+     is too light for white text (~1.5:1, fails WCAG AA). */
+  --accent-contrast: #FFFFFF;
 
   /* Secondary accent — was purple, now fuchsia (retired 2026-04-24). Used
      for categorical surfaces distinct from the brand accent (cyan) and
@@ -180,6 +184,9 @@ summary {
   --accent-hover: #2AB5A7;      /* ac-teal-500 */
   --accent-surface: rgba(54, 209, 194, 0.10);
   --accent-text: #1F9489;       /* ac-teal-600 — contrast text on paper */
+  /* AC teal is too light for white text — use navy for CTA foreground.
+     #001631 on #36D1C2 ≈ 8.6:1, passes WCAG AAA. */
+  --accent-contrast: #001631;   /* ac-navy-600 */
 
   /* Secondary accent — AC orange (not teal) for warmth + energy moments */
   --accent2: #FF7A45;           /* ac-orange-400 */
@@ -266,6 +273,7 @@ summary {
   --color-accent-hover: var(--accent-hover);
   --color-accent-surface: var(--accent-surface);
   --color-accent-text: var(--accent-text);
+  --color-accent-contrast: var(--accent-contrast);
   --color-accent2: var(--accent2);
   --color-accent2-hover: var(--accent2-hover);
   --color-accent2-surface: var(--accent2-surface);
@@ -918,6 +926,10 @@ dialog:not([open]) {
 
 [data-brand-mode="anderson"] .nz-eyebrow {
   color: #1A9E91;
+  /* Sora italic isn't loaded (layout.tsx trims to regular weights), so an
+     italic rule would force faux-italic. AC eyebrow reads as upright small-caps
+     energy instead. */
+  font-style: normal;
 }
 
 /* Pill-shape button override — Nativz signature shape for all CTAs.
@@ -966,6 +978,16 @@ button.bg-accent,
 a.bg-accent,
 [role="button"].bg-accent {
   border-radius: var(--nz-btn-radius, var(--nz-radius-pill));
+}
+
+/* ═══════════════════════════════════════════════════════════
+   AC mode — swap `text-white` → navy on any `bg-accent` CTA.
+   AC teal (#36D1C2) vs white = ~1.5:1, fails WCAG. Navy (#001631) gives
+   ~8.6:1 (AAA). This recolors ~40 inline-styled buttons across the app
+   without touching each call site. Nativz stays unchanged — cyan + white
+   is WCAG-fine. Specificity: attr + 2 classes beats `.text-white` alone. */
+[data-brand-mode="anderson"] .bg-accent.text-white {
+  color: var(--accent-contrast);
 }
 
 /* ═══════════════════════════════════════════════════════════

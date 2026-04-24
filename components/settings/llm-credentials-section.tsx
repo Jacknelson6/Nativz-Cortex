@@ -221,7 +221,7 @@ export function LlmCredentialsSection() {
               void saveFromInput(input.trim());
             }}
             disabled={saving || !dirty}
-            className="flex items-center gap-2 rounded-lg bg-accent-surface px-5 py-2.5 text-[14px] font-medium text-accent-text transition-colors hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-[14px] font-medium text-[color:var(--accent-contrast)] transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : success ? <Check size={14} /> : null}
             {saving ? 'Saving…' : success ? 'Saved' : 'Save API key'}
@@ -259,8 +259,15 @@ function VercelMirrorPill({
 
   if (!mirror.configured) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-[12px] text-amber-200/90">
-        <Cloud size={13} />
+      <div
+        className="flex items-center gap-2 rounded-lg border px-3 py-2 text-[12px]"
+        style={{
+          borderColor: 'color-mix(in srgb, var(--status-warning) 35%, transparent)',
+          backgroundColor: 'color-mix(in srgb, var(--status-warning) 10%, transparent)',
+          color: 'var(--text-primary)',
+        }}
+      >
+        <Cloud size={13} style={{ color: 'var(--status-warning)' }} />
         <span>
           Vercel&apos;s <code className="font-mono">{mirror.envKey}</code> is empty. Saving a key
           here will create it.
@@ -275,8 +282,15 @@ function VercelMirrorPill({
 
   if (matches) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/5 px-3 py-2 text-[12px] text-emerald-300/95">
-        <Cloud size={13} />
+      <div
+        className="flex items-center gap-2 rounded-lg border px-3 py-2 text-[12px]"
+        style={{
+          borderColor: 'color-mix(in srgb, var(--status-success) 35%, transparent)',
+          backgroundColor: 'color-mix(in srgb, var(--status-success) 10%, transparent)',
+          color: 'var(--text-primary)',
+        }}
+      >
+        <Cloud size={13} style={{ color: 'var(--status-success)' }} />
         <span>
           In sync with Vercel{' '}
           <code className="font-mono">{mirror.envKey}</code>
@@ -290,9 +304,16 @@ function VercelMirrorPill({
   // Either the two values differ, or DB is empty while Vercel has a value —
   // in both cases the user probably wants to pull from Vercel.
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-200/95">
+    <div
+      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2 text-[12px]"
+      style={{
+        borderColor: 'color-mix(in srgb, var(--status-warning) 40%, transparent)',
+        backgroundColor: 'color-mix(in srgb, var(--status-warning) 12%, transparent)',
+        color: 'var(--text-primary)',
+      }}
+    >
       <div className="flex items-start gap-2">
-        <Cloud size={13} className="mt-0.5 shrink-0" />
+        <Cloud size={13} className="mt-0.5 shrink-0" style={{ color: 'var(--status-warning)' }} />
         <span>
           {envOnly ? (
             <>
@@ -312,7 +333,14 @@ function VercelMirrorPill({
         type="button"
         onClick={onSync}
         disabled={syncing}
-        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 px-2.5 py-1 text-[12px] font-medium text-amber-100 transition-colors hover:border-amber-500/60 hover:bg-amber-500/25 disabled:opacity-50"
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[12px] font-medium transition-colors disabled:opacity-50"
+        style={{
+          borderColor: 'color-mix(in srgb, var(--status-warning) 55%, transparent)',
+          backgroundColor: 'var(--status-warning)',
+          /* Status warning is a light amber in both brand modes — dark ink
+             is the only foreground that passes contrast on it. */
+          color: '#1a1400',
+        }}
       >
         {syncing ? <Loader2 size={12} className="animate-spin" /> : <ArrowDownFromLine size={12} />}
         Use Vercel value

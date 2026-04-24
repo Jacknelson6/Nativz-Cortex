@@ -83,7 +83,7 @@ export function ActiveWatchesStrip({ watches }: { watches: WatchCard[] }) {
           </p>
           <h2
             className="mt-1 text-xl font-semibold text-text-primary"
-            style={{ fontFamily: 'Jost, system-ui, sans-serif' }}
+            style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
           >
             Watched competitors
           </h2>
@@ -136,7 +136,7 @@ export function ActiveWatchesStrip({ watches }: { watches: WatchCard[] }) {
                   <div className="flex items-center gap-2">
                     <span
                       className="truncate text-sm font-semibold text-text-primary"
-                      style={{ fontFamily: 'Jost, system-ui, sans-serif' }}
+                      style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
                     >
                       {w.handle ? `@${w.handle}` : w.client_name}
                     </span>

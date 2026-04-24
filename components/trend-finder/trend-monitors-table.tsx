@@ -127,7 +127,7 @@ export function TrendMonitorsTable({ subscriptions }: { subscriptions: Subscript
             <div>
               <div
                 className="truncate text-text-primary"
-                style={{ fontFamily: 'Jost, system-ui, sans-serif', fontWeight: 600 }}
+                style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif', fontWeight: 600 }}
               >
                 {s.name}
               </div>

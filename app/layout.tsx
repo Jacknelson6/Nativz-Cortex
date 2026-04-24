@@ -48,6 +48,10 @@ const sora = Sora({
   weight: ['400', '500', '600', '700'],
   subsets: ['latin'],
   display: 'swap',
+  // Sora ships italic as a synthesized axis — Google Fonts does not serve a
+  // distinct italic subset for it. We still load the upright weights above;
+  // AC eyebrow now skips italic entirely (see globals.css .nz-eyebrow rule)
+  // so we don't rely on faux-italic rendering.
 });
 
 const roboto = Roboto({

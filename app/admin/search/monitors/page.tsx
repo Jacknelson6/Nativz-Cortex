@@ -53,7 +53,7 @@ export default async function TrendMonitorsPage() {
           <div className="space-y-2">
             <h1
               className="text-3xl font-bold text-text-primary"
-              style={{ fontFamily: 'Jost, system-ui, sans-serif' }}
+              style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
             >
               Trend monitors
             </h1>
@@ -68,7 +68,7 @@ export default async function TrendMonitorsPage() {
           <Link
             href="/admin/finder/monitors/new"
             className="inline-flex items-center gap-2 rounded-full bg-accent px-5 py-2 text-xs font-semibold uppercase tracking-[2px] text-white transition-colors hover:bg-accent/90"
-            style={{ fontFamily: 'Jost, system-ui, sans-serif' }}
+            style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
           >
             + New monitor
           </Link>

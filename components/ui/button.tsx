@@ -17,7 +17,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 // action buttons — Nativz CTAs are cyan, AC CTAs are teal. Danger stays red.
 const variantStyles: Record<Variant, string> = {
   primary:
-    'bg-accent text-white shadow-[var(--shadow-card)] hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] nz-btn-label',
+    'bg-accent text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] nz-btn-label',
   secondary: 'bg-surface-hover text-text-primary hover:bg-nativz-border',
   outline: 'border border-nativz-border text-text-secondary hover:bg-surface-hover',
   ghost: 'text-text-secondary hover:bg-surface-hover hover:text-text-primary',

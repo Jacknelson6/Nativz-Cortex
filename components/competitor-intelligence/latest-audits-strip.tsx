@@ -47,7 +47,7 @@ export function LatestAuditsStrip({ audits }: { audits: AuditCard[] }) {
           </p>
           <h2
             className="mt-1 text-xl font-semibold text-text-primary"
-            style={{ fontFamily: 'Jost, system-ui, sans-serif' }}
+            style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
           >
             Latest audits
           </h2>
@@ -87,7 +87,7 @@ export function LatestAuditsStrip({ audits }: { audits: AuditCard[] }) {
                 <div className="min-w-0">
                   <div
                     className="truncate text-sm font-semibold text-text-primary"
-                    style={{ fontFamily: 'Jost, system-ui, sans-serif' }}
+                    style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
                   >
                     {a.brand_name}
                   </div>

@@ -65,7 +65,7 @@ function ActionCard({
       </span>
       <h3
         className="mb-2 text-xl font-semibold text-text-primary"
-        style={{ fontFamily: 'Jost, system-ui, sans-serif' }}
+        style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
       >
         {title}
       </h3>
@@ -77,7 +77,7 @@ function ActionCard({
       </p>
       <span
         className={`inline-flex items-center gap-2 rounded-full px-5 py-2 text-[11px] font-semibold uppercase tracking-[2px] transition-colors ${ctaClasses}`}
-        style={{ fontFamily: 'Jost, system-ui, sans-serif' }}
+        style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
       >
         {ctaLabel}
       </span>

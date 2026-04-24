@@ -33,7 +33,7 @@ export default async function WatchPage() {
         </p>
         <h1
           className="text-3xl font-bold text-text-primary"
-          style={{ fontFamily: 'Jost, system-ui, sans-serif' }}
+          style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
         >
           Set up an ongoing watch
         </h1>

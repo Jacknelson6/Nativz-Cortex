@@ -118,7 +118,7 @@ export function AdGeneratorWorkspace({
             <p className="nz-eyebrow">Ad generator · {brandDisplayName}</p>
             <h1
               className="nz-highlight text-3xl sm:text-[2.5rem] font-semibold leading-[1.05] text-text-primary"
-              style={{ fontFamily: 'Jost, system-ui, sans-serif' }}
+              style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
             >
               Generate ads for <u>{brandDisplayName}</u>
             </h1>
@@ -136,7 +136,7 @@ export function AdGeneratorWorkspace({
             type="button"
             onClick={() => setActiveTab('chat')}
             className="shrink-0 inline-flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-xs font-bold uppercase tracking-[2px] text-white transition-colors hover:bg-accent/90 cursor-pointer"
-            style={{ fontFamily: 'Jost, system-ui, sans-serif' }}
+            style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
           >
             <Sparkles size={14} />
             New batch

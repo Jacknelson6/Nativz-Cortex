@@ -67,7 +67,7 @@ export function RedditScanSummaryCard({
         target="_blank"
         rel="noopener noreferrer"
         className="block text-lg leading-snug text-text-primary transition-colors hover:text-accent-text"
-        style={{ fontFamily: 'Jost, system-ui, sans-serif', fontWeight: 500 }}
+        style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif', fontWeight: 500 }}
       >
         {top.title || 'Untitled thread'}
       </a>

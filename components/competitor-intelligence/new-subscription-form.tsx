@@ -169,7 +169,7 @@ export function NewSubscriptionForm({
           type="submit"
           disabled={submitting}
           className="inline-flex items-center gap-2 rounded-full bg-accent px-5 py-2 text-xs font-semibold uppercase tracking-[2px] text-white transition-colors hover:bg-accent/90 disabled:opacity-60"
-          style={{ fontFamily: 'Jost, system-ui, sans-serif' }}
+          style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
         >
           {submitting ? 'Creating…' : 'Create subscription'}
         </button>

@@ -60,7 +60,7 @@ export function WebSearchSummaryCard({ query, completedAt, serpData }: WebSearch
         <Search size={14} className="mt-0.5 shrink-0 text-text-muted/80" aria-hidden />
         <p
           className="min-w-0 text-lg leading-snug text-text-primary"
-          style={{ fontFamily: 'Jost, system-ui, sans-serif', fontWeight: 500 }}
+          style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif', fontWeight: 500 }}
           title={query}
         >
           {query}

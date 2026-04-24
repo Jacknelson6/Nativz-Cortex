@@ -9,7 +9,7 @@ export function CompetitorIntelligenceHero() {
       </p>
       <h1
         className="animate-ci-rise text-[40px] font-bold leading-[1.05] tracking-tight text-text-primary sm:text-5xl lg:text-[56px]"
-        style={{ animationDelay: '60ms', fontFamily: 'Jost, system-ui, sans-serif' }}
+        style={{ animationDelay: '60ms', fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
       >
         See what the <u className="nz-u">competition</u> is posting — and when it changes.
       </h1>

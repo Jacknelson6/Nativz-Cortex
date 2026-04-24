@@ -263,7 +263,7 @@ export function WatchWizard({ clients }: { clients: Client[] }) {
           onClick={submit}
           disabled={submitting || validRows.length === 0}
           className="inline-flex items-center gap-2 rounded-full bg-accent px-6 py-2.5 text-[11px] font-semibold uppercase tracking-[2px] text-white transition-colors hover:bg-accent/90 disabled:opacity-60"
-          style={{ fontFamily: 'Jost, system-ui, sans-serif' }}
+          style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
         >
           {submitting ? 'Setting up…' : `Start watching ${validRows.length || ''}`.trim()}
         </button>
@@ -291,7 +291,7 @@ function Step({
         </span>
         <h2
           className="text-lg font-semibold text-text-primary"
-          style={{ fontFamily: 'Jost, system-ui, sans-serif' }}
+          style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
         >
           {title}
         </h2>
