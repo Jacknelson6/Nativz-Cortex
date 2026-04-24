@@ -16,13 +16,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Check, Loader2, RefreshCw } from 'lucide-react';
-import {
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  Tooltip as RechartsTooltip,
-} from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { PER_UNIT_COST_USD } from '@/lib/search/scraper-cost-constants';
 import { PLATFORM_CONFIG } from '@/components/search/platform-icon';
 import { TooltipCard } from '@/components/ui/tooltip-card';
@@ -185,13 +179,16 @@ function clampInt(raw: string | number): number {
   return Math.max(0, Math.min(5000, n));
 }
 
-// Platform brand colours, slightly desaturated so three of them next to each
-// other on a small dark donut don't feel shouty. Matching swatches on the
-// left-hand cost list use the same map so the legend stays consistent.
+// Platform palette — slightly desaturated brand colours so three slices
+// next to each other on a small dark donut don't feel shouty. TikTok gets
+// Nativz purple (its real brand is multi-colour; purple reads distinct
+// against the reds + blue and matches Cortex's own accent2).
+// The same map drives the legend swatches so the donut and its side-list
+// never drift.
 const PIE_COLORS: Record<PlatformKey, string> = {
   reddit: '#FF6B35',
   youtube: '#F43F5E',
-  tiktok: '#22D3EE',
+  tiktok: '#A855F7',
   web: '#60A5FA',
 };
 
@@ -395,74 +392,7 @@ export function ScraperVolumesSection() {
           </div>
 
           {pieData.length > 0 ? (
-            <div className="mt-2 flex items-center gap-4">
-              {/* Donut + center label */}
-              <div className="relative h-[180px] w-[180px] shrink-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      dataKey="value"
-                      nameKey="name"
-                      innerRadius={56}
-                      outerRadius={84}
-                      paddingAngle={2}
-                      stroke="rgba(0,0,0,0.35)"
-                      strokeWidth={2}
-                      isAnimationActive
-                    >
-                      {pieData.map((entry) => (
-                        <Cell key={entry.platform} fill={PIE_COLORS[entry.platform]} />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip
-                      content={(props) => (
-                        <BreakdownTooltip {...props} total={totalCost} />
-                      )}
-                      wrapperStyle={{ outline: 'none' }}
-                      cursor={false}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-
-                {/* Center readout — total cost, tokens-style subhead */}
-                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-text-muted/80">
-                    Total
-                  </span>
-                  <span className="mt-0.5 text-[18px] font-semibold tabular-nums text-text-primary">
-                    {formatUsd(totalCost)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Inline legend: swatch + platform + % */}
-              <ul className="min-w-0 flex-1 space-y-1.5 text-[12px]">
-                {pieData
-                  .slice()
-                  .sort((a, b) => b.value - a.value)
-                  .map((entry) => {
-                    const pct = totalCost > 0 ? (entry.value / totalCost) * 100 : 0;
-                    return (
-                      <li
-                        key={entry.platform}
-                        className="flex items-center gap-2"
-                        title={`${entry.name}: ${formatUsd(entry.value)} (${pct.toFixed(1)}%)`}
-                      >
-                        <span
-                          aria-hidden
-                          className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                          style={{ backgroundColor: PIE_COLORS[entry.platform] }}
-                        />
-                        <span className="flex-1 truncate text-text-secondary">{entry.name}</span>
-                        <span className="tabular-nums text-text-muted">
-                          {pct < 1 ? '<1%' : `${Math.round(pct)}%`}
-                        </span>
-                      </li>
-                    );
-                  })}
-              </ul>
-            </div>
+            <BreakdownDonut pieData={pieData} totalCost={totalCost} />
           ) : (
             <div className="mt-2 flex h-[180px] items-center justify-center text-sm text-text-muted">
               Set non-zero volumes to see the breakdown.
@@ -510,44 +440,117 @@ export function ScraperVolumesSection() {
 // ── Save state indicator ────────────────────────────────────────────────
 
 /**
- * Custom tooltip for the Breakdown donut — the default Recharts tooltip
- * was reading as a blank box on the dark theme because we only passed it a
- * `formatter` (which returns the value, not the name) so the name header
- * rendered invisible. Rolling our own gives us platform name + absolute
- * dollars + percentage of total in one readable card.
+ * Breakdown donut + inline legend. Hover morphs the center label to the
+ * active slice's name / $ / % instead of floating a tooltip on top, which
+ * was overlapping the TOTAL readout in a ~180px chart. The side list
+ * still shows every platform at a glance so hover is optional.
  */
-function BreakdownTooltip({
-  active,
-  payload,
-  total,
+function BreakdownDonut({
+  pieData,
+  totalCost,
 }: {
-  active?: boolean;
-  payload?: readonly { value?: number; name?: string; payload?: { platform?: PlatformKey } }[];
-  total: number;
+  pieData: { platform: PlatformKey; name: string; value: number }[];
+  totalCost: number;
 }) {
-  if (!active || !payload?.length) return null;
-  const p = payload[0];
-  const value = Number(p?.value ?? 0);
-  const name = String(p?.name ?? '—');
-  const platform = p?.payload?.platform;
-  const color = platform ? PIE_COLORS[platform] : '#fff';
-  const pct = total > 0 ? (value / total) * 100 : 0;
+  const [activeIdx, setActiveIdx] = useState<number | null>(null);
+  const active = activeIdx != null ? pieData[activeIdx] : null;
+  const activePct = active && totalCost > 0 ? (active.value / totalCost) * 100 : 0;
+
   return (
-    <div className="rounded-lg border border-nativz-border bg-surface px-3 py-2 shadow-elevated">
-      <div className="flex items-center gap-2 text-[12px]">
-        <span
-          aria-hidden
-          className="inline-block h-2.5 w-2.5 rounded-full"
-          style={{ backgroundColor: color }}
-        />
-        <span className="font-medium text-text-primary">{name}</span>
+    <div className="mt-2 flex items-center gap-4">
+      <div
+        className="relative h-[180px] w-[180px] shrink-0"
+        onMouseLeave={() => setActiveIdx(null)}
+      >
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={pieData}
+              dataKey="value"
+              nameKey="name"
+              innerRadius={56}
+              outerRadius={84}
+              paddingAngle={2}
+              stroke="rgba(0,0,0,0.35)"
+              strokeWidth={2}
+              isAnimationActive
+              onMouseEnter={(_, i) => setActiveIdx(i)}
+            >
+              {pieData.map((entry, i) => (
+                <Cell
+                  key={entry.platform}
+                  fill={PIE_COLORS[entry.platform]}
+                  opacity={activeIdx == null || activeIdx === i ? 1 : 0.45}
+                  style={{ transition: 'opacity 120ms ease-out' }}
+                />
+              ))}
+            </Pie>
+            {/* No Recharts tooltip — the center label + side list carry
+                all the same information without overlapping the chart. */}
+          </PieChart>
+        </ResponsiveContainer>
+
+        {/* Center readout morphs between TOTAL and the hovered slice. */}
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+          {active ? (
+            <>
+              <span
+                className="font-mono text-[10px] uppercase tracking-[0.2em]"
+                style={{ color: PIE_COLORS[active.platform] }}
+              >
+                {active.name}
+              </span>
+              <span className="mt-0.5 text-[17px] font-semibold tabular-nums text-text-primary">
+                {formatUsd(active.value)}
+              </span>
+              <span className="mt-0.5 font-mono text-[10px] tabular-nums text-text-muted">
+                {activePct < 1 ? '<1%' : `${activePct.toFixed(1)}%`}
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-text-muted/80">
+                Total
+              </span>
+              <span className="mt-0.5 text-[18px] font-semibold tabular-nums text-text-primary">
+                {formatUsd(totalCost)}
+              </span>
+            </>
+          )}
+        </div>
       </div>
-      <div className="mt-1 flex items-baseline gap-2 font-mono tabular-nums">
-        <span className="text-[14px] font-semibold text-text-primary">{formatUsd(value)}</span>
-        <span className="text-[11px] text-text-muted">
-          {pct < 1 ? '<1%' : `${pct.toFixed(1)}%`}
-        </span>
-      </div>
+
+      {/* Inline legend: swatch + platform + % · hover sync with the donut */}
+      <ul className="min-w-0 flex-1 space-y-1.5 text-[12px]">
+        {pieData
+          .map((entry, i) => ({ ...entry, idx: i }))
+          .sort((a, b) => b.value - a.value)
+          .map((entry) => {
+            const pct = totalCost > 0 ? (entry.value / totalCost) * 100 : 0;
+            const isActive = activeIdx === entry.idx;
+            return (
+              <li
+                key={entry.platform}
+                onMouseEnter={() => setActiveIdx(entry.idx)}
+                onMouseLeave={() => setActiveIdx(null)}
+                className={`flex cursor-default items-center gap-2 rounded-md px-1.5 py-1 transition-colors ${
+                  isActive ? 'bg-surface-hover/50' : ''
+                }`}
+                title={`${entry.name}: ${formatUsd(entry.value)} (${pct.toFixed(1)}%)`}
+              >
+                <span
+                  aria-hidden
+                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: PIE_COLORS[entry.platform] }}
+                />
+                <span className="flex-1 truncate text-text-secondary">{entry.name}</span>
+                <span className="tabular-nums text-text-muted">
+                  {pct < 1 ? '<1%' : `${Math.round(pct)}%`}
+                </span>
+              </li>
+            );
+          })}
+      </ul>
     </div>
   );
 }

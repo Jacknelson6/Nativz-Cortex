@@ -299,15 +299,16 @@ export function ResearchTopicForm({
                 </PopoverContent>
               </Popover>
 
-              {/* Platforms — Web always on (toggle disabled); Reddit / YouTube / TikTok optional */}
-              {/* Static platform badges — all always on, muted to match other pills */}
+              {/* Platforms — Web / Reddit / YouTube / TikTok. Each icon    */}
+              {/* tints to its Trend-finder breakdown colour so the pill     */}
+              {/* reads as a legend the user sees everywhere else.           */}
               <div className={pillBtn}>
                 {(['web', 'reddit', 'youtube', 'tiktok'] as const).map((p) => {
                   const cfg = PLATFORM_CONFIG[p];
                   if (!cfg) return null;
                   const Icon = cfg.icon;
                   return (
-                    <span key={p} title={cfg.label} className="text-text-muted">
+                    <span key={p} title={cfg.label} className={cfg.color}>
                       <Icon size={15} />
                     </span>
                   );

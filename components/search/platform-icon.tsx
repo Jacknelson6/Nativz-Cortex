@@ -34,10 +34,13 @@ export const PLATFORM_CONFIG: Record<
   SearchPlatform,
   { label: string; icon: React.ComponentType<{ size?: number; className?: string }>; color: string; bg: string }
 > = {
-  web: { label: 'Web', icon: Globe, color: 'text-blue-400', bg: 'bg-blue-400/10' },
-  reddit: { label: 'Reddit', icon: RedditLogo, color: 'text-[#FF4500]', bg: 'bg-[#FF4500]/10' },
-  youtube: { label: 'YouTube', icon: YouTubePlatformIcon, color: 'text-[#FF0000]', bg: 'bg-[#FF0000]/10' },
-  tiktok: { label: 'TikTok', icon: TikTokLogo, color: 'text-text-primary', bg: 'bg-white/10' },
+  // Colours match the Trend finder Breakdown donut so the icon pill and
+  // the cost pie read as the same system. TikTok gets purple (real brand
+  // is multi-hue; purple reads distinct next to the reds + blue).
+  web: { label: 'Web', icon: Globe, color: 'text-[#60A5FA]', bg: 'bg-[#60A5FA]/10' },
+  reddit: { label: 'Reddit', icon: RedditLogo, color: 'text-[#FF6B35]', bg: 'bg-[#FF6B35]/10' },
+  youtube: { label: 'YouTube', icon: YouTubePlatformIcon, color: 'text-[#F43F5E]', bg: 'bg-[#F43F5E]/10' },
+  tiktok: { label: 'TikTok', icon: TikTokLogo, color: 'text-[#A855F7]', bg: 'bg-[#A855F7]/10' },
 };
 
 interface PlatformIconProps {

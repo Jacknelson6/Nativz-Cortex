@@ -68,25 +68,42 @@ async function fetchVercelDeployments(): Promise<VercelRollup> {
   }
 
   try {
+    // Vercel's deployment list is slow when the project has many builds —
+    // 6s was regularly tripping the abort. 20s matches the list-tab
+    // expectation and is still well under the function's 300s ceiling.
     const params = new URLSearchParams({ limit: '20' });
     if (projectId) params.set('projectId', projectId);
     if (teamId) params.set('teamId', teamId);
     const res = await fetch(`https://api.vercel.com/v6/deployments?${params.toString()}`, {
       headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(20_000),
+      cache: 'no-store',
     });
     if (!res.ok) {
-      return { hasToken: true, projectId, teamId, deployments: [], error: `Vercel API ${res.status}` };
+      const body = await res.text().catch(() => '');
+      return {
+        hasToken: true,
+        projectId,
+        teamId,
+        deployments: [],
+        error: `Vercel API ${res.status}${body ? ': ' + body.slice(0, 180) : ''}`,
+      };
     }
     const data = (await res.json()) as { deployments?: VercelDeployment[] };
     return { hasToken: true, projectId, teamId, deployments: data.deployments ?? [], error: null };
   } catch (err) {
+    const message = err instanceof Error ? err.message : 'fetch failed';
+    // Translate the opaque AbortError into something the UI can explain
+    // without pointing the user at the wrong env var.
+    const isTimeout = err instanceof Error && err.name === 'TimeoutError';
     return {
       hasToken: true,
       projectId,
       teamId,
       deployments: [],
-      error: err instanceof Error ? err.message : 'fetch failed',
+      error: isTimeout
+        ? 'Vercel deployments API timed out (20s). Usually transient — try Refresh.'
+        : message,
     };
   }
 }
@@ -247,11 +264,13 @@ export async function ComputeTab() {
       {vercel.hasToken ? (
         vercel.error ? (
           <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4 text-sm text-red-300">
-            Vercel API failed: {vercel.error}.{' '}
-            <span className="text-text-muted">
-              Token may lack read scope, or{' '}
-              <code className="rounded bg-background/60 px-1">VERCEL_PROJECT_ID</code> is missing.
-            </span>
+            {vercel.error}
+            {!vercel.error.toLowerCase().includes('timed out') ? (
+              <span className="text-text-muted">
+                {' '}Token may lack read scope, or{' '}
+                <code className="rounded bg-background/60 px-1">VERCEL_PROJECT_ID</code> is missing.
+              </span>
+            ) : null}
           </div>
         ) : vercel.deployments.length > 0 ? (
           <section className="overflow-hidden rounded-xl border border-nativz-border bg-surface">
