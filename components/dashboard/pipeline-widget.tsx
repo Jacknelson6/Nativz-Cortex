@@ -115,7 +115,7 @@ export function PipelineWidget() {
             Pipeline
           </h2>
           <Link
-            href="/admin/pipeline"
+            href="/admin/edits"
             className="text-xs text-text-muted hover:text-text-secondary flex items-center gap-1 transition-colors"
           >
             View pipeline <ArrowRight size={12} />
@@ -142,7 +142,7 @@ export function PipelineWidget() {
             {summary.doneCount}/{summary.total} complete
           </span>
           <Link
-            href="/admin/pipeline"
+            href="/admin/edits"
             className="text-xs text-text-muted hover:text-text-secondary flex items-center gap-1 transition-colors"
           >
             Full view <ArrowRight size={12} />

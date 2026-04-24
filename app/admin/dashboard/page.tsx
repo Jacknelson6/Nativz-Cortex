@@ -77,13 +77,13 @@ export default async function AdminDashboardPage() {
             4-col (Nerd slightly wider) from lg up. */}
         <div className="grid grid-cols-1 gap-3 auto-rows-[140px] sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_minmax(220px,1.25fr)]">
           <BentoTile
-            href="/admin/pipeline"
+            href="/admin/edits"
             icon={<Workflow size={20} className="text-accent-text" />}
             label="Monthly pipeline"
             description="Stages, shoots, and delivery"
           />
           <BentoTile
-            href="/admin/scheduler"
+            href="/admin/scheduling"
             icon={<Calendar size={20} className="text-accent-text" />}
             label="Schedule content"
             description="Plan and publish content"

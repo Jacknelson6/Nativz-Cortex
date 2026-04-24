@@ -230,7 +230,7 @@ async function sendFailureNotification(
     .single();
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
-  const postUrl = `${appUrl}/admin/scheduler?post=${post.id}`;
+  const postUrl = `${appUrl}/admin/scheduling?post=${post.id}`;
   const caption = ((post.caption as string) ?? '').substring(0, 100);
 
   // Create in-app notification
@@ -240,7 +240,7 @@ async function sendFailureNotification(
     type: 'report_published', // Reusing existing type for now
     title: `Post failed to publish`,
     body: `Post for ${client?.name ?? 'Unknown client'} failed after 3 retries: "${caption}..."`,
-    link_path: `/admin/scheduler?post=${post.id}`,
+    link_path: `/admin/scheduling?post=${post.id}`,
     is_read: false,
     email_sent: false,
   });

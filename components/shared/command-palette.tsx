@@ -73,8 +73,8 @@ export function CommandPalette() {
   const navItems: CommandItem[] = useMemo(() => [
     { id: 'dashboard', label: 'Dashboard', group: 'Navigation', icon: <LayoutDashboard className="w-4 h-4" />, action: () => navigate('/admin/dashboard'), keywords: 'home overview' },
     { id: 'shoots', label: 'Shoot calendar', group: 'Navigation', icon: <Camera className="w-4 h-4" />, action: () => navigate('/admin/shoots'), keywords: 'shoots photo video production content calendar filming' },
-    { id: 'pipeline', label: 'Monthly pipeline', group: 'Navigation', icon: <Workflow className="w-4 h-4" />, action: () => navigate('/admin/pipeline'), keywords: 'editing boosting approvals smm clients month' },
-    { id: 'post-scheduler', label: 'Post scheduler', group: 'Navigation', icon: <Send className="w-4 h-4" />, action: () => navigate('/admin/scheduler'), keywords: 'late publish social posts scheduling smm' },
+    { id: 'pipeline', label: 'Monthly pipeline', group: 'Navigation', icon: <Workflow className="w-4 h-4" />, action: () => navigate('/admin/edits'), keywords: 'editing boosting approvals smm clients month' },
+    { id: 'post-scheduler', label: 'Post scheduler', group: 'Navigation', icon: <Send className="w-4 h-4" />, action: () => navigate('/admin/scheduling'), keywords: 'late publish social posts scheduling smm' },
     { id: 'clients', label: 'Clients', group: 'Navigation', icon: <Users className="w-4 h-4" />, action: () => navigate('/admin/clients'), keywords: 'accounts brands' },
     { id: 'meetings', label: 'Meetings', group: 'Navigation', icon: <Mic2 className="w-4 h-4" />, action: () => navigate('/admin/meetings'), keywords: 'fyxer notes recurring adhoc prospects' },
     { id: 'research', label: 'Research', group: 'Navigation', icon: <Search className="w-4 h-4" />, action: () => navigate('/admin/search/new'), keywords: 'topic social listening ideas generate' },

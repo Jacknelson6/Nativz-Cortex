@@ -43,7 +43,7 @@ function SchedulerInner({ initialClients }: { initialClients: ClientOption[] }) 
     const connected = searchParams.get('connected');
     if (connected) {
       toast.success(`${connected.charAt(0).toUpperCase() + connected.slice(1)} connected`);
-      router.replace('/admin/scheduler', { scroll: false });
+      router.replace('/admin/scheduling', { scroll: false });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

@@ -301,7 +301,7 @@ export default function PipelinePageClient({
     const params = new URLSearchParams();
     params.set('view', view);
     if (stageParam) params.set('stage', stageParam);
-    router.push(`/admin/pipeline?${params.toString()}`, { scroll: false });
+    router.push(`/admin/edits?${params.toString()}`, { scroll: false });
   }
 
   // Initial load is covered by loading.tsx; render the full shell on mount

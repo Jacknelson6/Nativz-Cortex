@@ -136,7 +136,7 @@ function FooterLinks() {
       <Link href="/admin/analytics?tab=benchmarking" className="hover:text-cyan-300">
         Benchmarking history →
       </Link>
-      <Link href="/admin/competitor-intelligence/reports" className="hover:text-cyan-300">
+      <Link href="/admin/competitor-spying/reports" className="hover:text-cyan-300">
         Recurring reports →
       </Link>
     </footer>

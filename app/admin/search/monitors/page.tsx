@@ -77,7 +77,7 @@ export default async function TrendMonitorsPage() {
           <Link href="/admin/search/new" className="hover:text-cyan-300">
             ← Back to Trend Finder
           </Link>
-          <Link href="/admin/competitor-intelligence/reports" className="hover:text-cyan-300">
+          <Link href="/admin/competitor-spying/reports" className="hover:text-cyan-300">
             Competitor reports →
           </Link>
         </nav>

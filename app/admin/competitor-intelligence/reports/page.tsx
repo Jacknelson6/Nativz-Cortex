@@ -58,7 +58,7 @@ export default async function CompetitorReportsPage() {
             </p>
           </div>
           <Link
-            href="/admin/competitor-intelligence/reports/new"
+            href="/admin/competitor-spying/reports/new"
             className="inline-flex items-center gap-2 rounded-full bg-accent px-5 py-2 text-xs font-semibold uppercase tracking-[2px] text-white transition-colors hover:bg-accent/90"
             style={{ fontFamily: 'Jost, system-ui, sans-serif' }}
           >
@@ -66,7 +66,7 @@ export default async function CompetitorReportsPage() {
           </Link>
         </div>
         <nav className="mt-4 flex flex-wrap gap-4 text-xs text-text-muted">
-          <Link href="/admin/competitor-intelligence" className="hover:text-cyan-300">
+          <Link href="/admin/competitor-spying" className="hover:text-cyan-300">
             ← Back to Competitor intelligence
           </Link>
           <Link href="/admin/analytics?tab=benchmarking" className="hover:text-cyan-300">

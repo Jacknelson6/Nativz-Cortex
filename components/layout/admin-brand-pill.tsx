@@ -24,9 +24,9 @@ import type { AdminBrand } from '@/lib/admin/get-active-client';
 const ADMIN_ONLY_PREFIXES = [
   '/admin/dashboard',
   '/admin/tasks',
-  '/admin/pipeline',
+  '/admin/edits',
   '/admin/shoots',
-  '/admin/scheduler',
+  '/admin/scheduling',
   '/admin/accounting',
   '/admin/clients',
   '/admin/team',

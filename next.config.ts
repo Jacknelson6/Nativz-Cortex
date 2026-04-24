@@ -18,6 +18,38 @@ const nextConfig: NextConfig = {
       { source: '/admin/content-lab/:path*', destination: '/admin/strategy-lab/:path*', permanent: false },
       { source: '/portal/content-lab', destination: '/portal/strategy-lab', permanent: false },
       { source: '/portal/content-lab/:path*', destination: '/portal/strategy-lab/:path*', permanent: false },
+      // Slug-matches-label renames (2026-04-24 per Jack). Same pattern as the
+      // content-lab rename above: the directory name stays to avoid churn on
+      // imports + git blame; only the public URL changes. Old URLs keep
+      // working via these redirects so bookmarks don't break. The rewrites
+      // block below serves the renamed URL from the existing directory.
+      { source: '/admin/pipeline', destination: '/admin/edits', permanent: false },
+      { source: '/admin/pipeline/:path*', destination: '/admin/edits/:path*', permanent: false },
+      { source: '/admin/knowledge', destination: '/admin/brain', permanent: false },
+      { source: '/admin/knowledge/:path*', destination: '/admin/brain/:path*', permanent: false },
+      { source: '/admin/scheduler', destination: '/admin/scheduling', permanent: false },
+      { source: '/admin/scheduler/:path*', destination: '/admin/scheduling/:path*', permanent: false },
+      { source: '/admin/competitor-intelligence', destination: '/admin/competitor-spying', permanent: false },
+      { source: '/admin/competitor-intelligence/:path*', destination: '/admin/competitor-spying/:path*', permanent: false },
+    ];
+  },
+  async rewrites() {
+    return [
+      // Serve the renamed public URLs from their existing directories. Paired
+      // with the redirects above, the new URL is canonical and the old one
+      // still works for bookmarked links. API routes (`/api/scheduler/**`)
+      // are intentionally left alone — scheduler provider webhooks hit them
+      // by exact URL and renaming would break third-party configs.
+      { source: '/admin/content-lab', destination: '/admin/strategy-lab' },
+      { source: '/admin/content-lab/:path*', destination: '/admin/strategy-lab/:path*' },
+      { source: '/admin/edits', destination: '/admin/pipeline' },
+      { source: '/admin/edits/:path*', destination: '/admin/pipeline/:path*' },
+      { source: '/admin/brain', destination: '/admin/knowledge' },
+      { source: '/admin/brain/:path*', destination: '/admin/knowledge/:path*' },
+      { source: '/admin/scheduling', destination: '/admin/scheduler' },
+      { source: '/admin/scheduling/:path*', destination: '/admin/scheduler/:path*' },
+      { source: '/admin/competitor-spying', destination: '/admin/competitor-intelligence' },
+      { source: '/admin/competitor-spying/:path*', destination: '/admin/competitor-intelligence/:path*' },
     ];
   },
   compiler: {

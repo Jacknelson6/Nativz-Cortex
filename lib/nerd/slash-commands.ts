@@ -90,7 +90,7 @@ registerCommand({
   handler: async () => {
     const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || ''}/api/pipeline/summary`);
     if (!res.ok) {
-      return { content: "Couldn't load the pipeline right now — try /admin/pipeline directly." };
+      return { content: "Couldn't load the pipeline right now — try /admin/edits directly." };
     }
     const data = await res.json();
     const stages = (data.stages ?? []) as Array<{ stage: string; count: number }>;
@@ -99,7 +99,7 @@ registerCommand({
     }
     const lines = stages.map((s) => `- **${s.stage}** — ${s.count}`);
     return {
-      content: `**Pipeline summary**\n\n${lines.join('\n')}\n\nOpen the full board: /admin/pipeline`,
+      content: `**Pipeline summary**\n\n${lines.join('\n')}\n\nOpen the full board: /admin/edits`,
     };
   },
 });

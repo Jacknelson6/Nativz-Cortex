@@ -160,7 +160,7 @@ export const schedulerTools: ToolDefinition[] = [
               error: `Post created but platform assignment failed: ${platformError.message}`,
               data: post,
               cardType: 'post' as const,
-              link: { href: '/admin/scheduler', label: 'View scheduler' },
+              link: { href: '/admin/scheduling', label: 'View scheduler' },
             };
           }
         }
@@ -169,7 +169,7 @@ export const schedulerTools: ToolDefinition[] = [
           success: true,
           data: post,
           cardType: 'post' as const,
-          link: { href: '/admin/scheduler', label: 'View scheduler' },
+          link: { href: '/admin/scheduling', label: 'View scheduler' },
         };
       } catch (err) {
         return {
@@ -238,7 +238,7 @@ export const schedulerTools: ToolDefinition[] = [
           success: true,
           data: post,
           cardType: 'post' as const,
-          link: { href: '/admin/scheduler', label: 'View scheduler' },
+          link: { href: '/admin/scheduling', label: 'View scheduler' },
         };
       } catch (err) {
         return {
@@ -263,7 +263,7 @@ export const schedulerTools: ToolDefinition[] = [
         success: false,
         error: 'For safety, posts must be deleted manually.',
         cardType: 'post' as const,
-        link: { href: '/admin/scheduler', label: 'Open scheduler' },
+        link: { href: '/admin/scheduling', label: 'Open scheduler' },
       };
     },
   },

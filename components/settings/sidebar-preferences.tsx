@@ -28,7 +28,7 @@ const ADMIN_SIDEBAR_ITEMS = [
   ] },
   { section: 'Manage', items: [
     { href: '/admin/clients', label: 'Clients' },
-    { href: '/admin/pipeline', label: 'Edits' },
+    { href: '/admin/edits', label: 'Edits' },
     { href: '/admin/tasks', label: 'Tasks' },
     { href: '/admin/tools', label: 'Tools' },
     { href: '/admin/settings/ai', label: 'Settings', unhidable: true },

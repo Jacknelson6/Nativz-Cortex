@@ -45,7 +45,7 @@ export default async function WatchPage() {
           feed the Benchmarking tab under Analytics and any recurring reports you&apos;ve subscribed the client to.
         </p>
         <Link
-          href="/admin/competitor-intelligence"
+          href="/admin/competitor-spying"
           className="inline-block text-xs text-text-muted hover:text-cyan-300"
         >
           ← Back to Competitor intelligence

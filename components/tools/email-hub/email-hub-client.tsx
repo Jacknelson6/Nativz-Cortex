@@ -2,12 +2,13 @@
 
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Contact, FileText, Mail, Megaphone, Settings } from 'lucide-react';
+import { Contact, FileText, Mail, Megaphone, Send, Settings } from 'lucide-react';
 import { BannersTab } from './banners-tab';
 import { EmailsTab } from './emails-tab';
 import { ContactsTab } from './contacts-tab';
 import { TemplatesTab } from './templates-tab';
 import { SetupTab } from './setup-tab';
+import { SentLogTab } from './sent-log-tab';
 import { SectionTabs, SectionHeader } from '@/components/admin/section-tabs';
 import type { SectionTabDef } from '@/components/admin/section-tabs';
 
@@ -21,6 +22,7 @@ const NOTIFICATIONS_TABS = [
   { slug: 'banners',   label: 'Banners',   icon: <Megaphone size={13} /> },
   { slug: 'contacts',  label: 'Contacts',  icon: <Contact size={13} /> },
   { slug: 'emails',    label: 'Emails',    icon: <Mail size={13} /> },
+  { slug: 'sent',      label: 'Sent log',  icon: <Send size={13} /> },
   { slug: 'templates', label: 'Templates', icon: <FileText size={13} /> },
   { slug: 'setup',     label: 'Setup',     icon: <Settings size={13} /> },
 ] as const satisfies readonly SectionTabDef[];
@@ -58,6 +60,7 @@ function EmailHubClientInner({ clients }: Props) {
         {tab === 'banners' && <BannersTab clients={clients} />}
         {tab === 'contacts' && <ContactsTab />}
         {tab === 'emails' && <EmailsTab />}
+        {tab === 'sent' && <SentLogTab />}
         {tab === 'templates' && <TemplatesTab />}
         {tab === 'setup' && <SetupTab />}
       </div>

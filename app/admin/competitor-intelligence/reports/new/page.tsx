@@ -34,7 +34,7 @@ export default async function NewSubscriptionPage() {
           Cortex reads from the client&apos;s active benchmarks when it&apos;s time to send.
         </p>
         <Link
-          href="/admin/competitor-intelligence/reports"
+          href="/admin/competitor-spying/reports"
           className="inline-block text-xs text-text-muted hover:text-accent-text"
         >
           ← Back to subscriptions

@@ -112,12 +112,12 @@ const NAV_SECTIONS: NavSection[] = [
         // the corporate-sounding "intelligence". Telescope icon ("we're
         // watching from afar") replaces ScanSearch — the magnifying-
         // glass-with-arrows didn't read as surveillance.
-        href: '/admin/competitor-intelligence',
+        href: '/admin/competitor-spying',
         label: 'Competitor Spying',
         icon: Telescope,
       },
       { href: '/admin/ad-creatives', label: 'Ad Generator', icon: ImagePlus },
-      { href: '/admin/knowledge', label: 'Brain', icon: Brain },
+      { href: '/admin/brain', label: 'Brain', icon: Brain },
       // NAT-57 follow-up: single entry point for the pinned brand's
       // profile. Sits between Brain (AI knowledge) and Notes (manual
       // notes) — both adjacent to it in the user's mental model as
@@ -147,13 +147,13 @@ const NAV_SECTIONS: NavSection[] = [
           { href: '/admin/clients', label: 'Clients', icon: Contact },
           { href: '/admin/onboarding', label: 'Onboarding', icon: ListChecks },
           { href: '/admin/users', label: 'Users', icon: Users },
-          { href: '/admin/scheduler', label: 'Scheduling', icon: Calendar },
+          { href: '/admin/scheduling', label: 'Scheduling', icon: Calendar },
           { href: '/admin/accounting', label: 'Accounting', icon: Receipt },
           { href: '/admin/revenue', label: 'Revenue', icon: CreditCard },
           { href: '/admin/proposals', label: 'Proposals', icon: FileSignature },
           { href: '/admin/notifications', label: 'Notifications', icon: Bell },
           { href: '/admin/tasks', label: 'Tasks', icon: CheckSquare },
-          { href: '/admin/pipeline', label: 'Edits', icon: Scissors },
+          { href: '/admin/edits', label: 'Edits', icon: Scissors },
           { href: '/admin/shoots', label: 'Shoots', icon: Camera },
           { href: '/admin/infrastructure', label: 'Infrastructure', icon: Gauge },
           { href: '/admin/settings/ai', label: 'AI Settings', icon: Cpu },
@@ -170,15 +170,19 @@ function isActivePath(pathname: string, href: string, searchParams?: URLSearchPa
     return pathname.startsWith(prefix);
   }
 
-  // Pipeline root "All stages" shares /admin/pipeline with ?stage=… filtered views
-  if (href === '/admin/pipeline' && pathname === '/admin/pipeline') {
+  // Pipeline root "All stages" shares /admin/edits with ?stage=… filtered views
+  if (href === '/admin/edits' && pathname === '/admin/edits') {
     return !searchParams?.get('stage');
   }
 
-  // Knowledge: graph and meetings are one area (single sidebar item)
-  if (href.endsWith('/knowledge')) {
-    const prefix = href.replace('/knowledge', '');
+  // Brain (formerly Knowledge): graph and meetings are one area (single
+  // sidebar item). We keep the internal directory at /admin/knowledge and
+  // rewrite /admin/brain → /admin/knowledge; this active-path check works
+  // against the canonical public URL (/admin/brain).
+  if (href.endsWith('/brain')) {
+    const prefix = href.replace('/brain', '');
     if (pathname === `${prefix}/meetings` || pathname.startsWith(`${prefix}/meetings/`)) return true;
+    if (pathname === `${prefix}/knowledge` || pathname.startsWith(`${prefix}/knowledge/`)) return true;
     return pathname === href || pathname.startsWith(href + '/');
   }
 
@@ -214,16 +218,16 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/dashboard',
   '/admin/accounting',
   '/admin/tasks',
-  '/admin/pipeline',
-  '/admin/scheduler',
+  '/admin/edits',
+  '/admin/scheduling',
   '/admin/ad-creatives',
   '/admin/clients',
   '/admin/users',
   '/admin/presentations',
   '/admin/shoots',
-  '/admin/knowledge',
+  '/admin/brain',
   '/admin/analyze-social',
-  '/admin/competitor-intelligence',
+  '/admin/competitor-spying',
   '/admin/search/monitors',
   '/admin/notifications',
   '/admin/infrastructure',
