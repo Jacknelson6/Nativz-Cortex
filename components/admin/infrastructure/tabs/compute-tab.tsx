@@ -203,7 +203,7 @@ export async function ComputeTab() {
               href={dashboardUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded-full border border-nativz-border/60 bg-background/40 px-2.5 py-1 text-[11px] text-accent-text transition-colors hover:border-accent/50"
+              className="inline-flex items-center gap-1 rounded-full border border-nativz-border/60 bg-background/40 px-2.5 py-1 text-[12px] text-accent-text transition-colors hover:border-accent/50"
             >
               Dashboard <ArrowUpRight size={10} />
             </a>
@@ -228,12 +228,12 @@ export async function ComputeTab() {
           </dl>
           {commitMessage && (
             <div className="mt-4 rounded-lg border border-nativz-border/60 bg-background/40 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wide text-text-muted">
+              <div className="text-[12px] uppercase tracking-wide text-text-muted">
                 Commit message
               </div>
               <div className="mt-0.5 line-clamp-2 text-xs text-text-primary">{commitMessage}</div>
               {commitAuthor && (
-                <div className="mt-1 text-[11px] text-text-muted">by {commitAuthor}</div>
+                <div className="mt-1 text-[12px] text-text-muted">by {commitAuthor}</div>
               )}
             </div>
           )}
@@ -254,7 +254,7 @@ export async function ComputeTab() {
               <UrlRow label="Deployment" url={vercelUrl} tone="preview" />
             )}
           </div>
-          <p className="mt-4 text-[11px] text-text-muted">
+          <p className="mt-4 text-[12px] text-text-muted">
             Every push to main promotes to production. Branch previews live at{' '}
             <code className="rounded bg-background/60 px-1">*.vercel.app</code> URLs.
           </p>
@@ -277,7 +277,7 @@ export async function ComputeTab() {
               >
                 <div className="min-w-0">
                   <div className="truncate text-sm text-text-primary">{cron.label}</div>
-                  <div className="truncate font-mono text-[10px] text-text-muted">
+                  <div className="truncate font-mono text-[12px] text-text-muted">
                     {cron.schedule} · {run ? formatAge(run.started_at) : 'never'}
                   </div>
                 </div>
@@ -299,7 +299,7 @@ export async function ComputeTab() {
           </div>
         ) : vercel.deployments.length > 0 ? (
           <Disclosure summary="Recent deployments · Vercel API" count={vercel.deployments.length}>
-            <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-4 border-b border-nativz-border/40 pb-2 text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted">
+            <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-4 border-b border-nativz-border/40 pb-2 text-[12px] font-mono uppercase tracking-[0.18em] text-text-muted">
               <span>Target</span>
               <span>Branch · commit</span>
               <span className="text-right">Build</span>
@@ -316,7 +316,7 @@ export async function ComputeTab() {
                 >
                   <span
                     className={
-                      'rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ' +
+                      'rounded px-1.5 py-0.5 text-[12px] font-medium uppercase tracking-wide ' +
                       (d.target === 'production'
                         ? 'bg-accent/15 text-accent-text'
                         : 'bg-surface-hover/80 text-text-muted')
@@ -331,13 +331,13 @@ export async function ComputeTab() {
                         {d.meta?.githubCommitRef ?? '—'}
                       </span>
                       {d.meta?.githubCommitSha && (
-                        <span className="font-mono text-[10px] text-text-muted">
+                        <span className="font-mono text-[12px] text-text-muted">
                           · {d.meta.githubCommitSha.slice(0, 8)}
                         </span>
                       )}
                     </div>
                     {d.meta?.githubCommitMessage && (
-                      <div className="truncate text-[11px] text-text-muted">
+                      <div className="truncate text-[12px] text-text-muted">
                         {d.meta.githubCommitMessage}
                       </div>
                     )}
@@ -351,7 +351,7 @@ export async function ComputeTab() {
                   <div className="text-right">
                     <span
                       className={
-                        'rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ' +
+                        'rounded-full px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide ' +
                         stateTone(d.state)
                       }
                     >
@@ -363,7 +363,7 @@ export async function ComputeTab() {
                       href={`https://${d.url}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-0.5 text-[11px] text-accent-text"
+                      className="inline-flex items-center gap-0.5 text-[12px] text-accent-text"
                       aria-label="Open deployment"
                     >
                       ↗
@@ -386,7 +386,7 @@ export async function ComputeTab() {
             Vercel project env, then redeploy. Token needs <em>Read</em> scope on Projects +
             Deployments.
           </p>
-          <ul className="mt-3 space-y-1 text-[11px] font-mono text-text-muted">
+          <ul className="mt-3 space-y-1 text-[12px] font-mono text-text-muted">
             <li>· VERCEL_TOKEN=…</li>
             <li>· VERCEL_PROJECT_ID=…</li>
             <li>· VERCEL_ORG_ID=team_…</li>
@@ -395,7 +395,7 @@ export async function ComputeTab() {
             href="https://vercel.com/account/tokens"
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 inline-flex items-center gap-1 text-[11px] text-accent-text underline decoration-dotted"
+            className="mt-3 inline-flex items-center gap-1 text-[12px] text-accent-text underline decoration-dotted"
           >
             Mint a token <ArrowUpRight size={10} />
           </a>
@@ -404,7 +404,7 @@ export async function ComputeTab() {
 
       {crons.length > 0 && (
         <Disclosure summary="Cron runs · telemetry from cron_runs" count={crons.length}>
-          <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 border-b border-nativz-border/40 pb-2 text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted">
+          <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 border-b border-nativz-border/40 pb-2 text-[12px] font-mono uppercase tracking-[0.18em] text-text-muted">
             <span>Route</span>
             <span className="text-right">Age</span>
             <span className="text-right">Duration</span>
@@ -418,10 +418,10 @@ export async function ComputeTab() {
               <div className="min-w-0">
                 <div className="truncate font-mono text-xs text-text-primary">{run.route}</div>
               </div>
-              <div className="text-right text-[11px] tabular-nums text-text-muted">
+              <div className="text-right text-[12px] tabular-nums text-text-muted">
                 {formatAge(run.started_at)}
               </div>
-              <div className="text-right text-[11px] tabular-nums text-text-muted">
+              <div className="text-right text-[12px] tabular-nums text-text-muted">
                 {formatDuration(run.duration_ms ?? null)}
               </div>
               <div className="text-right">
@@ -432,7 +432,7 @@ export async function ComputeTab() {
         </Disclosure>
       )}
 
-      <p className="text-[11px] text-text-muted">
+      <p className="text-[12px] text-text-muted">
         Runtime env reflects the currently running deploy. Cron history lives in the{' '}
         <code className="rounded bg-background/60 px-1">cron_runs</code> table (populated by{' '}
         <code className="rounded bg-background/60 px-1">recordCronRun</code>). Deployment table
@@ -457,7 +457,7 @@ function DeployMeta({
 }) {
   return (
     <div className="min-w-0">
-      <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-text-muted">
+      <div className="flex items-center gap-1 text-[12px] uppercase tracking-wide text-text-muted">
         {icon}
         {label}
       </div>
@@ -488,11 +488,11 @@ function UrlRow({ label, url, tone }: { label: string; url: string; tone: 'ok' |
       className="group flex items-center justify-between gap-3 rounded-lg border border-nativz-border bg-background/40 px-3 py-2 transition-colors hover:border-accent/40"
     >
       <div className="min-w-0 flex-1">
-        <div className="text-[10px] uppercase tracking-wide text-text-muted">{label}</div>
+        <div className="text-[12px] uppercase tracking-wide text-text-muted">{label}</div>
         <div className="mt-0.5 truncate font-mono text-xs text-text-primary">{url}</div>
       </div>
       <span
-        className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${toneClass}`}
+        className={`shrink-0 rounded-full border px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide ${toneClass}`}
       >
         {tone === 'ok' ? 'live' : 'preview'}
       </span>

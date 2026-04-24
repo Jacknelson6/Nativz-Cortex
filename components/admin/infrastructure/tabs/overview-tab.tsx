@@ -324,7 +324,7 @@ export async function OverviewTab() {
             <DollarSign size={14} />
           </span>
           <h2 className="text-sm font-semibold text-text-primary">Command center</h2>
-          <span className="text-[11px] text-text-muted">· live spend + activity</span>
+          <span className="text-[12px] text-text-muted">· live spend + activity</span>
         </div>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Stat
@@ -370,7 +370,7 @@ export async function OverviewTab() {
                   {r.primary}
                 </div>
                 {r.secondary && (
-                  <div className="mt-0.5 truncate text-[11px] text-text-muted">{r.secondary}</div>
+                  <div className="mt-0.5 truncate text-[12px] text-text-muted">{r.secondary}</div>
                 )}
               </div>
             </div>
@@ -384,7 +384,7 @@ export async function OverviewTab() {
           count={data.failures.length}
           defaultOpen={data.failures.length <= 3}
         >
-          <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-nativz-border/40 pb-2 text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted">
+          <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-nativz-border/40 pb-2 text-[12px] font-mono uppercase tracking-[0.18em] text-text-muted">
             <span>Kind</span>
             <span>What failed</span>
             <span className="text-right">When</span>
@@ -397,9 +397,9 @@ export async function OverviewTab() {
               <FailureKindPill kind={f.kind} />
               <div className="min-w-0">
                 <div className="truncate text-text-primary">{f.label}</div>
-                <div className="truncate text-[11px] text-coral-300/90">{f.detail}</div>
+                <div className="truncate text-[12px] text-coral-300/90">{f.detail}</div>
               </div>
-              <span className="shrink-0 text-right text-[11px] tabular-nums text-text-muted">
+              <span className="shrink-0 text-right text-[12px] tabular-nums text-text-muted">
                 {formatAge(f.at)}
               </span>
             </div>
@@ -424,7 +424,7 @@ function FailureKindPill({ kind }: { kind: FailureRow['kind'] }) {
   const entry = map[kind];
   return (
     <span
-      className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide ${entry.tone}`}
+      className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 font-mono text-[12px] uppercase tracking-wide ${entry.tone}`}
     >
       {entry.label}
     </span>

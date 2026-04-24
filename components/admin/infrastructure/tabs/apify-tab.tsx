@@ -243,7 +243,7 @@ export async function ApifyTab() {
               {account.usageUsdCurrentMonth != null && (
                 <div>
                   <div className="flex items-baseline justify-between">
-                    <span className="text-[10px] uppercase tracking-wide text-text-muted">
+                    <span className="text-[12px] uppercase tracking-wide text-text-muted">
                       This month
                     </span>
                     <span className="text-sm tabular-nums text-text-primary">
@@ -337,7 +337,7 @@ export async function ApifyTab() {
           count={actors.length}
           defaultOpen
         >
-          <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto_auto] items-center gap-4 border-b border-nativz-border/40 pb-2 text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted">
+          <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto_auto] items-center gap-4 border-b border-nativz-border/40 pb-2 text-[12px] font-mono uppercase tracking-[0.18em] text-text-muted">
             <span>Actor</span>
             <span className="text-right">Runs 24h</span>
             <span className="text-right">Runs 7d</span>
@@ -367,7 +367,7 @@ export async function ApifyTab() {
               >
                 {a.failures7d}
               </span>
-              <span className="text-right text-[11px] text-text-muted">
+              <span className="text-right text-[12px] text-text-muted">
                 {formatRelative(a.lastSeen)}
               </span>
             </div>

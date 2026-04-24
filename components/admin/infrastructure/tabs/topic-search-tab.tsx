@@ -386,7 +386,7 @@ export async function TopicSearchTab() {
                         <summary className="cursor-pointer text-xs text-text-muted underline decoration-dotted">
                           Raw stage rows ({stages.length})
                         </summary>
-                        <pre className="mt-2 overflow-x-auto rounded-lg bg-nativz-ink-2/60 p-3 text-[11px] leading-relaxed text-text-muted">
+                        <pre className="mt-2 overflow-x-auto rounded-lg bg-nativz-ink-2/60 p-3 text-[12px] leading-relaxed text-text-muted">
                           {JSON.stringify(stages, null, 2)}
                         </pre>
                       </details>
@@ -418,13 +418,13 @@ function ModelRow({ label, value }: { label: string; value?: string | null }) {
   const model = value && slash > 0 ? value.slice(slash + 1) : value;
   return (
     <div className="rounded-lg border border-nativz-border/60 bg-surface-hover/30 px-3 py-2.5 transition-colors hover:border-nativz-border/90">
-      <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-muted/85">
+      <div className="font-mono text-[12px] uppercase tracking-[0.18em] text-text-muted/85">
         {label}
       </div>
       {value ? (
         <div className="mt-1.5 flex items-center gap-2">
           {provider && (
-            <span className="inline-flex shrink-0 rounded-full border border-accent/30 bg-accent/10 px-1.5 py-[1px] font-mono text-[10px] font-medium tracking-tight text-accent-text">
+            <span className="inline-flex shrink-0 rounded-full border border-accent/30 bg-accent/10 px-1.5 py-[1px] font-mono text-[12px] font-medium tracking-tight text-accent-text">
               {provider}
             </span>
           )}

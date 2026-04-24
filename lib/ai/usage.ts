@@ -107,17 +107,21 @@ export async function logUsage(entry: UsageEntry): Promise<void> {
 /**
  * Get usage summary for a date range.
  */
-export async function getUsageSummary(
-  from: string,
-  to: string,
-): Promise<{
+export interface UsageSummary {
   byService: Record<string, { totalTokens: number; costUsd: number; requests: number }>;
   byModel: Record<string, { service: string; totalTokens: number; costUsd: number; requests: number }>;
   byFeature: Record<string, { model: string; totalTokens: number; costUsd: number; requests: number }>;
   byUser: Record<string, { email: string; totalTokens: number; costUsd: number; requests: number }>;
   total: { totalTokens: number; costUsd: number; requests: number };
-  daily: { date: string; costUsd: number; requests: number }[];
-}> {
+  daily: { date: string; costUsd: number; requests: number; totalTokens: number }[];
+  /** For stacked bar charts — tokens grouped by day then by model. */
+  dailyByModel: { date: string; tokensByModel: Record<string, number> }[];
+  /** Calendar-scoped rollups (independent of the `from` window). */
+  today: { totalTokens: number; costUsd: number; requests: number };
+  thisMonth: { totalTokens: number; costUsd: number; requests: number };
+}
+
+export async function getUsageSummary(from: string, to: string): Promise<UsageSummary> {
   const admin = createAdminClient();
 
   const { data: logs } = await admin
@@ -134,28 +138,36 @@ export async function getUsageSummary(
   const byFeature: Record<string, { model: string; totalTokens: number; costUsd: number; requests: number }> = {};
   const byFeatureModelCounts: Record<string, Record<string, number>> = {};
   const byUser: Record<string, { email: string; totalTokens: number; costUsd: number; requests: number }> = {};
-  const dailyMap: Record<string, { costUsd: number; requests: number }> = {};
+  const dailyMap: Record<string, { costUsd: number; requests: number; totalTokens: number }> = {};
+  const dailyByModelMap: Record<string, Record<string, number>> = {};
   let totalTokens = 0;
   let totalCost = 0;
+
+  // Calendar-scoped counters read regardless of `from`/`to` — they look at the
+  // same row list and filter by date string, so "today" and "this month" stay
+  // meaningful even when the user flips to a 7d window.
+  const now = new Date();
+  const todayKey = now.toISOString().slice(0, 10);
+  const monthKey = todayKey.slice(0, 7);
+  const today = { totalTokens: 0, costUsd: 0, requests: 0 };
+  const thisMonth = { totalTokens: 0, costUsd: 0, requests: 0 };
 
   for (const log of entries) {
     const cost = Number(log.cost_usd) || 0;
     const tokens = log.total_tokens || 0;
+    const day = log.created_at.split('T')[0];
+    const modelKey = log.model || 'unknown';
 
-    // By service
     if (!byService[log.service]) byService[log.service] = { totalTokens: 0, costUsd: 0, requests: 0 };
     byService[log.service].totalTokens += tokens;
     byService[log.service].costUsd += cost;
     byService[log.service].requests += 1;
 
-    // By model
-    const modelKey = log.model || 'unknown';
     if (!byModel[modelKey]) byModel[modelKey] = { service: log.service, totalTokens: 0, costUsd: 0, requests: 0 };
     byModel[modelKey].totalTokens += tokens;
     byModel[modelKey].costUsd += cost;
     byModel[modelKey].requests += 1;
 
-    // By feature (track primary model used)
     if (!byFeature[log.feature]) byFeature[log.feature] = { model: modelKey, totalTokens: 0, costUsd: 0, requests: 0 };
     if (!byFeatureModelCounts[log.feature]) byFeatureModelCounts[log.feature] = {};
     byFeature[log.feature].totalTokens += tokens;
@@ -163,28 +175,42 @@ export async function getUsageSummary(
     byFeature[log.feature].requests += 1;
     byFeatureModelCounts[log.feature][modelKey] = (byFeatureModelCounts[log.feature][modelKey] ?? 0) + 1;
 
-    // By user
     const userKey = log.user_id ?? 'system';
     if (!byUser[userKey]) byUser[userKey] = { email: log.user_email ?? 'System', totalTokens: 0, costUsd: 0, requests: 0 };
     byUser[userKey].totalTokens += tokens;
     byUser[userKey].costUsd += cost;
     byUser[userKey].requests += 1;
 
-    // Daily
-    const day = log.created_at.split('T')[0];
-    if (!dailyMap[day]) dailyMap[day] = { costUsd: 0, requests: 0 };
+    if (!dailyMap[day]) dailyMap[day] = { costUsd: 0, requests: 0, totalTokens: 0 };
     dailyMap[day].costUsd += cost;
     dailyMap[day].requests += 1;
+    dailyMap[day].totalTokens += tokens;
+
+    if (!dailyByModelMap[day]) dailyByModelMap[day] = {};
+    dailyByModelMap[day][modelKey] = (dailyByModelMap[day][modelKey] ?? 0) + tokens;
+
+    if (day === todayKey) {
+      today.totalTokens += tokens;
+      today.costUsd += cost;
+      today.requests += 1;
+    }
+    if (day.startsWith(monthKey)) {
+      thisMonth.totalTokens += tokens;
+      thisMonth.costUsd += cost;
+      thisMonth.requests += 1;
+    }
 
     totalTokens += tokens;
     totalCost += cost;
   }
 
   const daily = Object.entries(dailyMap).map(([date, data]) => ({ date, ...data }));
+  const dailyByModel = Object.entries(dailyByModelMap)
+    .map(([date, tokensByModel]) => ({ date, tokensByModel }))
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
 
   for (const [feature, counts] of Object.entries(byFeatureModelCounts)) {
-    const dominantModel = Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])[0]?.[0];
+    const dominantModel = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
     if (dominantModel) {
       byFeature[feature].model = dominantModel;
     }
@@ -197,5 +223,8 @@ export async function getUsageSummary(
     byUser,
     total: { totalTokens, costUsd: totalCost, requests: entries.length },
     daily,
+    dailyByModel,
+    today,
+    thisMonth,
   };
 }

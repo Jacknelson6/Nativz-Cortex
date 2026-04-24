@@ -51,7 +51,7 @@ export function SectionCard({
         <div className="flex min-w-0 items-start gap-3">
           <span
             className={
-              'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full ' +
+              'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full ' +
               TONE_STYLES[tone]
             }
           >
@@ -59,13 +59,13 @@ export function SectionCard({
           </span>
           <div className="min-w-0">
             {eyebrow ? (
-              <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-nz-cyan/80">
+              <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-nz-cyan/80">
                 {eyebrow}
               </div>
             ) : null}
-            <h3 className="mt-0.5 text-sm font-semibold text-text-primary">{title}</h3>
+            <h3 className="mt-0.5 text-[15px] font-semibold text-text-primary">{title}</h3>
             {sub ? (
-              <p className="mt-0.5 text-[11px] leading-snug text-text-muted">{sub}</p>
+              <p className="mt-1 text-[13px] leading-snug text-text-muted">{sub}</p>
             ) : null}
           </div>
         </div>
@@ -100,10 +100,10 @@ export function Metric({
           ? 'text-coral-300'
           : 'text-text-primary';
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-nativz-border/40 py-1.5 last:border-b-0">
-      <span className="text-[11px] uppercase tracking-wide text-text-muted">{label}</span>
+    <div className="flex items-center justify-between gap-3 border-b border-nativz-border/40 py-2 last:border-b-0">
+      <span className="text-[12px] uppercase tracking-wide text-text-muted">{label}</span>
       <span
-        className={`truncate text-right text-xs ${toneClass} ${mono ? 'font-mono' : ''}`}
+        className={`truncate text-right text-[13px] ${toneClass} ${mono ? 'font-mono' : ''}`}
         title={value}
       >
         {value}
@@ -129,23 +129,22 @@ export function Disclosure({
 }) {
   return (
     <details className="group rounded-xl border border-nativz-border bg-surface" open={defaultOpen}>
-      <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-3 text-sm hover:bg-surface-hover/40">
-        <span className="flex items-center gap-2">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-text-muted transition-colors group-open:bg-nz-cyan" />
-          <span className="text-text-primary">{summary}</span>
+      <summary className="flex cursor-pointer items-center justify-between gap-2 px-5 py-3.5 text-[14px] hover:bg-surface-hover/40">
+        <span className="flex items-center gap-2.5">
+          <span className="inline-block h-2 w-2 rounded-full bg-text-muted transition-colors group-open:bg-nz-cyan" />
+          <span className="font-medium text-text-primary">{summary}</span>
           {typeof count === 'number' ? (
-            <span className="rounded-full bg-surface-hover/70 px-2 py-0.5 font-mono text-[10px] text-text-muted">
+            <span className="rounded-full bg-surface-hover/70 px-2 py-0.5 font-mono text-[11px] text-text-muted">
               {count.toLocaleString()}
             </span>
           ) : null}
         </span>
-        <span className="text-[10px] uppercase tracking-wide text-text-muted transition-colors group-open:text-nz-cyan">
-          {/* text rotates with state */}
+        <span className="text-[11px] uppercase tracking-wide text-text-muted transition-colors group-open:text-nz-cyan">
           <span className="group-open:hidden">expand ▸</span>
           <span className="hidden group-open:inline">collapse ▾</span>
         </span>
       </summary>
-      <div className="border-t border-nativz-border/60 px-4 py-4">{children}</div>
+      <div className="border-t border-nativz-border/60 px-5 py-4">{children}</div>
     </details>
   );
 }

@@ -139,7 +139,7 @@ export function IntegrationsTab() {
                 }
               />
             </div>
-            <div className="mt-3 flex flex-wrap gap-1.5 font-mono text-[10px]">
+            <div className="mt-3 flex flex-wrap gap-1.5 font-mono text-[12px]">
               {i.envChecks.map((env) => {
                 const isSet = !i.health.missing.includes(env);
                 return (
@@ -162,7 +162,7 @@ export function IntegrationsTab() {
                 href={i.docs}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-3 inline-block text-[11px] text-accent-text underline decoration-dotted"
+                className="mt-3 inline-block text-[12px] text-accent-text underline decoration-dotted"
               >
                 Docs →
               </a>
@@ -171,7 +171,7 @@ export function IntegrationsTab() {
         ))}
       </section>
 
-      <p className="text-[11px] text-text-muted">
+      <p className="text-[12px] text-text-muted">
         Health state reflects environment-variable configuration only. A green dot means every referenced
         env var is set — it does not guarantee the remote service is reachable. Live pings are future
         work; for now the Crons tab is the best proxy for real-world behaviour.

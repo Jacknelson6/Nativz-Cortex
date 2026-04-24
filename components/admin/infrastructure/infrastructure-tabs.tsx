@@ -53,14 +53,14 @@ export function InfrastructureTabs({ active }: { active: InfrastructureTabSlug }
             href={`${pathname}?${qs.toString()}`}
             scroll={false}
             className={
-              'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ' +
+              'inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-[13px] font-medium transition-colors ' +
               (isActive
                 ? 'bg-accent/15 text-accent-text ring-1 ring-inset ring-accent/40'
                 : 'text-text-secondary hover:bg-surface-hover/60 hover:text-text-primary')
             }
             aria-current={isActive ? 'page' : undefined}
           >
-            <Icon size={13} />
+            <Icon size={14} />
             {t.label}
           </Link>
         );

@@ -113,7 +113,7 @@ export async function TrendFinderSettingsTab() {
               2026-04-23; real billing lives in
               <code className="mx-1 rounded bg-background/60 px-1">apify_runs</code>.
             </p>
-            <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-text-muted">
+            <div className="mt-3 flex flex-wrap gap-2 text-[12px] text-text-muted">
               <span className="inline-flex items-center gap-1 rounded-full bg-background/60 px-2 py-0.5">
                 <Sparkles size={11} className="text-accent-text" />
                 Drives trend finder

@@ -80,15 +80,15 @@ export default async function InfrastructurePage({
 
   return (
     <div className="cortex-page-gutter max-w-6xl mx-auto space-y-8">
-      <header className="space-y-2">
-        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-text/80">
+      <header className="space-y-3">
+        <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-accent-text/80">
           Cortex · admin
         </p>
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold leading-tight text-text-primary">
+        <div className="space-y-3">
+          <h1 className="text-3xl font-semibold leading-tight text-text-primary">
             Infrastructure
           </h1>
-          <p className="max-w-2xl text-sm text-text-muted">
+          <p className="max-w-2xl text-[15px] text-text-muted">
             Every backend Cortex runs on, in one place — so you never have to open Vercel,
             Supabase, or Apify to see how we&apos;re doing. Summaries up top, details on tap.
           </p>

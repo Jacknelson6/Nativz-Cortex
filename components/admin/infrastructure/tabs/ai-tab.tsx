@@ -27,15 +27,41 @@ interface ProviderRollup {
   lastSeenAt: string | null;
 }
 
+/**
+ * Classify a model identifier into a provider bucket. Handles both the
+ * canonical `provider/model` form (`anthropic/claude-sonnet-4-5`) and the
+ * un-prefixed names we still emit from a few direct-SDK call sites
+ * (`gemini-embedding-001`, `whisper-large-v3-turbo`, `gpt-4o-mini`).
+ *
+ * Order matters — most specific prefix wins.
+ */
 function providerFromModel(model?: string | null): string {
   if (!model) return 'unknown';
-  if (model.startsWith('openai/')) return 'openai';
-  if (model.startsWith('anthropic/')) return 'anthropic';
-  if (model.startsWith('google/') || model.startsWith('gemini/')) return 'google';
-  if (model.startsWith('perplexity/')) return 'perplexity';
-  if (model.startsWith('openrouter/')) return 'openrouter';
-  if (model.includes('grok')) return 'grok';
-  return model.split('/')[0] ?? 'unknown';
+  const m = model.toLowerCase();
+
+  // Canonical `provider/model` shapes (OpenRouter slugs).
+  if (m.startsWith('openai/')) return 'openai';
+  if (m.startsWith('anthropic/')) return 'anthropic';
+  if (m.startsWith('google/') || m.startsWith('gemini/')) return 'google';
+  if (m.startsWith('perplexity/')) return 'perplexity';
+  if (m.startsWith('openrouter/')) return 'openrouter';
+  if (m.startsWith('groq/')) return 'groq';
+
+  // Bare model names — route by family.
+  if (m.startsWith('gpt-') || m.includes('/gpt-')) return 'openai';
+  if (m.startsWith('claude-') || m.includes('/claude-')) return 'anthropic';
+  if (m.startsWith('gemini-') || m.includes('/gemini-')) return 'google';
+  if (m.startsWith('whisper')) return 'groq';
+  if (m.includes('grok')) return 'grok';
+  if (m.startsWith('deepseek')) return 'deepseek';
+  if (m.startsWith('qwen')) return 'qwen';
+  if (m.startsWith('nvidia')) return 'nvidia';
+  if (m.startsWith('mistral')) return 'mistral';
+
+  // Fallback — if there's a slug prefix, use it; otherwise keep the whole
+  // name so the AI tab at least shows which model is unclassified.
+  const prefix = m.split('/')[0];
+  return prefix && prefix !== m ? prefix : 'unknown';
 }
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -44,8 +70,13 @@ const PROVIDER_LABELS: Record<string, string> = {
   google: 'Google (Gemini)',
   perplexity: 'Perplexity',
   openrouter: 'OpenRouter',
+  groq: 'Groq',
   grok: 'Grok (xAI)',
-  unknown: 'Unknown',
+  deepseek: 'DeepSeek',
+  qwen: 'Qwen',
+  nvidia: 'NVIDIA',
+  mistral: 'Mistral',
+  unknown: 'Unclassified',
 };
 
 const getProviderRollup = unstable_cache(
@@ -215,7 +246,7 @@ export async function AiTab() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <h4 className="text-sm font-semibold text-text-primary">{p.label}</h4>
-                  <span className="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-accent-text">
+                  <span className="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wide text-accent-text">
                     {p.slug}
                   </span>
                 </div>
@@ -271,9 +302,9 @@ export async function AiTab() {
         )}
       </SectionCard>
 
-      <Disclosure summary="Usage dashboard · by model, by user, daily spend" defaultOpen={false}>
-        <div className="flex items-center gap-2 text-[11px] text-text-muted">
-          <TrendingUp size={12} />
+      <Disclosure summary="Usage dashboard · by model, by user, daily spend" defaultOpen>
+        <div className="flex items-center gap-2 text-[12px] text-text-muted">
+          <TrendingUp size={13} />
           Fine-grained view reads from <code className="rounded bg-background/60 px-1">api_usage_logs</code>.
           Switch between 7 / 30 / 90 day windows below.
         </div>
@@ -282,9 +313,28 @@ export async function AiTab() {
         </div>
       </Disclosure>
 
-      <p className="text-[11px] text-text-muted">
-        Provider roll-up fuses two sources: per-stage <code className="rounded bg-background/60 px-1">pipeline_state.stages</code>{' '}
-        (calls, latency, failures) and <code className="rounded bg-background/60 px-1">api_usage_logs</code> (cost, tokens — ground truth).
+      <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-3 text-[12px] text-amber-200/90">
+        <strong className="font-semibold text-amber-200">Cost accuracy caveat:</strong>{' '}
+        OpenRouter costs here are local estimates (tokens × our cached price table), not
+        post-billing truth. For exact numbers wire OpenRouter&apos;s
+        {' '}
+        <a
+          href="https://openrouter.ai/docs/features/generation"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline decoration-dotted"
+        >
+          generation webhook
+        </a>{' '}
+        into a Cortex endpoint and reconcile{' '}
+        <code className="rounded bg-background/60 px-1">api_usage_logs.cost_usd</code> per-call.
+      </div>
+
+      <p className="text-[12px] text-text-muted">
+        Provider roll-up fuses two sources: per-stage{' '}
+        <code className="rounded bg-background/60 px-1">pipeline_state.stages</code> (calls,
+        latency, failures) and{' '}
+        <code className="rounded bg-background/60 px-1">api_usage_logs</code> (tokens + estimated cost).
       </p>
     </div>
   );
