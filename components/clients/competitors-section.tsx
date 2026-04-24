@@ -57,11 +57,16 @@ export function CompetitorsSection({ clientId }: { clientId: string }) {
       const res = await fetch(`/api/clients/${clientId}/competitors`);
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
-      setCompetitors(data.competitors);
+      // Defensive default — a response without a `competitors` key (or a
+      // failed fetch below) used to leave state on `null`, which renders
+      // as "Loading…" forever. Always settle to an array so the UI can
+      // show the empty state + Add button immediately.
+      setCompetitors(Array.isArray(data.competitors) ? data.competitors : []);
       setUngroupedCount(data.ungrouped_count ?? 0);
     } catch (err) {
       console.error('CompetitorsSection: fetch failed', err);
       toast.error('Failed to load competitors');
+      setCompetitors([]);
     }
   }
 

@@ -18,6 +18,9 @@ import {
   Sparkles,
   Clock,
 } from 'lucide-react';
+// (SpotlightCard — the cursor-following cyan radial hover glow — was removed
+// 2026-04-24: looked stuck-blue on AC paper and wasn't needed to signal
+// hoverability. The border + bg transitions on the card itself carry that load.)
 import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { HealthBadge } from '@/components/clients/health-badge';
@@ -140,53 +143,30 @@ const BUCKET_AGENCY_VALUE: Record<AgencyBucket, string | null> = {
   internal: 'Internal',
 };
 
-// ─── Spotlight card — ref-based, zero re-renders on mouse move ─────────────
+// ─── Move menu ─────────────────────────────────────────────────────────────
+//
+// Single always-visible "Move" control replaces the old HTML5 drag-drop. The
+// menu adapts to the current sectioning mode — if the grid is organized by
+// user groups, it lists groups + Unassigned; if organized by agency bucket,
+// it lists the agency rows (Onboarding is read-only and excluded). Keeps the
+// interaction one click deep, which is what Jack asked for.
 
-function SpotlightCard({
-  children,
-  className = '',
-  dimmed,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  dimmed?: boolean;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
+type MoveMode = 'groups' | 'agency';
 
-  const handleMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const el = ref.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    el.style.setProperty('--mx', `${e.clientX - rect.left}px`);
-    el.style.setProperty('--my', `${e.clientY - rect.top}px`);
-  }, []);
-
-  const spotColor = dimmed ? 'rgba(120, 130, 140, 0.08)' : 'rgba(0, 174, 239, 0.10)';
-
-  return (
-    <div ref={ref} onMouseMove={handleMove} className={`relative overflow-hidden ${className}`}>
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-300 ease-out"
-        style={{
-          background: `radial-gradient(320px circle at var(--mx, 50%) var(--my, 50%), ${spotColor}, transparent 70%)`,
-        }}
-      />
-      {children}
-    </div>
-  );
-}
-
-// ─── Move-to-group menu ────────────────────────────────────────────────────
-
-function MoveToGroupMenu({
+function MoveMenu({
+  mode,
   groups,
   currentGroupId,
-  onMove,
+  currentBucket,
+  onMoveGroup,
+  onMoveAgency,
 }: {
+  mode: MoveMode;
   groups: ClientGroup[];
   currentGroupId: string | null | undefined;
-  onMove: (groupId: string | null) => void;
+  currentBucket: AgencyBucket;
+  onMoveGroup: (groupId: string | null) => void;
+  onMoveAgency: (bucket: AgencyBucket) => void;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -207,51 +187,81 @@ function MoveToGroupMenu({
     };
   }, [open]);
 
+  // Agency buckets the user can pick — onboarding is tracker-driven, so it
+  // never appears as a manual destination.
+  const agencyChoices = BUCKET_ORDER.filter((b) => b !== 'onboarding');
+
   return (
     <div ref={rootRef} className="relative">
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-        className="rounded-md p-1.5 text-text-muted hover:text-accent-text hover:bg-accent-surface/30 cursor-pointer transition-colors"
-        title="Move to group"
-        aria-label="Move to group"
+        className="inline-flex items-center gap-1 rounded-md border border-nativz-border/70 bg-surface px-2 py-1 text-[11px] font-medium text-text-secondary hover:border-accent-border/60 hover:text-text-primary hover:bg-surface-hover cursor-pointer transition-colors"
+        title="Move to…"
+        aria-label="Move client"
+        aria-haspopup="menu"
+        aria-expanded={open}
       >
-        <ArrowRight size={14} />
+        <ArrowRight size={11} />
+        Move
       </button>
       {open && (
         <div
+          role="menu"
           className="absolute right-0 top-full mt-1 z-30 min-w-[200px] rounded-lg border border-nativz-border bg-surface shadow-xl animate-[popIn_150ms_ease-out] py-1"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="px-3 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-text-muted/70">
             Move to
           </div>
-          {groups.map((g) => {
-            const s = colorStyles(g.color);
-            const active = g.id === currentGroupId;
-            return (
+          {mode === 'groups' ? (
+            <>
+              {groups.map((g) => {
+                const s = colorStyles(g.color);
+                const active = g.id === currentGroupId;
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { setOpen(false); onMoveGroup(g.id); }}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-primary hover:bg-surface-hover transition-colors text-left"
+                  >
+                    <span className={`h-2 w-2 rounded-full ${s.dot}`} />
+                    <span className="flex-1 truncate">{g.name}</span>
+                    {active && <Check size={12} className="text-accent-text" />}
+                  </button>
+                );
+              })}
+              <div className="my-1 h-px bg-nativz-border/60" />
               <button
-                key={g.id}
                 type="button"
-                onClick={() => { setOpen(false); onMove(g.id); }}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-primary hover:bg-surface-hover transition-colors text-left"
+                role="menuitem"
+                onClick={() => { setOpen(false); onMoveGroup(null); }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-muted hover:bg-surface-hover transition-colors text-left"
               >
-                <span className={`h-2 w-2 rounded-full ${s.dot}`} />
-                <span className="flex-1 truncate">{g.name}</span>
-                {active && <Check size={12} className="text-accent-text" />}
+                <span className="h-2 w-2 rounded-full bg-slate-600" />
+                <span className="flex-1">Unassigned</span>
+                {!currentGroupId && <Check size={12} className="text-accent-text" />}
               </button>
-            );
-          })}
-          <div className="my-1 h-px bg-nativz-border/60" />
-          <button
-            type="button"
-            onClick={() => { setOpen(false); onMove(null); }}
-            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-muted hover:bg-surface-hover transition-colors text-left"
-          >
-            <span className="h-2 w-2 rounded-full bg-slate-600" />
-            <span className="flex-1">Unassigned</span>
-            {!currentGroupId && <Check size={12} className="text-accent-text" />}
-          </button>
+            </>
+          ) : (
+            agencyChoices.map((b) => {
+              const active = b === currentBucket;
+              return (
+                <button
+                  key={b}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => { setOpen(false); if (!active) onMoveAgency(b); }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-primary hover:bg-surface-hover transition-colors text-left"
+                >
+                  <span className="flex-1 truncate">{BUCKET_LABEL[b]}</span>
+                  {active && <Check size={12} className="text-accent-text" />}
+                </button>
+              );
+            })
+          )}
         </div>
       )}
     </div>
@@ -266,15 +276,13 @@ function ClientCard({
   dimmed,
   listView,
   groups,
+  moveMode,
   onNavigate,
   onImpersonate,
   onRequestDelete,
   onMoveGroup,
+  onMoveAgency,
   deleting,
-  draggable,
-  dragging,
-  onDragStart,
-  onDragEnd,
   animate = true,
 }: {
   client: ClientItem;
@@ -282,33 +290,35 @@ function ClientCard({
   dimmed?: boolean;
   listView?: boolean;
   groups: ClientGroup[];
+  /** Which destinations the Move menu should list — matches the current
+   *  sectioning mode so users can only move between rows they can see. */
+  moveMode: MoveMode;
   onNavigate: () => void;
   onImpersonate: () => void;
   onRequestDelete: () => void;
   onMoveGroup: (groupId: string | null) => void;
+  onMoveAgency: (bucket: AgencyBucket) => void;
   deleting?: boolean;
-  /** Only true when groups exist — drag targets don't exist otherwise. */
-  draggable?: boolean;
-  dragging?: boolean;
-  onDragStart?: (dbId: string) => void;
-  onDragEnd?: () => void;
   /**
    * When false, skip the entrance stagger animation. We turn this off after
-   * the initial mount so cards don't re-animate every time a drop causes them
-   * to remount in a different row.
+   * the initial mount so cards don't re-animate from scratch on layout shifts.
    */
   animate?: boolean;
 }) {
   const staggerDelay = animate ? `${Math.min(i, STAGGER_CAP) * STAGGER_MS}ms` : undefined;
   const staggerClass = animate ? 'animate-stagger-in' : '';
+  const currentBucket = bucketFor(client.agency, client.inOnboarding);
 
   const actionButtons = (
-    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200">
-      {groups.length > 0 && client.dbId && (
-        <MoveToGroupMenu
+    <div className="flex items-center gap-0.5">
+      {client.dbId && (
+        <MoveMenu
+          mode={moveMode}
           groups={groups}
           currentGroupId={client.groupId}
-          onMove={onMoveGroup}
+          currentBucket={currentBucket}
+          onMoveGroup={onMoveGroup}
+          onMoveAgency={onMoveAgency}
         />
       )}
       {client.organizationId && (
@@ -342,17 +352,9 @@ function ClientCard({
       <div
         role="button"
         tabIndex={0}
-        draggable={draggable && !!client.dbId}
-        onDragStart={(e) => {
-          if (!draggable || !client.dbId) return;
-          e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/plain', client.dbId);
-          onDragStart?.(client.dbId);
-        }}
-        onDragEnd={() => onDragEnd?.()}
         onClick={onNavigate}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate(); } }}
-        className={`group w-full text-left cursor-pointer focus:outline-none ${staggerClass} ${deleting ? 'pointer-events-none opacity-50' : ''} ${dragging ? 'opacity-40 scale-[0.99]' : ''} transition-[opacity,transform] duration-150`}
+        className={`group w-full text-left cursor-pointer focus:outline-none ${staggerClass} ${deleting ? 'pointer-events-none opacity-50' : ''} transition-[opacity] duration-150`}
         style={staggerDelay ? { animationDelay: staggerDelay } : undefined}
       >
         <div
@@ -388,21 +390,12 @@ function ClientCard({
     <div
       role="button"
       tabIndex={0}
-      draggable={draggable && !!client.dbId}
-      onDragStart={(e) => {
-        if (!draggable || !client.dbId) return;
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', client.dbId);
-        onDragStart?.(client.dbId);
-      }}
-      onDragEnd={() => onDragEnd?.()}
       onClick={onNavigate}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate(); } }}
-      className={`group w-full text-left focus:outline-none ${staggerClass} ${deleting ? 'pointer-events-none opacity-50' : ''} ${dragging ? 'opacity-40 scale-[0.98]' : ''} ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} transition-[opacity,transform] duration-150`}
+      className={`group w-full text-left focus:outline-none ${staggerClass} ${deleting ? 'pointer-events-none opacity-50' : ''} cursor-pointer transition-[opacity] duration-150`}
       style={staggerDelay ? { animationDelay: staggerDelay } : undefined}
     >
-      <SpotlightCard
-        dimmed={dimmed}
+      <div
         className={`rounded-[10px] border border-nativz-border bg-surface p-4 transition-colors duration-200 hover:border-accent-border/50 focus-within:border-accent-border/50 ${dimmed ? 'opacity-55 hover:opacity-80' : ''}`}
       >
         <div className="relative flex items-start gap-3">
@@ -418,7 +411,7 @@ function ClientCard({
               </div>
               <HealthBadge
                 healthScore={client.healthScore}
-                className="shrink-0 mt-0.5 transition-opacity duration-200 group-hover:opacity-0 group-focus-within:opacity-0"
+                className="shrink-0 mt-0.5"
               />
             </div>
 
@@ -438,7 +431,7 @@ function ClientCard({
           </div>
           <div className="absolute top-0 right-0">{actionButtons}</div>
         </div>
-      </SpotlightCard>
+      </div>
     </div>
   );
 }
@@ -692,12 +685,8 @@ export function ClientSearchGrid({
   const [agencyFilter, setAgencyFilter] = useState<AgencyFilter>('all');
   const [listView, setListView] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
-  // Drag-drop state — a single card dragged at a time; target key is either
-  // a group id, the sentinel 'unassigned', or null (no target).
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
   // Once the initial stagger has had time to play, turn it off. Otherwise every
-  // card would re-animate each time a drop causes it to remount in a new row.
+  // card would re-animate when a move causes layout to shift.
   const [canAnimateIn, setCanAnimateIn] = useState(true);
   useEffect(() => {
     const t = setTimeout(() => setCanAnimateIn(false), STAGGER_CAP * STAGGER_MS + 400);
@@ -875,32 +864,6 @@ export function ClientSearchGrid({
     [],
   );
 
-  const handleDropOnKey = useCallback(
-    (targetKey: string | null) => {
-      const dbId = draggingId;
-      setDraggingId(null);
-      setDropTargetKey(null);
-      if (!dbId) return;
-      const client = allClients.find((c) => c.dbId === dbId);
-      if (!client) return;
-
-      // Agency-bucket drops use a prefixed key so we can tell them apart from
-      // group drops (which are bare group ids or the 'unassigned' sentinel).
-      if (typeof targetKey === 'string' && targetKey.startsWith('agency:')) {
-        const bucket = targetKey.slice('agency:'.length) as AgencyBucket;
-        const currentBucket = bucketFor(client.agency, client.inOnboarding);
-        if (currentBucket === bucket) return;
-        void handleMoveAgency(client, bucket);
-        return;
-      }
-
-      const nextGroupId = targetKey === 'unassigned' || targetKey === null ? null : targetKey;
-      if ((client.groupId ?? null) === nextGroupId) return;
-      void handleMoveGroup(dbId, nextGroupId);
-    },
-    [draggingId, allClients, handleMoveGroup, handleMoveAgency],
-  );
-
   const handleDeleteGroup = useCallback(async (id: string) => {
     const prev = groups;
     const prevClients = allClients;
@@ -977,22 +940,25 @@ export function ClientSearchGrid({
 
   const gridClasses = 'grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3';
 
+  // Menu mode follows sectioning: if user groups exist, the Move menu lists
+  // groups; otherwise it lists agency buckets. Keeps destinations matched to
+  // what the user is currently seeing on screen.
+  const moveMode: MoveMode = useGroupSections ? 'groups' : 'agency';
+
   function renderBucket(items: typeof active, dimmed: boolean, indexBase = 0) {
     const commonCardProps = (client: (typeof items)[number], i: number) => ({
       client,
       i: indexBase + i,
       dimmed,
       groups,
+      moveMode,
       deleting: deletingId === client.dbId,
-      draggable: true,
-      dragging: draggingId === client.dbId,
       animate: canAnimateIn,
-      onDragStart: (dbId: string) => setDraggingId(dbId),
-      onDragEnd: () => { setDraggingId(null); setDropTargetKey(null); },
       onNavigate: () => router.push(`/admin/clients/${client.slug}`),
       onImpersonate: () => client.organizationId && handleImpersonate(client.organizationId, client.slug),
       onRequestDelete: () => client.dbId && setPendingDelete({ dbId: client.dbId, name: client.name }),
       onMoveGroup: (gid: string | null) => client.dbId && handleMoveGroup(client.dbId, gid),
+      onMoveAgency: (bucket: AgencyBucket) => handleMoveAgency(client, bucket),
     });
     if (listView) {
       return (
@@ -1008,51 +974,6 @@ export function ClientSearchGrid({
         {items.map((client, i) => (
           <ClientCard key={client.slug} {...commonCardProps(client, i)} />
         ))}
-      </div>
-    );
-  }
-
-  // Drop-zone wrapper for a section. Adds HTML5 dnd handlers + a subtle
-  // ring highlight while hovering. Keyboard users still have the
-  // "Move to…" menu on each card.
-  function DropZone({
-    targetKey,
-    empty,
-    readOnly,
-    children,
-  }: {
-    targetKey: string;
-    empty?: boolean;
-    /** Visual-only — we still let the drop fire so `handleDropOnKey` can show the
-     * proper toast instead of the drop silently bouncing at the browser level. */
-    readOnly?: boolean;
-    children: React.ReactNode;
-  }) {
-    const isTarget = dropTargetKey === targetKey && draggingId !== null;
-    const targetHighlight = readOnly
-      ? 'ring-2 ring-red-500/50 ring-offset-2 ring-offset-background bg-red-500/5'
-      : 'ring-2 ring-accent-border/70 ring-offset-2 ring-offset-background bg-accent-surface/10';
-    return (
-      <div
-        onDragOver={(e) => {
-          if (!draggingId) return;
-          e.preventDefault();
-          e.dataTransfer.dropEffect = readOnly ? 'none' : 'move';
-          if (dropTargetKey !== targetKey) setDropTargetKey(targetKey);
-        }}
-        onDragLeave={(e) => {
-          if (e.currentTarget.contains(e.relatedTarget as Node)) return;
-          if (dropTargetKey === targetKey) setDropTargetKey(null);
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          handleDropOnKey(targetKey);
-        }}
-        className={`rounded-[12px] transition-all duration-150 ${
-          isTarget ? targetHighlight : ''
-        } ${empty && draggingId ? 'min-h-[80px] border border-dashed border-nativz-border/60 p-3' : ''}`}
-      >
-        {children}
       </div>
     );
   }
@@ -1159,29 +1080,25 @@ export function ClientSearchGrid({
                         memberCount: gs.items.length,
                       })}
                     />
-                    <DropZone targetKey={gs.group.id} empty={gs.items.length === 0}>
-                      {gs.items.length > 0 ? (
-                        renderBucket(gs.items, false, offset)
-                      ) : (
-                        <p className="text-[13px] text-text-muted italic pl-2">
-                          {draggingId ? 'Drop here to move into this group.' : 'Empty — drag a card here or use the arrow button.'}
-                        </p>
-                      )}
-                    </DropZone>
+                    {gs.items.length > 0 ? (
+                      renderBucket(gs.items, false, offset)
+                    ) : (
+                      <p className="text-[13px] text-text-muted italic pl-2">
+                        Empty — use the Move button on any card to add one here.
+                      </p>
+                    )}
                   </section>
                 );
               })}
               <section className="space-y-2">
                 <SectionHeader label="Unassigned" count={unassigned.length} />
-                <DropZone targetKey="unassigned" empty={unassigned.length === 0}>
-                  {unassigned.length > 0 ? (
-                    renderBucket(unassigned, false)
-                  ) : (
-                    <p className="text-[13px] text-text-muted italic pl-2">
-                      {draggingId ? 'Drop here to remove from a group.' : 'No unassigned clients.'}
-                    </p>
-                  )}
-                </DropZone>
+                {unassigned.length > 0 ? (
+                  renderBucket(unassigned, false)
+                ) : (
+                  <p className="text-[13px] text-text-muted italic pl-2">
+                    No unassigned clients.
+                  </p>
+                )}
               </section>
             </>
           ) : agencyBuckets.length > 0 ? (
@@ -1196,19 +1113,15 @@ export function ClientSearchGrid({
                 ) : undefined;
               const emptyMessage = readOnly
                 ? 'Start an onboarding from the Onboarding page.'
-                : draggingId
-                  ? `Drop here to move into ${BUCKET_LABEL[g.key]}.`
-                  : 'No clients in this row yet.';
+                : 'No clients in this row yet.';
               return (
                 <section key={g.key} className="space-y-2">
                   <SectionHeader label={BUCKET_LABEL[g.key]} count={g.items.length} icon={icon} />
-                  <DropZone targetKey={`agency:${g.key}`} empty={g.items.length === 0} readOnly={readOnly}>
-                    {g.items.length > 0 ? (
-                      renderBucket(g.items, false, offset)
-                    ) : (
-                      <p className="text-[13px] text-text-muted italic pl-2">{emptyMessage}</p>
-                    )}
-                  </DropZone>
+                  {g.items.length > 0 ? (
+                    renderBucket(g.items, false, offset)
+                  ) : (
+                    <p className="text-[13px] text-text-muted italic pl-2">{emptyMessage}</p>
+                  )}
                 </section>
               );
             })

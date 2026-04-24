@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ImageUpload } from '@/components/ui/image-upload';
 import { SettingsPageHeader } from '@/components/clients/settings/settings-primitives';
+import { ClientLogo } from '@/components/clients/client-logo';
 
 type GeneralPayload = {
   id: string;
@@ -153,22 +154,23 @@ export function GeneralSettingsForm({ slug, embedded }: { slug: string; embedded
 
       <Card>
         <div className="flex items-start gap-4">
+          {/* Same ClientLogo component the sidebar + header use, so the
+              initials hash-color + logo fallback all match across surfaces
+              on the same client. Wrapped in a button for the edit flow. */}
           <button
             type="button"
             onClick={() => setEditingLogo(!editingLogo)}
             disabled={!editing}
-            className="group relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-hover/50 border border-nativz-border-light transition-all enabled:hover:border-accent/40 enabled:cursor-pointer disabled:opacity-80 disabled:cursor-default"
+            className="group relative shrink-0 rounded-2xl transition-all enabled:hover:ring-2 enabled:hover:ring-accent/40 enabled:cursor-pointer disabled:cursor-default focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
-            {logoUrl ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={logoUrl} alt={client.name} className="h-full w-full object-contain p-2" />
-            ) : (
-              <div className="text-lg font-bold text-accent-text">
-                {abbreviation || <Building2 size={24} />}
-              </div>
-            )}
+            <ClientLogo
+              src={logoUrl}
+              name={client.name}
+              abbreviation={abbreviation}
+              size="lg"
+            />
             {editing && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl">
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl">
                 <Pencil size={14} className="text-white" />
               </div>
             )}

@@ -36,23 +36,20 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Get client's organization_id
-    const { data: client } = await adminClient
-      .from('clients')
-      .select('organization_id')
-      .eq('id', id)
-      .single();
-
-    if (!client?.organization_id) {
-      return NextResponse.json({ error: 'Client not found or missing organization' }, { status: 404 });
-    }
-
-    // Get all viewer users in this org
+    // Scope by user_client_access — the row that actually maps a portal
+    // user to a specific client. Filtering by organization_id was too wide:
+    // orgs own many clients (e.g. a Nativz account can house Rank Prompt +
+    // Weston Funding + Owings Auto etc.), so the old query returned every
+    // portal user in the whole org under each client's Portal users list.
+    // `user_client_access!inner` forces an inner join so users with zero
+    // rows for this client are excluded.
     const { data: portalUsers, error } = await adminClient
       .from('users')
-      .select('id, email, full_name, avatar_url, last_login, created_at, is_active')
-      .eq('organization_id', client.organization_id)
+      .select(
+        'id, email, full_name, avatar_url, last_login, created_at, is_active, user_client_access!inner(client_id)',
+      )
       .eq('role', 'viewer')
+      .eq('user_client_access.client_id', id)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -60,7 +57,11 @@ export async function GET(
       return NextResponse.json({ error: 'Failed to fetch portal users' }, { status: 500 });
     }
 
-    return NextResponse.json({ users: portalUsers ?? [] });
+    // Strip the join artifact before returning so the shape stays identical
+    // to what the frontend already expects.
+    const shaped = (portalUsers ?? []).map(({ user_client_access: _uca, ...rest }) => rest);
+
+    return NextResponse.json({ users: shaped });
   } catch (error) {
     console.error('GET /api/clients/[id]/portal-users error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
