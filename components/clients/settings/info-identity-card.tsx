@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Building2, Pencil } from 'lucide-react';
 import { InfoCard, InfoField, InfoFieldGrid } from './info-card';
@@ -36,6 +37,7 @@ export function InfoIdentityCard({
    *  component already has the same data. */
   initialClient?: IdentityPayload;
 }) {
+  const router = useRouter();
   const [client, setClient] = useState<IdentityPayload | null>(initialClient ?? null);
   const [loading, setLoading] = useState(!initialClient);
   const [error, setError] = useState<string | null>(null);
@@ -117,6 +119,7 @@ export function InfoIdentityCard({
       setClient(next);
       setEditing(false);
       toast.success('Identity saved');
+      router.refresh();
     } catch {
       toast.error('Something went wrong');
     } finally {
@@ -181,6 +184,7 @@ export function InfoIdentityCard({
             onClick={() => setEditing(true)}
             className="group relative shrink-0 rounded-2xl transition-all hover:ring-2 hover:ring-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent cursor-pointer"
             title="Edit logo"
+            aria-label="Edit client logo and identity"
           >
             <ClientLogo
               src={client.logo_url}

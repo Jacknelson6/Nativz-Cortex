@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Sparkles } from 'lucide-react';
 import { InfoCard, InfoField } from './info-card';
@@ -27,18 +28,28 @@ const EMPTY: EssencePayload = {
   mission_statement: null,
 };
 
-export function InfoBrandEssenceCard({ clientId }: { clientId: string }) {
-  const [saved, setSaved] = useState<EssencePayload | null>(null);
+export function InfoBrandEssenceCard({
+  clientId,
+  initial,
+}: {
+  clientId: string;
+  /** SSR-fetched essence values; when supplied, the card hydrates without an
+   *  initial fetch round-trip. */
+  initial?: EssencePayload;
+}) {
+  const router = useRouter();
+  const [saved, setSaved] = useState<EssencePayload | null>(initial ?? null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [tagline, setTagline] = useState('');
-  const [valueProp, setValueProp] = useState('');
-  const [mission, setMission] = useState('');
+  const [tagline, setTagline] = useState(initial?.tagline ?? '');
+  const [valueProp, setValueProp] = useState(initial?.value_proposition ?? '');
+  const [mission, setMission] = useState(initial?.mission_statement ?? '');
 
   useEffect(() => {
+    if (initial) return;
     let cancelled = false;
     (async () => {
       try {
@@ -60,7 +71,7 @@ export function InfoBrandEssenceCard({ clientId }: { clientId: string }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [clientId]);
+  }, [clientId, initial]);
 
   function resetDrafts(from: EssencePayload) {
     setTagline(from.tagline ?? '');
@@ -96,6 +107,7 @@ export function InfoBrandEssenceCard({ clientId }: { clientId: string }) {
       setSaved(next);
       setEditing(false);
       toast.success('Brand essence saved');
+      router.refresh();
     } catch {
       toast.error('Something went wrong');
     } finally {

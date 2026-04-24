@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Megaphone } from 'lucide-react';
 import { InfoCard, InfoField } from './info-card';
@@ -24,24 +25,34 @@ type VoicePayload = {
   description: string | null;
 };
 
-export function InfoBrandVoiceCard({ slug }: { slug: string }) {
-  const [saved, setSaved] = useState<VoicePayload | null>(null);
+export function InfoBrandVoiceCard({
+  slug,
+  initial,
+}: {
+  slug: string;
+  /** SSR-fetched voice values; when supplied, the card hydrates without an
+   *  initial fetch round-trip. */
+  initial?: VoicePayload;
+}) {
+  const router = useRouter();
+  const [saved, setSaved] = useState<VoicePayload | null>(initial ?? null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [voice, setVoice] = useState('');
-  const [audience, setAudience] = useState('');
-  const [keywords, setKeywords] = useState('');
-  const [description, setDescription] = useState('');
+  const [voice, setVoice] = useState(initial?.brand_voice ?? '');
+  const [audience, setAudience] = useState(initial?.target_audience ?? '');
+  const [keywords, setKeywords] = useState((initial?.topic_keywords ?? []).join(', '));
+  const [description, setDescription] = useState(initial?.description ?? '');
 
   useEffect(() => {
+    if (initial) return;
     let cancelled = false;
     void load(cancelled);
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug]);
+  }, [slug, initial]);
 
   async function load(cancelledFlag?: boolean) {
     setError(null);
@@ -106,6 +117,7 @@ export function InfoBrandVoiceCard({ slug }: { slug: string }) {
       setSaved(next);
       setEditing(false);
       toast.success('Brand voice saved');
+      router.refresh();
     } catch {
       toast.error('Something went wrong');
     } finally {

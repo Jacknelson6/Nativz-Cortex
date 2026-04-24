@@ -1,1 +1,1 @@
-export { default } from '@/app/admin/brand-profile/loading';
+export { default } from '@/app/(app)/brand-profile/loading';
