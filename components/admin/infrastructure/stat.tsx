@@ -18,11 +18,11 @@ export function StatusPill({ status }: { status: string }) {
   const bad = s === 'failed' || s === 'error' || s === 'canceled' || s === 'cancelled';
   const warn = s === 'partial' || s === 'degraded' || s === 'building' || s === 'queued' || s === 'initializing';
   const tone = ok
-    ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+    ? 'border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
     : bad
-      ? 'border border-red-500/30 bg-red-500/10 text-red-300'
+      ? 'border border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300'
       : warn
-        ? 'border border-amber-500/30 bg-amber-500/10 text-amber-300'
+        ? 'border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'
         : s === 'processing' || s === 'pending' || s === 'running'
           ? 'border border-text-muted/30 bg-surface-hover/60 text-text-secondary'
           : 'border border-text-muted/20 bg-surface-hover/40 text-text-muted';

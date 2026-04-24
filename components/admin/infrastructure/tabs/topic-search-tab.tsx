@@ -397,7 +397,7 @@ export async function TopicSearchTab({ range, preset }: { range: DateRange; pres
                       <p className="text-xs text-text-muted">No stage timings recorded for this run.</p>
                     )}
 
-                    <div className="grid grid-cols-2 gap-3 text-xs md:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-3 text-center text-xs md:grid-cols-4">
                       <Meta label="Pipeline" value={row.topic_pipeline ?? '—'} />
                       <Meta label="Web mode" value={row.pipeline_state?.web_research_mode ?? '—'} />
                       <Meta label="Tokens" value={(row.tokens_used ?? row.pipeline_state?.totals?.tokens ?? 0).toLocaleString()} />
@@ -417,18 +417,7 @@ export async function TopicSearchTab({ range, preset }: { range: DateRange; pres
                       <Meta label="Search ID" value={row.id.slice(0, 8)} mono />
                     </div>
 
-                    {stages && stages.length > 0 && (
-                      <details className="group/inner">
-                        <summary className="cursor-pointer text-xs text-text-muted underline decoration-dotted">
-                          Raw stage rows ({stages.length})
-                        </summary>
-                        <pre className="mt-2 overflow-x-auto rounded-lg bg-nativz-ink-2/60 p-3 text-[12px] leading-relaxed text-text-muted">
-                          {JSON.stringify(stages, null, 2)}
-                        </pre>
-                      </details>
-                    )}
-
-                    <div>
+                    <div className="flex justify-end">
                       <Link
                         href={`/admin/finder/${row.id}`}
                         className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3.5 py-1.5 text-xs font-medium text-accent-text transition-colors hover:bg-accent/15"
