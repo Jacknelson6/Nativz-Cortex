@@ -38,19 +38,16 @@ export default async function ClientSettingsPartnershipPage({
   if (!user) notFound();
 
   const admin = createAdminClient();
-  const { data: me } = await admin
-    .from('users')
-    .select('role')
-    .eq('id', user.id)
-    .single();
+  const [{ data: me }, { data: client }] = await Promise.all([
+    admin.from('users').select('role').eq('id', user.id).single(),
+    admin
+      .from('clients')
+      .select('id, slug, name, services, admin_workspace_modules')
+      .eq('slug', slug)
+      .single(),
+  ]);
   const isAdmin = me?.role === 'admin' || me?.role === 'super_admin';
   if (!isAdmin) notFound();
-
-  const { data: client } = await admin
-    .from('clients')
-    .select('id, slug, name, services, admin_workspace_modules')
-    .eq('slug', slug)
-    .single();
   if (!client) notFound();
 
   const modules = normalizeAdminWorkspaceModules(

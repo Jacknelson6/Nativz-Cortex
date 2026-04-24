@@ -16,7 +16,7 @@ export function Stat({ label, value, sub }: { label: string; value: string; sub?
 export function StatusPill({ status }: { status: string }) {
   const tone =
     status === 'completed' || status === 'ok' || status === 'healthy'
-      ? 'border border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
+      ? 'border border-accent/30 bg-accent/10 text-accent-text'
       : status === 'failed' || status === 'error'
         ? 'border border-coral-500/30 bg-coral-500/10 text-coral-300'
         : status === 'partial' || status === 'degraded'
@@ -40,7 +40,7 @@ export function HealthDot({
 }) {
   const tone =
     state === 'healthy'
-      ? 'bg-cyan-400 shadow-[0_0_0_3px_rgba(34,211,238,0.18)]'
+      ? 'bg-accent shadow-[0_0_0_3px_rgba(0,174,239,0.18)]'
       : state === 'degraded'
         ? 'bg-amber-400 shadow-[0_0_0_3px_rgba(245,158,11,0.18)]'
         : state === 'error'

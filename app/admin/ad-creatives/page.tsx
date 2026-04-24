@@ -91,6 +91,7 @@ export default async function AdCreativesPage() {
       clientId={client.id}
       clientName={client.name ?? ''}
       clientSlug={client.slug ?? ''}
+      clientLogoUrl={client.logo_url ?? null}
       brandDnaStatus={client.brand_dna_status ?? 'none'}
       initialAssets={assetResult.data ?? []}
       initialTemplates={(templateResult.data ?? []) as AdPromptTemplate[]}

@@ -16,30 +16,17 @@ export default async function EcomCompetitorTrackerPage({
   if (!user) redirect('/admin/login');
 
   const admin = createAdminClient();
-  const { data: userData } = await admin
-    .from('users')
-    .select('role')
-    .eq('id', user.id)
-    .single();
+  const [{ data: userData }, { data: clients }, { clientId }, active] = await Promise.all([
+    admin.from('users').select('role').eq('id', user.id).single(),
+    admin.from('clients').select('id, name, slug, logo_url').eq('is_active', true).order('name'),
+    searchParams,
+    getActiveAdminClient().catch(() => null),
+  ]);
   if (!userData || !['admin', 'super_admin'].includes(userData.role)) {
     redirect('/admin/dashboard');
   }
 
-  const { data: clients } = await admin
-    .from('clients')
-    .select('id, name, slug, logo_url')
-    .eq('is_active', true)
-    .order('name');
-
-  const { clientId } = await searchParams;
-
-  // Fall back to the top-bar brand pill when no explicit ?clientId= is
-  // passed. URL wins when present.
-  let resolvedInitialClientId = clientId?.trim() || null;
-  if (!resolvedInitialClientId) {
-    const active = await getActiveAdminClient().catch(() => null);
-    if (active?.brand?.id) resolvedInitialClientId = active.brand.id;
-  }
+  const resolvedInitialClientId = clientId?.trim() || active?.brand?.id || null;
 
   return (
     <EcomTrackerClient

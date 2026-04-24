@@ -21,7 +21,7 @@ export default async function AuditPage() {
 
   const adminClient = createAdminClient();
 
-  const [{ data: auditRows }, { data: userRow }, vaultClients, rosterResult] = await Promise.all([
+  const [{ data: auditRows }, { data: userRow }, vaultClients, rosterResult, active] = await Promise.all([
     adminClient
       .from('prospect_audits')
       .select(
@@ -35,6 +35,7 @@ export default async function AuditPage() {
       select: 'id, slug, logo_url, is_active, agency',
       onlyActive: true,
     }),
+    getActiveAdminClient().catch(() => null),
   ]);
 
   const raw = userRow?.full_name?.trim();
@@ -75,7 +76,6 @@ export default async function AuditPage() {
 
   // Seed the audit hub from the top-bar pill so "run an audit for the
   // currently-pinned brand" is the zero-click default.
-  const active = await getActiveAdminClient().catch(() => null);
   const initialClientId = active?.brand?.id ?? null;
 
   return (

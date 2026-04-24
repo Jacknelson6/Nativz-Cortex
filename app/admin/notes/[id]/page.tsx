@@ -22,14 +22,15 @@ export default async function NotesBoardPage({
   if (!user) redirect('/admin/login');
 
   const admin = createAdminClient();
-  const { data: userRow } = await admin.from('users').select('role').eq('id', user.id).single();
+  const [{ data: userRow }, { data: board }] = await Promise.all([
+    admin.from('users').select('role').eq('id', user.id).single(),
+    admin
+      .from('moodboard_boards')
+      .select('id, name, user_id, is_personal, scope')
+      .eq('id', id)
+      .maybeSingle(),
+  ]);
   const isAdmin = userRow?.role === 'admin';
-
-  const { data: board } = await admin
-    .from('moodboard_boards')
-    .select('id, name, user_id, is_personal, scope')
-    .eq('id', id)
-    .maybeSingle();
 
   if (!board) notFound();
 

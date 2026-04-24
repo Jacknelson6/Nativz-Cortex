@@ -51,11 +51,11 @@ const PHASE_LABELS: Record<string, string> = {
 };
 
 const PHASE_TINTS: Record<string, string> = {
-  subtopic_research: 'bg-cyan-300/85',
-  platform_scrapers: 'bg-cyan-500/85',
-  transcribe_all: 'bg-cyan-200/70',
-  cluster_pillars: 'bg-cyan-700/85',
-  merge: 'bg-cyan-400/85',
+  subtopic_research: 'bg-accent-text/85',
+  platform_scrapers: 'bg-accent/85',
+  transcribe_all: 'bg-accent-text/60',
+  cluster_pillars: 'bg-accent',
+  merge: 'bg-accent/60',
   merge_retry: 'bg-coral-500/70',
 };
 
@@ -239,7 +239,7 @@ export async function TopicSearchTab() {
           <h2 className="text-sm font-semibold uppercase tracking-wide text-text-muted">
             Configured models (agency_settings)
           </h2>
-          <span className="shrink-0 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-cyan-300">
+          <span className="shrink-0 rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent-text">
             All via OpenRouter
           </span>
         </div>
@@ -397,7 +397,7 @@ function ModelRow({ label, value }: { label: string; value?: string | null }) {
       {value ? (
         <div className="mt-1.5 flex items-center gap-2">
           {provider && (
-            <span className="inline-flex shrink-0 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-[1px] font-mono text-[10px] font-medium tracking-tight text-cyan-300">
+            <span className="inline-flex shrink-0 rounded-full border border-accent/30 bg-accent/10 px-1.5 py-[1px] font-mono text-[10px] font-medium tracking-tight text-accent-text">
               {provider}
             </span>
           )}

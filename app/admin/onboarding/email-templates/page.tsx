@@ -29,14 +29,15 @@ export default async function OnboardingEmailTemplatesPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) notFound();
   const admin = createAdminClient();
-  const { data: me } = await admin.from('users').select('role').eq('id', user.id).single();
+  const [{ data: me }, { data }] = await Promise.all([
+    admin.from('users').select('role').eq('id', user.id).single(),
+    admin
+      .from('onboarding_email_templates')
+      .select('id, service, name, subject, body, blocks, sort_order, created_at, updated_at')
+      .order('service', { ascending: true })
+      .order('sort_order', { ascending: true }),
+  ]);
   if (me?.role !== 'admin') notFound();
-
-  const { data } = await admin
-    .from('onboarding_email_templates')
-    .select('id, service, name, subject, body, blocks, sort_order, created_at, updated_at')
-    .order('service', { ascending: true })
-    .order('sort_order', { ascending: true });
 
   const rows = (data as Row[] | null) ?? [];
 

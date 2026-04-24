@@ -209,13 +209,10 @@ function SchedulerInner({ initialClients }: { initialClients: ClientOption[] }) 
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center p-8">
-        <Loader2 size={24} className="animate-spin text-text-muted" />
-      </div>
-    );
-  }
+  // Initial data load is covered by the route-level loading.tsx skeleton,
+  // so we render the full shell immediately and let the calendar populate
+  // in place — no in-component spinner that would show as a second loading
+  // state after the skeleton.
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
@@ -391,12 +388,10 @@ function SchedulerInner({ initialClients }: { initialClients: ClientOption[] }) 
 }
 
 export function SchedulerContent({ initialClients }: { initialClients: ClientOption[] }) {
+  // fallback={null} so a CSR bailout on useSearchParams doesn't paint a
+  // second spinner after the route-level loading.tsx skeleton.
   return (
-    <Suspense fallback={
-      <div className="flex-1 flex items-center justify-center p-8">
-        <Loader2 size={24} className="animate-spin text-text-muted" />
-      </div>
-    }>
+    <Suspense fallback={null}>
       <SchedulerInner initialClients={initialClients} />
     </Suspense>
   );

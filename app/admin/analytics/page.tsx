@@ -37,21 +37,23 @@ export default async function AdminAnalyticsPage({
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/admin/login');
 
-  const { clientId, tab, sub } = await searchParams;
   const adminClient = createAdminClient();
 
-  // Fetch all clients with their social connection status
-  const { data: clients } = await adminClient
-    .from('clients')
-    .select('id, name, slug, logo_url, agency')
-    .order('name');
+  // Four independent reads — previously serial, which added ~3 round-trips
+  // to every analytics page paint. Active-client pill is always fetched so
+  // we don't need a trailing await when the URL omits ?clientId=.
+  const [
+    { clientId, tab, sub },
+    { data: clients },
+    { data: profiles },
+    active,
+  ] = await Promise.all([
+    searchParams,
+    adminClient.from('clients').select('id, name, slug, logo_url, agency').order('name'),
+    adminClient.from('social_profiles').select('client_id, status'),
+    getActiveAdminClient().catch(() => null),
+  ]);
 
-  // Fetch social profiles to determine connection status
-  const { data: profiles } = await adminClient
-    .from('social_profiles')
-    .select('client_id, status');
-
-  // Build connection status map
   const connectionMap: Record<string, 'connected' | 'disconnected' | 'paused'> = {};
   for (const profile of profiles ?? []) {
     if (!profile.client_id) continue;
@@ -74,13 +76,8 @@ export default async function AdminAnalyticsPage({
 
   const { tab: initialTab, sub: initialSub } = normalizeTabs(tab, sub);
 
-  // URL wins; fall back to the top-bar pill when no explicit ?clientId=
-  // is passed so the analytics dashboard opens on the pinned brand.
-  let resolvedInitialClientId = clientId?.trim() || null;
-  if (!resolvedInitialClientId) {
-    const active = await getActiveAdminClient().catch(() => null);
-    if (active?.brand?.id) resolvedInitialClientId = active.brand.id;
-  }
+  const resolvedInitialClientId =
+    clientId?.trim() || active?.brand?.id || null;
 
   return (
     <AnalyticsLanding

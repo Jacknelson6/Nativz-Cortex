@@ -14,26 +14,19 @@ export default async function WatchPage() {
   if (!user) redirect('/admin/login');
 
   const admin = createAdminClient();
-  const { data: me } = await admin
-    .from('users')
-    .select('role, is_super_admin')
-    .eq('id', user.id)
-    .single();
+  const [{ data: me }, { data: clients }] = await Promise.all([
+    admin.from('users').select('role, is_super_admin').eq('id', user.id).single(),
+    admin.from('clients').select('id, name, agency, logo_url').eq('is_active', true).order('name'),
+  ]);
   if (me?.role !== 'admin' && !me?.is_super_admin) {
     redirect('/admin/dashboard');
   }
-
-  const { data: clients } = await admin
-    .from('clients')
-    .select('id, name, agency, logo_url')
-    .eq('is_active', true)
-    .order('name');
 
   return (
     <div className="cortex-page-gutter max-w-3xl mx-auto space-y-6 pt-6">
       <header className="space-y-2">
         <p
-          className="font-mono text-[10px] uppercase tracking-[0.22em] text-cyan-300/80"
+          className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent-text/80"
           style={{ fontFamily: 'Rubik, system-ui, sans-serif', fontStyle: 'italic' }}
         >
           Competitor intelligence

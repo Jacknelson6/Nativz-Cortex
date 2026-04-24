@@ -187,18 +187,9 @@ export default function AdminTasksPage() {
     return groups;
   }, [activeTasks]);
 
-  if (loading) {
-    return (
-      <div className="cortex-page-gutter space-y-6">
-        <div className="h-8 w-32 bg-surface rounded animate-pulse" />
-        <div className="space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-12 bg-surface/50 rounded animate-pulse" style={{ animationDelay: `${i * 100}ms` }} />
-          ))}
-        </div>
-      </div>
-    );
-  }
+  // Initial load is covered by loading.tsx; we skip the in-component
+  // skeleton so the user never sees a second loading state after the
+  // route-level one.
 
   const todayHasTasks = overdueTasks.length > 0 || todayTasks.length > 0;
 

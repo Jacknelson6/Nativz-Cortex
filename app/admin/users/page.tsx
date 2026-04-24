@@ -49,8 +49,10 @@ function getInitials(name: string): string {
 }
 
 export default function UsersPage() {
+  // fallback={null} so a CSR bailout on useSearchParams doesn't paint a
+  // second loading state after the route-level loading.tsx skeleton.
   return (
-    <Suspense fallback={<div className="cortex-page-gutter max-w-6xl mx-auto py-10 text-sm text-text-muted">Loading…</div>}>
+    <Suspense fallback={null}>
       <UsersPageInner />
     </Suspense>
   );
@@ -164,13 +166,10 @@ function UsersPageInner() {
   const viewerCount = users.filter((u) => u.role === 'viewer').length;
   const teamCount = users.filter((u) => u.role === 'admin' || u.is_team_member).length;
 
-  if (isSuperAdmin === null) {
-    return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <div className="animate-pulse text-text-muted text-sm">Checking permissions...</div>
-      </div>
-    );
-  }
+  // Permission check runs in useEffect; loading.tsx already covers the
+  // initial paint. Render nothing while it settles so we don't paint a
+  // second full-page loading state.
+  if (isSuperAdmin === null) return null;
 
   return (
     <div className="cortex-page-gutter max-w-6xl mx-auto space-y-8">

@@ -304,47 +304,8 @@ export default function PipelinePageClient({
     router.push(`/admin/pipeline?${params.toString()}`, { scroll: false });
   }
 
-  // ── Loading State ────────────────────────────────────────────────────────
-
-  if (loading) {
-    return (
-      <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-3 border-b border-nativz-border bg-surface shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="h-5 w-36 rounded bg-surface-hover animate-pulse" />
-            <div className="h-5 w-40 rounded bg-surface-hover animate-pulse" />
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-24 rounded-lg bg-surface-hover animate-pulse" />
-            <div className="h-8 w-24 rounded-lg bg-surface-hover animate-pulse" />
-          </div>
-        </div>
-        <div className="flex-1 overflow-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="border-b border-nativz-border bg-background">
-                {Array.from({ length: 7 }).map((_, i) => (
-                  <th key={i} className="px-4 py-2.5">
-                    <div className="h-3 w-16 rounded bg-surface-hover animate-pulse" />
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {Array.from({ length: 5 }).map((_, row) => (
-                <tr key={row} className="border-b border-nativz-border">
-                  <td className="px-4 py-3"><div className="h-4 w-28 rounded bg-surface-hover animate-pulse" /></td>
-                  {Array.from({ length: 6 }).map((_, col) => (
-                    <td key={col} className="px-3 py-3"><div className="h-5 w-20 rounded-full bg-surface-hover animate-pulse" /></td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  }
+  // Initial load is covered by loading.tsx; render the full shell on mount
+  // so the user never sees a second in-component skeleton.
 
   // ── Render ───────────────────────────────────────────────────────────────
 

@@ -22,11 +22,10 @@ export default async function OnboardingEditorPage({
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) notFound();
   const admin = createAdminClient();
-  const { data: me } = await admin.from('users').select('role').eq('id', user.id).single();
-  if (me?.role !== 'admin') notFound();
-
-  // Fetch tracker + children in parallel.
-  const [trackerRes, phasesRes, groupsRes] = await Promise.all([
+  // Fold the role check into the tracker + children fetch so we don't
+  // pay a serial round-trip before the main parallel batch kicks off.
+  const [{ data: me }, trackerRes, phasesRes, groupsRes] = await Promise.all([
+    admin.from('users').select('role').eq('id', user.id).single(),
     admin
       .from('onboarding_trackers')
       .select('id, client_id, service, title, status, share_token, notify_emails, started_at, completed_at, created_at, updated_at, clients!inner(name, slug, logo_url)')
@@ -44,6 +43,7 @@ export default async function OnboardingEditorPage({
       .order('sort_order', { ascending: true }),
   ]);
 
+  if (me?.role !== 'admin') notFound();
   if (!trackerRes.data) notFound();
 
   // Supabase types `!inner` joins as arrays; they're 1:1 here so unwrap.

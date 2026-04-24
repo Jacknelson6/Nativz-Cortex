@@ -25,22 +25,20 @@ export default async function NotesDashboardPage() {
   if (!user) redirect('/admin/login');
 
   // Fetch the admin's clients for the New Note modal's client-scope option.
+  // Clients list is fetched unconditionally so it joins the same Promise.all;
+  // if the caller isn't admin we discard it. One extra query vs. an extra
+  // serial round-trip — worth it for the perceived-perf win.
   const admin = createAdminClient();
-  const [userResult, active] = await Promise.all([
+  const [userResult, active, { data: clientRows }] = await Promise.all([
     admin.from('users').select('role').eq('id', user.id).single(),
     getActiveAdminClient().catch(() => null),
+    admin.from('clients').select('id, name, slug').order('name', { ascending: true }),
   ]);
   const isAdmin = userResult.data?.role === 'admin';
   const adminScopedClientId = active?.brand?.id ?? null;
-
-  let clients: { id: string; name: string; slug: string }[] = [];
-  if (isAdmin) {
-    const { data } = await admin
-      .from('clients')
-      .select('id, name, slug')
-      .order('name', { ascending: true });
-    clients = (data ?? []) as { id: string; name: string; slug: string }[];
-  }
+  const clients = isAdmin
+    ? ((clientRows ?? []) as { id: string; name: string; slug: string }[])
+    : [];
 
   return (
     <NotesDashboard

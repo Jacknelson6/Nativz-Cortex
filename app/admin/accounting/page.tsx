@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { after } from 'next/server';
 import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -53,28 +54,28 @@ export default async function AccountingIndexPage({
   if (!user) redirect('/admin/login');
 
   const adminClient = createAdminClient();
-  const { data: userRow } = await adminClient
-    .from('users')
-    .select('role')
-    .eq('id', user.id)
-    .single();
+  const [{ data: userRow }, params] = await Promise.all([
+    adminClient.from('users').select('role').eq('id', user.id).single(),
+    searchParams,
+  ]);
   if (userRow?.role !== 'admin') redirect('/admin/dashboard');
 
-  // Ensure current period exists — non-fatal if it fails (e.g. unique
-  // constraint race, offline RPC) so the page still renders.
-  try {
-    const cur = currentPeriod();
-    await adminClient
-      .from('payroll_periods')
-      .upsert(
-        { start_date: cur.startDate, end_date: cur.endDate, half: cur.half, status: 'draft', created_by: user.id },
-        { onConflict: 'start_date,end_date', ignoreDuplicates: true },
-      );
-  } catch (err) {
-    console.error('[accounting] current-period upsert failed (non-fatal):', err);
-  }
+  // Period upsert runs off the critical path — it was adding a round-trip
+  // to every page load even though its result doesn't feed the render.
+  after(async () => {
+    try {
+      const cur = currentPeriod();
+      await adminClient
+        .from('payroll_periods')
+        .upsert(
+          { start_date: cur.startDate, end_date: cur.endDate, half: cur.half, status: 'draft', created_by: user.id },
+          { onConflict: 'start_date,end_date', ignoreDuplicates: true },
+        );
+    } catch (err) {
+      console.error('[accounting] current-period upsert failed (non-fatal):', err);
+    }
+  });
 
-  const params = await searchParams;
   const activeTab = resolveTab(params.tab);
 
   return (

@@ -122,13 +122,7 @@ export function NotesDashboard({
         </button>
       </div>
 
-      {boards === null ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-40 rounded-xl bg-surface-elevated animate-pulse" />
-          ))}
-        </div>
-      ) : boards.length === 0 ? (
+      {boards === null ? null : boards.length === 0 ? (
         <EmptyState onCreate={() => setNewOpen(true)} />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">

@@ -20,17 +20,8 @@ export default async function TikTokShopPage() {
   if (!user) redirect('/admin/login');
 
   const admin = createAdminClient();
-  const { data: userData } = await admin
-    .from('users')
-    .select('role, full_name')
-    .eq('id', user.id)
-    .single();
-
-  if (!userData || !['admin', 'super_admin'].includes(userData.role)) {
-    redirect('/admin/dashboard');
-  }
-
-  const [{ data: searches }, vaultClients, rosterResult] = await Promise.all([
+  const [{ data: userData }, { data: searches }, vaultClients, rosterResult, active] = await Promise.all([
+    admin.from('users').select('role, full_name').eq('id', user.id).single(),
     admin
       .from('tiktok_shop_searches')
       .select('id, query, status, products_found, creators_found, client_id, created_at, completed_at')
@@ -41,7 +32,12 @@ export default async function TikTokShopPage() {
       select: 'id, slug, logo_url, is_active, agency',
       onlyActive: true,
     }),
+    getActiveAdminClient().catch(() => null),
   ]);
+
+  if (!userData || !['admin', 'super_admin'].includes(userData.role)) {
+    redirect('/admin/dashboard');
+  }
 
   const raw = userData.full_name?.trim();
   const userFirstName =
@@ -66,7 +62,6 @@ export default async function TikTokShopPage() {
 
   // Seed from the top-bar pill so a pinned brand acts as the default
   // search scope.
-  const active = await getActiveAdminClient().catch(() => null);
   const initialClientId = active?.brand?.id ?? null;
 
   return (

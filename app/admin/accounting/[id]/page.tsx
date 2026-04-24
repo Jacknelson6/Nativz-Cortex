@@ -13,21 +13,22 @@ export default async function AccountingPeriodPage({ params }: { params: Promise
   if (!user) redirect('/admin/login');
 
   const adminClient = createAdminClient();
-  const { data: userRow } = await adminClient
-    .from('users')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-  if (userRow?.role !== 'admin') redirect('/admin/dashboard');
-
-  const { data: period } = await adminClient
-    .from('payroll_periods')
-    .select('id, start_date, end_date, half, status, notes, locked_at, paid_at')
-    .eq('id', id)
-    .single();
-  if (!period) notFound();
-
-  const [{ data: entries }, { data: team }, { data: clients }] = await Promise.all([
+  // All 5 reads are independent of each other — previously 2 serial
+  // awaits gated 3 parallel ones. One unified Promise.all replaces the
+  // whole chain.
+  const [
+    { data: userRow },
+    { data: period },
+    { data: entries },
+    { data: team },
+    { data: clients },
+  ] = await Promise.all([
+    adminClient.from('users').select('role').eq('id', user.id).single(),
+    adminClient
+      .from('payroll_periods')
+      .select('id, start_date, end_date, half, status, notes, locked_at, paid_at')
+      .eq('id', id)
+      .single(),
     adminClient
       .from('payroll_entries')
       .select('id, entry_type, team_member_id, payee_label, client_id, video_count, rate_cents, amount_cents, margin_cents, description, created_at')
@@ -38,11 +39,10 @@ export default async function AccountingPeriodPage({ params }: { params: Promise
       .select('id, full_name, role, is_active, user_id, created_at')
       .eq('is_active', true)
       .order('full_name'),
-    adminClient
-      .from('clients')
-      .select('id, name')
-      .order('name'),
+    adminClient.from('clients').select('id, name').order('name'),
   ]);
+  if (userRow?.role !== 'admin') redirect('/admin/dashboard');
+  if (!period) notFound();
 
   return (
     <div className="mx-auto max-w-6xl p-6 space-y-6">

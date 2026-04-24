@@ -33,35 +33,36 @@ export default async function AdminSearchResultsPage({
 
   const adminClient = createAdminClient();
 
-  // Fetch client info if attached
-  let clientInfo: {
-    id: string;
-    name: string;
-    slug: string;
-    industry: string;
-    topic_keywords: string[] | null;
-  } | null = null;
-  if (search.client_id) {
-    const { data } = await adminClient
-      .from('clients')
-      .select('id, name, slug, industry, topic_keywords')
-      .eq('id', search.client_id)
-      .single();
-    clientInfo = data || null;
-  }
-
-  // Fetch scraped video count
-  const { count: scrapedVideoCount } = await adminClient
-    .from('topic_search_videos')
-    .select('id', { count: 'exact', head: true })
-    .eq('search_id', id);
+  // Client info + scraped-video count are both keyed off `search` but
+  // independent of each other — parallel saves a round-trip.
+  const [clientRes, countRes] = await Promise.all([
+    search.client_id
+      ? adminClient
+          .from('clients')
+          .select('id, name, slug, industry, topic_keywords')
+          .eq('id', search.client_id)
+          .single()
+      : Promise.resolve({ data: null as {
+          id: string;
+          name: string;
+          slug: string;
+          industry: string;
+          topic_keywords: string[] | null;
+        } | null }),
+    adminClient
+      .from('topic_search_videos')
+      .select('id', { count: 'exact', head: true })
+      .eq('search_id', id),
+  ]);
+  const clientInfo = clientRes.data ?? null;
+  const scrapedVideoCount = countRes.count ?? 0;
 
   return (
     <>
       <AdminResultsClient
         search={search as TopicSearch}
         clientInfo={clientInfo}
-        scrapedVideoCount={scrapedVideoCount ?? 0}
+        scrapedVideoCount={scrapedVideoCount}
       />
       {search.status === 'completed' && (
         <AnalysisChatDrawer

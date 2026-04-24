@@ -15,22 +15,14 @@ export default async function TikTokShopResultsPage({
   if (!user) redirect('/admin/login');
 
   const admin = createAdminClient();
-  const { data: userData } = await admin
-    .from('users')
-    .select('role')
-    .eq('id', user.id)
-    .single();
+  const [{ data: userData }, { data: search }] = await Promise.all([
+    admin.from('users').select('role').eq('id', user.id).single(),
+    admin.from('tiktok_shop_searches').select('*').eq('id', jobId).maybeSingle(),
+  ]);
 
   if (!userData || !['admin', 'super_admin'].includes(userData.role)) {
     redirect('/admin/dashboard');
   }
-
-  const { data: search } = await admin
-    .from('tiktok_shop_searches')
-    .select('*')
-    .eq('id', jobId)
-    .maybeSingle();
-
   if (!search) notFound();
 
   return <TikTokShopResultsClient initial={search} />;

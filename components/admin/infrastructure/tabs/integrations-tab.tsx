@@ -148,7 +148,7 @@ export function IntegrationsTab() {
                     className={
                       'rounded border px-1.5 py-0.5 ' +
                       (isSet
-                        ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
+                        ? 'border-accent/30 bg-accent/10 text-accent-text'
                         : 'border-coral-500/30 bg-coral-500/10 text-coral-300')
                     }
                   >

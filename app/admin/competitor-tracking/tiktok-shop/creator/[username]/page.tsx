@@ -18,21 +18,18 @@ export default async function TikTokShopCreatorPage({
   if (!user) redirect('/admin/login');
 
   const admin = createAdminClient();
-  const { data: userData } = await admin
-    .from('users')
-    .select('role')
-    .eq('id', user.id)
-    .single();
+  const [{ data: userData }, { data: snapshot }] = await Promise.all([
+    admin.from('users').select('role').eq('id', user.id).single(),
+    admin
+      .from('tiktok_shop_creator_snapshots')
+      .select('username, data, fetched_at')
+      .eq('username', handle)
+      .maybeSingle(),
+  ]);
 
   if (!userData || !['admin', 'super_admin'].includes(userData.role)) {
     redirect('/admin/dashboard');
   }
-
-  const { data: snapshot } = await admin
-    .from('tiktok_shop_creator_snapshots')
-    .select('username, data, fetched_at')
-    .eq('username', handle)
-    .maybeSingle();
 
   return (
     <CreatorDetailClient

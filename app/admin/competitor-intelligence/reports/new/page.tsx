@@ -14,20 +14,13 @@ export default async function NewSubscriptionPage() {
   if (!user) redirect('/admin/login');
 
   const admin = createAdminClient();
-  const { data: me } = await admin
-    .from('users')
-    .select('role, is_super_admin, email')
-    .eq('id', user.id)
-    .single();
+  const [{ data: me }, { data: clients }] = await Promise.all([
+    admin.from('users').select('role, is_super_admin, email').eq('id', user.id).single(),
+    admin.from('clients').select('id, name, agency').eq('is_active', true).order('name'),
+  ]);
   if (me?.role !== 'admin' && !me?.is_super_admin) {
     redirect('/admin/dashboard');
   }
-
-  const { data: clients } = await admin
-    .from('clients')
-    .select('id, name, agency')
-    .eq('is_active', true)
-    .order('name');
 
   return (
     <div className="cortex-page-gutter max-w-3xl mx-auto space-y-6">
@@ -42,7 +35,7 @@ export default async function NewSubscriptionPage() {
         </p>
         <Link
           href="/admin/competitor-intelligence/reports"
-          className="inline-block text-xs text-text-muted hover:text-cyan-300"
+          className="inline-block text-xs text-text-muted hover:text-accent-text"
         >
           ← Back to subscriptions
         </Link>

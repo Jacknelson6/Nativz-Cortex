@@ -32,17 +32,12 @@ export default async function AccountingYearPage({
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/admin/login');
   const adminClient = createAdminClient();
-  const { data: userRow } = await adminClient
-    .from('users')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-  if (userRow?.role !== 'admin') redirect('/admin/dashboard');
-
   const params = await searchParams;
   const year = Number.parseInt(params.year ?? '', 10) || new Date().getFullYear();
 
-  const [{ data: periodsRaw }, { data: membersRaw }] = await Promise.all([
+  // Role check joins the data fetch so it doesn't gate first paint.
+  const [{ data: userRow }, { data: periodsRaw }, { data: membersRaw }] = await Promise.all([
+    adminClient.from('users').select('role').eq('id', user.id).single(),
     adminClient
       .from('payroll_periods')
       .select('id, start_date, half')
@@ -55,6 +50,7 @@ export default async function AccountingYearPage({
       .eq('is_active', true)
       .order('full_name'),
   ]);
+  if (userRow?.role !== 'admin') redirect('/admin/dashboard');
 
   const periods = (periodsRaw ?? []) as RawPeriod[];
   const members = (membersRaw ?? []) as RawMember[];
