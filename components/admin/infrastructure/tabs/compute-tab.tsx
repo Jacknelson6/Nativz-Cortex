@@ -103,7 +103,6 @@ const CRON_CATALOG: Array<{ route: string; label: string; schedule: string }> = 
   { route: '/api/cron/competitor-reports', label: 'Competitor reports', schedule: 'Daily 14:00 UTC' },
   { route: '/api/cron/weekly-social-report', label: 'Weekly social report', schedule: 'Weekly' },
   { route: '/api/cron/weekly-affiliate-report', label: 'Weekly affiliate report', schedule: 'Weekly' },
-  { route: '/api/cron/send-scheduled-emails', label: 'Send scheduled emails', schedule: 'Every 5 min' },
   { route: '/api/cron/sync-reporting', label: 'Sync reporting data', schedule: 'Hourly' },
 ];
 

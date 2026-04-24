@@ -51,10 +51,6 @@
       "schedule": "*/5 * * * *"
     },
     {
-      "path": "/api/cron/send-scheduled-emails",
-      "schedule": "*/1 * * * *"
-    },
-    {
       "path": "/api/cron/drain-email-hub",
       "schedule": "*/1 * * * *"
     },
