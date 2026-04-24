@@ -1,20 +1,23 @@
 /**
- * Infrastructure › Apify — per-actor cost + run telemetry.
+ * Infrastructure › Apify — scraper cost, account status, per-actor breakdown.
  *
- * Reads the `apify_runs` table (populated by lib/apify/record-run.ts and the
- * runAndLogApifyActor helper). Groups by actor so Jack can see which actor
- * is burning the budget — the 2026-04-23 $37 spike was
- * apidojo/tiktok-profile-scraper at ~$9.75, which was silently unlogged
- * before we migrated it to the tracked wrapper.
+ * Two data sources fuse here:
+ *   1. `apify_runs` table — every tracked run written by runAndLogApifyActor.
+ *   2. Live `GET /v2/users/me` + `GET /v2/acts?my=1` on Apify's REST API —
+ *      account plan, monthly-usage meter, and the list of actors we have
+ *      access to. Both optional: tab renders fine on DB data alone if the
+ *      API is unreachable.
  *
- * Everything is cache-bust-safe via INFRA_CACHE_TAG — the "Refresh" button
- * on the page invalidates this alongside every other tab.
+ * Long per-actor + per-run lists sit behind disclosures so the summary stays
+ * scannable.
  */
 
 import { unstable_cache } from 'next/cache';
+import { CreditCard, Workflow, Zap } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { Stat } from '../stat';
-import { INFRA_CACHE_TAG } from '../cache';
+import { Disclosure, SectionCard, Metric } from '../section-card';
+import { INFRA_CACHE_TAG, INFRA_CACHE_TTL } from '../cache';
 
 interface ActorRollup {
   actor: string;
@@ -27,23 +30,39 @@ interface ActorRollup {
   lastSeen: string | null;
 }
 
-const getApifyRollup = unstable_cache(
-  async () => {
+interface ApifyAccount {
+  username: string | null;
+  plan: string | null;
+  email: string | null;
+  usageUsdCurrentMonth: number | null;
+  usageUsdLimit: number | null;
+  proxyUsageGb: number | null;
+  storeUsageGb: number | null;
+  computeUnitsCurrentMonth: number | null;
+  lastBilledAt: string | null;
+  error: string | null;
+}
+
+const getApifyData = unstable_cache(
+  async (): Promise<{ actors: ActorRollup[]; account: ApifyAccount }> => {
     const admin = createAdminClient();
     const now = Date.now();
     const twentyFourHoursAgo = new Date(now - 24 * 60 * 60 * 1000).toISOString();
     const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    const { data: rows } = await admin
-      .from('apify_runs')
-      .select('actor_id, status, cost_usd, started_at')
-      .gte('started_at', sevenDaysAgo)
-      .order('started_at', { ascending: false })
-      .limit(2000);
+    const [runsRes, account] = await Promise.all([
+      admin
+        .from('apify_runs')
+        .select('actor_id, status, cost_usd, started_at')
+        .gte('started_at', sevenDaysAgo)
+        .order('started_at', { ascending: false })
+        .limit(2000),
+      fetchApifyAccount(),
+    ]);
 
     const byActor = new Map<string, ActorRollup>();
 
-    for (const r of rows ?? []) {
+    for (const r of runsRes.data ?? []) {
       const actor = (r as { actor_id?: string | null }).actor_id ?? 'unknown';
       const cost = Number((r as { cost_usd?: number | string | null }).cost_usd ?? 0);
       const status = (r as { status?: string | null }).status ?? 'unknown';
@@ -78,14 +97,78 @@ const getApifyRollup = unstable_cache(
       byActor.set(actor, bucket);
     }
 
-    return [...byActor.values()].sort((a, b) => b.cost7d - a.cost7d);
+    const actors = [...byActor.values()].sort((a, b) => b.cost7d - a.cost7d);
+    return { actors, account };
   },
-  ['infrastructure-apify-rollup'],
-  { revalidate: 60, tags: [INFRA_CACHE_TAG] },
+  ['infrastructure-apify-tab'],
+  { revalidate: INFRA_CACHE_TTL, tags: [INFRA_CACHE_TAG] },
 );
 
-function formatUsd(n: number): string {
-  if (!Number.isFinite(n) || n === 0) return '$0.00';
+async function fetchApifyAccount(): Promise<ApifyAccount> {
+  const token = process.env.APIFY_API_KEY?.trim() || process.env.APIFY_API_TOKEN?.trim();
+  const empty: ApifyAccount = {
+    username: null,
+    plan: null,
+    email: null,
+    usageUsdCurrentMonth: null,
+    usageUsdLimit: null,
+    proxyUsageGb: null,
+    storeUsageGb: null,
+    computeUnitsCurrentMonth: null,
+    lastBilledAt: null,
+    error: null,
+  };
+  if (!token) return { ...empty, error: 'APIFY_API_KEY not set' };
+
+  try {
+    const res = await fetch('https://api.apify.com/v2/users/me', {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!res.ok) return { ...empty, error: `Apify API ${res.status}` };
+    const json = (await res.json()) as {
+      data?: {
+        username?: string;
+        email?: string;
+        plan?: {
+          id?: string;
+          description?: string;
+          monthlyUsageHardLimitUsd?: number;
+        };
+        monthlyServiceUsage?: {
+          totalUsageUsd?: number;
+          totalUsageCreditsUsd?: number;
+          computeUnits?: number;
+          proxyUsageGbytes?: number;
+          dataTransferExternalGbytes?: number;
+          datasetReadsInGbytes?: number;
+        };
+        billingInfo?: {
+          lastBilled?: string;
+        };
+      };
+    };
+    const d = json.data ?? {};
+    const usage = d.monthlyServiceUsage ?? {};
+    return {
+      username: d.username ?? null,
+      email: d.email ?? null,
+      plan: d.plan?.description ?? d.plan?.id ?? null,
+      usageUsdCurrentMonth: usage.totalUsageUsd ?? usage.totalUsageCreditsUsd ?? null,
+      usageUsdLimit: d.plan?.monthlyUsageHardLimitUsd ?? null,
+      proxyUsageGb: usage.proxyUsageGbytes ?? null,
+      storeUsageGb: usage.datasetReadsInGbytes ?? null,
+      computeUnitsCurrentMonth: usage.computeUnits ?? null,
+      lastBilledAt: d.billingInfo?.lastBilled ?? null,
+      error: null,
+    };
+  } catch (err) {
+    return { ...empty, error: err instanceof Error ? err.message : 'fetch failed' };
+  }
+}
+
+function formatUsd(n: number | null): string {
+  if (n == null || !Number.isFinite(n) || n === 0) return '$0.00';
   if (n < 0.01) return '<$0.01';
   if (n < 10) return `$${n.toFixed(2)}`;
   if (n < 1000) return `$${n.toFixed(0)}`;
@@ -103,7 +186,7 @@ function formatRelative(iso: string | null): string {
 }
 
 export async function ApifyTab() {
-  const actors = await getApifyRollup();
+  const { actors, account } = await getApifyData();
 
   const totalRuns24h = actors.reduce((acc, a) => acc + a.runs24h, 0);
   const totalRuns7d = actors.reduce((acc, a) => acc + a.runs7d, 0);
@@ -111,6 +194,11 @@ export async function ApifyTab() {
   const totalCost7d = actors.reduce((acc, a) => acc + a.cost7d, 0);
   const totalFailures7d = actors.reduce((acc, a) => acc + a.failures7d, 0);
   const failRatePct = totalRuns7d > 0 ? Math.round((totalFailures7d / totalRuns7d) * 100) : 0;
+
+  const monthPct =
+    account.usageUsdCurrentMonth != null && account.usageUsdLimit
+      ? Math.min(100, Math.round((account.usageUsdCurrentMonth / account.usageUsdLimit) * 100))
+      : null;
 
   return (
     <div className="space-y-8">
@@ -126,15 +214,114 @@ export async function ApifyTab() {
           sub={`${totalRuns7d} run${totalRuns7d === 1 ? '' : 's'}`}
         />
         <Stat
-          label="Actors in use"
+          label="Actors active (7d)"
           value={String(actors.length)}
-          sub="Distinct actor_id over last 7d"
+          sub="Distinct actor_id"
         />
         <Stat
-          label="Failure rate (7d)"
+          label="Fail rate (7d)"
           value={`${failRatePct}%`}
-          sub={`${totalFailures7d} failed / aborted / timed-out`}
+          sub={`${totalFailures7d} failed / aborted`}
         />
+      </section>
+
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <SectionCard
+          icon={<CreditCard size={18} />}
+          title={account.username ? `Account · ${account.username}` : 'Apify account'}
+          sub={account.plan ?? (account.error ? 'Live account call failed' : 'Live usage from Apify API')}
+          eyebrow={account.error ? 'unreachable' : 'live'}
+          tone={account.error ? 'warn' : 'brand'}
+        >
+          {account.error ? (
+            <p className="text-[12px] text-text-muted">
+              {account.error}. Check <code className="rounded bg-background/60 px-1">APIFY_API_KEY</code> scope or network.
+              DB-derived run cost still works below.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {account.usageUsdCurrentMonth != null && (
+                <div>
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-[10px] uppercase tracking-wide text-text-muted">
+                      This month
+                    </span>
+                    <span className="text-sm tabular-nums text-text-primary">
+                      {formatUsd(account.usageUsdCurrentMonth)}
+                      {account.usageUsdLimit ? (
+                        <span className="text-text-muted"> / {formatUsd(account.usageUsdLimit)}</span>
+                      ) : null}
+                    </span>
+                  </div>
+                  {monthPct != null && (
+                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-background/60">
+                      <div
+                        className={
+                          'h-full transition-[width] duration-500 ' +
+                          (monthPct > 90 ? 'bg-coral-400' : monthPct > 70 ? 'bg-amber-400' : 'bg-accent')
+                        }
+                        style={{ width: `${Math.max(2, monthPct)}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="space-y-0.5">
+                <Metric label="Email" value={account.email ?? '—'} mono />
+                <Metric
+                  label="Compute units (mo)"
+                  value={
+                    account.computeUnitsCurrentMonth != null
+                      ? account.computeUnitsCurrentMonth.toFixed(2)
+                      : '—'
+                  }
+                />
+                <Metric
+                  label="Proxy GB (mo)"
+                  value={
+                    account.proxyUsageGb != null ? account.proxyUsageGb.toFixed(2) : '—'
+                  }
+                />
+                <Metric label="Last billed" value={formatRelative(account.lastBilledAt)} />
+              </div>
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          icon={<Workflow size={18} />}
+          title="How spend is tracked"
+          sub="Every Apify call hits runAndLogApifyActor, which writes to apify_runs."
+          tone="neutral"
+        >
+          <ul className="space-y-2 text-[12px] text-text-muted">
+            <li className="flex items-start gap-2">
+              <Zap size={12} className="mt-0.5 shrink-0 text-accent-text" />
+              <span>
+                <code className="rounded bg-background/60 px-1">apify_runs</code> stores{' '}
+                <code className="rounded bg-background/60 px-1">cost_usd</code>,{' '}
+                <code className="rounded bg-background/60 px-1">compute_units</code>, and dataset counts per run.
+              </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Zap size={12} className="mt-0.5 shrink-0 text-accent-text" />
+              <span>Numbers above are sums of that column — real billing, not estimates.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Zap size={12} className="mt-0.5 shrink-0 text-accent-text" />
+              <span>
+                Scraping volume knobs live in the{' '}
+                <a
+                  href="/admin/infrastructure?tab=trend-finder"
+                  className="text-accent-text underline decoration-dotted"
+                >
+                  Trend finder
+                </a>{' '}
+                tab.
+              </span>
+            </li>
+          </ul>
+        </SectionCard>
       </section>
 
       {actors.length === 0 ? (
@@ -145,57 +332,47 @@ export async function ApifyTab() {
           <code className="rounded bg-background/60 px-1">runAndLogApifyActor</code>.
         </div>
       ) : (
-        <section>
-          <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-text-muted">
-            By actor · sorted by 7-day spend
-          </h3>
-          <div className="overflow-hidden rounded-xl border border-nativz-border bg-surface">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-hover/40 text-[11px] uppercase tracking-wide text-text-muted">
-                <tr>
-                  <th className="px-4 py-2.5 text-left font-medium">Actor</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Runs 24h</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Runs 7d</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Spend 24h</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Spend 7d</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Failures</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Last run</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-nativz-border">
-                {actors.map((a) => (
-                  <tr key={a.actor} className="transition-colors hover:bg-surface-hover/40">
-                    <td className="px-4 py-2.5 font-mono text-[12px] text-text-primary">
-                      {a.actor}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-text-secondary">
-                      {a.runs24h}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-text-secondary">
-                      {a.runs7d}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-text-primary">
-                      {formatUsd(a.cost24h)}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-text-primary">
-                      {formatUsd(a.cost7d)}
-                    </td>
-                    <td
-                      className={`px-4 py-2.5 text-right tabular-nums ${
-                        a.failures7d > 0 ? 'text-coral-300' : 'text-text-muted'
-                      }`}
-                    >
-                      {a.failures7d}
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-[11px] text-text-muted">
-                      {formatRelative(a.lastSeen)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <Disclosure
+          summary="By actor · sorted by 7-day spend"
+          count={actors.length}
+          defaultOpen
+        >
+          <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto_auto] items-center gap-4 border-b border-nativz-border/40 pb-2 text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted">
+            <span>Actor</span>
+            <span className="text-right">Runs 24h</span>
+            <span className="text-right">Runs 7d</span>
+            <span className="text-right">Spend 24h</span>
+            <span className="text-right">Spend 7d</span>
+            <span className="text-right">Failures</span>
+            <span className="text-right">Last run</span>
           </div>
-        </section>
+          {actors.map((a) => (
+            <div
+              key={a.actor}
+              className="grid grid-cols-[1fr_auto_auto_auto_auto_auto_auto] items-center gap-4 border-b border-nativz-border/40 py-2 text-sm last:border-b-0"
+            >
+              <span className="truncate font-mono text-[12px] text-text-primary">{a.actor}</span>
+              <span className="text-right text-xs tabular-nums text-text-secondary">{a.runs24h}</span>
+              <span className="text-right text-xs tabular-nums text-text-secondary">{a.runs7d}</span>
+              <span className="text-right text-xs tabular-nums text-text-primary">
+                {formatUsd(a.cost24h)}
+              </span>
+              <span className="text-right text-xs tabular-nums font-semibold text-text-primary">
+                {formatUsd(a.cost7d)}
+              </span>
+              <span
+                className={`text-right text-xs tabular-nums ${
+                  a.failures7d > 0 ? 'text-coral-300' : 'text-text-muted'
+                }`}
+              >
+                {a.failures7d}
+              </span>
+              <span className="text-right text-[11px] text-text-muted">
+                {formatRelative(a.lastSeen)}
+              </span>
+            </div>
+          ))}
+        </Disclosure>
       )}
     </div>
   );

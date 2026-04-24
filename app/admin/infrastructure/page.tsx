@@ -9,10 +9,11 @@ import { RefreshButton } from '@/components/admin/infrastructure/refresh-button'
 import { OverviewTab } from '@/components/admin/infrastructure/tabs/overview-tab';
 import { TopicSearchTab } from '@/components/admin/infrastructure/tabs/topic-search-tab';
 import { ApifyTab } from '@/components/admin/infrastructure/tabs/apify-tab';
-import { AiProvidersTab } from '@/components/admin/infrastructure/tabs/ai-providers-tab';
-import { CronsTab } from '@/components/admin/infrastructure/tabs/crons-tab';
+import { AiTab } from '@/components/admin/infrastructure/tabs/ai-tab';
+import { ComputeTab } from '@/components/admin/infrastructure/tabs/compute-tab';
 import { IntegrationsTab } from '@/components/admin/infrastructure/tabs/integrations-tab';
-import { DatabaseTab } from '@/components/admin/infrastructure/tabs/database-tab';
+import { SupabaseTab } from '@/components/admin/infrastructure/tabs/supabase-tab';
+import { TrendFinderSettingsTab } from '@/components/admin/infrastructure/tabs/trend-finder-settings-tab';
 
 // Auth must run per-request (otherwise non-admins could hit a cached admin
 // page response). Each tab wraps its own expensive reads in unstable_cache
@@ -22,18 +23,34 @@ export const dynamic = 'force-dynamic';
 
 const VALID_TABS: readonly InfrastructureTabSlug[] = [
   'overview',
-  'topic-search',
-  'apify',
-  'ai-providers',
-  'crons',
-  'integrations',
+  'compute',
   'database',
+  'pipelines',
+  'ai',
+  'apify',
+  'trend-finder',
+  'integrations',
 ];
+
+// Legacy slugs (pre-condensed layout) → current slug. Keeps bookmarks + the
+// last-tab localStorage value from 404ing.
+const LEGACY_TAB_ALIASES: Record<string, InfrastructureTabSlug> = {
+  crons: 'compute',
+  vercel: 'compute',
+  supabase: 'database',
+  'ai-providers': 'ai',
+  'topic-search': 'pipelines',
+  'search-cost': 'trend-finder',
+};
 
 function resolveTab(raw: string | string[] | undefined): InfrastructureTabSlug {
   const value = Array.isArray(raw) ? raw[0] : raw;
-  if (value && (VALID_TABS as readonly string[]).includes(value)) {
+  if (!value) return 'overview';
+  if ((VALID_TABS as readonly string[]).includes(value)) {
     return value as InfrastructureTabSlug;
+  }
+  if (value in LEGACY_TAB_ALIASES) {
+    return LEGACY_TAB_ALIASES[value];
   }
   return 'overview';
 }
@@ -50,16 +67,14 @@ export default async function InfrastructurePage({
   if (!user) redirect('/admin/login');
 
   const admin = createAdminClient();
-  const { data: me } = await admin
-    .from('users')
-    .select('role, is_super_admin')
-    .eq('id', user.id)
-    .single();
+  const [{ data: me }, params] = await Promise.all([
+    admin.from('users').select('role, is_super_admin').eq('id', user.id).single(),
+    searchParams,
+  ]);
   if (me?.role !== 'admin' && !me?.is_super_admin) {
     redirect('/admin/dashboard');
   }
 
-  const params = await searchParams;
   const activeTab = resolveTab(params.tab);
 
   return (
@@ -74,8 +89,8 @@ export default async function InfrastructurePage({
               Infrastructure
             </h1>
             <p className="max-w-2xl text-sm text-text-muted">
-              Platform observability — every subsystem Cortex runs on, rolled up in one place.
-              Pick a tab to drill in.
+              Every backend Cortex runs on, in one place — so you never have to open Vercel,
+              Supabase, or Apify to see how we&apos;re doing. Summaries up top, details on tap.
             </p>
           </div>
           <RefreshButton />
@@ -93,17 +108,19 @@ function renderTab(slug: InfrastructureTabSlug) {
   switch (slug) {
     case 'overview':
       return <OverviewTab />;
-    case 'topic-search':
+    case 'compute':
+      return <ComputeTab />;
+    case 'database':
+      return <SupabaseTab />;
+    case 'pipelines':
       return <TopicSearchTab />;
+    case 'ai':
+      return <AiTab />;
     case 'apify':
       return <ApifyTab />;
-    case 'ai-providers':
-      return <AiProvidersTab />;
-    case 'crons':
-      return <CronsTab />;
+    case 'trend-finder':
+      return <TrendFinderSettingsTab />;
     case 'integrations':
       return <IntegrationsTab />;
-    case 'database':
-      return <DatabaseTab />;
   }
 }

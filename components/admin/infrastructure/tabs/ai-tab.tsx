@@ -1,7 +1,19 @@
+/**
+ * Infrastructure › AI — providers + usage (merged).
+ *
+ * Replaces the old "AI providers" tab and absorbs what used to be the AI
+ * settings "Usage" tab. The server-rendered provider roll-up stays visible
+ * by default; the fine-grained UsageDashboard (by model / by user / daily
+ * chart) lives behind a disclosure so the page stays scannable.
+ */
+
 import { unstable_cache } from 'next/cache';
+import { Layers, TrendingUp } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { Stat } from '../stat';
-import { INFRA_CACHE_TAG } from '../cache';
+import { Disclosure, SectionCard } from '../section-card';
+import { INFRA_CACHE_TAG, INFRA_CACHE_TTL } from '../cache';
+import { UsageDashboard } from '@/components/settings/usage-dashboard';
 
 interface ProviderRollup {
   slug: string;
@@ -43,13 +55,6 @@ const getProviderRollup = unstable_cache(
     const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
     const twentyFourHoursAgo = new Date(now - 24 * 60 * 60 * 1000).toISOString();
 
-    // Two telemetry sources fuse here:
-    //   1. `topic_searches.pipeline_state.stages[]` — per-stage model usage
-    //      (gives us calls, latency, failures inside a pipeline).
-    //   2. `api_usage_logs` — ground truth $ cost + tokens for every AI
-    //      call (populated by lib/ai/usage.ts::logUsage). This is the
-    //      right source for money — the pipeline_state.tokens field is
-    //      estimate-only.
     const [topic, usage, usage24h] = await Promise.all([
       admin
         .from('topic_searches')
@@ -69,6 +74,7 @@ const getProviderRollup = unstable_cache(
     ]);
 
     const byProvider = new Map<string, ProviderRollup>();
+    const latencyBuckets = new Map<string, number[]>();
 
     function ensure(slug: string): ProviderRollup {
       const existing = byProvider.get(slug);
@@ -88,10 +94,11 @@ const getProviderRollup = unstable_cache(
       return created;
     }
 
-    const latencyBuckets = new Map<string, number[]>();
-
     for (const row of topic.data ?? []) {
-      const stages = (row.pipeline_state as { stages?: Array<{ model?: string; duration_ms?: number; error?: unknown }> } | null)?.stages ?? [];
+      const stages =
+        (row.pipeline_state as {
+          stages?: Array<{ model?: string; duration_ms?: number; error?: unknown }>;
+        } | null)?.stages ?? [];
       for (const stage of stages) {
         const provider = providerFromModel(stage.model);
         const bucket = ensure(provider);
@@ -102,13 +109,6 @@ const getProviderRollup = unstable_cache(
           latencyBuckets.set(provider, list);
         }
         if (stage.error) bucket.failures7d += 1;
-      }
-      const tokens = row.tokens_used ?? 0;
-      if (tokens > 0) {
-        // Attribute tokens to the most-used provider on that run (rough)
-        const firstStageProvider = providerFromModel(stages[0]?.model);
-        const bucket = ensure(firstStageProvider);
-        bucket.tokens7d += tokens;
       }
       const lastSeen = row.completed_at ?? row.created_at;
       for (const stage of stages) {
@@ -126,7 +126,6 @@ const getProviderRollup = unstable_cache(
       bucket.avgLatencyMs = Math.round(times.reduce((a, b) => a + b, 0) / times.length);
     }
 
-    // Fuse api_usage_logs cost + token totals into each provider bucket.
     for (const row of usage.data ?? []) {
       const provider = providerFromModel((row as { model?: string | null }).model);
       const bucket = ensure(provider);
@@ -139,10 +138,12 @@ const getProviderRollup = unstable_cache(
       bucket.cost24h += Number((row as { cost_usd?: number | string | null }).cost_usd ?? 0);
     }
 
-    return [...byProvider.values()].sort((a, b) => b.cost7d - a.cost7d || b.calls7d - a.calls7d);
+    return [...byProvider.values()].sort(
+      (a, b) => b.cost7d - a.cost7d || b.calls7d - a.calls7d,
+    );
   },
-  ['infrastructure-ai-providers'],
-  { revalidate: 60, tags: [INFRA_CACHE_TAG] },
+  ['infrastructure-ai-tab'],
+  { revalidate: INFRA_CACHE_TTL, tags: [INFRA_CACHE_TAG] },
 );
 
 function formatTimestamp(iso: string | null): string {
@@ -163,7 +164,7 @@ function formatUsd(n: number): string {
   return `$${(n / 1000).toFixed(1)}k`;
 }
 
-export async function AiProvidersTab() {
+export async function AiTab() {
   const providers = await getProviderRollup();
 
   const totalCalls = providers.reduce((acc, p) => acc + p.calls7d, 0);
@@ -171,6 +172,7 @@ export async function AiProvidersTab() {
   const totalCost7d = providers.reduce((acc, p) => acc + p.cost7d, 0);
   const totalCost24h = providers.reduce((acc, p) => acc + p.cost24h, 0);
   const totalFailures = providers.reduce((acc, p) => acc + p.failures7d, 0);
+  const failRatePct = totalCalls > 0 ? Math.round((totalFailures / totalCalls) * 100) : 0;
 
   return (
     <div className="space-y-8">
@@ -187,69 +189,103 @@ export async function AiProvidersTab() {
         />
         <Stat label="Tokens (7d)" value={totalTokens.toLocaleString()} />
         <Stat
-          label="Failures (7d)"
-          value={String(totalFailures)}
-          sub={totalCalls > 0 ? `${Math.round((totalFailures / totalCalls) * 100)}% fail rate` : undefined}
+          label="Fail rate (7d)"
+          value={`${failRatePct}%`}
+          sub={`${totalFailures} errors`}
         />
       </section>
 
-      {providers.length === 0 ? (
-        <div className="rounded-xl border border-nativz-border bg-surface p-6 text-sm text-text-muted">
-          No provider telemetry in the last 7 days. Run a topic search to populate this tab.
-        </div>
-      ) : (
-        <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {providers.map((p) => (
-            <div
-              key={p.slug}
-              className="rounded-xl border border-nativz-border bg-surface p-4 transition-colors hover:border-nativz-border/90"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold text-text-primary">{p.label}</h3>
-                <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-cyan-300">
-                  {p.slug}
-                </span>
+      <SectionCard
+        icon={<Layers size={18} />}
+        title="Providers"
+        sub="Per-provider spend, throughput, and latency (last 7 days)"
+        eyebrow="Roll-up"
+        tone="brand"
+      >
+        {providers.length === 0 ? (
+          <p className="text-sm text-text-muted">
+            No provider telemetry in the last 7 days. Run a topic search to populate.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {providers.map((p) => (
+              <div
+                key={p.slug}
+                className="rounded-lg border border-nativz-border/60 bg-background/40 p-4 transition-colors hover:border-accent/30"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-sm font-semibold text-text-primary">{p.label}</h4>
+                  <span className="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-accent-text">
+                    {p.slug}
+                  </span>
+                </div>
+                <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <dt className="text-text-muted">Spend 24h</dt>
+                    <dd className="mt-0.5 tabular-nums text-text-primary">
+                      {formatUsd(p.cost24h)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-text-muted">Spend 7d</dt>
+                    <dd className="mt-0.5 tabular-nums font-semibold text-text-primary">
+                      {formatUsd(p.cost7d)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-text-muted">Calls</dt>
+                    <dd className="mt-0.5 tabular-nums text-text-primary">
+                      {p.calls7d.toLocaleString()}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-text-muted">Tokens</dt>
+                    <dd className="mt-0.5 tabular-nums text-text-primary">
+                      {p.tokens7d.toLocaleString()}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-text-muted">Failures</dt>
+                    <dd
+                      className={`mt-0.5 tabular-nums ${
+                        p.failures7d > 0 ? 'text-coral-300' : 'text-text-primary'
+                      }`}
+                    >
+                      {p.failures7d}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-text-muted">Avg latency</dt>
+                    <dd className="mt-0.5 tabular-nums text-text-primary">
+                      {p.avgLatencyMs != null ? `${(p.avgLatencyMs / 1000).toFixed(1)}s` : '—'}
+                    </dd>
+                  </div>
+                  <div className="col-span-2">
+                    <dt className="text-text-muted">Last seen</dt>
+                    <dd className="mt-0.5 text-text-primary">{formatTimestamp(p.lastSeenAt)}</dd>
+                  </div>
+                </dl>
               </div>
-              <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <dt className="text-text-muted">Spend 24h</dt>
-                  <dd className="mt-0.5 tabular-nums text-text-primary">{formatUsd(p.cost24h)}</dd>
-                </div>
-                <div>
-                  <dt className="text-text-muted">Spend 7d</dt>
-                  <dd className="mt-0.5 tabular-nums font-semibold text-text-primary">
-                    {formatUsd(p.cost7d)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-text-muted">Calls</dt>
-                  <dd className="mt-0.5 tabular-nums text-text-primary">{p.calls7d.toLocaleString()}</dd>
-                </div>
-                <div>
-                  <dt className="text-text-muted">Tokens</dt>
-                  <dd className="mt-0.5 tabular-nums text-text-primary">{p.tokens7d.toLocaleString()}</dd>
-                </div>
-                <div>
-                  <dt className="text-text-muted">Failures</dt>
-                  <dd className={`mt-0.5 tabular-nums ${p.failures7d > 0 ? 'text-coral-300' : 'text-text-primary'}`}>
-                    {p.failures7d}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-text-muted">Avg latency</dt>
-                  <dd className="mt-0.5 tabular-nums text-text-primary">
-                    {p.avgLatencyMs != null ? `${(p.avgLatencyMs / 1000).toFixed(1)}s` : '—'}
-                  </dd>
-                </div>
-                <div className="col-span-2">
-                  <dt className="text-text-muted">Last seen</dt>
-                  <dd className="mt-0.5 text-text-primary">{formatTimestamp(p.lastSeenAt)}</dd>
-                </div>
-              </dl>
-            </div>
-          ))}
-        </section>
-      )}
+            ))}
+          </div>
+        )}
+      </SectionCard>
+
+      <Disclosure summary="Usage dashboard · by model, by user, daily spend" defaultOpen={false}>
+        <div className="flex items-center gap-2 text-[11px] text-text-muted">
+          <TrendingUp size={12} />
+          Fine-grained view reads from <code className="rounded bg-background/60 px-1">api_usage_logs</code>.
+          Switch between 7 / 30 / 90 day windows below.
+        </div>
+        <div className="mt-4">
+          <UsageDashboard />
+        </div>
+      </Disclosure>
+
+      <p className="text-[11px] text-text-muted">
+        Provider roll-up fuses two sources: per-stage <code className="rounded bg-background/60 px-1">pipeline_state.stages</code>{' '}
+        (calls, latency, failures) and <code className="rounded bg-background/60 px-1">api_usage_logs</code> (cost, tokens — ground truth).
+      </p>
     </div>
   );
 }

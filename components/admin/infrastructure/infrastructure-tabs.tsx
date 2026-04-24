@@ -8,19 +8,21 @@ import {
   Gauge,
   Layers,
   Plug,
-  Timer,
+  Server,
+  Sliders,
   Zap,
 } from 'lucide-react';
 import { useEffect } from 'react';
 
 const TABS = [
-  { slug: 'overview', label: 'Overview', icon: Activity },
-  { slug: 'topic-search', label: 'Topic search', icon: Gauge },
-  { slug: 'apify', label: 'Apify', icon: Zap },
-  { slug: 'ai-providers', label: 'AI providers', icon: Layers },
-  { slug: 'crons', label: 'Crons', icon: Timer },
+  { slug: 'overview',     label: 'Overview',     icon: Activity },
+  { slug: 'compute',      label: 'Compute',      icon: Server },
+  { slug: 'database',     label: 'Database',     icon: Database },
+  { slug: 'pipelines',    label: 'Pipelines',    icon: Gauge },
+  { slug: 'ai',           label: 'AI',           icon: Layers },
+  { slug: 'apify',        label: 'Scrapers',     icon: Zap },
+  { slug: 'trend-finder', label: 'Trend finder', icon: Sliders },
   { slug: 'integrations', label: 'Integrations', icon: Plug },
-  { slug: 'database', label: 'Database', icon: Database },
 ] as const;
 
 export type InfrastructureTabSlug = (typeof TABS)[number]['slug'];
@@ -55,7 +57,7 @@ export function InfrastructureTabs({ active }: { active: InfrastructureTabSlug }
             className={
               'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ' +
               (isActive
-                ? 'bg-cyan-500/15 text-cyan-200 shadow-[inset_0_0_0_1px_rgba(34,211,238,0.35)]'
+                ? 'bg-accent/15 text-accent-text ring-1 ring-inset ring-accent/40'
                 : 'text-text-secondary hover:bg-surface-hover/60 hover:text-text-primary')
             }
             aria-current={isActive ? 'page' : undefined}
