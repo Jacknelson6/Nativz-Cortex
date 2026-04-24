@@ -1,38 +1,89 @@
 import Stripe from 'stripe';
+import type { AgencyBrand } from '@/lib/agency/detect';
 
-// TODO(dual-stripe): this module assumes a single Stripe account (AC). When
-// Nativz moves to its own Stripe account, this needs refactoring:
-//   - stripe_* tables: add stripe_account_id column, composite PK (account, id)
-//   - webhook route: /api/webhooks/stripe/[agency] with per-agency secret lookup
-//   - getStripe(agency) with per-agency getSecret(`STRIPE_SECRET_KEY_${agency}`)
-// See docs/superpowers/specs/2026-04-24-revenue-hardening-design.md §2.6.
+// Per-agency Stripe accounts. Each agency has its own Stripe account with its
+// own secret + webhook secret. Legacy single-account env vars (STRIPE_SECRET_KEY,
+// STRIPE_WEBHOOK_SECRET) still work as the Nativz default to avoid a breaking
+// rollout — the per-agency keys take precedence when present.
+//
+// Env vars:
+//   NATIVZ_STRIPE_SECRET_KEY         (preferred; falls back to STRIPE_SECRET_KEY)
+//   NATIVZ_STRIPE_WEBHOOK_SECRET     (preferred; falls back to STRIPE_WEBHOOK_SECRET)
+//   ANDERSON_STRIPE_SECRET_KEY       (required for AC billing)
+//   ANDERSON_STRIPE_WEBHOOK_SECRET   (required for AC webhook verification)
+//   STRIPE_SECRET_KEY                (legacy single-account fallback → Nativz)
+//   STRIPE_WEBHOOK_SECRET            (legacy single-account fallback → Nativz)
+
 type StripeCtorConfig = ConstructorParameters<typeof Stripe>[1];
 
-let cached: Stripe | null = null;
+const cache: Partial<Record<AgencyBrand, Stripe>> = {};
 
-export function getStripe(): Stripe {
-  if (cached) return cached;
-  const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) {
+function resolveSecretKey(agency: AgencyBrand): string {
+  if (agency === 'anderson') {
+    const ac = process.env.ANDERSON_STRIPE_SECRET_KEY;
+    if (!ac) {
+      throw new Error(
+        'ANDERSON_STRIPE_SECRET_KEY is not set. Add it to .env.local (or Vercel env) before calling Stripe for Anderson Collaborative.',
+      );
+    }
+    return ac;
+  }
+  const nativz = process.env.NATIVZ_STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY;
+  if (!nativz) {
     throw new Error(
-      'STRIPE_SECRET_KEY is not set. Add it to .env.local (or Vercel env) before calling Stripe.',
+      'NATIVZ_STRIPE_SECRET_KEY (or legacy STRIPE_SECRET_KEY) is not set. Add one to .env.local before calling Stripe for Nativz.',
     );
   }
+  return nativz;
+}
+
+/**
+ * Get the Stripe client for a specific agency. Cached per-agency.
+ *
+ * Callers that don't know the agency up-front (e.g. legacy code paths) can
+ * omit the arg and default to Nativz. New code should always pass the agency.
+ */
+export function getStripe(agency: AgencyBrand = 'nativz'): Stripe {
+  const existing = cache[agency];
+  if (existing) return existing;
+  const key = resolveSecretKey(agency);
   const config: StripeCtorConfig = {
-    appInfo: { name: 'Nativz Cortex Revenue Hub', version: '0.1.0' },
+    appInfo: { name: `Nativz Cortex Revenue Hub (${agency})`, version: '0.2.0' },
     maxNetworkRetries: 2,
     timeout: 15_000,
   };
-  cached = new Stripe(key, config);
-  return cached;
+  const client = new Stripe(key, config);
+  cache[agency] = client;
+  return client;
 }
 
-export function getStripeWebhookSecret(): string {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!secret) throw new Error('STRIPE_WEBHOOK_SECRET is not set.');
-  return secret;
+export function getStripeWebhookSecret(agency: AgencyBrand = 'nativz'): string {
+  if (agency === 'anderson') {
+    const ac = process.env.ANDERSON_STRIPE_WEBHOOK_SECRET;
+    if (!ac) {
+      throw new Error('ANDERSON_STRIPE_WEBHOOK_SECRET is not set.');
+    }
+    return ac;
+  }
+  const nativz = process.env.NATIVZ_STRIPE_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET;
+  if (!nativz) {
+    throw new Error('NATIVZ_STRIPE_WEBHOOK_SECRET (or legacy STRIPE_WEBHOOK_SECRET) is not set.');
+  }
+  return nativz;
 }
 
-export function isStripeConfigured(): boolean {
-  return Boolean(process.env.STRIPE_SECRET_KEY);
+export function isStripeConfigured(agency: AgencyBrand = 'nativz'): boolean {
+  if (agency === 'anderson') return Boolean(process.env.ANDERSON_STRIPE_SECRET_KEY);
+  return Boolean(process.env.NATIVZ_STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY);
+}
+
+/**
+ * Iterate through all configured agencies — used by the backfill script and
+ * cron reconciler to run the same logic against each Stripe account.
+ */
+export function configuredAgencies(): AgencyBrand[] {
+  const agencies: AgencyBrand[] = [];
+  if (isStripeConfigured('nativz')) agencies.push('nativz');
+  if (isStripeConfigured('anderson')) agencies.push('anderson');
+  return agencies;
 }
