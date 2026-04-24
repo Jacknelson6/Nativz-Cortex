@@ -8,6 +8,7 @@ import {
 } from '@/components/admin/infrastructure/infrastructure-tabs';
 import { InfrastructureTabSkeleton } from '@/components/admin/infrastructure/tab-skeleton';
 import { CostTab } from '@/components/admin/infrastructure/tabs/cost-tab';
+import { SearchRunsTab } from '@/components/admin/infrastructure/tabs/search-runs-tab';
 import { TrendFinderSettingsTab } from '@/components/admin/infrastructure/tabs/trend-finder-settings-tab';
 
 // Auth must run per-request (otherwise non-admins could hit a cached admin
@@ -19,6 +20,7 @@ export const dynamic = 'force-dynamic';
 const VALID_TABS: readonly InfrastructureTabSlug[] = [
   'cost',
   'trend-finder',
+  'search-runs',
 ];
 
 // Legacy slugs → current slug. Keeps bookmarks + the last-tab localStorage
@@ -85,7 +87,7 @@ export default async function InfrastructurePage({
     <div className="cortex-page-gutter max-w-6xl mx-auto space-y-8">
       <header>
         <h1 className="text-3xl font-semibold leading-tight text-text-primary">
-          Infrastructure
+          Usage
         </h1>
       </header>
 
@@ -109,8 +111,8 @@ function renderTab(
     case 'cost':
       return <CostTab preset={params.preset} from={params.from} to={params.to} />;
     case 'trend-finder':
-      return (
-        <TrendFinderSettingsTab preset={params.preset} from={params.from} to={params.to} />
-      );
+      return <TrendFinderSettingsTab />;
+    case 'search-runs':
+      return <SearchRunsTab preset={params.preset} from={params.from} to={params.to} />;
   }
 }

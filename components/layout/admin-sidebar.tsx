@@ -80,7 +80,7 @@ interface NavSection {
 // are one click away without cluttering the rail.
 //
 // Capitalization: sidebar labels use **Title Case** ("Brand Profile",
-// "AI Settings", "Competitor Spying"). This intentionally overrides the
+// "Settings", "Competitor Spying"). This intentionally overrides the
 // general sentence-case rule in CLAUDE.md — Jack prefers Title Case for
 // nav items specifically (confirmed 2026-04-23). Don't normalize back.
 const NAV_SECTIONS: NavSection[] = [
@@ -155,8 +155,8 @@ const NAV_SECTIONS: NavSection[] = [
           { href: '/admin/tasks', label: 'Tasks', icon: CheckSquare },
           { href: '/admin/edits', label: 'Edits', icon: Scissors },
           { href: '/admin/shoots', label: 'Shoots', icon: Camera },
-          { href: '/admin/infrastructure', label: 'Infrastructure', icon: Gauge },
-          { href: '/admin/settings/ai', label: 'AI Settings', icon: Cpu },
+          { href: '/admin/infrastructure', label: 'Usage', icon: Gauge },
+          { href: '/admin/settings/ai', label: 'Settings', icon: Cpu },
         ],
       },
     ],

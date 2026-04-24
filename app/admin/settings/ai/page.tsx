@@ -64,8 +64,8 @@ export default async function AISettingsPage({
   return (
     <div className="cortex-page-gutter max-w-6xl mx-auto space-y-8">
       <SectionHeader
-        title="AI settings"
-        description="Pick the model, hold the key, wire the skills — that's the whole surface. Usage and search cost moved to Infrastructure."
+        title="AI"
+        description="Pick the model, hold the key, wire the skills — that's the whole surface. Usage and search cost live under the Usage page."
         action={<RefreshButton action={refreshAiSettings} />}
       />
 

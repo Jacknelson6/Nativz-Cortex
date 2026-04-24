@@ -1,7 +1,7 @@
 import { unstable_cache } from 'next/cache';
 import Link from 'next/link';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { ArrowRight, ArrowUpRight, ChevronRight, Pencil, User as UserIcon } from 'lucide-react';
+import { ArrowRight, ChevronRight, User as UserIcon } from 'lucide-react';
 import { Stat, StatusPill, Meta } from '../stat';
 import { INFRA_CACHE_TAG, INFRA_CACHE_TTL } from '../cache';
 import type { DateRange, DateRangePreset } from '@/lib/types/reporting';
@@ -199,24 +199,10 @@ const getRangedRollupCached = unstable_cache(
   { revalidate: INFRA_CACHE_TTL, tags: [INFRA_CACHE_TAG] },
 );
 
-const getConfiguredModelsCached = unstable_cache(
-  async () => {
-    const admin = createAdminClient();
-    return admin
-      .from('agency_settings')
-      .select('topic_search_planner_model, topic_search_research_model, topic_search_merger_model')
-      .eq('agency', 'nativz')
-      .single();
-  },
-  ['infrastructure-models'],
-  { revalidate: 5 * 60, tags: [INFRA_CACHE_TAG] },
-);
-
 export async function TopicSearchTab({ range, preset }: { range: DateRange; preset: DateRangePreset }) {
-  const [recentResult, rollupResult, modelsResult] = await Promise.all([
+  const [recentResult, rollupResult] = await Promise.all([
     getRecentRunsCached(),
     getRangedRollupCached(range),
-    getConfiguredModelsCached(),
   ]);
 
   const rows = (recentResult.searchRes.data ?? []) as SearchRow[];
@@ -255,8 +241,6 @@ export async function TopicSearchTab({ range, preset }: { range: DateRange; pres
     ? subtopicTimes.reduce((a, b) => a + b, 0) / subtopicTimes.length
     : null;
 
-  const models = modelsResult.data ?? null;
-
   return (
     <div className="space-y-8">
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -283,35 +267,6 @@ export async function TopicSearchTab({ range, preset }: { range: DateRange; pres
           {rolled.length.toLocaleString()}. Narrow the range for an exact rollup.
         </p>
       )}
-
-      <section className="rounded-xl border border-nativz-border bg-surface p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-text-muted">
-            Configured models
-          </h2>
-          <div className="flex items-center gap-2">
-            <Link
-              href="/admin/settings/ai"
-              className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-medium text-accent-text transition-colors hover:bg-accent/15"
-            >
-              <Pencil size={12} />
-              Edit models
-            </Link>
-            <Link
-              href="/admin/infrastructure?tab=ai"
-              className="inline-flex items-center gap-1.5 rounded-full border border-nativz-border bg-surface px-3 py-1 text-xs font-medium text-text-secondary transition-colors hover:border-nativz-border/90 hover:text-text-primary"
-            >
-              <ArrowUpRight size={12} />
-              AI usage
-            </Link>
-          </div>
-        </div>
-        <dl className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-          <ModelRow label="Planner" value={models?.topic_search_planner_model} />
-          <ModelRow label="Research" value={models?.topic_search_research_model} />
-          <ModelRow label="Merger" value={models?.topic_search_merger_model} />
-        </dl>
-      </section>
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-text-muted">
@@ -437,27 +392,3 @@ export async function TopicSearchTab({ range, preset }: { range: DateRange; pres
   );
 }
 
-function ModelRow({ label, value }: { label: string; value?: string | null }) {
-  const slash = value?.indexOf('/') ?? -1;
-  const provider = value && slash > 0 ? value.slice(0, slash) : null;
-  const model = value && slash > 0 ? value.slice(slash + 1) : value;
-  return (
-    <div className="rounded-lg border border-nativz-border/60 bg-surface-hover/30 px-3 py-2.5 transition-colors hover:border-nativz-border/90">
-      <div className="font-mono text-[12px] uppercase tracking-[0.18em] text-text-muted/85">
-        {label}
-      </div>
-      {value ? (
-        <div className="mt-1.5 flex items-center gap-2">
-          {provider && (
-            <span className="inline-flex shrink-0 rounded-full border border-accent/30 bg-accent/10 px-1.5 py-[1px] font-mono text-[12px] font-medium tracking-tight text-accent-text">
-              {provider}
-            </span>
-          )}
-          <span className="truncate font-mono text-xs text-text-primary">{model}</span>
-        </div>
-      ) : (
-        <div className="mt-1.5 text-xs text-text-muted">env default</div>
-      )}
-    </div>
-  );
-}
