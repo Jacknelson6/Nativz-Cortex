@@ -7,7 +7,6 @@ import {
   type InfrastructureTabSlug,
 } from '@/components/admin/infrastructure/infrastructure-tabs';
 import { InfrastructureTabSkeleton } from '@/components/admin/infrastructure/tab-skeleton';
-import { ComputeTab } from '@/components/admin/infrastructure/tabs/compute-tab';
 import { CostTab } from '@/components/admin/infrastructure/tabs/cost-tab';
 import { IntegrationsTab } from '@/components/admin/infrastructure/tabs/integrations-tab';
 import { TrendFinderSettingsTab } from '@/components/admin/infrastructure/tabs/trend-finder-settings-tab';
@@ -19,7 +18,6 @@ import { TrendFinderSettingsTab } from '@/components/admin/infrastructure/tabs/t
 export const dynamic = 'force-dynamic';
 
 const VALID_TABS: readonly InfrastructureTabSlug[] = [
-  'compute',
   'cost',
   'trend-finder',
   'integrations',
@@ -30,14 +28,15 @@ const VALID_TABS: readonly InfrastructureTabSlug[] = [
 // any alias whose "added" date is older than ~30 days — by then the
 // localStorage value on every active admin will have rotated to a live slug.
 // Prune candidates (next cleanup ≥ 2026-05-24):
-//   overview, crons, vercel, supabase, database, ai, apify, ai-providers,
-//   pipelines, topic-search, search-cost  (all added 2026-04-24)
+//   overview, crons, compute, vercel, supabase, database, ai, apify,
+//   ai-providers, pipelines, topic-search, search-cost
 const LEGACY_TAB_ALIASES: Record<string, InfrastructureTabSlug> = {
-  overview: 'compute',
-  crons: 'compute',
-  vercel: 'compute',
-  supabase: 'compute',
-  database: 'compute',
+  overview: 'cost',
+  crons: 'cost',
+  compute: 'cost',
+  vercel: 'cost',
+  supabase: 'cost',
+  database: 'cost',
   ai: 'cost',
   apify: 'cost',
   'ai-providers': 'cost',
@@ -48,14 +47,14 @@ const LEGACY_TAB_ALIASES: Record<string, InfrastructureTabSlug> = {
 
 function resolveTab(raw: string | string[] | undefined): InfrastructureTabSlug {
   const value = Array.isArray(raw) ? raw[0] : raw;
-  if (!value) return 'compute';
+  if (!value) return 'cost';
   if ((VALID_TABS as readonly string[]).includes(value)) {
     return value as InfrastructureTabSlug;
   }
   if (value in LEGACY_TAB_ALIASES) {
     return LEGACY_TAB_ALIASES[value];
   }
-  return 'compute';
+  return 'cost';
 }
 
 export default async function InfrastructurePage({
@@ -108,8 +107,6 @@ function renderTab(
   params: { preset?: string; from?: string; to?: string },
 ) {
   switch (slug) {
-    case 'compute':
-      return <ComputeTab />;
     case 'cost':
       return <CostTab preset={params.preset} from={params.from} to={params.to} />;
     case 'trend-finder':
