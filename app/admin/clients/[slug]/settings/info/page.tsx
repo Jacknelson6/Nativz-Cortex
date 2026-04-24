@@ -7,6 +7,7 @@ import { ContactsSettingsView } from '@/components/clients/settings/contacts-set
 import { IntegrationsTable } from '@/components/clients/settings/integrations-table';
 import { ClientDossierHeader } from '@/components/clients/settings/client-dossier-header';
 import { InfoIdentityCard } from '@/components/clients/settings/info-identity-card';
+import { InfoBrandVoiceCard } from '@/components/clients/settings/info-brand-voice-card';
 import { InfoBrandEssenceCard } from '@/components/clients/settings/info-brand-essence-card';
 import { InfoBrandDnaSlim } from '@/components/clients/settings/info-brand-dna-slim';
 import {
@@ -14,6 +15,9 @@ import {
   SettingsSectionHeader,
 } from '@/components/clients/settings/settings-primitives';
 import { StickySubnav } from '@/components/clients/settings/sticky-subnav';
+
+const PLATFORMS = ['instagram', 'tiktok', 'facebook', 'youtube'] as const;
+type Platform = (typeof PLATFORMS)[number];
 
 export const dynamic = 'force-dynamic';
 
@@ -77,19 +81,56 @@ export default async function ClientSettingsInfoPage({
     }>();
   if (!client) notFound();
 
-  let brandDnaUpdatedAt: string | null = null;
-  if (client.brand_dna_status && client.brand_dna_status !== 'none') {
-    const { data } = await admin
-      .from('client_knowledge_entries')
-      .select('updated_at')
+  // Parallelize the remaining SSR queries so the dossier pills can render
+  // immediately without the client-side "—" flicker. `initialSlots` /
+  // `initialCompetitorCount` flow into ClientDossierHeader; the client
+  // component only re-fetches when these props are omitted.
+  const [dnaRow, socialRows, competitorRows] = await Promise.all([
+    client.brand_dna_status && client.brand_dna_status !== 'none'
+      ? admin
+        .from('client_knowledge_entries')
+        .select('updated_at')
+        .eq('client_id', client.id)
+        .eq('type', 'brand_guideline')
+        .is('metadata->superseded_by', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      : Promise.resolve({ data: null }),
+    admin
+      .from('social_profiles')
+      .select('platform, username, no_account, late_account_id')
       .eq('client_id', client.id)
-      .eq('type', 'brand_guideline')
-      .is('metadata->superseded_by', null)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    brandDnaUpdatedAt = data?.updated_at ?? null;
-  }
+      .in('platform', PLATFORMS as unknown as string[]),
+    admin
+      .from('competitors')
+      .select('id', { count: 'exact', head: true })
+      .eq('client_id', client.id),
+  ]);
+
+  const brandDnaUpdatedAt = (dnaRow.data as { updated_at?: string } | null)?.updated_at ?? null;
+
+  const initialSlots = PLATFORMS.map((platform) => {
+    const row = (socialRows.data ?? []).find((r) => r.platform === platform);
+    if (!row) {
+      return { platform, status: 'unset' as const, handle: null, zernio_connected: false };
+    }
+    if (row.no_account) {
+      return { platform, status: 'no_account' as const, handle: null, zernio_connected: false };
+    }
+    return {
+      platform,
+      status: 'linked' as const,
+      handle: row.username as string | null,
+      zernio_connected: !!row.late_account_id,
+    };
+  }) satisfies Array<{
+    platform: Platform;
+    status: 'linked' | 'no_account' | 'unset';
+    handle: string | null;
+    zernio_connected: boolean;
+  }>;
+  const initialCompetitorCount = competitorRows.count ?? 0;
 
   const hasIdentity = !!(client.logo_url || client.industry || client.website_url || client.agency);
   const hasBrand = !!(
@@ -132,19 +173,33 @@ export default async function ClientSettingsInfoPage({
         brandDnaStatus={client.brand_dna_status ?? 'none'}
         brandDnaUpdatedAt={brandDnaUpdatedAt}
         brandProfileHref={brandProfileHref}
+        initialSlots={initialSlots}
+        initialCompetitorCount={initialCompetitorCount}
       />
 
       <StickySubnav sections={sections} />
 
       {/* 1. Identity */}
       <section id="identity" className="space-y-4 scroll-mt-24">
-        <InfoIdentityCard slug={slug} />
+        <InfoIdentityCard
+          slug={slug}
+          initialClient={{
+            id: client.id,
+            name: client.name ?? '',
+            slug: client.slug ?? slug,
+            industry: client.industry,
+            website_url: client.website_url,
+            agency: client.agency,
+            logo_url: client.logo_url,
+          }}
+        />
       </section>
 
-      {/* 2. Brand — essence (read-first) + voice form + extras */}
+      {/* 2. Brand — essence + voice (read-first) + extras (tag lists + prefs) */}
       <section id="brand" className="space-y-4 scroll-mt-24">
         <InfoBrandEssenceCard clientId={client.id} />
-        <BrandSettingsForm slug={slug} embedded />
+        <InfoBrandVoiceCard slug={slug} />
+        <BrandSettingsForm slug={slug} embedded hideIdentityFields />
         <BrandEssenceSection clientId={client.id} skipEssence />
       </section>
 

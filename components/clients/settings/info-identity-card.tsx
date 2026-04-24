@@ -26,20 +26,30 @@ type IdentityPayload = {
 
 const AGENCIES = ['Nativz', 'Anderson Collaborative'] as const;
 
-export function InfoIdentityCard({ slug }: { slug: string }) {
-  const [client, setClient] = useState<IdentityPayload | null>(null);
-  const [loading, setLoading] = useState(true);
+export function InfoIdentityCard({
+  slug,
+  initialClient,
+}: {
+  slug: string;
+  /** SSR-fetched client row. When provided, skips the initial client fetch and
+   *  hydrates drafts from it — dedupes the round-trip when the page server
+   *  component already has the same data. */
+  initialClient?: IdentityPayload;
+}) {
+  const [client, setClient] = useState<IdentityPayload | null>(initialClient ?? null);
+  const [loading, setLoading] = useState(!initialClient);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Edit-state drafts; reset on Cancel or on remount after a save.
-  const [industry, setIndustry] = useState('');
-  const [website, setWebsite] = useState('');
-  const [agency, setAgency] = useState('');
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [industry, setIndustry] = useState(initialClient?.industry ?? '');
+  const [website, setWebsite] = useState(initialClient?.website_url ?? '');
+  const [agency, setAgency] = useState(initialClient?.agency ?? '');
+  const [logoUrl, setLogoUrl] = useState<string | null>(initialClient?.logo_url ?? null);
 
   useEffect(() => {
+    if (initialClient) return;
     let cancelled = false;
     (async () => {
       try {
@@ -62,7 +72,7 @@ export function InfoIdentityCard({ slug }: { slug: string }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [slug]);
+  }, [slug, initialClient]);
 
   function resetDrafts(from: IdentityPayload) {
     setIndustry(from.industry ?? '');

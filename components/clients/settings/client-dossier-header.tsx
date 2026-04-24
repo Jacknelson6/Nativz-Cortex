@@ -44,6 +44,11 @@ export interface ClientDossierHeaderProps {
   brandDnaUpdatedAt: string | null;
   /** Deep-link target for the "Brand DNA" pill — usually the brand-profile page. */
   brandProfileHref?: string;
+  /** SSR-fetched socials (kills the pill "—" flicker). Falls back to a
+   *  client fetch if omitted. */
+  initialSlots?: SocialSlot[];
+  /** SSR-fetched competitor count. Falls back to a client fetch if omitted. */
+  initialCompetitorCount?: number;
 }
 
 const PLATFORM_ORDER: Platform[] = ['instagram', 'tiktok', 'facebook', 'youtube'];
@@ -58,25 +63,40 @@ export function ClientDossierHeader({
   brandDnaStatus,
   brandDnaUpdatedAt,
   brandProfileHref,
+  initialSlots,
+  initialCompetitorCount,
 }: ClientDossierHeaderProps) {
-  const [socials, setSocials] = useState<SocialSlot[] | null>(null);
-  const [competitorCount, setCompetitorCount] = useState<number | null>(null);
+  const [socials, setSocials] = useState<SocialSlot[] | null>(initialSlots ?? null);
+  const [competitorCount, setCompetitorCount] = useState<number | null>(
+    initialCompetitorCount ?? null,
+  );
 
+  // Only fire the client fetches when the SSR data wasn't provided. When it is,
+  // we trust the server render and skip the round-trip entirely — the whole
+  // point of SSR-ing these counts is to eliminate the pill "—" flicker.
   useEffect(() => {
+    if (socials !== null && competitorCount !== null) return;
     let cancelled = false;
     Promise.all([
-      fetch(`/api/clients/${clientId}/social-slots`).then((r) => (r.ok ? r.json() : null)),
-      fetch(`/api/clients/${clientId}/competitors`).then((r) => (r.ok ? r.json() : null)),
+      socials === null
+        ? fetch(`/api/clients/${clientId}/social-slots`).then((r) => (r.ok ? r.json() : null))
+        : Promise.resolve(null),
+      competitorCount === null
+        ? fetch(`/api/clients/${clientId}/competitors`).then((r) => (r.ok ? r.json() : null))
+        : Promise.resolve(null),
     ]).then(([slotsRes, compRes]) => {
       if (cancelled) return;
-      setSocials((slotsRes?.slots as SocialSlot[]) ?? []);
-      setCompetitorCount(((compRes?.competitors as Competitor[]) ?? []).length);
+      if (slotsRes) setSocials((slotsRes.slots as SocialSlot[]) ?? []);
+      if (compRes) setCompetitorCount(((compRes.competitors as Competitor[]) ?? []).length);
     }).catch(() => {
       if (cancelled) return;
-      setSocials([]);
-      setCompetitorCount(0);
+      if (socials === null) setSocials([]);
+      if (competitorCount === null) setCompetitorCount(0);
     });
     return () => { cancelled = true; };
+    // Intentionally only re-run if clientId changes; setters are stable and
+    // initialSlots/initialCount changing after mount is not a supported flow.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
   const abbreviation = name.split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 2);

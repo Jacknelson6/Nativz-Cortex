@@ -24,7 +24,18 @@ type BrandPayload = {
   google_drive_calendars_url: string | null;
 };
 
-export function BrandSettingsForm({ slug, embedded }: { slug: string; embedded?: boolean }) {
+export function BrandSettingsForm({
+  slug,
+  embedded,
+  hideIdentityFields,
+}: {
+  slug: string;
+  embedded?: boolean;
+  /** When true, skip target_audience / brand_voice / topic_keywords / description
+   *  and the inline "Generate from website" action — the info page owns those
+   *  via InfoBrandVoiceCard and this form just renders commercial + drive links. */
+  hideIdentityFields?: boolean;
+}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [client, setClient] = useState<BrandPayload | null>(null);
@@ -143,7 +154,7 @@ export function BrandSettingsForm({ slug, embedded }: { slug: string; embedded?:
         />
       )}
 
-      {embedded && client.website_url && (
+      {embedded && client.website_url && !hideIdentityFields && (
         <div className="flex justify-end">
           <Button type="button" variant="outline" size="sm" onClick={handleGenerateAI} disabled={analyzing}>
             {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
@@ -154,54 +165,58 @@ export function BrandSettingsForm({ slug, embedded }: { slug: string; embedded?:
 
       {!embedded && <SettingsSectionHeader title="Identity" />}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Textarea
-          id="target_audience"
-          label="Target audience"
-          defaultValue={client.target_audience ?? ''}
-          onBlur={(e) => {
-            const v = e.target.value.trim();
-            if (v !== (client.target_audience ?? '')) patch({ target_audience: v || null });
-          }}
-          placeholder="Who this brand serves and what they're trying to accomplish."
-          rows={3}
-        />
-        <Textarea
-          id="brand_voice"
-          label="Brand voice"
-          defaultValue={client.brand_voice ?? ''}
-          onBlur={(e) => {
-            const v = e.target.value.trim();
-            if (v !== (client.brand_voice ?? '')) patch({ brand_voice: v || null });
-          }}
-          placeholder="Tone, register, personality — how they sound in writing."
-          rows={3}
-        />
-      </div>
+      {!hideIdentityFields && (
+        <>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Textarea
+              id="target_audience"
+              label="Target audience"
+              defaultValue={client.target_audience ?? ''}
+              onBlur={(e) => {
+                const v = e.target.value.trim();
+                if (v !== (client.target_audience ?? '')) patch({ target_audience: v || null });
+              }}
+              placeholder="Who this brand serves and what they're trying to accomplish."
+              rows={3}
+            />
+            <Textarea
+              id="brand_voice"
+              label="Brand voice"
+              defaultValue={client.brand_voice ?? ''}
+              onBlur={(e) => {
+                const v = e.target.value.trim();
+                if (v !== (client.brand_voice ?? '')) patch({ brand_voice: v || null });
+              }}
+              placeholder="Tone, register, personality — how they sound in writing."
+              rows={3}
+            />
+          </div>
 
-      <Input
-        id="topic_keywords"
-        label="Topic keywords"
-        defaultValue={(client.topic_keywords ?? []).join(', ')}
-        onBlur={(e) => {
-          const next = e.target.value.split(',').map((k) => k.trim()).filter(Boolean);
-          const prev = client.topic_keywords ?? [];
-          if (next.join('|') !== prev.join('|')) patch({ topic_keywords: next });
-        }}
-        placeholder="Comma-separated. e.g. fitness, nutrition, wellness"
-      />
+          <Input
+            id="topic_keywords"
+            label="Topic keywords"
+            defaultValue={(client.topic_keywords ?? []).join(', ')}
+            onBlur={(e) => {
+              const next = e.target.value.split(',').map((k) => k.trim()).filter(Boolean);
+              const prev = client.topic_keywords ?? [];
+              if (next.join('|') !== prev.join('|')) patch({ topic_keywords: next });
+            }}
+            placeholder="Comma-separated. e.g. fitness, nutrition, wellness"
+          />
 
-      <Textarea
-        id="description"
-        label="Description"
-        defaultValue={client.description ?? ''}
-        onBlur={(e) => {
-          const v = e.target.value.trim();
-          if (v !== (client.description ?? '')) patch({ description: v || null });
-        }}
-        placeholder="Optional long-form background — history, positioning, anything the AI should know."
-        rows={3}
-      />
+          <Textarea
+            id="description"
+            label="Description"
+            defaultValue={client.description ?? ''}
+            onBlur={(e) => {
+              const v = e.target.value.trim();
+              if (v !== (client.description ?? '')) patch({ description: v || null });
+            }}
+            placeholder="Optional long-form background — history, positioning, anything the AI should know."
+            rows={3}
+          />
+        </>
+      )}
 
       <SettingsSectionHeader title="Commercial" />
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef } from 'react';
+import { forwardRef, useEffect, useRef } from 'react';
 import { Pencil, X, Check, Loader2, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 
@@ -66,10 +66,45 @@ export const InfoCard = forwardRef<HTMLElement, InfoCardProps>(function InfoCard
 ) {
   const isEditing = state === 'edit';
   const showFooter = isEditing && (aiGenerate?.onClick || footerNote);
+  const localRef = useRef<HTMLElement | null>(null);
+
+  // Keyboard shortcuts while editing:
+  //   Escape          → cancel
+  //   Cmd/Ctrl+Enter  → save (only when dirty)
+  // Scoped to focus within this card so one page with multiple cards in
+  // edit mode doesn't fight over keystrokes.
+  useEffect(() => {
+    if (!isEditing) return;
+    const el = localRef.current;
+    if (!el) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && cancel?.onClick && !cancel.loading) {
+        e.preventDefault();
+        cancel.onClick();
+        return;
+      }
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        e.key === 'Enter' &&
+        save?.onClick &&
+        save.dirty !== false &&
+        !save.loading
+      ) {
+        e.preventDefault();
+        save.onClick();
+      }
+    }
+    el.addEventListener('keydown', onKey);
+    return () => el.removeEventListener('keydown', onKey);
+  }, [isEditing, cancel, save]);
 
   return (
     <section
-      ref={ref}
+      ref={(node) => {
+        localRef.current = node;
+        if (typeof ref === 'function') ref(node);
+        else if (ref) (ref as React.MutableRefObject<HTMLElement | null>).current = node;
+      }}
       className={cn(
         'rounded-xl border border-nativz-border bg-surface p-5 sm:p-6',
         'transition-colors',
