@@ -18,20 +18,14 @@ import { ContentBreakdown } from '@/components/results/content-breakdown';
 import { TrendingTopicsTable } from '@/components/results/trending-topics-table';
 import { ContentPillars } from '@/components/results/content-pillars';
 import { NicheInsights } from '@/components/results/niche-insights';
-import { SourcesPanel } from '@/components/results/sources-panel';
-import { SourceBrowser } from '@/components/results/source-browser';
-import { WebSearchSummaryCard } from '@/components/results/web-search-summary-card';
-import { RedditScanSummaryCard } from '@/components/results/reddit-scan-summary-card';
 import { ActivityChart } from '@/components/charts/activity-chart';
 import { ExportPdfButton } from '@/components/results/export-pdf-button';
 import { ShareButton } from '@/components/results/share-button';
 import { SearchProgress } from '@/components/search/search-progress';
-import { hasSerp } from '@/lib/types/search';
-import type { TopicSearch, TopicSearchAIResponse, TrendingTopic, LegacyTrendingTopic, PlatformSource } from '@/lib/types/search';
+import type { TopicSearch, TopicSearchAIResponse, TrendingTopic, LegacyTrendingTopic } from '@/lib/types/search';
 import { ScrapedVideosSection } from '@/components/results/scraped-videos-section';
 import { AiTakeaways } from '@/components/results/ai-takeaways';
 import { useAgencyBrand } from '@/lib/agency/use-agency-brand';
-import { IdeationPipelinePanel } from '@/components/ideation/ideation-pipeline-panel';
 import { TopicSyntheticAudiences } from '@/components/results/topic-synthetic-audiences';
 import { getClientAbbreviationLabel } from '@/lib/clients/client-abbreviations';
 import { formatRelativeTime } from '@/lib/utils/format';
@@ -211,13 +205,11 @@ export function AdminResultsClient({
                 {formatRelativeTime(search.completed_at)}
               </span>
             )}
-            {/* Header CTA uses `variant="outline"` — same visual tier as
-                Export PDF + Share so the three actions read as one system.
-                The primary filled "Open in Strategy Lab" pill lives at the
-                bottom of the results inside IdeationPipelinePanel so there
-                is exactly one filled CTA on the page. */}
+            {/* Header CTA is the single filled primary on the page — the
+                bottom "Turn these findings into a content plan" panel was
+                retired, so this is now the page's one strong call to action. */}
             <Button
-              variant="outline"
+              variant="primary"
               size="sm"
               onClick={() => {
                 if (!clientInfo) {
@@ -326,70 +318,6 @@ export function AdminResultsClient({
           </div>
         ) : null}
 
-        {(() => {
-          const platformSources = ((search.platform_data as Record<string, unknown> | null)?.sources ?? []) as PlatformSource[];
-          const hasPlatformSources = platformSources.length > 0;
-          const redditSources = platformSources.filter((s) => s.platform === 'reddit');
-          const serpData = hasSerp(search) ? search.serp_data : null;
-          const hasWebResults = Boolean(serpData?.webResults?.length);
-          const hasSummaryCards = hasWebResults || redditSources.length > 0;
-
-          return (
-            <>
-              {/* Web + Reddit summary cards — sit just above the short-form
-                  video grid. These platforms don't have video engagement
-                  metrics, so they get their own summary surface. */}
-              {hasSummaryCards ? (
-                <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-2">
-                  {hasWebResults && serpData ? (
-                    <WebSearchSummaryCard
-                      query={search.query}
-                      completedAt={search.completed_at}
-                      serpData={serpData}
-                    />
-                  ) : null}
-                  {redditSources.length > 0 ? (
-                    <RedditScanSummaryCard
-                      redditSources={redditSources}
-                      completedAt={search.completed_at}
-                    />
-                  ) : null}
-                </div>
-              ) : null}
-
-              {/* Source browser — short-form video cards. Reddit + web are
-                  filtered out inside SourceBrowser since they surface above. */}
-              {hasPlatformSources ? (
-                <SourceBrowser
-                  sources={platformSources}
-                  searchId={search.id}
-                  searchQuery={search.query}
-                  clientContext={
-                    clientInfo
-                      ? {
-                          name: clientInfo.name,
-                          industry: clientInfo.industry,
-                          topicKeywords: clientInfo.topic_keywords ?? undefined,
-                        }
-                      : null
-                  }
-                  defaultClientId={search.client_id}
-                />
-              ) : null}
-
-              {serpData ? <SourcesPanel serpData={serpData} /> : null}
-            </>
-          );
-        })()}
-
-        {/* "Next step" CTA — sits after every research section so the reader
-            only lands on it once they've absorbed the findings. Moved down
-            from its previous mid-page slot per Jack's "feels bolted-on"
-            feedback. */}
-        <IdeationPipelinePanel
-          searchId={search.id}
-          clientId={clientInfo?.id ?? null}
-        />
       </div>
 
       <ScrollToTop />

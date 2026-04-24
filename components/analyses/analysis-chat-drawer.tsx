@@ -274,7 +274,7 @@ export function AnalysisChatDrawer({
         aria-label="Open chat"
       >
         <MessageSquare size={16} aria-hidden />
-        Ask the Nerd
+        Strategize with the Nerd
       </button>
 
       {/* Click-outside layer — transparent so the analysis behind the drawer

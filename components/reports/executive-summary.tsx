@@ -30,10 +30,10 @@ export function ExecutiveSummary({ summary, title, variant = 'default' }: Execut
             the research console + Infrastructure header so the report
             sections feel like they're part of the same system, not
             individual one-off cards. */}
-        <h3 className="mb-2.5 font-mono text-[10px] uppercase tracking-[0.2em] text-accent-text/90">
+        <h3 className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-accent-text/90">
           {heading}
         </h3>
-        <div className="leading-relaxed text-text-primary [&_p]:text-text-primary [&_p]:m-0 [&_strong]:font-semibold">
+        <div className="leading-relaxed text-text-primary [&_p]:text-text-primary [&_p]:m-0 [&_p]:!text-[17px] [&_p]:!leading-[1.7] [&_li]:!text-[17px] [&_li]:!leading-[1.7] [&_strong]:font-semibold">
           <Markdown content={summary} bodySize="md" />
         </div>
       </div>

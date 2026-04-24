@@ -16,10 +16,6 @@ import { ContentBreakdown } from '@/components/results/content-breakdown';
 import { TrendingTopicsTable } from '@/components/results/trending-topics-table';
 import { ContentPillars } from '@/components/results/content-pillars';
 import { NicheInsights } from '@/components/results/niche-insights';
-import { SourcesPanel } from '@/components/results/sources-panel';
-import { SourceBrowser } from '@/components/results/source-browser';
-import { WebSearchSummaryCard } from '@/components/results/web-search-summary-card';
-import { RedditScanSummaryCard } from '@/components/results/reddit-scan-summary-card';
 import { ActivityChart } from '@/components/charts/activity-chart';
 import { BigMovers } from '@/components/results/big-movers';
 import { CompetitiveAnalysis } from '@/components/results/competitive-analysis';
@@ -28,8 +24,7 @@ import { ScrapedVideosSection } from '@/components/results/scraped-videos-sectio
 import { contentLabTopicSearchStorageKey } from '@/lib/content-lab/topic-search-selection-storage';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { searchHeaderQueryClassName } from '@/lib/clients/client-abbreviations';
-import { hasSerp } from '@/lib/types/search';
-import type { TopicSearch, TopicSearchAIResponse, TrendingTopic, LegacyTrendingTopic, PlatformSource } from '@/lib/types/search';
+import type { TopicSearch, TopicSearchAIResponse, TrendingTopic, LegacyTrendingTopic } from '@/lib/types/search';
 
 interface PortalClientInfo {
   id: string;
@@ -73,13 +68,6 @@ export function PortalResultsClient({
     }
     router.push(`/portal/strategy-lab/${clientInfo.id}`);
   }
-
-  const platformSources = ((search.platform_data as Record<string, unknown> | null)?.sources ?? []) as PlatformSource[];
-  const hasPlatformSources = platformSources.length > 0;
-  const redditSources = platformSources.filter((s) => s.platform === 'reddit');
-  const serpData = hasSerp(search) ? search.serp_data : null;
-  const hasWebResults = Boolean(serpData?.webResults?.length);
-  const hasSummaryCards = hasWebResults || redditSources.length > 0;
 
   return (
     <div className="min-h-full">
@@ -204,53 +192,6 @@ export function PortalResultsClient({
           <BigMovers movers={aiResponse!.big_movers!} />
         ) : null}
 
-        {/* Web + Reddit summary cards — sit just above the short-form video
-            grid. Web/Reddit results don't have video engagement metrics, so
-            they get their own summary surface instead of appearing in the
-            video card grid with "0 views / — ER". */}
-        {hasSummaryCards ? (
-          <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-2">
-            {hasWebResults && serpData ? (
-              <WebSearchSummaryCard
-                query={search.query}
-                completedAt={search.completed_at}
-                serpData={serpData}
-              />
-            ) : null}
-            {redditSources.length > 0 ? (
-              <RedditScanSummaryCard
-                redditSources={redditSources}
-                completedAt={search.completed_at}
-              />
-            ) : null}
-          </div>
-        ) : null}
-
-        {/* Source browser — browse short-form video posts by platform.
-            Analyze actions are hidden for portal viewers because the
-            /api/analysis/items topic_search_id path is admin-only. */}
-        {hasPlatformSources ? (
-          <SourceBrowser
-            sources={platformSources}
-            searchId={search.id}
-            searchQuery={search.query}
-            clientContext={
-              clientInfo
-                ? {
-                    name: clientInfo.name,
-                    industry: clientInfo.industry,
-                    topicKeywords: clientInfo.topic_keywords ?? undefined,
-                  }
-                : null
-            }
-            defaultClientId={search.client_id}
-          />
-        ) : null}
-
-        {/* Sources panel — only for new searches with SERP data */}
-        {serpData ? (
-          <SourcesPanel serpData={serpData} />
-        ) : null}
       </div>
 
       <ScrollToTop />

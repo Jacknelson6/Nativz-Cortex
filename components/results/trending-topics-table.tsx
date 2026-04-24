@@ -1,15 +1,13 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
-import { ChevronDown, ChevronRight, ChevronUp, Copy, FlaskConical } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
 import { TooltipCard } from '@/components/ui/tooltip-card';
 import { TOOLTIPS } from '@/lib/tooltips';
 import { TopicRowExpanded } from './topic-row-expanded';
 import { SentimentSplitBar } from './sentiment-split-bar';
-import { contentLabTopicSearchStorageKey } from '@/lib/content-lab/topic-search-selection-storage';
 import { formatTopicReach, getTopicReachValue, RESONANCE_LABEL } from '@/lib/search/topic-metrics';
 import type { TrendingTopic, LegacyTrendingTopic } from '@/lib/types/search';
 
@@ -100,7 +98,6 @@ function SortHeader({
 }
 
 export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopicsTableProps): React.JSX.Element | null {
-  const router = useRouter();
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('resonance');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -121,29 +118,6 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
     } catch {
       toast.error('Could not copy');
     }
-  }
-
-  /** Route a single topic straight into Strategy Lab. Pins the parent
-   *  search so the lab workspace auto-attaches it, same pattern as the
-   *  page-level "Open in Strategy Lab" button. */
-  function sendTopicToStrategyLab(topic: TrendingTopic | LegacyTrendingTopic) {
-    if (!clientId) {
-      toast.info('Attach a client to this search first to send topics to Strategy Lab.');
-      return;
-    }
-    if (searchId) {
-      try {
-        const key = contentLabTopicSearchStorageKey(clientId);
-        window.localStorage.setItem(key, JSON.stringify([searchId]));
-      } catch {
-        /* quota / JSON — non-fatal, user still lands on the lab */
-      }
-    }
-    const params = new URLSearchParams();
-    if (searchId) params.set('searchId', searchId);
-    params.set('topic', topic.name);
-    const qs = params.toString();
-    router.push(`/admin/strategy-lab/${clientId}${qs ? `?${qs}` : ''}`);
   }
 
   const sortedTopics = useMemo(() => {
@@ -183,6 +157,7 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
                 activeDir={sortDir}
                 onSort={handleSort}
                 tooltip={TOOLTIPS.views}
+                centered
               />
             </div>
             <div className="min-w-0">
@@ -196,7 +171,7 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
                 centered
               />
             </div>
-            <div className="min-w-0 flex justify-end">
+            <div className="min-w-0">
               <SortHeader
                 label="Sentiment"
                 sortKey="sentiment"
@@ -204,6 +179,7 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
                 activeDir={sortDir}
                 onSort={handleSort}
                 tooltip={TOOLTIPS.sentiment}
+                centered
               />
             </div>
             <span className="min-w-0" aria-hidden />
@@ -233,7 +209,7 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
                 </div>
 
                 <div className={METRICS_GRID}>
-                  <span className="min-w-0 text-right text-base font-semibold tabular-nums text-text-primary">
+                  <span className="min-w-0 text-center text-base font-semibold tabular-nums text-text-primary">
                     {formatTopicReach(topic)}
                   </span>
                   {/* Resonance aligned with Views — same weight + colour so the row
@@ -241,11 +217,12 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
                   <span className="min-w-0 text-center text-base font-semibold text-text-primary">
                     {RESONANCE_LABEL[topic.resonance] ?? topic.resonance}
                   </span>
-                  <div className="min-w-0 flex justify-end">
+                  <div className="min-w-0 flex justify-center">
                     <SentimentSplitBar sentiment={topic.sentiment} />
                   </div>
-                  {/* Row actions — copy + send to Strategy Lab. Disabled when no
-                      client is attached (you can't pin a search without one). */}
+                  {/* Row action — copy title. The "send to Strategy Lab" flask
+                      was removed (the handoff was unreliable); the page-level
+                      header CTA is the canonical entry point. */}
                   <div className="flex min-w-0 items-center justify-end gap-0.5">
                     <TooltipCard
                       iconTrigger
@@ -262,28 +239,6 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
                         aria-label="Copy topic title"
                       >
                         <Copy size={16} />
-                      </button>
-                    </TooltipCard>
-                    <TooltipCard
-                      iconTrigger
-                      title="Send to Strategy Lab"
-                      description={
-                        clientId
-                          ? 'Open Strategy Lab with this topic pre-selected so you can generate scripts and ideas from it.'
-                          : 'Attach a client to this search first.'
-                      }
-                    >
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          sendTopicToStrategyLab(topic);
-                        }}
-                        className="shrink-0 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-accent-surface hover:text-accent-text disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-text-muted"
-                        aria-label="Send topic to Strategy Lab"
-                        disabled={!clientId}
-                      >
-                        <FlaskConical size={16} />
                       </button>
                     </TooltipCard>
                   </div>
