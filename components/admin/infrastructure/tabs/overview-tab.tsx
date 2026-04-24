@@ -3,7 +3,10 @@
  *
  * Three decks, top → bottom:
  *   1. Money strip — 24h / 30d spend + searches in flight + active clients.
- *   2. Subsystem tiles — one per infrastructure tab, at-a-glance health dot.
+ *   2. Subsystem tiles — one per infrastructure tab. Each tile now carries
+ *      a real traffic-light state (green / amber / red / grey) computed
+ *      from recent telemetry, plus a tiny 7-day sparkline for the primary
+ *      metric so trends are visible at a glance without opening the tab.
  *   3. Recent failures — last-24h failed topic searches, apify runs, and
  *      cron runs (progressive disclosure — summary stays scannable, details
  *      open on click).
@@ -27,8 +30,8 @@ import {
 import { HealthDot, Stat } from '../stat';
 import { Disclosure } from '../section-card';
 import { INFRA_CACHE_TAG } from '../cache';
-
-type SubsystemState = 'healthy' | 'degraded' | 'error' | 'unknown';
+import { Sparkline } from '../sparkline';
+import type { SubsystemState } from '../subsystem-state';
 
 interface SubsystemRollup {
   slug: string;
@@ -37,6 +40,9 @@ interface SubsystemRollup {
   state: SubsystemState;
   primary: string;
   secondary?: string;
+  /** 7-day daily series for this subsystem's primary metric, oldest → newest. Omit when we have no meaningful series. */
+  series?: number[];
+  seriesLabel?: string;
   Icon: React.ComponentType<{ size?: number; className?: string }>;
 }
 
@@ -46,6 +52,34 @@ interface FailureRow {
   detail: string;
   at: string;
   id: string;
+}
+
+/**
+ * Bucket row timestamps into the trailing 7 days (oldest → newest) so we
+ * can feed the Sparkline component one number per day. Any row with a
+ * numeric value (cost, etc.) sums; null/undefined treats each row as
+ * count=1 so success-rate sparklines still work.
+ */
+function bucketByDay<T>(
+  rows: T[],
+  getIso: (row: T) => string | null | undefined,
+  getValue?: (row: T) => number,
+): number[] {
+  const buckets = new Array<number>(7).fill(0);
+  const now = Date.now();
+  const dayMs = 24 * 60 * 60 * 1000;
+  // Bucket 0 = 6 days ago, bucket 6 = today.
+  for (const row of rows) {
+    const iso = getIso(row);
+    if (!iso) continue;
+    const t = new Date(iso).getTime();
+    if (!Number.isFinite(t)) continue;
+    const daysAgo = Math.floor((now - t) / dayMs);
+    if (daysAgo < 0 || daysAgo > 6) continue;
+    const idx = 6 - daysAgo;
+    buckets[idx] += getValue ? getValue(row) : 1;
+  }
+  return buckets;
 }
 
 const getOverviewData = unstable_cache(
@@ -62,16 +96,20 @@ const getOverviewData = unstable_cache(
       benchmarks,
       clients,
       apify24h,
+      apify7d,
       apify30d,
       ai24h,
+      ai7d,
       ai30d,
+      apifyStatus7d,
       inFlight,
       failedSearches,
       failedApify,
+      socialProfiles,
     ] = await Promise.all([
       admin
         .from('topic_searches')
-        .select('status', { count: 'exact', head: false })
+        .select('status, created_at')
         .gte('created_at', sevenDaysAgo)
         .limit(500),
       admin
@@ -79,16 +117,19 @@ const getOverviewData = unstable_cache(
         .select('route, status, started_at, error')
         .gte('started_at', sevenDaysAgo)
         .order('started_at', { ascending: false })
-        .limit(200),
+        .limit(500),
       admin
         .from('client_benchmarks')
         .select('id', { count: 'exact', head: true })
         .eq('is_active', true),
       admin.from('clients').select('id', { count: 'exact', head: true }).eq('is_active', true),
       admin.from('apify_runs').select('cost_usd').gte('started_at', twentyFourHoursAgo),
+      admin.from('apify_runs').select('cost_usd, started_at').gte('started_at', sevenDaysAgo),
       admin.from('apify_runs').select('cost_usd, started_at').gte('started_at', thirtyDaysAgo),
       admin.from('api_usage_logs').select('cost_usd').gte('created_at', twentyFourHoursAgo),
+      admin.from('api_usage_logs').select('cost_usd, created_at').gte('created_at', sevenDaysAgo),
       admin.from('api_usage_logs').select('cost_usd, created_at').gte('created_at', thirtyDaysAgo),
+      admin.from('apify_runs').select('status, started_at').gte('started_at', sevenDaysAgo).limit(500),
       admin.from('topic_searches').select('id', { count: 'exact', head: true }).eq('status', 'processing'),
       admin
         .from('topic_searches')
@@ -104,6 +145,7 @@ const getOverviewData = unstable_cache(
         .gte('started_at', twentyFourHoursAgo)
         .order('started_at', { ascending: false })
         .limit(10),
+      admin.from('social_profiles').select('status').limit(200),
     ]);
 
     const sumCost = (rows: { cost_usd: number | string | null }[] | null): number =>
@@ -166,10 +208,14 @@ const getOverviewData = unstable_cache(
       activeClients: clients.count ?? 0,
       apifyCost24h: sumCost(apify24h.data as { cost_usd: number | string | null }[] | null),
       apifyCost30d: sumCost(apify30d.data as { cost_usd: number | string | null }[] | null),
+      apify7d: (apify7d.data ?? []) as { cost_usd: number | string | null; started_at: string }[],
+      apifyStatus7d: (apifyStatus7d.data ?? []) as { status: string | null; started_at: string }[],
       aiCost24h: sumCost(ai24h.data as { cost_usd: number | string | null }[] | null),
       aiCost30d: sumCost(ai30d.data as { cost_usd: number | string | null }[] | null),
+      ai7d: (ai7d.data ?? []) as { cost_usd: number | string | null; created_at: string }[],
       searchesInFlight: inFlight.count ?? 0,
       failures: failures.slice(0, 20),
+      socialProfiles: (socialProfiles.data ?? []) as { status: string | null }[],
     };
   },
   ['infrastructure-overview-rollup'],
@@ -194,30 +240,66 @@ function formatAge(iso: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+/**
+ * Health heuristic. Favors false-positive "degraded" over optimistic green:
+ * > 20% failure = error, > 5% = degraded, zero runs = unknown.
+ */
+function healthFromFailureRate(total: number, failed: number): SubsystemState {
+  if (total === 0) return 'unknown';
+  const rate = failed / total;
+  if (rate > 0.2) return 'error';
+  if (rate > 0.05) return 'degraded';
+  return 'healthy';
+}
+
 export async function OverviewTab() {
   const data = await getOverviewData();
 
-  const topicFailureRate = data.topicRuns.length
-    ? data.topicRuns.filter((r) => r.status === 'failed').length / data.topicRuns.length
-    : 0;
-  const topicState: SubsystemState =
-    data.topicRuns.length === 0
-      ? 'unknown'
-      : topicFailureRate > 0.2
-        ? 'error'
-        : topicFailureRate > 0.05
-          ? 'degraded'
-          : 'healthy';
+  // ── Per-subsystem signals ───────────────────────────────────────────────
+  const topicFailed = data.topicRuns.filter((r) => r.status === 'failed').length;
+  const topicState = healthFromFailureRate(data.topicRuns.length, topicFailed);
+  const topicFailureRate = data.topicRuns.length ? topicFailed / data.topicRuns.length : 0;
+  const topicSeries = bucketByDay(
+    data.topicRuns as { created_at: string }[],
+    (r) => r.created_at,
+  );
 
   const cronFailures = data.cronRuns.filter((r) => r.status !== 'ok').length;
-  const cronState: SubsystemState =
-    data.cronRuns.length === 0
+  const cronState = healthFromFailureRate(data.cronRuns.length, cronFailures);
+  const cronSeries = bucketByDay(
+    data.cronRuns as { started_at: string }[],
+    (r) => r.started_at,
+  );
+
+  const apifyFailed = data.apifyStatus7d.filter(
+    (r) => r.status && ['FAILED', 'ABORTED', 'TIMED-OUT', 'START_FAILED'].includes(r.status),
+  ).length;
+  const apifyState = healthFromFailureRate(data.apifyStatus7d.length, apifyFailed);
+  const apifySeries = bucketByDay(
+    data.apify7d,
+    (r) => r.started_at,
+    (r) => Number(r.cost_usd ?? 0),
+  );
+
+  const aiSeries = bucketByDay(
+    data.ai7d,
+    (r) => r.created_at,
+    (r) => Number(r.cost_usd ?? 0),
+  );
+  const aiState: SubsystemState =
+    data.aiCost30d === 0 ? 'unknown' : 'healthy';
+
+  const integrationsDown = data.socialProfiles.filter(
+    (p) => p.status && ['error', 'disconnected', 'expired', 'revoked'].includes(p.status),
+  ).length;
+  const integrationsState: SubsystemState =
+    data.socialProfiles.length === 0
       ? 'unknown'
-      : cronFailures > 0
-        ? cronFailures > 3
-          ? 'error'
-          : 'degraded'
-        : 'healthy';
+      : integrationsDown === 0
+        ? 'healthy'
+        : integrationsDown <= 2
+          ? 'degraded'
+          : 'error';
 
   const rollups: SubsystemRollup[] = [
     {
@@ -229,9 +311,11 @@ export async function OverviewTab() {
       secondary:
         data.cronRuns.length > 0
           ? cronFailures === 0
-            ? 'Crons healthy'
-            : `${cronFailures} cron failures`
+            ? `${data.cronRuns.length} runs · healthy`
+            : `${cronFailures} failures / ${data.cronRuns.length} runs`
           : 'Vercel + crons',
+      series: cronSeries,
+      seriesLabel: 'Cron runs, last 7 days',
       Icon: Server,
     },
     {
@@ -253,24 +337,36 @@ export async function OverviewTab() {
         data.topicRuns.length > 0
           ? `${Math.round(topicFailureRate * 100)}% failure · ${data.searchesInFlight} in flight`
           : 'No runs yet',
+      series: topicSeries,
+      seriesLabel: 'Topic searches, last 7 days',
       Icon: Gauge,
     },
     {
       slug: 'ai',
       name: 'AI',
       href: '/admin/infrastructure?tab=ai',
-      state: 'healthy',
+      state: aiState,
       primary: `${formatUsd(data.aiCost30d)} (30d)`,
-      secondary: 'OpenRouter + direct providers',
+      secondary:
+        data.aiCost24h > 0
+          ? `${formatUsd(data.aiCost24h)} last 24h · OpenRouter`
+          : 'OpenRouter + direct providers',
+      series: aiSeries,
+      seriesLabel: 'AI spend, last 7 days',
       Icon: Layers,
     },
     {
       slug: 'apify',
       name: 'Scrapers',
       href: '/admin/infrastructure?tab=apify',
-      state: 'healthy',
+      state: apifyState,
       primary: `${formatUsd(data.apifyCost30d)} (30d)`,
-      secondary: 'Apify actors · cost + account',
+      secondary:
+        data.apifyStatus7d.length > 0
+          ? `${apifyFailed} failures / ${data.apifyStatus7d.length} runs (7d)`
+          : 'Apify actors · cost + account',
+      series: apifySeries,
+      seriesLabel: 'Apify spend, last 7 days',
       Icon: Zap,
     },
     {
@@ -286,9 +382,15 @@ export async function OverviewTab() {
       slug: 'integrations',
       name: 'Integrations',
       href: '/admin/infrastructure?tab=integrations',
-      state: 'healthy',
-      primary: '11 services wired',
-      secondary: 'Zernio · OpenRouter · Gemini · Nango · …',
+      state: integrationsState,
+      primary:
+        data.socialProfiles.length > 0
+          ? `${data.socialProfiles.length - integrationsDown} / ${data.socialProfiles.length} connected`
+          : '11 services wired',
+      secondary:
+        integrationsDown > 0
+          ? `${integrationsDown} need attention`
+          : 'Zernio · OpenRouter · Gemini · Nango',
       Icon: Plug,
     },
     {
@@ -315,7 +417,8 @@ export async function OverviewTab() {
   return (
     <div className="space-y-6">
       <p className="text-sm text-text-muted">
-        At-a-glance health for every subsystem Cortex runs on. Click a tile to drill in.
+        At-a-glance health for every subsystem Cortex runs on. Green is healthy, amber is
+        degraded, red needs attention. Click a tile to drill in.
       </p>
 
       <section className="rounded-2xl border border-nativz-border bg-surface/60 p-5">
@@ -362,9 +465,19 @@ export async function OverviewTab() {
                 <r.Icon size={18} />
               </span>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-semibold text-text-primary">{r.name}</h3>
-                  <HealthDot state={r.state} />
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <h3 className="text-sm font-semibold text-text-primary truncate">{r.name}</h3>
+                    <HealthDot state={r.state} />
+                  </div>
+                  {r.series && (
+                    <Sparkline
+                      data={r.series}
+                      state={r.state}
+                      width={72}
+                      ariaLabel={r.seriesLabel}
+                    />
+                  )}
                 </div>
                 <div className="mt-1 truncate text-sm tabular-nums text-text-primary">
                   {r.primary}

@@ -41,13 +41,16 @@ export function HealthDot({
   state: 'healthy' | 'degraded' | 'error' | 'unknown';
   label?: string;
 }) {
+  // Traffic-light convention: green for healthy, amber for warnings, red
+  // for errors. The old wiring used the brand accent for healthy, which
+  // made it hard to spot actual issues next to cyan-accented UI chrome.
   const tone =
     state === 'healthy'
-      ? 'bg-accent shadow-[0_0_0_3px_rgba(0,174,239,0.18)]'
+      ? 'bg-emerald-400 shadow-[0_0_0_3px_rgba(52,211,153,0.18)]'
       : state === 'degraded'
         ? 'bg-amber-400 shadow-[0_0_0_3px_rgba(245,158,11,0.18)]'
         : state === 'error'
-          ? 'bg-coral-400 shadow-[0_0_0_3px_rgba(252,113,113,0.18)]'
+          ? 'bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.22)]'
           : 'bg-text-muted/40';
   return (
     <span className="inline-flex items-center gap-2">

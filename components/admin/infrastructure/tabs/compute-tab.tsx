@@ -1,15 +1,15 @@
 /**
- * Infrastructure › Compute — deploys, runtime, and scheduled jobs.
+ * Infrastructure › Compute — Vercel monitoring only.
  *
- * Consolidates the old Vercel + Crons tabs into one "where is our backend
- * running and what's it doing" view:
- *   • Top strip: environment + latest deploy + prod status + cron health
- *   • Current deploy card (always available — runtime env set by Vercel)
+ * Strict scope: uptime, new deployments, and the log surface. Nothing else.
+ * Cron schedule + cron run telemetry moved to the Overview tab's failure
+ * feed and the tile-level trend sparkline so this page stays focused.
+ *
+ * Contents, top → bottom:
+ *   • Top strip: environment · latest deploy · production status · uptime
+ *   • Current deploy card (runtime env from Vercel)
  *   • URLs card (production + preview)
- *   • Cron schedule card (static catalog + last-run status from cron_runs)
- *   • Deployments table (behind a disclosure; only populated when
- *     VERCEL_TOKEN is set)
- *   • Cron runs history (behind a disclosure)
+ *   • Deployments table with "Open logs" per row (Vercel API)
  */
 
 import { unstable_cache } from 'next/cache';
@@ -20,10 +20,10 @@ import {
   GitBranch,
   Globe,
   Rocket,
+  ScrollText,
   Timer,
 } from 'lucide-react';
-import { getLastRunPerRoute } from '@/lib/observability/cron-runs';
-import { Stat, StatusPill } from '../stat';
+import { Stat } from '../stat';
 import { Disclosure, SectionCard } from '../section-card';
 import { INFRA_CACHE_TAG, INFRA_CACHE_TTL } from '../cache';
 
@@ -37,6 +37,7 @@ interface VercelDeployment {
   buildingAt?: number;
   ready?: number;
   target?: string | null;
+  inspectorUrl?: string;
   meta?: {
     githubCommitSha?: string;
     githubCommitRef?: string;
@@ -63,7 +64,7 @@ async function fetchVercelDeployments(): Promise<VercelRollup> {
   }
 
   try {
-    const params = new URLSearchParams({ limit: '12' });
+    const params = new URLSearchParams({ limit: '15' });
     if (projectId) params.set('projectId', projectId);
     if (teamId) params.set('teamId', teamId);
     const res = await fetch(`https://api.vercel.com/v6/deployments?${params.toString()}`, {
@@ -88,23 +89,12 @@ async function fetchVercelDeployments(): Promise<VercelRollup> {
 
 const getComputeRollup = unstable_cache(
   async () => {
-    const [vercel, crons] = await Promise.all([fetchVercelDeployments(), getLastRunPerRoute()]);
-    return { vercel, crons };
+    const vercel = await fetchVercelDeployments();
+    return { vercel };
   },
   ['infrastructure-compute-rollup'],
   { revalidate: INFRA_CACHE_TTL, tags: [INFRA_CACHE_TAG] },
 );
-
-// Mirrors vercel.json cron schedule so we can label crons that haven't ticked yet.
-const CRON_CATALOG: Array<{ route: string; label: string; schedule: string }> = [
-  { route: '/api/cron/publish-posts', label: 'Publish scheduled posts', schedule: 'Every 5 min' },
-  { route: '/api/cron/benchmark-snapshots', label: 'Benchmark snapshots', schedule: 'Daily' },
-  { route: '/api/cron/competitor-snapshots', label: 'Competitor snapshots', schedule: 'Daily' },
-  { route: '/api/cron/competitor-reports', label: 'Competitor reports', schedule: 'Daily 14:00 UTC' },
-  { route: '/api/cron/weekly-social-report', label: 'Weekly social report', schedule: 'Weekly' },
-  { route: '/api/cron/weekly-affiliate-report', label: 'Weekly affiliate report', schedule: 'Weekly' },
-  { route: '/api/cron/sync-reporting', label: 'Sync reporting data', schedule: 'Hourly' },
-];
 
 function formatAge(iso: number | string | null | undefined): string {
   if (!iso) return '—';
@@ -130,16 +120,27 @@ function formatDuration(ms: number | null): string {
 
 function stateTone(state: string): string {
   const s = state.toLowerCase();
-  if (s === 'ready') return 'border border-accent/30 bg-accent/10 text-accent-text';
+  if (s === 'ready') return 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
   if (s === 'error' || s === 'canceled')
-    return 'border border-coral-500/30 bg-coral-500/10 text-coral-300';
+    return 'border border-red-500/30 bg-red-500/10 text-red-300';
   if (s === 'building' || s === 'queued' || s === 'initializing')
     return 'border border-amber-500/30 bg-amber-500/10 text-amber-300';
   return 'border border-text-muted/30 bg-surface-hover/60 text-text-secondary';
 }
 
+/**
+ * Build the canonical Vercel log URL for a deployment. Uses inspectorUrl
+ * when the API gives us one (authoritative), falling back to the known
+ * team-slug + project pattern so the link still resolves locally.
+ */
+function deploymentLogsUrl(d: VercelDeployment, teamId: string | null): string {
+  if (d.inspectorUrl) return `${d.inspectorUrl.replace(/\/$/, '')}/logs`;
+  const slug = teamId === 'team_0vyaJsvD9Q8NOFTD8K1di8BB' ? 'anderson-collaborative' : teamId;
+  return `https://vercel.com/${slug}/nativz-cortex/${d.uid}/logs`;
+}
+
 export async function ComputeTab() {
-  const { vercel, crons } = await getComputeRollup();
+  const { vercel } = await getComputeRollup();
 
   // Runtime env — set automatically by Vercel on every deploy.
   const env = process.env.VERCEL_ENV ?? 'local';
@@ -154,20 +155,31 @@ export async function ComputeTab() {
     : null;
 
   const productionUrl = 'https://cortex.nativz.io';
-  const dashboardUrl = vercel.teamId
-    ? `https://vercel.com/${vercel.teamId}`
+  const teamSlug =
+    vercel.teamId === 'team_0vyaJsvD9Q8NOFTD8K1di8BB' ? 'anderson-collaborative' : vercel.teamId;
+  const projectLogsUrl = teamSlug ? `https://vercel.com/${teamSlug}/nativz-cortex/logs` : null;
+  const projectDeploysUrl = teamSlug
+    ? `https://vercel.com/${teamSlug}/nativz-cortex/deployments`
     : 'https://vercel.com/dashboard';
 
   const latest = vercel.deployments[0] ?? null;
   const prod = vercel.deployments.find((d) => d.target === 'production') ?? null;
 
-  const cronsByRoute = new Map(crons.map((r) => [r.route, r]));
-  const cronFailing = crons.filter((r) => r.status !== 'ok').length;
-  const cronHealthy = crons.filter((r) => r.status === 'ok').length;
+  // Uptime read: if the latest prod deploy is Ready, we're up. If it's Error
+  // or the latest attempt failed, mark degraded so the stat reads as a
+  // warning rather than silently showing the previous healthy state.
+  const prodState = prod ? prod.state.toLowerCase() : 'unknown';
+  const uptimeValue =
+    prodState === 'ready' ? 'online' : prodState === 'error' || prodState === 'canceled' ? 'degraded' : prodState;
 
   return (
     <div className="space-y-8">
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Stat
+          label="Uptime"
+          value={uptimeValue}
+          sub={prod ? `${prod.target} · ${formatAge(prod.createdAt)}` : productionUrl.replace('https://', '')}
+        />
         <Stat
           label="Environment"
           value={env.toUpperCase()}
@@ -179,14 +191,9 @@ export async function ComputeTab() {
           sub={latest?.state.toLowerCase() ?? (sha ? 'runtime env' : 'no telemetry')}
         />
         <Stat
-          label="Production"
-          value={prod ? prod.state.toLowerCase() : 'ready'}
-          sub={prod ? formatAge(prod.createdAt) : productionUrl.replace('https://', '')}
-        />
-        <Stat
-          label="Crons healthy"
-          value={`${cronHealthy}/${CRON_CATALOG.length}`}
-          sub={cronFailing > 0 ? `${cronFailing} failing` : 'last 7d'}
+          label="Deployments (recent)"
+          value={`${vercel.deployments.length}`}
+          sub={vercel.hasToken ? 'Vercel API connected' : 'Connect Vercel for live data'}
         />
       </section>
 
@@ -198,14 +205,16 @@ export async function ComputeTab() {
           eyebrow="Live"
           tone="brand"
           action={
-            <a
-              href={dashboardUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded-full border border-nativz-border/60 bg-background/40 px-2.5 py-1 text-[12px] text-accent-text transition-colors hover:border-accent/50"
-            >
-              Dashboard <ArrowUpRight size={10} />
-            </a>
+            projectLogsUrl ? (
+              <a
+                href={projectLogsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-full border border-nativz-border/60 bg-background/40 px-2.5 py-1 text-[12px] text-accent-text transition-colors hover:border-accent/50"
+              >
+                Runtime logs <ArrowUpRight size={10} />
+              </a>
+            ) : undefined
           }
         >
           <dl className="grid grid-cols-2 gap-3 text-xs">
@@ -260,36 +269,9 @@ export async function ComputeTab() {
         </SectionCard>
       </section>
 
-      <SectionCard
-        icon={<Timer size={18} />}
-        title="Scheduled jobs"
-        sub="Cron routes + last-run health, last 7 days"
-        tone={cronFailing > 0 ? 'warn' : 'brand'}
-      >
-        <div className="grid gap-2 sm:grid-cols-2">
-          {CRON_CATALOG.map((cron) => {
-            const run = cronsByRoute.get(cron.route);
-            return (
-              <div
-                key={cron.route}
-                className="flex items-center justify-between gap-3 rounded-lg border border-nativz-border/60 bg-background/40 px-3 py-2"
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-sm text-text-primary">{cron.label}</div>
-                  <div className="truncate font-mono text-[12px] text-text-muted">
-                    {cron.schedule} · {run ? formatAge(run.started_at) : 'never'}
-                  </div>
-                </div>
-                <StatusPill status={run?.status ?? 'pending'} />
-              </div>
-            );
-          })}
-        </div>
-      </SectionCard>
-
       {vercel.hasToken ? (
         vercel.error ? (
-          <div className="rounded-xl border border-coral-500/30 bg-coral-500/5 p-4 text-sm text-coral-300">
+          <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4 text-sm text-red-300">
             Vercel API failed: {vercel.error}.{' '}
             <span className="text-text-muted">
               Token may lack read scope, or{' '}
@@ -297,14 +279,32 @@ export async function ComputeTab() {
             </span>
           </div>
         ) : vercel.deployments.length > 0 ? (
-          <Disclosure summary="Recent deployments · Vercel API" count={vercel.deployments.length}>
+          <Disclosure
+            summary="Recent deployments · Vercel API"
+            count={vercel.deployments.length}
+            defaultOpen
+          >
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-[12px] text-text-muted">
+                Click a row&apos;s <span className="text-accent-text">Logs</span> link to open
+                the deploy&apos;s runtime log stream in Vercel.
+              </p>
+              <a
+                href={projectDeploysUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-full border border-nativz-border/60 bg-background/40 px-2.5 py-1 text-[12px] text-accent-text transition-colors hover:border-accent/50"
+              >
+                Open in Vercel <ArrowUpRight size={10} />
+              </a>
+            </div>
             <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-4 border-b border-nativz-border/40 pb-2 text-[12px] font-mono uppercase tracking-[0.18em] text-text-muted">
               <span>Target</span>
               <span>Branch · commit</span>
               <span className="text-right">Build</span>
               <span className="text-right">Age</span>
               <span className="text-right">State</span>
-              <span className="text-right">↗</span>
+              <span className="text-right">Logs</span>
             </div>
             {vercel.deployments.map((d) => {
               const build = d.ready != null && d.buildingAt != null ? d.ready - d.buildingAt : null;
@@ -359,13 +359,14 @@ export async function ComputeTab() {
                   </div>
                   <div className="text-right">
                     <a
-                      href={`https://${d.url}`}
+                      href={deploymentLogsUrl(d, vercel.teamId)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-0.5 text-[12px] text-accent-text"
-                      aria-label="Open deployment"
+                      className="inline-flex items-center gap-1 rounded-full border border-nativz-border/60 bg-background/40 px-2 py-0.5 text-[12px] text-accent-text transition-colors hover:border-accent/50"
+                      aria-label="Open runtime logs in Vercel"
                     >
-                      ↗
+                      <ScrollText size={10} />
+                      Logs
                     </a>
                   </div>
                 </div>
@@ -377,7 +378,7 @@ export async function ComputeTab() {
         <SectionCard
           icon={<Rocket size={18} />}
           title="Connect Vercel for live deployments"
-          sub="Token-free tab works; adding a token unlocks the deployments table."
+          sub="Adding VERCEL_TOKEN unlocks the deployments table + per-deploy log links."
           tone="action"
         >
           <p className="text-[12px] text-text-muted">
@@ -400,43 +401,6 @@ export async function ComputeTab() {
           </a>
         </SectionCard>
       )}
-
-      {crons.length > 0 && (
-        <Disclosure summary="Cron runs · telemetry from cron_runs" count={crons.length}>
-          <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 border-b border-nativz-border/40 pb-2 text-[12px] font-mono uppercase tracking-[0.18em] text-text-muted">
-            <span>Route</span>
-            <span className="text-right">Age</span>
-            <span className="text-right">Duration</span>
-            <span className="text-right">State</span>
-          </div>
-          {crons.map((run) => (
-            <div
-              key={`${run.route}-${run.started_at}`}
-              className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 border-b border-nativz-border/40 py-2 text-sm last:border-b-0"
-            >
-              <div className="min-w-0">
-                <div className="truncate font-mono text-xs text-text-primary">{run.route}</div>
-              </div>
-              <div className="text-right text-[12px] tabular-nums text-text-muted">
-                {formatAge(run.started_at)}
-              </div>
-              <div className="text-right text-[12px] tabular-nums text-text-muted">
-                {formatDuration(run.duration_ms ?? null)}
-              </div>
-              <div className="text-right">
-                <StatusPill status={run.status} />
-              </div>
-            </div>
-          ))}
-        </Disclosure>
-      )}
-
-      <p className="text-[12px] text-text-muted">
-        Runtime env reflects the currently running deploy. Cron history lives in the{' '}
-        <code className="rounded bg-background/60 px-1">cron_runs</code> table (populated by{' '}
-        <code className="rounded bg-background/60 px-1">recordCronRun</code>). Deployment table
-        lights up when <code className="rounded bg-background/60 px-1">VERCEL_TOKEN</code> is set.
-      </p>
     </div>
   );
 }
@@ -477,7 +441,7 @@ function DeployMeta({
 function UrlRow({ label, url, tone }: { label: string; url: string; tone: 'ok' | 'preview' }) {
   const toneClass =
     tone === 'ok'
-      ? 'border-accent/30 bg-accent/10 text-accent-text'
+      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
       : 'border-nativz-border bg-surface-hover/60 text-text-secondary';
   return (
     <a
