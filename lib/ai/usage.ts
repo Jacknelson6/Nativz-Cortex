@@ -114,11 +114,29 @@ export interface UsageSummary {
   byUser: Record<string, { email: string; totalTokens: number; costUsd: number; requests: number }>;
   total: { totalTokens: number; costUsd: number; requests: number };
   daily: { date: string; costUsd: number; requests: number; totalTokens: number }[];
-  /** For stacked bar charts — tokens grouped by day then by model. */
-  dailyByModel: { date: string; tokensByModel: Record<string, number> }[];
+  /** For stacked bar charts — tokens AND cost grouped by day then by model. */
+  dailyByModel: {
+    date: string;
+    tokensByModel: Record<string, number>;
+    costByModel: Record<string, number>;
+  }[];
   /** Calendar-scoped rollups (independent of the `from` window). */
   today: { totalTokens: number; costUsd: number; requests: number };
   thisMonth: { totalTokens: number; costUsd: number; requests: number };
+  /**
+   * Reconciliation coverage — number of logged calls whose cost has been
+   * confirmed by the OpenRouter generation webhook vs. still-estimated-only.
+   * A row counts as reconciled when `metadata.openrouter_generation_id` is
+   * set by the webhook handler.
+   */
+  reconciliation: {
+    reconciled: number;
+    estimated: number;
+    total: number;
+    coveragePct: number;
+    /** Sum of cost_usd on rows we've reconciled — true-billing dollars. */
+    reconciledCostUsd: number;
+  };
 }
 
 export async function getUsageSummary(from: string, to: string): Promise<UsageSummary> {
@@ -126,7 +144,7 @@ export async function getUsageSummary(from: string, to: string): Promise<UsageSu
 
   const { data: logs } = await admin
     .from('api_usage_logs')
-    .select('service, model, feature, total_tokens, cost_usd, created_at, user_id, user_email')
+    .select('service, model, feature, total_tokens, cost_usd, created_at, user_id, user_email, metadata')
     .gte('created_at', from)
     .lte('created_at', to)
     .order('created_at', { ascending: true });
@@ -139,9 +157,12 @@ export async function getUsageSummary(from: string, to: string): Promise<UsageSu
   const byFeatureModelCounts: Record<string, Record<string, number>> = {};
   const byUser: Record<string, { email: string; totalTokens: number; costUsd: number; requests: number }> = {};
   const dailyMap: Record<string, { costUsd: number; requests: number; totalTokens: number }> = {};
-  const dailyByModelMap: Record<string, Record<string, number>> = {};
+  const dailyTokensByModelMap: Record<string, Record<string, number>> = {};
+  const dailyCostByModelMap: Record<string, Record<string, number>> = {};
   let totalTokens = 0;
   let totalCost = 0;
+  let reconciledCount = 0;
+  let reconciledCost = 0;
 
   // Calendar-scoped counters read regardless of `from`/`to` — they look at the
   // same row list and filter by date string, so "today" and "this month" stay
@@ -186,8 +207,11 @@ export async function getUsageSummary(from: string, to: string): Promise<UsageSu
     dailyMap[day].requests += 1;
     dailyMap[day].totalTokens += tokens;
 
-    if (!dailyByModelMap[day]) dailyByModelMap[day] = {};
-    dailyByModelMap[day][modelKey] = (dailyByModelMap[day][modelKey] ?? 0) + tokens;
+    if (!dailyTokensByModelMap[day]) dailyTokensByModelMap[day] = {};
+    dailyTokensByModelMap[day][modelKey] = (dailyTokensByModelMap[day][modelKey] ?? 0) + tokens;
+
+    if (!dailyCostByModelMap[day]) dailyCostByModelMap[day] = {};
+    dailyCostByModelMap[day][modelKey] = (dailyCostByModelMap[day][modelKey] ?? 0) + cost;
 
     if (day === todayKey) {
       today.totalTokens += tokens;
@@ -200,13 +224,26 @@ export async function getUsageSummary(from: string, to: string): Promise<UsageSu
       thisMonth.requests += 1;
     }
 
+    // Reconciliation: the webhook handler stamps metadata.openrouter_generation_id
+    // on every row it writes or updates, so presence of that key ≡ cost is
+    // OpenRouter's billing truth, not our local price-table estimate.
+    const meta = (log.metadata as Record<string, unknown> | null) ?? null;
+    if (meta && typeof meta.openrouter_generation_id === 'string' && meta.openrouter_generation_id.length > 0) {
+      reconciledCount += 1;
+      reconciledCost += cost;
+    }
+
     totalTokens += tokens;
     totalCost += cost;
   }
 
   const daily = Object.entries(dailyMap).map(([date, data]) => ({ date, ...data }));
-  const dailyByModel = Object.entries(dailyByModelMap)
-    .map(([date, tokensByModel]) => ({ date, tokensByModel }))
+  const dailyByModel = Object.entries(dailyTokensByModelMap)
+    .map(([date, tokensByModel]) => ({
+      date,
+      tokensByModel,
+      costByModel: dailyCostByModelMap[date] ?? {},
+    }))
     .sort((a, b) => (a.date < b.date ? -1 : 1));
 
   for (const [feature, counts] of Object.entries(byFeatureModelCounts)) {
@@ -215,6 +252,9 @@ export async function getUsageSummary(from: string, to: string): Promise<UsageSu
       byFeature[feature].model = dominantModel;
     }
   }
+
+  const estimatedCount = entries.length - reconciledCount;
+  const coveragePct = entries.length > 0 ? Math.round((reconciledCount / entries.length) * 100) : 0;
 
   return {
     byService,
@@ -226,5 +266,12 @@ export async function getUsageSummary(from: string, to: string): Promise<UsageSu
     dailyByModel,
     today,
     thisMonth,
+    reconciliation: {
+      reconciled: reconciledCount,
+      estimated: estimatedCount,
+      total: entries.length,
+      coveragePct,
+      reconciledCostUsd: reconciledCost,
+    },
   };
 }
