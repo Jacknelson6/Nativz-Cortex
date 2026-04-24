@@ -9,7 +9,6 @@ import {
 import { InfrastructureTabSkeleton } from '@/components/admin/infrastructure/tab-skeleton';
 import { CostTab } from '@/components/admin/infrastructure/tabs/cost-tab';
 import { SearchRunsTab } from '@/components/admin/infrastructure/tabs/search-runs-tab';
-import { TrendFinderSettingsTab } from '@/components/admin/infrastructure/tabs/trend-finder-settings-tab';
 
 // Auth must run per-request (otherwise non-admins could hit a cached admin
 // page response). Each tab wraps its own expensive reads in unstable_cache
@@ -19,7 +18,6 @@ export const dynamic = 'force-dynamic';
 
 const VALID_TABS: readonly InfrastructureTabSlug[] = [
   'cost',
-  'trend-finder',
   'search-runs',
 ];
 
@@ -29,8 +27,9 @@ const VALID_TABS: readonly InfrastructureTabSlug[] = [
 // localStorage value on every active admin will have rotated to a live slug.
 // Prune candidates (next cleanup ≥ 2026-05-24):
 //   overview, crons, compute, vercel, supabase, database, ai, apify,
-//   ai-providers, integrations, pipelines, topic-search, search-cost
-const LEGACY_TAB_ALIASES: Record<string, InfrastructureTabSlug> = {
+//   ai-providers, integrations, pipelines, topic-search, search-cost,
+//   trend-finder (moved to /admin/settings?tab=trend-finder)
+const LEGACY_TAB_ALIASES: Record<string, string> = {
   overview: 'cost',
   crons: 'cost',
   compute: 'cost',
@@ -41,20 +40,21 @@ const LEGACY_TAB_ALIASES: Record<string, InfrastructureTabSlug> = {
   apify: 'cost',
   'ai-providers': 'cost',
   integrations: 'cost',
-  pipelines: 'trend-finder',
-  'topic-search': 'trend-finder',
-  'search-cost': 'trend-finder',
+  pipelines: 'search-runs',
+  'topic-search': 'search-runs',
+  'search-cost': 'search-runs',
+  'trend-finder': '__settings__',
 };
 
-function resolveTab(raw: string | string[] | undefined): InfrastructureTabSlug {
+function resolveTab(raw: string | string[] | undefined): InfrastructureTabSlug | 'redirect-to-settings' {
   const value = Array.isArray(raw) ? raw[0] : raw;
   if (!value) return 'cost';
   if ((VALID_TABS as readonly string[]).includes(value)) {
     return value as InfrastructureTabSlug;
   }
-  if (value in LEGACY_TAB_ALIASES) {
-    return LEGACY_TAB_ALIASES[value];
-  }
+  const aliased = LEGACY_TAB_ALIASES[value];
+  if (aliased === '__settings__') return 'redirect-to-settings';
+  if (aliased) return aliased as InfrastructureTabSlug;
   return 'cost';
 }
 
@@ -78,7 +78,11 @@ export default async function InfrastructurePage({
     redirect('/admin/dashboard');
   }
 
-  const activeTab = resolveTab(params.tab);
+  const resolved = resolveTab(params.tab);
+  if (resolved === 'redirect-to-settings') {
+    redirect('/admin/settings?tab=trend-finder');
+  }
+  const activeTab = resolved;
   // The date-range query params (preset/from/to) key the Suspense subtree
   // too, so switching range triggers the skeleton alongside tab switches.
   const rangeKey = `${params.preset ?? ''}:${params.from ?? ''}:${params.to ?? ''}`;
@@ -110,8 +114,6 @@ function renderTab(
   switch (slug) {
     case 'cost':
       return <CostTab preset={params.preset} from={params.from} to={params.to} />;
-    case 'trend-finder':
-      return <TrendFinderSettingsTab />;
     case 'search-runs':
       return <SearchRunsTab preset={params.preset} from={params.from} to={params.to} />;
   }

@@ -15,6 +15,7 @@ import { RefreshButton } from '@/components/admin/shared/refresh-button';
 import { refreshAiSettings } from './actions';
 import { AiRoutingSection } from '@/components/settings/ai-routing-section';
 import { LlmCredentialsSection } from '@/components/settings/llm-credentials-section';
+import { ScraperVolumesSection } from '@/components/settings/scraper-volumes-section';
 import { AISettingsSkillsClient } from './skills-client';
 
 export const dynamic = 'force-dynamic';
@@ -108,6 +109,15 @@ function renderTab(
           description="Markdown context loaded into the Nerd's system prompt. Each skill picks which harnesses it applies to — the admin Nerd, admin Strategy Lab, and/or the portal Strategy Lab — and can be scoped to a single client."
         >
           <AISettingsSkillsClient clients={clients} />
+        </SectionPanel>
+      );
+    case 'trend-finder':
+      return (
+        <SectionPanel
+          title="Trend finder"
+          description="Per-platform scrape volumes and live per-unit pricing. Lower the volumes to cut cost; set any platform to 0 to skip it entirely."
+        >
+          <ScraperVolumesSection />
         </SectionPanel>
       );
   }

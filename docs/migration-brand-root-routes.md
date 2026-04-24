@@ -29,14 +29,11 @@ Every route here operates on the currently selected brand. These lift out of `/a
 | `/admin/strategy-lab` | `/strategy-lab` |
 | `/admin/strategy-lab/[clientId]` | `/strategy-lab/[clientId]` |
 | `/admin/competitor-spying` | `/competitor-spying` |
-| `/admin/ad-creatives` (Ad Generator) | `/ad-generator` *(also rename — current slug reads legacy)* |
+| `/admin/ad-creatives` (Ad Generator) | `/ad-generator` *(slug rename confirmed by Jack)* |
 | `/admin/brain` | `/brain` |
 | `/admin/knowledge` (internal, rewritten from /brain) | `/knowledge` |
 | `/admin/brand-profile` | `/brand-profile` |
 | `/admin/notes` | `/notes` |
-| `/admin/moodboard` | `/moodboard` |
-| `/admin/nerd` | `/nerd` |
-| `/admin/ideas` | `/ideas` |
 
 ### 2. Admin-only → keep under `/admin/*`
 Cross-brand ops. Not brand-scoped — or brand-scoped only in a "pick a client from the list" way, not "operating on my active brand."
@@ -66,15 +63,21 @@ Cross-brand ops. Not brand-scoped — or brand-scoped only in a "pick a client f
 | `/admin/account` | Personal account settings (just split) |
 | `/admin/tools` | Internal tools |
 
-### 3. Legacy / to-retire
+### 3. Legacy / to-retire (Jack confirmed 2026-04-24)
 | Route | Action |
 |---|---|
-| `/admin/ad-creatives-v2` | Delete if unused; confirm w/ `docs/ad-creatives-v2-deprecation-checklist.md` |
-| `/admin/analyze-social` | Retained as a share-link shell; keep at `/admin/analyze-social` — outbound share tokens depend on the URL |
-| `/admin/competitor-intelligence` | Confirm — merged into `competitor-spying`? |
-| `/admin/competitor-tracking` | Keep (has sub-rails; admin-only) |
-| `/admin/pipeline` | Confirm still used — looks like it aliased edits once |
-| `/admin/search` | Legacy; now redirects into `/admin/finder/*` |
+| `/admin/moodboard` | **Retire** — functionality migrated into Notes |
+| `/admin/nerd` | **Retire** — eliminated entirely |
+| `/admin/ideas` | **Retire** — eliminated entirely |
+| `/admin/meetings` | **Retire** — eliminated entirely |
+| `/admin/pipeline` | **Retire** — renamed into existing surfaces |
+| `/admin/search` | **Retire** — renamed to Trend Finder (now `/admin/finder/*`) |
+| `/admin/ad-creatives` | Rename to `/admin/ad-generator` (then lift to `/ad-generator` per bucket 1) |
+| `/admin/ad-creatives-v2` | Delete — see `docs/ad-creatives-v2-deprecation-checklist.md` |
+| `/admin/analyze-social` | **Keep** at `/admin/analyze-social` — outbound share tokens (`/shared/analyze-social/[token]`) depend on this URL |
+| `/admin/competitor-intelligence` | Confirm — merged into `competitor-spying`? *(still open)* |
+| `/admin/competitor-tracking` | **Keep** (admin-only sub-rails) |
+| `/admin/analytics` | **Keep** at `/admin/analytics` — cross-brand admin surface |
 
 ---
 
@@ -179,11 +182,12 @@ Redirect table is append-only until bookmarks age out (~30 days per the conventi
 
 1. **Admin login default:** `/` (brand home) or `/admin/dashboard` (ops)? I vote `/`.
 2. **Portal fate:** Option A (retire `/portal/*` phase 2) or B (keep indefinitely)? I vote A.
-3. **`ad-creatives` → `ad-generator`:** rename the route while we're moving? Aligns slug with sidebar label. Or leave as `/ad-creatives`?
-4. **`/admin/moodboard`, `/admin/nerd`, `/admin/ideas`:** confirm these are brand-scoped (I've got them in the root list).
-5. **`/admin/analytics`:** brand-scoped or admin cross-brand? Currently sidebar has it in the Dashboard section. Gut says cross-brand admin.
-6. **`/admin/meetings`:** still in use? It's not in the sidebar — legacy or active?
-7. **`/admin/pipeline`, `/admin/search`:** retire entirely or leave as redirects?
+3. **`/admin/competitor-intelligence`:** still in use, or retired into `competitor-spying`? Need to confirm before the move.
+
+### Resolved (2026-04-24)
+- `moodboard`, `nerd`, `ideas`, `meetings`, `pipeline`, `search`: all retired
+- `analytics`: keep at `/admin/analytics` (cross-brand admin)
+- `ad-creatives` → `ad-generator`: confirmed rename; lift to `/ad-generator`
 
 ---
 

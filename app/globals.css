@@ -328,6 +328,44 @@ body {
     @apply text-sm text-text-primary antialiased;
   }
 
+  /* Range slider thumb — shared tone for platform volume knobs etc.
+     The track itself is painted by the caller via an inline
+     linear-gradient so the filled portion syncs with the live value;
+     these rules only style the thumb and strip out the native chrome. */
+  .volume-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    outline: none;
+  }
+  .volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 9999px;
+    background: var(--accent);
+    border: 2px solid var(--color-surface, #ffffff);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    transition: transform 120ms ease-out, box-shadow 120ms ease-out;
+  }
+  .volume-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.1);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  }
+  .volume-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 9999px;
+    background: var(--accent);
+    border: 2px solid var(--color-surface, #ffffff);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+  }
+  .volume-slider:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px rgba(91, 199, 242, 0.35);
+  }
+
   /* Standard page outer gutter (most admin/portal pages) */
   .cortex-page-gutter {
     @apply p-6 sm:p-8;
@@ -871,7 +909,8 @@ dialog:not([open]) {
 }
 
 /* Button label — Jost 700 uppercase with 2px letter-spacing.
-   Applied to primary CTAs and key action buttons. */
+   Applied to primary CTAs and key action buttons.
+   Nativz signature; AC overrides below. */
 .nz-btn-label {
   font-family: var(--font-nz-display), 'Futura PT', 'Futura',
     'Century Gothic', system-ui, sans-serif;
@@ -879,6 +918,16 @@ dialog:not([open]) {
   text-transform: uppercase;
   letter-spacing: var(--nz-btn-letter-spacing);
   line-height: 1.2;
+}
+
+/* Anderson brand mode — uppercase + 2px tracking is the Nativz-only button
+   signature. AC buttons read in regular case with tighter spacing using AC's
+   UI sans (Rubik) at weight 600. Confirmed against AC marketing refs. */
+[data-brand-mode="anderson"] .nz-btn-label {
+  font-family: var(--font-nz-sans), 'Rubik', system-ui, sans-serif;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 /* Signature: thick translucent cyan underline sitting BEHIND glyphs.

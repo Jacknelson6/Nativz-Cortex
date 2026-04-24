@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Check, Loader2, RefreshCw } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { PER_UNIT_COST_USD } from '@/lib/search/scraper-cost-constants';
 import { PLATFORM_CONFIG } from '@/components/search/platform-icon';
@@ -40,6 +40,9 @@ interface PlatformField {
   label: string;
   tooltip: string;
   isPrimary: boolean;
+  /** Slider ceiling — primary fields sweep a wider range than secondary. */
+  max: number;
+  step: number;
 }
 
 interface PlatformSection {
@@ -62,12 +65,16 @@ const PLATFORM_SECTIONS: readonly PlatformSection[] = [
         label: 'Posts per search',
         tooltip: 'Total posts across the whole search (not per subtopic). 0 skips Reddit entirely.',
         isPrimary: true,
+        max: 500,
+        step: 10,
       },
       {
         key: 'reddit_comments_per_post',
         label: 'Comments per post',
         tooltip: 'Comments bundle into the same dataset rows — no extra Apify run.',
         isPrimary: false,
+        max: 100,
+        step: 5,
       },
     ],
   },
@@ -81,18 +88,24 @@ const PLATFORM_SECTIONS: readonly PlatformSection[] = [
         label: 'Videos per search',
         tooltip: 'Metadata + stats for this many top videos.',
         isPrimary: true,
+        max: 500,
+        step: 10,
       },
       {
         key: 'youtube_comment_videos',
         label: 'Videos we pull comments for',
         tooltip: 'Top-by-views subset of the above.',
         isPrimary: false,
+        max: 100,
+        step: 5,
       },
       {
         key: 'youtube_transcript_videos',
         label: 'Videos we transcribe',
         tooltip: 'Free via youtube-transcript — high-signal for merger context.',
         isPrimary: false,
+        max: 100,
+        step: 5,
       },
     ],
   },
@@ -107,18 +120,24 @@ const PLATFORM_SECTIONS: readonly PlatformSection[] = [
         label: 'Videos per search',
         tooltip: 'Total TikTok videos pulled (cap applies before ranking).',
         isPrimary: true,
+        max: 500,
+        step: 10,
       },
       {
         key: 'tiktok_comment_videos',
         label: 'Videos we pull comments for',
         tooltip: 'Top-by-engagement subset.',
         isPrimary: false,
+        max: 100,
+        step: 5,
       },
       {
         key: 'tiktok_transcript_videos',
         label: 'Videos we transcribe',
         tooltip: 'Captions first; Groq Whisper fallback only when missing.',
         isPrimary: false,
+        max: 100,
+        step: 5,
       },
     ],
   },
@@ -132,6 +151,8 @@ const PLATFORM_SECTIONS: readonly PlatformSection[] = [
         label: 'Google results per search',
         tooltip: 'Feeds both web-source extraction and PAA question mining.',
         isPrimary: true,
+        max: 100,
+        step: 5,
       },
     ],
   },
@@ -179,17 +200,14 @@ function clampInt(raw: string | number): number {
   return Math.max(0, Math.min(5000, n));
 }
 
-// Platform palette — slightly desaturated brand colours so three slices
-// next to each other on a small dark donut don't feel shouty. TikTok gets
-// Nativz purple (its real brand is multi-colour; purple reads distinct
-// against the reds + blue and matches Cortex's own accent2).
-// The same map drives the legend swatches so the donut and its side-list
-// never drift.
+// Platform palette — muted brand-adjacent hues so the donut reads as a
+// professional data viz rather than a saturated social-media mosaic. Same
+// map drives legend swatches so donut + side-list never drift.
 const PIE_COLORS: Record<PlatformKey, string> = {
-  reddit: '#FF6B35',
-  youtube: '#F43F5E',
-  tiktok: '#A855F7',
-  web: '#60A5FA',
+  reddit: '#EA580C',  // orange-600
+  youtube: '#DC2626', // red-600
+  tiktok: '#7C3AED',  // violet-600
+  web: '#2563EB',     // blue-600
 };
 
 // ── Main component ──────────────────────────────────────────────────────
@@ -198,7 +216,6 @@ export function ScraperVolumesSection() {
   const [row, setRow] = useState<SettingsRow | null>(null);
   const [prices, setPrices] = useState<UnitPricesResp | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -295,24 +312,6 @@ export function ScraperVolumesSection() {
     },
     [scheduleSave],
   );
-
-  async function refreshPricing() {
-    setRefreshing(true);
-    try {
-      const res = await fetch('/api/admin/scraper-settings/refresh-pricing', { method: 'POST' });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error ?? `status ${res.status}`);
-      }
-      const j = (await res.json()) as UnitPricesResp;
-      setPrices(j);
-      toast.success('Per-unit pricing refreshed');
-    } catch (err) {
-      toast.error(`Pricing refresh failed: ${(err as Error).message}`);
-    } finally {
-      setRefreshing(false);
-    }
-  }
 
   if (loading) {
     return (
@@ -422,15 +421,6 @@ export function ScraperVolumesSection() {
               </span>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => void refreshPricing()}
-            disabled={refreshing}
-            className="ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-nativz-border bg-surface px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:border-accent/40 hover:text-accent-text disabled:opacity-50"
-          >
-            <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
-            {refreshing ? 'Refreshing…' : 'Refresh'}
-          </button>
         </div>
       </div>
     </div>
@@ -468,11 +458,12 @@ function BreakdownDonut({
               data={pieData}
               dataKey="value"
               nameKey="name"
-              innerRadius={56}
-              outerRadius={84}
-              paddingAngle={2}
-              stroke="rgba(0,0,0,0.35)"
-              strokeWidth={2}
+              innerRadius={62}
+              outerRadius={82}
+              paddingAngle={0.5}
+              stroke="var(--color-surface, #ffffff)"
+              strokeWidth={1.5}
+              cornerRadius={2}
               isAnimationActive
               onMouseEnter={(_, i) => setActiveIdx(i)}
             >
@@ -480,8 +471,8 @@ function BreakdownDonut({
                 <Cell
                   key={entry.platform}
                   fill={PIE_COLORS[entry.platform]}
-                  opacity={activeIdx == null || activeIdx === i ? 1 : 0.45}
-                  style={{ transition: 'opacity 120ms ease-out' }}
+                  opacity={activeIdx == null || activeIdx === i ? 1 : 0.35}
+                  style={{ transition: 'opacity 160ms ease-out' }}
                 />
               ))}
             </Pie>
@@ -572,9 +563,7 @@ function SaveStateBadge({ state }: { state: 'idle' | 'saving' | 'saved' }) {
       </span>
     );
   }
-  return (
-    <span className="text-xs text-text-muted/60">Auto-saves as you type</span>
-  );
+  return null;
 }
 
 // ── Platform card ───────────────────────────────────────────────────────
@@ -598,10 +587,8 @@ function PlatformCard({
       <header className="flex items-start justify-between gap-3">
         <TooltipCard title={section.title} description={section.tooltip} iconTrigger>
           <div className="flex items-center gap-2.5">
-            <span
-              className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${config.bg}`}
-            >
-              <BrandIcon size={18} className={config.color} />
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-nativz-border bg-surface-hover/70">
+              <BrandIcon size={18} className="text-text-primary" />
             </span>
             <h3 className="cursor-help text-base font-semibold text-text-primary">
               {section.title}
@@ -613,14 +600,15 @@ function PlatformCard({
         </span>
       </header>
 
-      <div className="mt-4 space-y-3">
+      <div className="mt-4 space-y-4">
         {section.fields.map((field) => (
-          <VolumeInput
+          <VolumeSlider
             key={field.key}
             label={field.label}
             tooltip={field.tooltip}
             value={row[field.key]}
-            step={field.isPrimary ? 10 : 1}
+            max={field.max}
+            step={field.step}
             onChange={(n) => onChange(field.key, n)}
           />
         ))}
@@ -629,32 +617,50 @@ function PlatformCard({
   );
 }
 
-function VolumeInput({
+function VolumeSlider({
   label,
   tooltip,
   value,
+  max,
   step,
   onChange,
 }: {
   label: string;
   tooltip: string;
   value: number;
+  max: number;
   step: number;
   onChange: (n: number) => void;
 }) {
+  const clamped = Math.max(0, Math.min(max, value));
+  const pct = max === 0 ? 0 : (clamped / max) * 100;
+
   return (
     <label className="block">
-      <TooltipCard title={label} description={tooltip}>
-        <span className="text-[13px] font-medium text-text-secondary">{label}</span>
-      </TooltipCard>
+      <div className="flex items-baseline justify-between gap-2">
+        <TooltipCard title={label} description={tooltip}>
+          <span className="text-[13px] font-medium text-text-secondary">{label}</span>
+        </TooltipCard>
+        <span className="text-[13px] font-semibold tabular-nums text-text-primary">
+          {clamped}
+        </span>
+      </div>
       <input
-        type="number"
+        type="range"
         min={0}
-        max={5000}
+        max={max}
         step={step}
-        value={value}
+        value={clamped}
         onChange={(e) => onChange(clampInt(e.target.value))}
-        className="mt-1.5 w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-[15px] font-medium text-text-primary tabular-nums focus:border-accent focus:outline-none"
+        className="volume-slider mt-2 w-full cursor-pointer appearance-none bg-transparent"
+        style={{
+          background: `linear-gradient(to right, var(--accent) 0%, var(--accent) ${pct}%, var(--color-surface-hover, rgba(255,255,255,0.08)) ${pct}%, var(--color-surface-hover, rgba(255,255,255,0.08)) 100%)`,
+          height: '4px',
+          borderRadius: '9999px',
+        }}
+        aria-valuemin={0}
+        aria-valuemax={max}
+        aria-valuenow={clamped}
       />
     </label>
   );
