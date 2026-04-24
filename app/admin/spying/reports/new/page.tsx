@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { NewSubscriptionForm } from '@/components/competitor-intelligence/new-subscription-form';
+import { NewSubscriptionForm } from '@/components/spying/new-subscription-form';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,7 +34,7 @@ export default async function NewSubscriptionPage() {
           Cortex reads from the client&apos;s active benchmarks when it&apos;s time to send.
         </p>
         <Link
-          href="/admin/competitor-spying/reports"
+          href="/admin/spying/reports"
           className="inline-block text-xs text-text-muted hover:text-accent-text"
         >
           ← Back to subscriptions

@@ -2,10 +2,10 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { CompetitorIntelligenceHero } from '@/components/competitor-intelligence/landing-hero';
-import { CompetitorIntelligenceActionBand } from '@/components/competitor-intelligence/action-band';
-import { LatestAuditsStrip } from '@/components/competitor-intelligence/latest-audits-strip';
-import { ActiveWatchesStrip } from '@/components/competitor-intelligence/active-watches-strip';
+import { CompetitorIntelligenceHero } from '@/components/spying/landing-hero';
+import { CompetitorIntelligenceActionBand } from '@/components/spying/action-band';
+import { LatestAuditsStrip } from '@/components/spying/latest-audits-strip';
+import { ActiveWatchesStrip } from '@/components/spying/active-watches-strip';
 
 export const dynamic = 'force-dynamic';
 
@@ -136,7 +136,7 @@ function FooterLinks() {
       <Link href="/admin/analytics?tab=benchmarking" className="hover:text-cyan-300">
         Benchmarking history →
       </Link>
-      <Link href="/admin/competitor-spying/reports" className="hover:text-cyan-300">
+      <Link href="/admin/spying/reports" className="hover:text-cyan-300">
         Recurring reports →
       </Link>
     </footer>

@@ -1,31 +1,31 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * Route smoke tests for the Competitor Intelligence + Trend Finder monitors
+ * Route smoke tests for the Spying + Trend Finder monitors
  * surfaces shipped 2026-04-22. Logged-out hits should redirect to login
  * without 404ing. Logged-in crawling is covered by the admin crawl spec once
  * the admin-login-helpers are set up with a real cookie.
  */
 
 const NEW_ROUTES = [
-  // Competitor intelligence (NAT-62)
-  '/admin/competitor-intelligence',
-  '/admin/competitor-intelligence/watch',
-  '/admin/competitor-intelligence/reports',
-  '/admin/competitor-intelligence/reports/new',
+  // Spying (NAT-62)
+  '/admin/spying',
+  '/admin/spying/watch',
+  '/admin/spying/reports',
+  '/admin/spying/reports/new',
   // Trend Finder monitors (2026-04-22 evening)
-  '/admin/search/monitors',
-  '/admin/search/monitors/new',
+  '/admin/finder/monitors',
+  '/admin/finder/monitors/new',
   // Infrastructure v2 (NAT-61) — tab variations
-  '/admin/infrastructure?tab=overview',
-  '/admin/infrastructure?tab=topic-search',
-  '/admin/infrastructure?tab=ai-providers',
-  '/admin/infrastructure?tab=crons',
-  '/admin/infrastructure?tab=integrations',
-  '/admin/infrastructure?tab=database',
+  '/admin/usage?tab=overview',
+  '/admin/usage?tab=topic-search',
+  '/admin/usage?tab=ai-providers',
+  '/admin/usage?tab=crons',
+  '/admin/usage?tab=integrations',
+  '/admin/usage?tab=database',
 ];
 
-test.describe('Competitor intelligence + monitors — route smoke', () => {
+test.describe('Spying + monitors — route smoke', () => {
   for (const route of NEW_ROUTES) {
     test(`${route} responds without 404`, async ({ page }) => {
       const res = await page.goto(route, { waitUntil: 'domcontentloaded' });
@@ -37,14 +37,14 @@ test.describe('Competitor intelligence + monitors — route smoke', () => {
   }
 });
 
-test.describe('Competitor intelligence audits redirects', () => {
-  test('/admin/competitor-intelligence/audits → /admin/analyze-social', async ({ page }) => {
-    await page.goto('/admin/competitor-intelligence/audits', { waitUntil: 'domcontentloaded' });
+test.describe('Spying audits redirects', () => {
+  test('/admin/spying/audits → /admin/analyze-social', async ({ page }) => {
+    await page.goto('/admin/spying/audits', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/(analyze-social|login)/);
   });
 
-  test('/admin/competitor-intelligence/audits/[id] → /admin/analyze-social/[id]', async ({ page }) => {
-    await page.goto('/admin/competitor-intelligence/audits/00000000-0000-0000-0000-000000000000', {
+  test('/admin/spying/audits/[id] → /admin/analyze-social/[id]', async ({ page }) => {
+    await page.goto('/admin/spying/audits/00000000-0000-0000-0000-000000000000', {
       waitUntil: 'domcontentloaded',
     });
     await expect(page).toHaveURL(/\/admin\/(analyze-social|login)/);

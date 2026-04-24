@@ -18,7 +18,7 @@ export function CompetitorIntelligenceActionBand() {
       <ActionCard
         title="Watch a competitor"
         body="Enrol a competitor profile into ongoing benchmarking. Snapshots refresh weekly, biweekly, or monthly. History lives in Analytics."
-        href="/admin/competitor-spying/watch"
+        href="/admin/spying/watch"
         ctaLabel="Set up watch"
         tone="secondary"
         icon={<Radar size={22} />}

@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { WatchWizard } from '@/components/competitor-intelligence/watch-wizard';
+import { WatchWizard } from '@/components/spying/watch-wizard';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,7 +45,7 @@ export default async function WatchPage() {
           feed the Benchmarking tab under Analytics and any recurring reports you&apos;ve subscribed the client to.
         </p>
         <Link
-          href="/admin/competitor-spying"
+          href="/admin/spying"
           className="inline-block text-xs text-text-muted hover:text-cyan-300"
         >
           ← Back to Competitor intelligence

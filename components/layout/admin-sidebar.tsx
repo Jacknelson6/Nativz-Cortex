@@ -112,8 +112,8 @@ const NAV_SECTIONS: NavSection[] = [
         // the corporate-sounding "intelligence". Telescope icon ("we're
         // watching from afar") replaces ScanSearch — the magnifying-
         // glass-with-arrows didn't read as surveillance.
-        href: '/admin/competitor-spying',
-        label: 'Competitor Spying',
+        href: '/admin/spying',
+        label: 'Spying',
         icon: Telescope,
       },
       { href: '/admin/ad-creatives', label: 'Ad Generator', icon: ImagePlus },
@@ -234,7 +234,7 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/shoots',
   '/admin/brain',
   '/admin/analyze-social',
-  '/admin/competitor-spying',
+  '/admin/spying',
   '/admin/finder/monitors',
   '/admin/notifications',
   '/admin/usage',

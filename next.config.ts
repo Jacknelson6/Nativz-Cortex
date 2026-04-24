@@ -29,8 +29,14 @@ const nextConfig: NextConfig = {
       { source: '/admin/knowledge/:path*', destination: '/admin/brain/:path*', permanent: false },
       { source: '/admin/scheduler', destination: '/admin/scheduling', permanent: false },
       { source: '/admin/scheduler/:path*', destination: '/admin/scheduling/:path*', permanent: false },
-      { source: '/admin/competitor-intelligence', destination: '/admin/competitor-spying', permanent: false },
-      { source: '/admin/competitor-intelligence/:path*', destination: '/admin/competitor-spying/:path*', permanent: false },
+      // 2026-04-24: both legacy aliases collapse into /admin/spying (the
+      // real directory). The old bidirectional rewrite+redirect pair was
+      // cute but confusing — one short canonical URL beats a display-vs-
+      // storage split.
+      { source: '/admin/competitor-intelligence', destination: '/admin/spying', permanent: false },
+      { source: '/admin/competitor-intelligence/:path*', destination: '/admin/spying/:path*', permanent: false },
+      { source: '/admin/competitor-spying', destination: '/admin/spying', permanent: false },
+      { source: '/admin/competitor-spying/:path*', destination: '/admin/spying/:path*', permanent: false },
       // /admin/search → /admin/finder (2026-04-24). Covers Trend Finder
       // (/admin/finder/new), Trend Monitors (/admin/finder/monitors), and
       // topic-search detail pages (/admin/finder/[id]).
@@ -53,8 +59,6 @@ const nextConfig: NextConfig = {
       { source: '/admin/brain/:path*', destination: '/admin/knowledge/:path*' },
       { source: '/admin/scheduling', destination: '/admin/scheduler' },
       { source: '/admin/scheduling/:path*', destination: '/admin/scheduler/:path*' },
-      { source: '/admin/competitor-spying', destination: '/admin/competitor-intelligence' },
-      { source: '/admin/competitor-spying/:path*', destination: '/admin/competitor-intelligence/:path*' },
       { source: '/admin/finder', destination: '/admin/search' },
       { source: '/admin/finder/:path*', destination: '/admin/search/:path*' },
     ];

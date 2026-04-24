@@ -23,16 +23,20 @@ Every route here operates on the currently selected brand. These lift out of `/a
 
 | Current | New |
 |---|---|
+**Slug brevity:** Jack prefers the shortest reasonable slug. `/admin/spying` already collapsed `/admin/competitor-intelligence` + `/admin/competitor-spying` into one dir (2026-04-24). Applying the same principle to the lifts below.
+
+| Current | New |
+|---|---|
 | `/admin/finder/new` (Trend Finder) | `/finder/new` |
 | `/admin/finder/monitors` (Trend Monitors) | `/finder/monitors` |
 | `/admin/finder/[id]` | `/finder/[id]` |
-| `/admin/strategy-lab` | `/strategy-lab` |
-| `/admin/strategy-lab/[clientId]` | `/strategy-lab/[clientId]` |
-| `/admin/competitor-spying` | `/competitor-spying` |
-| `/admin/ad-creatives` (Ad Generator) | `/ad-generator` *(slug rename confirmed by Jack)* |
+| `/admin/strategy-lab` | `/lab` *(slug brevity)* |
+| `/admin/strategy-lab/[clientId]` | `/lab/[clientId]` |
+| `/admin/spying` | `/spying` |
+| `/admin/ad-creatives` (Ad Generator) | `/ads` *(slug brevity — "Ads" in sidebar, /ads as URL)* |
 | `/admin/brain` | `/brain` |
-| `/admin/knowledge` (internal, rewritten from /brain) | `/knowledge` |
-| `/admin/brand-profile` | `/brand-profile` |
+| `/admin/knowledge` (internal, rewritten from /brain) | `/knowledge` (dir stays; `/brain` is the public URL) |
+| `/admin/brand-profile` | `/profile` *(slug brevity)* |
 | `/admin/notes` | `/notes` |
 
 ### 2. Admin-only → keep under `/admin/*`
@@ -75,7 +79,7 @@ Cross-brand ops. Not brand-scoped — or brand-scoped only in a "pick a client f
 | `/admin/ad-creatives` | Rename to `/admin/ad-generator` (then lift to `/ad-generator` per bucket 1) |
 | `/admin/ad-creatives-v2` | Delete — see `docs/ad-creatives-v2-deprecation-checklist.md` |
 | `/admin/analyze-social` | **Keep** at `/admin/analyze-social` — outbound share tokens (`/shared/analyze-social/[token]`) depend on this URL |
-| `/admin/competitor-intelligence` | Confirm — merged into `competitor-spying`? *(still open)* |
+| `/admin/competitor-intelligence` | **Retired 2026-04-24** — collapsed into `/admin/spying` in prep commit |
 | `/admin/competitor-tracking` | **Keep** (admin-only sub-rails) |
 | `/admin/analytics` | **Keep** at `/admin/analytics` — cross-brand admin surface |
 
@@ -105,11 +109,12 @@ Cross-brand ops surface. What you hit to see the state of the agency.
 
 Admin-only. Portal viewers never land here.
 
-### Default redirects on login
-- Role `admin` → `/admin/dashboard` *(or `/` if Jack prefers brand-home-first)*
-- Role `viewer` → `/`
-
-**Open question:** does admin login default to `/` (brand home for the currently-active brand) or `/admin/dashboard` (ops)? The portal-home-first default is nicer when you live inside one brand most of the day; ops-first is nicer when you spend the day managing the agency. **Recommendation: `/` by default; pin `/admin/dashboard` as the second sidebar item below Dashboard so it's one click away.**
+### Default redirects on login (resolved 2026-04-24)
+- **One shared login** at `/login` for everyone — admin and viewer both hit the same form. The server detects the role after auth and routes:
+  - Role `admin` → `/` (brand home with the pinned brand)
+  - Role `viewer` → `/` (brand home scoped to their only brand)
+- The current `/admin/login` and `/portal/login` routes become redirects to `/login`.
+- `/admin/dashboard` stays as the ops surface, reachable from the sidebar; admins just don't *land* there by default.
 
 ---
 
@@ -135,19 +140,12 @@ Implementation: promote the existing `/admin/*` auth check (per-page `createServ
 
 This is the biggest call to make. Two options:
 
-### Option A — retire `/portal/*`, everyone shares root routes
-Brand tools at the root render different UI based on role. Viewers see their brand; admins see the brand from the brand-pill selector. One implementation per feature.
+**Resolved 2026-04-24 — Option A over two phases.**
 
-**Pros:** dramatically less code. Admin-viewer parity bugs go away. New features land once.
-**Cons:** big migration now (lift + merge portal pages into root equivalents). Feature flags can't diverge per role.
+- **Phase 1** (this plan): lift admin brand routes to root; `/portal/*` stays untouched. Admins + viewers both hit root URLs for brand tools; portal pages still exist for now.
+- **Phase 2** (later): merge portal pages into the root equivalents once phase 1 has bedded in. Single implementation per feature; UI branches on role.
 
-### Option B — keep `/portal/*` as a read-only wrapper
-Root routes are the admin/producer experience. `/portal/*` stays as the trimmed client-facing version. No route moves for portal.
-
-**Pros:** no portal migration tonight. UI can continue to diverge where it should.
-**Cons:** two implementations forever; duplicate bugs.
-
-**Recommendation: A over two phases.** Phase 1 of this plan lifts admin routes to root; `/portal/*` stays intact during and after. Phase 2 (later) merges portal pages into root equivalents once the route shape has bedded in. That way we don't bet everything on the move in one shot.
+Rationale: one move at a time. If anything breaks in the root lift, `/portal/*` is an unchanged escape hatch for client-facing traffic. Once phase 1 is stable for a couple weeks, phase 2 lands cleanly.
 
 ---
 
@@ -178,16 +176,14 @@ Redirect table is append-only until bookmarks age out (~30 days per the conventi
 
 ---
 
-## Open questions for you
+## All open questions resolved (2026-04-24)
 
-1. **Admin login default:** `/` (brand home) or `/admin/dashboard` (ops)? I vote `/`.
-2. **Portal fate:** Option A (retire `/portal/*` phase 2) or B (keep indefinitely)? I vote A.
-3. **`/admin/competitor-intelligence`:** still in use, or retired into `competitor-spying`? Need to confirm before the move.
-
-### Resolved (2026-04-24)
-- `moodboard`, `nerd`, `ideas`, `meetings`, `pipeline`, `search`: all retired
+- **Login:** unified at `/login` for both roles; post-auth routes to `/`
+- **Portal fate:** Option A, phased — phase 1 lifts admin routes, phase 2 merges portal
+- **Competitor Intelligence:** retired + collapsed into `/admin/spying` (shipped in prep commit)
+- Retired entirely: `moodboard`, `nerd`, `ideas`, `meetings`, `pipeline`, `search`, `competitor-intelligence`
 - `analytics`: keep at `/admin/analytics` (cross-brand admin)
-- `ad-creatives` → `ad-generator`: confirmed rename; lift to `/ad-generator`
+- Slug brevity wins: `competitor-spying` → `spying`, `strategy-lab` → `lab`, `ad-creatives` → `ads`, `brand-profile` → `profile`
 
 ---
 

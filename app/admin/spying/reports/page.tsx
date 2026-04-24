@@ -2,8 +2,8 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { SubscriptionsTable } from '@/components/competitor-intelligence/subscriptions-table';
-import { ReportHistoryFeed } from '@/components/competitor-intelligence/report-history-feed';
+import { SubscriptionsTable } from '@/components/spying/subscriptions-table';
+import { ReportHistoryFeed } from '@/components/spying/report-history-feed';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,7 +58,7 @@ export default async function CompetitorReportsPage() {
             </p>
           </div>
           <Link
-            href="/admin/competitor-spying/reports/new"
+            href="/admin/spying/reports/new"
             className="inline-flex items-center gap-2 rounded-full bg-accent px-5 py-2 text-xs font-semibold uppercase tracking-[2px] text-white transition-colors hover:bg-accent/90"
             style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
           >
@@ -66,7 +66,7 @@ export default async function CompetitorReportsPage() {
           </Link>
         </div>
         <nav className="mt-4 flex flex-wrap gap-4 text-xs text-text-muted">
-          <Link href="/admin/competitor-spying" className="hover:text-cyan-300">
+          <Link href="/admin/spying" className="hover:text-cyan-300">
             ← Back to Competitor intelligence
           </Link>
           <Link href="/admin/analytics?tab=benchmarking" className="hover:text-cyan-300">
