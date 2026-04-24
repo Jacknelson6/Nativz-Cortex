@@ -1,6 +1,10 @@
 {
   "permissions": {
-    "allow": [],
+    "allow": [
+      "Bash(rm -rf lib/context)",
+      "Bash(rm -f scripts/ingest-knowledge-to-trustgraph.ts scripts/ingest-fyxer-to-trustgraph.ts scripts/trustgraph-smoke.ts)",
+      "Bash(rm -f app/admin/knowledge/trustgraph-workbench-embed.tsx)"
+    ],
     "deny": []
   },
   "mcpServers": {

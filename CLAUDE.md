@@ -149,14 +149,15 @@ if (!isAdmin) {
 | `admin` / `super_admin` | Full admin dashboard, all clients | No org filter |
 | `viewer` | Portal only, research + settings | Scoped to their `organization_id` |
 
-## TrustGraph Context Layer
+## Memory Layer
 
-Shadow-mode context layer running alongside Supabase search. Code in `lib/context/`.
+Supabase is the single memory layer for semantic retrieval.
 
-- **Config:** `CONTEXT_PLATFORM_MODE` (`off` | `shadow` | `primary`), `TRUSTGRAPH_BASE_URL`, `TRUSTGRAPH_FLOW_ID`
-- **Shadow mode:** Every search also queries TrustGraph in parallel, logs parity. Zero user impact.
-- **Primary mode:** TrustGraph is the main search layer, Supabase is fallback.
-- Do NOT modify `lib/context/` without understanding the full adapter pattern.
+- **Embeddings:** Gemini Embedding 001 via `lib/ai/embeddings.ts` — generated on knowledge entry create/update
+- **Storage:** pgvector columns on `client_knowledge_entries` and `knowledge_nodes`
+- **Search:** Postgres RPCs `search_knowledge_semantic`, `search_knowledge_nodes`, `search_knowledge_global` (see `supabase/migrations/082_knowledge_search_rpcs.sql`)
+- **Public API:** `searchKnowledge*` in `lib/knowledge/search.ts` and `lib/knowledge/graph-queries.ts`. Semantic-first with FTS fallback when the embedding call fails.
+- Used by Nerd, topic search, and any agent that needs QMD-style "pull only relevant context" retrieval.
 
 ## Short-form Video Focus
 
@@ -167,7 +168,6 @@ Cortex is exclusively for **short-form video content** (TikTok, Reels, Shorts). 
 - **Vercel** at `cortex.nativz.io`
 - **Supabase** project `phypsgxszrvwdaaqpxup`
 - **SearXNG** at `localhost:8888` (Mac mini only, not in production)
-- **TrustGraph** at `localhost:8080` (Mac mini only, shadow mode)
 - **ReClip** at `localhost:8899` (video downloader, Mac mini only)
 
 ## Task Specs

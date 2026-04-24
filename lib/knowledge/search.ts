@@ -4,15 +4,11 @@
  * QMD pattern: agents call searchKnowledge() to retrieve only the most
  * relevant entries instead of loading the entire knowledge corpus.
  * This keeps agent context windows lean regardless of how many entries exist.
- *
- * When TrustGraph is configured (see docs/trustgraph-context-layer.md), retrieval
- * is orchestrated via {@link @/lib/context/run-client-search}.
  */
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateEmbedding } from '@/lib/ai/embeddings';
 import { classifyKnowledgeQuery, type KnowledgeQueryIntent } from './query-classifier';
-import { runClientSearch } from '@/lib/context/run-client-search';
 import { searchKnowledgeSupabase } from '@/lib/knowledge/search-supabase';
 
 // ---------------------------------------------------------------------------
@@ -35,9 +31,7 @@ export async function searchKnowledge(
   query: string,
   options: { limit?: number; threshold?: number; types?: string[] } = {},
 ): Promise<import('./search-types').KnowledgeSearchResult[]> {
-  return runClientSearch(clientId, query, options, () =>
-    searchKnowledgeSupabase(clientId, query, options),
-  );
+  return searchKnowledgeSupabase(clientId, query, options);
 }
 
 /**

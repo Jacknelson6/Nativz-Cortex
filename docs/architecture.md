@@ -43,7 +43,6 @@
 - `lib/prompts/` — AI prompt templates: `topic-research.ts`, `client-strategy.ts`, `brand-context.ts`, `onboard-strategy.ts`, `shoot-plan.ts`
 - `lib/types/` — TypeScript interfaces: `search.ts`, `database.ts`, `moodboard.ts`, `strategy.ts`
 - `lib/utils/` — Formatting helpers, sentiment utilities, metrics computation
-- `lib/context/` — Optional TrustGraph + Supabase retrieval orchestration for Nerd (see `docs/trustgraph-context-layer.md`)
 - `lib/vault/` — Obsidian vault integration: `github.ts`, `reader.ts`, `sync.ts`, `formatter.ts`, `parser.ts`, `indexer.ts`, `content-memory.ts`
 - `lib/monday/` — Monday.com integration: `client.ts` (API), `sync.ts` (data sync)
 - `lib/moodboard/` — Moodboard processing: `process-video.ts`

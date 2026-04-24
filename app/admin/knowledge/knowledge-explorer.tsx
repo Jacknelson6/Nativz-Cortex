@@ -11,12 +11,9 @@ import {
   ExternalLink,
   Search,
   ChevronRight,
-  LayoutGrid,
-  Network,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AgencyKnowledgeGraph } from './agency-knowledge-graph';
-import { TrustGraphWorkbenchEmbed, TrustGraphWorkbenchSetup } from './trustgraph-workbench-embed';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -129,13 +126,6 @@ export function KnowledgeExplorer({
 
   // Collapsed groups in node list
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
-
-  /** TrustGraph Workbench embed — set NEXT_PUBLIC_TRUSTGRAPH_WORKBENCH_URL (e.g. http://localhost:8081) */
-  const trustgraphWorkbenchUrl =
-    typeof process.env.NEXT_PUBLIC_TRUSTGRAPH_WORKBENCH_URL === 'string'
-      ? process.env.NEXT_PUBLIC_TRUSTGRAPH_WORKBENCH_URL.trim()
-      : '';
-  const [graphView, setGraphView] = useState<'cortex' | 'trustgraph'>('cortex');
 
   // Selection state
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -333,52 +323,14 @@ export function KnowledgeExplorer({
           <div>
             <h1 className="ui-section-title">Knowledge graph</h1>
             <p className="text-xs text-text-muted mt-0.5">
-              {graphView === 'trustgraph'
-                ? 'TrustGraph Workbench — visualizer, relationships, and retrieval'
-                : `${graphData.nodes.length} nodes · ${graphData.edges.length} connections`}
+              {`${graphData.nodes.length} nodes · ${graphData.edges.length} connections`}
             </p>
-          </div>
-
-          <div
-            className="flex rounded-lg border border-nativz-border p-0.5 bg-background"
-            role="tablist"
-            aria-label="Graph data source"
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={graphView === 'cortex'}
-              onClick={() => setGraphView('cortex')}
-              className={`cursor-pointer flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                graphView === 'cortex'
-                  ? 'bg-accent-surface text-accent-text'
-                  : 'text-text-muted hover:text-text-secondary'
-              }`}
-            >
-              <LayoutGrid size={13} />
-              Cortex
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={graphView === 'trustgraph'}
-              onClick={() => setGraphView('trustgraph')}
-              className={`cursor-pointer flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                graphView === 'trustgraph'
-                  ? 'bg-accent-surface text-accent-text'
-                  : 'text-text-muted hover:text-text-secondary'
-              }`}
-            >
-              <Network size={13} />
-              TrustGraph
-            </button>
           </div>
 
           {/* Client picker */}
           <select
             value={clientFilter}
             onChange={(e) => setClientFilter(e.target.value)}
-            disabled={graphView === 'trustgraph'}
             className="rounded-lg border border-nativz-border bg-background px-3 py-1.5 text-xs text-text-secondary focus:outline-none focus:ring-1 focus:ring-accent/30 disabled:opacity-40 disabled:pointer-events-none"
           >
             <option value="all">All clients</option>
@@ -389,7 +341,7 @@ export function KnowledgeExplorer({
           </select>
 
           {/* Search */}
-          <div className={`relative ${graphView === 'trustgraph' ? 'opacity-40 pointer-events-none' : ''}`}>
+          <div className="relative">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
             <input
               type="text"
@@ -411,7 +363,7 @@ export function KnowledgeExplorer({
 
         <button
           onClick={fetchData}
-          disabled={loading || graphView === 'trustgraph'}
+          disabled={loading}
           className="cursor-pointer flex items-center gap-1.5 rounded-lg border border-nativz-border bg-surface px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover transition-colors disabled:opacity-50"
         >
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
@@ -419,16 +371,7 @@ export function KnowledgeExplorer({
         </button>
       </div>
 
-      {/* Main content: node list + graph + detail — or TrustGraph Workbench embed / setup */}
-      {graphView === 'trustgraph' ? (
-        <div className="flex-1 min-h-0 flex flex-col min-w-0">
-          {trustgraphWorkbenchUrl ? (
-            <TrustGraphWorkbenchEmbed baseUrl={trustgraphWorkbenchUrl} />
-          ) : (
-            <TrustGraphWorkbenchSetup />
-          )}
-        </div>
-      ) : (
+      {/* Main content: node list + graph + detail */}
       <div className="flex flex-1 min-h-0 relative">
         {/* ── Left panel: node list ── */}
         <div className="w-64 shrink-0 border-r border-nativz-border bg-surface flex flex-col min-h-0">
@@ -663,7 +606,6 @@ export function KnowledgeExplorer({
           </>
         )}
       </div>
-      )}
     </div>
   );
 }

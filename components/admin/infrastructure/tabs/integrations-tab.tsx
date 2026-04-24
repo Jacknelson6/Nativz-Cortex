@@ -66,13 +66,6 @@ const INTEGRATIONS: Integration[] = [
     envChecks: ['SEARXNG_URL'],
   },
   {
-    slug: 'trustgraph',
-    name: 'TrustGraph',
-    role: 'Context layer (shadow mode). Mac mini only.',
-    docs: 'https://trustgraph.ai',
-    envChecks: ['TRUSTGRAPH_BASE_URL'],
-  },
-  {
     slug: 'reclip',
     name: 'ReClip',
     role: 'Video downloader. Mac mini only.',

@@ -1,5 +1,5 @@
 /**
- * Shared types for client knowledge search (Supabase + TrustGraph).
+ * Shared types for client knowledge search (Supabase semantic + FTS).
  */
 
 export interface KnowledgeSearchResult {
