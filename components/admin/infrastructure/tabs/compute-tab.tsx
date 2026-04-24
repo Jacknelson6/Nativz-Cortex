@@ -95,7 +95,11 @@ async function fetchVercelDeployments(): Promise<VercelRollup> {
     const message = err instanceof Error ? err.message : 'fetch failed';
     // Translate the opaque AbortError into something the UI can explain
     // without pointing the user at the wrong env var.
-    const isTimeout = err instanceof Error && err.name === 'TimeoutError';
+    const isTimeout =
+      err instanceof Error &&
+      (err.name === 'TimeoutError' ||
+        err.name === 'AbortError' ||
+        /aborted|timed out/i.test(err.message));
     return {
       hasToken: true,
       projectId,
@@ -265,7 +269,7 @@ export async function ComputeTab() {
         vercel.error ? (
           <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4 text-sm text-red-300">
             {vercel.error}
-            {!vercel.error.toLowerCase().includes('timed out') ? (
+            {!/timed out|aborted/i.test(vercel.error) ? (
               <span className="text-text-muted">
                 {' '}Token may lack read scope, or{' '}
                 <code className="rounded bg-background/60 px-1">VERCEL_PROJECT_ID</code> is missing.
