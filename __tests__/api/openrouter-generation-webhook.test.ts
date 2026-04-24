@@ -19,8 +19,17 @@ vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => mockAdminClient,
 }));
 
-// Import AFTER the mock so the handler picks up our admin stub.
-import { POST } from './route';
+// Stub logApiError — it writes to Supabase too and would otherwise need
+// the mockAdminClient to answer `from('api_error_log')` calls. The route
+// catches its failures, so a no-op keeps the test focused on behaviour.
+vi.mock('@/lib/api/error-log', () => ({
+  logApiError: vi.fn().mockResolvedValue(undefined),
+}));
+
+// Import AFTER the mocks so the handler picks up our stubs. Kept under
+// __tests__/ rather than colocated next to route.ts so the build tracer
+// can't accidentally bundle this test into the edge/node function output.
+import { POST } from '@/app/api/webhooks/openrouter/generation/route';
 
 const SECRET = 'test-secret-xyz';
 

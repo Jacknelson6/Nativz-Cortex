@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { logApiError } from '@/lib/api/error-log';
 
 /**
  * POST /api/webhooks/openrouter/generation
@@ -31,6 +32,13 @@ import { createAdminClient } from '@/lib/supabase/admin';
 export async function POST(req: Request) {
   const expected = process.env.CORTEX_OPENROUTER_WEBHOOK_SECRET;
   if (!expected) {
+    // Unconfigured server secret is itself a prod incident — log it so the
+    // super_admin Platform Health feed picks it up on the next sweep.
+    logApiError({
+      route: '/api/webhooks/openrouter/generation',
+      statusCode: 503,
+      errorMessage: 'CORTEX_OPENROUTER_WEBHOOK_SECRET not set',
+    }).catch(() => {});
     return NextResponse.json(
       { error: 'Webhook secret not configured on the server' },
       { status: 503 },
@@ -39,6 +47,15 @@ export async function POST(req: Request) {
 
   const got = req.headers.get('x-cortex-webhook-secret');
   if (got !== expected) {
+    // Auth failures get a structured breadcrumb (no secret echoed) so a
+    // rotated secret on OpenRouter's side shows up in the error feed
+    // rather than silently breaking reconciliation.
+    logApiError({
+      route: '/api/webhooks/openrouter/generation',
+      statusCode: 403,
+      errorMessage: 'Bad or missing x-cortex-webhook-secret header',
+      meta: { hadHeader: got !== null },
+    }).catch(() => {});
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -54,11 +71,22 @@ export async function POST(req: Request) {
   try {
     body = await req.json();
   } catch {
+    logApiError({
+      route: '/api/webhooks/openrouter/generation',
+      statusCode: 400,
+      errorMessage: 'Invalid JSON body',
+    }).catch(() => {});
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
   const generationId = body.id?.trim();
   if (!generationId) {
+    logApiError({
+      route: '/api/webhooks/openrouter/generation',
+      statusCode: 400,
+      errorMessage: 'Missing generation id in webhook payload',
+      meta: { keys: Object.keys(body) },
+    }).catch(() => {});
     return NextResponse.json({ error: 'Missing id' }, { status: 400 });
   }
 
@@ -135,6 +163,13 @@ export async function POST(req: Request) {
   // 23505 = unique_violation. A concurrent delivery beat us to the row;
   // retry as an update so the final state still matches this payload.
   if (insertError.code !== '23505') {
+    logApiError({
+      route: '/api/webhooks/openrouter/generation',
+      statusCode: 500,
+      errorMessage: 'Failed to insert reconciled row',
+      errorDetail: insertError.message,
+      meta: { code: insertError.code, generationId },
+    }).catch(() => {});
     return NextResponse.json(
       { error: 'Failed to write row', detail: insertError.message },
       { status: 500 },

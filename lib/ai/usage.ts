@@ -83,11 +83,32 @@ export function calculateGroqAudioCost(durationSeconds: number): number {
 
 /**
  * Log API usage to the database. Non-blocking — failures are swallowed.
+ *
+ * Reverse-race handling (OpenRouter only):
+ *
+ *   When the OpenRouter webhook arrives at /api/webhooks/openrouter/generation
+ *   BEFORE our local logUsage insert (possible under cold starts or long
+ *   local fetches), the webhook inserts a row with `feature='reconciled'`,
+ *   the real cost, and the generation id. Our subsequent insert then hits
+ *   the UNIQUE partial index from migration 161 and fails with 23505.
+ *   Without the branch below we'd silently drop the feature + user
+ *   attribution ("which user asked what in the Nerd").
+ *
+ *   The recovery path: on 23505, fetch the existing row, merge our local
+ *   attribution (feature, user_id, user_email, metadata) into it without
+ *   touching the webhook's ground-truth cost/tokens. This happens only
+ *   on the rare race; the hot path (insert succeeds) has zero extra
+ *   queries.
  */
 export async function logUsage(entry: UsageEntry): Promise<void> {
   try {
     const admin = createAdminClient();
-    await admin.from('api_usage_logs').insert({
+    const genId =
+      typeof entry.metadata?.openrouter_generation_id === 'string'
+        ? (entry.metadata.openrouter_generation_id as string)
+        : null;
+
+    const insertPayload = {
       service: entry.service,
       model: entry.model,
       feature: entry.feature,
@@ -98,7 +119,47 @@ export async function logUsage(entry: UsageEntry): Promise<void> {
       metadata: entry.metadata ?? {},
       user_id: entry.userId ?? null,
       user_email: entry.userEmail ?? null,
-    });
+    };
+
+    const { error } = await admin.from('api_usage_logs').insert(insertPayload);
+
+    // Happy path — or a non-conflict failure we want visible in logs.
+    if (!error) return;
+    if (!genId || error.code !== '23505') {
+      console.error('Failed to log API usage:', error);
+      return;
+    }
+
+    // Reverse race: webhook wrote first. Merge our local attribution onto
+    // the existing row without clobbering the webhook's cost/tokens.
+    const { data: existing } = await admin
+      .from('api_usage_logs')
+      .select('id, metadata')
+      .contains('metadata', { openrouter_generation_id: genId })
+      .limit(1)
+      .maybeSingle();
+
+    if (!existing?.id) {
+      // Conflict but no row — transient weirdness. Surface it and move on.
+      console.error('Failed to log API usage (conflict, no row found):', error);
+      return;
+    }
+
+    const prevMeta =
+      existing.metadata && typeof existing.metadata === 'object'
+        ? (existing.metadata as Record<string, unknown>)
+        : {};
+    await admin
+      .from('api_usage_logs')
+      .update({
+        service: entry.service,
+        model: entry.model,
+        feature: entry.feature,
+        user_id: entry.userId ?? null,
+        user_email: entry.userEmail ?? null,
+        metadata: { ...prevMeta, ...(entry.metadata ?? {}) },
+      })
+      .eq('id', existing.id);
   } catch (err) {
     console.error('Failed to log API usage:', err);
   }
