@@ -31,6 +31,12 @@ import { ChartCard, type LegendItem } from '@/components/admin/infrastructure/ch
 import { DateRangePicker } from '@/components/reporting/date-range-picker';
 import { resolvePresetRange } from '@/lib/reporting/date-presets';
 import type { DateRange, DateRangePreset } from '@/lib/types/reporting';
+import {
+  formatTokens,
+  formatUsd,
+  formatUsdAxis,
+  providerFromModel,
+} from '@/lib/ai/format';
 
 interface UsageSummary {
   byModel: Record<string, { service: string; totalTokens: number; costUsd: number; requests: number }>;
@@ -69,45 +75,6 @@ const CHART_COLORS = [
 
 function colorForIndex(i: number): string {
   return CHART_COLORS[i % CHART_COLORS.length];
-}
-
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 10_000) return `${(n / 1_000).toFixed(0)}K`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toLocaleString();
-}
-
-function formatUsd(n: number): string {
-  if (!Number.isFinite(n) || n === 0) return '$0.00';
-  if (n < 0.01) return '<$0.01';
-  if (n < 10) return `$${n.toFixed(2)}`;
-  if (n < 1000) return `$${n.toFixed(2)}`;
-  return `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-}
-
-function formatUsdAxis(n: number): string {
-  if (n === 0) return '$0';
-  if (n < 0.01) return '<$0.01';
-  if (n < 1) return `$${n.toFixed(2)}`;
-  if (n < 1000) return `$${n.toFixed(0)}`;
-  return `$${(n / 1000).toFixed(1)}k`;
-}
-
-function providerFromModel(model: string): string {
-  const m = model.toLowerCase();
-  if (m.startsWith('openai/') || m.startsWith('gpt-')) return 'openai';
-  if (m.startsWith('anthropic/') || m.startsWith('claude-')) return 'anthropic';
-  if (m.startsWith('google/') || m.startsWith('gemini/') || m.startsWith('gemini-')) return 'google';
-  if (m.startsWith('perplexity/')) return 'perplexity';
-  if (m.startsWith('openrouter/')) return 'openrouter';
-  if (m.startsWith('groq/') || m.startsWith('whisper')) return 'groq';
-  if (m.includes('grok')) return 'grok';
-  if (m.startsWith('deepseek')) return 'deepseek';
-  if (m.startsWith('qwen') || m.startsWith('dashscope/')) return 'qwen';
-  if (m.startsWith('nvidia')) return 'nvidia';
-  if (m.startsWith('mistral')) return 'mistral';
-  return m.split('/')[0] || 'unknown';
 }
 
 /**

@@ -13,6 +13,9 @@ type OpenRouterUsage = {
 };
 
 type OpenRouterResponsePayload = {
+  /** Generation id — used by the webhook to reconcile our local row to
+   *  OpenRouter's post-billing cost. Stamp it into metadata on logUsage. */
+  id?: string;
   choices?: Array<{ message?: { content?: string | null } }>;
   usage?: OpenRouterUsage;
 };
@@ -108,6 +111,7 @@ export async function createOpenRouterRichCompletion(options: {
     const estimatedCost = calculateCost(model, promptTokens, completionTokens);
 
     if (options.feature) {
+      const generationId = data.id?.trim();
       logUsage({
         service: 'openrouter',
         model,
@@ -118,6 +122,11 @@ export async function createOpenRouterRichCompletion(options: {
         costUsd: estimatedCost,
         userId: options.userId,
         userEmail: options.userEmail,
+        // Stamp the generation id so the OpenRouter webhook can locate
+        // this row and overwrite cost with post-billing truth. Without
+        // this, the webhook takes the insert path every time and the
+        // "Reconciled %" tile can't climb past 50%.
+        metadata: generationId ? { openrouter_generation_id: generationId } : undefined,
       }).catch(() => {});
     }
 

@@ -241,6 +241,13 @@ function buildCompletionResult(
   const estimatedCost = calculateCost(model, promptTokens, completionTokens);
 
   if (options.feature) {
+    // OpenRouter responses include a top-level `id`; stamping it into
+    // metadata lets the generation webhook locate this row later and
+    // overwrite cost_usd with post-billing truth instead of inserting a
+    // duplicate. Other services (openai direct, dashscope) don't send a
+    // usable id here, so we skip the stamp for them.
+    const rawId = typeof data.id === 'string' ? data.id.trim() : '';
+    const generationId = service === 'openrouter' && rawId ? rawId : null;
     logUsage({
       service,
       model,
@@ -251,6 +258,7 @@ function buildCompletionResult(
       costUsd: estimatedCost,
       userId: options.userId,
       userEmail: options.userEmail,
+      metadata: generationId ? { openrouter_generation_id: generationId } : undefined,
     }).catch(() => {});
   }
 
