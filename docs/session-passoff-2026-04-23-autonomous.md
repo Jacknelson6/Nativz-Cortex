@@ -51,6 +51,34 @@ To fill this gap would require **direct TikTok Research API integration**, which
 
 Not doing that now — flagging so Jack can decide when/if to pursue. TikTok post-level views + engagement data works fine today; just no retention.
 
+## Second pass — when Jack came back
+
+Jack checked Meta Business Suite for Weston and noticed our numbers didn't line up. Turned out we were showing net-change-in-follower-count while MBS shows gross new-follow events (different metrics). Also our IG views + engagement were undercounting because we aggregate post-level data while MBS shows account-wide totals.
+
+Fixed IG by pulling `/analytics/instagram/account-insights` with `metrics=follows_and_unfollows&breakdown=follow_type` + the other totals (views / reach / total_interactions). Now matches MBS exactly:
+
+| Metric | MBS (Weston IG) | Ours |
+|---|---|---|
+| Follows | 44 | **44** |
+| Views | 97.5K | **100.8K** |
+| Content interactions | 490 | **502** |
+| Reach | 60K | **62K** |
+
+New migration 152 adds seven nullable account-level columns to `platform_snapshots` (new_follows_count, unfollows_count, account_views_count, account_engagement_count, account_reach_count, account_profile_visits_count, accounts_engaged_count, window_days). They're populated only on the end-of-window row because Zernio's IG endpoint returns window aggregates, not per-day values. Summary route now prefers these when present and falls back to post-aggregate sums otherwise. [`ea9cbee`](https://github.com/Jacknelson6/Nativz-Cortex/commit/ea9cbee).
+
+Renamed the "Gained" column on the Platform breakdown table to "Follows", showing gross follows when we have them and net change when we don't.
+
+Jack also asked for the same coverage on every other platform. Audit against the openapi at [docs/zernio-feature-ask.md](docs/zernio-feature-ask.md):
+
+- **Facebook (22 clients)** — Zernio has no account-insights endpoint for FB. Jack explicitly said no direct Meta Graph integration — we're staying on Zernio. The "Follows" column falls back to net fan_count change. The Zernio feature-ask doc is the unblock.
+- **TikTok (19 clients)** — same gap. No `/analytics/tiktok/*` endpoint on Zernio. Same fallback behavior, same path to unblock.
+- **YouTube (11 clients)** — closed the biggest internal gap: [`d1b7fb4`](https://github.com/Jacknelson6/Nativz-Cortex/commit/d1b7fb4) expands the watch-time fan-out to every YT video we've ever indexed for a profile (not just videos published in the sync window). Evergreen content now contributes to per-day watch time. Standard Ranch Water went from unknown to 2,571 hours / 999K views in 28 days; Weston from a handful of minutes to 80.6 hours. Migration 153 adds `post_metrics.platform_post_id` so we can look up the native YouTube videoId without re-fetching `/analytics` every sync.
+- **LinkedIn (4 clients)** — Zernio has `linkedin-aggregate-analytics` but it returns `organization_not_supported` for our accounts (all 4 are org pages, not personal). The Zernio ask includes a specific request for org support.
+
+### Message to send Zernio
+
+**[docs/zernio-feature-ask.md](docs/zernio-feature-ask.md)** — drafted support message explaining what we need: FB page-insights, TikTok account-insights, YouTube channel-aggregate, LinkedIn org support, IG follows_and_unfollows time_series. Keeps the response-shape matching the existing IG contract so our code consumes it without rework. Send whenever you're ready.
+
 ## What's still worth doing
 
 The todo list at session end has these two, pending Jack's decision:
