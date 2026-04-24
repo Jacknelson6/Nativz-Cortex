@@ -298,6 +298,16 @@ export async function TopicSearchTab() {
           </div>
         ) : (
           <div className="overflow-hidden rounded-xl border border-nativz-border bg-surface">
+            {/* Column headers — mirror the summary row widths below so the      */}
+            {/* values align vertically with their labels.                       */}
+            <div className="flex items-center gap-4 border-b border-nativz-border/60 bg-surface-hover/30 px-4 py-2 text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted">
+              <span aria-hidden className="w-[14px] shrink-0" />
+              <span className="w-20 shrink-0">Age</span>
+              <span className="min-w-0 flex-1">Query</span>
+              <span className="shrink-0">Status</span>
+              <span className="w-20 shrink-0 text-right">Duration</span>
+              <span className="hidden w-36 shrink-0 text-right md:inline-block">Run by</span>
+            </div>
             {rows.map((row) => {
               const total = totalWallClockMs(row);
               const stages = row.pipeline_state?.stages;
