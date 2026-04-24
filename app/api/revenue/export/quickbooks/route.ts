@@ -47,22 +47,41 @@ export async function GET(req: NextRequest) {
   ];
 
   const rows: string[] = [header.map(csvEscape).join(',')];
+  // Group totals by currency so a USD + CAD mix doesn't produce a misleading
+  // single-sum row. If everything is one currency we still emit just that row.
+  const totalsByCurrency = new Map<string, number>();
   for (const inv of data ?? []) {
     const client = inv.clients as { name?: string | null } | null;
+    const cents = inv.amount_paid_cents ?? 0;
+    const currency = (inv.currency ?? 'usd').toUpperCase();
+    totalsByCurrency.set(currency, (totalsByCurrency.get(currency) ?? 0) + cents);
     rows.push(
       [
         inv.paid_at ? isoDate(inv.paid_at) : '',
         inv.number ?? '',
         client?.name ?? 'Unlinked customer',
         'Stripe invoice payment',
-        centsToDollars(inv.amount_paid_cents ?? 0).toFixed(2),
-        (inv.currency ?? 'usd').toUpperCase(),
+        centsToDollars(cents).toFixed(2),
+        currency,
         inv.status,
         inv.id,
       ]
         .map(csvEscape)
         .join(','),
     );
+  }
+
+  // Totals row per currency (QuickBooks ignores unknown rows on import; these
+  // are for humans eyeballing the CSV or pasting into a spreadsheet).
+  if (data && data.length > 0) {
+    rows.push('');
+    for (const [currency, cents] of Array.from(totalsByCurrency.entries()).sort()) {
+      rows.push(
+        ['', '', `TOTAL (${currency})`, `${data.length} invoices`, centsToDollars(cents).toFixed(2), currency, '', '']
+          .map(csvEscape)
+          .join(','),
+      );
+    }
   }
 
   const body = rows.join('\n');

@@ -36,7 +36,7 @@ export function LifecycleStatePill({ state }: { state: string }) {
   const map: Record<string, { label: string; classes: string }> = {
     lead: { label: 'Lead', classes: 'bg-white/5 text-text-muted' },
     contracted: { label: 'Contracted', classes: 'bg-nz-cyan/10 text-nz-cyan' },
-    paid_deposit: { label: 'Deposit paid', classes: 'bg-nz-purple/15 text-nz-purple-100' },
+    paid_deposit: { label: 'Deposit paid', classes: 'bg-accent/15 text-accent-text' },
     active: { label: 'Active', classes: 'bg-emerald-500/10 text-emerald-300' },
     churned: { label: 'Churned', classes: 'bg-coral-500/10 text-coral-300' },
   };

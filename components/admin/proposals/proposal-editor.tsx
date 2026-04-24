@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -85,19 +85,24 @@ export function ProposalEditor({
   const [proposal, setProposal] = useState(initial);
   const [packages, setPackages] = useState(initialPackages);
   const [deliverables, setDeliverables] = useState(initialDeliverables);
-  const [saving, setSaving] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [saving, setSaving] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [sendingBusy, setSendingBusy] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Build the public URL on the client after mount so SSR and CSR agree.
+  // Rendering `window.location.origin` eagerly during render would produce a
+  // relative-href fallback on the server + an absolute one on the client and
+  // trip React's hydration check.
+  const [publicUrl, setPublicUrl] = useState(`/proposals/${proposal.slug}`);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setPublicUrl(`${window.location.origin}/proposals/${proposal.slug}`);
+    }
+  }, [proposal.slug]);
+
   const readOnly = !['draft', 'sent', 'viewed'].includes(proposal.status);
-  const publicUrl = useMemo(
-    () =>
-      typeof window !== 'undefined'
-        ? `${window.location.origin}/proposals/${proposal.slug}`
-        : `/proposals/${proposal.slug}`,
-    [proposal.slug],
-  );
 
   const totals = useMemo(() => {
     let monthly = 0;
@@ -112,6 +117,7 @@ export function ProposalEditor({
   const saveProposal = useCallback(
     async (patch: Partial<Proposal> & Record<string, unknown>) => {
       setSaving('saving');
+      setSaveError(null);
       const body: Record<string, unknown> = { ...patch };
       if ('total_cents' in patch) {
         body.total_dollars = patch.total_cents === null ? null : centsToDollars(patch.total_cents as number);
@@ -121,13 +127,24 @@ export function ProposalEditor({
         body.deposit_dollars = patch.deposit_cents === null ? null : centsToDollars(patch.deposit_cents as number);
         delete body.deposit_cents;
       }
-      const res = await fetch(`/api/admin/proposals/${proposal.id}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      setSaving(res.ok ? 'saved' : 'idle');
-      if (res.ok) setTimeout(() => setSaving('idle'), 1200);
+      try {
+        const res = await fetch(`/api/admin/proposals/${proposal.id}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (res.ok) {
+          setSaving('saved');
+          setTimeout(() => setSaving('idle'), 1200);
+          return;
+        }
+        const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+        setSaving('error');
+        setSaveError(payload?.error ?? `Save failed (${res.status})`);
+      } catch (err) {
+        setSaving('error');
+        setSaveError(err instanceof Error ? err.message : 'Network error');
+      }
     },
     [proposal.id],
   );
@@ -283,7 +300,17 @@ export function ProposalEditor({
             {proposal.status}
           </span>
           <span className="text-[11px] text-text-muted">
-            {saving === 'saving' ? 'Saving…' : saving === 'saved' ? 'Saved' : ''}
+            {saving === 'saving' ? (
+              'Saving…'
+            ) : saving === 'saved' ? (
+              'Saved'
+            ) : saving === 'error' ? (
+              <span className="text-coral-300" title={saveError ?? ''}>
+                Save failed — retry
+              </span>
+            ) : (
+              ''
+            )}
           </span>
         </div>
         <div className="flex items-center gap-2">

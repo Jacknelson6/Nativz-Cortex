@@ -59,6 +59,9 @@ export async function sendProposal(
     .order('sort_order');
 
   let paymentLinkUrl: string | null = proposal.stripe_payment_link_url;
+  // Deposit semantics: null → default to setup + first-month; 0 → explicit
+  // "no deposit, no Payment Link". Any positive integer is treated as the
+  // exact deposit amount.
   const depositCents = proposal.deposit_cents ?? defaultDeposit(packages ?? []);
 
   if (depositCents > 0 && !paymentLinkUrl) {
