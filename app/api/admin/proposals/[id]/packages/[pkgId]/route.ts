@@ -29,6 +29,19 @@ export async function PATCH(
   const parsed = patchSchema.safeParse(raw);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.message }, { status: 400 });
 
+  const { data: proposal } = await admin
+    .from('proposals')
+    .select('status')
+    .eq('id', proposalId)
+    .maybeSingle();
+  if (!proposal) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (proposal.status !== 'draft') {
+    return NextResponse.json(
+      { error: `Cannot modify a package on a '${proposal.status}' proposal` },
+      { status: 409 },
+    );
+  }
+
   const patch: Record<string, unknown> = {};
   if (parsed.data.name !== undefined) patch.name = parsed.data.name;
   if (parsed.data.description !== undefined) patch.description = parsed.data.description;
@@ -63,6 +76,20 @@ export async function DELETE(
   const { admin } = auth;
 
   const { id: proposalId, pkgId } = await ctx.params;
+
+  const { data: proposal } = await admin
+    .from('proposals')
+    .select('status')
+    .eq('id', proposalId)
+    .maybeSingle();
+  if (!proposal) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (proposal.status !== 'draft') {
+    return NextResponse.json(
+      { error: `Cannot delete a package from a '${proposal.status}' proposal` },
+      { status: 409 },
+    );
+  }
+
   const { error } = await admin
     .from('proposal_packages')
     .delete()

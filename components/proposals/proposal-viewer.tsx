@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { CheckCircle2, Clock } from 'lucide-react';
+import { MarkdownBlock } from './markdown-block';
 
 type Proposal = {
   id: string;
@@ -45,16 +46,16 @@ export function ProposalViewer({
   packages,
   deliverables,
   expired,
-  body,
-  terms,
+  bodyMarkdown,
+  termsMarkdown,
   formatCents,
 }: {
   proposal: Proposal;
   packages: Package[];
   deliverables: Deliverable[];
   expired: boolean;
-  body: ReactNode;
-  terms: ReactNode;
+  bodyMarkdown: string | null;
+  termsMarkdown: string | null;
   formatCents: (cents: number, currency?: string) => string;
 }) {
   const [signed, setSigned] = useState(['signed', 'paid'].includes(proposal.status));
@@ -92,8 +93,10 @@ export function ProposalViewer({
         <p className="mt-3 text-lg text-text-secondary">{proposal.scope_statement}</p>
       ) : null}
 
-      {body ? (
-        <div className="prose prose-invert mt-8 max-w-none text-text-secondary">{body}</div>
+      {bodyMarkdown ? (
+        <div className="prose prose-invert mt-8 max-w-none text-text-secondary">
+          <MarkdownBlock source={bodyMarkdown} />
+        </div>
       ) : null}
 
       {packages.length > 0 ? (
@@ -164,9 +167,11 @@ export function ProposalViewer({
         </section>
       ) : null}
 
-      {terms ? (
+      {termsMarkdown ? (
         <section className="mt-10 rounded-xl border border-nativz-border bg-surface p-5">
-          <div className="prose prose-invert prose-sm max-w-none text-text-secondary">{terms}</div>
+          <div className="prose prose-invert prose-sm max-w-none text-text-secondary">
+            <MarkdownBlock source={termsMarkdown} />
+          </div>
         </section>
       ) : null}
 

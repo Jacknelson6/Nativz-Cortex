@@ -30,7 +30,12 @@ export type LifecycleEventType =
   | 'onboarding.advanced'
   | 'kickoff.scheduled'
   | 'kickoff.completed'
-  | 'ad_spend.recorded';
+  | 'ad_spend.recorded'
+  | 'proposal.sent'
+  | 'proposal.viewed'
+  | 'proposal.signed'
+  | 'proposal.paid'
+  | 'proposal.expired';
 
 export async function logLifecycleEvent(
   clientId: string,

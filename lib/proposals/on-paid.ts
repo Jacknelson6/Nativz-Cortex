@@ -41,8 +41,12 @@ export async function onProposalCheckoutCompleted(
       .eq('id', proposal.client_id)
       .in('lifecycle_state', ['lead', 'contracted']);
 
-    await logLifecycleEvent(proposal.client_id, 'invoice.paid', `Deposit paid: ${proposal.title}`, {
-      metadata: { proposal_id: proposal.id, checkout_session: session.id },
+    await logLifecycleEvent(proposal.client_id, 'proposal.paid', `Deposit paid: ${proposal.title}`, {
+      metadata: {
+        proposal_id: proposal.id,
+        checkout_session: session.id,
+        amount_cents: session.amount_total ?? null,
+      },
       admin,
     });
   }

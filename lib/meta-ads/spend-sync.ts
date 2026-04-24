@@ -52,23 +52,30 @@ export async function syncMetaAdSpendForClient(
   const until = opts.untilIso ?? new Date().toISOString().slice(0, 10);
   const accountId = normalizeAccountId(client.meta_ad_account_id);
 
-  const url = new URL(`https://graph.facebook.com/${GRAPH_VERSION}/act_${accountId}/insights`);
-  url.searchParams.set('access_token', token);
-  url.searchParams.set('level', 'campaign');
-  url.searchParams.set('time_increment', '1');
-  url.searchParams.set('time_range', JSON.stringify({ since, until }));
-  url.searchParams.set(
+  // Token goes in the Authorization header, not query string, so it doesn't
+  // leak into server/proxy logs. Pagination `paging.next` URLs come back
+  // without a token and are hit with the same header.
+  const firstUrl = new URL(`https://graph.facebook.com/${GRAPH_VERSION}/act_${accountId}/insights`);
+  firstUrl.searchParams.set('level', 'campaign');
+  firstUrl.searchParams.set('time_increment', '1');
+  firstUrl.searchParams.set('time_range', JSON.stringify({ since, until }));
+  firstUrl.searchParams.set(
     'fields',
     'spend,campaign_id,campaign_name,account_currency,date_start,date_stop',
   );
-  url.searchParams.set('limit', '500');
+  firstUrl.searchParams.set('limit', '500');
 
   const allRows: InsightRow[] = [];
-  let next: string | null = url.toString();
+  let next: string | null = firstUrl.toString();
   let pages = 0;
   while (next && pages < 50) {
     pages += 1;
-    const res = await fetch(next);
+    // Strip any access_token that Meta might have baked into paging.next; we
+    // send the token via header so the URL should not carry it on any page.
+    const stripped = stripAccessTokenParam(next);
+    const res = await fetch(stripped, {
+      headers: { authorization: `Bearer ${token}` },
+    });
     const json = (await res.json()) as InsightsResponse;
     if (json.error) return { ok: false, error: `Meta API: ${json.error.message}` };
     allRows.push(...(json.data ?? []));
@@ -125,6 +132,16 @@ export async function syncMetaAdSpendForClient(
 
 function normalizeAccountId(raw: string): string {
   return raw.startsWith('act_') ? raw.slice(4) : raw;
+}
+
+function stripAccessTokenParam(rawUrl: string): string {
+  try {
+    const u = new URL(rawUrl);
+    u.searchParams.delete('access_token');
+    return u.toString();
+  } catch {
+    return rawUrl;
+  }
 }
 
 function dollarsStringToCents(spend: string): number {

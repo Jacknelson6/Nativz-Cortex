@@ -1,7 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { ExternalLink, FileDown } from 'lucide-react';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
 import { getPortalClient } from '@/lib/portal/get-portal-client';
 import { formatCents, formatCentsCompact } from '@/lib/format/money';
 import { mrrForSubscription } from '@/lib/stripe/mrr';
@@ -13,18 +12,29 @@ import {
 
 export const dynamic = 'force-dynamic';
 
+const AD_SPEND_SOURCE_LABEL: Record<string, string> = {
+  manual: 'Manual',
+  meta_api: 'Auto-synced (Meta)',
+  google_api: 'Auto-synced (Google)',
+  tiktok_api: 'Auto-synced (TikTok)',
+  import: 'Imported',
+};
+
 export default async function PortalBillingPage() {
-  const supabase = await createServerSupabaseClient();
+  // RLS-aware client — portal read policies from migrations 155 + 159 scope
+  // every query to rows where the viewer is in user_client_access. If a
+  // client is accidentally missing the link, they see empty data rather
+  // than another customer's invoices.
+  const db = await createServerSupabaseClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await db.auth.getUser();
   if (!user) redirect('/portal/login');
 
   const portal = await getPortalClient();
   if (!portal) notFound();
   const { client } = portal;
 
-  const admin = createAdminClient();
   const monthStart = new Date();
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
@@ -38,30 +48,34 @@ export default async function PortalBillingPage() {
     { data: openArRes },
     { data: adSpendRows },
   ] = await Promise.all([
-    admin
+    db
       .from('clients')
       .select('mrr_cents, boosting_budget_cents, lifecycle_state, stripe_customer_id')
       .eq('id', client.id)
       .single(),
-    admin
+    db
       .from('stripe_invoices')
-      .select('id, number, status, amount_due_cents, amount_paid_cents, amount_remaining_cents, currency, due_date, paid_at, hosted_invoice_url, invoice_pdf, created_at')
+      .select(
+        'id, number, status, amount_due_cents, amount_paid_cents, amount_remaining_cents, currency, due_date, paid_at, hosted_invoice_url, invoice_pdf, created_at',
+      )
       .eq('client_id', client.id)
       .order('created_at', { ascending: false })
       .limit(100),
-    admin
+    db
       .from('stripe_subscriptions')
-      .select('id, status, current_period_end, cancel_at_period_end, product_name, price_nickname, unit_amount_cents, interval, interval_count, quantity')
+      .select(
+        'id, status, current_period_end, cancel_at_period_end, product_name, price_nickname, unit_amount_cents, interval, interval_count, quantity',
+      )
       .eq('client_id', client.id)
       .order('status')
       .order('started_at', { ascending: false }),
-    admin.from('stripe_invoices').select('amount_paid_cents').eq('client_id', client.id),
-    admin
+    db.from('stripe_invoices').select('amount_paid_cents').eq('client_id', client.id),
+    db
       .from('stripe_invoices')
       .select('amount_remaining_cents')
       .eq('client_id', client.id)
       .eq('status', 'open'),
-    admin
+    db
       .from('client_ad_spend')
       .select('platform, campaign_label, spend_cents, period_month, source')
       .eq('client_id', client.id)
@@ -83,7 +97,7 @@ export default async function PortalBillingPage() {
           Billing
         </p>
         <h1 className="text-2xl font-semibold text-text-primary">
-          {client.name} — billing & invoices
+          {client.name} — billing &amp; invoices
         </h1>
         <p className="text-sm text-text-muted">
           Your recent invoices, active subscriptions, and payment history. Click any invoice to
@@ -107,7 +121,7 @@ export default async function PortalBillingPage() {
         />
       </div>
 
-      {(adSpendRows && adSpendRows.length > 0) ? (
+      {adSpendRows && adSpendRows.length > 0 ? (
         <section className="rounded-xl border border-nativz-border bg-surface p-5">
           <h2 className="text-sm font-semibold text-text-primary">Ad spend</h2>
           <p className="mt-1 text-[11px] text-text-muted">
@@ -120,6 +134,7 @@ export default async function PortalBillingPage() {
                   <th className="py-2 font-medium">Month</th>
                   <th className="py-2 font-medium">Platform</th>
                   <th className="py-2 font-medium">Campaign</th>
+                  <th className="py-2 font-medium">Source</th>
                   <th className="py-2 font-medium text-right">Spend</th>
                 </tr>
               </thead>
@@ -131,6 +146,9 @@ export default async function PortalBillingPage() {
                     </td>
                     <td className="py-2 capitalize text-text-secondary">{r.platform}</td>
                     <td className="py-2 text-text-secondary">{r.campaign_label ?? '—'}</td>
+                    <td className="py-2 text-[11px] text-text-muted">
+                      {AD_SPEND_SOURCE_LABEL[r.source ?? 'manual'] ?? r.source}
+                    </td>
                     <td className="py-2 text-right font-mono text-text-primary">
                       {formatCents(r.spend_cents)}
                     </td>

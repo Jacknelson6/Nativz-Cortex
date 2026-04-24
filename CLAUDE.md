@@ -170,6 +170,16 @@ Cortex is exclusively for **short-form video content** (TikTok, Reels, Shorts). 
 - **SearXNG** at `localhost:8888` (Mac mini only, not in production)
 - **ReClip** at `localhost:8899` (video downloader, Mac mini only)
 
+## Revenue Hub + Proposals
+
+- **Admin surfaces:** `/admin/revenue` (MRR / invoices / subs / clients / ad-spend / activity), `/admin/clients/[slug]/billing` (per-client), `/admin/proposals` (list + editor), `/admin/proposals/new` (draft), `/admin/proposals/[slug]` (editor — autosaves, status-guarded to draft-only).
+- **Portal:** `/portal/billing` — RLS-scoped (policies on `stripe_*` + `client_ad_spend` + `client_lifecycle_events`).
+- **Public:** `/proposals/[slug]` (no auth, rate-limited). Reads from `proposals.sent_snapshot` once sent so the signer always sees the version they agreed to.
+- **Stripe:** webhook at `/api/webhooks/stripe` (signature-verified, idempotent via `stripe_events`). Required events in the Stripe dashboard — see `docs/superpowers/specs/2026-04-23-revenue-hub-design.md` §14 and the round-2 commit message. Keys in `.env.local` only; mirror to Vercel with `npm run vercel:env:mirror` once the token has full-account scope.
+- **Lifecycle events** (stored in `client_lifecycle_events.type`): `invoice.*`, `subscription.*`, `onboarding.advanced`, `kickoff.*`, `contract.*`, `proposal.sent|viewed|signed|paid|expired`, `ad_spend.recorded`.
+- **Notification types** for admin bells: `payment_received`, `invoice_overdue`, `invoice_sent`, `invoice_due_soon`, `contract_signed`, `subscription_created|canceled|paused|resumed|updated`.
+- **Meta Ads sync:** per-client `meta_ad_account_id` on `clients` + `META_APP_ACCESS_TOKEN` env (passed via `Authorization: Bearer`). Daily cron `/api/cron/meta-ads-sync`.
+
 ## Task Specs
 
 For complex features, check `tasks/` directory for detailed specs. Build from specs without asking for confirmation.

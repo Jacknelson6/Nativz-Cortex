@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { logLifecycleEvent } from '@/lib/lifecycle/state-machine';
+import { checkRateLimit, ipFromRequest } from '@/lib/rate-limit/in-memory';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,15 @@ const bodySchema = z.object({
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
   const { slug } = await ctx.params;
+  const ip = ipFromRequest(req.headers);
+  const rl = checkRateLimit(`sign:${ip}`, 10, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'Too many requests' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+    );
+  }
+
   const admin = createAdminClient();
 
   const raw = await req.json().catch(() => null);
@@ -38,7 +48,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
     return NextResponse.json({ error: 'Proposal expired' }, { status: 400 });
   }
 
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
   const ua = req.headers.get('user-agent') ?? null;
 
   await admin
@@ -71,7 +80,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
 
     await logLifecycleEvent(
       proposal.client_id,
-      'contract.signed',
+      'proposal.signed',
       `Proposal signed: ${proposal.title}`,
       { metadata: { proposal_id: proposal.id, slug }, admin },
     );

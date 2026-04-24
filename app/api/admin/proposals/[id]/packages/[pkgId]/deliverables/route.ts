@@ -22,6 +22,20 @@ export async function POST(
   const parsed = createSchema.safeParse(raw);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.message }, { status: 400 });
 
+  const { data: pkg } = await admin
+    .from('proposal_packages')
+    .select('proposal_id, proposals(status)')
+    .eq('id', pkgId)
+    .maybeSingle();
+  const proposalStatus = (pkg?.proposals as { status?: string } | null)?.status;
+  if (!proposalStatus) return NextResponse.json({ error: 'Package not found' }, { status: 404 });
+  if (proposalStatus !== 'draft') {
+    return NextResponse.json(
+      { error: `Cannot modify deliverables on a '${proposalStatus}' proposal` },
+      { status: 409 },
+    );
+  }
+
   const { count } = await admin
     .from('proposal_deliverables')
     .select('id', { count: 'exact', head: true })

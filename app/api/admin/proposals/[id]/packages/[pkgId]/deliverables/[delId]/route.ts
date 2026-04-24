@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { requireAdmin } from '@/lib/revenue/auth';
+
+async function isProposalEditable(admin: SupabaseClient, pkgId: string): Promise<boolean> {
+  const { data } = await admin
+    .from('proposal_packages')
+    .select('proposals(status)')
+    .eq('id', pkgId)
+    .maybeSingle();
+  const status = (data?.proposals as { status?: string } | null)?.status;
+  return status === 'draft';
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +34,10 @@ export async function PATCH(
   const parsed = patchSchema.safeParse(raw);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.message }, { status: 400 });
 
+  if (!(await isProposalEditable(admin, pkgId))) {
+    return NextResponse.json({ error: 'Proposal is locked (not in draft).' }, { status: 409 });
+  }
+
   const { error } = await admin
     .from('proposal_deliverables')
     .update(parsed.data)
@@ -40,6 +55,10 @@ export async function DELETE(
   if (auth instanceof NextResponse) return auth;
   const { admin } = auth;
   const { pkgId, delId } = await ctx.params;
+
+  if (!(await isProposalEditable(admin, pkgId))) {
+    return NextResponse.json({ error: 'Proposal is locked (not in draft).' }, { status: 409 });
+  }
 
   const { error } = await admin
     .from('proposal_deliverables')

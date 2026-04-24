@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { checkRateLimit, ipFromRequest } from '@/lib/rate-limit/in-memory';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
   const { slug } = await ctx.params;
+  const ip = ipFromRequest(req.headers);
+  const rl = checkRateLimit(`view:${ip}`, 60, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'Too many requests' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+    );
+  }
+
   const admin = createAdminClient();
 
   const { data: proposal } = await admin
@@ -14,7 +24,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
     .maybeSingle();
   if (!proposal) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
   const ua = req.headers.get('user-agent') ?? null;
 
   await admin.from('proposal_events').insert({

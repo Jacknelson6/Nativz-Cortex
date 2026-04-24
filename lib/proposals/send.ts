@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getStripe } from '@/lib/stripe/client';
 import { sendOnboardingEmail } from '@/lib/email/resend';
 import { formatCents } from '@/lib/format/money';
+import { buildProposalSnapshot } from './snapshot';
 
 type AdminClient = SupabaseClient;
 
@@ -30,12 +31,26 @@ export async function sendProposal(
   const { data: proposal, error } = await admin
     .from('proposals')
     .select(
-      'id, slug, title, status, signer_name, signer_email, total_cents, deposit_cents, currency, client_id, stripe_payment_link_id, stripe_payment_link_url',
+      'id, slug, title, status, signer_name, signer_email, total_cents, deposit_cents, currency, client_id, stripe_payment_link_id, stripe_payment_link_url, sent_snapshot',
     )
     .eq('id', proposalId)
     .maybeSingle();
   if (error || !proposal) return { ok: false, error: 'Proposal not found' };
   if (!proposal.signer_email) return { ok: false, error: 'Signer email is required' };
+  if (!['draft', 'sent', 'viewed'].includes(proposal.status)) {
+    return { ok: false, error: `Cannot send a proposal in status '${proposal.status}'` };
+  }
+
+  // Snapshot on first send only — subsequent resends keep the original.
+  if (!proposal.sent_snapshot) {
+    const snapshot = await buildProposalSnapshot(admin, proposal.id);
+    if (snapshot) {
+      await admin
+        .from('proposals')
+        .update({ sent_snapshot: snapshot })
+        .eq('id', proposal.id);
+    }
+  }
 
   const { data: packages } = await admin
     .from('proposal_packages')

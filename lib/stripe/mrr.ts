@@ -10,12 +10,12 @@ export function mrrForSubscription(sub: {
   interval_count?: number | null;
 }): number {
   if (!includedInMrr(sub.status)) return 0;
+  if (!sub.interval) return 0;
   const unit = sub.unit_amount_cents ?? 0;
   const qty = sub.quantity ?? 1;
   const gross = unit * qty;
-  const interval = (sub.interval as IntervalLike | null | undefined) ?? 'month';
   const count = sub.interval_count ?? 1;
-  return Math.round(normalizeToMonth(gross, interval, count));
+  return Math.round(normalizeToMonth(gross, sub.interval as IntervalLike, count));
 }
 
 export function mrrForStripeSubscription(sub: Stripe.Subscription): number {

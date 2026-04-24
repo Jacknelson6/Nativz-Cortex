@@ -30,6 +30,19 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   const parsed = patchSchema.safeParse(raw);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.message }, { status: 400 });
 
+  const { data: existing } = await admin
+    .from('proposals')
+    .select('status')
+    .eq('id', id)
+    .maybeSingle();
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!['draft'].includes(existing.status)) {
+    return NextResponse.json(
+      { error: `Cannot edit a proposal in status '${existing.status}'` },
+      { status: 409 },
+    );
+  }
+
   const patch: Record<string, unknown> = {};
   if (parsed.data.title !== undefined) patch.title = parsed.data.title;
   if (parsed.data.client_id !== undefined) patch.client_id = parsed.data.client_id;
