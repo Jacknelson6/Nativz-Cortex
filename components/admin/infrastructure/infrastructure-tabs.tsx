@@ -3,7 +3,6 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   Activity,
-  Gauge,
   Layers,
   Loader2,
   Plug,
@@ -16,7 +15,6 @@ import { useEffect, useState, useTransition } from 'react';
 const TABS = [
   { slug: 'overview',     label: 'Overview',     icon: Activity },
   { slug: 'compute',      label: 'Compute',      icon: Server },
-  { slug: 'pipelines',    label: 'Pipelines',    icon: Gauge },
   { slug: 'ai',           label: 'AI',           icon: Layers },
   { slug: 'apify',        label: 'Scrapers',     icon: Zap },
   { slug: 'trend-finder', label: 'Trend finder', icon: Sliders },

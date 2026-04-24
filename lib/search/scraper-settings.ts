@@ -87,15 +87,83 @@ export function invalidateScraperSettingsCache(): void {
   cached = null;
 }
 
-export function estimateSearchCost(settings: ScraperSettings): {
+// ── Live unit prices ────────────────────────────────────────────────────────
+//
+// Populated by POST /api/admin/scraper-settings/refresh-pricing from real
+// apify_runs costs. Falls back to the hardcoded defaults when no refreshed
+// row exists (fresh environment) or the DB is unreachable.
+
+export interface UnitPrices {
+  reddit: number;
+  youtube: number;
+  tiktok: number;
+  web: number;
+  refreshedAt: string | null;
+}
+
+export const DEFAULT_UNIT_PRICES: UnitPrices = {
+  reddit: PER_UNIT_COST_USD.reddit,
+  youtube: PER_UNIT_COST_USD.youtube,
+  tiktok: PER_UNIT_COST_USD.tiktok,
+  web: PER_UNIT_COST_USD.web,
+  refreshedAt: null,
+};
+
+let cachedPrices: { value: UnitPrices; expiresAt: number } | null = null;
+const PRICES_TTL_MS = 60_000;
+
+export async function getUnitPrices(): Promise<UnitPrices> {
+  const now = Date.now();
+  if (cachedPrices && cachedPrices.expiresAt > now) return cachedPrices.value;
+
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from('scraper_unit_prices')
+      .select('*')
+      .eq('id', 1)
+      .maybeSingle();
+
+    if (error || !data) {
+      cachedPrices = { value: DEFAULT_UNIT_PRICES, expiresAt: now + PRICES_TTL_MS };
+      return DEFAULT_UNIT_PRICES;
+    }
+
+    const value: UnitPrices = {
+      reddit: Number(data.reddit_price_per_unit ?? DEFAULT_UNIT_PRICES.reddit),
+      youtube: Number(data.youtube_price_per_unit ?? DEFAULT_UNIT_PRICES.youtube),
+      tiktok: Number(data.tiktok_price_per_unit ?? DEFAULT_UNIT_PRICES.tiktok),
+      web: Number(data.web_price_per_unit ?? DEFAULT_UNIT_PRICES.web),
+      refreshedAt: (data.refreshed_at as string | null) ?? null,
+    };
+    cachedPrices = { value, expiresAt: now + PRICES_TTL_MS };
+    return value;
+  } catch {
+    return DEFAULT_UNIT_PRICES;
+  }
+}
+
+export function invalidateUnitPricesCache(): void {
+  cachedPrices = null;
+}
+
+/**
+ * Cost estimate. Pass `prices` from `getUnitPrices()` to use live numbers.
+ * Omitting it falls back to the hardcoded constants — keeps older callers
+ * working without forcing a round-trip.
+ */
+export function estimateSearchCost(
+  settings: ScraperSettings,
+  prices: UnitPrices = DEFAULT_UNIT_PRICES,
+): {
   perPlatformUsd: Record<keyof ScraperSettings, number>;
   totalUsd: number;
 } {
   const perPlatformUsd = {
-    reddit: settings.reddit.posts * PER_UNIT_COST_USD.reddit,
-    youtube: settings.youtube.videos * PER_UNIT_COST_USD.youtube,
-    tiktok: settings.tiktok.videos * PER_UNIT_COST_USD.tiktok,
-    web: settings.web.results * PER_UNIT_COST_USD.web,
+    reddit: settings.reddit.posts * prices.reddit,
+    youtube: settings.youtube.videos * prices.youtube,
+    tiktok: settings.tiktok.videos * prices.tiktok,
+    web: settings.web.results * prices.web,
   };
   const totalUsd = Object.values(perPlatformUsd).reduce((a, b) => a + b, 0);
   return { perPlatformUsd, totalUsd };

@@ -8,7 +8,6 @@ import {
 } from '@/components/admin/infrastructure/infrastructure-tabs';
 import { InfrastructureTabSkeleton } from '@/components/admin/infrastructure/tab-skeleton';
 import { OverviewTab } from '@/components/admin/infrastructure/tabs/overview-tab';
-import { TopicSearchTab } from '@/components/admin/infrastructure/tabs/topic-search-tab';
 import { ApifyTab } from '@/components/admin/infrastructure/tabs/apify-tab';
 import { AiTab } from '@/components/admin/infrastructure/tabs/ai-tab';
 import { ComputeTab } from '@/components/admin/infrastructure/tabs/compute-tab';
@@ -24,7 +23,6 @@ export const dynamic = 'force-dynamic';
 const VALID_TABS: readonly InfrastructureTabSlug[] = [
   'overview',
   'compute',
-  'pipelines',
   'ai',
   'apify',
   'trend-finder',
@@ -32,16 +30,17 @@ const VALID_TABS: readonly InfrastructureTabSlug[] = [
 ];
 
 // Legacy slugs (pre-condensed layout) → current slug. Keeps bookmarks + the
-// last-tab localStorage value from 404ing. `supabase` + `database` both map
-// to overview now that the Database tab was retired.
+// last-tab localStorage value from 404ing. `pipelines` was folded into
+// `trend-finder` on 2026-04-24 — all its content lives there now.
 const LEGACY_TAB_ALIASES: Record<string, InfrastructureTabSlug> = {
   crons: 'compute',
   vercel: 'compute',
   supabase: 'overview',
   database: 'overview',
   'ai-providers': 'ai',
-  'topic-search': 'pipelines',
+  'topic-search': 'trend-finder',
   'search-cost': 'trend-finder',
+  pipelines: 'trend-finder',
 };
 
 function resolveTab(raw: string | string[] | undefined): InfrastructureTabSlug {
@@ -80,19 +79,10 @@ export default async function InfrastructurePage({
 
   return (
     <div className="cortex-page-gutter max-w-6xl mx-auto space-y-8">
-      <header className="space-y-3">
-        <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-accent-text/80">
-          Cortex · admin
-        </p>
-        <div className="space-y-3">
-          <h1 className="text-3xl font-semibold leading-tight text-text-primary">
-            Infrastructure
-          </h1>
-          <p className="max-w-2xl text-[15px] text-text-muted">
-            Every backend Cortex runs on, in one place — so you never have to open Vercel,
-            Supabase, or Apify to see how we&apos;re doing. Summaries up top, details on tap.
-          </p>
-        </div>
+      <header>
+        <h1 className="text-3xl font-semibold leading-tight text-text-primary">
+          Infrastructure
+        </h1>
       </header>
 
       <InfrastructureTabs active={activeTab} />
@@ -113,8 +103,6 @@ function renderTab(slug: InfrastructureTabSlug) {
       return <OverviewTab />;
     case 'compute':
       return <ComputeTab />;
-    case 'pipelines':
-      return <TopicSearchTab />;
     case 'ai':
       return <AiTab />;
     case 'apify':

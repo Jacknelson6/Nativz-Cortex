@@ -115,23 +115,19 @@ function SectionTabsInner<T extends readonly SectionTabDef[]>({
  */
 interface SectionHeaderProps {
   title: string;
-  description: string;
+  /** Optional — when omitted the header is just the H1 + action. */
+  description?: string;
   action?: React.ReactNode;
 }
 
 export function SectionHeader({ title, description, action }: SectionHeaderProps) {
   return (
-    <header className="space-y-2">
-      <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-text/80">
-        Cortex · admin
-      </p>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold leading-tight text-text-primary">{title}</h1>
-          <p className="max-w-2xl text-sm text-text-muted">{description}</p>
-        </div>
-        {action ? <div className="shrink-0">{action}</div> : null}
+    <header className="flex flex-wrap items-end justify-between gap-4">
+      <div className="space-y-2">
+        <h1 className="text-2xl font-semibold leading-tight text-text-primary">{title}</h1>
+        {description ? <p className="max-w-2xl text-sm text-text-muted">{description}</p> : null}
       </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
     </header>
   );
 }

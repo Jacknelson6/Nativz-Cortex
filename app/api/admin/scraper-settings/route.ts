@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { invalidateScraperSettingsCache, SCRAPER_DEFAULTS } from '@/lib/search/scraper-settings';
+import {
+  invalidateScraperSettingsCache,
+  invalidateUnitPricesCache,
+  SCRAPER_DEFAULTS,
+  DEFAULT_UNIT_PRICES,
+} from '@/lib/search/scraper-settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,16 +32,28 @@ export async function GET() {
   const auth = await requireAdmin();
   if (!auth.ok) return NextResponse.json(auth.body, { status: auth.status });
 
-  const { data, error } = await auth.admin
-    .from('scraper_settings')
-    .select('*')
-    .eq('id', 1)
-    .maybeSingle();
+  const [settingsRes, pricesRes] = await Promise.all([
+    auth.admin.from('scraper_settings').select('*').eq('id', 1).maybeSingle(),
+    auth.admin.from('scraper_unit_prices').select('*').eq('id', 1).maybeSingle(),
+  ]);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (settingsRes.error) {
+    return NextResponse.json({ error: settingsRes.error.message }, { status: 500 });
+  }
+
+  const prices = pricesRes.data
+    ? {
+        reddit: Number(pricesRes.data.reddit_price_per_unit),
+        youtube: Number(pricesRes.data.youtube_price_per_unit),
+        tiktok: Number(pricesRes.data.tiktok_price_per_unit),
+        web: Number(pricesRes.data.web_price_per_unit),
+        refreshedAt: (pricesRes.data.refreshed_at as string | null) ?? null,
+        source: (pricesRes.data.source as unknown) ?? null,
+      }
+    : { ...DEFAULT_UNIT_PRICES, source: null };
 
   return NextResponse.json({
-    settings: data ?? {
+    settings: settingsRes.data ?? {
       id: 1,
       reddit_posts: SCRAPER_DEFAULTS.reddit.posts,
       reddit_comments_per_post: SCRAPER_DEFAULTS.reddit.commentPosts,
@@ -48,6 +65,7 @@ export async function GET() {
       tiktok_transcript_videos: SCRAPER_DEFAULTS.tiktok.transcriptVideos,
       web_results: SCRAPER_DEFAULTS.web.results,
     },
+    prices,
   });
 }
 
