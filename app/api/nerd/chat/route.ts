@@ -1122,6 +1122,11 @@ export async function POST(req: NextRequest) {
         model: requestModel,
         messages: apiMessages,
         stream: true,
+        // Ask OpenRouter to append a final chunk with `usage` totals so we
+        // can log real prompt/completion token counts instead of the
+        // 4-chars-per-token estimate. Works on any model that supports
+        // usage in chat completions.
+        stream_options: { include_usage: true },
         ...tokenLimitField,
         tools: tools.length > 0 ? tools : undefined,
         ...(toolChoice ? { tool_choice: toolChoice } : {}),
@@ -1164,6 +1169,23 @@ export async function POST(req: NextRequest) {
         let fullAssistantText = '';
         const allToolResults: Array<{ toolName: string; result: ToolResult }> = [];
 
+        // Generation id + usage totals captured from the SSE stream — used
+        // downstream for webhook reconciliation. OpenRouter includes the id
+        // on every chunk, and (when stream_options.include_usage is on) a
+        // final chunk with real prompt/completion token counts.
+        //
+        // The unions are aliased so TS doesn't narrow the initializer (null
+        // and '') through the nested processStream closure — without the
+        // alias the reads at the end of the stream collapse to `never`.
+        type StreamedUsage = {
+          prompt_tokens: number;
+          completion_tokens: number;
+          total_tokens?: number;
+        } | null;
+        type StreamedId = string | null;
+        let streamedGenerationId: StreamedId = null as StreamedId;
+        let streamedUsage: StreamedUsage = null as StreamedUsage;
+
         async function processStream(res: Response): Promise<{
           textContent: string;
           toolCalls: Array<{ id: string; function: { name: string; arguments: string } }>;
@@ -1190,6 +1212,24 @@ export async function POST(req: NextRequest) {
 
               try {
                 const chunk = JSON.parse(data);
+
+                // OpenRouter stamps the generation id on every SSE chunk; grab
+                // the first non-empty one we see and remember it for logUsage.
+                if (!streamedGenerationId && typeof chunk.id === 'string' && chunk.id.trim()) {
+                  streamedGenerationId = chunk.id.trim();
+                }
+
+                // Final chunk (when include_usage=true) carries prompt +
+                // completion token counts. Overwrite as later chunks arrive
+                // so the last non-null one wins.
+                if (chunk.usage && typeof chunk.usage === 'object') {
+                  streamedUsage = {
+                    prompt_tokens: Number(chunk.usage.prompt_tokens ?? 0),
+                    completion_tokens: Number(chunk.usage.completion_tokens ?? 0),
+                    total_tokens: Number(chunk.usage.total_tokens ?? 0),
+                  };
+                }
+
                 const delta = chunk.choices?.[0]?.delta;
                 if (!delta) continue;
 
@@ -1343,6 +1383,9 @@ export async function POST(req: NextRequest) {
                 model: requestModel,
                 messages: currentMessages,
                 stream: true,
+                // Same usage-in-stream opt-in as the initial request so
+                // post-tool-call turns also land a real-tokens + id pair.
+                stream_options: { include_usage: true },
                 ...tokenLimitField,
                 tools: tools.length > 0 ? tools : undefined,
                 ...(continueToolChoice ? { tool_choice: continueToolChoice } : {}),
@@ -1389,19 +1432,36 @@ export async function POST(req: NextRequest) {
             }
           }
 
-          // Log usage for the Nerd chat
-          const estimatedInputTokens = Math.ceil((systemPrompt.length + portfolioContext.length + lastUserMsg.length) / 4);
-          const estimatedOutputTokens = Math.ceil((fullAssistantText?.length ?? 0) / 4);
+          // Log usage for the Nerd chat. Prefer the real token counts +
+          // generation id from the SSE stream (stream_options.include_usage)
+          // — falls back to a 4-chars-per-token heuristic only if the
+          // model didn't honour include_usage. Stamping the generation id
+          // lets the OpenRouter webhook reconcile this row's cost to the
+          // post-billing truth.
+          const heuristicIn = Math.ceil((systemPrompt.length + portfolioContext.length + lastUserMsg.length) / 4);
+          const heuristicOut = Math.ceil((fullAssistantText?.length ?? 0) / 4);
+          // Pull the streamed usage into a local const so TS stops narrowing
+          // it through the nested processStream closure — optional chaining
+          // ended up on `never` after the closure's assignments.
+          const finalUsage = streamedUsage;
+          const inputTokens = finalUsage ? finalUsage.prompt_tokens : heuristicIn;
+          const outputTokens = finalUsage ? finalUsage.completion_tokens : heuristicOut;
+          const totalTokens = finalUsage && finalUsage.total_tokens != null
+            ? finalUsage.total_tokens
+            : inputTokens + outputTokens;
           logUsage({
             service: 'openrouter',
             model: requestModel,
             feature: 'nerd_chat',
-            inputTokens: estimatedInputTokens,
-            outputTokens: estimatedOutputTokens,
-            totalTokens: estimatedInputTokens + estimatedOutputTokens,
-            costUsd: calculateCost(requestModel, estimatedInputTokens, estimatedOutputTokens),
+            inputTokens,
+            outputTokens,
+            totalTokens,
+            costUsd: calculateCost(requestModel, inputTokens, outputTokens),
             userId: userIdForStream,
             userEmail: user.email ?? undefined,
+            metadata: streamedGenerationId
+              ? { openrouter_generation_id: streamedGenerationId }
+              : undefined,
           }).catch(() => {});
 
           controller.close();

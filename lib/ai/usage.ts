@@ -139,80 +139,198 @@ export interface UsageSummary {
   };
 }
 
-export async function getUsageSummary(from: string, to: string): Promise<UsageSummary> {
-  const admin = createAdminClient();
+// ── Aggregation passes ─────────────────────────────────────────────────────
+// getUsageSummary decomposes into a few small reducers over the same row
+// list. Each pass is pure and independently testable, and the top-level
+// function just composes them. Keeping the row fetch in one place (the
+// `fetchUsageRows` helper) lets the aggregation pieces stay in-memory and
+// avoids a second round-trip to Postgres.
 
-  const { data: logs } = await admin
+type UsageRow = {
+  service: string;
+  model: string | null;
+  feature: string;
+  total_tokens: number | null;
+  cost_usd: number | null;
+  created_at: string;
+  user_id: string | null;
+  user_email: string | null;
+  metadata: unknown;
+};
+
+async function fetchUsageRows(from: string, to: string): Promise<UsageRow[]> {
+  const admin = createAdminClient();
+  const { data } = await admin
     .from('api_usage_logs')
     .select('service, model, feature, total_tokens, cost_usd, created_at, user_id, user_email, metadata')
     .gte('created_at', from)
     .lte('created_at', to)
     .order('created_at', { ascending: true });
+  return (data ?? []) as UsageRow[];
+}
 
-  const entries = logs ?? [];
+/** Row-level derived fields every aggregation pass uses. */
+interface DerivedFields {
+  cost: number;
+  tokens: number;
+  day: string;
+  modelKey: string;
+}
 
-  const byService: Record<string, { totalTokens: number; costUsd: number; requests: number }> = {};
-  const byModel: Record<string, { service: string; totalTokens: number; costUsd: number; requests: number }> = {};
-  const byFeature: Record<string, { model: string; totalTokens: number; costUsd: number; requests: number }> = {};
-  const byFeatureModelCounts: Record<string, Record<string, number>> = {};
-  const byUser: Record<string, { email: string; totalTokens: number; costUsd: number; requests: number }> = {};
+function deriveRow(row: UsageRow): DerivedFields {
+  return {
+    cost: Number(row.cost_usd) || 0,
+    tokens: row.total_tokens || 0,
+    day: row.created_at.split('T')[0],
+    modelKey: row.model || 'unknown',
+  };
+}
+
+type BucketTotals = { totalTokens: number; costUsd: number; requests: number };
+
+function aggregateByService(rows: UsageRow[]): Record<string, BucketTotals> {
+  const out: Record<string, BucketTotals> = {};
+  for (const row of rows) {
+    const { cost, tokens } = deriveRow(row);
+    const bucket = (out[row.service] ??= { totalTokens: 0, costUsd: 0, requests: 0 });
+    bucket.totalTokens += tokens;
+    bucket.costUsd += cost;
+    bucket.requests += 1;
+  }
+  return out;
+}
+
+function aggregateByModel(
+  rows: UsageRow[],
+): Record<string, { service: string } & BucketTotals> {
+  const out: Record<string, { service: string } & BucketTotals> = {};
+  for (const row of rows) {
+    const { cost, tokens, modelKey } = deriveRow(row);
+    const bucket = (out[modelKey] ??= {
+      service: row.service,
+      totalTokens: 0,
+      costUsd: 0,
+      requests: 0,
+    });
+    bucket.totalTokens += tokens;
+    bucket.costUsd += cost;
+    bucket.requests += 1;
+  }
+  return out;
+}
+
+/**
+ * `byFeature` tracks usage per feature AND picks the dominant model per
+ * feature (the model that answered the most calls for that feature in the
+ * window). Two-pass so we can count model occurrences before deciding the
+ * winner — doing it in one pass would be simpler but would sort-on-every-row.
+ */
+function aggregateByFeature(
+  rows: UsageRow[],
+): Record<string, { model: string } & BucketTotals> {
+  const out: Record<string, { model: string } & BucketTotals> = {};
+  const modelCounts: Record<string, Record<string, number>> = {};
+
+  for (const row of rows) {
+    const { cost, tokens, modelKey } = deriveRow(row);
+    const bucket = (out[row.feature] ??= {
+      model: modelKey,
+      totalTokens: 0,
+      costUsd: 0,
+      requests: 0,
+    });
+    bucket.totalTokens += tokens;
+    bucket.costUsd += cost;
+    bucket.requests += 1;
+
+    const counts = (modelCounts[row.feature] ??= {});
+    counts[modelKey] = (counts[modelKey] ?? 0) + 1;
+  }
+
+  for (const [feature, counts] of Object.entries(modelCounts)) {
+    const dominantModel = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
+    if (dominantModel) out[feature].model = dominantModel;
+  }
+  return out;
+}
+
+function aggregateByUser(
+  rows: UsageRow[],
+): Record<string, { email: string } & BucketTotals> {
+  const out: Record<string, { email: string } & BucketTotals> = {};
+  for (const row of rows) {
+    const { cost, tokens } = deriveRow(row);
+    const key = row.user_id ?? 'system';
+    const bucket = (out[key] ??= {
+      email: row.user_email ?? 'System',
+      totalTokens: 0,
+      costUsd: 0,
+      requests: 0,
+    });
+    bucket.totalTokens += tokens;
+    bucket.costUsd += cost;
+    bucket.requests += 1;
+  }
+  return out;
+}
+
+/**
+ * Daily aggregates — split into two: a flat daily totals array (for cost-
+ * over-time sparklines) and a per-model-per-day breakdown (for the stacked
+ * bar chart). Both derived from the same single pass.
+ */
+function aggregateDaily(rows: UsageRow[]): {
+  daily: UsageSummary['daily'];
+  dailyByModel: UsageSummary['dailyByModel'];
+} {
   const dailyMap: Record<string, { costUsd: number; requests: number; totalTokens: number }> = {};
-  const dailyTokensByModelMap: Record<string, Record<string, number>> = {};
-  const dailyCostByModelMap: Record<string, Record<string, number>> = {};
-  let totalTokens = 0;
-  let totalCost = 0;
-  let reconciledCount = 0;
-  let reconciledCost = 0;
+  const tokensByModelMap: Record<string, Record<string, number>> = {};
+  const costByModelMap: Record<string, Record<string, number>> = {};
 
-  // Calendar-scoped counters read regardless of `from`/`to` — they look at the
-  // same row list and filter by date string, so "today" and "this month" stay
-  // meaningful even when the user flips to a 7d window.
+  for (const row of rows) {
+    const { cost, tokens, day, modelKey } = deriveRow(row);
+
+    const d = (dailyMap[day] ??= { costUsd: 0, requests: 0, totalTokens: 0 });
+    d.costUsd += cost;
+    d.requests += 1;
+    d.totalTokens += tokens;
+
+    const tokensForDay = (tokensByModelMap[day] ??= {});
+    tokensForDay[modelKey] = (tokensForDay[modelKey] ?? 0) + tokens;
+
+    const costForDay = (costByModelMap[day] ??= {});
+    costForDay[modelKey] = (costForDay[modelKey] ?? 0) + cost;
+  }
+
+  const daily = Object.entries(dailyMap).map(([date, data]) => ({ date, ...data }));
+  const dailyByModel = Object.entries(tokensByModelMap)
+    .map(([date, tokensByModel]) => ({
+      date,
+      tokensByModel,
+      costByModel: costByModelMap[date] ?? {},
+    }))
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
+
+  return { daily, dailyByModel };
+}
+
+/**
+ * Calendar-scoped counters — they read the SAME in-memory rows as the other
+ * aggregations, but bucket by today/this-month instead of the user's from/to
+ * window. That keeps "Used today" meaningful when the window is "last 7d".
+ */
+function aggregateCalendarRollups(rows: UsageRow[]): {
+  today: BucketTotals;
+  thisMonth: BucketTotals;
+} {
   const now = new Date();
   const todayKey = now.toISOString().slice(0, 10);
   const monthKey = todayKey.slice(0, 7);
-  const today = { totalTokens: 0, costUsd: 0, requests: 0 };
-  const thisMonth = { totalTokens: 0, costUsd: 0, requests: 0 };
+  const today: BucketTotals = { totalTokens: 0, costUsd: 0, requests: 0 };
+  const thisMonth: BucketTotals = { totalTokens: 0, costUsd: 0, requests: 0 };
 
-  for (const log of entries) {
-    const cost = Number(log.cost_usd) || 0;
-    const tokens = log.total_tokens || 0;
-    const day = log.created_at.split('T')[0];
-    const modelKey = log.model || 'unknown';
-
-    if (!byService[log.service]) byService[log.service] = { totalTokens: 0, costUsd: 0, requests: 0 };
-    byService[log.service].totalTokens += tokens;
-    byService[log.service].costUsd += cost;
-    byService[log.service].requests += 1;
-
-    if (!byModel[modelKey]) byModel[modelKey] = { service: log.service, totalTokens: 0, costUsd: 0, requests: 0 };
-    byModel[modelKey].totalTokens += tokens;
-    byModel[modelKey].costUsd += cost;
-    byModel[modelKey].requests += 1;
-
-    if (!byFeature[log.feature]) byFeature[log.feature] = { model: modelKey, totalTokens: 0, costUsd: 0, requests: 0 };
-    if (!byFeatureModelCounts[log.feature]) byFeatureModelCounts[log.feature] = {};
-    byFeature[log.feature].totalTokens += tokens;
-    byFeature[log.feature].costUsd += cost;
-    byFeature[log.feature].requests += 1;
-    byFeatureModelCounts[log.feature][modelKey] = (byFeatureModelCounts[log.feature][modelKey] ?? 0) + 1;
-
-    const userKey = log.user_id ?? 'system';
-    if (!byUser[userKey]) byUser[userKey] = { email: log.user_email ?? 'System', totalTokens: 0, costUsd: 0, requests: 0 };
-    byUser[userKey].totalTokens += tokens;
-    byUser[userKey].costUsd += cost;
-    byUser[userKey].requests += 1;
-
-    if (!dailyMap[day]) dailyMap[day] = { costUsd: 0, requests: 0, totalTokens: 0 };
-    dailyMap[day].costUsd += cost;
-    dailyMap[day].requests += 1;
-    dailyMap[day].totalTokens += tokens;
-
-    if (!dailyTokensByModelMap[day]) dailyTokensByModelMap[day] = {};
-    dailyTokensByModelMap[day][modelKey] = (dailyTokensByModelMap[day][modelKey] ?? 0) + tokens;
-
-    if (!dailyCostByModelMap[day]) dailyCostByModelMap[day] = {};
-    dailyCostByModelMap[day][modelKey] = (dailyCostByModelMap[day][modelKey] ?? 0) + cost;
-
+  for (const row of rows) {
+    const { cost, tokens, day } = deriveRow(row);
     if (day === todayKey) {
       today.totalTokens += tokens;
       today.costUsd += cost;
@@ -223,55 +341,68 @@ export async function getUsageSummary(from: string, to: string): Promise<UsageSu
       thisMonth.costUsd += cost;
       thisMonth.requests += 1;
     }
+  }
+  return { today, thisMonth };
+}
 
-    // Reconciliation: the webhook handler stamps metadata.openrouter_generation_id
-    // on every row it writes or updates, so presence of that key ≡ cost is
-    // OpenRouter's billing truth, not our local price-table estimate.
-    const meta = (log.metadata as Record<string, unknown> | null) ?? null;
+/**
+ * Reconciliation coverage — how many rows carry an
+ * `metadata.openrouter_generation_id`. The webhook handler stamps that
+ * key on every row it writes or updates, so presence ≡ cost is
+ * OpenRouter's billing truth rather than our local price-table estimate.
+ */
+function aggregateReconciliation(rows: UsageRow[]): UsageSummary['reconciliation'] {
+  let reconciledCount = 0;
+  let reconciledCost = 0;
+  for (const row of rows) {
+    const { cost } = deriveRow(row);
+    const meta = row.metadata && typeof row.metadata === 'object'
+      ? (row.metadata as Record<string, unknown>)
+      : null;
     if (meta && typeof meta.openrouter_generation_id === 'string' && meta.openrouter_generation_id.length > 0) {
       reconciledCount += 1;
       reconciledCost += cost;
     }
+  }
+  const total = rows.length;
+  return {
+    reconciled: reconciledCount,
+    estimated: total - reconciledCount,
+    total,
+    coveragePct: total > 0 ? Math.round((reconciledCount / total) * 100) : 0,
+    reconciledCostUsd: reconciledCost,
+  };
+}
 
+function aggregateTotals(rows: UsageRow[]): BucketTotals {
+  let totalTokens = 0;
+  let totalCost = 0;
+  for (const row of rows) {
+    const { cost, tokens } = deriveRow(row);
     totalTokens += tokens;
     totalCost += cost;
   }
+  return { totalTokens, costUsd: totalCost, requests: rows.length };
+}
 
-  const daily = Object.entries(dailyMap).map(([date, data]) => ({ date, ...data }));
-  const dailyByModel = Object.entries(dailyTokensByModelMap)
-    .map(([date, tokensByModel]) => ({
-      date,
-      tokensByModel,
-      costByModel: dailyCostByModelMap[date] ?? {},
-    }))
-    .sort((a, b) => (a.date < b.date ? -1 : 1));
+// ── Public entry point ─────────────────────────────────────────────────────
 
-  for (const [feature, counts] of Object.entries(byFeatureModelCounts)) {
-    const dominantModel = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
-    if (dominantModel) {
-      byFeature[feature].model = dominantModel;
-    }
-  }
-
-  const estimatedCount = entries.length - reconciledCount;
-  const coveragePct = entries.length > 0 ? Math.round((reconciledCount / entries.length) * 100) : 0;
+export async function getUsageSummary(from: string, to: string): Promise<UsageSummary> {
+  const rows = await fetchUsageRows(from, to);
+  const { daily, dailyByModel } = aggregateDaily(rows);
+  const { today, thisMonth } = aggregateCalendarRollups(rows);
 
   return {
-    byService,
-    byModel,
-    byFeature,
-    byUser,
-    total: { totalTokens, costUsd: totalCost, requests: entries.length },
+    byService: aggregateByService(rows),
+    byModel: aggregateByModel(rows),
+    byFeature: aggregateByFeature(rows),
+    byUser: aggregateByUser(rows),
+    total: aggregateTotals(rows),
     daily,
     dailyByModel,
     today,
     thisMonth,
-    reconciliation: {
-      reconciled: reconciledCount,
-      estimated: estimatedCount,
-      total: entries.length,
-      coveragePct,
-      reconciledCostUsd: reconciledCost,
-    },
+    reconciliation: aggregateReconciliation(rows),
   };
 }
+

@@ -63,22 +63,29 @@ export async function POST(req: Request) {
   }
 
   const admin = createAdminClient();
-
-  // Try to locate an existing row (e.g. the client-side log that fired when
-  // we issued the request). Match on metadata.openrouter_generation_id.
-  const { data: existing } = await admin
-    .from('api_usage_logs')
-    .select('id, cost_usd')
-    .contains('metadata', { openrouter_generation_id: generationId })
-    .limit(1)
-    .maybeSingle();
-
   const input = Number(body.tokens_prompt ?? 0);
   const output = Number(body.tokens_completion ?? 0);
   const total = input + output;
   const cost = Number(body.total_cost ?? 0);
 
+  // Look for the client-side row that fired when we issued the request.
+  // Match on metadata.openrouter_generation_id (GIN-indexed in migration
+  // 161 so the lookup stays fast as the table grows).
+  const { data: existing } = await admin
+    .from('api_usage_logs')
+    .select('id, metadata')
+    .contains('metadata', { openrouter_generation_id: generationId })
+    .limit(1)
+    .maybeSingle();
+
   if (existing?.id) {
+    // Update branch — the usual happy path. Preserve any metadata the
+    // client stamped (user_id hints, feature-specific fields, etc.) and
+    // layer the reconciliation marker on top.
+    const prevMeta =
+      existing.metadata && typeof existing.metadata === 'object'
+        ? (existing.metadata as Record<string, unknown>)
+        : {};
     await admin
       .from('api_usage_logs')
       .update({
@@ -86,33 +93,82 @@ export async function POST(req: Request) {
         output_tokens: output,
         total_tokens: total,
         cost_usd: cost,
-        // preserve the original metadata and tack on the reconciliation stamp
         metadata: {
+          ...prevMeta,
           ...(body.metadata ?? {}),
           openrouter_generation_id: generationId,
           reconciled_at: new Date().toISOString(),
         },
       })
       .eq('id', existing.id);
-  } else {
-    await admin.from('api_usage_logs').insert({
-      service: 'openrouter',
-      model: body.model ?? 'unknown',
-      feature: 'reconciled',
-      input_tokens: input,
-      output_tokens: output,
-      total_tokens: total,
-      cost_usd: cost,
-      created_at: body.created_at ?? new Date().toISOString(),
-      metadata: {
-        ...(body.metadata ?? {}),
-        openrouter_generation_id: generationId,
-        reconciled_only: true,
-      },
-    });
+    return NextResponse.json({ ok: true, reconciled: true });
   }
 
-  return NextResponse.json({ ok: true, reconciled: Boolean(existing?.id) });
+  // Insert branch — either the webhook arrived before our client insert
+  // (possible if the local log failed or is still in flight) or the
+  // generation id never landed in the DB. The unique partial index on
+  // metadata->>'openrouter_generation_id' (migration 161) guarantees
+  // that concurrent webhook retries can't race in two copies — on the
+  // second attempt we catch 23505 and fall back to the update path.
+  const insertPayload = {
+    service: 'openrouter',
+    model: body.model ?? 'unknown',
+    feature: 'reconciled',
+    input_tokens: input,
+    output_tokens: output,
+    total_tokens: total,
+    cost_usd: cost,
+    created_at: body.created_at ?? new Date().toISOString(),
+    metadata: {
+      ...(body.metadata ?? {}),
+      openrouter_generation_id: generationId,
+      reconciled_only: true,
+      reconciled_at: new Date().toISOString(),
+    },
+  };
+
+  const { error: insertError } = await admin.from('api_usage_logs').insert(insertPayload);
+  if (!insertError) {
+    return NextResponse.json({ ok: true, reconciled: false });
+  }
+
+  // 23505 = unique_violation. A concurrent delivery beat us to the row;
+  // retry as an update so the final state still matches this payload.
+  if (insertError.code !== '23505') {
+    return NextResponse.json(
+      { error: 'Failed to write row', detail: insertError.message },
+      { status: 500 },
+    );
+  }
+
+  const { data: raced } = await admin
+    .from('api_usage_logs')
+    .select('id, metadata')
+    .contains('metadata', { openrouter_generation_id: generationId })
+    .limit(1)
+    .maybeSingle();
+  if (raced?.id) {
+    const prevMeta =
+      raced.metadata && typeof raced.metadata === 'object'
+        ? (raced.metadata as Record<string, unknown>)
+        : {};
+    await admin
+      .from('api_usage_logs')
+      .update({
+        input_tokens: input,
+        output_tokens: output,
+        total_tokens: total,
+        cost_usd: cost,
+        metadata: {
+          ...prevMeta,
+          ...(body.metadata ?? {}),
+          openrouter_generation_id: generationId,
+          reconciled_at: new Date().toISOString(),
+        },
+      })
+      .eq('id', raced.id);
+  }
+  return NextResponse.json({ ok: true, reconciled: true, raced: true });
 }
 
 export async function GET() {

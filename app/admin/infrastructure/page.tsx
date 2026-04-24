@@ -26,8 +26,12 @@ const VALID_TABS: readonly InfrastructureTabSlug[] = [
 ];
 
 // Legacy slugs → current slug. Keeps bookmarks + the last-tab localStorage
-// value from 404ing after the Overview tab was retired, Pipelines was folded
-// into Trend finder, and AI + Apify were merged into Cost.
+// value from 404ing after the tab restructure on 2026-04-24. Safe to prune
+// any alias whose "added" date is older than ~30 days — by then the
+// localStorage value on every active admin will have rotated to a live slug.
+// Prune candidates (next cleanup ≥ 2026-05-24):
+//   overview, crons, vercel, supabase, database, ai, apify, ai-providers,
+//   pipelines, topic-search, search-cost  (all added 2026-04-24)
 const LEGACY_TAB_ALIASES: Record<string, InfrastructureTabSlug> = {
   overview: 'compute',
   crons: 'compute',
