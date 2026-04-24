@@ -57,7 +57,7 @@ function resolveTab(raw: string | string[] | undefined): InfrastructureTabSlug {
 export default async function InfrastructurePage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; preset?: string; from?: string; to?: string }>;
 }) {
   const supabase = await createServerSupabaseClient();
   const {
@@ -75,6 +75,9 @@ export default async function InfrastructurePage({
   }
 
   const activeTab = resolveTab(params.tab);
+  // The date-range query params (preset/from/to) key the Suspense subtree
+  // too, so switching range triggers the skeleton alongside tab switches.
+  const rangeKey = `${params.preset ?? ''}:${params.from ?? ''}:${params.to ?? ''}`;
 
   return (
     <div className="cortex-page-gutter max-w-6xl mx-auto space-y-8">
@@ -86,24 +89,29 @@ export default async function InfrastructurePage({
 
       <InfrastructureTabs active={activeTab} />
 
-      {/* `key={activeTab}` forces React to treat each tab as a fresh subtree
-         so the Suspense fallback paints the moment the slug changes — the
-         previous tab doesn't linger while the new one's awaits resolve. */}
-      <Suspense key={activeTab} fallback={<InfrastructureTabSkeleton />}>
-        {renderTab(activeTab)}
+      {/* `key={activeTab:rangeKey}` forces React to treat each tab and
+         each range change as a fresh subtree so the Suspense fallback
+         paints the moment either slug changes. */}
+      <Suspense key={`${activeTab}:${rangeKey}`} fallback={<InfrastructureTabSkeleton />}>
+        {renderTab(activeTab, params)}
       </Suspense>
     </div>
   );
 }
 
-function renderTab(slug: InfrastructureTabSlug) {
+function renderTab(
+  slug: InfrastructureTabSlug,
+  params: { preset?: string; from?: string; to?: string },
+) {
   switch (slug) {
     case 'compute':
       return <ComputeTab />;
     case 'cost':
-      return <CostTab />;
+      return <CostTab preset={params.preset} from={params.from} to={params.to} />;
     case 'trend-finder':
-      return <TrendFinderSettingsTab />;
+      return (
+        <TrendFinderSettingsTab preset={params.preset} from={params.from} to={params.to} />
+      );
     case 'integrations':
       return <IntegrationsTab />;
   }

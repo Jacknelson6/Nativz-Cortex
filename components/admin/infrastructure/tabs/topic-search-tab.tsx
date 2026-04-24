@@ -4,6 +4,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { ArrowRight, ArrowUpRight, ChevronRight, Pencil, User as UserIcon } from 'lucide-react';
 import { Stat, StatusPill, Meta } from '../stat';
 import { INFRA_CACHE_TAG, INFRA_CACHE_TTL } from '../cache';
+import type { DateRange, DateRangePreset } from '@/lib/types/reporting';
+import { presetLabel } from '@/lib/reporting/date-presets';
 
 type StageRow = {
   phase?: string;
@@ -171,18 +173,20 @@ const getRecentRunsCached = unstable_cache(
   { revalidate: INFRA_CACHE_TTL, tags: [INFRA_CACHE_TAG] },
 );
 
-const getWeeklyRollupCached = unstable_cache(
-  async () => {
+const getRangedRollupCached = unstable_cache(
+  async (range: DateRange) => {
     const admin = createAdminClient();
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const startIso = new Date(`${range.start}T00:00:00`).toISOString();
+    const endIso = new Date(`${range.end}T23:59:59.999`).toISOString();
     return admin
       .from('topic_searches')
       .select('status, completed_at, processing_started_at, pipeline_state')
       .eq('topic_pipeline', 'llm_v1')
-      .gte('created_at', sevenDaysAgo)
-      .limit(500);
+      .gte('created_at', startIso)
+      .lte('created_at', endIso)
+      .limit(1000);
   },
-  ['infrastructure-weekly-rollup'],
+  ['infrastructure-ranged-rollup'],
   { revalidate: INFRA_CACHE_TTL, tags: [INFRA_CACHE_TAG] },
 );
 
@@ -199,31 +203,32 @@ const getConfiguredModelsCached = unstable_cache(
   { revalidate: 5 * 60, tags: [INFRA_CACHE_TAG] },
 );
 
-export async function TopicSearchTab() {
-  const [recentResult, weeklyResult, modelsResult] = await Promise.all([
+export async function TopicSearchTab({ range, preset }: { range: DateRange; preset: DateRangePreset }) {
+  const [recentResult, rollupResult, modelsResult] = await Promise.all([
     getRecentRunsCached(),
-    getWeeklyRollupCached(),
+    getRangedRollupCached(range),
     getConfiguredModelsCached(),
   ]);
 
   const rows = (recentResult.searchRes.data ?? []) as SearchRow[];
   const userMap = recentResult.userMap;
-  const weekly = (weeklyResult.data ?? []) as Pick<
+  const rolled = (rollupResult.data ?? []) as Pick<
     SearchRow,
     'status' | 'completed_at' | 'processing_started_at' | 'pipeline_state'
   >[];
+  const rangeWord = presetLabel(preset).toLowerCase();
 
-  const completedWeek = weekly.filter((r) => r.status === 'completed');
-  const failedWeek = weekly.filter((r) => r.status === 'failed').length;
+  const completedRange = rolled.filter((r) => r.status === 'completed');
+  const failedRange = rolled.filter((r) => r.status === 'failed').length;
 
-  const totalTimes = completedWeek
+  const totalTimes = completedRange
     .map((r) => sumStageDurations(r.pipeline_state?.stages))
     .filter((n) => n > 0);
   const avgTotal = totalTimes.length
     ? totalTimes.reduce((a, b) => a + b, 0) / totalTimes.length
     : null;
 
-  const mergeTimes = completedWeek
+  const mergeTimes = completedRange
     .flatMap((r) => r.pipeline_state?.stages ?? [])
     .filter((s) => s.phase === 'merge' && typeof s.duration_ms === 'number')
     .map((s) => s.duration_ms as number);
@@ -231,7 +236,7 @@ export async function TopicSearchTab() {
     ? mergeTimes.reduce((a, b) => a + b, 0) / mergeTimes.length
     : null;
 
-  const subtopicTimes = completedWeek
+  const subtopicTimes = completedRange
     .flatMap((r) => r.pipeline_state?.stages ?? [])
     .filter((s) => s.phase === 'subtopic_research' && typeof s.duration_ms === 'number')
     .map((s) => s.duration_ms as number);
@@ -244,11 +249,15 @@ export async function TopicSearchTab() {
   return (
     <div className="space-y-8">
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Completed (7d)" value={String(completedWeek.length)} />
         <Stat
-          label="Failed (7d)"
-          value={String(failedWeek)}
-          sub={weekly.length ? `${Math.round((failedWeek / weekly.length) * 100)}% failure rate` : undefined}
+          label="Completed"
+          value={String(completedRange.length)}
+          sub={rangeWord}
+        />
+        <Stat
+          label="Failed"
+          value={String(failedRange)}
+          sub={rolled.length ? `${Math.round((failedRange / rolled.length) * 100)}% failure rate` : rangeWord}
         />
         <Stat label="Avg total time" value={formatMs(avgTotal)} sub="sum of stage durations" />
         <Stat
