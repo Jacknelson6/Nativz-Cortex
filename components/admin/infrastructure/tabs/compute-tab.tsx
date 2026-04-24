@@ -1,31 +1,35 @@
 /**
  * Infrastructure › Compute — Vercel monitoring only.
  *
- * Strict scope: uptime, new deployments, and the log surface. Nothing else.
- * Cron schedule + cron run telemetry moved to the Overview tab's failure
- * feed and the tile-level trend sparkline so this page stays focused.
+ * Strict scope: uptime, new deployments, and a live runtime log stream.
+ * No cards for the running env or URLs (both live one click away on the
+ * Vercel dashboard). No disclosure/collapse on anything — you land here,
+ * you see everything.
  *
  * Contents, top → bottom:
- *   • Top strip: environment · latest deploy · production status · uptime
- *   • Current deploy card (runtime env from Vercel)
- *   • URLs card (production + preview)
- *   • Deployments table with "Open logs" per row (Vercel API)
+ *   1. Top strip: uptime · environment · latest deploy · deployments count
+ *   2. Recent deployments table (always open, fixed-width right columns so
+ *      alignment doesn't drift with commit-message length)
+ *   3. Live log stream (polls Vercel's events API every 3s, no click to open)
+ *
+ * Note: Vercel's observability charts (Edge Requests, Fast Data Transfer,
+ * Functions error rate, Active CPU) are not exposed on their public REST
+ * API with a project-scoped token — those endpoints 404. A single prominent
+ * "Open observability in Vercel" link in the header surfaces them one click
+ * away rather than faking charts with unrelated data.
  */
 
 import { unstable_cache } from 'next/cache';
 import {
   ArrowUpRight,
-  CircleDot,
-  ExternalLink,
   GitBranch,
-  Globe,
   Rocket,
   ScrollText,
-  Timer,
+  BarChart3,
 } from 'lucide-react';
 import { Stat } from '../stat';
-import { Disclosure, SectionCard } from '../section-card';
 import { INFRA_CACHE_TAG, INFRA_CACHE_TTL } from '../cache';
+import { LiveLogStream } from '../live-log-stream';
 
 interface VercelDeployment {
   uid: string;
@@ -64,7 +68,7 @@ async function fetchVercelDeployments(): Promise<VercelRollup> {
   }
 
   try {
-    const params = new URLSearchParams({ limit: '15' });
+    const params = new URLSearchParams({ limit: '20' });
     if (projectId) params.set('projectId', projectId);
     if (teamId) params.set('teamId', teamId);
     const res = await fetch(`https://api.vercel.com/v6/deployments?${params.toString()}`, {
@@ -92,7 +96,7 @@ const getComputeRollup = unstable_cache(
     const vercel = await fetchVercelDeployments();
     return { vercel };
   },
-  ['infrastructure-compute-rollup'],
+  ['infrastructure-compute-rollup-v3'],
   { revalidate: INFRA_CACHE_TTL, tags: [INFRA_CACHE_TAG] },
 );
 
@@ -128,52 +132,51 @@ function stateTone(state: string): string {
   return 'border border-text-muted/30 bg-surface-hover/60 text-text-secondary';
 }
 
-/**
- * Build the canonical Vercel log URL for a deployment. Uses inspectorUrl
- * when the API gives us one (authoritative), falling back to the known
- * team-slug + project pattern so the link still resolves locally.
- */
+function teamSlugOf(teamId: string | null): string | null {
+  if (!teamId) return null;
+  // Stable internal mapping — avoids a round-trip to /v2/teams/{id} on
+  // every render just to resolve a display slug.
+  if (teamId === 'team_0vyaJsvD9Q8NOFTD8K1di8BB') return 'anderson-collaborative';
+  return teamId;
+}
+
 function deploymentLogsUrl(d: VercelDeployment, teamId: string | null): string {
   if (d.inspectorUrl) return `${d.inspectorUrl.replace(/\/$/, '')}/logs`;
-  const slug = teamId === 'team_0vyaJsvD9Q8NOFTD8K1di8BB' ? 'anderson-collaborative' : teamId;
-  return `https://vercel.com/${slug}/nativz-cortex/${d.uid}/logs`;
+  const slug = teamSlugOf(teamId);
+  return `https://vercel.com/${slug ?? 'dashboard'}/nativz-cortex/${d.uid}/logs`;
 }
 
 export async function ComputeTab() {
   const { vercel } = await getComputeRollup();
 
-  // Runtime env — set automatically by Vercel on every deploy.
   const env = process.env.VERCEL_ENV ?? 'local';
-  const sha = process.env.VERCEL_GIT_COMMIT_SHA ?? null;
-  const ref = process.env.VERCEL_GIT_COMMIT_REF ?? null;
-  const commitMessage = process.env.VERCEL_GIT_COMMIT_MESSAGE ?? null;
-  const commitAuthor = process.env.VERCEL_GIT_COMMIT_AUTHOR_NAME ?? null;
   const region = process.env.VERCEL_REGION ?? 'local';
-  const vercelUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null;
-  const branchUrl = process.env.VERCEL_BRANCH_URL
-    ? `https://${process.env.VERCEL_BRANCH_URL}`
-    : null;
-
   const productionUrl = 'https://cortex.nativz.io';
-  const teamSlug =
-    vercel.teamId === 'team_0vyaJsvD9Q8NOFTD8K1di8BB' ? 'anderson-collaborative' : vercel.teamId;
-  const projectLogsUrl = teamSlug ? `https://vercel.com/${teamSlug}/nativz-cortex/logs` : null;
-  const projectDeploysUrl = teamSlug
-    ? `https://vercel.com/${teamSlug}/nativz-cortex/deployments`
-    : 'https://vercel.com/dashboard';
 
   const latest = vercel.deployments[0] ?? null;
   const prod = vercel.deployments.find((d) => d.target === 'production') ?? null;
 
-  // Uptime read: if the latest prod deploy is Ready, we're up. If it's Error
-  // or the latest attempt failed, mark degraded so the stat reads as a
-  // warning rather than silently showing the previous healthy state.
   const prodState = prod ? prod.state.toLowerCase() : 'unknown';
   const uptimeValue =
-    prodState === 'ready' ? 'online' : prodState === 'error' || prodState === 'canceled' ? 'degraded' : prodState;
+    prodState === 'ready'
+      ? 'online'
+      : prodState === 'error' || prodState === 'canceled'
+        ? 'degraded'
+        : prodState;
+
+  const slug = teamSlugOf(vercel.teamId);
+  const observabilityUrl = slug ? `https://vercel.com/${slug}/nativz-cortex/observability` : null;
+  const deploysUrl = slug
+    ? `https://vercel.com/${slug}/nativz-cortex/deployments`
+    : 'https://vercel.com/dashboard';
+  const logsUrl = slug ? `https://vercel.com/${slug}/nativz-cortex/logs` : null;
+
+  // Pick which deploy to stream logs from. Prefer production ready; fall
+  // back to the newest deploy. No log stream when there's no token.
+  const streamTarget = prod ?? latest;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat
           label="Uptime"
@@ -187,8 +190,8 @@ export async function ComputeTab() {
         />
         <Stat
           label="Latest deploy"
-          value={latest ? formatAge(latest.createdAt) : sha ? 'current' : '—'}
-          sub={latest?.state.toLowerCase() ?? (sha ? 'runtime env' : 'no telemetry')}
+          value={latest ? formatAge(latest.createdAt) : '—'}
+          sub={latest?.state.toLowerCase() ?? 'no telemetry'}
         />
         <Stat
           label="Deployments (recent)"
@@ -197,78 +200,50 @@ export async function ComputeTab() {
         />
       </section>
 
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <SectionCard
-          icon={<Rocket size={18} />}
-          title="Current deploy"
-          sub="Runtime env · always set by Vercel on deploy"
-          eyebrow="Live"
-          tone="brand"
-          action={
-            projectLogsUrl ? (
-              <a
-                href={projectLogsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded-full border border-nativz-border/60 bg-background/40 px-2.5 py-1 text-[12px] text-accent-text transition-colors hover:border-accent/50"
-              >
-                Runtime logs <ArrowUpRight size={10} />
-              </a>
-            ) : undefined
-          }
-        >
-          <dl className="grid grid-cols-2 gap-3 text-xs">
-            <DeployMeta icon={<GitBranch size={11} />} label="Branch" value={ref ?? 'local'} mono />
-            <DeployMeta
-              icon={<CircleDot size={11} />}
-              label="Commit"
-              value={sha ? sha.slice(0, 8) : 'local'}
-              mono
-            />
-            <DeployMeta icon={<Timer size={11} />} label="Region" value={region} mono />
-            <DeployMeta
-              icon={<Globe size={11} />}
-              label="URL"
-              value={vercelUrl ?? productionUrl}
-              mono
-              truncate
-            />
-          </dl>
-          {commitMessage && (
-            <div className="mt-4 rounded-lg border border-nativz-border/60 bg-background/40 px-3 py-2">
-              <div className="text-[12px] uppercase tracking-wide text-text-muted">
-                Commit message
-              </div>
-              <div className="mt-0.5 line-clamp-2 text-xs text-text-primary">{commitMessage}</div>
-              {commitAuthor && (
-                <div className="mt-1 text-[12px] text-text-muted">by {commitAuthor}</div>
-              )}
-            </div>
+      {/* Quick access to Vercel's own dashboards — the observability tile charts
+          (Edge Requests, Fast Data Transfer, Functions, Compute) aren't exposed
+          on the public REST API, so we deep-link instead of faking them here. */}
+      {vercel.hasToken && (
+        <div className="flex flex-wrap items-center gap-2">
+          {observabilityUrl && (
+            <a
+              href={observabilityUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3.5 py-1.5 text-xs font-medium text-accent-text transition-colors hover:bg-accent/15"
+            >
+              <BarChart3 size={12} />
+              Observability in Vercel
+              <ArrowUpRight size={11} />
+            </a>
           )}
-        </SectionCard>
+          <a
+            href={deploysUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-full border border-nativz-border bg-surface px-3.5 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:border-nativz-border/90 hover:text-text-primary"
+          >
+            <Rocket size={12} />
+            All deployments
+            <ArrowUpRight size={11} />
+          </a>
+          {logsUrl && (
+            <a
+              href={logsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-full border border-nativz-border bg-surface px-3.5 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:border-nativz-border/90 hover:text-text-primary"
+            >
+              <ScrollText size={12} />
+              Full log viewer
+              <ArrowUpRight size={11} />
+            </a>
+          )}
+        </div>
+      )}
 
-        <SectionCard
-          icon={<ExternalLink size={18} />}
-          title="URLs"
-          sub="Production + preview targets"
-          tone="action"
-        >
-          <div className="space-y-2">
-            <UrlRow label="Production" url={productionUrl} tone="ok" />
-            {branchUrl && branchUrl !== productionUrl && (
-              <UrlRow label={`Branch (${ref ?? 'preview'})`} url={branchUrl} tone="preview" />
-            )}
-            {vercelUrl && vercelUrl !== productionUrl && vercelUrl !== branchUrl && (
-              <UrlRow label="Deployment" url={vercelUrl} tone="preview" />
-            )}
-          </div>
-          <p className="mt-4 text-[12px] text-text-muted">
-            Every push to main promotes to production. Branch previews live at{' '}
-            <code className="rounded bg-background/60 px-1">*.vercel.app</code> URLs.
-          </p>
-        </SectionCard>
-      </section>
-
+      {/* Recent deployments — always open, fixed-width right columns so
+          Build/Age/State/Logs line up regardless of commit-message width. */}
       {vercel.hasToken ? (
         vercel.error ? (
           <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4 text-sm text-red-300">
@@ -279,26 +254,17 @@ export async function ComputeTab() {
             </span>
           </div>
         ) : vercel.deployments.length > 0 ? (
-          <Disclosure
-            summary="Recent deployments · Vercel API"
-            count={vercel.deployments.length}
-            defaultOpen
-          >
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <p className="text-[12px] text-text-muted">
-                Click a row&apos;s <span className="text-accent-text">Logs</span> link to open
-                the deploy&apos;s runtime log stream in Vercel.
-              </p>
-              <a
-                href={projectDeploysUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded-full border border-nativz-border/60 bg-background/40 px-2.5 py-1 text-[12px] text-accent-text transition-colors hover:border-accent/50"
-              >
-                Open in Vercel <ArrowUpRight size={10} />
-              </a>
-            </div>
-            <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-4 border-b border-nativz-border/40 pb-2 text-[12px] font-mono uppercase tracking-[0.18em] text-text-muted">
+          <section className="overflow-hidden rounded-xl border border-nativz-border bg-surface">
+            <header className="flex items-center justify-between gap-3 border-b border-nativz-border/60 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span className="inline-block h-2 w-2 rounded-full bg-accent/70" />
+                <h2 className="text-sm font-semibold text-text-primary">Recent deployments</h2>
+                <span className="font-mono text-[11px] text-text-muted">
+                  · {vercel.deployments.length} · Vercel API
+                </span>
+              </div>
+            </header>
+            <div className="grid grid-cols-[6rem_minmax(0,1fr)_4rem_5rem_5.5rem_4.5rem] items-center gap-3 border-b border-nativz-border/40 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-text-muted">
               <span>Target</span>
               <span>Branch · commit</span>
               <span className="text-right">Build</span>
@@ -311,11 +277,11 @@ export async function ComputeTab() {
               return (
                 <div
                   key={d.uid}
-                  className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-4 border-b border-nativz-border/40 py-2 text-sm last:border-b-0"
+                  className="grid grid-cols-[6rem_minmax(0,1fr)_4rem_5rem_5.5rem_4.5rem] items-center gap-3 border-b border-nativz-border/40 px-4 py-2.5 text-sm last:border-b-0"
                 >
                   <span
                     className={
-                      'rounded px-1.5 py-0.5 text-[12px] font-medium uppercase tracking-wide ' +
+                      'justify-self-start rounded px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide ' +
                       (d.target === 'production'
                         ? 'bg-accent/15 text-accent-text'
                         : 'bg-surface-hover/80 text-text-muted')
@@ -330,7 +296,7 @@ export async function ComputeTab() {
                         {d.meta?.githubCommitRef ?? '—'}
                       </span>
                       {d.meta?.githubCommitSha && (
-                        <span className="font-mono text-[12px] text-text-muted">
+                        <span className="font-mono text-[11px] text-text-muted">
                           · {d.meta.githubCommitSha.slice(0, 8)}
                         </span>
                       )}
@@ -350,7 +316,7 @@ export async function ComputeTab() {
                   <div className="text-right">
                     <span
                       className={
-                        'rounded-full px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide ' +
+                        'rounded-full px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide ' +
                         stateTone(d.state)
                       }
                     >
@@ -362,7 +328,7 @@ export async function ComputeTab() {
                       href={deploymentLogsUrl(d, vercel.teamId)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 rounded-full border border-nativz-border/60 bg-background/40 px-2 py-0.5 text-[12px] text-accent-text transition-colors hover:border-accent/50"
+                      className="inline-flex items-center gap-1 rounded-full border border-nativz-border/60 bg-background/40 px-2 py-0.5 text-[11px] text-accent-text transition-colors hover:border-accent/50"
                       aria-label="Open runtime logs in Vercel"
                     >
                       <ScrollText size={10} />
@@ -372,94 +338,48 @@ export async function ComputeTab() {
                 </div>
               );
             })}
-          </Disclosure>
+          </section>
         ) : null
       ) : (
-        <SectionCard
-          icon={<Rocket size={18} />}
-          title="Connect Vercel for live deployments"
-          sub="Adding VERCEL_TOKEN unlocks the deployments table + per-deploy log links."
-          tone="action"
-        >
-          <p className="text-[12px] text-text-muted">
-            Add these to <code className="rounded bg-background/60 px-1">.env.local</code> and your
-            Vercel project env, then redeploy. Token needs <em>Read</em> scope on Projects +
-            Deployments.
-          </p>
-          <ul className="mt-3 space-y-1 text-[12px] font-mono text-text-muted">
-            <li>· VERCEL_TOKEN=…</li>
-            <li>· VERCEL_PROJECT_ID=…</li>
-            <li>· VERCEL_ORG_ID=team_…</li>
-          </ul>
-          <a
-            href="https://vercel.com/account/tokens"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 inline-flex items-center gap-1 text-[12px] text-accent-text underline decoration-dotted"
-          >
-            Mint a token <ArrowUpRight size={10} />
-          </a>
-        </SectionCard>
+        <div className="rounded-xl border border-nativz-border bg-surface p-5">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent-text">
+              <Rocket size={18} />
+            </span>
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-text-primary">
+                Connect Vercel for live deployments + log stream
+              </h3>
+              <p className="mt-1 text-[12px] text-text-muted">
+                Set <code className="rounded bg-background/60 px-1">VERCEL_TOKEN</code>,{' '}
+                <code className="rounded bg-background/60 px-1">VERCEL_PROJECT_ID</code>, and{' '}
+                <code className="rounded bg-background/60 px-1">VERCEL_ORG_ID</code> in your Vercel
+                project env, then redeploy. Token needs <em>Read</em> scope on Projects +
+                Deployments.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Live log stream — starts streaming on mount, no click required. */}
+      {vercel.hasToken && streamTarget && (
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-text-primary">Live logs</h2>
+              <p className="text-[12px] text-text-muted">
+                Streaming from the {streamTarget.target ?? 'preview'} deploy{' '}
+                <span className="font-mono text-accent-text/80">
+                  {streamTarget.meta?.githubCommitSha?.slice(0, 8) ?? streamTarget.uid.slice(0, 12)}
+                </span>
+                . New events append automatically.
+              </p>
+            </div>
+          </div>
+          <LiveLogStream deploymentId={streamTarget.uid} />
+        </section>
       )}
     </div>
-  );
-}
-
-function DeployMeta({
-  icon,
-  label,
-  value,
-  mono,
-  truncate,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  mono?: boolean;
-  truncate?: boolean;
-}) {
-  return (
-    <div className="min-w-0">
-      <div className="flex items-center gap-1 text-[12px] uppercase tracking-wide text-text-muted">
-        {icon}
-        {label}
-      </div>
-      <div
-        className={
-          `mt-0.5 text-xs text-text-primary ${mono ? 'font-mono' : ''} ${
-            truncate ? 'truncate' : ''
-          }`
-        }
-        title={truncate ? value : undefined}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function UrlRow({ label, url, tone }: { label: string; url: string; tone: 'ok' | 'preview' }) {
-  const toneClass =
-    tone === 'ok'
-      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-      : 'border-nativz-border bg-surface-hover/60 text-text-secondary';
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="group flex items-center justify-between gap-3 rounded-lg border border-nativz-border bg-background/40 px-3 py-2 transition-colors hover:border-accent/40"
-    >
-      <div className="min-w-0 flex-1">
-        <div className="text-[12px] uppercase tracking-wide text-text-muted">{label}</div>
-        <div className="mt-0.5 truncate font-mono text-xs text-text-primary">{url}</div>
-      </div>
-      <span
-        className={`shrink-0 rounded-full border px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide ${toneClass}`}
-      >
-        {tone === 'ok' ? 'live' : 'preview'}
-      </span>
-      <ArrowUpRight size={12} className="text-text-muted transition-transform group-hover:translate-x-0.5" />
-    </a>
   );
 }
