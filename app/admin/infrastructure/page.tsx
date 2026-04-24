@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -5,14 +6,13 @@ import {
   InfrastructureTabs,
   type InfrastructureTabSlug,
 } from '@/components/admin/infrastructure/infrastructure-tabs';
-import { RefreshButton } from '@/components/admin/infrastructure/refresh-button';
+import { InfrastructureTabSkeleton } from '@/components/admin/infrastructure/tab-skeleton';
 import { OverviewTab } from '@/components/admin/infrastructure/tabs/overview-tab';
 import { TopicSearchTab } from '@/components/admin/infrastructure/tabs/topic-search-tab';
 import { ApifyTab } from '@/components/admin/infrastructure/tabs/apify-tab';
 import { AiTab } from '@/components/admin/infrastructure/tabs/ai-tab';
 import { ComputeTab } from '@/components/admin/infrastructure/tabs/compute-tab';
 import { IntegrationsTab } from '@/components/admin/infrastructure/tabs/integrations-tab';
-import { SupabaseTab } from '@/components/admin/infrastructure/tabs/supabase-tab';
 import { TrendFinderSettingsTab } from '@/components/admin/infrastructure/tabs/trend-finder-settings-tab';
 
 // Auth must run per-request (otherwise non-admins could hit a cached admin
@@ -24,7 +24,6 @@ export const dynamic = 'force-dynamic';
 const VALID_TABS: readonly InfrastructureTabSlug[] = [
   'overview',
   'compute',
-  'database',
   'pipelines',
   'ai',
   'apify',
@@ -33,11 +32,13 @@ const VALID_TABS: readonly InfrastructureTabSlug[] = [
 ];
 
 // Legacy slugs (pre-condensed layout) → current slug. Keeps bookmarks + the
-// last-tab localStorage value from 404ing.
+// last-tab localStorage value from 404ing. `supabase` + `database` both map
+// to overview now that the Database tab was retired.
 const LEGACY_TAB_ALIASES: Record<string, InfrastructureTabSlug> = {
   crons: 'compute',
   vercel: 'compute',
-  supabase: 'database',
+  supabase: 'overview',
+  database: 'overview',
   'ai-providers': 'ai',
   'topic-search': 'pipelines',
   'search-cost': 'trend-finder',
@@ -83,23 +84,25 @@ export default async function InfrastructurePage({
         <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-text/80">
           Cortex · admin
         </p>
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div className="space-y-2">
-            <h1 className="text-2xl font-semibold leading-tight text-text-primary">
-              Infrastructure
-            </h1>
-            <p className="max-w-2xl text-sm text-text-muted">
-              Every backend Cortex runs on, in one place — so you never have to open Vercel,
-              Supabase, or Apify to see how we&apos;re doing. Summaries up top, details on tap.
-            </p>
-          </div>
-          <RefreshButton />
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold leading-tight text-text-primary">
+            Infrastructure
+          </h1>
+          <p className="max-w-2xl text-sm text-text-muted">
+            Every backend Cortex runs on, in one place — so you never have to open Vercel,
+            Supabase, or Apify to see how we&apos;re doing. Summaries up top, details on tap.
+          </p>
         </div>
       </header>
 
       <InfrastructureTabs active={activeTab} />
 
-      <div>{renderTab(activeTab)}</div>
+      {/* `key={activeTab}` forces React to treat each tab as a fresh subtree
+         so the Suspense fallback paints the moment the slug changes — the
+         previous tab doesn't linger while the new one's awaits resolve. */}
+      <Suspense key={activeTab} fallback={<InfrastructureTabSkeleton />}>
+        {renderTab(activeTab)}
+      </Suspense>
     </div>
   );
 }
@@ -110,8 +113,6 @@ function renderTab(slug: InfrastructureTabSlug) {
       return <OverviewTab />;
     case 'compute':
       return <ComputeTab />;
-    case 'database':
-      return <SupabaseTab />;
     case 'pipelines':
       return <TopicSearchTab />;
     case 'ai':

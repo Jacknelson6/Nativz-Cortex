@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
   Activity,
-  Database,
   Gauge,
   Layers,
   Plug,
@@ -17,7 +16,6 @@ import { useEffect } from 'react';
 const TABS = [
   { slug: 'overview',     label: 'Overview',     icon: Activity },
   { slug: 'compute',      label: 'Compute',      icon: Server },
-  { slug: 'database',     label: 'Database',     icon: Database },
   { slug: 'pipelines',    label: 'Pipelines',    icon: Gauge },
   { slug: 'ai',           label: 'AI',           icon: Layers },
   { slug: 'apify',        label: 'Scrapers',     icon: Zap },
