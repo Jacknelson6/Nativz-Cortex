@@ -45,17 +45,15 @@ export async function POST(req: NextRequest) {
   }
 
   let clientTradeName: string | null = null;
-  let clientDomain: string | null = null;
   let clientSlug: string | null = null;
   if (body.client_id) {
     const { data: client } = await admin
       .from('clients')
-      .select('id, name, slug, domain')
+      .select('id, name, slug')
       .eq('id', body.client_id)
       .maybeSingle();
     if (client) {
       clientTradeName = (client.name as string | null) ?? null;
-      clientDomain = (client.domain as string | null) ?? null;
       clientSlug = (client.slug as string | null) ?? null;
     }
   }
@@ -106,7 +104,6 @@ export async function POST(req: NextRequest) {
       legalName: body.signer_legal_entity ?? null,
       tradeName: clientTradeName,
       address: body.signer_address ?? null,
-      domain: clientDomain,
     },
     slugHint: clientSlug ?? body.signer_name,
   }).catch((err: unknown) => ({
