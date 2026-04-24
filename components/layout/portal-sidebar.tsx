@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { Search, Settings, PanelLeftClose, ShoppingBag, Building } from 'lucide-react';
+import { Search, Settings, PanelLeftClose, ShoppingBag, Building, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SidebarAccount } from '@/components/layout/sidebar-account';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
@@ -54,6 +54,7 @@ const NAV_ITEMS: PortalNavItem[] = [
   // page falls back gracefully if social slots / competitors aren't
   // populated yet.
   { href: '/portal/brand-profile', label: 'Brand profile', icon: Building, flag: null },
+  { href: '/portal/billing', label: 'Billing', icon: CreditCard, flag: null },
   { href: '/portal/settings', label: 'Settings', icon: Settings, flag: null },
 ];
 

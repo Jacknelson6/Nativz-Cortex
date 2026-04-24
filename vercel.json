@@ -89,6 +89,10 @@
     {
       "path": "/api/cron/revenue-reconcile",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/meta-ads-sync",
+      "schedule": "0 10 * * *"
     }
   ]
 }

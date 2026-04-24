@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { syncRecent } from '@/lib/stripe/backfill';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { onInvoiceOverdue } from '@/lib/lifecycle/state-machine';
+import { onInvoiceOverdue, onInvoiceDueSoon } from '@/lib/lifecycle/state-machine';
 import { recomputeClientMrr } from '@/lib/stripe/subscriptions';
 
 export const runtime = 'nodejs';
@@ -53,6 +53,41 @@ export async function GET(req: NextRequest) {
     overdueNotifications += 1;
   }
 
+  const dueSoonHorizon = new Date(Date.now() + 3 * 86400_000).toISOString();
+  const { data: dueSoon } = await admin
+    .from('stripe_invoices')
+    .select('id, client_id, number, amount_paid_cents, amount_due_cents, amount_remaining_cents, currency, hosted_invoice_url, status, due_date')
+    .eq('status', 'open')
+    .gte('due_date', nowIso)
+    .lte('due_date', dueSoonHorizon)
+    .limit(200);
+
+  let dueSoonNotifications = 0;
+  for (const inv of dueSoon ?? []) {
+    const { data: recent } = await admin
+      .from('client_lifecycle_events')
+      .select('id')
+      .contains('metadata', { invoice_id: inv.id, kind: 'due_soon' })
+      .gte('occurred_at', new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString())
+      .limit(1);
+    if (recent && recent.length > 0) continue;
+
+    await onInvoiceDueSoon(
+      {
+        id: inv.id,
+        client_id: inv.client_id,
+        number: inv.number,
+        amount_paid_cents: inv.amount_paid_cents,
+        amount_due_cents: inv.amount_due_cents,
+        currency: inv.currency,
+        hosted_invoice_url: inv.hosted_invoice_url,
+        status: inv.status,
+      },
+      admin,
+    );
+    dueSoonNotifications += 1;
+  }
+
   const { data: clientsWithMrr } = await admin
     .from('clients')
     .select('id')
@@ -65,6 +100,7 @@ export async function GET(req: NextRequest) {
     ok: true,
     recent: recentCounts,
     overdueNotifications,
+    dueSoonNotifications,
     mrrRecomputed: clientsWithMrr?.length ?? 0,
   });
 }

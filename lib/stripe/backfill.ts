@@ -3,6 +3,7 @@ import { upsertCustomerFromStripe } from './customers';
 import { upsertInvoiceFromStripe } from './invoices';
 import { upsertSubscriptionFromStripe } from './subscriptions';
 import { upsertChargeFromStripe } from './charges';
+import { upsertRefundFromStripe } from './refunds';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 type Progress = {
@@ -10,13 +11,14 @@ type Progress = {
   invoices: number;
   subscriptions: number;
   charges: number;
+  refunds: number;
 };
 
 export async function fullSync(opts: { dryRun?: boolean; log?: (msg: string) => void } = {}): Promise<Progress> {
   const log = opts.log ?? ((m: string) => console.log(m));
   const stripe = getStripe();
   const admin = createAdminClient();
-  const progress: Progress = { customers: 0, invoices: 0, subscriptions: 0, charges: 0 };
+  const progress: Progress = { customers: 0, invoices: 0, subscriptions: 0, charges: 0, refunds: 0 };
 
   log('Syncing customers…');
   for await (const customer of stripe.customers.list({ limit: 100 })) {
@@ -50,6 +52,14 @@ export async function fullSync(opts: { dryRun?: boolean; log?: (msg: string) => 
   }
   log(`  ${progress.charges} charges done.`);
 
+  log('Syncing refunds…');
+  for await (const refund of stripe.refunds.list({ limit: 100 })) {
+    if (!opts.dryRun) await upsertRefundFromStripe(refund, admin);
+    progress.refunds += 1;
+    if (progress.refunds % 100 === 0) log(`  …${progress.refunds} refunds`);
+  }
+  log(`  ${progress.refunds} refunds done.`);
+
   return progress;
 }
 
@@ -57,7 +67,7 @@ export async function syncRecent(sinceSeconds = 48 * 60 * 60): Promise<Progress>
   const stripe = getStripe();
   const admin = createAdminClient();
   const created = { gte: Math.floor(Date.now() / 1000) - sinceSeconds };
-  const progress: Progress = { customers: 0, invoices: 0, subscriptions: 0, charges: 0 };
+  const progress: Progress = { customers: 0, invoices: 0, subscriptions: 0, charges: 0, refunds: 0 };
 
   for await (const c of stripe.customers.list({ limit: 100, created })) {
     await upsertCustomerFromStripe(c, admin);
@@ -74,6 +84,10 @@ export async function syncRecent(sinceSeconds = 48 * 60 * 60): Promise<Progress>
   for await (const ch of stripe.charges.list({ limit: 100, created })) {
     await upsertChargeFromStripe(ch, admin);
     progress.charges += 1;
+  }
+  for await (const r of stripe.refunds.list({ limit: 100, created })) {
+    await upsertRefundFromStripe(r, admin);
+    progress.refunds += 1;
   }
 
   return progress;

@@ -8,7 +8,7 @@ import {
   type RevenueTabSlug,
 } from '@/components/admin/revenue/revenue-tabs';
 import { RevenueOverviewTab } from '@/components/admin/revenue/overview-tab';
-import { RevenueInvoicesTab } from '@/components/admin/revenue/invoices-tab';
+import { InvoicesTable } from '@/components/admin/revenue/invoices-table';
 import { RevenueSubscriptionsTab } from '@/components/admin/revenue/subscriptions-tab';
 import { RevenueClientsTab } from '@/components/admin/revenue/clients-tab';
 import { AdSpendTab } from '@/components/admin/revenue/ad-spend-tab';
@@ -55,7 +55,7 @@ export default async function RevenuePage({
 
       <SectionPanel>
         {activeTab === 'overview' ? <RevenueOverviewTab /> : null}
-        {activeTab === 'invoices' ? <RevenueInvoicesTab /> : null}
+        {activeTab === 'invoices' ? <InvoicesTable /> : null}
         {activeTab === 'subscriptions' ? <RevenueSubscriptionsTab /> : null}
         {activeTab === 'clients' ? <RevenueClientsTab /> : null}
         {activeTab === 'ad-spend' ? <AdSpendClientLoader /> : null}

@@ -1,0 +1,114 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { requireAdmin } from '@/lib/revenue/auth';
+import { centsToDollars } from '@/lib/format/money';
+
+export const dynamic = 'force-dynamic';
+
+const querySchema = z.object({
+  start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  range: z.enum(['mtd', 'ytd', 'last30', 'last90', 'all']).optional(),
+});
+
+export async function GET(req: NextRequest) {
+  const auth = await requireAdmin();
+  if (auth instanceof NextResponse) return auth;
+  const { admin } = auth;
+
+  const parsed = querySchema.safeParse(Object.fromEntries(req.nextUrl.searchParams.entries()));
+  if (!parsed.success) return NextResponse.json({ error: 'Invalid query' }, { status: 400 });
+
+  const { start, end } = resolveRange(parsed.data);
+
+  let q = admin
+    .from('stripe_invoices')
+    .select(
+      'id, number, status, amount_paid_cents, currency, paid_at, created_at, finalized_at, client_id, clients(name)',
+    )
+    .not('paid_at', 'is', null)
+    .order('paid_at', { ascending: true })
+    .limit(5000);
+  if (start) q = q.gte('paid_at', start);
+  if (end) q = q.lte('paid_at', end);
+
+  const { data, error } = await q;
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const header = [
+    'Date',
+    'Invoice Number',
+    'Customer',
+    'Memo',
+    'Amount',
+    'Currency',
+    'Status',
+    'Stripe Invoice ID',
+  ];
+
+  const rows: string[] = [header.map(csvEscape).join(',')];
+  for (const inv of data ?? []) {
+    const client = inv.clients as { name?: string | null } | null;
+    rows.push(
+      [
+        inv.paid_at ? isoDate(inv.paid_at) : '',
+        inv.number ?? '',
+        client?.name ?? 'Unlinked customer',
+        'Stripe invoice payment',
+        centsToDollars(inv.amount_paid_cents ?? 0).toFixed(2),
+        (inv.currency ?? 'usd').toUpperCase(),
+        inv.status,
+        inv.id,
+      ]
+        .map(csvEscape)
+        .join(','),
+    );
+  }
+
+  const body = rows.join('\n');
+  const filename = `cortex-revenue-${start ?? 'all'}_${end ?? 'now'}.csv`;
+  return new NextResponse(body, {
+    headers: {
+      'content-type': 'text/csv; charset=utf-8',
+      'content-disposition': `attachment; filename="${filename}"`,
+    },
+  });
+}
+
+function csvEscape(v: unknown): string {
+  const s = String(v ?? '');
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    return `"${s.replaceAll('"', '""')}"`;
+  }
+  return s;
+}
+
+function isoDate(ts: string): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function resolveRange(
+  q: z.infer<typeof querySchema>,
+): { start: string | null; end: string | null } {
+  if (q.start || q.end) {
+    return { start: q.start ? `${q.start}T00:00:00Z` : null, end: q.end ? `${q.end}T23:59:59Z` : null };
+  }
+  const now = new Date();
+  switch (q.range ?? 'ytd') {
+    case 'mtd':
+      return {
+        start: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(),
+        end: null,
+      };
+    case 'ytd':
+      return { start: new Date(now.getFullYear(), 0, 1).toISOString(), end: null };
+    case 'last30':
+      return { start: new Date(Date.now() - 30 * 86400_000).toISOString(), end: null };
+    case 'last90':
+      return { start: new Date(Date.now() - 90 * 86400_000).toISOString(), end: null };
+    case 'all':
+    default:
+      return { start: null, end: null };
+  }
+}

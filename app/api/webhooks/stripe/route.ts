@@ -6,11 +6,15 @@ import { upsertCustomerFromStripe } from '@/lib/stripe/customers';
 import { upsertInvoiceFromStripe } from '@/lib/stripe/invoices';
 import { upsertSubscriptionFromStripe } from '@/lib/stripe/subscriptions';
 import { upsertChargeFromStripe } from '@/lib/stripe/charges';
+import { upsertRefundFromStripe } from '@/lib/stripe/refunds';
 import {
   onInvoicePaid,
+  onInvoiceSent,
   onSubscriptionCreated,
   onSubscriptionCanceled,
-  logLifecycleEvent,
+  onSubscriptionPaused,
+  onSubscriptionResumed,
+  onSubscriptionUpdated,
 } from '@/lib/lifecycle/state-machine';
 
 export const runtime = 'nodejs';
@@ -94,6 +98,27 @@ async function dispatch(event: Stripe.Event, admin: ReturnType<typeof createAdmi
       await upsertInvoiceFromStripe(event.data.object as Stripe.Invoice, admin);
       return;
 
+    case 'invoice.sent': {
+      const inv = event.data.object as Stripe.Invoice;
+      const result = await upsertInvoiceFromStripe(inv, admin);
+      if (result.client_id) {
+        await onInvoiceSent(
+          {
+            id: inv.id,
+            client_id: result.client_id,
+            number: inv.number ?? null,
+            amount_paid_cents: inv.amount_paid ?? 0,
+            amount_due_cents: inv.amount_due ?? 0,
+            currency: inv.currency ?? 'usd',
+            hosted_invoice_url: inv.hosted_invoice_url ?? null,
+            status: inv.status ?? 'open',
+          },
+          admin,
+        );
+      }
+      return;
+    }
+
     case 'invoice.paid':
     case 'invoice.payment_succeeded': {
       const inv = event.data.object as Stripe.Invoice;
@@ -125,14 +150,42 @@ async function dispatch(event: Stripe.Event, admin: ReturnType<typeof createAdmi
 
     case 'customer.subscription.updated': {
       const sub = event.data.object as Stripe.Subscription;
+      const prev = (event.data as unknown as { previous_attributes?: Record<string, unknown> })
+        .previous_attributes ?? {};
       const result = await upsertSubscriptionFromStripe(sub, admin);
-      if (result.client_id) {
-        await logLifecycleEvent(result.client_id, 'subscription.updated', `Subscription updated`, {
-          metadata: { subscription_id: sub.id, status: sub.status },
-          stripeEventId: event.id,
-          admin,
-        });
+
+      // Stripe signals pause via pause_collection.behavior transitioning to a non-null value.
+      const pauseNow =
+        (sub as unknown as { pause_collection?: { behavior?: string } | null }).pause_collection;
+      const prevPause = prev.pause_collection as { behavior?: string } | null | undefined;
+      if (pauseNow?.behavior && !prevPause?.behavior) {
+        await onSubscriptionPaused(sub.id, result.client_id, admin);
+        return;
       }
+      if (!pauseNow && prevPause?.behavior) {
+        await onSubscriptionResumed(sub.id, result.client_id, admin);
+        return;
+      }
+
+      const summaryBits: string[] = [];
+      if ('status' in prev) summaryBits.push(`status → ${sub.status}`);
+      if ('cancel_at_period_end' in prev) summaryBits.push(`cancel_at_period_end → ${sub.cancel_at_period_end}`);
+      const summary = summaryBits.length > 0 ? summaryBits.join(', ') : `status: ${sub.status}`;
+      await onSubscriptionUpdated(sub.id, result.client_id, summary, admin);
+      return;
+    }
+
+    case 'customer.subscription.paused': {
+      const sub = event.data.object as Stripe.Subscription;
+      const result = await upsertSubscriptionFromStripe(sub, admin);
+      await onSubscriptionPaused(sub.id, result.client_id, admin);
+      return;
+    }
+
+    case 'customer.subscription.resumed': {
+      const sub = event.data.object as Stripe.Subscription;
+      const result = await upsertSubscriptionFromStripe(sub, admin);
+      await onSubscriptionResumed(sub.id, result.client_id, admin);
       return;
     }
 
@@ -148,6 +201,12 @@ async function dispatch(event: Stripe.Event, admin: ReturnType<typeof createAdmi
     case 'charge.refunded':
     case 'charge.updated':
       await upsertChargeFromStripe(event.data.object as Stripe.Charge, admin);
+      return;
+
+    case 'refund.created':
+    case 'refund.updated':
+    case 'charge.refund.updated':
+      await upsertRefundFromStripe(event.data.object as Stripe.Refund, admin);
       return;
 
     default:

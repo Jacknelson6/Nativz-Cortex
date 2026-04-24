@@ -11,6 +11,7 @@ import {
   LifecycleStatePill,
   SubscriptionStatusPill,
 } from '@/components/admin/revenue/status-pill';
+import { MetaAdsLinkCard } from '@/components/admin/revenue/meta-ads-link-card';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +39,7 @@ export default async function ClientBillingPage({
   const { data: client } = await admin
     .from('clients')
     .select(
-      'id, name, slug, lifecycle_state, mrr_cents, boosting_budget_cents, stripe_customer_id',
+      'id, name, slug, lifecycle_state, mrr_cents, boosting_budget_cents, stripe_customer_id, meta_ad_account_id, meta_ad_spend_synced_at',
     )
     .eq('slug', slug)
     .single();
@@ -295,6 +296,14 @@ export default async function ClientBillingPage({
           <p className="mt-3 text-sm text-text-muted">No invoices yet.</p>
         )}
       </section>
+
+      <MetaAdsLinkCard
+        clientId={client.id}
+        currentAccountId={(client as { meta_ad_account_id?: string | null }).meta_ad_account_id ?? null}
+        lastSyncedAt={
+          (client as { meta_ad_spend_synced_at?: string | null }).meta_ad_spend_synced_at ?? null
+        }
+      />
 
       <section className="rounded-xl border border-nativz-border bg-surface p-5">
         <h2 className="text-sm font-semibold text-text-primary">Lifecycle</h2>

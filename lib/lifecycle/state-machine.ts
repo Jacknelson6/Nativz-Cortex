@@ -62,9 +62,14 @@ async function notifyAdmins(
   type:
     | 'payment_received'
     | 'invoice_overdue'
+    | 'invoice_sent'
+    | 'invoice_due_soon'
     | 'contract_signed'
     | 'subscription_created'
-    | 'subscription_canceled',
+    | 'subscription_canceled'
+    | 'subscription_paused'
+    | 'subscription_resumed'
+    | 'subscription_updated',
   title: string,
   message: string,
 ): Promise<void> {
@@ -214,6 +219,59 @@ async function queueKickoffEmail(
   });
 }
 
+export async function onInvoiceSent(
+  invoice: InvoiceRow,
+  admin: AdminClient = createAdminClient(),
+): Promise<void> {
+  if (!invoice.client_id) return;
+  const { data: client } = await admin
+    .from('clients')
+    .select('name')
+    .eq('id', invoice.client_id)
+    .maybeSingle();
+  if (!client) return;
+  const amount = formatCents(invoice.amount_due_cents, invoice.currency);
+  const tag = invoice.number ? `#${invoice.number}` : '(unnumbered)';
+
+  await logLifecycleEvent(invoice.client_id, 'invoice.created', `Invoice ${tag} sent — ${amount}`, {
+    metadata: { invoice_id: invoice.id },
+    admin,
+  });
+  await notifyAdmins(
+    admin,
+    'invoice_sent',
+    `${client.name}: invoice ${tag} sent`,
+    `${amount} invoiced.`,
+  );
+}
+
+export async function onInvoiceDueSoon(
+  invoice: InvoiceRow,
+  admin: AdminClient = createAdminClient(),
+): Promise<void> {
+  if (!invoice.client_id) return;
+  const { data: client } = await admin
+    .from('clients')
+    .select('name')
+    .eq('id', invoice.client_id)
+    .maybeSingle();
+  if (!client) return;
+  const amount = formatCents(invoice.amount_due_cents, invoice.currency);
+  const tag = invoice.number ? `#${invoice.number}` : '(unnumbered)';
+
+  await logLifecycleEvent(invoice.client_id, 'invoice.created', `Invoice ${tag} due soon`, {
+    description: `Reminder — ${amount} due for ${client.name}.`,
+    metadata: { invoice_id: invoice.id, kind: 'due_soon' },
+    admin,
+  });
+  await notifyAdmins(
+    admin,
+    'invoice_due_soon',
+    `${client.name}: invoice ${tag} due soon`,
+    `${amount} due — consider sending a reminder.`,
+  );
+}
+
 export async function onInvoiceOverdue(
   invoice: InvoiceRow,
   admin: AdminClient = createAdminClient(),
@@ -266,5 +324,78 @@ export async function onSubscriptionCanceled(
     admin,
   });
   await notifyAdmins(admin, 'subscription_canceled', 'Subscription canceled', `Sub ${subId}`);
+}
+
+export async function onSubscriptionPaused(
+  subId: string,
+  clientId: string | null,
+  admin: AdminClient = createAdminClient(),
+): Promise<void> {
+  if (!clientId) return;
+  const { data: client } = await admin
+    .from('clients')
+    .select('name')
+    .eq('id', clientId)
+    .maybeSingle();
+  await logLifecycleEvent(clientId, 'subscription.updated', 'Subscription paused', {
+    metadata: { subscription_id: subId, kind: 'paused' },
+    admin,
+  });
+  await notifyAdmins(
+    admin,
+    'subscription_paused',
+    `${client?.name ?? 'Client'}: subscription paused`,
+    'Work should stop until it resumes — check with the client.',
+  );
+}
+
+export async function onSubscriptionResumed(
+  subId: string,
+  clientId: string | null,
+  admin: AdminClient = createAdminClient(),
+): Promise<void> {
+  if (!clientId) return;
+  const { data: client } = await admin
+    .from('clients')
+    .select('name, lifecycle_state')
+    .eq('id', clientId)
+    .maybeSingle();
+  await logLifecycleEvent(clientId, 'subscription.updated', 'Subscription resumed', {
+    metadata: { subscription_id: subId, kind: 'resumed' },
+    admin,
+  });
+  if (client?.lifecycle_state === 'churned') {
+    await admin.from('clients').update({ lifecycle_state: 'active' }).eq('id', clientId);
+  }
+  await notifyAdmins(
+    admin,
+    'subscription_resumed',
+    `${client?.name ?? 'Client'}: subscription resumed`,
+    'Work can resume — pick back up where we left off.',
+  );
+}
+
+export async function onSubscriptionUpdated(
+  subId: string,
+  clientId: string | null,
+  summary: string,
+  admin: AdminClient = createAdminClient(),
+): Promise<void> {
+  if (!clientId) return;
+  const { data: client } = await admin
+    .from('clients')
+    .select('name')
+    .eq('id', clientId)
+    .maybeSingle();
+  await logLifecycleEvent(clientId, 'subscription.updated', `Subscription updated: ${summary}`, {
+    metadata: { subscription_id: subId },
+    admin,
+  });
+  await notifyAdmins(
+    admin,
+    'subscription_updated',
+    `${client?.name ?? 'Client'}: subscription updated`,
+    summary,
+  );
 }
 
