@@ -28,6 +28,9 @@ import {
 import { BarChart3, ListOrdered, ShieldCheck, Table2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChartCard, type LegendItem } from '@/components/admin/infrastructure/chart-card';
+import { DateRangePicker } from '@/components/reporting/date-range-picker';
+import { resolvePresetRange } from '@/lib/reporting/date-presets';
+import type { DateRange, DateRangePreset } from '@/lib/types/reporting';
 
 interface UsageSummary {
   byModel: Record<string, { service: string; totalTokens: number; costUsd: number; requests: number }>;
@@ -49,13 +52,6 @@ interface UsageSummary {
     reconciledCostUsd: number;
   };
 }
-
-const PRESETS = [
-  { label: '24h', days: 1 },
-  { label: '7d', days: 7 },
-  { label: '30d', days: 30 },
-  { label: '90d', days: 90 },
-] as const;
 
 // Deterministic palette — first model seen gets slot 0, etc.
 const CHART_COLORS = [
@@ -114,26 +110,57 @@ function providerFromModel(model: string): string {
   return m.split('/')[0] || 'unknown';
 }
 
-function getDateRange(days: number): { from: string; to: string } {
-  const to = new Date();
-  const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
-  return { from: from.toISOString(), to: to.toISOString() };
+/**
+ * Translate the analytics-picker range (local YYYY-MM-DD start + end,
+ * both inclusive) into an ISO window for the `/api/usage` endpoint.
+ * `start` goes to 00:00 local time, `end` to 23:59:59.999 — otherwise the
+ * "today" bucket loses everything after midnight on the chosen day.
+ */
+function rangeToApiWindow(range: DateRange): { from: string; to: string } {
+  const [sy, sm, sd] = range.start.split('-').map(Number);
+  const [ey, em, ed] = range.end.split('-').map(Number);
+  const from = new Date(sy, sm - 1, sd, 0, 0, 0, 0).toISOString();
+  const to = new Date(ey, em - 1, ed, 23, 59, 59, 999).toISOString();
+  return { from, to };
+}
+
+function daysInRange(range: DateRange): number {
+  const [sy, sm, sd] = range.start.split('-').map(Number);
+  const [ey, em, ed] = range.end.split('-').map(Number);
+  const s = new Date(sy, sm - 1, sd).getTime();
+  const e = new Date(ey, em - 1, ed).getTime();
+  const diff = Math.round((e - s) / 86_400_000);
+  return Math.max(1, diff + 1); // +1: both endpoints are inclusive
 }
 
 type ChartMetric = 'cost' | 'tokens';
 
 export function UsageDashboard() {
-  const [activeDays, setActiveDays] = useState(30);
+  const [preset, setPreset] = useState<DateRangePreset>('last_30d');
+  const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined);
   const [metric, setMetric] = useState<ChartMetric>('cost');
   const [data, setData] = useState<UsageSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchUsage = useCallback(async (days: number) => {
+  const resolvedRange = useMemo<DateRange>(
+    () => (preset === 'custom' && customRange ? customRange : resolvePresetRange(preset)),
+    [preset, customRange],
+  );
+  const rangeDays = useMemo(() => daysInRange(resolvedRange), [resolvedRange]);
+  const rangeLabelShort = useMemo(() => {
+    if (preset !== 'custom') {
+      // Matches the picker's own preset labels for non-custom ranges.
+      return `last ${rangeDays} day${rangeDays === 1 ? '' : 's'}`;
+    }
+    return `${resolvedRange.start} → ${resolvedRange.end}`;
+  }, [preset, rangeDays, resolvedRange]);
+
+  const fetchUsage = useCallback(async (range: DateRange) => {
     setLoading(true);
     setError(null);
     try {
-      const { from, to } = getDateRange(days);
+      const { from, to } = rangeToApiWindow(range);
       const res = await fetch(
         `/api/usage?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
       );
@@ -148,8 +175,10 @@ export function UsageDashboard() {
   }, []);
 
   useEffect(() => {
-    void fetchUsage(activeDays);
-  }, [activeDays, fetchUsage]);
+    void fetchUsage(resolvedRange);
+    // Fetch re-runs on range change. resolvedRange identity changes when the
+    // picker applies a new preset or custom span.
+  }, [resolvedRange, fetchUsage]);
 
   // Stable model order — top 8 by cost across the window. Everything else
   // lumps into "Other". We colour them in that order and reuse the index for
@@ -208,10 +237,10 @@ export function UsageDashboard() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `cortex-daily-${metric}-${activeDays}d.csv`;
+    a.download = `cortex-daily-${metric}-${resolvedRange.start}_to_${resolvedRange.end}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [data, topModelKeys, hasOtherBucket, chartRows, metric, activeDays]);
+  }, [data, topModelKeys, hasOtherBucket, chartRows, metric, resolvedRange]);
 
   const exportModelsCsv = useCallback(() => {
     if (!data) return;
@@ -231,10 +260,10 @@ export function UsageDashboard() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `cortex-top-models-${activeDays}d.csv`;
+    a.download = `cortex-top-models-${resolvedRange.start}_to_${resolvedRange.end}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [data, activeDays]);
+  }, [data, resolvedRange]);
 
   return (
     <div className="space-y-6">
@@ -260,27 +289,16 @@ export function UsageDashboard() {
         <ReconciledTile reconciliation={data?.reconciliation} />
       </div>
 
-      {/* Date presets — the per-chart download buttons handle the CSV export   */}
-      {/* case, so the old "Download full logs" toolbar button went away.       */}
-      <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-nativz-border bg-surface/60 p-2.5">
-        <span className="pl-2 pr-1 text-[11px] font-mono uppercase tracking-[0.18em] text-text-muted">
-          Range
-        </span>
-        {PRESETS.map((p) => (
-          <button
-            key={p.label}
-            type="button"
-            onClick={() => setActiveDays(p.days)}
-            className={
-              'rounded-lg border px-2.5 py-1 text-[12px] font-medium transition-colors ' +
-              (activeDays === p.days
-                ? 'border-accent/50 bg-accent/15 text-accent-text'
-                : 'border-nativz-border bg-background/40 text-text-secondary hover:border-accent/30 hover:text-text-primary')
-            }
-          >
-            {p.label}
-          </button>
-        ))}
+      {/* Date range picker — same component analytics uses. Supports every */}
+      {/* preset (Yesterday / Last 7/28/30/90 / This week/month/year / Last  */}
+      {/* week/month) plus a full custom two-month calendar.                */}
+      <div className="flex flex-wrap items-center gap-2">
+        <DateRangePicker
+          value={preset}
+          onChange={setPreset}
+          customRange={customRange}
+          onCustomRangeChange={setCustomRange}
+        />
       </div>
 
       {error && (
@@ -301,7 +319,7 @@ export function UsageDashboard() {
           <ChartCard
             icon={<BarChart3 size={18} />}
             title={metric === 'cost' ? 'Cost over time' : 'Tokens over time'}
-            subtitle={`Daily spend stacked by model · last ${activeDays} days`}
+            subtitle={`Daily spend stacked by model · ${rangeLabelShort}`}
             tone="neutral"
             onDownload={exportChartCsv}
             downloadLabel="Download chart CSV"
@@ -369,7 +387,7 @@ export function UsageDashboard() {
           <ChartCard
             icon={<ListOrdered size={18} />}
             title="Top models · this window"
-            subtitle={`Ranked by cost across the last ${activeDays} days`}
+            subtitle={`Ranked by cost across ${rangeLabelShort}`}
             tone="neutral"
             onDownload={exportModelsCsv}
             downloadLabel="Download top-models CSV"
