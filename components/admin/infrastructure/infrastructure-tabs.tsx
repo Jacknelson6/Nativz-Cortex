@@ -2,21 +2,17 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
-  Activity,
-  Layers,
+  DollarSign,
   Loader2,
   Plug,
   Server,
   Sliders,
-  Zap,
 } from 'lucide-react';
 import { useEffect, useState, useTransition } from 'react';
 
 const TABS = [
-  { slug: 'overview',     label: 'Overview',     icon: Activity },
   { slug: 'compute',      label: 'Vercel',       icon: Server },
-  { slug: 'ai',           label: 'AI',           icon: Layers },
-  { slug: 'apify',        label: 'Scrapers',     icon: Zap },
+  { slug: 'cost',         label: 'Cost',         icon: DollarSign },
   { slug: 'trend-finder', label: 'Trend finder', icon: Sliders },
   { slug: 'integrations', label: 'Integrations', icon: Plug },
 ] as const;

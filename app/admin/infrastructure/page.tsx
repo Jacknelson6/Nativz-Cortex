@@ -7,10 +7,8 @@ import {
   type InfrastructureTabSlug,
 } from '@/components/admin/infrastructure/infrastructure-tabs';
 import { InfrastructureTabSkeleton } from '@/components/admin/infrastructure/tab-skeleton';
-import { OverviewTab } from '@/components/admin/infrastructure/tabs/overview-tab';
-import { ApifyTab } from '@/components/admin/infrastructure/tabs/apify-tab';
-import { AiTab } from '@/components/admin/infrastructure/tabs/ai-tab';
 import { ComputeTab } from '@/components/admin/infrastructure/tabs/compute-tab';
+import { CostTab } from '@/components/admin/infrastructure/tabs/cost-tab';
 import { IntegrationsTab } from '@/components/admin/infrastructure/tabs/integrations-tab';
 import { TrendFinderSettingsTab } from '@/components/admin/infrastructure/tabs/trend-finder-settings-tab';
 
@@ -21,38 +19,39 @@ import { TrendFinderSettingsTab } from '@/components/admin/infrastructure/tabs/t
 export const dynamic = 'force-dynamic';
 
 const VALID_TABS: readonly InfrastructureTabSlug[] = [
-  'overview',
   'compute',
-  'ai',
-  'apify',
+  'cost',
   'trend-finder',
   'integrations',
 ];
 
-// Legacy slugs (pre-condensed layout) → current slug. Keeps bookmarks + the
-// last-tab localStorage value from 404ing. `pipelines` was folded into
-// `trend-finder` on 2026-04-24 — all its content lives there now.
+// Legacy slugs → current slug. Keeps bookmarks + the last-tab localStorage
+// value from 404ing after the Overview tab was retired, Pipelines was folded
+// into Trend finder, and AI + Apify were merged into Cost.
 const LEGACY_TAB_ALIASES: Record<string, InfrastructureTabSlug> = {
+  overview: 'compute',
   crons: 'compute',
   vercel: 'compute',
-  supabase: 'overview',
-  database: 'overview',
-  'ai-providers': 'ai',
+  supabase: 'compute',
+  database: 'compute',
+  ai: 'cost',
+  apify: 'cost',
+  'ai-providers': 'cost',
+  pipelines: 'trend-finder',
   'topic-search': 'trend-finder',
   'search-cost': 'trend-finder',
-  pipelines: 'trend-finder',
 };
 
 function resolveTab(raw: string | string[] | undefined): InfrastructureTabSlug {
   const value = Array.isArray(raw) ? raw[0] : raw;
-  if (!value) return 'overview';
+  if (!value) return 'compute';
   if ((VALID_TABS as readonly string[]).includes(value)) {
     return value as InfrastructureTabSlug;
   }
   if (value in LEGACY_TAB_ALIASES) {
     return LEGACY_TAB_ALIASES[value];
   }
-  return 'overview';
+  return 'compute';
 }
 
 export default async function InfrastructurePage({
@@ -99,14 +98,10 @@ export default async function InfrastructurePage({
 
 function renderTab(slug: InfrastructureTabSlug) {
   switch (slug) {
-    case 'overview':
-      return <OverviewTab />;
     case 'compute':
       return <ComputeTab />;
-    case 'ai':
-      return <AiTab />;
-    case 'apify':
-      return <ApifyTab />;
+    case 'cost':
+      return <CostTab />;
     case 'trend-finder':
       return <TrendFinderSettingsTab />;
     case 'integrations':
