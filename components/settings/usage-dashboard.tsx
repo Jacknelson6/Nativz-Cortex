@@ -25,15 +25,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import {
-  BarChart3,
-  CalendarDays,
-  DollarSign,
-  ListOrdered,
-  ShieldCheck,
-  Table2,
-  Wallet,
-} from 'lucide-react';
+import { BarChart3, ListOrdered, ShieldCheck, Table2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChartCard, type LegendItem } from '@/components/admin/infrastructure/chart-card';
 
@@ -207,12 +199,6 @@ export function UsageDashboard() {
     });
   }, [data, metric, topModelKeys]);
 
-  const exportCsv = useCallback(() => {
-    const { from, to } = getDateRange(activeDays);
-    const url = `/api/usage/export.csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
-    window.open(url, '_blank');
-  }, [activeDays]);
-
   const exportChartCsv = useCallback(() => {
     if (!data) return;
     const header = ['date', ...topModelKeys, hasOtherBucket ? 'Other' : null].filter(Boolean) as string[];
@@ -252,61 +238,49 @@ export function UsageDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Summary tiles — cost first, tokens as subheading; reconciliation is the */}
-      {/* honest "how much of this is ground-truth" signal.                       */}
+      {/* Summary tiles — cost + tokens only; reconciliation tile as the 4th.   */}
+      {/* Subtext is deliberately minimal — repeated "calls / last Nd" strings  */}
+      {/* added noise without teaching anything the number didn't already say. */}
       <div className="grid gap-3 md:grid-cols-4">
         <PrimaryTile
           label="Total cost"
           value={data ? formatUsd(data.total.costUsd) : '—'}
-          subValue={data ? `${formatTokens(data.total.totalTokens)} tokens` : undefined}
-          sub={data ? `${data.total.requests.toLocaleString()} calls · last ${activeDays}d` : undefined}
+          tokens={data ? formatTokens(data.total.totalTokens) : undefined}
         />
         <SecondaryTile
-          icon={<CalendarDays size={13} />}
           label="Used today"
           value={data ? formatUsd(data.today.costUsd) : '—'}
-          sub={data ? `${formatTokens(data.today.totalTokens)} tokens · ${data.today.requests} calls` : undefined}
+          tokens={data ? formatTokens(data.today.totalTokens) : undefined}
         />
         <SecondaryTile
-          icon={<Wallet size={13} />}
           label="Used this month"
           value={data ? formatUsd(data.thisMonth.costUsd) : '—'}
-          sub={data ? `${formatTokens(data.thisMonth.totalTokens)} tokens · ${data.thisMonth.requests} calls` : undefined}
+          tokens={data ? formatTokens(data.thisMonth.totalTokens) : undefined}
         />
         <ReconciledTile reconciliation={data?.reconciliation} />
       </div>
 
-      {/* Date presets + download-logs action sit in a compact toolbar so they */}
-      {/* don't steal visual weight from the summary above.                    */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-nativz-border bg-surface/60 p-2.5">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="pl-2 pr-1 text-[11px] font-mono uppercase tracking-[0.18em] text-text-muted">
-            Range
-          </span>
-          {PRESETS.map((p) => (
-            <button
-              key={p.label}
-              type="button"
-              onClick={() => setActiveDays(p.days)}
-              className={
-                'rounded-lg border px-2.5 py-1 text-[12px] font-medium transition-colors ' +
-                (activeDays === p.days
-                  ? 'border-accent/50 bg-accent/15 text-accent-text'
-                  : 'border-nativz-border bg-background/40 text-text-secondary hover:border-accent/30 hover:text-text-primary')
-              }
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={exportCsv}
-          disabled={!data}
-          className="inline-flex items-center justify-center gap-2 rounded-lg border border-nz-purple/40 bg-nz-purple/10 px-3 py-1.5 text-[13px] font-medium text-nz-purple-100 transition-colors hover:border-nz-purple/60 hover:bg-nz-purple/20 disabled:opacity-50"
-        >
-          Download full logs
-        </button>
+      {/* Date presets — the per-chart download buttons handle the CSV export   */}
+      {/* case, so the old "Download full logs" toolbar button went away.       */}
+      <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-nativz-border bg-surface/60 p-2.5">
+        <span className="pl-2 pr-1 text-[11px] font-mono uppercase tracking-[0.18em] text-text-muted">
+          Range
+        </span>
+        {PRESETS.map((p) => (
+          <button
+            key={p.label}
+            type="button"
+            onClick={() => setActiveDays(p.days)}
+            className={
+              'rounded-lg border px-2.5 py-1 text-[12px] font-medium transition-colors ' +
+              (activeDays === p.days
+                ? 'border-accent/50 bg-accent/15 text-accent-text'
+                : 'border-nativz-border bg-background/40 text-text-secondary hover:border-accent/30 hover:text-text-primary')
+            }
+          >
+            {p.label}
+          </button>
+        ))}
       </div>
 
       {error && (
@@ -328,7 +302,7 @@ export function UsageDashboard() {
             icon={<BarChart3 size={18} />}
             title={metric === 'cost' ? 'Cost over time' : 'Tokens over time'}
             subtitle={`Daily spend stacked by model · last ${activeDays} days`}
-            tone="action"
+            tone="neutral"
             onDownload={exportChartCsv}
             downloadLabel="Download chart CSV"
             legend={chartLegend}
@@ -396,7 +370,7 @@ export function UsageDashboard() {
             icon={<ListOrdered size={18} />}
             title="Top models · this window"
             subtitle={`Ranked by cost across the last ${activeDays} days`}
-            tone="brand"
+            tone="neutral"
             onDownload={exportModelsCsv}
             downloadLabel="Download top-models CSV"
             hideExpand
@@ -445,7 +419,7 @@ export function UsageDashboard() {
             icon={<Table2 size={18} />}
             title="Where each model is used"
             subtitle="Feature × dominant model — which model is powering which flow"
-            tone="brand"
+            tone="neutral"
             hideExpand
             dataPointsLabel={`${Object.keys(data.byFeature).length} feature${
               Object.keys(data.byFeature).length === 1 ? '' : 's'
@@ -501,55 +475,36 @@ export function UsageDashboard() {
   );
 }
 
-function PrimaryTile({
-  label,
-  value,
-  subValue,
-  sub,
-}: {
-  label: string;
-  value: string;
-  subValue?: string;
-  sub?: string;
-}) {
+/** Headline summary tile — the big "Total cost" card. */
+function PrimaryTile({ label, value, tokens }: { label: string; value: string; tokens?: string }) {
   return (
     <div className="rounded-xl border border-nativz-border bg-surface p-5">
-      <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-text-muted/85">
-        <DollarSign size={12} className="text-emerald-300" />
+      <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-text-muted/85">
         {label}
       </div>
       <div className="mt-2 text-[32px] font-semibold leading-none tabular-nums text-text-primary">
         {value}
       </div>
-      {subValue ? (
-        <div className="mt-2 text-[13px] font-medium text-text-secondary">{subValue}</div>
+      {tokens ? (
+        <div className="mt-2 text-[13px] text-text-secondary tabular-nums">{tokens} tokens</div>
       ) : null}
-      {sub ? <div className="mt-0.5 text-[12px] text-text-muted">{sub}</div> : null}
     </div>
   );
 }
 
-function SecondaryTile({
-  icon,
-  label,
-  value,
-  sub,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  sub?: string;
-}) {
+/** Secondary summary tile — same shape, slightly smaller headline. */
+function SecondaryTile({ label, value, tokens }: { label: string; value: string; tokens?: string }) {
   return (
     <div className="rounded-xl border border-nativz-border bg-surface p-5">
-      <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-text-muted/85">
-        <span className="text-accent-text">{icon}</span>
+      <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-text-muted/85">
         {label}
       </div>
       <div className="mt-2 text-[26px] font-semibold leading-none tabular-nums text-text-primary">
         {value}
       </div>
-      {sub ? <div className="mt-2 text-[12px] text-text-muted">{sub}</div> : null}
+      {tokens ? (
+        <div className="mt-2 text-[13px] text-text-secondary tabular-nums">{tokens} tokens</div>
+      ) : null}
     </div>
   );
 }

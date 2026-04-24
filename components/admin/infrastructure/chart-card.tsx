@@ -58,7 +58,7 @@ export function ChartCard({
   icon,
   title,
   subtitle,
-  tone = 'action',
+  tone = 'neutral',
   onDownload,
   downloadLabel = 'Download',
   hideExpand = false,
