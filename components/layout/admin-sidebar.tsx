@@ -7,12 +7,10 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import {
   LayoutDashboard,
   BarChart3,
-  CheckSquare,
   ChevronRight,
   Contact,
   ImagePlus,
   StickyNote,
-  Scissors,
   TrendingUp,
   MessagesSquare,
   Receipt,
@@ -23,13 +21,13 @@ import {
   BookUser,
   ShoppingBag,
   Bell,
-  Camera,
   Calendar,
   Brain,
   Cpu,
   Gauge,
   ListChecks,
   Telescope,
+  Briefcase,
 } from 'lucide-react';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
@@ -128,7 +126,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'Admin',
     items: [
       {
-        href: '/admin/tasks',
+        href: '/admin/projects',
         label: 'Admin',
         icon: SettingsIcon,
         children: [
@@ -142,9 +140,11 @@ const NAV_SECTIONS: NavSection[] = [
           { href: '/admin/revenue', label: 'Revenue', icon: CreditCard },
           { href: '/admin/proposals', label: 'Proposals', icon: FileSignature },
           { href: '/admin/notifications', label: 'Notifications', icon: Bell },
-          { href: '/admin/tasks', label: 'Tasks', icon: CheckSquare },
-          { href: '/admin/edits', label: 'Edits', icon: Scissors },
-          { href: '/admin/shoots', label: 'Shoots', icon: Camera },
+          // Unified PM surface. /admin/shoots and /admin/edits redirect here
+          // (see their page.tsx). /admin/tasks still serves the legacy task
+          // UI directly — it folds into /admin/projects once the PM surface
+          // reaches feature parity.
+          { href: '/admin/projects', label: 'Project Management', icon: Briefcase },
           { href: '/admin/usage', label: 'Usage', icon: Gauge },
           { href: '/admin/settings', label: 'Settings', icon: SettingsIcon },
         ],
@@ -159,11 +159,6 @@ function isActivePath(pathname: string, href: string, searchParams?: URLSearchPa
   if (href.endsWith('/finder/new')) {
     const prefix = href.replace('/finder/new', '');
     return pathname.startsWith(`${prefix}/finder`);
-  }
-
-  // Pipeline root "All stages" shares /admin/edits with ?stage=… filtered views
-  if (href === '/admin/edits' && pathname === '/admin/edits') {
-    return !searchParams?.get('stage');
   }
 
   // Brain (formerly Knowledge): graph and meetings roll up into a single
@@ -206,13 +201,11 @@ function isActivePath(pathname: string, href: string, searchParams?: URLSearchPa
 const ADMIN_ONLY_HREFS = new Set([
   '/admin/dashboard',
   '/admin/accounting',
-  '/admin/tasks',
-  '/admin/edits',
+  '/admin/projects',
   '/admin/scheduling',
   '/admin/clients',
   '/admin/users',
   '/admin/presentations',
-  '/admin/shoots',
   '/admin/analyze-social',
   '/admin/notifications',
   '/admin/usage',

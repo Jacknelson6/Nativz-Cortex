@@ -22,7 +22,8 @@ import { ActivityChart } from '@/components/charts/activity-chart';
 import { ExportPdfButton } from '@/components/results/export-pdf-button';
 import { ShareButton } from '@/components/results/share-button';
 import { SearchProgress } from '@/components/search/search-progress';
-import type { TopicSearch, TopicSearchAIResponse, TrendingTopic, LegacyTrendingTopic } from '@/lib/types/search';
+import { SourceBrowser } from '@/components/results/source-browser';
+import type { TopicSearch, TopicSearchAIResponse, TrendingTopic, LegacyTrendingTopic, PlatformSource } from '@/lib/types/search';
 import { ScrapedVideosSection } from '@/components/results/scraped-videos-section';
 import { AiTakeaways } from '@/components/results/ai-takeaways';
 import { useAgencyBrand } from '@/lib/agency/use-agency-brand';
@@ -331,6 +332,32 @@ export function AdminResultsClient({
             ) : null}
           </div>
         ) : null}
+
+        {/* Sources — short-form video card grid (TikTok + YouTube). Web /
+            Reddit / domain link list were retired in the prior trim pass;
+            only the video card layout is restored here per Jack's ask. */}
+        {(() => {
+          const platformSources = ((search.platform_data as Record<string, unknown> | null)?.sources ?? []) as PlatformSource[];
+          if (platformSources.length === 0) return null;
+          return (
+            <SourceBrowser
+              sources={platformSources}
+              searchId={search.id}
+              searchQuery={search.query}
+              clientContext={
+                clientInfo
+                  ? {
+                      name: clientInfo.name,
+                      industry: clientInfo.industry,
+                      topicKeywords: clientInfo.topic_keywords ?? undefined,
+                    }
+                  : null
+              }
+              defaultClientId={search.client_id}
+              allowAnalyze={isAdminViewer}
+            />
+          );
+        })()}
 
       </div>
 

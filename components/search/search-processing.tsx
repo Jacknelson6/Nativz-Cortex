@@ -490,10 +490,18 @@ export function SearchProcessing({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchId]);
 
-  function handleRetry() {
+  async function handleRetry() {
     stopStatusPoll();
     setError('');
     setApiError(null);
+    // If the row never made it past pending_subtopics (auto-confirm failed
+    // on first mount), the process route's status guard 400s on every
+    // forceRetry attempt. Re-run autoConfirmSubtopics here so the row
+    // gets flipped to 'processing' before runProcess fires.
+    if (pendingSubtopics) {
+      const ok = await autoConfirmSubtopics();
+      if (!ok) return;
+    }
     runProcess({ forceRetry: true });
   }
 
