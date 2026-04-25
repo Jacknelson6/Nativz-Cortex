@@ -315,6 +315,28 @@ export async function middleware(request: NextRequest) {
     });
   }
 
+  // -----------------------------------------------------------------------
+  // Maintenance gate — viewer accounts park on /maintenance while the
+  // brand-root migration phase 2 collapses /portal/* into the new (app)
+  // shell. Half-migrated routes can't render correctly mid-flight for real
+  // client users, so they hold here until the unified surface ships.
+  // Admins (incl. super_admin) are unaffected. Lift this gate by deleting
+  // the block once /portal/* is retired.
+  // -----------------------------------------------------------------------
+  const MAINTENANCE_PATH = '/maintenance';
+  const isAdminRole = role === 'admin' || role === 'super_admin';
+  // Viewers can still sign out from the maintenance page — keep the auth
+  // logout endpoint reachable. Everything else routes them to maintenance.
+  const isMaintenanceAllowed =
+    pathname === MAINTENANCE_PATH || pathname === '/api/auth/logout';
+  if (!isAdminRole && !isMaintenanceAllowed) {
+    return NextResponse.redirect(new URL(MAINTENANCE_PATH, request.url));
+  }
+  // Admin landed on /maintenance — bounce to dashboard.
+  if (isAdminRole && pathname === MAINTENANCE_PATH) {
+    return NextResponse.redirect(new URL('/admin/dashboard', request.url));
+  }
+
   // Impersonation detection
   const isImpersonating = request.cookies.has('x-impersonate-org');
 
@@ -327,9 +349,11 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse;
   }
 
-  // Admin routes — only admins
-  if (pathname.startsWith('/admin') && role !== 'admin') {
-    return NextResponse.redirect(new URL(PORTAL_HOME_PATH, request.url));
+  // Admin routes — only admins. Non-admins are already gated above by the
+  // maintenance redirect, so this is just defense-in-depth for any role
+  // we add later that isn't 'viewer'.
+  if (pathname.startsWith('/admin') && !isAdminRole) {
+    return NextResponse.redirect(new URL(MAINTENANCE_PATH, request.url));
   }
 
   // Legacy /admin/strategy-lab/<uuid> → set active-client cookie + 302.
