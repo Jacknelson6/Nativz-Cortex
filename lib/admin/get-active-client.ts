@@ -75,6 +75,31 @@ export async function getActiveAdminClient(
   const cookieStore = await cookies();
   const cookieClientId = cookieStore.get(ADMIN_ACTIVE_CLIENT_COOKIE)?.value ?? null;
 
+  // Impersonation override. When an admin owner has clicked "View as <client>",
+  // /api/impersonate sets the slug + organization_id pair. Resolving the
+  // impersonated brand here means the shared (app) shell — sidebar pill,
+  // brand-profile page, every page that calls `getActiveAdminClient()` —
+  // automatically re-scopes to that client without each page needing its own
+  // impersonation check. Brand-root migration phase 2 prep so impersonation
+  // lands on root URLs (e.g. /brand-profile) instead of the legacy /portal/* surface.
+  const impersonateOrg = cookieStore.get('x-impersonate-org')?.value?.trim() || null;
+  const impersonateSlug = cookieStore.get('x-impersonate-slug')?.value?.trim() || null;
+  if (impersonateOrg && impersonateSlug) {
+    const admin = createAdminClient();
+    const { data: impersonated } = await admin
+      .from('clients')
+      .select('id, name, slug, logo_url, agency')
+      .eq('organization_id', impersonateOrg)
+      .eq('slug', impersonateSlug)
+      .eq('is_active', true)
+      .maybeSingle();
+    if (impersonated) {
+      return { brand: impersonated, source: 'cookie', isAdmin };
+    }
+    // Fall through if the impersonation target is no longer valid; the
+    // banner's exit button will clear stale cookies.
+  }
+
   const urlId = overrideClientId?.trim() || null;
   const cookieId = cookieClientId?.trim() || null;
   const candidate = urlId ?? cookieId;

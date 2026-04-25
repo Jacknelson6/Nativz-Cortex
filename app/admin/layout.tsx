@@ -18,6 +18,7 @@ import { PageTransition } from '@/components/shared/page-transition';
 import { BackgroundSearchProvider } from '@/components/search/background-search-tracker';
 import { SWRProvider } from '@/components/providers/swr-provider';
 import { BannerStrip } from '@/components/shared/banner-strip';
+import { ImpersonationBanner } from '@/components/portal/impersonation-banner';
 import { ActiveBrandProvider } from '@/lib/admin/active-client-context';
 import { getActiveAdminClient, listAdminAccessibleBrands } from '@/lib/admin/get-active-client';
 
@@ -98,6 +99,7 @@ export default async function AdminLayout({
               />
             }
           >
+            <ImpersonationBanner />
             <EasterEgg />
             <CommandPalette />
             <AdminSidebar userName={userName} avatarUrl={avatarUrl} hiddenSidebarItems={hiddenSidebarItems} />
