@@ -54,7 +54,7 @@ export function OnboardingFlowsRoster({ flows }: { flows: FlowRow[] }) {
     return (
       <div className="rounded-xl border border-nativz-border bg-surface p-10 text-center">
         <p className="text-sm text-text-muted">
-          No flows yet. Open a client and click <strong className="text-text-primary">Start onboarding</strong> to spin one up.
+          No flows yet. Click <strong className="text-text-primary">Start onboarding</strong> in the top-right to pick a brand and spin one up.
         </p>
       </div>
     );
