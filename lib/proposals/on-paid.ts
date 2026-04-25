@@ -142,12 +142,25 @@ async function advanceFlowOnPaid(
     })
     .eq('id', flowId);
 
-  // POC invite send is in lib/onboarding/system-emails.ts — fire-and-
-  // forget so a Resend hiccup doesn't bring down the webhook handler.
-  const { sendFlowPocInvite } = await import('@/lib/onboarding/system-emails');
-  await sendFlowPocInvite(admin, flowId).catch((err) => {
-    console.error('[proposals:on-paid] POC invite send failed:', err);
-  });
+  // Mark the always-first agreement_payment segment as done so the
+  // timeline reflects reality.
+  await admin
+    .from('onboarding_flow_segments')
+    .update({ status: 'done', completed_at: nowIso })
+    .eq('flow_id', flowId)
+    .eq('kind', 'agreement_payment');
+
+  // POC invite + invoice_paid milestone fan-out. Both fire-and-forget so a
+  // Resend hiccup doesn't bring down the webhook handler.
+  const { sendFlowPocInvite, sendFlowStakeholderMilestone } = await import('@/lib/onboarding/system-emails');
+  await Promise.all([
+    sendFlowPocInvite(admin, flowId).catch((err) => {
+      console.error('[proposals:on-paid] POC invite send failed:', err);
+    }),
+    sendFlowStakeholderMilestone(admin, flowId, 'invoice_paid').catch((err) => {
+      console.error('[proposals:on-paid] invoice_paid milestone fire failed:', err);
+    }),
+  ]);
 }
 
 type SignedProposal = {

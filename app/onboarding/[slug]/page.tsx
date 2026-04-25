@@ -42,15 +42,96 @@ export default async function PublicOnboardingPage({
   }
 
   const admin = createAdminClient();
-  const { data: tracker, error } = await admin
+
+  // Token can resolve to either a legacy single-tracker share_token OR a
+  // new onboarding_flows.share_token. For flow tokens we redirect through
+  // to the first non-virtual segment's tracker — Phase 5 ships only one
+  // service segment (Social) so the POC sees that tracker's checklist.
+  // Once the flow has zero service segments yet, render a "still setting
+  // up" placeholder.
+  type ResolvedTracker = {
+    id: string;
+    client_id: string;
+    service: string;
+    title: string | null;
+    status: string;
+    share_token: string;
+    started_at: string | null;
+    completed_at: string | null;
+    clients: { name: string; slug: string; logo_url: string | null } | null;
+  };
+
+  let tracker: ResolvedTracker | null = null;
+
+  const { data: directTracker } = await admin
     .from('onboarding_trackers')
     .select('id, client_id, service, title, status, share_token, started_at, completed_at, clients!inner(name, slug, logo_url)')
     .eq('share_token', token)
     .maybeSingle();
 
-  if (error || !tracker) {
+  if (directTracker) {
+    tracker = directTracker as unknown as ResolvedTracker;
+  } else {
+    const { data: flow } = await admin
+      .from('onboarding_flows')
+      .select('id, status, started_at, completed_at, share_token, clients!inner(name, slug, logo_url)')
+      .eq('share_token', token)
+      .maybeSingle();
+    if (!flow) notFound();
+    type FlowRow = {
+      id: string;
+      status: string;
+      started_at: string | null;
+      completed_at: string | null;
+      share_token: string;
+      clients: { name: string; slug: string; logo_url: string | null } | Array<{ name: string; slug: string; logo_url: string | null }>;
+    };
+    const f = flow as FlowRow;
+    const fc = Array.isArray(f.clients) ? f.clients[0] : f.clients;
+
+    const { data: firstSegment } = await admin
+      .from('onboarding_flow_segments')
+      .select('tracker_id')
+      .eq('flow_id', f.id)
+      .not('tracker_id', 'is', null)
+      .order('position', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    const trackerId = (firstSegment as { tracker_id: string | null } | null)?.tracker_id ?? null;
+
+    if (!trackerId) {
+      // Flow exists but no service segment scaffolded yet. Friendly placeholder.
+      return (
+        <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-6 py-12 text-center">
+          <h1 className="text-2xl font-semibold text-text-primary">
+            Welcome, {fc?.name ?? ''} — your onboarding is being set up.
+          </h1>
+          <p className="mt-3 text-sm text-text-muted">
+            Your team is still configuring this flow. We'll email you the moment your checklist is ready.
+          </p>
+        </main>
+      );
+    }
+
+    const { data: trackerRow } = await admin
+      .from('onboarding_trackers')
+      .select('id, client_id, service, title, status, share_token, started_at, completed_at, clients!inner(name, slug, logo_url)')
+      .eq('id', trackerId)
+      .maybeSingle();
+    if (!trackerRow) notFound();
+    tracker = trackerRow as unknown as ResolvedTracker;
+    // Bump the flow's POC activity cursor on view too — opening the
+    // checklist counts as engagement.
+    await admin
+      .from('onboarding_flows')
+      .update({ last_poc_activity_at: new Date().toISOString() })
+      .eq('id', f.id);
+  }
+
+  if (!tracker) {
     notFound();
   }
+  const t = tracker;
 
   // Cosmetic slug check — if someone sends a mismatched slug + valid
   // token we still render (token is the real gate), but redirecting
@@ -61,12 +142,12 @@ export default async function PublicOnboardingPage({
     admin
       .from('onboarding_phases')
       .select('id, name, description, what_we_need, status, sort_order, actions, progress_percent')
-      .eq('tracker_id', tracker.id)
+      .eq('tracker_id', t.id)
       .order('sort_order', { ascending: true }),
     admin
       .from('onboarding_checklist_groups')
       .select('id, name, sort_order')
-      .eq('tracker_id', tracker.id)
+      .eq('tracker_id', t.id)
       .order('sort_order', { ascending: true }),
   ]);
 
@@ -82,7 +163,7 @@ export default async function PublicOnboardingPage({
     admin
       .from('onboarding_uploads')
       .select('id, filename, size_bytes, mime_type, created_at')
-      .eq('tracker_id', tracker.id)
+      .eq('tracker_id', t.id)
       .order('created_at', { ascending: false }),
     // Zernio-connected social accounts for this tracker's client. Used to
     // surface "Connected as @handle" on connection cards even after the
@@ -90,12 +171,12 @@ export default async function PublicOnboardingPage({
     admin
       .from('social_profiles')
       .select('platform, username, is_active')
-      .eq('client_id', tracker.client_id)
+      .eq('client_id', t.client_id)
       .eq('is_active', true),
   ]);
 
   // Supabase types `!inner` joins as arrays; 1:1 here so unwrap.
-  const raw = tracker as unknown as Record<string, unknown> & {
+  const raw = t as unknown as Record<string, unknown> & {
     clients: Tracker['clients'] | Array<NonNullable<Tracker['clients']>>;
   };
   const normalized: Tracker = {
