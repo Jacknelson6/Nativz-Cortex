@@ -7,9 +7,7 @@ import {
   UserX,
   LayoutGrid,
   List,
-  Trash2,
   Loader2,
-  Eye,
   Plus,
   MoreHorizontal,
   Check,
@@ -276,11 +274,8 @@ function ClientCard({
   groups,
   moveMode,
   onNavigate,
-  onImpersonate,
-  onRequestDelete,
   onMoveGroup,
   onMoveAgency,
-  deleting,
   animate = true,
 }: {
   client: ClientItem;
@@ -292,11 +287,8 @@ function ClientCard({
    *  sectioning mode so users can only move between rows they can see. */
   moveMode: MoveMode;
   onNavigate: () => void;
-  onImpersonate: () => void;
-  onRequestDelete: () => void;
   onMoveGroup: (groupId: string | null) => void;
   onMoveAgency: (bucket: AgencyBucket) => void;
-  deleting?: boolean;
   /**
    * When false, skip the entrance stagger animation. We turn this off after
    * the initial mount so cards don't re-animate from scratch on layout shifts.
@@ -307,12 +299,11 @@ function ClientCard({
   const staggerClass = animate ? 'animate-stagger-in' : '';
   const currentBucket = bucketFor(client.agency, client.inOnboarding);
 
-  // Action buttons: per Jack 2026-04-25, Move (re-grouping / re-bucketing)
-  // is the rarely-used one — it lives in the hover-revealed slot so it's
-  // out of the way at rest. Impersonate (View as) and Delete are reached
-  // often enough to stay always-visible so the eye doesn't have to learn
-  // a hover dance. Keyboard users still surface Move via tab focus via
-  // group-focus-within.
+  // 2026-04-25: dropped the always-visible Eye (Impersonate) and Trash
+  // (Delete) icons that used to live at the card's top-right. Both actions
+  // now live inside the client detail page's identity header, which is one
+  // click away. Move stays — it's the only card-level action that makes
+  // sense without leaving the grid.
   const moveButton = client.dbId && (
     <div className="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
       <MoveMenu
@@ -326,38 +317,9 @@ function ClientCard({
     </div>
   );
 
-  const persistentButtons = (
-    <div className="flex items-center gap-0.5">
-      {client.organizationId && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onImpersonate(); }}
-          className="rounded-md p-1.5 text-text-muted hover:text-text-primary hover:bg-surface-hover cursor-pointer transition-colors"
-          title={`View portal as ${client.name}`}
-          aria-label={`View portal as ${client.name}`}
-        >
-          <Eye size={14} />
-        </button>
-      )}
-      {client.dbId && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onRequestDelete(); }}
-          disabled={deleting}
-          className="rounded-md p-1.5 text-text-muted hover:text-red-400 hover:bg-red-500/10 cursor-pointer transition-colors disabled:cursor-wait"
-          title={`Delete ${client.name}`}
-          aria-label={`Delete ${client.name}`}
-        >
-          {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-        </button>
-      )}
-    </div>
-  );
-
   const actionButtons = (
     <div className="flex items-center gap-0.5">
       {moveButton}
-      {persistentButtons}
     </div>
   );
 
@@ -368,7 +330,7 @@ function ClientCard({
         tabIndex={0}
         onClick={onNavigate}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate(); } }}
-        className={`group w-full text-left cursor-pointer focus:outline-none ${staggerClass} ${deleting ? 'pointer-events-none opacity-50' : ''} transition-[opacity] duration-150`}
+        className={`group w-full text-left cursor-pointer focus:outline-none ${staggerClass} transition-[opacity] duration-150`}
         style={staggerDelay ? { animationDelay: staggerDelay } : undefined}
       >
         <div
@@ -400,7 +362,7 @@ function ClientCard({
       tabIndex={0}
       onClick={onNavigate}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate(); } }}
-      className={`group w-full text-left focus:outline-none ${staggerClass} ${deleting ? 'pointer-events-none opacity-50' : ''} cursor-pointer transition-[opacity] duration-150`}
+      className={`group w-full text-left focus:outline-none ${staggerClass} cursor-pointer transition-[opacity] duration-150`}
       style={staggerDelay ? { animationDelay: staggerDelay } : undefined}
     >
       <div
@@ -680,8 +642,6 @@ export function ClientSearchGrid({
     rawClients.map((c) => ({ ...c, services: normalizeServices(c.services) })),
   );
   const [groups, setGroups] = useState<ClientGroup[]>(initialGroups);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<{ dbId: string; name: string } | null>(null);
   const [pendingGroupDelete, setPendingGroupDelete] = useState<{ id: string; name: string; memberCount: number } | null>(null);
   const [query, setQuery] = useState('');
   const [agencyFilter, setAgencyFilter] = useState<AgencyFilter>('all');
@@ -714,34 +674,8 @@ export function ClientSearchGrid({
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const handleDelete = useCallback(async (dbId: string) => {
-    setDeletingId(dbId);
-    try {
-      const res = await fetch(`/api/clients/${dbId}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string; details?: string };
-        const msg = [data.error ?? 'Failed to delete', data.details].filter(Boolean).join(' — ');
-        throw new Error(msg);
-      }
-      setAllClients((prev) => prev.filter((c) => c.dbId !== dbId));
-      toast.success('Client deleted');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete client');
-    } finally {
-      setDeletingId(null);
-    }
-  }, []);
-
-  const handleImpersonate = useCallback((organizationId: string, slug: string) => {
-    fetch('/api/impersonate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ organization_id: organizationId, client_slug: slug }),
-    })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Impersonate failed'))))
-      .then((data: { redirect: string }) => { window.location.href = data.redirect; })
-      .catch(() => toast.error('Failed to impersonate'));
-  }, []);
+  // Per-card Impersonate / Delete moved to the client detail page header
+  // 2026-04-25 — see components/clients/client-identity-header.tsx.
 
   const handleMoveGroup = useCallback(async (dbId: string, groupId: string | null) => {
     const prev = allClients;
@@ -954,11 +888,8 @@ export function ClientSearchGrid({
       dimmed,
       groups,
       moveMode,
-      deleting: deletingId === client.dbId,
       animate: canAnimateIn,
       onNavigate: () => router.push(`/admin/clients/${client.slug}`),
-      onImpersonate: () => client.organizationId && handleImpersonate(client.organizationId, client.slug),
-      onRequestDelete: () => client.dbId && setPendingDelete({ dbId: client.dbId, name: client.name }),
       onMoveGroup: (gid: string | null) => client.dbId && handleMoveGroup(client.dbId, gid),
       onMoveAgency: (bucket: AgencyBucket) => handleMoveAgency(client, bucket),
     });
@@ -1143,19 +1074,6 @@ export function ClientSearchGrid({
           )}
         </div>
       )}
-
-      <ConfirmDialog
-        open={pendingDelete !== null}
-        title="Delete client"
-        description={pendingDelete ? `Delete "${pendingDelete.name}"? This cannot be undone.` : ''}
-        confirmLabel="Delete"
-        variant="danger"
-        onConfirm={() => {
-          if (pendingDelete) void handleDelete(pendingDelete.dbId);
-          setPendingDelete(null);
-        }}
-        onCancel={() => setPendingDelete(null)}
-      />
 
       <ConfirmDialog
         open={pendingGroupDelete !== null}

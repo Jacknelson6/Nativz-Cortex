@@ -3,6 +3,7 @@
 import { ClientLogo } from '@/components/clients/client-logo';
 import { ImpersonateButton } from '@/components/clients/impersonate-button';
 import { InviteButton } from '@/components/clients/invite-button';
+import { DeleteClientButton } from '@/components/clients/delete-client-button';
 import { useClientAdminShell } from '@/components/clients/client-admin-shell-context';
 import { StartOnboardingButton } from '@/components/onboarding/start-onboarding-button';
 
@@ -44,6 +45,7 @@ export function ClientIdentityHeader() {
             clientSlug={slug}
           />
         )}
+        <DeleteClientButton clientId={clientId} clientName={clientName} />
       </div>
     </div>
   );

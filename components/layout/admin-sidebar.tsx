@@ -28,6 +28,7 @@ import {
   ListChecks,
   Telescope,
   Briefcase,
+  CheckSquare,
 } from 'lucide-react';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
@@ -140,11 +141,14 @@ const NAV_SECTIONS: NavSection[] = [
           { href: '/admin/revenue', label: 'Revenue', icon: CreditCard },
           { href: '/admin/proposals', label: 'Proposals', icon: FileSignature },
           { href: '/admin/notifications', label: 'Notifications', icon: Bell },
-          // Unified PM surface. /admin/shoots and /admin/edits redirect here
-          // (see their page.tsx). /admin/tasks still serves the legacy task
-          // UI directly — it folds into /admin/projects once the PM surface
-          // reaches feature parity.
+          // Project Management = pipelines / sprints (the editing pipeline,
+          // shoot scheduling, larger projects). /admin/shoots + /admin/edits
+          // redirect here. Tasks below is the day-to-day individual to-do
+          // list (Today / Upcoming / All view). Two surfaces, one section
+          // — Jack 2026-04-25: "they exist in one space but they're
+          // technically different."
           { href: '/admin/projects', label: 'Project Management', icon: Briefcase },
+          { href: '/admin/tasks', label: 'Tasks', icon: CheckSquare },
           { href: '/admin/usage', label: 'Usage', icon: Gauge },
           { href: '/admin/settings', label: 'Settings', icon: SettingsIcon },
         ],
@@ -202,6 +206,7 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/dashboard',
   '/admin/accounting',
   '/admin/projects',
+  '/admin/tasks',
   '/admin/scheduling',
   '/admin/clients',
   '/admin/users',
