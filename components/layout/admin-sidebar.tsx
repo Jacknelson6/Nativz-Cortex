@@ -156,7 +156,7 @@ const NAV_SECTIONS: NavSection[] = [
           { href: '/admin/edits', label: 'Edits', icon: Scissors },
           { href: '/admin/shoots', label: 'Shoots', icon: Camera },
           { href: '/admin/usage', label: 'Usage', icon: Gauge },
-          { href: '/admin/settings', label: 'Settings', icon: Cpu },
+          { href: '/admin/settings', label: 'Settings', icon: SettingsIcon },
         ],
       },
     ],

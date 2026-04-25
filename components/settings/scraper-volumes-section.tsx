@@ -16,7 +16,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Check, Loader2 } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { PER_UNIT_COST_USD } from '@/lib/search/scraper-cost-constants';
 import { PLATFORM_CONFIG } from '@/components/search/platform-icon';
 import { TooltipCard } from '@/components/ui/tooltip-card';
@@ -264,13 +263,6 @@ export function ScraperVolumesSection() {
     ? Object.values(perPlatformCost).reduce((a, b) => a + b, 0)
     : 0;
 
-  const pieData = useMemo(() => {
-    if (!perPlatformCost) return [];
-    return (Object.entries(perPlatformCost) as [PlatformKey, number][])
-      .filter(([, v]) => v > 0)
-      .map(([k, v]) => ({ name: PLATFORM_CONFIG[k].label, value: v, platform: k }));
-  }, [perPlatformCost]);
-
   // Debounced autosave — fires 600ms after the last change. Manual state
   // transitions idle → saving → saved (brief flash) → idle so the user
   // sees a clear acknowledgment without chart thrash.
@@ -332,11 +324,6 @@ export function ScraperVolumesSection() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-text-primary">Platform volumes</h2>
-        <SaveStateBadge state={saveState} />
-      </div>
-
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {PLATFORM_SECTIONS.map((section) => (
           <PlatformCard
@@ -349,202 +336,128 @@ export function ScraperVolumesSection() {
         ))}
       </div>
 
-      {/* Cost visualization */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1.2fr]">
-        <div className="rounded-xl border border-nativz-border bg-surface p-5">
-          <p className="text-xs font-medium uppercase tracking-wider text-text-muted">
-            Estimated cost per search
-          </p>
-          <p className="mt-2 text-4xl font-semibold tabular-nums text-text-primary">
+      <CostSummaryBar
+        perPlatformCost={perPlatformCost}
+        totalCost={totalCost}
+        row={row}
+        pricesRefreshedAt={prices?.refreshedAt ?? null}
+        saveState={saveState}
+      />
+    </div>
+  );
+}
+
+// ── Cost summary ────────────────────────────────────────────────────────
+
+/**
+ * One-row cost readout: total + stacked horizontal bar + inline legend.
+ * Replaced the prior two-card estimate/donut + per-unit strip — same info,
+ * one quarter the vertical space, hierarchy that lets the sliders dominate.
+ */
+function CostSummaryBar({
+  perPlatformCost,
+  totalCost,
+  row,
+  pricesRefreshedAt,
+  saveState,
+}: {
+  perPlatformCost: Record<PlatformKey, number> | null;
+  totalCost: number;
+  row: SettingsRow;
+  pricesRefreshedAt: string | null;
+  saveState: 'idle' | 'saving' | 'saved';
+}) {
+  const [activeKey, setActiveKey] = useState<PlatformKey | null>(null);
+
+  const segments = useMemo(() => {
+    if (!perPlatformCost) return [];
+    return (Object.entries(perPlatformCost) as [PlatformKey, number][])
+      .filter(([, v]) => v > 0)
+      .map(([platform, value]) => ({
+        platform,
+        value,
+        pct: totalCost > 0 ? (value / totalCost) * 100 : 0,
+        count: row[primaryFieldForPlatform(platform)],
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [perPlatformCost, totalCost, row]);
+
+  return (
+    <div className="rounded-xl border border-nativz-border bg-surface p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+        <div className="flex items-baseline gap-3">
+          <span className="text-xs font-medium uppercase tracking-wider text-text-muted">
+            Cost per search
+          </span>
+          <span className="text-2xl font-semibold tabular-nums text-text-primary">
             {formatUsd(totalCost)}
-          </p>
-          <div className="mt-4 space-y-1.5 text-sm">
-            {perPlatformCost &&
-              (Object.entries(perPlatformCost) as [PlatformKey, number][]).map(([k, v]) => {
-                const count = row[primaryFieldForPlatform(k)];
-                return (
-                  <div key={k} className="flex items-center justify-between">
-                    <span className="flex items-center gap-2 text-text-secondary">
-                      <span
-                        className="inline-block h-2.5 w-2.5 rounded-full"
-                        style={{ backgroundColor: PIE_COLORS[k] }}
-                        aria-hidden
-                      />
-                      {PLATFORM_CONFIG[k].label}
-                      <span className="text-text-muted/60">· {count}</span>
-                    </span>
-                    <span className="tabular-nums text-text-primary">{formatUsd(v)}</span>
-                  </div>
-                );
-              })}
-          </div>
+          </span>
         </div>
-
-        <div className="relative rounded-xl border border-nativz-border bg-surface p-5">
-          <div className="flex items-start justify-between">
-            <p className="text-xs font-medium uppercase tracking-wider text-text-muted">
-              Breakdown
-            </p>
-            {pieData.length > 0 ? (
-              <p className="text-[11px] text-text-muted">per search</p>
-            ) : null}
-          </div>
-
-          {pieData.length > 0 ? (
-            <BreakdownDonut pieData={pieData} totalCost={totalCost} />
-          ) : (
-            <div className="mt-2 flex h-[180px] items-center justify-center text-sm text-text-muted">
-              Set non-zero volumes to see the breakdown.
-            </div>
-          )}
+        <div className="flex items-center gap-3 text-[11px] text-text-muted">
+          <SaveStateBadge state={saveState} />
+          <span>prices updated {formatRelativeTime(pricesRefreshedAt)}</span>
         </div>
       </div>
 
-      {/* Per-unit pricing strip */}
-      <div className="rounded-xl border border-nativz-border bg-surface/60 p-4">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">
-              Per-unit pricing
-            </p>
-            <span className="text-[11px] text-text-muted/60">
-              · updated {formatRelativeTime(prices?.refreshedAt ?? null)}
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-4 text-sm">
-            {(['reddit', 'youtube', 'tiktok', 'web'] as const).map((p) => (
-              <span key={p} className="flex items-center gap-1.5">
-                <span className="text-text-muted">{PLATFORM_CONFIG[p].label}</span>
-                <span className="tabular-nums text-text-primary">
-                  {formatUnitPrice(unitPrice(p))}
-                </span>
-              </span>
+      {segments.length > 0 ? (
+        <>
+          <div
+            className="mt-4 flex h-2 w-full overflow-hidden rounded-full bg-surface-hover/40"
+            onMouseLeave={() => setActiveKey(null)}
+          >
+            {segments.map((seg) => (
+              <div
+                key={seg.platform}
+                onMouseEnter={() => setActiveKey(seg.platform)}
+                className="h-full transition-opacity duration-150"
+                style={{
+                  width: `${seg.pct}%`,
+                  backgroundColor: PIE_COLORS[seg.platform],
+                  opacity: activeKey == null || activeKey === seg.platform ? 1 : 0.35,
+                }}
+                title={`${PLATFORM_CONFIG[seg.platform].label}: ${formatUsd(seg.value)} (${seg.pct.toFixed(1)}%)`}
+              />
             ))}
           </div>
-        </div>
-      </div>
+
+          <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-[12px]">
+            {segments.map((seg) => {
+              const dim = activeKey != null && activeKey !== seg.platform;
+              return (
+                <li
+                  key={seg.platform}
+                  onMouseEnter={() => setActiveKey(seg.platform)}
+                  onMouseLeave={() => setActiveKey(null)}
+                  className={`flex items-center gap-2 transition-opacity ${
+                    dim ? 'opacity-50' : 'opacity-100'
+                  }`}
+                >
+                  <span
+                    aria-hidden
+                    className="inline-block h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: PIE_COLORS[seg.platform] }}
+                  />
+                  <span className="text-text-secondary">
+                    {PLATFORM_CONFIG[seg.platform].label}
+                  </span>
+                  <span className="text-text-muted">· {seg.count}</span>
+                  <span className="tabular-nums text-text-primary">{formatUsd(seg.value)}</span>
+                  <span className="tabular-nums text-text-muted/70">
+                    · {seg.pct < 1 ? '<1%' : `${Math.round(seg.pct)}%`}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      ) : (
+        <p className="mt-3 text-sm text-text-muted">All platforms at zero — no scrape will run.</p>
+      )}
     </div>
   );
 }
 
 // ── Save state indicator ────────────────────────────────────────────────
-
-/**
- * Breakdown donut + inline legend. Hover morphs the center label to the
- * active slice's name / $ / % instead of floating a tooltip on top, which
- * was overlapping the TOTAL readout in a ~180px chart. The side list
- * still shows every platform at a glance so hover is optional.
- */
-function BreakdownDonut({
-  pieData,
-  totalCost,
-}: {
-  pieData: { platform: PlatformKey; name: string; value: number }[];
-  totalCost: number;
-}) {
-  const [activeIdx, setActiveIdx] = useState<number | null>(null);
-  const active = activeIdx != null ? pieData[activeIdx] : null;
-  const activePct = active && totalCost > 0 ? (active.value / totalCost) * 100 : 0;
-
-  return (
-    <div className="mt-2 flex items-center gap-4">
-      <div
-        className="relative h-[180px] w-[180px] shrink-0"
-        onMouseLeave={() => setActiveIdx(null)}
-      >
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={pieData}
-              dataKey="value"
-              nameKey="name"
-              innerRadius={62}
-              outerRadius={82}
-              paddingAngle={0.5}
-              stroke="var(--color-surface, #ffffff)"
-              strokeWidth={1.5}
-              cornerRadius={2}
-              isAnimationActive
-              onMouseEnter={(_, i) => setActiveIdx(i)}
-            >
-              {pieData.map((entry, i) => (
-                <Cell
-                  key={entry.platform}
-                  fill={PIE_COLORS[entry.platform]}
-                  opacity={activeIdx == null || activeIdx === i ? 1 : 0.35}
-                  style={{ transition: 'opacity 160ms ease-out' }}
-                />
-              ))}
-            </Pie>
-            {/* No Recharts tooltip — the center label + side list carry
-                all the same information without overlapping the chart. */}
-          </PieChart>
-        </ResponsiveContainer>
-
-        {/* Center readout morphs between TOTAL and the hovered slice. */}
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-          {active ? (
-            <>
-              <span
-                className="font-mono text-[10px] uppercase tracking-[0.2em]"
-                style={{ color: PIE_COLORS[active.platform] }}
-              >
-                {active.name}
-              </span>
-              <span className="mt-0.5 text-[17px] font-semibold tabular-nums text-text-primary">
-                {formatUsd(active.value)}
-              </span>
-              <span className="mt-0.5 font-mono text-[10px] tabular-nums text-text-muted">
-                {activePct < 1 ? '<1%' : `${activePct.toFixed(1)}%`}
-              </span>
-            </>
-          ) : (
-            <>
-              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-text-muted/80">
-                Total
-              </span>
-              <span className="mt-0.5 text-[18px] font-semibold tabular-nums text-text-primary">
-                {formatUsd(totalCost)}
-              </span>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Inline legend: swatch + platform + % · hover sync with the donut */}
-      <ul className="min-w-0 flex-1 space-y-1.5 text-[12px]">
-        {pieData
-          .map((entry, i) => ({ ...entry, idx: i }))
-          .sort((a, b) => b.value - a.value)
-          .map((entry) => {
-            const pct = totalCost > 0 ? (entry.value / totalCost) * 100 : 0;
-            const isActive = activeIdx === entry.idx;
-            return (
-              <li
-                key={entry.platform}
-                onMouseEnter={() => setActiveIdx(entry.idx)}
-                onMouseLeave={() => setActiveIdx(null)}
-                className={`flex cursor-default items-center gap-2 rounded-md px-1.5 py-1 transition-colors ${
-                  isActive ? 'bg-surface-hover/50' : ''
-                }`}
-                title={`${entry.name}: ${formatUsd(entry.value)} (${pct.toFixed(1)}%)`}
-              >
-                <span
-                  aria-hidden
-                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: PIE_COLORS[entry.platform] }}
-                />
-                <span className="flex-1 truncate text-text-secondary">{entry.name}</span>
-                <span className="tabular-nums text-text-muted">
-                  {pct < 1 ? '<1%' : `${Math.round(pct)}%`}
-                </span>
-              </li>
-            );
-          })}
-      </ul>
-    </div>
-  );
-}
 
 function SaveStateBadge({ state }: { state: 'idle' | 'saving' | 'saved' }) {
   if (state === 'saving') {
