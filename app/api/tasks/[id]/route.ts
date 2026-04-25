@@ -20,6 +20,23 @@ const updateTaskSchema = z.object({
   tags: z.array(z.string()).optional(),
   monday_item_id: z.string().nullable().optional(),
   monday_board_id: z.string().nullable().optional(),
+  // Shoot-specific
+  shoot_location: z.string().nullable().optional(),
+  shoot_start_at: z.string().nullable().optional(),
+  shoot_end_at: z.string().nullable().optional(),
+  shoot_notes: z.string().nullable().optional(),
+  scheduled_status: z.enum(['draft', 'scheduled', 'completed', 'cancelled']).nullable().optional(),
+  // Edit-specific
+  edit_status: z.enum(['not_started', 'in_edit', 'review', 'revisions', 'approved', 'delivered']).nullable().optional(),
+  edit_revision_count: z.number().int().min(0).optional(),
+  edit_source_url: z.string().url().nullable().optional(),
+  edit_deliverable_url: z.string().url().nullable().optional(),
+  edit_due_at: z.string().nullable().optional(),
+  parent_shoot_id: z.string().uuid().nullable().optional(),
+  // Generic PM
+  sort_order: z.number().int().optional(),
+  started_at: z.string().nullable().optional(),
+  completed_at: z.string().nullable().optional(),
 });
 
 async function verifyAdmin(userId: string) {
@@ -207,6 +224,8 @@ export async function PATCH(
     const trackedFields = [
       'status', 'priority', 'assignee_id', 'client_id',
       'due_date', 'title', 'description', 'task_type',
+      'edit_status', 'scheduled_status',
+      'shoot_start_at', 'shoot_location',
     ] as const;
 
     const actionMap: Record<string, string> = {
@@ -218,6 +237,10 @@ export async function PATCH(
       title: 'title_changed',
       description: 'description_changed',
       task_type: 'task_type_changed',
+      edit_status: 'edit_status_changed',
+      scheduled_status: 'scheduled_status_changed',
+      shoot_start_at: 'shoot_rescheduled',
+      shoot_location: 'shoot_location_changed',
     };
 
     for (const field of trackedFields) {

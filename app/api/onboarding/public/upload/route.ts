@@ -132,6 +132,10 @@ export async function POST(request: NextRequest) {
       detail: safeName,
     });
 
+    // Bump parent flow's POC activity cursor (reminders + no-progress reset).
+    const { bumpPocActivityForTracker } = await import('@/lib/onboarding/poc-activity');
+    await bumpPocActivityForTracker(admin, tracker.id);
+
     return NextResponse.json({ ok: true, upload: row });
   } catch (error) {
     console.error('POST /api/onboarding/public/upload error:', error);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import { Upload, Loader2, CheckCircle2, FileText } from 'lucide-react';
+import { Upload, Loader2, CheckCircle2, FileText, Link as LinkIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
 type UploadRow = {
@@ -32,6 +32,37 @@ export function OnboardingPublicUploads({
   const [dragActive, setDragActive] = useState(false);
   const [busyCount, setBusyCount] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [linkDraft, setLinkDraft] = useState('');
+  const [linkBusy, setLinkBusy] = useState(false);
+
+  const submitLink = useCallback(async () => {
+    const url = linkDraft.trim();
+    if (!url) return;
+    if (!/^https?:\/\//i.test(url)) {
+      toast.error('Use a full https:// link');
+      return;
+    }
+    setLinkBusy(true);
+    try {
+      const res = await fetch('/api/onboarding/public/link', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ share_token: shareToken, url }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error((d as { error?: string }).error || 'Could not save link');
+      }
+      const { upload } = (await res.json()) as { upload: UploadRow };
+      setUploads((xs) => [upload, ...xs]);
+      setLinkDraft('');
+      toast.success('Link saved');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save link');
+    } finally {
+      setLinkBusy(false);
+    }
+  }, [linkDraft, shareToken]);
 
   const handleFiles = useCallback(
     async (files: FileList | File[]) => {
@@ -86,6 +117,31 @@ export function OnboardingPublicUploads({
         <p className="text-[13px] text-text-muted">
           Drop anything useful here — brand assets, reference clips, product shots. Up to 10 MB per file.
         </p>
+      </div>
+
+      <div className="flex items-center gap-2 rounded-[10px] border border-nativz-border bg-surface px-3 py-2">
+        <LinkIcon size={14} className="text-text-muted shrink-0" />
+        <input
+          type="url"
+          value={linkDraft}
+          onChange={(e) => setLinkDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void submitLink();
+            }
+          }}
+          placeholder="…or paste a Drive / Dropbox / cloud link"
+          className="flex-1 bg-transparent text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={() => void submitLink()}
+          disabled={!linkDraft.trim() || linkBusy}
+          className="shrink-0 rounded-md bg-accent-surface px-2.5 py-1 text-[12px] font-medium text-accent-text disabled:opacity-50"
+        >
+          {linkBusy ? '…' : 'Save'}
+        </button>
       </div>
 
       <label

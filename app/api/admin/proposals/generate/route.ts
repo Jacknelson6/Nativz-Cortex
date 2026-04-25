@@ -10,6 +10,7 @@ export const maxDuration = 30;
 const bodySchema = z.object({
   template_id: z.string().uuid(),
   client_id: z.string().uuid().optional().nullable(),
+  flow_id: z.string().uuid().optional().nullable(),
   title: z.string().trim().min(1).max(200).optional(),
   signer_name: z.string().trim().min(1).max(200),
   signer_email: z.string().trim().email(),
@@ -35,6 +36,7 @@ export async function POST(req: NextRequest) {
     {
       templateId: body.template_id,
       clientId: body.client_id ?? null,
+      flowId: body.flow_id ?? null,
       title: body.title ?? null,
       signerName: body.signer_name,
       signerEmail: body.signer_email,

@@ -46,7 +46,7 @@ export async function onProposalCheckoutCompleted(
   const { data: proposal } = await admin
     .from('proposals')
     .select(
-      'id, client_id, slug, title, status, agency, signer_name, signer_email, signer_title, signer_legal_entity, signer_address, signature_method, signature_image, tier_id, tier_label, total_cents, deposit_cents, cadence, is_subscription, signed_at, signed_ip, signed_user_agent, template_id, counter_signed_at',
+      'id, client_id, slug, title, status, agency, signer_name, signer_email, signer_title, signer_legal_entity, signer_address, signature_method, signature_image, tier_id, tier_label, total_cents, deposit_cents, cadence, is_subscription, signed_at, signed_ip, signed_user_agent, template_id, counter_signed_at, onboarding_flow_id',
     )
     .eq('id', proposalId)
     .maybeSingle();
@@ -107,6 +107,46 @@ export async function onProposalCheckoutCompleted(
   // automated retry) can re-attempt this step until it succeeds.
   await counterSignAndEmail(admin, proposal, session, nowIso).catch((err) => {
     console.error('[proposals:on-paid] counter-sign + email failed:', err);
+  });
+
+  // Onboarding flow: advance to active + start the POC clock + fire the
+  // POC invite email if this proposal is linked to a flow. Best-effort —
+  // we don't unwind the proposal-paid state if the flow advance fails.
+  if (proposal.onboarding_flow_id) {
+    await advanceFlowOnPaid(admin, proposal.onboarding_flow_id, nowIso).catch((err) => {
+      console.error('[proposals:on-paid] flow advance failed:', err);
+    });
+  }
+}
+
+async function advanceFlowOnPaid(
+  admin: AdminClient,
+  flowId: string,
+  nowIso: string,
+): Promise<void> {
+  const { data: flow } = await admin
+    .from('onboarding_flows')
+    .select('id, status, started_at')
+    .eq('id', flowId)
+    .maybeSingle();
+  if (!flow) return;
+  // Idempotent: if already active or beyond, just return.
+  if (['active', 'completed', 'archived'].includes(flow.status)) return;
+
+  await admin
+    .from('onboarding_flows')
+    .update({
+      status: 'active',
+      started_at: flow.started_at ?? nowIso,
+      last_poc_activity_at: nowIso,
+    })
+    .eq('id', flowId);
+
+  // POC invite send is in lib/onboarding/system-emails.ts — fire-and-
+  // forget so a Resend hiccup doesn't bring down the webhook handler.
+  const { sendFlowPocInvite } = await import('@/lib/onboarding/system-emails');
+  await sendFlowPocInvite(admin, flowId).catch((err) => {
+    console.error('[proposals:on-paid] POC invite send failed:', err);
   });
 }
 

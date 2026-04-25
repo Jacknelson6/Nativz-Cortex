@@ -19,6 +19,20 @@ const createTaskSchema = z.object({
   monday_board_id: z.string().nullable().optional(),
   recurrence: z.string().nullable().optional(),
   recurrence_from_completion: z.boolean().optional(),
+  // Shoot-specific (when task_type='shoot')
+  shoot_location: z.string().nullable().optional(),
+  shoot_start_at: z.string().nullable().optional(),
+  shoot_end_at: z.string().nullable().optional(),
+  shoot_notes: z.string().nullable().optional(),
+  scheduled_status: z.enum(['draft', 'scheduled', 'completed', 'cancelled']).nullable().optional(),
+  // Edit-specific (when task_type='edit')
+  edit_status: z.enum(['not_started', 'in_edit', 'review', 'revisions', 'approved', 'delivered']).nullable().optional(),
+  edit_source_url: z.string().url().nullable().optional(),
+  edit_deliverable_url: z.string().url().nullable().optional(),
+  edit_due_at: z.string().nullable().optional(),
+  parent_shoot_id: z.string().uuid().nullable().optional(),
+  // Generic PM
+  sort_order: z.number().int().optional(),
 });
 
 /**
@@ -183,6 +197,8 @@ export async function POST(request: NextRequest) {
       assigneeId = teamMember?.id ?? null;
     }
 
+    const taskType = data.task_type ?? 'other';
+
     const { data: task, error } = await adminClient
       .from('tasks')
       .insert({
@@ -194,13 +210,27 @@ export async function POST(request: NextRequest) {
         assignee_id: assigneeId,
         created_by: user.id,
         due_date: data.due_date ?? null,
-        task_type: data.task_type ?? 'other',
+        task_type: taskType,
         shoot_date: data.shoot_date ?? null,
         tags: data.tags ?? [],
         monday_item_id: data.monday_item_id ?? null,
         monday_board_id: data.monday_board_id ?? null,
         recurrence: data.recurrence ?? null,
         recurrence_from_completion: data.recurrence_from_completion ?? false,
+        // Shoot fields — only persist when relevant
+        shoot_location: data.shoot_location ?? null,
+        shoot_start_at: data.shoot_start_at ?? null,
+        shoot_end_at: data.shoot_end_at ?? null,
+        shoot_notes: data.shoot_notes ?? null,
+        scheduled_status: data.scheduled_status ?? (taskType === 'shoot' ? 'draft' : null),
+        // Edit fields
+        edit_status: data.edit_status ?? (taskType === 'edit' ? 'not_started' : null),
+        edit_source_url: data.edit_source_url ?? null,
+        edit_deliverable_url: data.edit_deliverable_url ?? null,
+        edit_due_at: data.edit_due_at ?? null,
+        parent_shoot_id: data.parent_shoot_id ?? null,
+        // Generic PM
+        sort_order: data.sort_order ?? 0,
       })
       .select('*, clients(id, name, slug), team_members(id, full_name, avatar_url)')
       .single();

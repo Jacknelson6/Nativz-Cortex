@@ -22,6 +22,9 @@ export type CreateProposalInput = {
   signerLegalEntity?: string | null;
   signerAddress?: string | null;
   clientId?: string | null;
+  /** When set, links the new proposal to an onboarding flow and advances
+   *  the flow to 'awaiting_payment' on insert. */
+  flowId?: string | null;
   title?: string | null;
   sendEmail?: boolean;
   createdBy?: string | null;
@@ -96,11 +99,24 @@ export async function createProposalDraft(
       external_repo: null,
       external_folder: null,
       created_by: input.createdBy ?? null,
+      onboarding_flow_id: input.flowId ?? null,
     })
     .select('id, slug')
     .single();
   if (insertErr || !inserted) {
     return { ok: false, error: insertErr?.message ?? 'Insert failed', status: 500 };
+  }
+
+  // Link the flow → proposal and advance status. The flow's "Agreement &
+  // Payment" segment will auto-tick from proposal events going forward.
+  if (input.flowId) {
+    await admin
+      .from('onboarding_flows')
+      .update({
+        proposal_id: inserted.id,
+        status: 'awaiting_payment',
+      })
+      .eq('id', input.flowId);
   }
 
   await admin.from('proposal_events').insert({

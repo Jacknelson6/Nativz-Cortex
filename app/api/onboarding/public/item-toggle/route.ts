@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { queueOnboardingNotification } from '@/lib/onboarding/queue-notification';
 import { recomputePhaseStatuses } from '@/lib/onboarding/recompute-phase-statuses';
+import { bumpPocActivityForTracker } from '@/lib/onboarding/poc-activity';
 
 export const dynamic = 'force-dynamic';
 
@@ -110,6 +111,10 @@ export async function POST(request: NextRequest) {
     // Re-bucket phase statuses based on the new overall progress. Runs on
     // both done and pending flips so unchecking an item demotes phases too.
     await recomputePhaseStatuses(admin, tracker.id);
+
+    // Bump the parent flow's POC activity cursor so reminder/no-progress
+    // crons reset. No-op for legacy trackers not attached to a flow.
+    await bumpPocActivityForTracker(admin, tracker.id);
 
     return NextResponse.json({ ok: true, status: target });
   } catch (error) {

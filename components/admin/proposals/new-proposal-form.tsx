@@ -20,7 +20,15 @@ type Template = {
 const formatCents = (c?: number) =>
   typeof c === 'number' ? `$${(c / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—';
 
-export function NewProposalForm({ clients }: { clients: ClientOption[] }) {
+export function NewProposalForm({
+  clients,
+  preselectClientId = null,
+  flowId = null,
+}: {
+  clients: ClientOption[];
+  preselectClientId?: string | null;
+  flowId?: string | null;
+}) {
   const router = useRouter();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(true);
@@ -30,7 +38,7 @@ export function NewProposalForm({ clients }: { clients: ClientOption[] }) {
   const [showOptional, setShowOptional] = useState(false);
   const [form, setForm] = useState({
     template_id: '',
-    client_id: '',
+    client_id: preselectClientId ?? '',
     signer_name: '',
     signer_email: '',
     signer_title: '',
@@ -92,6 +100,7 @@ export function NewProposalForm({ clients }: { clients: ClientOption[] }) {
         body: JSON.stringify({
           template_id: form.template_id,
           client_id: form.client_id || null,
+          flow_id: flowId,
           signer_name: form.signer_name.trim(),
           signer_email: form.signer_email.trim(),
           signer_title: form.signer_title.trim() || null,

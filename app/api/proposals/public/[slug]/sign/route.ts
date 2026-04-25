@@ -245,13 +245,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
 
   // 4. Lifecycle event + admin notification (fires for both prospects and
   //    contracted clients — the proposal-paid path advances to paid_deposit).
-  // Look up client_id from proposal row (re-fetch since previous row didn't include it).
+  // Look up client_id + linked flow from proposal row (re-fetch since previous row didn't include them).
   const { data: proposalWithClient } = await admin
     .from('proposals')
-    .select('client_id')
+    .select('client_id, onboarding_flow_id')
     .eq('id', proposal.id)
     .maybeSingle();
   const clientId = proposalWithClient?.client_id ?? null;
+  const linkedFlowId = (proposalWithClient as { onboarding_flow_id?: string | null } | null)?.onboarding_flow_id ?? null;
   if (clientId) {
     await admin
       .from('clients')
@@ -262,6 +263,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
       metadata: { proposal_id: proposal.id, slug: proposal.slug, pdf_hash: pdfHash },
       admin,
     });
+  }
+  // Onboarding flow stays in `awaiting_payment` after sign — only the
+  // proposal-paid webhook advances it to `active`. We just bump the
+  // updated_at timestamp so the flow row reflects recent activity.
+  if (linkedFlowId) {
+    await admin
+      .from('onboarding_flows')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', linkedFlowId);
   }
 
   // 5. Email both parties with the PDF attached. Failure here is logged but

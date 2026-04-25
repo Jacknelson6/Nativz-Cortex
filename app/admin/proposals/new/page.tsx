@@ -5,7 +5,12 @@ import { NewProposalForm } from '@/components/admin/proposals/new-proposal-form'
 
 export const dynamic = 'force-dynamic';
 
-export default async function NewProposalPage() {
+export default async function NewProposalPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ flowId?: string; clientSlug?: string }>;
+}) {
+  const sp = await searchParams;
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
@@ -27,6 +32,15 @@ export default async function NewProposalPage() {
     .eq('hide_from_roster', false)
     .order('name');
 
+  // Optional preselect: when /admin/onboarding/[id] sends the admin
+  // here with ?flowId=…&clientSlug=…, the form arrives pinned to that
+  // client and stamps onboarding_flow_id on insert.
+  const preselectClientId = (() => {
+    if (!sp.clientSlug) return null;
+    const match = (clients ?? []).find((c) => c.slug === sp.clientSlug);
+    return match?.id ?? null;
+  })();
+
   return (
     <div className="cortex-page-gutter max-w-4xl mx-auto space-y-6">
       <header className="space-y-2">
@@ -47,6 +61,8 @@ export default async function NewProposalPage() {
           name: c.name ?? 'Unnamed',
           slug: c.slug ?? '',
         }))}
+        preselectClientId={preselectClientId}
+        flowId={sp.flowId ?? null}
       />
     </div>
   );

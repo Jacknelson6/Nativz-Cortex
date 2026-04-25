@@ -98,6 +98,11 @@ export async function POST(request: NextRequest) {
       profileId,
     });
 
+    // Bump parent flow's POC activity cursor — even initiating an OAuth
+    // connect counts as engagement and resets the reminder window.
+    const { bumpPocActivityForTracker } = await import('@/lib/onboarding/poc-activity');
+    await bumpPocActivityForTracker(admin, tracker.id);
+
     return NextResponse.json({ authUrl: result.authorizationUrl });
   } catch (error) {
     // Surface the underlying message to the UI so admins debugging in
