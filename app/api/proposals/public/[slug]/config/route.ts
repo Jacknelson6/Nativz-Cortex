@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { publicProposalUrl } from '@/lib/proposals/public-url';
+import type { AgencyBrand } from '@/lib/agency/detect';
 
 /**
  * Replaces the per-folder client.json that the original CF-hosted sign page
@@ -43,7 +45,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }
 
   const { data: template } = await admin
     .from('proposal_templates')
-    .select('name, source_folder, tiers_preview, public_base_url')
+    .select('name, source_folder, tiers_preview')
     .eq('id', proposal.template_id)
     .maybeSingle();
   if (!template) return NextResponse.json({ error: 'Template missing' }, { status: 500 });
@@ -62,8 +64,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }
     };
   }
 
-  // Originating host for the canonical proposalUrl in the signed PDF.
-  const proposalUrl = `${template.public_base_url?.replace(/\/+$/, '') ?? ''}/proposals/${proposal.slug}`;
+  // Canonical Cortex-hosted URL for the proposal — baked into the signed PDF.
+  const agency: AgencyBrand = (proposal.agency as AgencyBrand | null) ?? 'anderson';
+  const proposalUrl = publicProposalUrl(agency, proposal.slug);
 
   return NextResponse.json({
     slug: proposal.slug,
