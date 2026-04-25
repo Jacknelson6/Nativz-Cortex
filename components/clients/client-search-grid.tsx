@@ -21,10 +21,8 @@ import {
 // (SpotlightCard — the cursor-following cyan radial hover glow — was removed
 // 2026-04-24: looked stuck-blue on AC paper and wasn't needed to signal
 // hoverability. The border + bg transitions on the card itself carry that load.)
-import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { HealthBadge } from '@/components/clients/health-badge';
-import { AgencyAssignmentLabel } from '@/components/clients/agency-assignment-label';
 import { ClientLogo } from '@/components/clients/client-logo';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { toast } from 'sonner';
@@ -309,22 +307,27 @@ function ClientCard({
   const staggerClass = animate ? 'animate-stagger-in' : '';
   const currentBucket = bucketFor(client.agency, client.inOnboarding);
 
-  // Reveal-on-hover: 15+ icon buttons across a roster grid is visual noise
-  // when most are inert most of the time. The card itself already uses a
-  // `group` class, so child opacity gates on `group-hover` / `group-focus-
-  // within`. Keyboard users still surface the buttons via tab focus.
-  const actionButtons = (
-    <div className="flex items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
-      {client.dbId && (
-        <MoveMenu
-          mode={moveMode}
-          groups={groups}
-          currentGroupId={client.groupId}
-          currentBucket={currentBucket}
-          onMoveGroup={onMoveGroup}
-          onMoveAgency={onMoveAgency}
-        />
-      )}
+  // Action buttons: per Jack 2026-04-25, Move (re-grouping / re-bucketing)
+  // is the rarely-used one — it lives in the hover-revealed slot so it's
+  // out of the way at rest. Impersonate (View as) and Delete are reached
+  // often enough to stay always-visible so the eye doesn't have to learn
+  // a hover dance. Keyboard users still surface Move via tab focus via
+  // group-focus-within.
+  const moveButton = client.dbId && (
+    <div className="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+      <MoveMenu
+        mode={moveMode}
+        groups={groups}
+        currentGroupId={client.groupId}
+        currentBucket={currentBucket}
+        onMoveGroup={onMoveGroup}
+        onMoveAgency={onMoveAgency}
+      />
+    </div>
+  );
+
+  const persistentButtons = (
+    <div className="flex items-center gap-0.5">
       {client.organizationId && (
         <button
           type="button"
@@ -351,6 +354,13 @@ function ClientCard({
     </div>
   );
 
+  const actionButtons = (
+    <div className="flex items-center gap-0.5">
+      {moveButton}
+      {persistentButtons}
+    </div>
+  );
+
   if (listView) {
     return (
       <div
@@ -369,12 +379,9 @@ function ClientCard({
             <p className="text-sm font-semibold text-text-primary truncate" title={client.name}>{client.name}</p>
             <p className="text-xs text-text-muted truncate">{client.industry || 'General'}</p>
           </div>
-          <AgencyAssignmentLabel agency={client.agency} showWhenUnassigned className="shrink-0 hidden sm:block" />
-          {client.services.length > 0 && (
-            <div className="hidden md:flex gap-1 shrink-0">
-              {client.services.map((s) => <Badge key={s} className="text-[11px] px-1.5 py-0">{s}</Badge>)}
-            </div>
-          )}
+          {/* Agency + services pills retired 2026-04-25 — the page already
+              groups cards under their agency / status section header, so
+              repeating that on every card was redundant noise. */}
           {client.lastActivityAt && (
             <span className="text-xs text-text-muted shrink-0 hidden lg:block tabular-nums">
               {formatRelativeTime(client.lastActivityAt)}
@@ -413,19 +420,16 @@ function ClientCard({
               />
             </div>
 
-            <div className="mt-2.5 flex items-center gap-2 flex-wrap">
-              <AgencyAssignmentLabel agency={client.agency} showWhenUnassigned />
-              {client.services.length > 0 && (
-                <div className="flex gap-1 flex-wrap">
-                  {client.services.map((s) => <Badge key={s} className="text-[11px] px-1.5 py-0 shrink-0">{s}</Badge>)}
-                </div>
-              )}
-              {client.lastActivityAt && (
+            {/* Agency + services pills retired 2026-04-25 — section
+                grouping already conveys agency / bucket. Last activity
+                stays as the only meta line so the card has a heartbeat. */}
+            {client.lastActivityAt && (
+              <div className="mt-2.5 flex items-center">
                 <span className="ml-auto text-xs text-text-muted tabular-nums">
                   {formatRelativeTime(client.lastActivityAt)}
                 </span>
-              )}
-            </div>
+              </div>
+            )}
           </div>
           <div className="absolute top-0 right-0">{actionButtons}</div>
         </div>
