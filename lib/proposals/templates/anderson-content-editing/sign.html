@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght%40300;400;500;600;700;800;900&family=Caveat:wght@500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.2.0/dist/signature_pad.umd.min.js"></script>
+<script src="/proposal-assets/_lib/signature_pad.umd.min.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   :root {
@@ -467,6 +467,7 @@
     </div>
 
     <button type="button" class="submit-btn" id="submitBtn" disabled>Get Started →</button>
+    <p id="submitHint" style="margin-top:8px;font-size:11px;color:#7b8794;text-align:center;">Fill in your details, sign above, and check the consent box to enable.</p>
 
     <div class="trust">
       Secure Stripe Checkout <span>·</span> SHA-256 document hash <span>·</span> 7-year retention
@@ -664,6 +665,21 @@
     if (sigMode === 'draw' && pad.isEmpty()) ok = false;
     if (sigMode === 'type' && typedInput.value.trim().length < 2) ok = false;
     submit.disabled = !ok;
+    var hint = document.getElementById('submitHint');
+    if (hint) {
+      var missing = [];
+      var labels = { clientLegalName: 'legal entity', clientAddress: 'address', signerName: 'name', signerTitle: 'title', signerEmail: 'email' };
+      required.forEach(function(id){
+        if (document.getElementById(id).value.trim().length <= 1) missing.push(labels[id] || id);
+      });
+      if (!consent.checked) missing.push('consent box');
+      if (sigMode === 'draw' && pad.isEmpty()) missing.push('drawn signature');
+      if (sigMode === 'type' && typedInput.value.trim().length < 2) missing.push('typed name');
+      hint.style.display = ok ? 'none' : 'block';
+      hint.textContent = ok
+        ? ''
+        : 'Still needed: ' + missing.join(', ') + '.';
+    }
   }
   required.forEach(function(id){
     document.getElementById(id).addEventListener('input', validate);

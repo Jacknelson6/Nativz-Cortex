@@ -39,7 +39,7 @@ export default async function ProposalsPage() {
         action={
           <Link
             href="/admin/proposals/new"
-            className="inline-flex items-center gap-1 rounded-full bg-nz-cyan px-3 py-1.5 text-xs font-medium text-background hover:bg-nz-cyan/90"
+            className="inline-flex items-center gap-1 rounded-full bg-nz-cyan px-3 py-1.5 text-xs font-semibold text-white hover:bg-nz-cyan/90"
           >
             <Plus size={12} /> New proposal
           </Link>

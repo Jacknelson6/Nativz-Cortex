@@ -12,6 +12,7 @@ import {
   Github,
   Loader2,
   Send,
+  Trash2,
 } from 'lucide-react';
 
 type Proposal = {
@@ -75,6 +76,8 @@ export function ProposalDetail({
   const [resendOk, setResendOk] = useState(false);
   const [copied, setCopied] = useState(false);
   const [iframeBlocked, setIframeBlocked] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function resend() {
     if (!proposal.external_url) return;
@@ -93,6 +96,28 @@ export function ProposalDetail({
     router.refresh();
   }
 
+  async function deleteProposal() {
+    const confirmText = `${proposal.signer_email ?? proposal.title}`;
+    const typed = window.prompt(
+      `Type "${confirmText}" to confirm. This permanently deletes the proposal + signing record.`,
+    );
+    if (typed?.trim() !== confirmText) {
+      if (typed !== null) alert('Confirmation text did not match. Nothing deleted.');
+      return;
+    }
+    setDeleting(true);
+    setDeleteError(null);
+    const res = await fetch(`/api/admin/proposals/${proposal.id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const json = await res.json().catch(() => null);
+      setDeleting(false);
+      setDeleteError(json?.error ?? `Delete failed (${res.status})`);
+      return;
+    }
+    router.push('/admin/proposals');
+    router.refresh();
+  }
+
   async function copyUrl() {
     if (!proposal.external_url) return;
     try {
@@ -103,6 +128,12 @@ export function ProposalDetail({
       /* ignore */
     }
   }
+
+  // The iframe must use a same-origin path so it works on whichever Cortex
+  // host is currently serving (cortex.nativz.io vs cortex.andersoncollaborative.com
+  // vs localhost during dev). external_url stores the canonical absolute URL,
+  // but the iframe + Open button can use the slug-relative path.
+  const samePathPreviewUrl = `/proposals/${proposal.slug}`;
 
   const repoHref =
     proposal.external_repo && proposal.external_folder
@@ -147,7 +178,7 @@ export function ProposalDetail({
                   type="button"
                   onClick={resend}
                   disabled={resending}
-                  className="inline-flex items-center gap-1 rounded-full bg-nz-cyan px-3 py-1 text-[11px] font-medium text-background hover:bg-nz-cyan/90 disabled:opacity-50"
+                  className="inline-flex items-center gap-1 rounded-full bg-nz-cyan px-3 py-1 text-[11px] font-semibold text-white hover:bg-nz-cyan/90 disabled:opacity-50"
                 >
                   {resending ? (
                     <>
@@ -162,6 +193,17 @@ export function ProposalDetail({
               ) : null}
             </>
           ) : null}
+          {!['signed', 'paid'].includes(proposal.status) ? (
+            <button
+              type="button"
+              onClick={deleteProposal}
+              disabled={deleting}
+              className="inline-flex items-center gap-1 rounded-full border border-coral-500/30 bg-coral-500/5 px-3 py-1 text-[11px] text-coral-300 hover:bg-coral-500/10 disabled:opacity-50"
+              title="Delete this proposal"
+            >
+              <Trash2 size={11} /> {deleting ? 'Deleting…' : 'Delete'}
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -172,6 +214,7 @@ export function ProposalDetail({
 
       {resendError ? <p className="text-sm text-coral-300">{resendError}</p> : null}
       {resendOk ? <p className="text-sm text-emerald-300">Email sent.</p> : null}
+      {deleteError ? <p className="text-sm text-coral-300">{deleteError}</p> : null}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">
         <div className="space-y-5">
@@ -196,12 +239,11 @@ export function ProposalDetail({
             {proposal.external_url ? (
               iframeBlocked ? (
                 <div className="px-5 py-12 text-center text-sm text-text-muted">
-                  Inline preview blocked by the docs host (X-Frame-Options). Click <strong>Open</strong>
-                  above to view it in a new tab.
+                  Inline preview unavailable. Click <strong>Open</strong> above to view in a new tab.
                 </div>
               ) : (
                 <iframe
-                  src={proposal.external_url}
+                  src={samePathPreviewUrl}
                   title={`${proposal.title} preview`}
                   className="h-[900px] w-full bg-white"
                   sandbox="allow-same-origin allow-scripts allow-forms allow-popups"

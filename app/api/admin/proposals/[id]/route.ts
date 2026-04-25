@@ -70,6 +70,16 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   return NextResponse.json({ ok: true });
 }
 
+/**
+ * Delete a proposal. Allowed for any status EXCEPT `paid` — paid proposals
+ * have money tied to them and need to stay in the audit trail. Admins
+ * wanting to clean up a paid record should use Stripe + a dedicated
+ * accounting flow, not this endpoint.
+ *
+ * Cleans up downstream: signed/executed PDFs in Storage, proposal_events,
+ * and the proposal row itself. The cascade on proposal_events FK already
+ * handles event cleanup; we just blast the storage objects manually.
+ */
 export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin();
   if (auth instanceof NextResponse) return auth;
@@ -79,12 +89,27 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: str
 
   const { data: proposal } = await admin
     .from('proposals')
-    .select('status')
+    .select('status, signed_pdf_path, counter_signed_pdf_path')
     .eq('id', id)
     .maybeSingle();
   if (!proposal) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (proposal.status !== 'draft' && proposal.status !== 'canceled') {
-    return NextResponse.json({ error: 'Can only delete draft or canceled proposals' }, { status: 400 });
+  if (proposal.status === 'paid') {
+    return NextResponse.json(
+      { error: 'Cannot delete a paid proposal. Refund + cancel in Stripe first.' },
+      { status: 409 },
+    );
+  }
+
+  // Best-effort PDF cleanup. We don't fail the delete if storage removal
+  // hiccups — the row is the source of truth and orphan PDFs are harmless.
+  const pathsToRemove = [proposal.signed_pdf_path, proposal.counter_signed_pdf_path].filter(
+    (p): p is string => Boolean(p),
+  );
+  if (pathsToRemove.length > 0) {
+    await admin.storage
+      .from('proposal-pdfs')
+      .remove(pathsToRemove)
+      .catch((err) => console.warn('[proposals:delete] storage remove failed', err));
   }
 
   const { error } = await admin.from('proposals').delete().eq('id', id);

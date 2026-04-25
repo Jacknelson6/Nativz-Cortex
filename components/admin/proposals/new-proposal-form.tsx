@@ -26,6 +26,7 @@ export function NewProposalForm({ clients }: { clients: ClientOption[] }) {
   const [templatesLoading, setTemplatesLoading] = useState(true);
   const [templatesError, setTemplatesError] = useState<string | null>(null);
 
+  const [agencyFilter, setAgencyFilter] = useState<'all' | 'anderson' | 'nativz'>('all');
   const [form, setForm] = useState({
     template_id: '',
     client_id: '',
@@ -67,6 +68,8 @@ export function NewProposalForm({ clients }: { clients: ClientOption[] }) {
     };
   }, []);
 
+  const filteredTemplates =
+    agencyFilter === 'all' ? templates : templates.filter((t) => t.agency === agencyFilter);
   const selectedTemplate = templates.find((t) => t.id === form.template_id) ?? null;
 
   async function submit(e: React.FormEvent) {
@@ -128,8 +131,33 @@ export function NewProposalForm({ clients }: { clients: ClientOption[] }) {
         ) : templates.length === 0 ? (
           <p className="text-sm text-text-muted">No templates configured.</p>
         ) : (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {templates.map((t) => {
+          <>
+            <div className="mb-3 inline-flex rounded-full border border-nativz-border bg-background p-0.5 text-[11px]">
+              {(['all', 'anderson', 'nativz'] as const).map((a) => {
+                const label = a === 'all' ? 'All agencies' : a === 'anderson' ? 'Anderson Collaborative' : 'Nativz';
+                const count = a === 'all' ? templates.length : templates.filter((t) => t.agency === a).length;
+                const active = agencyFilter === a;
+                return (
+                  <button
+                    key={a}
+                    type="button"
+                    onClick={() => setAgencyFilter(a)}
+                    className={`rounded-full px-3 py-1 transition ${
+                      active
+                        ? 'bg-nz-cyan/10 text-nz-cyan'
+                        : 'text-text-muted hover:text-text-primary'
+                    }`}
+                  >
+                    {label} <span className="ml-1 text-text-muted">({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+            {filteredTemplates.length === 0 ? (
+              <p className="text-sm text-text-muted">No templates for this agency yet.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {filteredTemplates.map((t) => {
               const selected = form.template_id === t.id;
               return (
                 <button
@@ -177,7 +205,9 @@ export function NewProposalForm({ clients }: { clients: ClientOption[] }) {
                 </button>
               );
             })}
-          </div>
+              </div>
+            )}
+          </>
         )}
       </section>
 
@@ -307,7 +337,7 @@ export function NewProposalForm({ clients }: { clients: ClientOption[] }) {
           type="submit"
           data-testid="generate-submit"
           disabled={busy || !form.template_id}
-          className="inline-flex items-center gap-2 rounded-full bg-nz-cyan px-5 py-2 text-xs font-medium text-background hover:bg-nz-cyan/90 disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-full bg-nz-cyan px-5 py-2 text-xs font-semibold text-white hover:bg-nz-cyan/90 disabled:opacity-50"
         >
           {busy ? (
             <>
