@@ -4,12 +4,11 @@ import { requireAdmin } from '@/lib/revenue/auth';
 import { randomSuffix, slugify } from '@/lib/proposals/slug';
 import { sendProposal } from '@/lib/proposals/send';
 import { publicProposalUrl } from '@/lib/proposals/public-url';
-import { publishProposal, savePublishedProposal } from '@/lib/proposals/publisher';
 import { logLifecycleEvent } from '@/lib/lifecycle/state-machine';
 
 export const dynamic = 'force-dynamic';
-// GitHub writes + resend call can take a few seconds on first publish.
-export const maxDuration = 60;
+// Resend send + DB writes typically finish in <5s; keep headroom.
+export const maxDuration = 30;
 
 const bodySchema = z.object({
   template_id: z.string().uuid(),
@@ -37,15 +36,13 @@ export async function POST(req: NextRequest) {
 
   const { data: templateRow, error: tplErr } = await admin
     .from('proposal_templates')
-    .select('id, agency, name, source_repo, source_folder, public_base_url, active')
+    .select('id, agency, name, source_folder, active')
     .eq('id', body.template_id)
     .maybeSingle<{
       id: string;
       agency: 'anderson' | 'nativz';
       name: string;
-      source_repo: string;
       source_folder: string;
-      public_base_url: string;
       active: boolean;
     }>();
   if (tplErr) return NextResponse.json({ error: tplErr.message }, { status: 500 });
@@ -54,7 +51,6 @@ export async function POST(req: NextRequest) {
   }
 
   let clientTradeName: string | null = null;
-  let clientSlug: string | null = null;
   if (body.client_id) {
     const { data: client } = await admin
       .from('clients')
@@ -63,7 +59,6 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
     if (client) {
       clientTradeName = (client.name as string | null) ?? null;
-      clientSlug = (client.slug as string | null) ?? null;
     }
   }
 
@@ -72,6 +67,11 @@ export async function POST(req: NextRequest) {
   const slugBase =
     slugify(`${templateRow.name} ${clientTradeName ?? body.signer_name}`) || 'proposal';
   const slug = `${slugBase}-${randomSuffix(6)}`;
+
+  // Self-host: the public URL is just /proposals/<slug> on the agency's
+  // Cortex domain. No GitHub commit, no Cloudflare Pages deploy delay.
+  const publicUrl = publicProposalUrl(templateRow.agency, slug);
+
   const { data: inserted, error: insertErr } = await admin
     .from('proposals')
     .insert({
@@ -83,9 +83,14 @@ export async function POST(req: NextRequest) {
       signer_title: body.signer_title ?? null,
       signer_legal_entity: body.signer_legal_entity ?? null,
       signer_address: body.signer_address ?? null,
-      status: 'draft',
+      status: 'sent',
+      sent_at: new Date().toISOString(),
+      published_at: new Date().toISOString(),
       template_id: templateRow.id,
       agency: templateRow.agency,
+      external_url: publicUrl,
+      external_repo: null,
+      external_folder: null,
       created_by: userId,
     })
     .select('id, slug')
@@ -94,54 +99,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: insertErr?.message ?? 'Insert failed' }, { status: 500 });
   }
 
-  const publishResult = await publishProposal({
-    proposalId: inserted.id,
-    template: {
-      id: templateRow.id,
-      agency: templateRow.agency,
-      name: templateRow.name,
-      source_repo: templateRow.source_repo,
-      source_folder: templateRow.source_folder,
-      public_base_url: templateRow.public_base_url,
-    },
-    signer: {
-      name: body.signer_name,
-      email: body.signer_email,
-      title: body.signer_title ?? null,
-    },
-    client: {
-      legalName: body.signer_legal_entity ?? null,
-      tradeName: clientTradeName,
-      address: body.signer_address ?? null,
-    },
-    slugHint: clientSlug ?? body.signer_name,
-  }).catch((err: unknown) => ({
-    ok: false as const,
-    error: err instanceof Error ? err.message : 'publishProposal threw',
-  }));
-
-  if (!publishResult.ok) {
-    return NextResponse.json(
-      { error: `Publish failed: ${publishResult.error}`, proposal_id: inserted.id, slug: inserted.slug },
-      { status: 502 },
-    );
-  }
-
-  await savePublishedProposal(admin, inserted.id, publishResult, templateRow.agency);
   await admin.from('proposal_events').insert({
     proposal_id: inserted.id,
     type: 'published',
-    metadata: {
-      repo: publishResult.repo,
-      folder: publishResult.folder,
-      url: publishResult.url,
-      files_written: publishResult.filesWritten,
-    },
+    metadata: { url: publicUrl, agency: templateRow.agency },
   });
 
-  // Lifecycle event fires only when the email actually goes out — publishing
-  // alone is not "sent to the signer".
-  let sendUrl: string | null = publishResult.url;
+  // Fire the branded email (only if requested). Lifecycle event fires only
+  // when an email actually went out — publishing alone doesn't count as
+  // "sent to the signer".
+  let sendUrl: string | null = publicUrl;
   let sendError: string | null = null;
   if (body.send_email) {
     const sendResult = await sendProposal(inserted.id, { admin });
@@ -155,7 +122,7 @@ export async function POST(req: NextRequest) {
           'proposal.sent',
           `Proposal sent: ${title}`,
           {
-            metadata: { proposal_id: inserted.id, slug: inserted.slug, url: publishResult.url },
+            metadata: { proposal_id: inserted.id, slug: inserted.slug, url: publicUrl },
             admin,
           },
         );
@@ -168,8 +135,6 @@ export async function POST(req: NextRequest) {
     proposal_id: inserted.id,
     slug: inserted.slug,
     url: sendUrl,
-    repo: publishResult.repo,
-    folder: publishResult.folder,
     sent: body.send_email && !sendError,
     send_error: sendError,
   });
