@@ -107,7 +107,7 @@ export default async function ClientBillingPage({
         </p>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold text-text-primary">{client.name}</h1>
+            <h1 className="ui-page-title">{client.name}</h1>
             <LifecycleStatePill state={client.lifecycle_state ?? 'lead'} />
           </div>
           <div className="flex items-center gap-2">

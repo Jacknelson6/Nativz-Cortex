@@ -371,8 +371,12 @@ body {
     @apply p-6 sm:p-8;
   }
 
+  /* Bumped 2026-04-25 from text-2xl → text-3xl per Jack: every admin page
+   * lands on the same hero size as /admin/usage. text-md / hero variants
+   * stay where they are for the few callers that genuinely need a smaller
+   * scale. */
   .ui-page-title {
-    @apply text-2xl font-semibold tracking-tight text-text-primary font-display;
+    @apply text-3xl font-semibold tracking-tight leading-tight text-text-primary font-display;
   }
 
   .ui-page-title-md {

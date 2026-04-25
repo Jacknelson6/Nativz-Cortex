@@ -90,9 +90,7 @@ export default async function InfrastructurePage({
   return (
     <div className="cortex-page-gutter max-w-6xl mx-auto space-y-8">
       <header>
-        <h1 className="text-3xl font-semibold leading-tight text-text-primary">
-          Usage
-        </h1>
+        <h1 className="ui-page-title">Usage</h1>
       </header>
 
       <InfrastructureTabs active={activeTab} />

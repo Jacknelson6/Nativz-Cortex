@@ -49,7 +49,7 @@ export default async function CompetitorReportsPage() {
         </p>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="space-y-2">
-            <h1 className="text-2xl font-semibold leading-tight text-text-primary">
+            <h1 className="ui-page-title">
               Recurring competitor reports
             </h1>
             <p className="max-w-2xl text-sm text-text-muted">

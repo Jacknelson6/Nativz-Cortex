@@ -115,18 +115,19 @@ function SectionTabsInner<T extends readonly SectionTabDef[]>({
  */
 interface SectionHeaderProps {
   title: string;
-  /** Optional — when omitted the header is just the H1 + action. */
+  /** @deprecated Subtext was retired 2026-04-25 — every admin page now
+   *  shows the title alone for a tighter, less-noisy chrome. The prop
+   *  stays in the type so existing callers don't need to be updated in
+   *  one sweep, but it renders nothing. Drop it from the call site
+   *  whenever you touch the file. */
   description?: string;
   action?: React.ReactNode;
 }
 
-export function SectionHeader({ title, description, action }: SectionHeaderProps) {
+export function SectionHeader({ title, action }: SectionHeaderProps) {
   return (
     <header className="flex flex-wrap items-end justify-between gap-4">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold leading-tight text-text-primary">{title}</h1>
-        {description ? <p className="max-w-2xl text-sm text-text-muted">{description}</p> : null}
-      </div>
+      <h1 className="ui-page-title">{title}</h1>
       {action ? <div className="shrink-0">{action}</div> : null}
     </header>
   );

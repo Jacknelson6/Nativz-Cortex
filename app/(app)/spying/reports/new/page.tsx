@@ -28,7 +28,7 @@ export default async function NewSubscriptionPage() {
         <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-text/80">
           Competitor intelligence · automation
         </p>
-        <h1 className="text-2xl font-semibold text-text-primary">New recurring report</h1>
+        <h1 className="ui-page-title">New recurring report</h1>
         <p className="text-sm text-text-muted">
           Pick a client, choose a cadence, and add the people who should receive the report.
           Cortex reads from the client&apos;s active benchmarks when it&apos;s time to send.

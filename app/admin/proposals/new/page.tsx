@@ -33,7 +33,7 @@ export default async function NewProposalPage() {
         <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-text/80">
           Cortex · admin · proposals
         </p>
-        <h1 className="text-2xl font-semibold text-text-primary">New proposal</h1>
+        <h1 className="ui-page-title">New proposal</h1>
         <p className="text-sm text-text-muted">
           Pick a template and signer. Cortex clones the branded proposal folder into the docs repo,
           commits it, and fires the &ldquo;Review &amp; sign&rdquo; email. Signing, PDF, and Stripe

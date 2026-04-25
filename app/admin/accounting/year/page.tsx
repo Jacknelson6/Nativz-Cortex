@@ -67,7 +67,7 @@ export default async function AccountingYearPage({
     <div className="mx-auto max-w-7xl p-6 space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Accounting · {year}</h1>
+          <h1 className="ui-page-title">Accounting · {year}</h1>
           <p className="text-sm text-text-muted mt-1">
             Year-to-date totals by service and person. Click a cell to open the period.
           </p>
