@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAdmin } from '@/lib/revenue/auth';
 import { randomSuffix, slugify } from '@/lib/proposals/slug';
-import { publishProposal, savePublishedProposal, type ProposalTemplateRow } from '@/lib/proposals/publisher';
 import { sendProposal } from '@/lib/proposals/send';
+import { publicProposalUrl } from '@/lib/proposals/public-url';
+import { publishProposal, savePublishedProposal } from '@/lib/proposals/publisher';
 import { logLifecycleEvent } from '@/lib/lifecycle/state-machine';
 
 export const dynamic = 'force-dynamic';
@@ -38,7 +39,15 @@ export async function POST(req: NextRequest) {
     .from('proposal_templates')
     .select('id, agency, name, source_repo, source_folder, public_base_url, active')
     .eq('id', body.template_id)
-    .maybeSingle<ProposalTemplateRow & { active: boolean }>();
+    .maybeSingle<{
+      id: string;
+      agency: 'anderson' | 'nativz';
+      name: string;
+      source_repo: string;
+      source_folder: string;
+      public_base_url: string;
+      active: boolean;
+    }>();
   if (tplErr) return NextResponse.json({ error: tplErr.message }, { status: 500 });
   if (!templateRow || !templateRow.active) {
     return NextResponse.json({ error: 'Template not found or inactive' }, { status: 404 });
