@@ -20,7 +20,6 @@ import type {
 import type { TopicPlan, TopicIdea, TopicSeries } from '@/lib/topic-plans/types';
 import { formatAudience, normalizeResonance, totalIdeas, totalHighResonance } from '@/lib/topic-plans/types';
 import type { CompetitorReportData, CompetitorReportCompetitor } from '@/lib/reporting/competitor-report-types';
-import type { TrendReportData } from '@/lib/reporting/trend-report-types';
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -328,66 +327,3 @@ export function mapCompetitorReportToBranded(data: CompetitorReportData): Brande
   };
 }
 
-// ── Trend report adapter ───────────────────────────────────────────────────
-
-export function mapTrendReportToBranded(data: TrendReportData): BrandedDeliverableData {
-  const range = `${dateLabel(data.period_start)} – ${dateLabel(data.period_end)}`;
-  const f = data.findings;
-
-  const mentionTopics: BrandedDeliverableTopic[] = f.top_mentions.slice(0, 10).map((m, idx) => {
-    const tags = [...m.matchedBrands, ...m.matchedKeywords].slice(0, 3).join(', ');
-    const tone = m.sentimentGuess === 'positive' ? 'positive' : m.sentimentGuess === 'negative' ? 'negative' : 'neutral';
-    return {
-      number: `${String(idx + 1).padStart(2, '0')}.`,
-      title: m.title,
-      sourceLabel: 'Source',
-      source: m.source_domain,
-      resonanceLabel: m.sentimentGuess.toUpperCase(),
-      metrics: [
-        ...(tags ? [{ label: 'Tags', value: tags, tone: 'neutral' as const }] : []),
-      ],
-      whyItWorks: m.snippet,
-    };
-  });
-
-  const brandSeries: BrandedDeliverableSeries | null = f.brand_buckets.some((b) => b.mention_count > 0)
-    ? {
-        label: 'Brand listening',
-        title: 'Brand mention breakdown',
-        subtitle: `${data.brand_names.length} brand${data.brand_names.length === 1 ? '' : 's'} watched`,
-        topics: f.brand_buckets
-          .filter((b) => b.mention_count > 0)
-          .map((b, idx) => ({
-            number: `${String(idx + 1).padStart(2, '0')}.`,
-            title: b.brand_name,
-            sourceLabel: 'Mentions',
-            source: String(b.mention_count),
-            metrics: [{ label: 'Mentions', value: String(b.mention_count), tone: 'neutral' as const }],
-          })),
-      }
-    : null;
-
-  const series: BrandedDeliverableSeries[] = [
-    {
-      label: 'Mentions',
-      title: 'Top mentions this period',
-      subtitle: range,
-      topics: mentionTopics,
-    },
-  ];
-  if (brandSeries) series.push(brandSeries);
-
-  return {
-    eyebrow: data.client_name,
-    kicker: 'Trend Monitor',
-    title: data.subscription_name,
-    summary: data.summary,
-    stats: [
-      { value: String(f.total_mentions), label: 'Mentions' },
-      { value: String(data.brand_names.length), label: 'Brands watched' },
-      { value: data.cadence, label: 'Cadence' },
-    ],
-    series,
-    runningHeaderTitle: data.subscription_name,
-  };
-}
