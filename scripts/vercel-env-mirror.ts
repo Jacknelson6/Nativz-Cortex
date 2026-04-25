@@ -23,11 +23,23 @@ import { readFileSync } from 'node:fs';
 loadEnv({ path: resolve(process.cwd(), '.env.local') });
 
 const KEYS_TO_MIRROR = [
+  // Legacy single-account Stripe (Nativz fallback path)
   'STRIPE_SECRET_KEY',
   'STRIPE_RESTRICTED_KEY',
   'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
   'STRIPE_WEBHOOK_SECRET',
   'STRIPE_WEBHOOK_ENDPOINT_ID',
+  // Multi-agency Stripe (Anderson Collaborative)
+  'ANDERSON_STRIPE_SECRET_KEY',
+  'ANDERSON_STRIPE_WEBHOOK_SECRET',
+  // Multi-agency Stripe (Nativz, when separate from legacy)
+  'NATIVZ_STRIPE_SECRET_KEY',
+  'NATIVZ_STRIPE_WEBHOOK_SECRET',
+  // Self-host proposals
+  'DOCS_WEBHOOK_SECRET',
+  'PROPOSALS_PUBLIC_HOST_ANDERSON',
+  'PROPOSALS_PUBLIC_HOST_NATIVZ',
+  // Cron + misc
   'CRON_SECRET',
 ] as const;
 
