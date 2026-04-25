@@ -366,8 +366,8 @@ function ClientCard({
         >
           <ClientLogo src={client.logoUrl} name={client.name} abbreviation={client.abbreviation} size="sm" />
           <div className="min-w-0 flex-1">
-            <p className="text-[15px] font-medium text-text-primary truncate" title={client.name}>{client.name}</p>
-            <p className="text-[12px] text-text-muted truncate">{client.industry || 'General'}</p>
+            <p className="text-sm font-semibold text-text-primary truncate" title={client.name}>{client.name}</p>
+            <p className="text-xs text-text-muted truncate">{client.industry || 'General'}</p>
           </div>
           <AgencyAssignmentLabel agency={client.agency} showWhenUnassigned className="shrink-0 hidden sm:block" />
           {client.services.length > 0 && (
@@ -376,7 +376,7 @@ function ClientCard({
             </div>
           )}
           {client.lastActivityAt && (
-            <span className="text-[12px] text-text-muted shrink-0 hidden lg:block tabular-nums">
+            <span className="text-xs text-text-muted shrink-0 hidden lg:block tabular-nums">
               {formatRelativeTime(client.lastActivityAt)}
             </span>
           )}
@@ -397,15 +397,15 @@ function ClientCard({
       style={staggerDelay ? { animationDelay: staggerDelay } : undefined}
     >
       <div
-        className={`rounded-[10px] border border-nativz-border bg-surface p-4 transition-colors duration-200 hover:bg-surface-hover ${dimmed ? 'opacity-60' : ''}`}
+        className={`rounded-[10px] border border-nativz-border bg-surface p-4 transition-colors duration-200 hover:bg-surface-hover focus-within:ring-1 focus-within:ring-accent-border ${dimmed ? 'opacity-60' : ''}`}
       >
         <div className="relative flex items-start gap-3">
           <ClientLogo src={client.logoUrl} name={client.name} abbreviation={client.abbreviation} size="md" />
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
-                <p className="text-[15px] font-medium text-text-primary truncate leading-tight" title={client.name}>{client.name}</p>
-                <p className="text-[13px] text-text-muted truncate mt-0.5">{client.industry || 'General'}</p>
+                <p className="text-sm font-semibold text-text-primary truncate leading-tight" title={client.name}>{client.name}</p>
+                <p className="text-xs text-text-muted truncate mt-0.5">{client.industry || 'General'}</p>
               </div>
               <HealthBadge
                 healthScore={client.healthScore}
@@ -421,7 +421,7 @@ function ClientCard({
                 </div>
               )}
               {client.lastActivityAt && (
-                <span className="ml-auto text-[11px] text-text-muted tabular-nums">
+                <span className="ml-auto text-xs text-text-muted tabular-nums">
                   {formatRelativeTime(client.lastActivityAt)}
                 </span>
               )}
