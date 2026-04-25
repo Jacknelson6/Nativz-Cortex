@@ -12,6 +12,7 @@ import {
 } from '@/lib/proposals/pdf/agreement';
 import { getFromAddress, getReplyTo } from '@/lib/email/resend';
 import { logLifecycleEvent } from '@/lib/lifecycle/state-machine';
+import { publicProposalUrl } from '@/lib/proposals/public-url';
 import type { AgencyBrand } from '@/lib/agency/detect';
 
 export const runtime = 'nodejs';
@@ -154,7 +155,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
       slug: proposal.slug,
       projectName: payload.projectName,
       projectShortName: payload.projectShortName,
-      proposalUrl: payload.proposalUrl ?? `${template.public_base_url ?? ''}/proposals/${proposal.slug}`,
+      proposalUrl: payload.proposalUrl ?? publicProposalUrl(agency, proposal.slug),
       scopeStatement: payload.scopeStatement,
       agreementTitle: template.name,
       tier: payload.tier,
@@ -170,7 +171,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
       signerEmail: payload.signerEmail,
       signatureDataUrl: payload.signatureDataUrl,
       signatureMethod: payload.signatureMethod === 'type' ? 'type' : 'draw',
-      signatureTimestamp: payload.timestamp,
+      // Use server time so the counter-sign render (which reads
+      // proposal.signed_at = nowIso) reproduces the same embedded timestamp.
+      // payload.timestamp captures the click moment but isn't persisted, so
+      // a counter-sign re-render would otherwise drift by network latency.
+      signatureTimestamp: nowIso,
       serverTimestamp: nowIso,
       ip,
       userAgent: ua,
@@ -283,6 +288,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
       projectShortName: payload.projectShortName,
       subscription: trustedSubscription,
       cadence: trustedCadence,
+      agency,
     });
     const opsHtml = emailOpsSigned({
       clientLegalName: payload.clientLegalName,
@@ -301,6 +307,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
       projectName: payload.projectName,
       subscription: trustedSubscription,
       cadence: trustedCadence,
+      agency,
     });
     const subjectClient = trustedSubscription
       ? `Your ${payload.projectName} agreement is signed. First ${trustedCadence} payment link inside (${payload.tierLabel}).`

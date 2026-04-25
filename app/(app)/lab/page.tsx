@@ -7,7 +7,7 @@ import { ContentLabGeneralChat } from '@/components/content-lab/content-lab-gene
 import { ContentLabWorkspace } from '@/components/content-lab/content-lab-workspace';
 import { loadPillarReferencePreviews } from '@/lib/content-lab/pillar-reference-previews';
 import { getKnowledgeEntries, getKnowledgeGraph } from '@/lib/knowledge/queries';
-import { getActiveAdminClient } from '@/lib/admin/get-active-client';
+import { getActiveBrand } from '@/lib/active-brand';
 
 type ClientRow = {
   id: string;
@@ -101,7 +101,7 @@ export default async function StrategyLabPage({
   })();
 
   const admin = createAdminClient();
-  const active = await getActiveAdminClient().catch(() => null);
+  const active = await getActiveBrand().catch(() => null);
 
   // ── Branded workspace (Our brand mode) ──────────────────────────────────
   if (active?.brand) {

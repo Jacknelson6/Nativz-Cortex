@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NotesDashboard } from '@/components/notes/notes-dashboard';
-import { getActiveAdminClient } from '@/lib/admin/get-active-client';
+import { getActiveBrand } from '@/lib/active-brand';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,7 +31,7 @@ export default async function NotesDashboardPage() {
   const admin = createAdminClient();
   const [userResult, active, { data: clientRows }] = await Promise.all([
     admin.from('users').select('role').eq('id', user.id).single(),
-    getActiveAdminClient().catch(() => null),
+    getActiveBrand().catch(() => null),
     admin.from('clients').select('id, name, slug').order('name', { ascending: true }),
   ]);
   const isAdmin = userResult.data?.role === 'admin';

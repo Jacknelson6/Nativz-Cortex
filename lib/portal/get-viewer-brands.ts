@@ -1,10 +1,10 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { cookies } from 'next/headers';
-import type { AdminBrand } from '@/lib/admin/get-active-client';
+import type { AdminBrand } from '@/lib/active-brand';
 
 /**
  * Brand-root migration phase 2 — viewer-side brand resolution for the
- * shared `(app)` shell. Mirrors `getActiveAdminClient()` /
+ * shared `(app)` shell. Mirrors `getActiveBrand()` /
  * `listAdminAccessibleBrands()` so both roles produce the same shape that
  * `<ActiveBrandProvider />` and `<AdminBrandPill />` already expect.
  *

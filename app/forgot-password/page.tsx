@@ -25,7 +25,7 @@ export default function AdminForgotPasswordPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email,
-          redirectTo: window.location.origin + '/admin/reset-password',
+          redirectTo: window.location.origin + '/reset-password',
         }),
       });
 

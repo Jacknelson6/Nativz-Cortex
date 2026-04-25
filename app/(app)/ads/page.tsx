@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getActiveAdminClient } from '@/lib/admin/get-active-client';
+import { getActiveBrand } from '@/lib/active-brand';
 import { AdGeneratorWorkspace } from '@/components/ad-creatives/ad-generator-workspace';
 import type { AdPromptTemplate } from '@/components/ad-creatives/ad-template-library';
 import type { AdConcept } from '@/components/ad-creatives/ad-concept-gallery';
@@ -22,7 +22,17 @@ export default async function AdCreativesPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const active = await getActiveAdminClient().catch(() => null);
+  const admin = createAdminClient();
+  const { data: me } = await admin
+    .from('users')
+    .select('role, is_super_admin')
+    .eq('id', user.id)
+    .single();
+  if (me?.role !== 'admin' && !me?.is_super_admin) {
+    redirect('/finder/new');
+  }
+
+  const active = await getActiveBrand().catch(() => null);
 
   // No brand pinned → same gentle empty state pattern as analytics.
   if (!active?.brand) {
@@ -38,7 +48,6 @@ export default async function AdCreativesPage() {
     );
   }
 
-  const admin = createAdminClient();
   const clientId = active.brand.id;
 
   // Parallel: every read the workspace needs on first paint. Concept list

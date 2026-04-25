@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
   const html = buildClientInviteEmailHtml({
     contactName: previewName,
     clientName: client.name,
-    inviteUrl: `${request.nextUrl.origin}/portal/join/preview-token`,
+    inviteUrl: `${request.nextUrl.origin}/join/preview-token`,
     invitedBy,
     agency,
   });

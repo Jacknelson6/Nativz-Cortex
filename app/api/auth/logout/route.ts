@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { ADMIN_ACTIVE_CLIENT_COOKIE } from '@/lib/admin/get-active-client';
+import { ADMIN_ACTIVE_CLIENT_COOKIE } from '@/lib/active-brand';
 
 /**
  * POST /api/auth/logout

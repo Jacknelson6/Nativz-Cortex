@@ -20,6 +20,43 @@ import { RUBIK_REGULAR_B64 } from './fonts/rubik-regular';
 import { RUBIK_MEDIUM_B64 } from './fonts/rubik-medium';
 import { CAVEAT_SEMIBOLD_B64 } from './fonts/caveat-semibold';
 import { LOGO_DARK_BG_B64, LOGO_LIGHT_BG_B64 } from './assets';
+import { getEmailLogoUrl } from '@/lib/email/brand-tokens';
+import type { AgencyBrand } from '@/lib/agency/detect';
+
+// Email-only brand details. The PDF body is still Anderson-skinned (legal
+// agreement template); this resolver only feeds the transactional emails.
+type EmailAgencyBrand = {
+  companyName: string;       // legal name in body copy + subjects
+  signerName: string;        // counter-signer name in copy ("…executed by X on behalf of …")
+  contactEmail: string;      // public-facing contact in footers
+  marketingHost: string;     // marketing site host (no protocol)
+  marketingUrl: string;      // marketing site URL with protocol
+  logoUrl: string;           // hosted logo for email <img>
+  postalAddress: string;     // street line for footer
+};
+
+function resolveEmailAgencyBrand(agency: AgencyBrand): EmailAgencyBrand {
+  if (agency === 'nativz') {
+    return {
+      companyName: 'Nativz',
+      signerName: 'Jack Nelson',
+      contactEmail: 'jack@nativz.io',
+      marketingHost: 'nativz.io',
+      marketingUrl: 'https://nativz.io',
+      logoUrl: getEmailLogoUrl('nativz'),
+      postalAddress: '',
+    };
+  }
+  return {
+    companyName: 'Anderson Collaborative LLC',
+    signerName: 'Trevor Anderson',
+    contactEmail: 'info@andersoncollaborative.com',
+    marketingHost: 'andersoncollaborative.com',
+    marketingUrl: 'https://andersoncollaborative.com',
+    logoUrl: 'https://docs.andersoncollaborative.com/assets/ac-logo-dark.png',
+    postalAddress: '4000 Ponce de Leon Blvd Ste 470, Coral Gables FL 33146',
+  };
+}
 
 export interface AgreementInputs {
   id: string;
@@ -632,7 +669,10 @@ function esc(s: string): string {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c] as string));
 }
 
-function emailShell(innerHtml: string, title: string): string {
+function emailShell(innerHtml: string, title: string, brand: EmailAgencyBrand): string {
+  const footerLine = brand.postalAddress
+    ? `${brand.companyName} · ${brand.postalAddress} · <a href="${brand.marketingUrl}" style="color:#2BB8AA;">${brand.marketingHost}</a>`
+    : `${brand.companyName} · <a href="${brand.marketingUrl}" style="color:#2BB8AA;">${brand.marketingHost}</a>`;
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title>
 <!--[if !mso]><!--><link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&family=Rubik:wght@400;500;600&display=swap" rel="stylesheet"><!--<![endif]-->
 <style>${EMAIL_WRAPPER_CSS}</style></head>
@@ -641,7 +681,7 @@ function emailShell(innerHtml: string, title: string): string {
   ${innerHtml}
   <div class="footer" style="margin-top: 0; border-radius: 0 0 12px 12px;"></div>
   <p class="tagline" style="text-align:center; margin: 14px 0 0;">Solving the marketing problems of today with the strategies of tomorrow.</p>
-  <p style="text-align:center; font-size:10.5px; color:#7b8794; margin: 6px 0 0;">Anderson Collaborative LLC · 4000 Ponce de Leon Blvd Ste 470, Coral Gables FL 33146 · <a href="https://andersoncollaborative.com" style="color:#2BB8AA;">andersoncollaborative.com</a></p>
+  <p style="text-align:center; font-size:10.5px; color:#7b8794; margin: 6px 0 0;">${footerLine}</p>
 </div>
 </body></html>`;
 }
@@ -659,7 +699,9 @@ export function emailClientSigned(input: {
   projectShortName?: string;
   subscription?: boolean;
   cadence?: 'month' | 'year' | 'week';
+  agency?: AgencyBrand;
 }): string {
+  const brand = resolveEmailAgencyBrand(input.agency ?? 'anderson');
   const first = input.signerName.split(' ')[0] || input.signerName;
   const href = `${input.stripeUrl}?prefilled_email=${encodeURIComponent(input.signerEmail)}&client_reference_id=${input.id}`;
   const cw = input.cadence === 'year' ? 'year' : input.cadence === 'week' ? 'week' : 'month';
@@ -689,12 +731,12 @@ export function emailClientSigned(input: {
   const inner = `
   <div class="card">
     <div class="header">
-      <img class="logo" src="https://docs.andersoncollaborative.com/assets/ac-logo-dark.png" alt="Anderson Collaborative">
+      <img class="logo" src="${brand.logoUrl}" alt="${esc(brand.companyName)}">
       <div class="eyebrow">Agreement Signed</div>
       <h1 class="title">Thank you, ${esc(first)}. One step to kickoff.</h1>
     </div>
     <div class="body">
-      <p>Your signed <strong>${esc(input.projectName)}</strong> Service Agreement with Anderson Collaborative LLC is attached. We kept a copy for our records.</p>
+      <p>Your signed <strong>${esc(input.projectName)}</strong> Service Agreement with ${esc(brand.companyName)} is attached. We kept a copy for our records.</p>
       <div class="stats"><table>${stats}
       </table></div>
       <p style="margin-top: 18px;">${nextStep}</p>
@@ -705,7 +747,7 @@ export function emailClientSigned(input: {
   const subject = isSub
     ? `${input.projectName} agreement signed. First ${cw} payment link inside.`
     : `${input.projectName} agreement signed. Deposit link inside.`;
-  return emailShell(inner, subject);
+  return emailShell(inner, subject, brand);
 }
 
 export function emailOpsSigned(input: {
@@ -725,7 +767,9 @@ export function emailOpsSigned(input: {
   projectName: string;
   subscription?: boolean;
   cadence?: 'month' | 'year' | 'week';
+  agency?: AgencyBrand;
 }): string {
+  const brand = resolveEmailAgencyBrand(input.agency ?? 'anderson');
   const cw = input.cadence === 'year' ? 'year' : input.cadence === 'week' ? 'week' : 'month';
   const isSub = !!input.subscription;
   const tierLine = isSub
@@ -737,7 +781,7 @@ export function emailOpsSigned(input: {
   const inner = `
   <div class="card">
     <div class="header">
-      <img class="logo" src="https://docs.andersoncollaborative.com/assets/ac-logo-dark.png" alt="Anderson Collaborative">
+      <img class="logo" src="${brand.logoUrl}" alt="${esc(brand.companyName)}">
       <div class="eyebrow">New Signing · ${esc(input.projectName)}</div>
       <h1 class="title">${esc(input.clientLegalName)}</h1>
     </div>
@@ -757,7 +801,7 @@ export function emailOpsSigned(input: {
       <p style="font-size: 12px; color: #7b8794;">KV: <code>sign:${esc(input.id)}:*</code> · 7-year retention.</p>
     </div>
   </div>`;
-  return emailShell(inner, `[Signed · ${input.projectName}] ${input.clientLegalName} · ${input.tierLabel}`);
+  return emailShell(inner, `[Signed · ${input.projectName}] ${input.clientLegalName} · ${input.tierLabel}`, brand);
 }
 
 export function emailClientPaid(input: {
@@ -771,14 +815,16 @@ export function emailClientPaid(input: {
   projectName: string;
   subscription?: boolean;
   cadence?: 'month' | 'year' | 'week';
+  agency?: AgencyBrand;
 }): string {
+  const brand = resolveEmailAgencyBrand(input.agency ?? 'anderson');
   const first = input.signerName.split(' ')[0] || input.signerName;
   const cw = input.cadence === 'year' ? 'year' : input.cadence === 'week' ? 'week' : 'month';
   const isSub = !!input.subscription;
   const eyebrowText = isSub ? `First ${cw.charAt(0).toUpperCase()}${cw.slice(1)} Received · Fully Executed` : 'Deposit Received · Fully Executed';
   const openingLine = isSub
-    ? `Your first ${cw}'s payment of <strong>$${(input.amountPaid / 100).toFixed(2)}</strong> has cleared. The attached PDF is the fully counter-signed agreement, executed by Trevor Anderson on behalf of Anderson Collaborative LLC.`
-    : `Your deposit of <strong>$${(input.amountPaid / 100).toFixed(2)}</strong> has cleared. The attached PDF is the fully counter-signed agreement, executed by Trevor Anderson on behalf of Anderson Collaborative LLC.`;
+    ? `Your first ${cw}'s payment of <strong>$${(input.amountPaid / 100).toFixed(2)}</strong> has cleared. The attached PDF is the fully counter-signed agreement, executed by ${esc(brand.signerName)} on behalf of ${esc(brand.companyName)}.`
+    : `Your deposit of <strong>$${(input.amountPaid / 100).toFixed(2)}</strong> has cleared. The attached PDF is the fully counter-signed agreement, executed by ${esc(brand.signerName)} on behalf of ${esc(brand.companyName)}.`;
   const stats = isSub
     ? `
         <tr><td class="k">Tier</td><td class="v">${esc(input.tierLabel)}</td></tr>
@@ -796,10 +842,11 @@ export function emailClientPaid(input: {
   const nextLine = isSub
     ? `<strong>What happens next:</strong> we reach out within 24 hours to confirm intake and start your first ${cw}'s deliverables. Please send over brand guidelines, existing assets, and any priority content you want us to work on first.`
     : `<strong>What happens next:</strong> we reach out within 24 hours to schedule kickoff. In the meantime, start gathering brand assets, preferred color palette, competitor sites you admire, and any content to migrate.`;
+  const contactFirstName = brand.signerName.split(' ')[0] || brand.signerName;
   const inner = `
   <div class="card">
     <div class="header" style="background: linear-gradient(135deg, #00161F 0%, #012029 100%);">
-      <img class="logo" src="https://docs.andersoncollaborative.com/assets/ac-logo-dark.png" alt="Anderson Collaborative">
+      <img class="logo" src="${brand.logoUrl}" alt="${esc(brand.companyName)}">
       <div class="eyebrow" style="color: #4ade80;">${eyebrowText}</div>
       <h1 class="title">Welcome aboard, ${esc(first)}. Kickoff inbound.</h1>
     </div>
@@ -808,13 +855,13 @@ export function emailClientPaid(input: {
       <div class="stats" style="border-left-color: #16a34a;"><table>${stats}
       </table></div>
       <p style="margin-top: 18px;">${nextLine}</p>
-      <p style="font-size: 12px; color: #7b8794; margin-top: 18px;">Questions? Reply to this email or reach Trevor at info@andersoncollaborative.com.</p>
+      <p style="font-size: 12px; color: #7b8794; margin-top: 18px;">Questions? Reply to this email or reach ${esc(contactFirstName)} at ${esc(brand.contactEmail)}.</p>
     </div>
   </div>`;
   const subject = isSub
     ? `First ${cw} received. Fully executed ${input.projectName} agreement attached.`
     : `Deposit received. Fully executed ${input.projectName} agreement attached.`;
-  return emailShell(inner, subject);
+  return emailShell(inner, subject, brand);
 }
 
 export function emailOpsPaid(input: {
@@ -831,7 +878,9 @@ export function emailOpsPaid(input: {
   projectName: string;
   subscription?: boolean;
   cadence?: 'month' | 'year' | 'week';
+  agency?: AgencyBrand;
 }): string {
+  const brand = resolveEmailAgencyBrand(input.agency ?? 'anderson');
   const cw = input.cadence === 'year' ? 'year' : input.cadence === 'week' ? 'week' : 'month';
   const isSub = !!input.subscription;
   const eyebrowText = isSub
@@ -847,7 +896,7 @@ export function emailOpsPaid(input: {
   const inner = `
   <div class="card">
     <div class="header">
-      <img class="logo" src="https://docs.andersoncollaborative.com/assets/ac-logo-dark.png" alt="Anderson Collaborative">
+      <img class="logo" src="${brand.logoUrl}" alt="${esc(brand.companyName)}">
       <div class="eyebrow" style="color: #4ade80;">${eyebrowText}</div>
       <h1 class="title">${esc(input.clientLegalName)} → kickoff within 24h</h1>
     </div>
@@ -864,5 +913,5 @@ export function emailOpsPaid(input: {
       <p style="margin-top: 18px;">Fully executed PDF attached. <strong>Kickoff call needed within 24h.</strong></p>
     </div>
   </div>`;
-  return emailShell(inner, `[Paid · ${input.projectName}] ${input.clientLegalName} · ${input.tierLabel}`);
+  return emailShell(inner, `[Paid · ${input.projectName}] ${input.clientLegalName} · ${input.tierLabel}`, brand);
 }

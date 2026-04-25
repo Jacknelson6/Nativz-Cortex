@@ -21,7 +21,7 @@ export default async function TrendMonitorsPage() {
     .eq('id', user.id)
     .single();
   if (me?.role !== 'admin' && !me?.is_super_admin) {
-    redirect('/admin/dashboard');
+    redirect('/finder/new');
   }
 
   const [{ data: subscriptions }, { data: reports }] = await Promise.all([

@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { TikTokShopHub } from '@/components/tiktok-shop/tiktok-shop-hub';
 import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibility-query';
 import { getVaultClients } from '@/lib/vault/reader';
-import { getActiveAdminClient } from '@/lib/admin/get-active-client';
+import { getActiveBrand } from '@/lib/active-brand';
 
 type HubDbClientRow = {
   id: string;
@@ -32,7 +32,7 @@ export default async function TikTokShopPage() {
       select: 'id, slug, logo_url, is_active, agency',
       onlyActive: true,
     }),
-    getActiveAdminClient().catch(() => null),
+    getActiveBrand().catch(() => null),
   ]);
 
   if (!userData || !['admin', 'super_admin'].includes(userData.role)) {

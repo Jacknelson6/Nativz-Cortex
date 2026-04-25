@@ -228,10 +228,11 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/usage',
   // Cost-driving brand tools stay admin-only. Spying triggers Apify scrapes
   // on every audit; Trend Monitors are recurring scheduled scrapes; the Ad
-  // Generator triggers Gemini 2.5 Flash Image generations. Their pages
-  // already redirect non-admins, so hide them from the viewer sidebar to
-  // match. Brand Profile, Notes, Brain, Strategy Lab, and Trend Finder are
-  // read-friendly — RLS scopes them to the viewer's user_client_access.
+  // Generator triggers Gemini 2.5 Flash Image generations. Each page also
+  // redirects non-admins server-side (defence in depth) — this set just
+  // hides them from the viewer sidebar. Brand Profile, Notes, Brain,
+  // Strategy Lab, and Trend Finder are read-friendly — RLS scopes them to
+  // the viewer's user_client_access.
   '/ads',
   '/finder/monitors',
   '/spying',

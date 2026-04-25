@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getSupabasePublishableKey, getSupabaseUrl } from '@/lib/supabase/public-env';
 import { PORTAL_HOME_PATH, shouldRedirectPortalToMinimalHome } from '@/lib/portal/client-surface';
 import { detectAgencyFromHostname, resolveAgencyForRequest } from '@/lib/agency/detect';
-import { ADMIN_ACTIVE_CLIENT_COOKIE } from '@/lib/admin/get-active-client';
+import { ADMIN_ACTIVE_CLIENT_COOKIE } from '@/lib/active-brand';
 
 // Legacy Strategy Lab URLs like /admin/strategy-lab/<uuid> pre-date NAT-57's
 // flatten to /admin/strategy-lab. The old page.tsx handled this with a client
@@ -163,7 +163,7 @@ export async function middleware(request: NextRequest) {
   if (
     pathname === '/api/health' ||
     pathname.startsWith('/api/v1/') ||
-    pathname.startsWith('/portal/join/') ||
+    pathname.startsWith('/join/') ||
     pathname.startsWith('/api/social/') ||
     pathname.startsWith('/shared/') ||
     pathname.startsWith('/api/shared/') ||
@@ -206,10 +206,10 @@ export async function middleware(request: NextRequest) {
 
   // Password reset pages don't require auth
   if (
-    pathname === '/admin/forgot-password' ||
-    pathname === '/admin/reset-password' ||
-    pathname === '/portal/forgot-password' ||
-    pathname === '/portal/reset-password'
+    pathname === '/forgot-password' ||
+    pathname === '/reset-password' ||
+    pathname === '/forgot-password' ||
+    pathname === '/reset-password'
   ) {
     supabaseResponse.headers.set('x-pathname', pathname);
     supabaseResponse.headers.set('x-agency', resolveAgencyForRequest(request));
@@ -355,7 +355,7 @@ export async function middleware(request: NextRequest) {
   // Legacy /admin/strategy-lab/<uuid> → set active-client cookie + 302.
   // Replaces a client-side page that cost ~1.5s of LCP (boot + POST + RSC
   // refetch). Skips the API route's client-existence check; the downstream
-  // page's getActiveAdminClient() falls back to general chat if the id is
+  // page's getActiveBrand() falls back to general chat if the id is
   // stale, which is the same surface the old page ended up on.
   const legacyMatch = pathname.match(LEGACY_STRATEGY_LAB_CLIENT_ID);
   if (legacyMatch) {

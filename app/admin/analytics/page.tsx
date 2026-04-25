@@ -6,7 +6,7 @@ import {
   type TabId,
   type SubTabId,
 } from '@/components/analytics/analytics-landing';
-import { getActiveAdminClient } from '@/lib/admin/get-active-client';
+import { getActiveBrand } from '@/lib/active-brand';
 
 const VALID_TABS: readonly TabId[] = ['social', 'paid', 'seo', 'affiliates'];
 const VALID_SUBS: readonly SubTabId[] = ['overview', 'benchmarking'];
@@ -51,7 +51,7 @@ export default async function AdminAnalyticsPage({
     searchParams,
     adminClient.from('clients').select('id, name, slug, logo_url, agency').order('name'),
     adminClient.from('social_profiles').select('client_id, status'),
-    getActiveAdminClient().catch(() => null),
+    getActiveBrand().catch(() => null),
   ]);
 
   const connectionMap: Record<string, 'connected' | 'disconnected' | 'paused'> = {};

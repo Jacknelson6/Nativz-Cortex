@@ -19,7 +19,7 @@ export default async function WatchPage() {
     admin.from('clients').select('id, name, agency, logo_url').eq('is_active', true).order('name'),
   ]);
   if (me?.role !== 'admin' && !me?.is_super_admin) {
-    redirect('/admin/dashboard');
+    redirect('/finder/new');
   }
 
   return (

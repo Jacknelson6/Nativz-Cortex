@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { IdeasHubView } from '@/components/ideas-hub/ideas-hub-view';
-import { getActiveAdminClient } from '@/lib/admin/get-active-client';
+import { getActiveBrand } from '@/lib/active-brand';
 
 export default async function IdeasPage({
   searchParams,
@@ -15,7 +15,7 @@ export default async function IdeasPage({
   // in the "default working brand" otherwise. Failure is silent — Ideas
   // still renders its own in-page picker when neither source resolves.
   const activeFromPill = !clientIdParam?.trim()
-    ? await getActiveAdminClient().catch(() => null)
+    ? await getActiveBrand().catch(() => null)
     : null;
   const resolvedClientIdParam = clientIdParam?.trim() || activeFromPill?.brand?.id || undefined;
 

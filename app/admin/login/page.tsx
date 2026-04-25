@@ -234,7 +234,7 @@ State of the art<br />content intelligence.
 
             <div className="text-center mt-4">
               <a
-                href="/admin/forgot-password"
+                href="/forgot-password"
                 className={`text-xs transition-colors ${
                   isAC ? 'text-[#617792] hover:text-[#00161F]' : 'text-white/40 hover:text-white/70'
                 }`}

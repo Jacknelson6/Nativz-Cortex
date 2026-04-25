@@ -1,5 +1,5 @@
 import { KnowledgeExplorer } from './knowledge-explorer';
-import { getActiveAdminClient } from '@/lib/admin/get-active-client';
+import { getActiveBrand } from '@/lib/active-brand';
 
 /**
  * Brain (Knowledge) lives under the sidebar's "Brand tools" section, so
@@ -9,7 +9,7 @@ import { getActiveAdminClient } from '@/lib/admin/get-active-client';
  * the explorer.
  */
 export default async function KnowledgePage() {
-  const active = await getActiveAdminClient().catch(() => null);
+  const active = await getActiveBrand().catch(() => null);
   const initialClientFilter = active?.brand?.id ?? 'all';
 
   return <KnowledgeExplorer initialClientFilter={initialClientFilter} />;

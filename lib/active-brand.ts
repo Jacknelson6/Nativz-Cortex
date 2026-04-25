@@ -8,11 +8,18 @@ import { selectClientsWithRosterVisibility } from '@/lib/clients/roster-visibili
  * Parallels the portal's `x-portal-active-client`.
  *
  * SECURITY: The cookie carries only a UUID. Every server read re-authorizes
- * via {@link getActiveAdminClient} — tampering with the cookie cannot grant
- * access to a brand the user doesn't already have admin rights to.
+ * via {@link getActiveBrand} — tampering with the cookie cannot grant access
+ * to a brand the user doesn't already have admin rights to.
  */
 export const ADMIN_ACTIVE_CLIENT_COOKIE = 'x-admin-active-client';
 
+/**
+ * Active-brand record. Field name `AdminBrand` is historical — kept to
+ * avoid churn across ~50 callers. Same shape regardless of the resolving
+ * user's role; the backing data is whichever client the user currently
+ * has selected, scoped by `user_client_access` for viewers and by
+ * portfolio access for admins.
+ */
 export interface AdminBrand {
   id: string;
   name: string;
@@ -21,11 +28,18 @@ export interface AdminBrand {
   agency: string | null;
 }
 
-export interface ActiveAdminClientResult {
+export interface ActiveBrandResult {
   brand: AdminBrand | null;
-  /** Where the resolved brand id came from. "none" = no selection. */
-  source: 'url' | 'cookie' | 'none';
-  /** True when the current user is admin / super_admin. Non-admins get no brand. */
+  /**
+   * Where the resolved brand id came from.
+   *  - 'url'           — explicit URL param override (admins only)
+   *  - 'cookie'        — active-client cookie (admin or viewer)
+   *  - 'first-access'  — viewer fallback: first row in user_client_access
+   *  - 'none'          — nothing resolved
+   */
+  source: 'url' | 'cookie' | 'first-access' | 'none';
+  /** True when the current user is admin / super_admin. Viewers get a brand
+   *  too (resolved via user_client_access) but with isAdmin: false. */
   isAdmin: boolean;
 }
 
@@ -55,9 +69,9 @@ async function resolveAdminRole(userId: string): Promise<boolean> {
  * to read the URL param and pass it in — the util cannot read the URL itself
  * from a pure server function.
  */
-export async function getActiveAdminClient(
+export async function getActiveBrand(
   overrideClientId?: string | null,
-): Promise<ActiveAdminClientResult> {
+): Promise<ActiveBrandResult> {
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
@@ -76,8 +90,8 @@ export async function getActiveAdminClient(
   // care about the role check `result.isAdmin` rather than re-querying.
   if (!isAdmin) {
     const { getActiveViewerBrand } = await import('@/lib/portal/get-viewer-brands');
-    const { brand } = await getActiveViewerBrand(user.id);
-    return { brand, source: brand ? 'cookie' : 'none', isAdmin: false };
+    const viewer = await getActiveViewerBrand(user.id);
+    return { brand: viewer.brand, source: viewer.source, isAdmin: false };
   }
 
   const cookieStore = await cookies();
@@ -86,7 +100,7 @@ export async function getActiveAdminClient(
   // Impersonation override. When an admin owner has clicked "View as <client>",
   // /api/impersonate sets the slug + organization_id pair. Resolving the
   // impersonated brand here means the shared (app) shell — sidebar pill,
-  // brand-profile page, every page that calls `getActiveAdminClient()` —
+  // brand-profile page, every page that calls `getActiveBrand()` —
   // automatically re-scopes to that client without each page needing its own
   // impersonation check. Brand-root migration phase 2 prep so impersonation
   // lands on root URLs (e.g. /brand-profile) instead of the legacy /portal/* surface.
@@ -111,7 +125,7 @@ export async function getActiveAdminClient(
   const urlId = overrideClientId?.trim() || null;
   const cookieId = cookieClientId?.trim() || null;
   const candidate = urlId ?? cookieId;
-  const source: ActiveAdminClientResult['source'] = urlId ? 'url' : cookieId ? 'cookie' : 'none';
+  const source: ActiveBrandResult['source'] = urlId ? 'url' : cookieId ? 'cookie' : 'none';
 
   if (!candidate) {
     return { brand: null, source: 'none', isAdmin };

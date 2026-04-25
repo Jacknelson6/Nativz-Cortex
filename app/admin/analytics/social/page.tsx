@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getActiveAdminClient } from '@/lib/admin/get-active-client';
+import { getActiveBrand } from '@/lib/active-brand';
 
 export default async function SocialAnalyticsPage({
   searchParams,
@@ -13,7 +13,7 @@ export default async function SocialAnalyticsPage({
   // URL wins when present.
   let resolvedClientId = clientId?.trim();
   if (!resolvedClientId) {
-    const active = await getActiveAdminClient().catch(() => null);
+    const active = await getActiveBrand().catch(() => null);
     if (active?.brand?.id) resolvedClientId = active.brand.id;
   }
 

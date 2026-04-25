@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     const baseUrl = getCortexAppUrl(getBrandFromAgency(client.agency));
     const enriched = (invites ?? []).map(inv => ({
       token: inv.token,
-      invite_url: `${baseUrl}/portal/join/${inv.token}`,
+      invite_url: `${baseUrl}/join/${inv.token}`,
       expires_at: inv.expires_at,
     }));
 

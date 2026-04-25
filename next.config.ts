@@ -23,11 +23,25 @@ const nextConfig: NextConfig = {
       { source: '/admin/scheduler', destination: '/admin/scheduling', permanent: false },
       { source: '/admin/scheduler/:path*', destination: '/admin/scheduling/:path*', permanent: false },
 
-      // Phase 2 — unified login at /login. /admin/login and /portal/login
-      // redirect here; /admin/forgot-password + reset-password stay put for
-      // now and consolidate when /portal/* is fully retired.
+      // Phase 2 — unified auth surface at the root. /login,
+      // /forgot-password, /reset-password are the canonical entry points;
+      // the legacy /admin/* and /portal/* aliases redirect here so any
+      // in-flight emails or saved bookmarks resolve.
       { source: '/admin/login', destination: '/login', permanent: false },
       { source: '/portal/login', destination: '/login', permanent: false },
+      { source: '/admin/forgot-password', destination: '/forgot-password', permanent: false },
+      { source: '/portal/forgot-password', destination: '/forgot-password', permanent: false },
+      { source: '/admin/reset-password', destination: '/reset-password', permanent: false },
+      { source: '/portal/reset-password', destination: '/reset-password', permanent: false },
+      // Invite acceptance moved /portal/join/[token] → /join/[token]. The
+      // colon-asterisk capture passes the token segment through unchanged.
+      { source: '/portal/join/:token*', destination: '/join/:token*', permanent: false },
+      // Viewer billing surface retired with /portal/* — admins still see
+      // billing inside /admin/account. Viewers don't have a billing UI yet,
+      // so the redirect lands them in the shell where the avatar popover
+      // covers account-level needs.
+      { source: '/portal/billing', destination: '/admin/account', permanent: false },
+      { source: '/portal/billing/:path*', destination: '/admin/account', permanent: false },
 
       // Phase 2 — every legacy /portal/* brand tool collapses into the
       // unified `(app)` shell at the root. Listed in match order: deeper
@@ -56,12 +70,14 @@ const nextConfig: NextConfig = {
       // surface either retires entirely or lives on the existing
       // admin-only /admin/* route (which viewers never reach).
       //
-      // Settings + preferences → root account page lives at /admin/account
-      // for now; the avatar popover is the canonical entry from the shell.
-      { source: '/portal/settings', destination: '/admin/account', permanent: false },
-      { source: '/portal/settings/:path*', destination: '/admin/account', permanent: false },
-      { source: '/portal/preferences', destination: '/admin/account', permanent: false },
-      { source: '/portal/preferences/:path*', destination: '/admin/account', permanent: false },
+      // Settings + preferences — /admin/account is admin-gated, so a viewer
+      // bookmark would bounce 2 hops. Land them on the brand home; the
+      // avatar popover is the canonical settings entry once they're in the
+      // shell.
+      { source: '/portal/settings', destination: '/finder/new', permanent: false },
+      { source: '/portal/settings/:path*', destination: '/finder/new', permanent: false },
+      { source: '/portal/preferences', destination: '/finder/new', permanent: false },
+      { source: '/portal/preferences/:path*', destination: '/finder/new', permanent: false },
       // Notifications inbox is the bell button in <AdminTopBar>; deep
       // links into a dedicated route fall back to the brand home.
       { source: '/portal/notifications', destination: '/finder/new', permanent: false },
@@ -81,8 +97,10 @@ const nextConfig: NextConfig = {
       { source: '/portal/analyze/:path*', destination: '/finder/new', permanent: false },
       { source: '/portal/reports', destination: '/finder/new', permanent: false },
       { source: '/portal/reports/:path*', destination: '/finder/new', permanent: false },
-      { source: '/portal/competitor-tracking', destination: '/spying', permanent: false },
-      { source: '/portal/competitor-tracking/:path*', destination: '/spying/:path*', permanent: false },
+      // /spying is admin-only so a viewer bookmark would bounce. Land on
+      // brand home like the other retired surfaces.
+      { source: '/portal/competitor-tracking', destination: '/finder/new', permanent: false },
+      { source: '/portal/competitor-tracking/:path*', destination: '/finder/new', permanent: false },
 
       // --- Brand-root migration phase 1 (2026-04-24) ---
       // Brand-scoped tools lifted from /admin/* to the root. Each old URL

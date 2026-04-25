@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useRouter } from 'next/navigation';
-import type { AdminBrand } from '@/lib/admin/get-active-client';
+import type { AdminBrand } from '@/lib/active-brand';
 
 interface ActiveBrandContextValue {
   /** The brand the current user is working on. `null` if none selected. */

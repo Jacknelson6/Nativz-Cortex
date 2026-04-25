@@ -24,7 +24,9 @@ export function AdminTopBarAccount({
 }: {
   userName?: string;
   avatarUrl?: string | null;
-  settingsHref: string;
+  /** Optional — viewers don't have a settings surface yet. When omitted,
+   *  the popover hides the "Account settings" row. */
+  settingsHref?: string;
   apiDocsHref?: string;
   logoutRedirect: string;
 }) {
@@ -105,14 +107,16 @@ export function AdminTopBarAccount({
           <div className="px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
             {userName || 'Account'}
           </div>
-          <Link
-            href={settingsHref}
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
-          >
-            <Settings size={15} />
-            Account settings
-          </Link>
+          {settingsHref && (
+            <Link
+              href={settingsHref}
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
+            >
+              <Settings size={15} />
+              Account settings
+            </Link>
+          )}
           {apiDocsHref && (
             <Link
               href={apiDocsHref}

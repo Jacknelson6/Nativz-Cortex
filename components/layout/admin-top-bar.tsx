@@ -26,7 +26,10 @@ export function AdminTopBar({
 }: {
   userName?: string;
   avatarUrl?: string | null;
-  settingsHref: string;
+  /** Optional — viewers don't have a dedicated settings surface yet, so
+   *  the layout passes `undefined` for them and the popover hides the
+   *  "Settings" link. */
+  settingsHref?: string;
   apiDocsHref?: string;
   logoutRedirect: string;
 }) {

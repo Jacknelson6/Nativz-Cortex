@@ -26,6 +26,7 @@ import type { TopicSearch, TopicSearchAIResponse, TrendingTopic, LegacyTrendingT
 import { ScrapedVideosSection } from '@/components/results/scraped-videos-section';
 import { AiTakeaways } from '@/components/results/ai-takeaways';
 import { useAgencyBrand } from '@/lib/agency/use-agency-brand';
+import { useActiveBrand } from '@/lib/admin/active-client-context';
 import { TopicSyntheticAudiences } from '@/components/results/topic-synthetic-audiences';
 import { getClientAbbreviationLabel } from '@/lib/clients/client-abbreviations';
 import { formatRelativeTime } from '@/lib/utils/format';
@@ -49,6 +50,12 @@ export function AdminResultsClient({
 }: AdminResultsClientProps) {
   const router = useRouter();
   const { brand: agencyBrand } = useAgencyBrand();
+  // Phase 2 — viewers see the same results page as admins; gate any
+  // affordances that 404 / 403 for them. The `/admin/clients/[slug]` deep
+  // link is the obvious one (admin-only roster surface). Title editing
+  // stays open to both since renaming your own search is harmless.
+  const { role } = useActiveBrand();
+  const isAdminViewer = role === 'admin';
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(search.query);
   const [savingTitle, setSavingTitle] = useState(false);
@@ -180,17 +187,24 @@ export function AdminResultsClient({
                 </h1>
               )}
               {clientInfo ? (
-                <Link
-                  href={`/admin/clients/${clientInfo.slug}`}
-                  title={clientInfo.name}
-                  aria-label={`View client ${clientInfo.name}`}
-                  className="inline-flex max-w-full"
-                >
+                isAdminViewer ? (
+                  <Link
+                    href={`/admin/clients/${clientInfo.slug}`}
+                    title={clientInfo.name}
+                    aria-label={`View client ${clientInfo.name}`}
+                    className="inline-flex max-w-full"
+                  >
+                    <Badge variant="info" className="gap-1.5 px-2.5 py-1 text-sm font-medium">
+                      <Building2 size={14} className="shrink-0 opacity-90" aria-hidden />
+                      <span className="truncate">{getClientAbbreviationLabel(clientInfo.name, clientInfo.slug)}</span>
+                    </Badge>
+                  </Link>
+                ) : (
                   <Badge variant="info" className="gap-1.5 px-2.5 py-1 text-sm font-medium">
                     <Building2 size={14} className="shrink-0 opacity-90" aria-hidden />
                     <span className="truncate">{getClientAbbreviationLabel(clientInfo.name, clientInfo.slug)}</span>
                   </Badge>
-                </Link>
+                )
               ) : search.client_id === null ? (
                 <Badge variant="mono" className="text-xs sm:text-sm">
                   No client attached

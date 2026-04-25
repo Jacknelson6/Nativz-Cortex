@@ -2,7 +2,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { redirect } from 'next/navigation';
 import { EcomTrackerClient } from '@/components/ecom-competitors/ecom-tracker-client';
-import { getActiveAdminClient } from '@/lib/admin/get-active-client';
+import { getActiveBrand } from '@/lib/active-brand';
 
 export default async function EcomCompetitorTrackerPage({
   searchParams,
@@ -20,7 +20,7 @@ export default async function EcomCompetitorTrackerPage({
     admin.from('users').select('role').eq('id', user.id).single(),
     admin.from('clients').select('id, name, slug, logo_url').eq('is_active', true).order('name'),
     searchParams,
-    getActiveAdminClient().catch(() => null),
+    getActiveBrand().catch(() => null),
   ]);
   if (!userData || !['admin', 'super_admin'].includes(userData.role)) {
     redirect('/admin/dashboard');

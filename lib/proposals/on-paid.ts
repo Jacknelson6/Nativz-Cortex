@@ -12,6 +12,7 @@ import {
 } from '@/lib/proposals/pdf/agreement';
 import { getFromAddress, getReplyTo } from '@/lib/email/resend';
 import { getSecret } from '@/lib/secrets/store';
+import { publicProposalUrl } from '@/lib/proposals/public-url';
 import type { AgencyBrand } from '@/lib/agency/detect';
 
 type AdminClient = SupabaseClient;
@@ -45,55 +46,65 @@ export async function onProposalCheckoutCompleted(
   const { data: proposal } = await admin
     .from('proposals')
     .select(
-      'id, client_id, slug, title, status, agency, signer_name, signer_email, signer_title, signer_legal_entity, signer_address, signature_method, signature_image, signature_method, tier_id, tier_label, total_cents, deposit_cents, cadence, is_subscription, signed_at, signed_ip, signed_user_agent, template_id',
+      'id, client_id, slug, title, status, agency, signer_name, signer_email, signer_title, signer_legal_entity, signer_address, signature_method, signature_image, tier_id, tier_label, total_cents, deposit_cents, cadence, is_subscription, signed_at, signed_ip, signed_user_agent, template_id, counter_signed_at',
     )
     .eq('id', proposalId)
     .maybeSingle();
   if (!proposal) return;
-  if (proposal.status === 'paid') return;
+  // Gate replay-eligibility on the counter-sign artifact, not on `status`.
+  // A previous webhook may have flipped status='paid' but failed to render
+  // the executed PDF or send the emails — replaying that case must be able
+  // to re-attempt the counter-sign step.
+  if (proposal.counter_signed_at) return;
 
   const nowIso = new Date().toISOString();
+  const wasAlreadyPaid = proposal.status === 'paid';
 
-  // Always mark paid first — even if downstream PDF/email fail, the source-of-
-  // truth flips so the admin UI reflects reality.
-  await admin
-    .from('proposals')
-    .update({
-      status: 'paid',
-      paid_at: nowIso,
-      stripe_checkout_session_id: session.id,
-    })
-    .eq('id', proposal.id);
-
-  await admin.from('proposal_events').insert({
-    proposal_id: proposal.id,
-    type: 'paid',
-    metadata: {
-      checkout_session: session.id,
-      amount_cents: session.amount_total ?? null,
-      client_reference_id: session.client_reference_id ?? null,
-    },
-  });
-
-  if (proposal.client_id) {
+  if (!wasAlreadyPaid) {
+    // First-time handling: flip status, log paid event, advance lifecycle.
+    // These all dupe on replay, so they're skipped if a previous webhook
+    // already got this far before failing on counter-sign.
     await admin
-      .from('clients')
-      .update({ lifecycle_state: 'paid_deposit' })
-      .eq('id', proposal.client_id)
-      .in('lifecycle_state', ['lead', 'contracted']);
+      .from('proposals')
+      .update({
+        status: 'paid',
+        paid_at: nowIso,
+        stripe_checkout_session_id: session.id,
+      })
+      .eq('id', proposal.id);
 
-    await logLifecycleEvent(proposal.client_id, 'proposal.paid', `Deposit paid: ${proposal.title}`, {
+    await admin.from('proposal_events').insert({
+      proposal_id: proposal.id,
+      type: 'paid',
       metadata: {
-        proposal_id: proposal.id,
         checkout_session: session.id,
         amount_cents: session.amount_total ?? null,
+        client_reference_id: session.client_reference_id ?? null,
       },
-      admin,
     });
+
+    if (proposal.client_id) {
+      await admin
+        .from('clients')
+        .update({ lifecycle_state: 'paid_deposit' })
+        .eq('id', proposal.client_id)
+        .in('lifecycle_state', ['lead', 'contracted']);
+
+      await logLifecycleEvent(proposal.client_id, 'proposal.paid', `Deposit paid: ${proposal.title}`, {
+        metadata: {
+          proposal_id: proposal.id,
+          checkout_session: session.id,
+          amount_cents: session.amount_total ?? null,
+        },
+        admin,
+      });
+    }
   }
 
-  // Counter-sign + execution emails are best-effort. We don't unwind the
-  // paid status if any of this fails — the admin can resend manually.
+  // Counter-sign + execution emails. The .catch keeps a transient failure
+  // from triggering Stripe webhook retry storms, but the early-return above
+  // is now keyed on counter_signed_at so manual webhook replay (or a future
+  // automated retry) can re-attempt this step until it succeeds.
   await counterSignAndEmail(admin, proposal, session, nowIso).catch((err) => {
     console.error('[proposals:on-paid] counter-sign + email failed:', err);
   });
@@ -123,6 +134,7 @@ type SignedProposal = {
   signed_ip: string | null;
   signed_user_agent: string | null;
   template_id: string | null;
+  counter_signed_at: string | null;
 };
 
 async function counterSignAndEmail(
@@ -141,7 +153,7 @@ async function counterSignAndEmail(
   // Pull the agreement title from the linked template.
   const { data: template } = await admin
     .from('proposal_templates')
-    .select('name, public_base_url')
+    .select('name')
     .eq('id', proposal.template_id)
     .maybeSingle();
   const agreementTitle = template?.name ?? proposal.title;
@@ -164,7 +176,7 @@ async function counterSignAndEmail(
     slug: proposal.slug,
     projectName: proposal.title,
     projectShortName: agreementTitle,
-    proposalUrl: `${template?.public_base_url ?? ''}/proposals/${proposal.slug}`,
+    proposalUrl: publicProposalUrl(agency, proposal.slug),
     agreementTitle,
     tier: proposal.tier_id ?? '',
     tierLabel: proposal.tier_label,
@@ -237,6 +249,7 @@ async function counterSignAndEmail(
     projectName: proposal.title,
     subscription: !!proposal.is_subscription,
     cadence,
+    agency,
   });
   const opsHtml = emailOpsPaid({
     clientLegalName: proposal.signer_legal_entity ?? '',
@@ -252,6 +265,7 @@ async function counterSignAndEmail(
     projectName: proposal.title,
     subscription: !!proposal.is_subscription,
     cadence,
+    agency,
   });
 
   const subjectClient = proposal.is_subscription

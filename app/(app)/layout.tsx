@@ -16,7 +16,7 @@ import { SWRProvider } from '@/components/providers/swr-provider';
 import { BannerStrip } from '@/components/shared/banner-strip';
 import { ImpersonationBanner } from '@/components/portal/impersonation-banner';
 import { ActiveBrandProvider } from '@/lib/admin/active-client-context';
-import { getActiveAdminClient, listAdminAccessibleBrands } from '@/lib/admin/get-active-client';
+import { getActiveBrand, listAdminAccessibleBrands } from '@/lib/active-brand';
 import { getActiveViewerBrand, listViewerAccessibleBrands } from '@/lib/portal/get-viewer-brands';
 
 // Phase 2 of the brand-root migration: this shell now serves both admins
@@ -70,7 +70,7 @@ export default async function AppLayout({
   const [{ brand, availableBrands }] = await Promise.all([
     isAdmin
       ? Promise.all([
-          getActiveAdminClient().catch(() => ({ brand: null, source: 'none' as const, isAdmin: true })),
+          getActiveBrand().catch(() => ({ brand: null, source: 'none' as const, isAdmin: true })),
           listAdminAccessibleBrands().catch(() => []),
         ]).then(([active, brands]) => ({ brand: active.brand, availableBrands: brands }))
       : Promise.all([
@@ -98,7 +98,7 @@ export default async function AppLayout({
               <AdminTopBar
                 userName={userName}
                 avatarUrl={avatarUrl}
-                settingsHref={isAdmin ? '/admin/settings' : '/portal/settings'}
+                settingsHref={isAdmin ? '/admin/settings' : undefined}
                 apiDocsHref={isAdmin ? '/admin/nerd/api' : undefined}
                 logoutRedirect="/login"
               />

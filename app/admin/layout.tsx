@@ -20,7 +20,7 @@ import { SWRProvider } from '@/components/providers/swr-provider';
 import { BannerStrip } from '@/components/shared/banner-strip';
 import { ImpersonationBanner } from '@/components/portal/impersonation-banner';
 import { ActiveBrandProvider } from '@/lib/admin/active-client-context';
-import { getActiveAdminClient, listAdminAccessibleBrands } from '@/lib/admin/get-active-client';
+import { getActiveBrand, listAdminAccessibleBrands } from '@/lib/active-brand';
 
 function bareShell(children: React.ReactNode) {
   return (
@@ -62,7 +62,7 @@ export default async function AdminLayout({
       .select('full_name, avatar_url, hidden_sidebar_items, role, is_super_admin')
       .eq('id', user.id)
       .single(),
-    getActiveAdminClient().catch(() => ({
+    getActiveBrand().catch(() => ({
       brand: null,
       source: 'none' as const,
       isAdmin: false,

@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { Check, ChevronsUpDown, FolderOpen, Plus, Search } from 'lucide-react';
 import { useActiveBrand } from '@/lib/admin/active-client-context';
-import type { AdminBrand } from '@/lib/admin/get-active-client';
+import type { AdminBrand } from '@/lib/active-brand';
 
 /**
  * Top-bar brand pill. Clicking opens a compact popover with search + a list

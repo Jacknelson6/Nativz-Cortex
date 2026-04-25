@@ -3,14 +3,14 @@ import { z } from 'zod';
 import { cookies } from 'next/headers';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { ADMIN_ACTIVE_CLIENT_COOKIE } from '@/lib/admin/get-active-client';
+import { ADMIN_ACTIVE_CLIENT_COOKIE } from '@/lib/active-brand';
 
 /**
  * Write or clear the admin's active-brand cookie.
  *
  * Mirrors the portal `POST /api/portal/brands/switch` pattern. The cookie is
  * a UX convenience only — server reads always re-authorize via
- * `getActiveAdminClient`. This endpoint still validates the target brand
+ * `getActiveBrand`. This endpoint still validates the target brand
  * before writing so a rogue POST can't stuff an arbitrary id into the
  * cookie and cause later DB lookups to thrash.
  */

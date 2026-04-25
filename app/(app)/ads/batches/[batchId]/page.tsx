@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { V2BatchStatus } from "@/components/ad-creatives-v2/batch-status";
 
@@ -16,7 +17,21 @@ export default async function AdCreativesBatchDetailPage({
   params: Promise<{ batchId: string }>;
 }) {
   const { batchId } = await params;
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
   const admin = createAdminClient();
+  const { data: me } = await admin
+    .from("users")
+    .select("role, is_super_admin")
+    .eq("id", user.id)
+    .single();
+  if (me?.role !== "admin" && !me?.is_super_admin) {
+    redirect("/admin/dashboard");
+  }
 
   const { data: batch } = await admin
     .from("ad_generation_batches")

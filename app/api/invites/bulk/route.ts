@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
     // address doesn't kill the whole batch.
     const results = await Promise.allSettled(
       finalContacts.map(async (contact, i) => {
-        const inviteUrl = `${baseUrl}/portal/join/${tokens[i].token}`;
+        const inviteUrl = `${baseUrl}/join/${tokens[i].token}`;
         const fallbackName = contact.email.split('@')[0] ?? contact.email;
         try {
           const res = await sendClientInviteEmail({

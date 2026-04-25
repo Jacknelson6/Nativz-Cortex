@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   const { data, error } = await admin.auth.admin.generateLink({
     type: 'recovery',
     email,
-    options: { redirectTo: `${appUrl}/admin/reset-password` },
+    options: { redirectTo: `${appUrl}/reset-password` },
   });
 
   if (error) {

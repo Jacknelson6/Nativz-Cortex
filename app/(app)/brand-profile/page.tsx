@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getActiveAdminClient } from '@/lib/admin/get-active-client';
+import { getActiveBrand } from '@/lib/active-brand';
 import { BrandProfileInlineEditor } from '@/components/clients/brand-profile-inline-editor';
 import { BrandProfileView, type BrandProfileData } from '@/components/clients/brand-profile-view';
 import { LinkedSocialsSection } from '@/components/clients/linked-socials-section';
@@ -30,7 +30,7 @@ export const dynamic = 'force-dynamic';
  */
 export default async function AdminBrandProfilePage() {
   try {
-    const active = await getActiveAdminClient().catch(() => null);
+    const active = await getActiveBrand().catch(() => null);
 
     if (!active?.brand) {
       return (

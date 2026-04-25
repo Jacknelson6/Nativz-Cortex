@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
   const { email, redirectTo } = parsed.data;
   const admin = createAdminClient();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io';
-  const resetPage = redirectTo ?? `${appUrl}/admin/reset-password`;
+  const resetPage = redirectTo ?? `${appUrl}/reset-password`;
 
   // Generate recovery link via Supabase admin API (no email sent by Supabase)
   const { data, error } = await admin.auth.admin.generateLink({
