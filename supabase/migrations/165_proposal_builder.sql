@@ -298,6 +298,16 @@ Defines the brand''s content pillars, monthly sprint plans, hook batches, and cr
     'per_month', 150000, 1)
 ON CONFLICT (agency, slug) DO NOTHING;
 
+-- ──────────────────────────────────────────────────────────────────────
+-- Storage bucket for chat-dropped images. Public-read so the preview
+-- iframe and the eventual rendered proposal can <img src=…> without
+-- juggling signed URLs.
+-- ──────────────────────────────────────────────────────────────────────
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('proposal-draft-images', 'proposal-draft-images', true)
+ON CONFLICT (id) DO NOTHING;
+
 -- Seed two starter pricing rules per agency:
 --   1. 12+ short-form videos: 10% off the line.
 --   2. Annual prepay: 10% off the whole proposal.
