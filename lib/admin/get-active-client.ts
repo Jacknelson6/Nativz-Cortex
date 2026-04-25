@@ -68,8 +68,16 @@ export async function getActiveAdminClient(
   }
 
   const isAdmin = await resolveAdminRole(user.id);
+
+  // Phase 2 of the brand-root migration — viewers share the same `(app)`
+  // shell as admins, so this util now resolves their active brand too.
+  // We delegate to `getActiveViewerBrand` (user_client_access cookie /
+  // first row) and return the result with `isAdmin: false`. Pages that
+  // care about the role check `result.isAdmin` rather than re-querying.
   if (!isAdmin) {
-    return { brand: null, source: 'none', isAdmin: false };
+    const { getActiveViewerBrand } = await import('@/lib/portal/get-viewer-brands');
+    const { brand } = await getActiveViewerBrand(user.id);
+    return { brand, source: brand ? 'cookie' : 'none', isAdmin: false };
   }
 
   const cookieStore = await cookies();

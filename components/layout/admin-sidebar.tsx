@@ -226,12 +226,15 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/analyze-social',
   '/admin/notifications',
   '/admin/usage',
-  // Brand tools that drive scraping / generation cost (recurring monitors,
-  // ad generator) stay admin-only. Read-only brand tools (Brand Profile,
-  // Notes, Brain, Strategy Lab, Trend Finder, Spying) are open to viewers
-  // — RLS scopes their data to the user's `user_client_access` brands.
+  // Cost-driving brand tools stay admin-only. Spying triggers Apify scrapes
+  // on every audit; Trend Monitors are recurring scheduled scrapes; the Ad
+  // Generator triggers Gemini 2.5 Flash Image generations. Their pages
+  // already redirect non-admins, so hide them from the viewer sidebar to
+  // match. Brand Profile, Notes, Brain, Strategy Lab, and Trend Finder are
+  // read-friendly — RLS scopes them to the viewer's user_client_access.
   '/ads',
   '/finder/monitors',
+  '/spying',
   // Settings is reachable from the avatar popover — it doesn't need its
   // own nav row on the portal. Keeping it on the admin side where the gear
   // is the primary entry point to the agency settings secondary rail.

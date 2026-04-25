@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getActiveAdminClient } from '@/lib/admin/get-active-client';
 import { BrandProfileInlineEditor } from '@/components/clients/brand-profile-inline-editor';
+import { BrandProfileView, type BrandProfileData } from '@/components/clients/brand-profile-view';
 import { LinkedSocialsSection } from '@/components/clients/linked-socials-section';
 import { CompetitorsSection } from '@/components/clients/competitors-section';
 import { BrandDNAView } from '@/components/brand-dna/brand-dna-view';
@@ -49,19 +50,33 @@ export default async function AdminBrandProfilePage() {
     }
 
     const clientId = active.brand.id;
+    const isAdmin = active.isAdmin;
     const admin = createAdminClient();
+
+    // Viewers get the read-only `BrandProfileView` (same shape used by the
+    // legacy /portal/brand-profile page) which has no inline editor and
+    // no per-section pencil icons. Admins keep the inline editor + section
+    // pencils. The select list is wider for the viewer view because that
+    // component renders extra read-only fields (products, services, etc.).
+    const adminFields = [
+      'id', 'name', 'slug', 'logo_url', 'website_url', 'description',
+      'industry', 'brand_voice', 'target_audience',
+      'tagline', 'value_proposition', 'mission_statement',
+      'brand_dna_status',
+    ];
+    const viewerFields = [
+      ...adminFields,
+      'products', 'services', 'brand_aliases', 'topic_keywords',
+      'writing_style', 'ai_image_style', 'banned_phrases', 'content_language',
+      'primary_country', 'primary_state', 'primary_city',
+      'created_at',
+    ];
+    const selectFields = (isAdmin ? adminFields : viewerFields).join(',');
 
     const [clientResult, guidelineResult] = await Promise.all([
       admin
         .from('clients')
-        .select(
-          [
-            'id', 'name', 'slug', 'logo_url', 'website_url', 'description',
-            'industry', 'brand_voice', 'target_audience',
-            'tagline', 'value_proposition', 'mission_statement',
-            'brand_dna_status',
-          ].join(','),
-        )
+        .select(selectFields)
         .eq('id', clientId)
         .maybeSingle(),
       admin
@@ -79,6 +94,55 @@ export default async function AdminBrandProfilePage() {
     const raw = clientResult.data as Record<string, unknown> | null;
     if (!raw) return <PageError title="Could not load brand" />;
 
+    const slug = (raw.slug as string | null) ?? active.brand.slug;
+    const brandDnaStatus = (raw.brand_dna_status as string | null) ?? 'none';
+
+    // Viewer path — reuse the legacy /portal/brand-profile read-only view.
+    // Same data, just no edit affordances. `editHref={null}` hides the
+    // "Edit in settings" CTA that admin gets in the section card.
+    if (!isAdmin) {
+      const profile: BrandProfileData = {
+        id: raw.id as string,
+        name: (raw.name as string | null) ?? null,
+        slug,
+        logo_url: (raw.logo_url as string | null) ?? null,
+        website_url: (raw.website_url as string | null) ?? null,
+        description: (raw.description as string | null) ?? null,
+        industry: (raw.industry as string | null) ?? null,
+        brand_voice: (raw.brand_voice as string | null) ?? null,
+        target_audience: (raw.target_audience as string | null) ?? null,
+        tagline: (raw.tagline as string | null) ?? null,
+        value_proposition: (raw.value_proposition as string | null) ?? null,
+        mission_statement: (raw.mission_statement as string | null) ?? null,
+        products: (raw.products as string[] | null) ?? [],
+        services: (raw.services as string[] | null) ?? [],
+        brand_aliases: (raw.brand_aliases as string[] | null) ?? [],
+        topic_keywords: (raw.topic_keywords as string[] | null) ?? [],
+        writing_style: (raw.writing_style as string | null) ?? null,
+        ai_image_style: (raw.ai_image_style as string | null) ?? null,
+        banned_phrases: (raw.banned_phrases as string[] | null) ?? [],
+        content_language: (raw.content_language as string | null) ?? null,
+        primary_country: (raw.primary_country as string | null) ?? null,
+        primary_state: (raw.primary_state as string | null) ?? null,
+        primary_city: (raw.primary_city as string | null) ?? null,
+        created_at: (raw.created_at as string | null) ?? null,
+      };
+      const dnaMetadata =
+        (guidelineResult.data?.metadata as Record<string, unknown> | null) ?? null;
+      const dnaUpdatedAt = (guidelineResult.data?.updated_at as string | null) ?? null;
+      return (
+        <div className="max-w-5xl mx-auto p-4 md:p-6">
+          <BrandProfileView
+            profile={profile}
+            dnaMetadata={dnaMetadata}
+            dnaUpdatedAt={dnaUpdatedAt}
+            editHref={null}
+          />
+        </div>
+      );
+    }
+
+    // Admin path — inline editor + manageable sections.
     const profile = {
       id: raw.id as string,
       name: (raw.name as string | null) ?? null,
@@ -92,9 +156,6 @@ export default async function AdminBrandProfilePage() {
       value_proposition: (raw.value_proposition as string | null) ?? null,
       mission_statement: (raw.mission_statement as string | null) ?? null,
     };
-
-    const brandDnaStatus = (raw.brand_dna_status as string | null) ?? 'none';
-    const slug = (raw.slug as string | null) ?? active.brand.slug;
 
     return (
       <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-4">

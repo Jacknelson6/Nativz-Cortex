@@ -46,12 +46,43 @@ const nextConfig: NextConfig = {
       { source: '/portal/notes', destination: '/notes', permanent: false },
       { source: '/portal/notes/:path*', destination: '/notes/:path*', permanent: false },
       { source: '/portal/dashboard', destination: '/finder/new', permanent: false },
-      // Portal-only feature surfaces that haven't been folded into (app)
-      // yet — calendar, notifications, settings, preferences, ideas,
-      // reports, analyze, nerd, competitor-tracking. Leave their /portal/*
-      // routes intact for now; the maintenance gate keeps real viewers
-      // out until those features land at the root. They'll get redirects
-      // here once their root equivalents exist.
+      // Phase 2 — retire portal-only feature surfaces. Per Jack's intent
+      // ("the only difference between the admin and what users see are not
+      // admin's or clients really should be the admin sidebar"), viewers
+      // share the admin shell's affordances: avatar popover for settings,
+      // bell icon for notifications, brand tools in the sidebar. Folding
+      // these into separate viewer pages would re-create the divergence
+      // we're collapsing. Anything that doesn't belong on a viewer
+      // surface either retires entirely or lives on the existing
+      // admin-only /admin/* route (which viewers never reach).
+      //
+      // Settings + preferences → root account page lives at /admin/account
+      // for now; the avatar popover is the canonical entry from the shell.
+      { source: '/portal/settings', destination: '/admin/account', permanent: false },
+      { source: '/portal/settings/:path*', destination: '/admin/account', permanent: false },
+      { source: '/portal/preferences', destination: '/admin/account', permanent: false },
+      { source: '/portal/preferences/:path*', destination: '/admin/account', permanent: false },
+      // Notifications inbox is the bell button in <AdminTopBar>; deep
+      // links into a dedicated route fall back to the brand home.
+      { source: '/portal/notifications', destination: '/finder/new', permanent: false },
+      { source: '/portal/notifications/:path*', destination: '/finder/new', permanent: false },
+      // Calendar surface is admin-only at /admin/calendar — viewer-side
+      // calendar UI didn't have a real consumer, so retiring it for now.
+      { source: '/portal/calendar', destination: '/finder/new', permanent: false },
+      { source: '/portal/calendar/:path*', destination: '/finder/new', permanent: false },
+      // Retired per the brand-root migration plan: ideas, nerd, analyze,
+      // reports, competitor-tracking. Each redirects to the closest live
+      // surface so old links resolve into something useful.
+      { source: '/portal/ideas', destination: '/finder/new', permanent: false },
+      { source: '/portal/ideas/:path*', destination: '/finder/new', permanent: false },
+      { source: '/portal/nerd', destination: '/finder/new', permanent: false },
+      { source: '/portal/nerd/:path*', destination: '/finder/new', permanent: false },
+      { source: '/portal/analyze', destination: '/finder/new', permanent: false },
+      { source: '/portal/analyze/:path*', destination: '/finder/new', permanent: false },
+      { source: '/portal/reports', destination: '/finder/new', permanent: false },
+      { source: '/portal/reports/:path*', destination: '/finder/new', permanent: false },
+      { source: '/portal/competitor-tracking', destination: '/spying', permanent: false },
+      { source: '/portal/competitor-tracking/:path*', destination: '/spying/:path*', permanent: false },
 
       // --- Brand-root migration phase 1 (2026-04-24) ---
       // Brand-scoped tools lifted from /admin/* to the root. Each old URL
@@ -239,4 +270,12 @@ const nextConfig: NextConfig = {
 // compile correctly. See docs/spec-vercel-workflow-migration.md for the full
 // migration plan for the topic-search pipeline. The wrapper is a no-op at
 // runtime until a server route calls `start(...)` from `workflow/api`.
-export default withWorkflow(nextConfig);
+//
+// Local-only carve-out: when DISABLE_WORKFLOW_WRAPPER=1, ship the bare
+// nextConfig so the dev server doesn't spawn the workflow esbuild process.
+// Several local sessions hit a goroutine deadlock in esbuild's background
+// service when the wrapper restarts mid-edit; the prod build path still
+// goes through `withWorkflow`. Keep this opt-in (default = wrapped).
+export default process.env.DISABLE_WORKFLOW_WRAPPER === '1'
+  ? nextConfig
+  : withWorkflow(nextConfig);
