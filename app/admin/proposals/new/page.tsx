@@ -1,10 +1,23 @@
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
+import { Sparkles, FileText } from 'lucide-react';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NewProposalForm } from '@/components/admin/proposals/new-proposal-form';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * /admin/proposals/new — entry point for new proposals.
+ *
+ * Two paths:
+ *   - Chat-driven custom builder (recommended) — /admin/proposals/builder
+ *   - Pick a fixed template (legacy) — this page
+ *
+ * The two coexist because some flows just need a known template (e.g.
+ * the AC content-editing-packages page is well-defined). For everything
+ * custom, the builder is the better surface.
+ */
 export default async function NewProposalPage({
   searchParams,
 }: {
@@ -32,13 +45,18 @@ export default async function NewProposalPage({
     .eq('hide_from_roster', false)
     .order('name');
 
-  // Optional preselect: when /admin/onboarding/[id] sends the admin
-  // here with ?flowId=…&clientSlug=…, the form arrives pinned to that
-  // client and stamps onboarding_flow_id on insert.
   const preselectClientId = (() => {
     if (!sp.clientSlug) return null;
     const match = (clients ?? []).find((c) => c.slug === sp.clientSlug);
     return match?.id ?? null;
+  })();
+
+  const builderHref = (() => {
+    const params = new URLSearchParams();
+    if (sp.flowId) params.set('flowId', sp.flowId);
+    if (sp.clientSlug) params.set('clientSlug', sp.clientSlug);
+    const qs = params.toString();
+    return `/admin/proposals/builder${qs ? `?${qs}` : ''}`;
   })();
 
   return (
@@ -49,21 +67,50 @@ export default async function NewProposalPage({
         </p>
         <h1 className="ui-page-title">New proposal</h1>
         <p className="text-sm text-text-muted">
-          Pick a template and signer. Cortex clones the branded proposal folder into the docs repo,
-          commits it, and fires the &ldquo;Review &amp; sign&rdquo; email. Signing, PDF, and Stripe
-          happen on the docs host.
+          Build a custom proposal with the chat-driven builder or pick a fixed template.
         </p>
       </header>
 
-      <NewProposalForm
-        clients={(clients ?? []).map((c) => ({
-          id: c.id,
-          name: c.name ?? 'Unnamed',
-          slug: c.slug ?? '',
-        }))}
-        preselectClientId={preselectClientId}
-        flowId={sp.flowId ?? null}
-      />
+      <Link
+        href={builderHref}
+        className="block rounded-xl border border-accent/30 bg-accent/5 hover:bg-accent/10 transition p-5"
+      >
+        <div className="flex items-start gap-3">
+          <div className="h-10 w-10 shrink-0 rounded-lg bg-accent/15 text-accent-text flex items-center justify-center">
+            <Sparkles size={18} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold text-text-primary">Chat-driven custom builder</h2>
+              <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-300">
+                Recommended
+              </span>
+            </div>
+            <p className="text-sm text-text-muted mt-1">
+              Tag a client, add services from the catalog one at a time, iterate live with the agent + an inline
+              preview, and commit when ready. Best for custom packages.
+            </p>
+          </div>
+        </div>
+      </Link>
+
+      <details className="rounded-xl border border-nativz-border bg-surface">
+        <summary className="cursor-pointer px-5 py-4 text-sm font-medium text-text-primary flex items-center gap-2">
+          <FileText size={14} className="text-text-muted" />
+          Or pick a fixed template
+        </summary>
+        <div className="border-t border-nativz-border p-5">
+          <NewProposalForm
+            clients={(clients ?? []).map((c) => ({
+              id: c.id,
+              name: c.name ?? 'Unnamed',
+              slug: c.slug ?? '',
+            }))}
+            preselectClientId={preselectClientId}
+            flowId={sp.flowId ?? null}
+          />
+        </div>
+      </details>
     </div>
   );
 }
