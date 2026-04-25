@@ -133,12 +133,18 @@ export function ProjectsCalendar({ projects, onSelect }: ProjectsCalendarProps) 
             <div
               key={`${d.date}-${i}`}
               className={`min-h-[96px] border-b border-r border-nativz-border p-1.5 ${
-                d.isCurrentMonth ? 'bg-surface' : 'bg-surface/40 text-text-tertiary'
-              } ${isToday ? 'ring-1 ring-inset ring-accent-text/40' : ''}`}
+                d.isCurrentMonth ? 'bg-surface' : 'bg-surface/40'
+              } ${isToday ? 'ring-1 ring-inset ring-accent-border/60' : ''}`}
             >
-              <div className={`text-xs ${isToday ? 'font-semibold text-accent-text' : 'text-text-secondary'}`}>
-                {d.day}
-              </div>
+              {isToday ? (
+                <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent-surface px-1.5 text-[11px] font-semibold tabular-nums text-accent-text">
+                  {d.day}
+                </span>
+              ) : (
+                <span className={`inline-block px-1 text-[11px] tabular-nums ${d.isCurrentMonth ? 'text-text-secondary' : 'text-text-tertiary/60'}`}>
+                  {d.day}
+                </span>
+              )}
               <div className="mt-1 space-y-0.5">
                 {items.slice(0, 3).map((p) => {
                   const type = normalizeProjectType(p.task_type);

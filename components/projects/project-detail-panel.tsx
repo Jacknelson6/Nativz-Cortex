@@ -39,6 +39,13 @@ const TYPE_ICON = {
   content: CheckSquare, paid_media: CheckSquare, strategy: CheckSquare,
 } as const;
 
+// Single source of truth for form-control chrome inside the panel — keeps
+// every input/select/textarea visually identical to the toolbar pattern in
+// /admin/clients and ProjectsClient. If the toolbar styling changes, this
+// constant changes too.
+const FIELD_INPUT =
+  'rounded-md border border-nativz-border bg-surface-primary px-2.5 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-border focus:outline-none focus:ring-1 focus:ring-accent-border transition-colors';
+
 export function ProjectDetailPanel({ project, onClose, onUpdate, onDelete }: ProjectDetailPanelProps) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -130,18 +137,16 @@ function PanelBody({
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-center justify-between border-b border-nativz-border px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Icon size={16} className="text-text-tertiary" />
-          <span className="text-xs uppercase tracking-wider text-text-tertiary">
-            {type === 'paid_media' ? 'Paid media' : type}
-          </span>
-        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-hover px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider text-text-secondary">
+          <Icon size={11} />
+          <span>{type === 'paid_media' ? 'Paid media' : type}</span>
+        </span>
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={handleDelete}
             aria-label="Delete"
-            className="rounded p-1.5 text-text-tertiary hover:text-red-400 hover:bg-surface-hover"
+            className="rounded-md p-1.5 text-text-tertiary hover:text-red-400 hover:bg-red-500/10 transition-colors"
           >
             <Trash2 size={14} />
           </button>
@@ -149,7 +154,7 @@ function PanelBody({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded p-1.5 text-text-tertiary hover:text-text-primary hover:bg-surface-hover"
+            className="rounded-md p-1.5 text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
           >
             <X size={14} />
           </button>
@@ -173,7 +178,8 @@ function PanelBody({
           <select
             value={project.status}
             onChange={(e) => patch({ status: e.target.value })}
-            className="rounded border border-nativz-border bg-surface px-2 py-1 text-sm text-text-primary"
+            className={`${FIELD_INPUT} cursor-pointer`}
+            aria-label="Project status"
           >
             {Object.entries(STATUS_LABELS).map(([v, l]) => (
               <option key={v} value={v}>{l}</option>
@@ -202,7 +208,9 @@ function PanelBody({
         )}
 
         <div>
-          <label className="block text-xs font-medium uppercase tracking-wider text-text-tertiary mb-1">Description</label>
+          <label className="block text-[11px] font-medium uppercase tracking-wider text-text-tertiary mb-1.5">
+            Description
+          </label>
           <textarea
             defaultValue={project.description ?? ''}
             onBlur={(e) => {
@@ -211,7 +219,7 @@ function PanelBody({
             }}
             placeholder="Add a description"
             rows={4}
-            className="w-full rounded border border-nativz-border bg-surface px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent-text/40 placeholder:text-text-tertiary"
+            className={`${FIELD_INPUT} w-full resize-y leading-relaxed`}
           />
         </div>
 
@@ -237,7 +245,8 @@ function ShootSection({
         <select
           value={project.scheduled_status ?? 'draft'}
           onChange={(e) => onPatch({ scheduled_status: e.target.value as ScheduledStatus })}
-          className="rounded border border-nativz-border bg-surface px-2 py-1 text-sm text-text-primary"
+          className={`${FIELD_INPUT} cursor-pointer`}
+          aria-label="Shoot stage"
         >
           {Object.entries(SCHEDULED_LABELS).map(([v, l]) => (
             <option key={v} value={v}>{l}</option>
@@ -254,7 +263,7 @@ function ShootSection({
             if (v !== (project.shoot_location ?? '')) onPatch({ shoot_location: v || null });
           }}
           placeholder="On-location, studio, …"
-          className="flex-1 rounded border border-nativz-border bg-surface px-2 py-1 text-sm text-text-primary outline-none focus:border-accent-text/40"
+          className={`${FIELD_INPUT} flex-1`}
         />
       </Field>
 
@@ -263,7 +272,7 @@ function ShootSection({
           type="datetime-local"
           defaultValue={project.shoot_start_at ? toLocalInput(project.shoot_start_at) : ''}
           onChange={(e) => onPatch({ shoot_start_at: e.target.value ? new Date(e.target.value).toISOString() : null })}
-          className="rounded border border-nativz-border bg-surface px-2 py-1 text-sm text-text-primary outline-none focus:border-accent-text/40"
+          className={FIELD_INPUT}
         />
       </Field>
 
@@ -272,7 +281,7 @@ function ShootSection({
           type="datetime-local"
           defaultValue={project.shoot_end_at ? toLocalInput(project.shoot_end_at) : ''}
           onChange={(e) => onPatch({ shoot_end_at: e.target.value ? new Date(e.target.value).toISOString() : null })}
-          className="rounded border border-nativz-border bg-surface px-2 py-1 text-sm text-text-primary outline-none focus:border-accent-text/40"
+          className={FIELD_INPUT}
         />
       </Field>
 
@@ -301,7 +310,8 @@ function EditSection({
         <select
           value={project.edit_status ?? 'not_started'}
           onChange={(e) => onPatch({ edit_status: e.target.value as EditStatus })}
-          className="rounded border border-nativz-border bg-surface px-2 py-1 text-sm text-text-primary"
+          className={`${FIELD_INPUT} cursor-pointer`}
+          aria-label="Edit stage"
         >
           {Object.entries(EDIT_LABELS).map(([v, l]) => (
             <option key={v} value={v}>{l}</option>
@@ -310,13 +320,14 @@ function EditSection({
       </Field>
 
       <Field label="Revisions">
-        <span className="text-sm text-text-primary">
+        <span className="text-sm font-medium tabular-nums text-text-primary">
           {project.edit_revision_count ?? 0}
         </span>
         <button
           type="button"
           onClick={() => onPatch({ edit_revision_count: (project.edit_revision_count ?? 0) + 1 })}
-          className="ml-2 rounded border border-nativz-border px-2 py-0.5 text-xs text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+          className="ml-2 rounded-md border border-nativz-border bg-surface-primary px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover hover:text-text-primary hover:border-accent-border/40 transition-colors"
+          aria-label="Add revision"
         >
           +1
         </button>
@@ -327,7 +338,7 @@ function EditSection({
           type="date"
           defaultValue={project.edit_due_at ? project.edit_due_at.slice(0, 10) : ''}
           onChange={(e) => onPatch({ edit_due_at: e.target.value ? new Date(e.target.value).toISOString() : null })}
-          className="rounded border border-nativz-border bg-surface px-2 py-1 text-sm text-text-primary outline-none focus:border-accent-text/40"
+          className={FIELD_INPUT}
         />
       </Field>
 
@@ -356,11 +367,11 @@ function Field({
 }) {
   return (
     <div className="flex items-start gap-3">
-      <div className="flex w-24 shrink-0 items-center gap-1.5 pt-1 text-xs font-medium text-text-tertiary">
-        {Icon && <Icon size={12} />}
+      <div className="flex w-20 shrink-0 items-center gap-1.5 pt-2 text-[11px] font-medium uppercase tracking-wider text-text-tertiary">
+        {Icon && <Icon size={11} />}
         <span>{label}</span>
       </div>
-      <div className="flex-1 flex items-center gap-1">{children}</div>
+      <div className="flex-1 flex items-center gap-1.5 min-w-0">{children}</div>
     </div>
   );
 }
@@ -384,7 +395,7 @@ function UrlField({
           if (v !== (value ?? '')) onSave(v || null);
         }}
         placeholder="https://…"
-        className="flex-1 rounded border border-nativz-border bg-surface px-2 py-1 text-sm text-text-primary outline-none focus:border-accent-text/40 placeholder:text-text-tertiary"
+        className={`${FIELD_INPUT} flex-1 min-w-0`}
       />
       {value && (
         <a
@@ -392,7 +403,7 @@ function UrlField({
           target="_blank"
           rel="noopener noreferrer"
           aria-label="Open link"
-          className="rounded p-1 text-text-tertiary hover:text-accent-text hover:bg-surface-hover"
+          className="shrink-0 rounded-md p-1.5 text-text-tertiary hover:text-accent-text hover:bg-surface-hover transition-colors"
         >
           <ExternalLink size={12} />
         </a>
