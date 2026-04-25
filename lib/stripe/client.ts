@@ -87,3 +87,21 @@ export function configuredAgencies(): AgencyBrand[] {
   if (isStripeConfigured('anderson')) agencies.push('anderson');
   return agencies;
 }
+
+/**
+ * For the legacy single-endpoint webhook at `/api/webhooks/stripe`: return
+ * every agency whose webhook secret is configured, in priority order. The
+ * handler tries each one until the signature verifies — this lets a Stripe
+ * dashboard pointing at the legacy URL serve either Nativz or AC without
+ * code changes when both accounts are configured.
+ */
+export function configuredWebhookAgencies(): AgencyBrand[] {
+  const agencies: AgencyBrand[] = [];
+  if (process.env.NATIVZ_STRIPE_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET) {
+    agencies.push('nativz');
+  }
+  if (process.env.ANDERSON_STRIPE_WEBHOOK_SECRET) {
+    agencies.push('anderson');
+  }
+  return agencies;
+}

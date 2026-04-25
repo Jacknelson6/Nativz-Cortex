@@ -13,7 +13,11 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import type Stripe from 'stripe';
 import type { AgencyBrand } from '@/lib/agency/detect';
-import { getStripe, getStripeWebhookSecret } from './client';
+import {
+  configuredWebhookAgencies,
+  getStripe,
+  getStripeWebhookSecret,
+} from './client';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { upsertCustomerFromStripe } from './customers';
 import { upsertInvoiceFromStripe } from './invoices';
@@ -31,24 +35,50 @@ import {
 } from '@/lib/lifecycle/state-machine';
 import { onProposalCheckoutCompleted } from '@/lib/proposals/on-paid';
 
-export async function handleStripeWebhook(req: NextRequest, agency: AgencyBrand): Promise<NextResponse> {
+export async function handleStripeWebhook(
+  req: NextRequest,
+  agency: AgencyBrand | 'auto',
+): Promise<NextResponse> {
   const signature = req.headers.get('stripe-signature');
   if (!signature) {
     return NextResponse.json({ error: 'missing stripe-signature header' }, { status: 400 });
   }
 
   const rawBody = await req.text();
-  const stripe = getStripe(agency);
-  const whSecret = getStripeWebhookSecret(agency);
 
-  let event: Stripe.Event;
-  try {
-    event = stripe.webhooks.constructEvent(rawBody, signature, whSecret);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'signature verification failed';
-    console.error(`[stripe:${agency}] signature failed:`, message);
-    return NextResponse.json({ error: message }, { status: 400 });
+  // Verify against the right secret. For the per-agency endpoints we know
+  // up-front; for the legacy single endpoint ('auto') we try each configured
+  // agency's secret until one matches.
+  let event: Stripe.Event | null = null;
+  let resolvedAgency: AgencyBrand | null = null;
+  let lastError = '';
+  const candidates: AgencyBrand[] =
+    agency === 'auto' ? configuredWebhookAgencies() : [agency];
+  if (candidates.length === 0) {
+    return NextResponse.json(
+      { error: 'No Stripe webhook secrets configured' },
+      { status: 500 },
+    );
   }
+  for (const candidate of candidates) {
+    try {
+      const stripe = getStripe(candidate);
+      const secret = getStripeWebhookSecret(candidate);
+      event = stripe.webhooks.constructEvent(rawBody, signature, secret);
+      resolvedAgency = candidate;
+      break;
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : 'signature verification failed';
+    }
+  }
+  if (!event || !resolvedAgency) {
+    console.error(
+      `[stripe:${agency === 'auto' ? candidates.join('|') : agency}] signature failed:`,
+      lastError,
+    );
+    return NextResponse.json({ error: lastError || 'signature verification failed' }, { status: 400 });
+  }
+  agency = resolvedAgency;
 
   const admin = createAdminClient();
 
