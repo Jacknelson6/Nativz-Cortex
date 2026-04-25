@@ -29,6 +29,30 @@ const nextConfig: NextConfig = {
       { source: '/admin/login', destination: '/login', permanent: false },
       { source: '/portal/login', destination: '/login', permanent: false },
 
+      // Phase 2 — every legacy /portal/* brand tool collapses into the
+      // unified `(app)` shell at the root. Listed in match order: deeper
+      // aliases first, broader prefixes last. Outbound emails, share links,
+      // and saved bookmarks keep resolving until they age out.
+      { source: '/portal/search', destination: '/finder', permanent: false },
+      { source: '/portal/search/:path*', destination: '/finder/:path*', permanent: false },
+      { source: '/portal/strategy-lab', destination: '/lab', permanent: false },
+      { source: '/portal/strategy-lab/:path*', destination: '/lab/:path*', permanent: false },
+      { source: '/portal/knowledge', destination: '/brain', permanent: false },
+      { source: '/portal/knowledge/:path*', destination: '/brain/:path*', permanent: false },
+      { source: '/portal/brand-profile', destination: '/brand-profile', permanent: false },
+      { source: '/portal/brand-profile/:path*', destination: '/brand-profile/:path*', permanent: false },
+      { source: '/portal/brand', destination: '/brand-profile', permanent: false },
+      { source: '/portal/brand/:path*', destination: '/brand-profile/:path*', permanent: false },
+      { source: '/portal/notes', destination: '/notes', permanent: false },
+      { source: '/portal/notes/:path*', destination: '/notes/:path*', permanent: false },
+      { source: '/portal/dashboard', destination: '/finder/new', permanent: false },
+      // Portal-only feature surfaces that haven't been folded into (app)
+      // yet — calendar, notifications, settings, preferences, ideas,
+      // reports, analyze, nerd, competitor-tracking. Leave their /portal/*
+      // routes intact for now; the maintenance gate keeps real viewers
+      // out until those features land at the root. They'll get redirects
+      // here once their root equivalents exist.
+
       // --- Brand-root migration phase 1 (2026-04-24) ---
       // Brand-scoped tools lifted from /admin/* to the root. Each old URL
       // (and any earlier alias) redirects to the new canonical root path so

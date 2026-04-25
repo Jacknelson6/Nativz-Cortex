@@ -17,12 +17,14 @@ import { BannerStrip } from '@/components/shared/banner-strip';
 import { ImpersonationBanner } from '@/components/portal/impersonation-banner';
 import { ActiveBrandProvider } from '@/lib/admin/active-client-context';
 import { getActiveAdminClient, listAdminAccessibleBrands } from '@/lib/admin/get-active-client';
+import { getActiveViewerBrand, listViewerAccessibleBrands } from '@/lib/portal/get-viewer-brands';
 
-// Route group shell for brand-scoped tools lifted out of /admin/* (Trend
-// Finder, Strategy Lab, Spying, Ads, Brain, Notes, Brand Profile). Shares
-// the admin sidebar / top bar / brand switcher. Phase 1 of the brand-root
-// migration: admin-only, to keep the auth posture identical to the old
-// /admin/<tool> layout. Phase 2 relaxes this to "any logged-in user".
+// Phase 2 of the brand-root migration: this shell now serves both admins
+// and viewers. Admin role keeps the full sidebar (admin ops + brand tools);
+// viewer role gets brand tools only — `AdminSidebar` filters items via
+// `ADMIN_ONLY_HREFS` based on the `role` prop. The brand switcher resolves
+// either against the admin's portfolio or the viewer's `user_client_access`
+// list, with the same `<ActiveBrandProvider />` powering both.
 
 async function resolveAuthUser() {
   try {
@@ -45,43 +47,59 @@ export default async function AppLayout({
   if (!ok || !user) redirect('/login');
 
   const adminClient = createAdminClient();
-  const [userRowRes, active, availableBrands] = await Promise.all([
-    adminClient
-      .from('users')
-      .select('full_name, avatar_url, hidden_sidebar_items, role, is_super_admin')
-      .eq('id', user.id)
-      .single(),
-    getActiveAdminClient().catch(() => ({
-      brand: null,
-      source: 'none' as const,
-      isAdmin: false,
-    })),
-    listAdminAccessibleBrands().catch(() => []),
-  ]);
+  const { data: userRow } = await adminClient
+    .from('users')
+    .select('full_name, avatar_url, hidden_sidebar_items, role, is_super_admin')
+    .eq('id', user.id)
+    .single();
 
-  const userRow = userRowRes.data;
   const role = userRow?.role ?? null;
   const isAdmin =
     userRow?.is_super_admin === true || role === 'admin' || role === 'super_admin';
+  const isViewer = role === 'viewer';
 
-  if (!isAdmin) redirect('/portal');
+  // Anything other than admin or viewer (deactivated, missing row) gets
+  // bounced to /login — the maintenance gate already catches viewers in
+  // production while phase 2 ships, but the (app) shell still wants a
+  // clean fall-through for the un-classifiable case.
+  if (!isAdmin && !isViewer) redirect('/login');
+
+  // Brand resolution branches by role; both paths produce the same shape
+  // (`AdminBrand[]` + nullable active brand) so the rest of the shell
+  // stays role-agnostic.
+  const [{ brand, availableBrands }] = await Promise.all([
+    isAdmin
+      ? Promise.all([
+          getActiveAdminClient().catch(() => ({ brand: null, source: 'none' as const, isAdmin: true })),
+          listAdminAccessibleBrands().catch(() => []),
+        ]).then(([active, brands]) => ({ brand: active.brand, availableBrands: brands }))
+      : Promise.all([
+          getActiveViewerBrand(user.id).catch(() => ({ brand: null, source: 'none' as const })),
+          listViewerAccessibleBrands(user.id).catch(() => []),
+        ]).then(([active, brands]) => ({ brand: active.brand, availableBrands: brands })),
+  ]);
 
   const userName = userRow?.full_name || user.email || '';
   const avatarUrl = userRow?.avatar_url || null;
   const hiddenSidebarItems =
     (userRow?.hidden_sidebar_items as string[] | null) ?? [];
+  const sidebarRole: 'admin' | 'viewer' = isAdmin ? 'admin' : 'viewer';
 
   return (
     <SWRProvider>
       <BackgroundSearchProvider>
-        <ActiveBrandProvider initialBrand={active.brand} availableBrands={availableBrands}>
+        <ActiveBrandProvider
+          initialBrand={brand}
+          availableBrands={availableBrands}
+          role={sidebarRole}
+        >
           <SidebarProvider
             topBar={
               <AdminTopBar
                 userName={userName}
                 avatarUrl={avatarUrl}
-                settingsHref="/admin/settings"
-                apiDocsHref="/admin/nerd/api"
+                settingsHref={isAdmin ? '/admin/settings' : '/portal/settings'}
+                apiDocsHref={isAdmin ? '/admin/nerd/api' : undefined}
                 logoutRedirect="/login"
               />
             }
@@ -89,7 +107,13 @@ export default async function AppLayout({
             <ImpersonationBanner />
             <EasterEgg />
             <CommandPalette />
-            <AdminSidebar userName={userName} avatarUrl={avatarUrl} hiddenSidebarItems={hiddenSidebarItems} />
+            <AdminSidebar
+              userName={userName}
+              avatarUrl={avatarUrl}
+              hiddenSidebarItems={hiddenSidebarItems}
+              role={sidebarRole}
+              routePrefix=""
+            />
             <SidebarInset>
               <BannerStrip />
               <PageTransition>{children}</PageTransition>

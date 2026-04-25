@@ -13,14 +13,16 @@ import { useRouter } from 'next/navigation';
 import type { AdminBrand } from '@/lib/admin/get-active-client';
 
 interface ActiveBrandContextValue {
-  /** The brand the current admin is working on. `null` if none selected. */
+  /** The brand the current user is working on. `null` if none selected. */
   brand: AdminBrand | null;
-  /** All brands the current admin can switch to. */
+  /** All brands the current user can switch to. */
   availableBrands: AdminBrand[];
   /** Switch to a brand by id, or pass `null` to clear the selection. */
   setBrand: (brandId: string | null) => void;
   /** True while a setBrand() call is round-tripping to the server. */
   isPending: boolean;
+  /** Whether the current user is admin or viewer — drives switcher endpoint. */
+  role: 'admin' | 'viewer';
 }
 
 const ActiveBrandContext = createContext<ActiveBrandContextValue | null>(null);
@@ -29,10 +31,13 @@ export function ActiveBrandProvider({
   children,
   initialBrand,
   availableBrands,
+  role = 'admin',
 }: {
   children: ReactNode;
   initialBrand: AdminBrand | null;
   availableBrands: AdminBrand[];
+  /** Admin uses /api/admin/active-client; viewer uses /api/portal/brands/switch. */
+  role?: 'admin' | 'viewer';
 }) {
   const router = useRouter();
   // Optimistic — the UI pill swaps instantly while the server action flies.
@@ -48,7 +53,9 @@ export function ActiveBrandProvider({
 
       startTransition(async () => {
         try {
-          const res = await fetch('/api/admin/active-client', {
+          const endpoint =
+            role === 'viewer' ? '/api/portal/brands/switch' : '/api/admin/active-client';
+          const res = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ client_id: brandId }),
@@ -63,12 +70,12 @@ export function ActiveBrandProvider({
         }
       });
     },
-    [availableBrands, initialBrand, router],
+    [availableBrands, initialBrand, router, role],
   );
 
   const value = useMemo<ActiveBrandContextValue>(
-    () => ({ brand: optimisticBrand, availableBrands, setBrand, isPending }),
-    [optimisticBrand, availableBrands, setBrand, isPending],
+    () => ({ brand: optimisticBrand, availableBrands, setBrand, isPending, role }),
+    [optimisticBrand, availableBrands, setBrand, isPending, role],
   );
 
   return <ActiveBrandContext.Provider value={value}>{children}</ActiveBrandContext.Provider>;

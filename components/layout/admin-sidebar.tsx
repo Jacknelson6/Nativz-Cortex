@@ -219,17 +219,19 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/tasks',
   '/admin/edits',
   '/admin/scheduling',
-  '/ads',
   '/admin/clients',
   '/admin/users',
   '/admin/presentations',
   '/admin/shoots',
-  '/brain',
   '/admin/analyze-social',
-  '/spying',
-  '/finder/monitors',
   '/admin/notifications',
   '/admin/usage',
+  // Brand tools that drive scraping / generation cost (recurring monitors,
+  // ad generator) stay admin-only. Read-only brand tools (Brand Profile,
+  // Notes, Brain, Strategy Lab, Trend Finder, Spying) are open to viewers
+  // — RLS scopes their data to the user's `user_client_access` brands.
+  '/ads',
+  '/finder/monitors',
   // Settings is reachable from the avatar popover — it doesn't need its
   // own nav row on the portal. Keeping it on the admin side where the gear
   // is the primary entry point to the agency settings secondary rail.
@@ -262,33 +264,48 @@ const PORTAL_HREF_REWRITES: Record<string, string> = {
 function getNavSectionsForRole(role: 'admin' | 'viewer', prefix: string): NavSection[] {
   if (role === 'admin') return NAV_SECTIONS;
 
-  // Portal viewers get a filtered flat list
+  // Phase 2 of the brand-root migration: when the viewer is mounted inside
+  // the unified `(app)` shell (`routePrefix === ''`), brand tools live at
+  // root URLs identical to admin's. Skip the legacy `/portal/*` remap and
+  // just filter out admin-only items. The legacy `/portal/*` shell still
+  // exists for the maintenance window — it passes `routePrefix='/portal'`
+  // and falls into the old remap path below.
+  const isUnifiedShell = prefix === '';
+
   const viewerItems: NavItem[] = [];
   for (const section of NAV_SECTIONS) {
     for (const item of section.items) {
       if (ADMIN_ONLY_HREFS.has(item.href)) continue;
       const isComingSoon = COMING_SOON_HREFS.has(item.href);
-      const portalRewrite = PORTAL_HREF_REWRITES[item.href];
-      // Remap /admin/ → portal prefix (with per-item override for paths
-      // that don't share the admin suffix, e.g. content-lab → content-lab)
+
+      const remappedHref = (() => {
+        if (isComingSoon) return '#';
+        if (isUnifiedShell) return item.href;
+        return PORTAL_HREF_REWRITES[item.href] ?? item.href.replace('/admin/', `${prefix}/`);
+      })();
+
+      const remappedChildren = isComingSoon
+        ? undefined
+        : item.children
+            ?.filter((c) => !ADMIN_ONLY_HREFS.has(c.href))
+            .map((c) => ({
+              ...c,
+              href: isUnifiedShell
+                ? c.href
+                : PORTAL_HREF_REWRITES[c.href] ?? c.href.replace('/admin/', `${prefix}/`),
+            }));
+
       const remapped: NavItem = {
         ...item,
-        href: isComingSoon
-          ? '#'
-          : (portalRewrite ?? item.href.replace('/admin/', `${prefix}/`)),
+        href: remappedHref,
         comingSoon: isComingSoon,
         // Preserve the admin href as navKey so sidebar-hide preferences
-        // stay stable whether the user is looking at the admin or portal
-        // shell.
+        // stay stable whether the user is in the unified shell or the
+        // legacy portal shell.
         navKey: item.href,
-        children: isComingSoon ? undefined : item.children?.filter(c => !ADMIN_ONLY_HREFS.has(c.href)).map(c => ({
-          ...c,
-          href: PORTAL_HREF_REWRITES[c.href] ?? c.href.replace('/admin/', `${prefix}/`),
-        })),
+        children: remappedChildren,
       };
       viewerItems.push(remapped);
-
-      // History rail replaces the old "Search history" sidebar item
     }
   }
 
