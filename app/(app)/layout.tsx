@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
@@ -64,15 +65,36 @@ export default async function AppLayout({
   // clean fall-through for the un-classifiable case.
   if (!isAdmin && !isViewer) redirect('/login');
 
+  // Impersonation override: when an admin owner has clicked "View as <client>"
+  // and the impersonate cookies are present, render the shell exactly as a
+  // viewer would see it — admin sidebar collapsed, edit affordances hidden,
+  // brand switcher locked to the impersonated brand. The underlying user is
+  // still admin (so the banner's "Exit impersonation" works and getActiveBrand
+  // already resolves the impersonated client), but the UI mirrors the viewer
+  // surface so it's a faithful preview, not "admin UI scoped to client X."
+  const cookieStore = await cookies();
+  const isImpersonating =
+    isAdmin &&
+    cookieStore.has('x-impersonate-org') &&
+    cookieStore.has('x-impersonate-slug');
+
   // Brand resolution branches by role; both paths produce the same shape
   // (`AdminBrand[]` + nullable active brand) so the rest of the shell
-  // stays role-agnostic.
+  // stays role-agnostic. Impersonation falls through the admin path —
+  // getActiveBrand reads the impersonate cookies and returns the
+  // impersonated client; the brand list is locked to that single brand
+  // so the switcher reads as "Viewing as <client>" with nothing else.
   const [{ brand, availableBrands }] = await Promise.all([
     isAdmin
       ? Promise.all([
           getActiveBrand().catch(() => ({ brand: null, source: 'none' as const, isAdmin: true })),
-          listAdminAccessibleBrands().catch(() => []),
-        ]).then(([active, brands]) => ({ brand: active.brand, availableBrands: brands }))
+          isImpersonating
+            ? Promise.resolve([])
+            : listAdminAccessibleBrands().catch(() => []),
+        ]).then(([active, brands]) => ({
+          brand: active.brand,
+          availableBrands: isImpersonating && active.brand ? [active.brand] : brands,
+        }))
       : Promise.all([
           getActiveViewerBrand(user.id).catch(() => ({ brand: null, source: 'none' as const })),
           listViewerAccessibleBrands(user.id).catch(() => []),
@@ -83,7 +105,13 @@ export default async function AppLayout({
   const avatarUrl = userRow?.avatar_url || null;
   const hiddenSidebarItems =
     (userRow?.hidden_sidebar_items as string[] | null) ?? [];
-  const sidebarRole: 'admin' | 'viewer' = isAdmin ? 'admin' : 'viewer';
+  // sidebarRole drives every UI affordance: sidebar admin items, edit
+  // buttons (via `useActiveBrand().role`), settings href in the top bar.
+  // Treating impersonation as a viewer surface here is the single switch
+  // that makes /admin/* nav, edit pencils on /brand-profile, etc. all
+  // behave the way a real client would experience them.
+  const sidebarRole: 'admin' | 'viewer' = isAdmin && !isImpersonating ? 'admin' : 'viewer';
+  const showAdminAffordances = isAdmin && !isImpersonating;
 
   return (
     <SWRProvider>
@@ -98,8 +126,8 @@ export default async function AppLayout({
               <AdminTopBar
                 userName={userName}
                 avatarUrl={avatarUrl}
-                settingsHref={isAdmin ? '/admin/settings' : undefined}
-                apiDocsHref={isAdmin ? '/admin/nerd/api' : undefined}
+                settingsHref={showAdminAffordances ? '/admin/settings' : undefined}
+                apiDocsHref={showAdminAffordances ? '/admin/nerd/api' : undefined}
                 logoutRedirect="/login"
               />
             }

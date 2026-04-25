@@ -102,8 +102,14 @@ export async function getActiveBrand(
   // impersonated brand here means the shared (app) shell — sidebar pill,
   // brand-profile page, every page that calls `getActiveBrand()` —
   // automatically re-scopes to that client without each page needing its own
-  // impersonation check. Brand-root migration phase 2 prep so impersonation
-  // lands on root URLs (e.g. /brand-profile) instead of the legacy /portal/* surface.
+  // impersonation check.
+  //
+  // We also flip `isAdmin: false` while impersonating so every page that
+  // gates render on it (e.g. /brand-profile's editor-vs-readonly switch)
+  // shows the viewer surface — which is the whole point of impersonating
+  // a client. Pages that genuinely need to know "is the underlying user
+  // an admin" (impersonation banner, exit button) read the cookies
+  // directly via `/api/impersonate/status`.
   const impersonateOrg = cookieStore.get('x-impersonate-org')?.value?.trim() || null;
   const impersonateSlug = cookieStore.get('x-impersonate-slug')?.value?.trim() || null;
   if (impersonateOrg && impersonateSlug) {
@@ -116,7 +122,7 @@ export async function getActiveBrand(
       .eq('is_active', true)
       .maybeSingle();
     if (impersonated) {
-      return { brand: impersonated, source: 'cookie', isAdmin };
+      return { brand: impersonated, source: 'cookie', isAdmin: false };
     }
     // Fall through if the impersonation target is no longer valid; the
     // banner's exit button will clear stale cookies.
