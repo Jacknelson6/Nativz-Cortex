@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
+import { toast } from 'sonner';
 import {
   GitMerge,
   Loader2,
@@ -13,6 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { SkeletonRows, InlineSpinner } from '@/components/ui/loading-skeletons';
+import { TONE_PILL } from './_status-tokens';
 
 type Contact = {
   id: string;
@@ -48,7 +50,7 @@ export function ContactsTab() {
   if (role !== 'all') params.set('role', role);
   if (emailFilter !== 'all') params.set('email', emailFilter);
 
-  const { data, isLoading, mutate } = useSWR<{ contacts: Contact[] }>(
+  const { data, error, isLoading, mutate } = useSWR<{ contacts: Contact[] }>(
     `/api/admin/email-hub/contacts?${params.toString()}`,
   );
   const contacts = data?.contacts ?? [];
@@ -58,44 +60,34 @@ export function ContactsTab() {
 
   return (
     <section className="rounded-2xl border border-nativz-border bg-surface overflow-hidden">
-      <header className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-nativz-border">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-surface border border-nativz-border">
-            <UserRound size={15} className="text-accent-text" />
-          </div>
-          <div>
-            <h2 className="text-base font-semibold text-text-primary">Contacts</h2>
-            <p className="text-xs text-text-muted mt-0.5">
-              {contacts.length} contact{contacts.length === 1 ? '' : 's'}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowDuplicates(true)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-nativz-border bg-background px-3 py-1.5 text-xs font-medium text-text-secondary hover:text-text-primary"
-          >
-            <GitMerge size={13} />
-            Find duplicates
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowAdd(true)}
-            className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent/90"
-          >
-            <Plus size={13} />
-            Add contact
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowImport(true)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-nativz-border bg-background px-3 py-1.5 text-xs font-medium text-text-secondary hover:text-text-primary"
-          >
-            <Upload size={13} />
-            Import CSV
-          </button>
-        </div>
+      <header className="flex flex-wrap items-center justify-end gap-2 px-5 py-3 border-b border-nativz-border">
+        <p className="mr-auto text-xs text-text-muted tabular-nums">
+          {contacts.length} contact{contacts.length === 1 ? '' : 's'}
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowDuplicates(true)}
+          className="inline-flex items-center gap-1.5 rounded-full border border-nativz-border bg-background px-3 py-2 text-xs font-medium text-text-secondary hover:text-text-primary"
+        >
+          <GitMerge size={13} />
+          Find duplicates
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowAdd(true)}
+          className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-2 text-xs font-semibold text-white hover:bg-accent/90"
+        >
+          <Plus size={13} />
+          Add contact
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowImport(true)}
+          className="inline-flex items-center gap-1.5 rounded-full border border-nativz-border bg-background px-3 py-2 text-xs font-medium text-text-secondary hover:text-text-primary"
+        >
+          <Upload size={13} />
+          Import CSV
+        </button>
       </header>
 
       <div className="flex flex-wrap items-center gap-3 px-5 py-3 border-b border-nativz-border bg-surface/40">
@@ -103,19 +95,22 @@ export function ContactsTab() {
           <Search
             size={14}
             className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
+            aria-hidden
           />
           <input
-            type="text"
+            type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by email, name, or company…"
+            aria-label="Search contacts"
             className="w-full rounded-full border border-nativz-border bg-background px-9 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent/30"
           />
         </div>
         <select
           value={emailFilter}
           onChange={(e) => setEmailFilter(e.target.value as EmailStateFilter)}
-          className="rounded-full border border-nativz-border bg-background px-3 py-2 text-xs text-text-primary"
+          aria-label="Subscription filter"
+          className="rounded-full border border-nativz-border bg-background px-3 py-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30"
         >
           <option value="all">All emails</option>
           <option value="subscribed">Subscribed</option>
@@ -124,7 +119,8 @@ export function ContactsTab() {
         <select
           value={role}
           onChange={(e) => setRole(e.target.value as RoleFilter)}
-          className="rounded-full border border-nativz-border bg-background px-3 py-2 text-xs text-text-primary"
+          aria-label="Role filter"
+          className="rounded-full border border-nativz-border bg-background px-3 py-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30"
         >
           <option value="all">All roles</option>
           <option value="decision_maker">Decision maker</option>
@@ -134,7 +130,9 @@ export function ContactsTab() {
         </select>
       </div>
 
-      {isLoading && contacts.length === 0 ? (
+      {error ? (
+        <ErrorState onRetry={load} />
+      ) : isLoading && contacts.length === 0 ? (
         <SkeletonRows count={6} />
       ) : contacts.length === 0 ? (
         <EmptyContacts onAdd={() => setShowAdd(true)} onImport={() => setShowImport(true)} />
@@ -219,22 +217,32 @@ function ContactRow({ contact, onChanged }: { contact: Contact; onChanged: () =>
   }, [contact]);
 
   async function toggleSub() {
-    await fetch(`/api/admin/email-hub/contacts/${contact.id}`, {
+    const res = await fetch(`/api/admin/email-hub/contacts/${contact.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ subscribed: !contact.subscribed }),
     });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      toast.error(body?.error ?? 'Failed to update subscription');
+      return;
+    }
     onChanged();
   }
 
   async function remove() {
     if (!confirm(`Delete ${contact.email}? This cannot be undone.`)) return;
-    await fetch(`/api/admin/email-hub/contacts/${contact.id}`, { method: 'DELETE' });
+    const res = await fetch(`/api/admin/email-hub/contacts/${contact.id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      toast.error(body?.error ?? 'Failed to delete contact');
+      return;
+    }
     onChanged();
   }
 
   return (
-    <li className="px-5 py-3.5 flex items-center gap-3 hover:bg-surface/40">
+    <li className="px-5 py-3 flex items-center gap-3 hover:bg-surface/40">
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-surface border border-nativz-border text-xs font-semibold uppercase text-accent-text">
         {initials || <Mail size={14} />}
       </div>
@@ -248,7 +256,7 @@ function ContactRow({ contact, onChanged }: { contact: Contact; onChanged: () =>
           {contact.company || contact.client?.name || ''}
         </p>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-1.5 shrink-0">
         {contact.tags.slice(0, 2).map((t) => (
           <span
             key={t}
@@ -258,26 +266,43 @@ function ContactRow({ contact, onChanged }: { contact: Contact; onChanged: () =>
           </span>
         ))}
         {!contact.subscribed ? (
-          <span className="inline-flex items-center rounded-full bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 text-[10px] font-medium text-amber-500">
+          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${TONE_PILL.warning}`}>
             Unsubscribed
           </span>
         ) : null}
         <button
           type="button"
           onClick={toggleSub}
-          className="text-xs text-text-muted hover:text-text-primary"
+          aria-label={contact.subscribed ? `Unsubscribe ${contact.email}` : `Resubscribe ${contact.email}`}
+          className="rounded-md px-2 py-1.5 text-xs text-text-muted hover:bg-surface-hover/40 hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30"
         >
           {contact.subscribed ? 'Unsubscribe' : 'Resubscribe'}
         </button>
         <button
           type="button"
           onClick={remove}
-          className="text-xs text-text-muted hover:text-rose-500"
+          aria-label={`Delete ${contact.email}`}
+          className="rounded-md px-2 py-1.5 text-xs text-text-muted hover:bg-rose-500/10 hover:text-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/30"
         >
           Delete
         </button>
       </div>
     </li>
+  );
+}
+
+function ErrorState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
+      <p className="text-sm text-rose-500">Couldn&apos;t load contacts.</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="rounded-full border border-nativz-border bg-background px-4 py-2 text-xs font-medium text-text-secondary hover:text-text-primary"
+      >
+        Retry
+      </button>
+    </div>
   );
 }
 
@@ -595,21 +620,58 @@ export function ModalShell({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const titleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const previouslyFocused = useRef<HTMLElement | null>(null);
+
+  // Escape to close + focus the first focusable element on open + restore
+  // focus to the trigger on close. The native <dialog> element would handle
+  // this for free, but ModalShell predates the Dialog component and is still
+  // used by Add/Import/Duplicates/Template editor flows.
+  useEffect(() => {
+    previouslyFocused.current = document.activeElement as HTMLElement | null;
+    document.body.style.overflow = 'hidden';
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    const panel = panelRef.current;
+    if (panel) {
+      const focusable = panel.querySelector<HTMLElement>(
+        'input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled])',
+      );
+      focusable?.focus();
+    }
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+      previouslyFocused.current?.focus?.();
+    };
+  }, [onClose]);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       onClick={onClose}
+      role="presentation"
     >
       <div
-        className="w-full max-w-lg rounded-2xl border border-nativz-border bg-surface p-5 shadow-2xl"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="w-full max-w-lg max-h-[calc(100vh-4rem)] overflow-y-auto rounded-2xl border border-nativz-border bg-surface p-5 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-semibold text-text-primary">{title}</h3>
+          <h3 id={titleId} className="text-base font-semibold text-text-primary">
+            {title}
+          </h3>
           <button
             type="button"
             onClick={onClose}
-            className="text-text-muted hover:text-text-primary"
+            aria-label="Close dialog"
+            className="rounded-md p-1.5 text-text-muted hover:bg-surface-hover/40 hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30"
           >
             <X size={18} />
           </button>

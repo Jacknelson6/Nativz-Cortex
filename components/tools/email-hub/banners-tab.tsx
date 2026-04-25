@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { toast } from 'sonner';
 import {
@@ -22,6 +22,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { SkeletonRows } from '@/components/ui/loading-skeletons';
 import { LabeledInput } from './contacts-tab';
 import type { EmailHubClientOption } from './email-hub-client';
+import { TONE_PILL, bannerStatusTone } from './_status-tokens';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -248,7 +249,7 @@ interface Props {
 }
 
 export function BannersTab({ clients }: Props) {
-  const { data, isLoading, mutate } = useSWR<{ banners: Banner[] }>('/api/admin/banners');
+  const { data, error, isLoading, mutate } = useSWR<{ banners: Banner[] }>('/api/admin/banners');
   const banners = data?.banners ?? [];
   const [editing, setEditing] = useState<Banner | null>(null);
   const [creating, setCreating] = useState(false);
@@ -274,48 +275,59 @@ export function BannersTab({ clients }: Props) {
   }
 
   async function toggleActive(b: Banner) {
-    await fetch(`/api/admin/banners/${b.id}`, {
+    const res = await fetch(`/api/admin/banners/${b.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ active: !b.active }),
     });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      toast.error(body?.error ?? 'Failed to update banner');
+      return;
+    }
     void mutate();
   }
 
   async function remove(id: string) {
     if (!confirm('Delete this banner? This cannot be undone.')) return;
     const res = await fetch(`/api/admin/banners/${id}`, { method: 'DELETE' });
-    if (res.ok) {
-      toast.success('Banner deleted');
-      void mutate();
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      toast.error(body?.error ?? 'Failed to delete banner');
+      return;
     }
+    toast.success('Banner deleted');
+    void mutate();
   }
 
   return (
     <section className="rounded-2xl border border-nativz-border bg-surface overflow-hidden">
-      <header className="flex items-center justify-between gap-3 px-5 py-4 border-b border-nativz-border">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-surface border border-nativz-border">
-            <Megaphone size={15} className="text-accent-text" />
-          </div>
-          <div>
-            <h2 className="text-base font-semibold text-text-primary">Banners & announcements</h2>
-            <p className="text-xs text-text-muted mt-0.5">
-              Shown to Cortex users based on agency, role, and time window.
-            </p>
-          </div>
-        </div>
+      <header className="flex items-center justify-end gap-3 px-5 py-3 border-b border-nativz-border">
+        <p className="mr-auto text-xs text-text-muted">
+          Shown to Cortex users by agency, role, and time window.
+        </p>
         <button
           type="button"
           onClick={() => setCreating(true)}
-          className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent/90"
+          className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-2 text-xs font-semibold text-white hover:bg-accent/90"
         >
           <Plus size={13} />
           Create banner
         </button>
       </header>
 
-      {isLoading && banners.length === 0 ? (
+      {error ? (
+        <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
+          <p className="text-sm text-rose-500">Couldn&apos;t load banners.</p>
+          <button
+            type="button"
+            onClick={() => void mutate()}
+            className="rounded-full border border-nativz-border bg-background px-4 py-2 text-xs font-medium text-text-secondary hover:text-text-primary"
+          >
+            Retry
+          </button>
+        </div>
+      ) : isLoading && banners.length === 0 ? (
         <SkeletonRows count={3} withAvatar={false} />
       ) : banners.length === 0 ? (
         <EmptyBanners onCreate={() => setCreating(true)} />
@@ -396,32 +408,36 @@ function BannerRow({
   if (clientName) targetParts.push(clientName);
   if (targetParts.length === 0) targetParts.push('All users');
 
+  const draft = useMemo(() => bannerToDraft(banner), [banner]);
   return (
-    <li className="px-5 py-3.5 grid grid-cols-[minmax(240px,2fr)_minmax(140px,1fr)_56px_140px_minmax(120px,auto)] items-center gap-4">
-      <BannerPreview draft={bannerToDraft(banner)} compact />
+    <li className="px-5 py-4 flex flex-col gap-3 md:grid md:grid-cols-[minmax(240px,2fr)_minmax(140px,1fr)_56px_140px_minmax(120px,auto)] md:items-center md:gap-4">
+      <BannerPreview draft={draft} compact />
 
-      <div className="min-w-0 text-xs text-text-muted">
-        {targetParts.join(' · ')}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-text-muted md:contents">
+        <span className="md:hidden text-[10px] uppercase tracking-wider">Audience</span>
+        <div className="md:min-w-0 truncate">{targetParts.join(' · ')}</div>
+
+        <span className="md:hidden text-[10px] uppercase tracking-wider">Priority</span>
+        <div className="tabular-nums md:text-center">{banner.priority}</div>
+
+        <span className="md:hidden text-[10px] uppercase tracking-wider">Window</span>
+        <div className="tabular-nums col-span-2 md:col-span-1">{fmtRange(banner.start_at, banner.end_at)}</div>
       </div>
 
-      <div className="text-xs text-text-muted tabular-nums text-center">{banner.priority}</div>
-
-      <div className="text-xs text-text-muted tabular-nums">
-        <div>{fmtRange(banner.start_at, banner.end_at)}</div>
-      </div>
-
-      <div className="flex items-center gap-2 justify-end">
+      <div className="flex items-center gap-2 justify-end flex-wrap">
         <StatusPill status={status} />
         <button
           type="button"
           onClick={onToggle}
-          className={`h-6 w-10 rounded-full border transition-colors ${
+          role="switch"
+          aria-checked={banner.active}
+          aria-label={`${banner.active ? 'Pause' : 'Activate'} banner: ${banner.title}`}
+          className={`h-6 w-10 rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-accent/30 ${
             banner.active
               ? 'bg-emerald-500/20 border-emerald-500/40'
               : 'bg-surface border-nativz-border'
           } relative`}
           title={banner.active ? 'Active — click to pause' : 'Paused — click to activate'}
-          aria-label="Toggle active"
         >
           <span
             className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
@@ -432,18 +448,20 @@ function BannerRow({
         <button
           type="button"
           onClick={onEdit}
-          className="text-text-muted hover:text-text-primary"
+          aria-label={`Edit banner: ${banner.title}`}
+          className="rounded-md p-2 text-text-muted hover:bg-surface-hover/40 hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30"
           title="Edit"
         >
-          <Pencil size={14} />
+          <Pencil size={14} aria-hidden />
         </button>
         <button
           type="button"
           onClick={onDelete}
-          className="text-text-muted hover:text-rose-500"
+          aria-label={`Delete banner: ${banner.title}`}
+          className="rounded-md p-2 text-text-muted hover:bg-rose-500/10 hover:text-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/30"
           title="Delete"
         >
-          <Trash2 size={14} />
+          <Trash2 size={14} aria-hidden />
         </button>
       </div>
     </li>
@@ -463,15 +481,9 @@ function computeStatus(b: Banner): Status {
 }
 
 function StatusPill({ status }: { status: Status }) {
-  const map: Record<Status, string> = {
-    live: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30',
-    scheduled: 'bg-sky-500/10 text-sky-500 border-sky-500/30',
-    expired: 'bg-text-muted/10 text-text-muted border-nativz-border',
-    paused: 'bg-amber-500/10 text-amber-500 border-amber-500/30',
-  };
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${map[status]}`}
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${TONE_PILL[bannerStatusTone(status)]}`}
     >
       {status}
     </span>
@@ -536,32 +548,7 @@ function BannerEditor({
           <BannerPreview draft={draft} />
         </div>
 
-        {!banner && (
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted mb-2">
-              Start from a template
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {TEMPLATES.map((t) => {
-                const TplIcon = ICON_COMPONENTS[t.icon];
-                return (
-                  <button
-                    key={t.key}
-                    type="button"
-                    onClick={() => setDraft((d) => t.apply(d))}
-                    className="flex items-start gap-2.5 rounded-xl border border-nativz-border bg-background hover:bg-surface/60 px-3 py-2.5 text-left"
-                  >
-                    <TplIcon size={16} className="text-text-secondary mt-0.5" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-text-primary">{t.label}</p>
-                      <p className="text-xs text-text-muted truncate">{t.description}</p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        {!banner && <TemplateGrid onApply={(t) => setDraft((d) => t.apply(d))} />}
 
         <div className="space-y-3">
           <LabeledInput
@@ -744,10 +731,46 @@ function BannerEditor({
 }
 
 // ---------------------------------------------------------------------------
-// Preview — exported shape that's also what the shell renderer will use.
+// Template picker — memoized so banner-editor keystrokes don't re-render the
+// (entirely static) template card list.
 // ---------------------------------------------------------------------------
 
-export function BannerPreview({
+const TemplateGrid = memo(function TemplateGrid({ onApply }: { onApply: (t: Template) => void }) {
+  return (
+    <div>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted mb-2">
+        Start from a template
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {TEMPLATES.map((t) => {
+          const TplIcon = ICON_COMPONENTS[t.icon];
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => onApply(t)}
+              className="flex items-start gap-2.5 rounded-xl border border-nativz-border bg-background hover:bg-surface/60 px-3 py-2.5 text-left focus:outline-none focus:ring-2 focus:ring-accent/30"
+            >
+              <TplIcon size={16} className="text-text-secondary mt-0.5" aria-hidden />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-text-primary">{t.label}</p>
+                <p className="text-xs text-text-muted truncate">{t.description}</p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Preview — exported shape that's also what the shell renderer will use.
+// Memoized so list rows don't re-render every parent state change; the
+// editor's live preview still updates on every keystroke (props change).
+// ---------------------------------------------------------------------------
+
+export const BannerPreview = memo(function BannerPreview({
   draft,
   compact = false,
 }: {
@@ -764,7 +787,7 @@ export function BannerPreview({
         compact ? 'truncate' : ''
       }`}
     >
-      <IconComponent size={compact ? 14 : 16} className={`${styles.icon} shrink-0 mt-0.5`} />
+      <IconComponent size={compact ? 14 : 16} className={`${styles.icon} shrink-0 mt-0.5`} aria-hidden />
       <div className="min-w-0 flex-1">
         <p className={`font-semibold ${styles.title} ${compact ? 'text-xs truncate' : 'text-sm'}`}>
           {title}
@@ -780,16 +803,16 @@ export function BannerPreview({
             className={`inline-flex items-center gap-1 text-xs mt-1 ${styles.link}`}
           >
             {draft.link_text}
-            <ExternalLink size={11} />
+            <ExternalLink size={11} aria-hidden />
           </a>
         ) : null}
       </div>
       {!draft.dismissible ? null : (
-        <XCircle size={compact ? 12 : 14} className="text-text-muted shrink-0 mt-0.5 opacity-40" />
+        <XCircle size={compact ? 12 : 14} className="text-text-muted shrink-0 mt-0.5 opacity-40" aria-hidden />
       )}
     </div>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // Small form primitives

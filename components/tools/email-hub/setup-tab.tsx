@@ -18,6 +18,7 @@ import {
 import { Dialog } from '@/components/ui/dialog';
 import { InlineSpinner, SkeletonRows } from '@/components/ui/loading-skeletons';
 import { LabeledInput } from './contacts-tab';
+import { TONE_PILL } from './_status-tokens';
 
 type SecretMeta = {
   key: string;
@@ -71,7 +72,22 @@ type SetupData = {
 };
 
 export function SetupTab() {
-  const { data, isLoading } = useSWR<SetupData>('/api/admin/email-hub/setup');
+  const { data, error, isLoading, mutate } = useSWR<SetupData>('/api/admin/email-hub/setup');
+
+  if (error) {
+    return (
+      <section className="rounded-2xl border border-rose-500/30 bg-rose-500/5 p-6 text-center">
+        <p className="text-sm text-rose-500">Couldn&apos;t load setup state.</p>
+        <button
+          type="button"
+          onClick={() => void mutate()}
+          className="mt-3 rounded-full border border-nativz-border bg-background px-4 py-2 text-xs font-medium text-text-secondary hover:text-text-primary"
+        >
+          Retry
+        </button>
+      </section>
+    );
+  }
 
   if (isLoading || !data) {
     return (
@@ -242,22 +258,13 @@ function WebhookSecretChip({
       : source === 'shared'
       ? `Using shared RESEND_WEBHOOK_SECRET. Set ${envVar} for a per-agency override.`
       : `Set ${envVar} in Vercel (or RESEND_WEBHOOK_SECRET as a shared fallback).`;
+  const tone = !configured ? 'warning' : source === 'dedicated' ? 'success' : 'info';
   return (
     <span
       title={tooltip}
-      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider ${
-        configured
-          ? source === 'dedicated'
-            ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
-            : 'bg-sky-500/10 text-sky-400 border-sky-500/30'
-          : 'bg-amber-500/10 text-amber-500 border-amber-500/30'
-      }`}
+      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider ${TONE_PILL[tone]}`}
     >
-      {configured ? (
-        <CheckCircle2 size={11} />
-      ) : (
-        <AlertCircle size={11} />
-      )}
+      {configured ? <CheckCircle2 size={11} aria-hidden /> : <AlertCircle size={11} aria-hidden />}
       {label}
     </span>
   );
@@ -282,20 +289,21 @@ function TestSendButton({ agency }: { agency: 'nativz' | 'anderson' }) {
     setTimeout(() => setStatus('idle'), 4000);
   }
 
+  const stateClass =
+    status === 'ok'
+      ? TONE_PILL.success
+      : status === 'err'
+      ? TONE_PILL.danger
+      : 'border-nativz-border bg-background text-text-secondary hover:text-text-primary';
   return (
     <button
       type="button"
       onClick={send}
       disabled={busy}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${
-        status === 'ok'
-          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500'
-          : status === 'err'
-          ? 'border-rose-500/30 bg-rose-500/10 text-rose-500'
-          : 'border-nativz-border bg-background text-text-secondary hover:text-text-primary'
-      } disabled:opacity-60`}
+      aria-label={`Send a test email from ${agency}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-accent/30 disabled:opacity-60 ${stateClass}`}
     >
-      <Send size={12} />
+      <Send size={12} aria-hidden />
       {status === 'ok' ? 'Sent' : status === 'err' ? 'Failed' : busy ? 'Sending…' : 'Test send'}
     </button>
   );
@@ -390,12 +398,8 @@ function SecretRow({
   onClear: () => void;
 }) {
   const description = SECRET_DESCRIPTIONS[secret.key] ?? '';
-  const pillClass =
-    secret.source === 'db'
-      ? 'bg-sky-500/10 text-sky-500 border-sky-500/30'
-      : secret.source === 'env'
-      ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
-      : 'bg-amber-500/10 text-amber-500 border-amber-500/30';
+  const tone =
+    secret.source === 'db' ? 'info' : secret.source === 'env' ? 'success' : 'warning';
   const pillLabel =
     secret.source === 'db' ? 'Overridden' : secret.source === 'env' ? 'Env' : 'Missing';
   const isSet = secret.source !== 'missing';
@@ -420,7 +424,7 @@ function SecretRow({
         ) : null}
       </div>
       <span
-        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${pillClass}`}
+        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${TONE_PILL[tone]}`}
       >
         {pillLabel}
       </span>
@@ -429,9 +433,10 @@ function SecretRow({
           type="button"
           onClick={onClear}
           title="Clear DB override, fall back to env"
-          className="text-text-muted hover:text-rose-500"
+          aria-label={`Clear DB override for ${secret.key}`}
+          className="rounded-md p-2 text-text-muted hover:bg-rose-500/10 hover:text-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/30"
         >
-          <RotateCcw size={14} />
+          <RotateCcw size={14} aria-hidden />
         </button>
       ) : null}
       <button
@@ -439,9 +444,10 @@ function SecretRow({
         onClick={onEdit}
         disabled={!editable}
         title={editable ? 'Edit value' : 'SECRETS_ENCRYPTION_KEY not configured'}
-        className="text-text-muted hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed"
+        aria-label={`Edit ${secret.key}`}
+        className="rounded-md p-2 text-text-muted hover:bg-surface-hover/40 hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30 disabled:opacity-30 disabled:cursor-not-allowed"
       >
-        <Pencil size={14} />
+        <Pencil size={14} aria-hidden />
       </button>
     </li>
   );
@@ -468,11 +474,7 @@ function ReadOnlyEnvRow({
         <p className="text-xs text-text-muted mt-0.5">{description}</p>
       </div>
       <span
-        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${
-          configured
-            ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
-            : 'bg-amber-500/10 text-amber-500 border-amber-500/30'
-        }`}
+        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${TONE_PILL[configured ? 'success' : 'warning']}`}
       >
         {configured ? 'Set' : 'Missing'}
       </span>

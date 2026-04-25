@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import useSWR from 'swr';
+import { toast } from 'sonner';
 import { FileText, Plus, Save, Trash2 } from 'lucide-react';
 import { LabeledInput, ModalShell } from './contacts-tab';
 import { SkeletonRows } from '@/components/ui/loading-skeletons';
@@ -28,7 +29,7 @@ const CATEGORIES: { key: Category; label: string }[] = [
 export function TemplatesTab() {
   const [selected, setSelected] = useState<Template | null>(null);
   const [creating, setCreating] = useState(false);
-  const { data, isLoading, mutate } = useSWR<{ templates: Template[] }>(
+  const { data, error, isLoading, mutate } = useSWR<{ templates: Template[] }>(
     '/api/admin/email-templates',
   );
   const templates = data?.templates ?? [];
@@ -37,66 +38,74 @@ export function TemplatesTab() {
   };
 
   async function save(tpl: Partial<Template> & { id?: string }) {
-    if (tpl.id) {
-      const res = await fetch(`/api/admin/email-templates/${tpl.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: tpl.name,
-          category: tpl.category,
-          subject: tpl.subject,
-          body_markdown: tpl.body_markdown,
-        }),
-      });
-      if (res.ok) {
-        setSelected(null);
-        load();
-      }
-    } else {
-      const res = await fetch('/api/admin/email-templates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(tpl),
-      });
-      if (res.ok) {
-        setCreating(false);
-        load();
-      }
+    const url = tpl.id ? `/api/admin/email-templates/${tpl.id}` : '/api/admin/email-templates';
+    const method = tpl.id ? 'PATCH' : 'POST';
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(
+        tpl.id
+          ? {
+              name: tpl.name,
+              category: tpl.category,
+              subject: tpl.subject,
+              body_markdown: tpl.body_markdown,
+            }
+          : tpl,
+      ),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      toast.error(body?.error ?? 'Failed to save template');
+      return;
     }
+    toast.success(tpl.id ? 'Template updated' : 'Template created');
+    setSelected(null);
+    setCreating(false);
+    load();
   }
 
   async function remove(id: string) {
     if (!confirm('Delete this template? This cannot be undone.')) return;
-    await fetch(`/api/admin/email-templates/${id}`, { method: 'DELETE' });
+    const res = await fetch(`/api/admin/email-templates/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      toast.error(body?.error ?? 'Failed to delete template');
+      return;
+    }
+    toast.success('Template deleted');
     setSelected(null);
     load();
   }
 
   return (
     <section className="rounded-2xl border border-nativz-border bg-surface overflow-hidden">
-      <header className="flex items-center justify-between gap-3 px-5 py-4 border-b border-nativz-border">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-surface border border-nativz-border">
-            <FileText size={15} className="text-accent-text" />
-          </div>
-          <div>
-            <h2 className="text-base font-semibold text-text-primary">Email templates</h2>
-            <p className="text-xs text-text-muted mt-0.5">
-              {templates.length} template{templates.length === 1 ? '' : 's'}
-            </p>
-          </div>
-        </div>
+      <header className="flex items-center justify-end gap-3 px-5 py-3 border-b border-nativz-border">
+        <p className="mr-auto text-xs text-text-muted tabular-nums">
+          {templates.length} template{templates.length === 1 ? '' : 's'}
+        </p>
         <button
           type="button"
           onClick={() => setCreating(true)}
-          className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent/90"
+          className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-2 text-xs font-semibold text-white hover:bg-accent/90"
         >
           <Plus size={13} />
           Create template
         </button>
       </header>
 
-      {isLoading && templates.length === 0 ? (
+      {error ? (
+        <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
+          <p className="text-sm text-rose-500">Couldn&apos;t load templates.</p>
+          <button
+            type="button"
+            onClick={load}
+            className="rounded-full border border-nativz-border bg-background px-4 py-2 text-xs font-medium text-text-secondary hover:text-text-primary"
+          >
+            Retry
+          </button>
+        </div>
+      ) : isLoading && templates.length === 0 ? (
         <SkeletonRows count={4} withAvatar={false} />
       ) : templates.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
@@ -121,21 +130,23 @@ export function TemplatesTab() {
       ) : (
         <ul className="divide-y divide-nativz-border">
           {templates.map((tpl) => (
-            <li
-              key={tpl.id}
-              className="px-5 py-3.5 flex items-center gap-3 hover:bg-surface/40 cursor-pointer"
-              onClick={() => setSelected(tpl)}
-            >
-              <span className="inline-flex items-center rounded-full bg-accent-surface border border-nativz-border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-accent-text">
-                {tpl.category}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-text-primary truncate">{tpl.name}</p>
-                <p className="text-xs text-text-muted truncate">{tpl.subject || 'No subject'}</p>
-              </div>
-              <time className="text-[11px] text-text-muted tabular-nums shrink-0">
-                {new Date(tpl.updated_at).toLocaleDateString()}
-              </time>
+            <li key={tpl.id}>
+              <button
+                type="button"
+                onClick={() => setSelected(tpl)}
+                className="w-full px-5 py-3 flex items-center gap-3 text-left hover:bg-surface/40 focus:outline-none focus:bg-surface/40"
+              >
+                <span className="inline-flex items-center rounded-full bg-accent-surface border border-nativz-border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-accent-text">
+                  {tpl.category}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-text-primary truncate">{tpl.name}</p>
+                  <p className="text-xs text-text-muted truncate">{tpl.subject || 'No subject'}</p>
+                </div>
+                <time className="text-[11px] text-text-muted tabular-nums shrink-0">
+                  {new Date(tpl.updated_at).toLocaleDateString()}
+                </time>
+              </button>
             </li>
           ))}
         </ul>

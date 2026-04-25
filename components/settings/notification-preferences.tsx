@@ -10,14 +10,23 @@ import { DEFAULT_NOTIFICATION_PREFERENCES } from '@/lib/types/notification-prefe
 
 // ─── Toggle switch ──────────────────────────────────────────────────────────
 
-function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+function Toggle({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+}) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      aria-label={label}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cursor-pointer ${
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/30 ${
         checked ? 'bg-accent' : 'bg-surface-hover'
       }`}
     >
@@ -27,56 +36,6 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
         }`}
       />
     </button>
-  );
-}
-
-// ─── Threshold row ──────────────────────────────────────────────────────────
-
-function ThresholdRow({
-  label,
-  description,
-  enabled,
-  onToggle,
-  value,
-  onValueChange,
-  suffix,
-  min,
-  step,
-}: {
-  label: string;
-  description: string;
-  enabled: boolean;
-  onToggle: (v: boolean) => void;
-  value: number;
-  onValueChange: (v: number) => void;
-  suffix: string;
-  min?: number;
-  step?: number;
-}) {
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-text-primary">{label}</p>
-          <p className="text-xs text-text-muted">{description}</p>
-        </div>
-        <Toggle checked={enabled} onChange={onToggle} />
-      </div>
-      {enabled && (
-        <div className="flex items-center gap-2 pl-1">
-          <span className="text-xs text-text-muted">Trigger at</span>
-          <input
-            type="number"
-            min={min ?? 1}
-            step={step ?? 1}
-            value={value}
-            onChange={(e) => onValueChange(Number(e.target.value))}
-            className="w-24 rounded-lg border border-nativz-border bg-surface-elevated px-2.5 py-1.5 text-sm text-text-primary focus:border-accent-border focus:outline-none"
-          />
-          <span className="text-xs text-text-muted">{suffix}</span>
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -146,7 +105,11 @@ export function NotificationPreferencesSection() {
               <p className="text-sm font-medium text-text-primary">In-app notifications</p>
               <p className="text-xs text-text-muted">Show notification bell alerts in Cortex</p>
             </div>
-            <Toggle checked={prefs.inApp} onChange={(v) => update({ inApp: v })} />
+            <Toggle
+              checked={prefs.inApp}
+              onChange={(v) => update({ inApp: v })}
+              label="Toggle in-app notifications"
+            />
           </div>
           <div className="border-t border-nativz-border" />
           <div className="flex items-center justify-between">
@@ -154,7 +117,11 @@ export function NotificationPreferencesSection() {
               <p className="text-sm font-medium text-text-primary">Email notifications</p>
               <p className="text-xs text-text-muted">Receive email alerts for important events</p>
             </div>
-            <Toggle checked={prefs.email} onChange={(v) => update({ email: v })} />
+            <Toggle
+              checked={prefs.email}
+              onChange={(v) => update({ email: v })}
+              label="Toggle email notifications"
+            />
           </div>
         </div>
       </Card>
