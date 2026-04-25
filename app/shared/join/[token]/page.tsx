@@ -150,7 +150,7 @@ export default function TeamJoinPage() {
                   ? 'This invite link has expired. Ask your admin for a new one.'
                   : 'This invite link is not valid. Check the link or ask your admin.'}
             </p>
-            <Link href="/admin/login">
+            <Link href="/login">
               <Button variant="outline" className="mt-2">
                 Go to login
               </Button>
@@ -166,7 +166,7 @@ export default function TeamJoinPage() {
             <p className="text-sm text-text-muted">
               Welcome to the team! Sign in to access your dashboard.
             </p>
-            <Button className="mt-2 w-full" onClick={() => router.push('/admin/login')}>
+            <Button className="mt-2 w-full" onClick={() => router.push('/login')}>
               Sign in
             </Button>
           </div>
@@ -280,7 +280,7 @@ export default function TeamJoinPage() {
 
             <p className="mt-4 text-center text-xs text-text-muted">
               Already have an account?{' '}
-              <Link href="/admin/login" className="text-accent-text hover:underline">
+              <Link href="/login" className="text-accent-text hover:underline">
                 Sign in
               </Link>
             </p>

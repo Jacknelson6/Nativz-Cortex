@@ -20,7 +20,7 @@ export default async function AdCreativesPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect('/admin/login');
+  if (!user) redirect('/login');
 
   const active = await getActiveAdminClient().catch(() => null);
 

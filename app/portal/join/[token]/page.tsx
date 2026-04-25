@@ -206,7 +206,7 @@ export default function PortalJoinPage() {
                   ? 'This invite link has expired. Ask your account manager for a new one.'
                   : 'This invite link is not valid. Check the link or ask your account manager.'}
             </p>
-            <Link href="/admin/login">
+            <Link href="/login">
               <Button variant="outline" className="mt-2">
                 Go to login
               </Button>
@@ -222,7 +222,7 @@ export default function PortalJoinPage() {
             <p className="text-sm text-text-muted">
               Your portal account is ready.
             </p>
-            <Button className="mt-2 w-full" onClick={() => router.push('/admin/login')}>
+            <Button className="mt-2 w-full" onClick={() => router.push('/login')}>
               Sign in
             </Button>
           </div>

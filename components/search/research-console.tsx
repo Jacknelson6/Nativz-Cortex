@@ -32,6 +32,9 @@ interface ResearchConsoleProps {
 
 interface LogLine {
   ts: number;
+  /** Pre-formatted HH:MM:SS clock — computed at emit time so we don't
+   *  re-`new Date()` and re-pad the string on every render of every line. */
+  clock: string;
   tag: string;
   text: string;
   /** Closed-out lines render slightly dimmer; the active line gets the cursor. */
@@ -232,15 +235,19 @@ const SUBLINE_INTERVAL_MS = 5000;
 const MAX_LINES = 40;
 
 export function ResearchConsole({ stages, stageIndex }: ResearchConsoleProps) {
-  const [lines, setLines] = useState<LogLine[]>(() => [
-    // Marketing-register opener — no internal pipeline identifiers leak.
-    {
-      ts: Date.now(),
-      tag: 'START',
-      text: 'starting your research session',
-      closed: true,
-    },
-  ]);
+  const [lines, setLines] = useState<LogLine[]>(() => {
+    const ts = Date.now();
+    return [
+      // Marketing-register opener — no internal pipeline identifiers leak.
+      {
+        ts,
+        clock: formatClock(ts),
+        tag: 'START',
+        text: 'starting your research session',
+        closed: true,
+      },
+    ];
+  });
   const lastStageRef = useRef(-1);
   const sublinesEmittedRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -259,7 +266,8 @@ export function ResearchConsole({ stages, stageIndex }: ResearchConsoleProps) {
       const next = prev.length > 0
         ? [...prev.slice(0, -1), { ...prev[prev.length - 1], closed: true }]
         : prev;
-      return [...next, { ts: Date.now(), tag, text }].slice(-MAX_LINES);
+      const ts = Date.now();
+      return [...next, { ts, clock: formatClock(ts), tag, text }].slice(-MAX_LINES);
     });
     lastStageRef.current = stageIndex;
     sublinesEmittedRef.current = 0;
@@ -283,7 +291,8 @@ export function ResearchConsole({ stages, stageIndex }: ResearchConsoleProps) {
         const closed = prev.length > 0
           ? [...prev.slice(0, -1), { ...prev[prev.length - 1], closed: true }]
           : prev;
-        return [...closed, { ts: Date.now(), tag, text }].slice(-MAX_LINES);
+        const ts = Date.now();
+        return [...closed, { ts, clock: formatClock(ts), tag, text }].slice(-MAX_LINES);
       });
     }, SUBLINE_INTERVAL_MS);
     return () => clearInterval(interval);
@@ -333,7 +342,7 @@ export function ResearchConsole({ stages, stageIndex }: ResearchConsoleProps) {
               className={`flex items-baseline gap-3 ${line.closed ? 'opacity-60' : 'opacity-100'} animate-fade-slide-in`}
             >
               <span className="w-[64px] shrink-0 tabular-nums text-text-muted/60">
-                {formatClock(line.ts)}
+                {line.clock}
               </span>
               <span className="w-[72px] shrink-0 truncate text-accent-text">
                 {line.tag}

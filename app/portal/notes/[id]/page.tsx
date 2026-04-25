@@ -23,7 +23,7 @@ export default async function PortalNotesBoardPage({
 
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/admin/login');
+  if (!user) redirect('/login');
 
   const admin = createAdminClient();
   const { data: userRow } = await admin

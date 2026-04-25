@@ -223,7 +223,7 @@ export function PortalSidebar({ userName, avatarUrl, featureFlags, brands, activ
           userName={userName}
           avatarUrl={avatarUrl}
           settingsHref="/portal/settings"
-          logoutRedirect="/admin/login"
+          logoutRedirect="/login"
           collapsed={!open}
         />
       </SidebarFooter>

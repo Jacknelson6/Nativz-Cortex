@@ -23,6 +23,12 @@ const nextConfig: NextConfig = {
       { source: '/admin/scheduler', destination: '/admin/scheduling', permanent: false },
       { source: '/admin/scheduler/:path*', destination: '/admin/scheduling/:path*', permanent: false },
 
+      // Phase 2 — unified login at /login. /admin/login and /portal/login
+      // redirect here; /admin/forgot-password + reset-password stay put for
+      // now and consolidate when /portal/* is fully retired.
+      { source: '/admin/login', destination: '/login', permanent: false },
+      { source: '/portal/login', destination: '/login', permanent: false },
+
       // --- Brand-root migration phase 1 (2026-04-24) ---
       // Brand-scoped tools lifted from /admin/* to the root. Each old URL
       // (and any earlier alias) redirects to the new canonical root path so

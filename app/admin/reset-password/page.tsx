@@ -264,7 +264,7 @@ export default function AdminResetPasswordPage() {
 
             <div className="mt-6 text-center">
               <a
-                href="/admin/login"
+                href="/login"
                 className={`text-xs transition-colors ${
                   isAC ? 'text-[#36D1C2] hover:text-[#2BB5A8]' : 'text-[#046BD2]/70 hover:text-[#046BD2]'
                 }`}

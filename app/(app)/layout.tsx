@@ -42,7 +42,7 @@ export default async function AppLayout({
 }) {
   const { user, ok } = await resolveAuthUser();
 
-  if (!ok || !user) redirect('/admin/login');
+  if (!ok || !user) redirect('/login');
 
   const adminClient = createAdminClient();
   const [userRowRes, active, availableBrands] = await Promise.all([
@@ -82,7 +82,7 @@ export default async function AppLayout({
                 avatarUrl={avatarUrl}
                 settingsHref="/admin/settings"
                 apiDocsHref="/admin/nerd/api"
-                logoutRedirect="/admin/login"
+                logoutRedirect="/login"
               />
             }
           >

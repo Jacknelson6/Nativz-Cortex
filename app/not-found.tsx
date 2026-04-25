@@ -27,7 +27,7 @@ export default async function NotFound() {
         </p>
         <div className="flex items-center justify-center gap-3 pt-2">
           <Link
-            href="/admin/login"
+            href="/login"
             className="inline-flex items-center rounded-lg border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent-text transition hover:border-accent/50 hover:bg-accent/20"
           >
             Back to sign in

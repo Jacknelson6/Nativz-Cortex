@@ -1,10 +1,9 @@
 import { redirect } from 'next/navigation';
 
 /**
- * Portal login redirects to the unified login page at /admin/login.
- * The login page detects the user's role after auth and redirects accordingly:
- * - admin → /admin/dashboard
- * - viewer → /portal/search/new
+ * Portal login redirects to the unified Cortex login at /login. Phase 2 of
+ * the brand-root migration: one entry point for both admins and viewers;
+ * /login detects role after auth and routes accordingly.
  */
 export default async function PortalLoginRedirect({
   searchParams,
@@ -17,5 +16,5 @@ export default async function PortalLoginRedirect({
     if (v !== undefined) qs.set(k, v);
   }
   const query = qs.toString();
-  redirect(`/admin/login${query ? `?${query}` : ''}`);
+  redirect(`/login${query ? `?${query}` : ''}`);
 }

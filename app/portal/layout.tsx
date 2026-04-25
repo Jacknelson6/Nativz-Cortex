@@ -193,7 +193,7 @@ export default async function PortalLayout({
   const headersList = await headers();
   const pathname = headersList.get('x-pathname') || headersList.get('x-invoke-path') || '';
   const isAuthPage =
-    pathname.includes('/portal/login') ||
+    pathname.includes('/login') ||
     pathname.includes('/portal/join') ||
     pathname.includes('/portal/forgot-password') ||
     pathname.includes('/portal/reset-password');
@@ -214,7 +214,7 @@ export default async function PortalLayout({
 
   // Non-auth pages without a user session — redirect to unified login
   if (!user) {
-    redirect('/admin/login');
+    redirect('/login');
   }
 
   // Fetch user profile + accessible brands in parallel
@@ -264,7 +264,7 @@ export default async function PortalLayout({
             avatarUrl={avatarUrl}
             role="viewer"
             routePrefix="/portal"
-            logoutPath="/admin/login"
+            logoutPath="/login"
             settingsPath="/portal/settings"
             brands={brandData.brands}
             activeBrandId={brandData.activeBrandId}
@@ -276,7 +276,7 @@ export default async function PortalLayout({
               userName={userName}
               avatarUrl={avatarUrl}
               settingsHref="/portal/settings"
-              logoutRedirect="/admin/login"
+              logoutRedirect="/login"
             />
             <BannerStrip />
             {children}

@@ -141,7 +141,7 @@ export default function PortalResetPasswordPage() {
         </Card>
 
         <div className="mt-4 text-center">
-          <a href="/admin/login" className="text-xs text-text-muted hover:text-text-default transition-colors">
+          <a href="/login" className="text-xs text-text-muted hover:text-text-default transition-colors">
             Back to sign in
           </a>
         </div>

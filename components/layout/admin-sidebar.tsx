@@ -345,7 +345,7 @@ export function AdminSidebar({
   avatarUrl: _avatarUrl,
   role = 'admin',
   routePrefix = '/admin',
-  logoutPath: _logoutPath = '/admin/login',
+  logoutPath: _logoutPath = '/login',
   settingsPath: _settingsPath = '/admin/account',
   brands,
   activeBrandId,

@@ -10,7 +10,7 @@ export default async function AccountingPeriodPage({ params }: { params: Promise
   const { id } = await params;
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/admin/login');
+  if (!user) redirect('/login');
 
   const adminClient = createAdminClient();
   // All 5 reads are independent of each other — previously 2 serial

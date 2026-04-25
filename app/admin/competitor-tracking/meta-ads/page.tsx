@@ -13,7 +13,7 @@ export default async function MetaAdTrackerPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect('/admin/login');
+  if (!user) redirect('/login');
 
   const admin = createAdminClient();
   const [{ data: userData }, { data: clients }, { clientId }, active] = await Promise.all([

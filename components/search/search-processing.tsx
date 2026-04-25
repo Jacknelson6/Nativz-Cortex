@@ -484,21 +484,17 @@ export function SearchProcessing({
           <ResearchConsole stages={stages} stageIndex={stageIndex} />
         )}
 
-        {/* Thin progress + elapsed row. Lives just under the console as a
-            secondary indicator — the console itself is the primary signal. */}
+        {/* Quiet meta line — single elapsed counter + stage pointer. The
+            old thin progress bar + percentage was a redundant second
+            indicator; the console feed is the primary "we're working"
+            signal and this row gives a one-glance "where are we" pulse. */}
         {!done && !error && (
-          <>
-            <div className="mt-4 h-[3px] overflow-hidden rounded-full bg-surface-hover">
-              <div
-                className="h-full rounded-full bg-accent transition-all duration-300 ease-out"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <div className="mt-1.5 flex items-center justify-between font-mono text-[11px] text-text-muted">
-              <span className="tabular-nums">{formatElapsed(elapsed)} elapsed</span>
-              <span className="tabular-nums">{Math.round(progress)}%</span>
-            </div>
-          </>
+          <div className="mt-3 flex items-center justify-between font-mono text-[11px] text-text-muted">
+            <span className="tabular-nums">{formatElapsed(elapsed)} elapsed</span>
+            <span className="tabular-nums">
+              stage {Math.min(stageIndex + 1, stages.length)} of {stages.length}
+            </span>
+          </div>
         )}
 
         {/* Done state — sits in the same vertical slot as the console so

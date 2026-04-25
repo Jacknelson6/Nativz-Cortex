@@ -16,10 +16,10 @@ export default async function PortalNotesDashboardPage() {
   try {
     const supabase = await createServerSupabaseClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) redirect('/admin/login');
+    if (!user) redirect('/login');
 
     const portal = await getPortalClient();
-    if (!portal) redirect('/admin/login');
+    if (!portal) redirect('/login');
 
     return (
       <NotesDashboard

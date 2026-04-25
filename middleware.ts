@@ -216,25 +216,33 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse;
   }
 
-  // Login pages don't require auth. Use full JWT validation here so we never
-  // accidentally redirect a user with an expired session back into the app.
-  if (pathname === '/admin/login' || pathname === '/portal/login') {
+  // Unified login at /login — no auth required. Use full JWT validation so we
+  // never accidentally redirect a user with an expired session back into the
+  // app. If they're already authenticated, route based on role (admin →
+  // dashboard, viewer → finder home — viewer will then hit the maintenance
+  // gate during phase 2 of the brand-root migration).
+  if (pathname === '/login') {
     const loginUser = await getAuthUserResilient(supabase, false);
     if (loginUser) {
-      if (pathname === '/admin/login') {
-        return NextResponse.redirect(new URL('/admin/dashboard', request.url));
-      }
-      return NextResponse.redirect(new URL(PORTAL_HOME_PATH, request.url));
+      const { data: userRow } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', loginUser.id)
+        .single();
+      const role = (userRow?.role as string | undefined) ?? null;
+      const isAdmin = role === 'admin' || role === 'super_admin';
+      return NextResponse.redirect(
+        new URL(isAdmin ? '/admin/dashboard' : '/finder/new', request.url),
+      );
     }
-    // BUG 9: expose pathname so portal layout can detect auth pages
     supabaseResponse.headers.set('x-pathname', pathname);
-          supabaseResponse.headers.set('x-agency', resolveAgencyForRequest(request));
+    supabaseResponse.headers.set('x-agency', resolveAgencyForRequest(request));
     return supabaseResponse;
   }
 
-  // Legacy routes — redirect to admin login
-  if (pathname === '/' || pathname === '/login' || pathname === '/history' || pathname.startsWith('/search/')) {
-    return NextResponse.redirect(new URL('/admin/login', request.url));
+  // Legacy / bare URLs that never hosted real content — funnel to /login.
+  if (pathname === '/' || pathname === '/history' || pathname.startsWith('/search/')) {
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
   // Skip the network JWT validation when we've validated within the last
@@ -257,7 +265,7 @@ export async function middleware(request: NextRequest) {
       return res;
     }
     // Unified login — all unauthenticated users go to /admin/login
-    return NextResponse.redirect(new URL('/admin/login', request.url));
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
   // Role-based access: use cached role from cookie if available.
@@ -277,7 +285,7 @@ export async function middleware(request: NextRequest) {
 
     // Block deactivated portal users
     if (userData?.is_active === false) {
-      return NextResponse.redirect(new URL('/admin/login?error=deactivated', request.url));
+      return NextResponse.redirect(new URL('/login?error=deactivated', request.url));
     }
 
     role = userData?.role || null;
@@ -401,7 +409,7 @@ export async function middleware(request: NextRequest) {
   // Portal routes — viewers, or admins (incl. impersonation)
   if (pathname.startsWith('/portal')) {
     if (role !== 'viewer' && role !== 'admin') {
-      return NextResponse.redirect(new URL('/admin/login', request.url));
+      return NextResponse.redirect(new URL('/login', request.url));
     }
     if (shouldRedirectPortalToMinimalHome(pathname)) {
       return NextResponse.redirect(new URL(PORTAL_HOME_PATH, request.url));

@@ -11,7 +11,7 @@ export default async function NewTrendMonitorPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect('/admin/login');
+  if (!user) redirect('/login');
 
   const admin = createAdminClient();
   const { data: me } = await admin

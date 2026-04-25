@@ -35,7 +35,7 @@ export default async function AdminAnalyticsPage({
 }) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/admin/login');
+  if (!user) redirect('/login');
 
   const adminClient = createAdminClient();
 

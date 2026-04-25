@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
       .eq('id', invite.id);
 
     // Send welcome email (non-blocking)
-    const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io'}/admin/login`;
+    const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io'}/login`;
     sendWelcomeEmail({ to: email, name: full_name, role: 'admin', loginUrl, agency }).catch((err) =>
       console.error('Welcome email failed:', err),
     );

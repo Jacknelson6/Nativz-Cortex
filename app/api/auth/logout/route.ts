@@ -16,7 +16,7 @@ export async function POST() {
     const supabase = await createServerSupabaseClient();
     await supabase.auth.signOut();
 
-    const response = NextResponse.json({ redirectTo: '/admin/login' });
+    const response = NextResponse.json({ redirectTo: '/login' });
     // Clear cached role cookies so the next login doesn't inherit a stale role
     response.cookies.set('x-user-role', '', { maxAge: 0, path: '/' });
     response.cookies.set('x-user-role-uid', '', { maxAge: 0, path: '/' });

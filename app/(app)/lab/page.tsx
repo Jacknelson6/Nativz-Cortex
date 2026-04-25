@@ -90,7 +90,7 @@ export default async function StrategyLabPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect('/admin/login');
+    redirect('/login');
   }
 
   const { attach: attachParam } = await searchParams;

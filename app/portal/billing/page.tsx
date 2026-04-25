@@ -29,7 +29,7 @@ export default async function PortalBillingPage() {
   const {
     data: { user },
   } = await db.auth.getUser();
-  if (!user) redirect('/portal/login');
+  if (!user) redirect('/login');
 
   const portal = await getPortalClient();
   if (!portal) notFound();

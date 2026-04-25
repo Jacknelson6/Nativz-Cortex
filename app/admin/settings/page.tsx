@@ -44,7 +44,7 @@ export default async function AISettingsPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect('/admin/login');
+  if (!user) redirect('/login');
 
   const admin = createAdminClient();
   const [{ data: me }, { data: clients }, params] = await Promise.all([

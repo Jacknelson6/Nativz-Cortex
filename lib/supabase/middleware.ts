@@ -39,10 +39,10 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Login pages don't require auth
-  if (pathname === '/admin/login' || pathname === '/portal/login') {
+  if (pathname === '/login' || pathname === '/login') {
     if (user) {
       // Already logged in — redirect to appropriate dashboard
-      if (pathname === '/admin/login') {
+      if (pathname === '/login') {
         return NextResponse.redirect(new URL('/admin/dashboard', request.url));
       }
       return NextResponse.redirect(new URL(PORTAL_HOME_PATH, request.url));
@@ -52,18 +52,18 @@ export async function updateSession(request: NextRequest) {
 
   // Legacy routes — redirect to admin login
   if (pathname === '/' || pathname === '/login' || pathname === '/history' || pathname.startsWith('/search/')) {
-    return NextResponse.redirect(new URL('/admin/login', request.url));
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
   // All other routes require auth
   if (!user) {
     if (pathname.startsWith('/admin')) {
-      return NextResponse.redirect(new URL('/admin/login', request.url));
+      return NextResponse.redirect(new URL('/login', request.url));
     }
     if (pathname.startsWith('/portal')) {
-      return NextResponse.redirect(new URL('/admin/login', request.url));
+      return NextResponse.redirect(new URL('/login', request.url));
     }
-    return NextResponse.redirect(new URL('/admin/login', request.url));
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
   // Role-based access control
@@ -76,7 +76,7 @@ export async function updateSession(request: NextRequest) {
 
   // Portal routes — viewers (and admins can also access portal for testing)
   if (pathname.startsWith('/portal') && role !== 'viewer' && role !== 'admin') {
-    return NextResponse.redirect(new URL('/admin/login', request.url));
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
   if (pathname.startsWith('/portal') && shouldRedirectPortalToMinimalHome(pathname)) {

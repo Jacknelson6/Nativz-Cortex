@@ -13,7 +13,7 @@ export default async function EmailHubPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect('/admin/login');
+  if (!user) redirect('/login');
 
   const admin = createAdminClient();
   const { data: me } = await admin.from('users').select('role').eq('id', user.id).single();

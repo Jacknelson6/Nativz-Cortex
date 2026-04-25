@@ -51,7 +51,7 @@ export default async function AccountingIndexPage({
 }) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/admin/login');
+  if (!user) redirect('/login');
 
   const adminClient = createAdminClient();
   const [{ data: userRow }, params] = await Promise.all([

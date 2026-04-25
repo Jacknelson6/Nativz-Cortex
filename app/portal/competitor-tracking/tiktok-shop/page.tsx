@@ -7,7 +7,7 @@ import { PORTAL_HOME_PATH } from '@/lib/portal/client-surface';
 
 export default async function PortalTikTokShopPage() {
   const portal = await getPortalClient();
-  if (!portal) redirect('/admin/login');
+  if (!portal) redirect('/login');
 
   // Gate: if the brand doesn't have TikTok Shop enabled, bounce home.
   // Direct-URL users hit the sidebar's grayed-out path; this is just

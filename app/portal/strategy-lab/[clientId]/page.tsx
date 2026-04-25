@@ -25,7 +25,7 @@ export default async function PortalContentLabPage({
   try {
     const { clientId } = await params;
     const portal = await getPortalClient();
-    if (!portal) redirect('/admin/login');
+    if (!portal) redirect('/login');
 
     if (portal.client.id !== clientId) notFound();
 

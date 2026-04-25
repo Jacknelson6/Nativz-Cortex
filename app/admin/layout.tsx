@@ -95,7 +95,7 @@ export default async function AdminLayout({
                 avatarUrl={avatarUrl}
                 settingsHref="/admin/settings"
                 apiDocsHref="/admin/nerd/api"
-                logoutRedirect="/admin/login"
+                logoutRedirect="/login"
               />
             }
           >

@@ -22,7 +22,7 @@ export const dynamic = 'force-dynamic';
 export default async function NotesDashboardPage() {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/admin/login');
+  if (!user) redirect('/login');
 
   // Fetch the admin's clients for the New Note modal's client-scope option.
   // Clients list is fetched unconditionally so it joins the same Promise.all;

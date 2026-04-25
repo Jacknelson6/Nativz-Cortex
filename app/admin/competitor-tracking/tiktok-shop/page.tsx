@@ -17,7 +17,7 @@ type HubDbClientRow = {
 export default async function TikTokShopPage() {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/admin/login');
+  if (!user) redirect('/login');
 
   const admin = createAdminClient();
   const [{ data: userData }, { data: searches }, vaultClients, rosterResult, active] = await Promise.all([
