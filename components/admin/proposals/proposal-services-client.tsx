@@ -121,7 +121,7 @@ export function ProposalServicesClient({ initialServices }: { initialServices: S
           Cortex · admin · proposals
         </p>
         <h1 className="ui-page-title">Service catalog</h1>
-        <p className="text-sm text-text-muted">
+        <p className="ui-muted">
           Pricing repository the chat-driven proposal builder reads from. Edit prices any time —
           drafts created after the change use the new price; existing drafts keep their snapshot.
         </p>

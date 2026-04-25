@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import { ImagePlus, Loader2, Send, Wrench, AlertCircle, FileText } from 'lucide-react';
+import { ImagePlus, Loader2, Send, Wrench, AlertCircle, FileText, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 /**
@@ -56,6 +56,7 @@ export function ProposalBuilderChat({
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollAnchorRef = useRef<HTMLDivElement>(null);
 
@@ -158,6 +159,7 @@ export function ProposalBuilderChat({
   const onDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
+      setDragOver(false);
       const f = e.dataTransfer.files?.[0];
       if (f) void handleFile(f);
     },
@@ -166,10 +168,33 @@ export function ProposalBuilderChat({
 
   return (
     <div
-      className="flex h-full flex-col"
-      onDragOver={(e) => e.preventDefault()}
+      className={`relative flex h-full flex-col transition-colors ${dragOver ? 'bg-accent-surface/30' : ''}`}
+      onDragEnter={(e) => {
+        // Only trigger if dragging files (not a text selection).
+        if (Array.from(e.dataTransfer.types ?? []).includes('Files')) {
+          e.preventDefault();
+          setDragOver(true);
+        }
+      }}
+      onDragOver={(e) => {
+        if (Array.from(e.dataTransfer.types ?? []).includes('Files')) {
+          e.preventDefault();
+        }
+      }}
+      onDragLeave={(e) => {
+        // Only clear when leaving the wrapper, not its children.
+        if (e.currentTarget === e.target) setDragOver(false);
+      }}
       onDrop={onDrop}
     >
+      {dragOver && (
+        <div className="pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-xl border-2 border-dashed border-accent/60 bg-accent-surface/40 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-2 text-accent-text">
+            <Upload size={20} />
+            <p className="ui-caption font-medium">Drop image or .md to inline it</p>
+          </div>
+        </div>
+      )}
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
         {messages.length === 0 ? (
@@ -221,7 +246,7 @@ export function ProposalBuilderChat({
             placeholder="Describe what to add or change…"
             rows={2}
             disabled={busy}
-            className="flex-1 resize-none rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none"
+            className="flex-1 resize-none rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted transition-colors focus:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-background"
           />
           <button
             type="button"

@@ -447,8 +447,10 @@ export function ProposalBuilderClient({
       )}
       {manualOpen ? null : null}
 
-      {/* RIGHT: live preview */}
-      <div className="flex-1 bg-zinc-100 overflow-hidden relative min-w-0">
+      {/* RIGHT: live preview. Outside the iframe is the page-background
+          matte; the iframe interior renders the proposal on its own paper
+          backdrop (mirrors the canonical signed PDF). */}
+      <div className="flex-1 bg-background overflow-hidden relative min-w-0">
         {!manualOpen && (
           <div className="absolute top-2 left-2 z-10">
             <button

@@ -84,7 +84,7 @@ export function ProposalBuilderStart({
           <Sparkles size={18} className="text-accent-text" />
           New chat-driven proposal
         </h1>
-        <p className="text-sm text-text-muted">
+        <p className="ui-muted">
           Build a custom proposal one service at a time, with deterministic pricing pulled from the catalog.
           Iterate live with the agent + the inline preview, then send when it&apos;s ready.
         </p>
@@ -117,7 +117,7 @@ export function ProposalBuilderStart({
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-[12px] font-medium text-text-muted uppercase tracking-wider">
+          <label className="ui-caption font-medium uppercase tracking-wider">
             Client (optional)
           </label>
           <select
@@ -141,7 +141,7 @@ export function ProposalBuilderStart({
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-[12px] font-medium text-text-muted uppercase tracking-wider">
+          <label className="ui-caption font-medium uppercase tracking-wider">
             Title (optional)
           </label>
           <input
@@ -154,7 +154,7 @@ export function ProposalBuilderStart({
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-[12px] font-medium text-text-muted uppercase tracking-wider">
+          <label className="ui-caption font-medium uppercase tracking-wider">
             Payment model
           </label>
           <div className="grid grid-cols-2 gap-2">
