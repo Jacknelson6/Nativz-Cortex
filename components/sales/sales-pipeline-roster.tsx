@@ -17,6 +17,7 @@ import {
   Send,
 } from 'lucide-react';
 import { ClientLogo } from '@/components/clients/client-logo';
+import { formatRelativeTime } from '@/lib/utils/format';
 import {
   PRIMARY_STATUS_LABEL,
   PRIMARY_STATUS_PILL,
@@ -45,16 +46,16 @@ const FILTER_LABEL: Record<'all' | PrimaryStatus, string> = {
 };
 
 const STATUS_ICON: Record<PrimaryStatus, React.ReactNode> = {
-  drafted: <FileText size={11} />,
-  sent: <Clock size={11} />,
-  viewed: <AlertCircle size={11} />,
-  signed: <Check size={11} />,
-  awaiting_payment: <Clock size={11} />,
-  paid: <Check size={11} />,
-  onboarding: <ClipboardList size={11} />,
-  active: <Sparkles size={11} />,
-  archived: <Archive size={11} />,
-  lead_no_proposal: <Pause size={11} />,
+  drafted: <FileText size={11} aria-hidden />,
+  sent: <Clock size={11} aria-hidden />,
+  viewed: <AlertCircle size={11} aria-hidden />,
+  signed: <Check size={11} aria-hidden />,
+  awaiting_payment: <Clock size={11} aria-hidden />,
+  paid: <Check size={11} aria-hidden />,
+  onboarding: <ClipboardList size={11} aria-hidden />,
+  active: <Sparkles size={11} aria-hidden />,
+  archived: <Archive size={11} aria-hidden />,
+  lead_no_proposal: <Pause size={11} aria-hidden />,
 };
 
 /**
@@ -196,15 +197,25 @@ export function SalesPipelineRoster({
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-nativz-border bg-surface">
-          <table className="w-full text-left text-sm">
+          {/* horizontal scroll container — narrow viewports get a clean
+              swipe instead of a squeezed table. The wrapping rounded
+              border stays visible because the table itself doesn't have
+              its own border-radius applied. */}
+          <div className="overflow-x-auto">
+          <table
+            className="w-full text-left text-sm"
+            aria-label={`Sales pipeline — ${filteredRows.length} ${filter === 'all' ? 'total' : FILTER_LABEL[filter].toLowerCase()}`}
+          >
             <thead className="bg-surface-hover/40 text-[11px] uppercase tracking-wider text-text-muted">
               <tr>
-                <th className="px-4 py-3 font-medium">Brand</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Proposal</th>
-                <th className="px-4 py-3 font-medium">Onboarding</th>
-                <th className="px-4 py-3 font-medium">Last activity</th>
-                <th className="px-4 py-3" aria-label="Actions" />
+                <th scope="col" className="px-4 py-3 font-medium">Brand</th>
+                <th scope="col" className="px-4 py-3 font-medium">Status</th>
+                <th scope="col" className="px-4 py-3 font-medium">Proposal</th>
+                <th scope="col" className="px-4 py-3 font-medium">Onboarding</th>
+                <th scope="col" className="px-4 py-3 font-medium">Last activity</th>
+                <th scope="col" className="px-4 py-3">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-nativz-border/60">
@@ -213,23 +224,7 @@ export function SalesPipelineRoster({
               ))}
             </tbody>
           </table>
-          <style jsx>{`
-            @keyframes rowFadeIn {
-              from {
-                opacity: 0;
-                transform: translateY(4px);
-              }
-              to {
-                opacity: 1;
-                transform: translateY(0);
-              }
-            }
-            @media (prefers-reduced-motion: reduce) {
-              :global(tr[data-pipeline-row]) {
-                animation: none !important;
-              }
-            }
-          `}</style>
+          </div>
         </div>
       )}
     </div>
@@ -300,12 +295,11 @@ function PipelineRow({ row, index }: { row: SalesPipelineRow; index: number }) {
 
   return (
     <tr
-      data-pipeline-row
-      className="transition-colors hover:bg-surface-hover/30"
-      style={{
-        animation: `rowFadeIn 220ms ease-out both`,
-        animationDelay: `${delayMs}ms`,
-      }}
+      // animate-stagger-in is the global utility (app/globals.css) — wires
+      // up keyframes + duration + easing token + prefers-reduced-motion
+      // override in one go. We only override the per-row delay here.
+      className="animate-stagger-in transition-colors hover:bg-surface-hover/30"
+      style={{ animationDelay: `${delayMs}ms` }}
     >
       <td className="px-4 py-3">
         <Link href={primaryLink} className="flex items-center gap-3" aria-label={`Open ${row.client.name}`}>
@@ -356,9 +350,17 @@ function PipelineRow({ row, index }: { row: SalesPipelineRow; index: number }) {
         )}
       </td>
       <td className="px-4 py-3 text-text-muted">
-        {row.last_activity_at
-          ? new Date(row.last_activity_at).toLocaleDateString()
-          : '—'}
+        {row.last_activity_at ? (
+          <time
+            dateTime={row.last_activity_at}
+            title={new Date(row.last_activity_at).toLocaleString()}
+            className="text-[12px]"
+          >
+            {formatRelativeTime(row.last_activity_at)}
+          </time>
+        ) : (
+          '—'
+        )}
       </td>
       <td className="px-4 py-3 text-right">
         <div className="flex items-center justify-end gap-2">
@@ -379,7 +381,7 @@ function PipelineRow({ row, index }: { row: SalesPipelineRow; index: number }) {
                 aria-expanded={openMenu}
                 className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
               >
-                <MoreVertical size={14} />
+                <MoreVertical size={14} aria-hidden />
               </button>
               {openMenu ? (
                 <RowActionMenu
@@ -440,7 +442,7 @@ function RowActionMenu({
           onClick={onResend}
           className="flex w-full items-center gap-2 px-3 py-2 text-left text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
         >
-          <Send size={12} />
+          <Send size={12} aria-hidden />
           Resend proposal
         </button>
       ) : null}
@@ -452,7 +454,7 @@ function RowActionMenu({
           onClick={onArchive}
           className="flex w-full items-center gap-2 px-3 py-2 text-left text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
         >
-          <Archive size={12} />
+          <Archive size={12} aria-hidden />
           Archive flow
         </button>
       ) : null}

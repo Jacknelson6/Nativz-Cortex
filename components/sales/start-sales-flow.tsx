@@ -3,7 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Plus, Search, Rocket, UserPlus, Building2 } from 'lucide-react';
+import { Plus, Search, Rocket, UserPlus, Building2, Loader2, SearchX } from 'lucide-react';
 import { ClientLogo } from '@/components/clients/client-logo';
 import { Button } from '@/components/ui/button';
 
@@ -167,7 +167,7 @@ export function StartSalesFlow({ clients }: { clients: ClientOption[] }) {
         aria-haspopup="dialog"
         aria-expanded={open}
       >
-        <Plus size={14} />
+        <Plus size={14} aria-hidden />
         Start
       </Button>
 
@@ -189,7 +189,7 @@ export function StartSalesFlow({ clients }: { clients: ClientOption[] }) {
                   : 'text-text-muted hover:bg-surface-hover'
               }`}
             >
-              <Building2 size={12} />
+              <Building2 size={12} aria-hidden />
               Existing client
             </button>
             <button
@@ -202,7 +202,7 @@ export function StartSalesFlow({ clients }: { clients: ClientOption[] }) {
                   : 'text-text-muted hover:bg-surface-hover'
               }`}
             >
-              <UserPlus size={12} />
+              <UserPlus size={12} aria-hidden />
               New prospect
             </button>
           </div>
@@ -214,7 +214,7 @@ export function StartSalesFlow({ clients }: { clients: ClientOption[] }) {
                   Search brands
                 </label>
                 <div className="flex items-center gap-2 rounded-lg border border-nativz-border bg-background px-2.5 py-1.5">
-                  <Search size={13} className="text-text-muted" />
+                  <Search size={13} className="text-text-muted" aria-hidden />
                   <input
                     id={id('search')}
                     autoFocus
@@ -228,34 +228,52 @@ export function StartSalesFlow({ clients }: { clients: ClientOption[] }) {
               </div>
               <ul className="max-h-80 overflow-y-auto py-1">
                 {filtered.length === 0 ? (
-                  <li className="px-3 py-3 text-[12px] text-text-muted">No matches.</li>
+                  <li className="flex flex-col items-center gap-1 px-3 py-6 text-center">
+                    <SearchX size={18} className="text-text-muted/60" aria-hidden />
+                    <p className="text-[12px] text-text-muted">
+                      {query.trim()
+                        ? `No brands match "${query.trim()}".`
+                        : 'No brands yet — try the New prospect tab.'}
+                    </p>
+                  </li>
                 ) : (
-                  filtered.map((c) => (
-                    <li key={c.id}>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => pickExisting(c)}
-                        className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-surface-hover disabled:opacity-50"
-                      >
-                        <ClientLogo src={c.logo_url} name={c.name} size="sm" />
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm text-text-primary">{c.name}</div>
-                          <div className="text-[11px] text-text-muted">
-                            {c.has_live_flow
-                              ? 'Live flow exists — opens it'
-                              : 'No flow yet — creates one'}
+                  filtered.map((c) => {
+                    const isBusyForThis = busy;
+                    return (
+                      <li key={c.id}>
+                        <button
+                          type="button"
+                          disabled={isBusyForThis}
+                          onClick={() => pickExisting(c)}
+                          className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-surface-hover disabled:opacity-50"
+                        >
+                          <ClientLogo src={c.logo_url} name={c.name} size="sm" />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm text-text-primary">{c.name}</div>
+                            <div className="text-[11px] text-text-muted">
+                              {c.has_live_flow
+                                ? 'Live flow exists — opens it'
+                                : 'No flow yet — creates one'}
+                            </div>
                           </div>
-                        </div>
-                        <Rocket size={13} className="text-accent-text shrink-0" />
-                      </button>
-                    </li>
-                  ))
+                          {isBusyForThis ? (
+                            <Loader2
+                              size={13}
+                              className="shrink-0 animate-spin text-text-muted"
+                              aria-label="Working"
+                            />
+                          ) : (
+                            <Rocket size={13} className="text-accent-text shrink-0" aria-hidden />
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })
                 )}
               </ul>
             </>
           ) : (
-            <form onSubmit={createProspect} className="space-y-2.5 p-3" noValidate>
+            <form onSubmit={createProspect} className="space-y-2.5 p-3">
               <p className="text-[11px] text-text-muted">
                 Welcome a fresh prospect. We&apos;ll create a lead row and an empty flow so you can attach a proposal next.
               </p>
@@ -329,8 +347,12 @@ export function StartSalesFlow({ clients }: { clients: ClientOption[] }) {
                   disabled={busy || prospectName.trim().length < 2}
                   className="gap-1.5"
                 >
-                  <Rocket size={12} />
-                  Create + open flow
+                  {busy ? (
+                    <Loader2 size={12} className="animate-spin" aria-hidden />
+                  ) : (
+                    <Rocket size={12} aria-hidden />
+                  )}
+                  {busy ? 'Creating…' : 'Create + open flow'}
                 </Button>
               </div>
             </form>
