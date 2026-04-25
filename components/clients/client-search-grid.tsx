@@ -309,8 +309,12 @@ function ClientCard({
   const staggerClass = animate ? 'animate-stagger-in' : '';
   const currentBucket = bucketFor(client.agency, client.inOnboarding);
 
+  // Reveal-on-hover: 15+ icon buttons across a roster grid is visual noise
+  // when most are inert most of the time. The card itself already uses a
+  // `group` class, so child opacity gates on `group-hover` / `group-focus-
+  // within`. Keyboard users still surface the buttons via tab focus.
   const actionButtons = (
-    <div className="flex items-center gap-0.5">
+    <div className="flex items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
       {client.dbId && (
         <MoveMenu
           mode={moveMode}
@@ -325,7 +329,7 @@ function ClientCard({
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onImpersonate(); }}
-          className="rounded-md p-1.5 text-text-muted hover:text-accent-text hover:bg-accent-surface/30 cursor-pointer transition-colors"
+          className="rounded-md p-1.5 text-text-muted hover:text-text-primary hover:bg-surface-hover cursor-pointer transition-colors"
           title={`View portal as ${client.name}`}
           aria-label={`View portal as ${client.name}`}
         >
@@ -358,14 +362,11 @@ function ClientCard({
         style={staggerDelay ? { animationDelay: staggerDelay } : undefined}
       >
         <div
-          className={`flex items-center gap-3 rounded-[10px] border border-nativz-border-light px-4 py-3 hover:bg-surface-hover focus-visible:ring-1 focus-visible:ring-accent-border transition-colors ${dimmed ? 'opacity-55 hover:opacity-80' : ''}`}
+          className={`flex items-center gap-3 rounded-[10px] border border-nativz-border-light px-4 py-3 hover:bg-surface-hover focus-visible:ring-1 focus-visible:ring-accent-border transition-colors ${dimmed ? 'opacity-60' : ''}`}
         >
           <ClientLogo src={client.logoUrl} name={client.name} abbreviation={client.abbreviation} size="sm" />
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <p className="text-[15px] font-medium text-text-primary truncate" title={client.name}>{client.name}</p>
-              {client.abbreviation && <span className="shrink-0 text-[11px] font-medium text-text-muted">{client.abbreviation}</span>}
-            </div>
+            <p className="text-[15px] font-medium text-text-primary truncate" title={client.name}>{client.name}</p>
             <p className="text-[12px] text-text-muted truncate">{client.industry || 'General'}</p>
           </div>
           <AgencyAssignmentLabel agency={client.agency} showWhenUnassigned className="shrink-0 hidden sm:block" />
@@ -396,17 +397,14 @@ function ClientCard({
       style={staggerDelay ? { animationDelay: staggerDelay } : undefined}
     >
       <div
-        className={`rounded-[10px] border border-nativz-border bg-surface p-4 transition-colors duration-200 hover:border-accent-border/50 focus-within:border-accent-border/50 ${dimmed ? 'opacity-55 hover:opacity-80' : ''}`}
+        className={`rounded-[10px] border border-nativz-border bg-surface p-4 transition-colors duration-200 hover:bg-surface-hover ${dimmed ? 'opacity-60' : ''}`}
       >
         <div className="relative flex items-start gap-3">
           <ClientLogo src={client.logoUrl} name={client.name} abbreviation={client.abbreviation} size="md" />
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <p className="text-[15px] font-medium text-text-primary truncate leading-tight" title={client.name}>{client.name}</p>
-                  {client.abbreviation && <span className="shrink-0 text-[11px] font-medium text-text-muted">{client.abbreviation}</span>}
-                </div>
+                <p className="text-[15px] font-medium text-text-primary truncate leading-tight" title={client.name}>{client.name}</p>
                 <p className="text-[13px] text-text-muted truncate mt-0.5">{client.industry || 'General'}</p>
               </div>
               <HealthBadge

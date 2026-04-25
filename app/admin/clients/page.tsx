@@ -102,7 +102,6 @@ export default async function AdminClientsPage() {
       <div className="cortex-page-gutter max-w-6xl mx-auto space-y-6">
         <SectionHeader
           title="Clients"
-          description={`Manage your client roster and brand profiles${clients.length > 0 ? ` · ${clients.length} total` : ''}.`}
           action={
             isSuperAdmin ? (
               <Link href="/admin/clients/onboard">
