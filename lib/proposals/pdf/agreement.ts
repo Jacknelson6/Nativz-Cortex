@@ -39,8 +39,8 @@ function resolveEmailAgencyBrand(agency: AgencyBrand): EmailAgencyBrand {
   if (agency === 'nativz') {
     return {
       companyName: 'Nativz',
-      signerName: 'Jack Nelson',
-      contactEmail: 'jack@nativz.io',
+      signerName: 'Cole',
+      contactEmail: 'cole@nativz.io',
       marketingHost: 'nativz.io',
       marketingUrl: 'https://nativz.io',
       logoUrl: getEmailLogoUrl('nativz'),
@@ -50,7 +50,7 @@ function resolveEmailAgencyBrand(agency: AgencyBrand): EmailAgencyBrand {
   return {
     companyName: 'Anderson Collaborative LLC',
     signerName: 'Trevor Anderson',
-    contactEmail: 'info@andersoncollaborative.com',
+    contactEmail: 'trevor@andersoncollaborative.com',
     marketingHost: 'andersoncollaborative.com',
     marketingUrl: 'https://andersoncollaborative.com',
     logoUrl: 'https://docs.andersoncollaborative.com/assets/ac-logo-dark.png',

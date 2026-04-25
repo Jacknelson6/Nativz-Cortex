@@ -205,12 +205,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Password reset pages don't require auth
-  if (
-    pathname === '/forgot-password' ||
-    pathname === '/reset-password' ||
-    pathname === '/forgot-password' ||
-    pathname === '/reset-password'
-  ) {
+  if (pathname === '/forgot-password' || pathname === '/reset-password') {
     supabaseResponse.headers.set('x-pathname', pathname);
     supabaseResponse.headers.set('x-agency', resolveAgencyForRequest(request));
     return supabaseResponse;
