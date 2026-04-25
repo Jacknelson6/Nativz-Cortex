@@ -30,6 +30,7 @@ export default function NerdPage() {
   const strategyBoardId = searchParams.get('strategyBoardId');
   const strategyBoardName = searchParams.get('strategyBoardName');
   const strategySource = searchParams.get('strategySource');
+  const promptParam = searchParams.get('prompt');
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -59,6 +60,7 @@ export default function NerdPage() {
   const abortRef = useRef<AbortController | null>(null);
   const pendingAttachmentsRef = useRef<ChatAttachment[]>([]);
   const strategyClientPrefilledRef = useRef(false);
+  const promptPrefilledRef = useRef(false);
   const strategySessionHintRef = useRef<string | null>(
     strategySource === 'content-lab'
       ? 'User opened this conversation from Strategy Lab. Prefer strategy, analytics, affiliate, and analysis-board tools where relevant.'
@@ -97,6 +99,20 @@ export default function NerdPage() {
       })
       .catch(() => {});
   }, []);
+
+  // Generic prefilled prompt (?prompt=…) — any deeplink can seed the composer
+  // with a starter message. URL param is consumed and removed once applied so
+  // subsequent navigations don't re-fire it.
+  useEffect(() => {
+    if (promptPrefilledRef.current) return;
+    if (!promptParam) return;
+    promptPrefilledRef.current = true;
+    setInput(promptParam);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('prompt');
+    const qs = params.toString();
+    router.replace(qs ? `/admin/nerd?${qs}` : '/admin/nerd', { scroll: false });
+  }, [promptParam, searchParams, router]);
 
   // Strategy Lab deep link: /admin/nerd?strategyClient=<uuid> — prefill input and client mention
   useEffect(() => {

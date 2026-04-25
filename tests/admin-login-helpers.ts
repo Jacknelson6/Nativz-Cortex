@@ -29,7 +29,9 @@ async function readInlineLoginError(page: Page): Promise<string | null> {
 
 export async function signInAsAdmin(page: Page, email: string, password: string): Promise<void> {
   const e = email.trim();
-  await page.goto('/admin/login', { waitUntil: 'load' });
+  // /admin/login 307s to /login (unified entry post brand-root migration);
+  // navigate straight to /login to skip the redirect.
+  await page.goto('/login', { waitUntil: 'load' });
   await page.locator('#email').fill(e);
   await page.locator('#password').fill(password);
   await page.getByRole('button', { name: /^sign in$/i }).click();

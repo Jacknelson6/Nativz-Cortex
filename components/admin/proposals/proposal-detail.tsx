@@ -284,22 +284,32 @@ export function ProposalDetail({
         <aside className="space-y-4">
           <section className="rounded-xl border border-nativz-border bg-surface p-4">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
-              Status
+              Timeline
             </h2>
             <dl className="mt-3 space-y-2 text-xs">
-              <Row label="Published" value={formatDate(proposal.published_at)} />
-              <Row label="Sent" value={formatDate(proposal.sent_at)} />
-              <Row label="Viewed" value={formatDate(proposal.viewed_at)} />
-              <Row
-                label="Signed"
-                value={formatDate(proposal.signed_at)}
-                icon={proposal.signed_at ? <CheckCircle2 size={11} className="text-emerald-300" /> : null}
-              />
-              <Row
-                label="Paid"
-                value={formatDate(proposal.paid_at)}
-                icon={proposal.paid_at ? <CheckCircle2 size={11} className="text-emerald-300" /> : null}
-              />
+              {/* Show only the rows that actually have data — empty rows are noise. */}
+              {proposal.published_at ? (
+                <Row label="Published" value={formatDate(proposal.published_at)} />
+              ) : null}
+              {proposal.sent_at ? <Row label="Sent" value={formatDate(proposal.sent_at)} /> : null}
+              {proposal.viewed_at ? <Row label="Viewed" value={formatDate(proposal.viewed_at)} /> : null}
+              {proposal.signed_at ? (
+                <Row
+                  label="Signed"
+                  value={formatDate(proposal.signed_at)}
+                  icon={<CheckCircle2 size={11} className="text-emerald-300" />}
+                />
+              ) : null}
+              {proposal.paid_at ? (
+                <Row
+                  label="Paid"
+                  value={formatDate(proposal.paid_at)}
+                  icon={<CheckCircle2 size={11} className="text-emerald-300" />}
+                />
+              ) : null}
+              {!proposal.published_at && !proposal.sent_at ? (
+                <p className="text-[11px] text-text-muted">No activity yet.</p>
+              ) : null}
             </dl>
           </section>
 
@@ -321,32 +331,22 @@ export function ProposalDetail({
           </section>
 
           {template ? (
-            <section className="rounded-xl border border-nativz-border bg-surface p-4">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
-                Source
-              </h2>
-              <dl className="mt-3 space-y-2 text-xs text-text-secondary">
-                <Row label="Template" value={template.name} />
-                <Row
-                  label="Source"
-                  value={
-                    <span className="font-mono text-[11px]">
-                      {template.source_repo}/{template.source_folder}
-                    </span>
-                  }
-                />
-                {repoHref ? (
+            <p className="text-[11px] text-text-muted">
+              Template: <span className="text-text-secondary">{template.name}</span>
+              {repoHref ? (
+                <>
+                  {' · '}
                   <a
                     href={repoHref}
                     target="_blank"
                     rel="noreferrer"
-                    className="mt-1 inline-flex items-center gap-1 text-[11px] text-nz-cyan hover:underline"
+                    className="inline-flex items-center gap-1 text-nz-cyan hover:underline"
                   >
-                    <Github size={11} /> Open generated folder
+                    <Github size={10} /> source
                   </a>
-                ) : null}
-              </dl>
-            </section>
+                </>
+              ) : null}
+            </p>
           ) : null}
 
           {proposal.stripe_payment_link_url ? (

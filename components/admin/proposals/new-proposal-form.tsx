@@ -27,6 +27,7 @@ export function NewProposalForm({ clients }: { clients: ClientOption[] }) {
   const [templatesError, setTemplatesError] = useState<string | null>(null);
 
   const [agencyFilter, setAgencyFilter] = useState<'all' | 'anderson' | 'nativz'>('all');
+  const [showOptional, setShowOptional] = useState(false);
   const [form, setForm] = useState({
     template_id: '',
     client_id: '',
@@ -212,31 +213,17 @@ export function NewProposalForm({ clients }: { clients: ClientOption[] }) {
       </section>
 
       <section className="rounded-xl border border-nativz-border bg-surface p-5">
-        <header className="mb-3">
+        <header className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-text-primary">Signer</h2>
-          <p className="mt-1 text-xs text-text-muted">
-            Who&rsquo;s getting the proposal email. Legal entity + address pre-fill the autofill pill on
-            the sign page so the prospect doesn&rsquo;t have to retype what we already know.
-          </p>
+          <button
+            type="button"
+            onClick={() => setShowOptional((v) => !v)}
+            className="text-[11px] text-text-muted hover:text-text-primary"
+          >
+            {showOptional ? '— Hide optional fields' : '+ Optional fields'}
+          </button>
         </header>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <label>
-            <span className="mb-1 block text-[10px] uppercase tracking-wider text-text-muted">
-              Client (optional)
-            </span>
-            <select
-              value={form.client_id}
-              onChange={(e) => setForm((f) => ({ ...f, client_id: e.target.value }))}
-              className="w-full rounded border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary"
-            >
-              <option value="">— No client (prospect) —</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
           <label>
             <span className="mb-1 block text-[10px] uppercase tracking-wider text-text-muted">
               Signer name
@@ -263,43 +250,69 @@ export function NewProposalForm({ clients }: { clients: ClientOption[] }) {
               className="w-full rounded border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary"
             />
           </label>
-          <label>
-            <span className="mb-1 block text-[10px] uppercase tracking-wider text-text-muted">
-              Signer title (optional)
-            </span>
-            <input
-              type="text"
-              value={form.signer_title}
-              onChange={(e) => setForm((f) => ({ ...f, signer_title: e.target.value }))}
-              placeholder="e.g. Owner, CEO"
-              className="w-full rounded border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary"
-            />
-          </label>
-          <label>
-            <span className="mb-1 block text-[10px] uppercase tracking-wider text-text-muted">
-              Client legal entity (optional)
-            </span>
-            <input
-              type="text"
-              value={form.signer_legal_entity}
-              onChange={(e) => setForm((f) => ({ ...f, signer_legal_entity: e.target.value }))}
-              placeholder="e.g. Acme Inc."
-              className="w-full rounded border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary"
-            />
-          </label>
-          <label>
-            <span className="mb-1 block text-[10px] uppercase tracking-wider text-text-muted">
-              Client address (optional)
-            </span>
-            <input
-              type="text"
-              value={form.signer_address}
-              onChange={(e) => setForm((f) => ({ ...f, signer_address: e.target.value }))}
-              placeholder="e.g. 123 Main St, Miami FL 33130"
-              className="w-full rounded border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary"
-            />
-          </label>
         </div>
+        {showOptional ? (
+          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+            <label>
+              <span className="mb-1 block text-[10px] uppercase tracking-wider text-text-muted">
+                Existing client (optional)
+              </span>
+              <select
+                value={form.client_id}
+                onChange={(e) => setForm((f) => ({ ...f, client_id: e.target.value }))}
+                className="w-full rounded border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary"
+              >
+                <option value="">— Prospect (no client) —</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="mb-1 block text-[10px] uppercase tracking-wider text-text-muted">
+                Signer title
+              </span>
+              <input
+                type="text"
+                value={form.signer_title}
+                onChange={(e) => setForm((f) => ({ ...f, signer_title: e.target.value }))}
+                placeholder="Owner, CEO"
+                className="w-full rounded border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary"
+              />
+            </label>
+            <label>
+              <span className="mb-1 block text-[10px] uppercase tracking-wider text-text-muted">
+                Client legal entity
+              </span>
+              <input
+                type="text"
+                value={form.signer_legal_entity}
+                onChange={(e) => setForm((f) => ({ ...f, signer_legal_entity: e.target.value }))}
+                placeholder="Acme Inc."
+                className="w-full rounded border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary"
+              />
+            </label>
+            <label>
+              <span className="mb-1 block text-[10px] uppercase tracking-wider text-text-muted">
+                Client address
+              </span>
+              <input
+                type="text"
+                value={form.signer_address}
+                onChange={(e) => setForm((f) => ({ ...f, signer_address: e.target.value }))}
+                placeholder="123 Main St, Miami FL 33130"
+                className="w-full rounded border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary"
+              />
+            </label>
+          </div>
+        ) : (
+          <p className="mt-2 text-[11px] text-text-muted">
+            Optional fields (legal entity, address, existing client, title) pre-fill the autofill
+            pill on the sign page so the signer types less.
+          </p>
+        )}
         <label className="mt-4 flex items-center gap-2 text-sm text-text-secondary">
           <input
             type="checkbox"
@@ -311,24 +324,6 @@ export function NewProposalForm({ clients }: { clients: ClientOption[] }) {
         </label>
       </section>
 
-      {selectedTemplate ? (
-        <section className="rounded-xl border border-nativz-border bg-surface p-5">
-          <header className="mb-3">
-            <h2 className="text-sm font-semibold text-text-primary">Preview</h2>
-            <p className="mt-1 text-xs text-text-muted">
-              We&rsquo;ll clone{' '}
-              <span className="font-mono text-text-secondary">
-                {selectedTemplate.source_repo}/{selectedTemplate.source_folder}
-              </span>{' '}
-              into a unique folder and commit. The public URL shape is{' '}
-              <span className="font-mono text-text-secondary">
-                {selectedTemplate.public_base_url}/&lt;auto-slug&gt;/
-              </span>
-              .
-            </p>
-          </header>
-        </section>
-      ) : null}
 
       {error ? <p className="text-sm text-coral-300" data-testid="generate-error">{error}</p> : null}
 
