@@ -11,13 +11,16 @@ interface ProjectsCalendarProps {
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+// Tinted toward the Nativz palette: cyan = brand/shoot, fuchsia = post-production
+// edit, coral = paid-media urgency. Task/content/strategy take calmer
+// non-brand tints so the brand colors keep their meaning.
 const TYPE_COLOR = {
-  shoot: 'bg-blue-500/80 text-white',
-  edit: 'bg-purple-500/80 text-white',
-  task: 'bg-emerald-500/80 text-white',
-  content: 'bg-amber-500/80 text-white',
-  paid_media: 'bg-pink-500/80 text-white',
-  strategy: 'bg-cyan-500/80 text-white',
+  shoot: 'bg-[#00AEEF]/80 text-white',
+  edit: 'bg-[#EC4899]/75 text-white',
+  task: 'bg-emerald-500/70 text-white',
+  content: 'bg-amber-500/75 text-white',
+  paid_media: 'bg-[#ED6B63]/75 text-white',
+  strategy: 'bg-indigo-400/75 text-white',
 } as const;
 
 const TYPE_ICON = {

@@ -196,8 +196,10 @@ function Card({ project, dragging = false }: { project: Project; dragging?: bool
 
   return (
     <div
-      className={`rounded-md border bg-surface p-3 ${
-        dragging ? 'shadow-elevated ring-1 ring-accent-text/30 border-accent-text/40' : 'border-nativz-border'
+      className={`rounded-lg border bg-surface p-3 transition-colors ${
+        dragging
+          ? 'shadow-elevated ring-1 ring-accent-text/30 border-accent-text/40'
+          : 'border-nativz-border hover:border-accent-border/40 hover:bg-surface-hover/40'
       }`}
     >
       <div className="flex items-start gap-2 mb-2">

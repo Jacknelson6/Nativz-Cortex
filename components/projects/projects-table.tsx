@@ -1,8 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Camera, Scissors, CheckSquare, Trash2 } from 'lucide-react';
+import { Camera, Scissors, CheckSquare, Trash2, FolderKanban } from 'lucide-react';
 import { toast } from 'sonner';
+import { EmptyState } from '@/components/shared/empty-state';
 import {
   type Project,
   STATUS_LABELS,
@@ -58,10 +59,11 @@ export function ProjectsTable({ projects, onUpdate, onDelete, onSelect }: Projec
 
   if (projects.length === 0) {
     return (
-      <div className="rounded-lg border border-nativz-border bg-surface p-12 text-center">
-        <p className="text-sm font-medium text-text-primary mb-1">No projects yet</p>
-        <p className="text-xs text-text-tertiary">Use the New button to add a task, shoot, or edit.</p>
-      </div>
+      <EmptyState
+        icon={<FolderKanban size={28} />}
+        title="No projects match your filters"
+        description="Try clearing the filters above, or use the New button to add a task, shoot, or edit."
+      />
     );
   }
 
@@ -152,9 +154,9 @@ function ProjectRow({
         <button
           type="button"
           onClick={() => onSelect(project.id)}
-          className="flex items-center gap-2 text-left text-text-primary hover:text-accent-text"
+          className="text-left text-sm font-medium text-text-primary hover:text-accent-text transition-colors"
         >
-          <span className="font-medium truncate">{project.title}</span>
+          <span className="truncate">{project.title}</span>
         </button>
       </td>
       <td className="px-3 py-2.5">
@@ -173,7 +175,9 @@ function ProjectRow({
         <select
           value={project.status}
           onChange={(e) => handleStatusChange(e.target.value as Project['status'])}
-          className="rounded border border-nativz-border bg-surface px-2 py-0.5 text-xs text-text-primary"
+          onClick={(e) => e.stopPropagation()}
+          className="rounded-md border border-nativz-border bg-surface-primary px-2 py-1 text-xs text-text-primary cursor-pointer hover:border-accent-border/40 focus:border-accent-border focus:outline-none focus:ring-1 focus:ring-accent-border transition-colors"
+          aria-label={`Status for ${project.title}`}
         >
           {Object.entries(STATUS_LABELS).map(([value, label]) => (
             <option key={value} value={value}>{label}</option>

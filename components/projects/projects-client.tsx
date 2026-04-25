@@ -8,10 +8,12 @@ import {
   Table as TableIcon,
   Calendar as CalendarIcon,
   Plus,
+  Search,
   Camera,
   Scissors,
   CheckSquare,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -154,9 +156,11 @@ export function ProjectsClient() {
   return (
     <div>
       <header className="mb-4 space-y-3">
-        {/* Row 1: type pills + create dropdown */}
+        {/* Row 1: type pills (left) + new dropdown (right). Pills match the
+            visual scale of <SectionTabs> — text-xs so they sit clearly under
+            the page-level Pipelines/Tasks toggle. */}
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             {TYPE_PILLS.map((pill) => {
               const active = typeFilter === pill.value;
               const count = counts[pill.value];
@@ -165,14 +169,14 @@ export function ProjectsClient() {
                   key={pill.value}
                   type="button"
                   onClick={() => updateParams({ type: pill.value === 'all' ? null : pill.value })}
-                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors ${
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
                     active
-                      ? 'bg-accent-surface text-text-primary font-semibold'
-                      : 'bg-surface text-text-secondary hover:bg-surface-hover hover:text-text-primary'
+                      ? 'bg-accent-surface text-accent-text ring-1 ring-inset ring-accent/40'
+                      : 'text-text-secondary hover:bg-surface-hover/60 hover:text-text-primary'
                   }`}
                 >
                   <span>{pill.label}</span>
-                  <span className="text-xs opacity-70">{count}</span>
+                  <span className={`tabular-nums ${active ? 'opacity-80' : 'text-text-muted'}`}>{count}</span>
                 </button>
               );
             })}
@@ -180,12 +184,26 @@ export function ProjectsClient() {
           <NewProjectButton onCreate={createProject} />
         </div>
 
-        {/* Row 2: filters + view switcher */}
+        {/* Row 2: search · filters · view switcher. Mirrors the toolbar in
+            /admin/clients (same border, surface, focus-ring treatment). */}
         <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[220px] max-w-md">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => updateParams({ q: e.target.value || null })}
+              placeholder="Search projects"
+              className="w-full rounded-lg border border-nativz-border bg-surface-primary pl-9 pr-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-border focus:outline-none focus:ring-1 focus:ring-accent-border transition-colors"
+              aria-label="Search projects"
+            />
+          </div>
+
           <select
             value={clientFilter}
             onChange={(e) => updateParams({ client: e.target.value || null })}
-            className="rounded-md border border-nativz-border bg-surface px-3 py-1.5 text-sm text-text-primary"
+            className="rounded-lg border border-nativz-border bg-surface-primary pl-3 pr-8 py-2 text-sm text-text-primary focus:border-accent-border focus:outline-none cursor-pointer"
+            aria-label="Filter by client"
           >
             <option value="">All clients</option>
             <option value="none">No client</option>
@@ -197,7 +215,8 @@ export function ProjectsClient() {
           <select
             value={assigneeFilter}
             onChange={(e) => updateParams({ assignee: e.target.value || null })}
-            className="rounded-md border border-nativz-border bg-surface px-3 py-1.5 text-sm text-text-primary"
+            className="rounded-lg border border-nativz-border bg-surface-primary pl-3 pr-8 py-2 text-sm text-text-primary focus:border-accent-border focus:outline-none cursor-pointer"
+            aria-label="Filter by assignee"
           >
             <option value="">All assignees</option>
             <option value="unassigned">Unassigned</option>
@@ -206,15 +225,7 @@ export function ProjectsClient() {
             ))}
           </select>
 
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => updateParams({ q: e.target.value || null })}
-            placeholder="Search title or description"
-            className="flex-1 min-w-[180px] max-w-xs rounded-md border border-nativz-border bg-surface px-3 py-1.5 text-sm text-text-primary placeholder:text-text-tertiary"
-          />
-
-          <div className="ml-auto flex items-center gap-1 rounded-lg border border-nativz-border bg-surface p-1">
+          <div className="ml-auto flex rounded-lg border border-nativz-border overflow-hidden">
             {VIEW_OPTIONS.map((opt) => {
               const active = view === opt.value;
               const Icon = opt.icon;
@@ -223,14 +234,17 @@ export function ProjectsClient() {
                   key={opt.value}
                   type="button"
                   onClick={() => updateParams({ view: opt.value === 'table' ? null : opt.value })}
-                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-sm transition-colors ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors ${
                     active
-                      ? 'bg-accent-surface text-text-primary font-medium'
-                      : 'text-text-secondary hover:text-text-primary'
+                      ? 'bg-accent-surface text-accent-text'
+                      : 'bg-surface-primary text-text-muted hover:text-text-secondary hover:bg-surface-hover/50'
                   }`}
+                  title={opt.label}
+                  aria-label={opt.label}
+                  aria-pressed={active}
                 >
                   <Icon size={14} />
-                  <span>{opt.label}</span>
+                  <span className="hidden sm:inline">{opt.label}</span>
                 </button>
               );
             })}
@@ -239,11 +253,7 @@ export function ProjectsClient() {
       </header>
 
       <main>
-        {loading ? (
-          <div className="rounded-lg border border-nativz-border bg-surface p-8 text-center text-sm text-text-tertiary">
-            Loading projects…
-          </div>
-        ) : view === 'table' ? (
+        {loading ? null : view === 'table' ? (
           <ProjectsTable
             projects={filtered}
             onUpdate={(updated) => setProjects((prev) => prev.map((p) => p.id === updated.id ? updated : p))}
@@ -278,13 +288,10 @@ function NewProjectButton({ onCreate }: { onCreate: (type: 'shoot' | 'edit' | 't
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="inline-flex items-center gap-1.5 rounded-md bg-accent-text px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-text/90 transition-colors"
-        >
+        <Button size="sm" variant="primary">
           <Plus size={14} />
-          <span>New</span>
-        </button>
+          New
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
         <DropdownMenuItem onClick={() => onCreate('task')}>
