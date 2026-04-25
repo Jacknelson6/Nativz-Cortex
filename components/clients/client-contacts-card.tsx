@@ -40,6 +40,10 @@ interface ClientContactsCardProps {
     job_title: string | null;
     last_login: string | null;
   }>;
+  /** When true, drops the outer Card chrome + the internal "Contacts" h2 +
+   *  the trailing Add button row, returning only the body so the caller can
+   *  embed it inside an InfoCard / equivalent surface. */
+  bare?: boolean;
 }
 
 const EMPTY_FORM = { name: '', email: '', phone: '', role: '', project_role: '', is_primary: false };
@@ -48,7 +52,7 @@ function getInitials(name: string): string {
   return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
 }
 
-export function ClientContactsCard({ clientId, clientName, vaultContacts = [], portalContacts: initialPortalContacts = [] }: ClientContactsCardProps) {
+export function ClientContactsCard({ clientId, clientName, vaultContacts = [], portalContacts: initialPortalContacts = [], bare = false }: ClientContactsCardProps) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [portalUsers, setPortalUsers] = useState(initialPortalContacts);
   const [loading, setLoading] = useState(true);
@@ -180,11 +184,17 @@ export function ClientContactsCard({ clientId, clientName, vaultContacts = [], p
 
   const hasAnyContacts = contacts.length > 0 || vaultContacts.length > 0 || portalUsers.length > 0;
 
+  const Wrapper = bare
+    ? ({ children }: { children: React.ReactNode }) => <div>{children}</div>
+    : ({ children }: { children: React.ReactNode }) => <Card>{children}</Card>;
+
   return (
     <>
-      <Card>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-text-primary">Contacts</h2>
+      <Wrapper>
+        <div className={`flex items-center justify-between ${bare ? 'mb-3' : 'mb-4'}`}>
+          {bare ? <span /> : (
+            <h2 className="text-base font-semibold text-text-primary">Contacts</h2>
+          )}
           <Button variant="ghost" size="sm" onClick={openAdd}>
             <Plus size={14} />
             Add
@@ -328,7 +338,7 @@ export function ClientContactsCard({ clientId, clientName, vaultContacts = [], p
             ))}
           </div>
         )}
-      </Card>
+      </Wrapper>
 
       {/* Add/Edit contact dialog */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} title={editingContact ? 'Edit contact' : 'Add contact'}>

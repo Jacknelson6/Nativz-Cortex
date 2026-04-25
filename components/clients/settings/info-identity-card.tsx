@@ -191,6 +191,7 @@ export function InfoIdentityCard({
               name={client.name}
               abbreviation={abbreviation}
               size="lg"
+              noBacking
             />
             <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl">
               <Pencil size={14} className="text-white" />
@@ -204,10 +205,6 @@ export function InfoIdentityCard({
           </p>
           <p className="mt-0.5 text-xs text-text-muted">
             Slug: <span className="font-mono text-text-secondary">{client.slug}</span>
-          </p>
-          <p className="mt-2 text-[11px] italic text-text-muted leading-relaxed">
-            Renaming or changing the slug lives in Danger zone — those touch
-            URLs, permissions, and reporting.
           </p>
         </div>
       </div>

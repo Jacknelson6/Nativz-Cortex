@@ -119,9 +119,13 @@ function UpPromoteModal({
 export function IntegrationsTable({
   clientId,
   hasAffiliateIntegration,
+  bare = false,
 }: {
   clientId: string;
   hasAffiliateIntegration?: boolean;
+  /** When true, drops the outer Card chrome so the table embeds inside an
+   *  InfoCard / equivalent surface without nested cards. */
+  bare?: boolean;
 }) {
   const [profiles, setProfiles] = useState<SocialProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -273,9 +277,17 @@ export function IntegrationsTable({
 
   const connectedCount = rows.filter((r) => r.connected).length;
 
+  const Shell = bare
+    ? ({ children }: { children: React.ReactNode }) => (
+      <div className="rounded-lg border border-nativz-border overflow-hidden">{children}</div>
+    )
+    : ({ children }: { children: React.ReactNode }) => (
+      <Card className="p-0 overflow-hidden">{children}</Card>
+    );
+
   return (
     <>
-      <Card className="p-0 overflow-hidden">
+      <Shell>
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-nativz-border">
           <div className="text-xs text-text-muted">
             Showing {rows.length} of {rows.length} rows
@@ -391,7 +403,7 @@ export function IntegrationsTable({
             </table>
           </div>
         )}
-      </Card>
+      </Shell>
 
       {showUpPromoteModal && (
         <UpPromoteModal

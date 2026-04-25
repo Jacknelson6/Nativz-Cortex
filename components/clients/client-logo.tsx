@@ -20,6 +20,10 @@ interface ClientLogoProps {
   abbreviation?: string | null;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
+  /** When true, the rounded chip border + dark fill behind a logo image is
+   *  dropped so the logo floats directly on its parent surface. Initials
+   *  fallback still gets its color tile (otherwise letters disappear). */
+  noBacking?: boolean;
 }
 
 const SIZE_CLASSES = {
@@ -60,15 +64,16 @@ function getColor(name: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
-export function ClientLogo({ src, name, abbreviation, size = 'md', className = '' }: ClientLogoProps) {
+export function ClientLogo({ src, name, abbreviation, size = 'md', className = '', noBacking = false }: ClientLogoProps) {
   const [failed, setFailed] = useState(false);
   const sizeClass = SIZE_CLASSES[size];
   const pad = PADDING[size];
+  const backing = noBacking ? '' : 'border border-white/[0.08] bg-white/[0.04]';
 
   if (src && !failed) {
     return (
       <div
-        className={`shrink-0 overflow-hidden border border-white/[0.08] bg-white/[0.04] flex items-center justify-center ${sizeClass} ${pad} ${className}`}
+        className={`shrink-0 overflow-hidden flex items-center justify-center ${backing} ${sizeClass} ${pad} ${className}`}
       >
         <img
           src={src}
