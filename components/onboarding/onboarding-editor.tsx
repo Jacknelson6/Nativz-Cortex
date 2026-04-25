@@ -23,10 +23,6 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ClientLogo } from '@/components/clients/client-logo';
-import {
-  OnboardingEmailTemplatesPanel,
-  type EmailTemplate,
-} from '@/components/onboarding/onboarding-email-templates-panel';
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -110,20 +106,14 @@ export function OnboardingEditor({
   initialPhases,
   initialGroups,
   initialItems,
-  emailTemplates = [],
   availableTemplates = [],
-  contactFirstName = null,
-  contactEmail = null,
   initialUploads = [],
 }: {
   initialTracker: Tracker;
   initialPhases: Phase[];
   initialGroups: Group[];
   initialItems: Item[];
-  emailTemplates?: EmailTemplate[];
   availableTemplates?: AvailableTemplate[];
-  contactFirstName?: string | null;
-  contactEmail?: string | null;
   initialUploads?: UploadRow[];
 }) {
   const router = useRouter();
@@ -560,29 +550,6 @@ export function OnboardingEditor({
         </section>
       )}
 
-      {/* Email templates — hidden on templates themselves (they have no
-          client context to interpolate against). */}
-      {!tracker.is_template && (
-        <section className="space-y-3">
-          <div>
-            <h2 className="text-base font-semibold text-text-primary">Email templates</h2>
-            <p className="text-[13px] text-text-muted">
-              Pre-filled emails for this tracker — copy and paste into Gmail.
-            </p>
-          </div>
-          <OnboardingEmailTemplatesPanel
-            templates={emailTemplates}
-            trackerId={tracker.id}
-            defaultRecipientEmail={contactEmail}
-            context={{
-              clientName: tracker.clients?.name ?? 'Client',
-              service: tracker.service,
-              shareUrl,
-              contactFirstName,
-            }}
-          />
-        </section>
-      )}
     </div>
   );
 }

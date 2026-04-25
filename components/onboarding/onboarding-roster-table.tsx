@@ -141,7 +141,7 @@ export function OnboardingRosterTable({
       }
       const { tracker } = await res.json() as { tracker: { id: string } };
       toast.success('Tracker created');
-      router.push(`/admin/onboarding/${tracker.id}`);
+      router.push(`/admin/onboarding/tracker/${tracker.id}`);
     } finally {
       setCreating(false);
     }
@@ -163,7 +163,7 @@ export function OnboardingRosterTable({
       }
       const { tracker } = await res.json() as { tracker: { id: string } };
       toast.success('Template created');
-      router.push(`/admin/onboarding/${tracker.id}`);
+      router.push(`/admin/onboarding/tracker/${tracker.id}`);
     } finally {
       setCreating(false);
     }
@@ -257,7 +257,7 @@ export function OnboardingRosterTable({
                   return (
                     <tr
                       key={t.id}
-                      onClick={() => router.push(`/admin/onboarding/${t.id}`)}
+                      onClick={() => router.push(`/admin/onboarding/tracker/${t.id}`)}
                       className="border-b border-nativz-border last:border-b-0 hover:bg-surface-hover/20 cursor-pointer transition-colors"
                     >
                       <Td>
