@@ -20,7 +20,7 @@ test.describe('Full onboarding + portal + search flow', () => {
 
     // ── STEP 1: Admin logs in ──────────────────────────────────────────
     console.log('🔄 Step 1: Admin login...');
-    await page.goto(`${BASE_URL}/admin/login`);
+    await page.goto(`${BASE_URL}/login`);
     await page.waitForSelector('input[type="email"]', { timeout: 10000 });
     await page.locator('input[type="email"]').fill(ADMIN_EMAIL);
     await page.locator('input[type="password"]').fill(ADMIN_PASSWORD);
@@ -111,7 +111,7 @@ test.describe('Full onboarding + portal + search flow', () => {
 
     if (inviteErr) throw new Error(`Failed to create invite: ${inviteErr.message}`);
     const inviteToken = invite!.token;
-    const inviteUrl = `${BASE_URL}/portal/join/${inviteToken}`;
+    const inviteUrl = `${BASE_URL}/join/${inviteToken}`;
     console.log('✅ Step 4: Invite created:', inviteUrl);
 
     // ── STEP 5: Validate invite via API ───────────────────────────────
@@ -155,7 +155,7 @@ test.describe('Full onboarding + portal + search flow', () => {
 
     // ── STEP 7: Log in as portal user ─────────────────────────────────
     console.log('🔄 Step 7: Portal login...');
-    await portalPage.goto(`${BASE_URL}/portal/login`);
+    await portalPage.goto(`${BASE_URL}/login`);
     await portalPage.waitForSelector('input[type="email"]', { timeout: 10000 });
     await portalPage.locator('input[type="email"]').fill(testEmail);
     await portalPage.locator('input[type="password"]').fill(testPassword);
@@ -166,7 +166,7 @@ test.describe('Full onboarding + portal + search flow', () => {
 
     // ── STEP 8: Navigate to search ────────────────────────────────────
     console.log('🔄 Step 8: Running search...');
-    await portalPage.goto(`${BASE_URL}/portal/search`);
+    await portalPage.goto(`${BASE_URL}/finder`);
     await portalPage.waitForLoadState('networkidle');
     await portalPage.screenshot({ path: 'test-results/step8-search-page.png' });
 
@@ -183,7 +183,7 @@ test.describe('Full onboarding + portal + search flow', () => {
     await searchBtn.click();
 
     // Wait for navigation to processing or results page
-    await portalPage.waitForURL((url) => url.pathname !== '/portal/search', { timeout: 20000 });
+    await portalPage.waitForURL((url) => url.pathname !== '/finder', { timeout: 20000 });
     console.log('✅ Step 8: Search started →', portalPage.url());
     await portalPage.screenshot({ path: 'test-results/step8-search-started.png' });
 

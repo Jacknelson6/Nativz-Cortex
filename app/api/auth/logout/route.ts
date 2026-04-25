@@ -6,7 +6,7 @@ import { ADMIN_ACTIVE_CLIENT_COOKIE } from '@/lib/active-brand';
  * POST /api/auth/logout
  *
  * Sign out the current user via Supabase Auth. Always redirects to the
- * unified login page at /admin/login.
+ * unified login page at /login.
  *
  * @auth None required (no-op if not authenticated)
  * @returns {{ redirectTo: string }} Redirect path for the client to navigate to

@@ -23,19 +23,37 @@ export default async function NotesBoardPage({
 
   const admin = createAdminClient();
   const [{ data: userRow }, { data: board }] = await Promise.all([
-    admin.from('users').select('role').eq('id', user.id).single(),
+    admin.from('users').select('role, is_super_admin').eq('id', user.id).single(),
     admin
       .from('moodboard_boards')
-      .select('id, name, user_id, is_personal, scope')
+      .select('id, name, user_id, is_personal, scope, client_id')
       .eq('id', id)
       .maybeSingle(),
   ]);
-  const isAdmin = userRow?.role === 'admin';
+  const isAdmin =
+    userRow?.is_super_admin === true ||
+    userRow?.role === 'admin' ||
+    userRow?.role === 'super_admin';
+  const isViewer = userRow?.role === 'viewer';
 
   if (!board) notFound();
 
-  const canSee =
-    isAdmin || (board.is_personal === true && board.user_id === user.id);
+  // Phase 2 regression fix: viewers must still be able to open brand-scoped
+  // boards their org owns (this used to live in /portal/notes/[id]). Admins
+  // see everything; personal-board owners see their own; viewers see their
+  // org's boards via user_client_access.
+  let canSee = isAdmin || (board.is_personal === true && board.user_id === user.id);
+
+  if (!canSee && isViewer && board.scope === 'client' && board.client_id) {
+    const { data: access } = await admin
+      .from('user_client_access')
+      .select('client_id')
+      .eq('user_id', user.id)
+      .eq('client_id', board.client_id as string)
+      .maybeSingle();
+    canSee = Boolean(access);
+  }
+
   if (!canSee) notFound();
 
   return <PersonalMoodboard boardId={board.id} boardName={board.name ?? 'Untitled board'} />;

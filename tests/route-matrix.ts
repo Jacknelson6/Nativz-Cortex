@@ -1,9 +1,13 @@
 /**
  * Static app routes for E2E redirect / crawl coverage.
  * Dynamic segments ([slug], [id], …) are omitted — those are covered indirectly or via authenticated crawl.
+ *
+ * Phase 2 of the brand-root migration unified admin + viewer surfaces under
+ * the `(app)/*` shell. /portal/* is retired; what's left is auth flows
+ * (forgot-password, reset-password, join) and a redirect stub for /portal/login.
  */
 
-/** Expect unauthenticated session → final URL matches /admin/login */
+/** Expect unauthenticated session → final URL matches /login */
 export const ADMIN_PROTECTED_ROUTES: string[] = [
   '/admin/dashboard',
   '/admin/clients',
@@ -37,24 +41,21 @@ export const ADMIN_PROTECTED_ROUTES: string[] = [
   '/admin/competitor-tracking/meta-ads',
 ];
 
-/** Expect unauthenticated session → final URL matches /portal/login */
-export const PORTAL_PROTECTED_ROUTES: string[] = [
-  '/portal/dashboard',
-  '/portal/search/new',
-  '/portal/reports',
-  '/portal/settings',
-  '/portal/preferences',
-  '/portal/knowledge',
-  '/portal/calendar',
-  '/portal/notifications',
-  '/portal/brand',
-  '/portal/analyze',
-  '/portal/nerd',
-  '/portal/strategy-lab',
+/**
+ * Viewer-accessible brand surfaces in the unified `(app)/*` shell. Used by
+ * the post-login viewer crawl. Anything cost-driving (spying, ads,
+ * finder/monitors) is admin-only and lives in ADMIN_PROTECTED_ROUTES.
+ */
+export const VIEWER_PROTECTED_ROUTES: string[] = [
+  '/finder/new',
+  '/lab',
+  '/brain',
+  '/notes',
+  '/brand-profile',
 ];
 
-/** Logged-in portal crawl — minimal client surface (research + settings only). */
-export const PORTAL_E2E_MINIMAL_STATIC_ROUTES: string[] = ['/portal/search/new', '/portal/settings'];
+/** Logged-in viewer crawl — minimal surface (research + brand profile). */
+export const VIEWER_E2E_MINIMAL_STATIC_ROUTES: string[] = ['/finder/new', '/brand-profile'];
 
 /**
  * Every static admin `page.tsx` (no `[param]`) — post-login E2E crawl.
@@ -66,5 +67,12 @@ export const ADMIN_E2E_FULL_STATIC_ROUTES: string[] = [
   '/lab',
 ];
 
-/** Full portal static shells for post-login crawl. */
-export const PORTAL_E2E_FULL_STATIC_ROUTES: string[] = [...PORTAL_E2E_MINIMAL_STATIC_ROUTES];
+/** Full viewer static shells for post-login crawl. */
+export const VIEWER_E2E_FULL_STATIC_ROUTES: string[] = [...VIEWER_PROTECTED_ROUTES];
+
+// Back-compat aliases — the old PORTAL_* exports are kept for any test
+// helper still importing under the old name. New tests should use the
+// VIEWER_* exports above.
+export const PORTAL_PROTECTED_ROUTES = VIEWER_PROTECTED_ROUTES;
+export const PORTAL_E2E_MINIMAL_STATIC_ROUTES = VIEWER_E2E_MINIMAL_STATIC_ROUTES;
+export const PORTAL_E2E_FULL_STATIC_ROUTES = VIEWER_E2E_FULL_STATIC_ROUTES;

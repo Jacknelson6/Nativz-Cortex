@@ -6,7 +6,7 @@ import { getEffectiveAccessContext } from '@/lib/portal/effective-access';
 
 // NAT-57 follow-up: every client has one "slot" per platform. Admins
 // manage slots from the brand profile (link handle, mark no-account,
-// unset); portal users see them read-only on their /portal/brand-profile.
+// unset); portal users see them read-only on /brand-profile.
 
 const PLATFORMS = ['instagram', 'tiktok', 'facebook', 'youtube'] as const;
 type Platform = (typeof PLATFORMS)[number];
