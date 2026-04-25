@@ -95,6 +95,86 @@ export async function createFlowForClient(opts: {
 }
 
 /**
+ * Idempotent flow ensure-or-link. Used by the public sign endpoint to
+ * guarantee a flow exists for the proposal's client_id and that the flow
+ * is linked to the proposal. Three branches:
+ *
+ *   1. A live flow exists AND already references this proposal → no-op.
+ *   2. A live flow exists but doesn't reference this proposal → patch
+ *      `proposal_id` and bump status to `desiredStatus` (defaults to the
+ *      flow's current status — caller decides if a transition is wanted).
+ *   3. No live flow exists → create one with the desired status, link
+ *      proposal_id, scaffold the always-first agreement_payment segment.
+ *
+ * Returns the resolved flow row in every case.
+ */
+export async function ensureFlowForClient(opts: {
+  clientId: string;
+  proposalId: string | null;
+  desiredStatus?: FlowStatus;
+  createdBy: string | null;
+  admin?: AdminClient;
+}): Promise<{ ok: true; flow: Flow; created: boolean } | { ok: false; error: string }> {
+  const admin = opts.admin ?? createAdminClient();
+
+  const { data: existing } = await admin
+    .from('onboarding_flows')
+    .select('*')
+    .eq('client_id', opts.clientId)
+    .not('status', 'in', '(archived,completed)')
+    .maybeSingle();
+
+  if (existing) {
+    const patch: Partial<Flow> = {};
+    if (opts.proposalId && existing.proposal_id !== opts.proposalId) {
+      patch.proposal_id = opts.proposalId;
+    }
+    if (opts.desiredStatus && existing.status !== opts.desiredStatus) {
+      patch.status = opts.desiredStatus;
+    }
+    if (Object.keys(patch).length === 0) {
+      return { ok: true, flow: existing as Flow, created: false };
+    }
+    const { data: updated, error: updErr } = await admin
+      .from('onboarding_flows')
+      .update(patch)
+      .eq('id', existing.id)
+      .select('*')
+      .single();
+    if (updErr || !updated) {
+      return { ok: false, error: updErr?.message ?? 'flow update failed' };
+    }
+    return { ok: true, flow: updated as Flow, created: false };
+  }
+
+  const { data: created, error } = await admin
+    .from('onboarding_flows')
+    .insert({
+      client_id: opts.clientId,
+      status: opts.desiredStatus ?? 'awaiting_payment',
+      proposal_id: opts.proposalId,
+      created_by: opts.createdBy,
+    })
+    .select('*')
+    .single();
+  if (error || !created) {
+    return { ok: false, error: error?.message ?? 'flow insert failed' };
+  }
+
+  await admin.from('onboarding_flow_segments').insert({
+    flow_id: created.id,
+    kind: 'agreement_payment',
+    tracker_id: null,
+    position: 0,
+    // Sign-time path means the agreement is already signed — segment
+    // tracker pulls live state from the proposal_events trail.
+    status: opts.desiredStatus === 'awaiting_payment' ? 'in_progress' : 'pending',
+  });
+
+  return { ok: true, flow: created as Flow, created: true };
+}
+
+/**
  * Persistent "Start onboarding" toasts the active admin should still see.
  * Fires whenever a flow they created is in `needs_proposal` status and
  * hasn't been dismissed. Closing it just sets toast_dismissed_at — the

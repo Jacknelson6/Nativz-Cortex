@@ -13,6 +13,7 @@ import {
 import { getFromAddress, getReplyTo } from '@/lib/email/resend';
 import { logLifecycleEvent } from '@/lib/lifecycle/state-machine';
 import { publicProposalUrl } from '@/lib/proposals/public-url';
+import { ensureFlowForClient } from '@/lib/onboarding/flows';
 import type { AgencyBrand } from '@/lib/agency/detect';
 
 export const runtime = 'nodejs';
@@ -264,10 +265,35 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
       admin,
     });
   }
-  // Onboarding flow stays in `awaiting_payment` after sign — only the
-  // proposal-paid webhook advances it to `active`. We just bump the
-  // updated_at timestamp so the flow row reflects recent activity.
-  if (linkedFlowId) {
+  // Sales-pipeline unification (2026-04-25): every signed proposal
+  // guarantees a live onboarding flow exists for its client_id. Three
+  // cases the helper handles:
+  //   - flow already linked → bump status to awaiting_payment + no-op
+  //   - live flow exists but no proposal_id → patch the link
+  //   - no live flow exists → create one with agreement_payment segment
+  // We pass createdBy=null because the signer is not an admin user.
+  // After this, the proposal-paid Stripe webhook flips the flow to
+  // 'active' and fans out the kickoff/POC emails.
+  if (clientId) {
+    const flowResult = await ensureFlowForClient({
+      clientId,
+      proposalId: proposal.id,
+      desiredStatus: 'awaiting_payment',
+      createdBy: null,
+      admin,
+    });
+    if (!flowResult.ok) {
+      console.error('[proposals:sign] flow ensure failed', flowResult.error);
+      // Non-fatal — proposal is signed; admin can recover from /admin/sales.
+    } else if (!linkedFlowId && flowResult.flow.id) {
+      // Back-link the proposal to the flow we just created/found so the
+      // detail page renders the correct flow context for the next visitor.
+      await admin
+        .from('proposals')
+        .update({ onboarding_flow_id: flowResult.flow.id })
+        .eq('id', proposal.id);
+    }
+  } else if (linkedFlowId) {
     await admin
       .from('onboarding_flows')
       .update({ updated_at: new Date().toISOString() })

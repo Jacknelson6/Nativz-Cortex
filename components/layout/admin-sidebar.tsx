@@ -15,7 +15,6 @@ import {
   MessagesSquare,
   Receipt,
   CreditCard,
-  FileSignature,
   Settings as SettingsIcon,
   Users,
   BookUser,
@@ -25,10 +24,10 @@ import {
   Brain,
   Cpu,
   Gauge,
-  ListChecks,
   Telescope,
   Briefcase,
   CheckSquare,
+  Workflow,
 } from 'lucide-react';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
@@ -134,12 +133,16 @@ const NAV_SECTIONS: NavSection[] = [
           // Ordered per Jack 2026-04-23: client-facing surfaces up top,
           // internal ops in the middle, platform admin at the bottom.
           { href: '/admin/clients', label: 'Clients', icon: Contact },
-          { href: '/admin/onboarding', label: 'Onboarding', icon: ListChecks },
+          // Sales = unified pipeline (replaces standalone Proposals +
+          // Onboarding entries). Spec:
+          // docs/superpowers/specs/2026-04-25-sales-pipeline-unification.md.
+          // Both legacy hrefs still redirect server-side, so any external
+          // bookmarks land on the correct sub-filter.
+          { href: '/admin/sales', label: 'Sales', icon: Workflow },
           { href: '/admin/users', label: 'Users', icon: Users },
           { href: '/admin/scheduling', label: 'Scheduling', icon: Calendar },
           { href: '/admin/accounting', label: 'Accounting', icon: Receipt },
           { href: '/admin/revenue', label: 'Revenue', icon: CreditCard },
-          { href: '/admin/proposals', label: 'Proposals', icon: FileSignature },
           { href: '/admin/notifications', label: 'Notifications', icon: Bell },
           // Project Management = pipelines / sprints (the editing pipeline,
           // shoot scheduling, larger projects). /admin/shoots + /admin/edits
@@ -209,6 +212,7 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/tasks',
   '/admin/scheduling',
   '/admin/clients',
+  '/admin/sales',
   '/admin/users',
   '/admin/presentations',
   '/admin/analyze-social',
