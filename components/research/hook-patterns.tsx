@@ -71,8 +71,8 @@ export function HookPatterns({ hooks }: HookPatternsProps) {
   return (
     <Card className="space-y-3">
       <div>
-        <CardTitle className="text-base font-semibold text-text-primary flex items-center gap-2">
-          <Zap size={16} className="text-accent2-text" />
+        <CardTitle className="flex items-center gap-2">
+          <Zap size={18} className="text-accent2-text" />
           Hook patterns
         </CardTitle>
         <p className="text-xs text-text-muted mt-1">

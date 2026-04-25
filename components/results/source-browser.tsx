@@ -58,7 +58,7 @@ export function SourceBrowser({
 
   const allSorted = useMemo(
     () =>
-      sortSources(listSources, 'views', {
+      sortSources(listSources, 'similar', {
         searchQuery,
         industry: clientContext?.industry,
         clientName: clientContext?.name,
@@ -90,10 +90,7 @@ export function SourceBrowser({
   return (
     <section className="rounded-2xl border border-nativz-border/50 bg-background/20 p-4 sm:p-5">
       <div className="mb-4">
-        <h3 className="text-lg font-semibold tracking-tight text-text-primary sm:text-xl">Sources</h3>
-        <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-text-muted">
-          Short-form video sources across platforms, most viewed first, left to right across each row
-        </p>
+        <h3 className="text-lg font-semibold tracking-tight text-text-primary">Sources</h3>
       </div>
 
       <div className="relative">

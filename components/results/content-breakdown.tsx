@@ -25,7 +25,7 @@ export function ContentBreakdown({ data }: ContentBreakdownProps) {
 
   return (
     <Card>
-      <CardTitle className="text-base font-semibold">Content breakdown</CardTitle>
+      <CardTitle>Content breakdown</CardTitle>
 
       {/* Tabs */}
       <div className="mt-5 flex gap-1 rounded-lg bg-surface-hover p-1">

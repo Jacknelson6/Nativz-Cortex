@@ -20,6 +20,10 @@ import { TIME_RANGE_OPTIONS } from '@/lib/types/search';
 import type { SearchPlatform } from '@/lib/types/search';
 import { PLATFORM_CONFIG } from '@/components/search/platform-icon';
 
+/** Platforms submitted with every search. Hoisted out of the component so
+ *  the array isn't re-allocated on each render. */
+const SEARCH_PLATFORMS: SearchPlatform[] = ['web', 'reddit', 'youtube', 'tiktok'];
+
 interface ResearchTopicFormProps {
   clients: ClientOption[];
   initialQuery?: string;
@@ -87,7 +91,6 @@ export function ResearchTopicForm({
     // where the form showed a stale brand (Museum of Illusions) while
     // the top-bar pill already pointed somewhere else.
     const clientId = portalMode ? fixedClientId : initialClientId;
-    const platforms = new Set<SearchPlatform>(['web', 'reddit', 'youtube', 'tiktok']);
     const [timeRange, setTimeRange] = useState('last_3_months');
     const [language] = useState('all');
     const [country] = useState('us');
@@ -119,7 +122,7 @@ export function ResearchTopicForm({
           search_mode: searchMode,
           // Always include web; per-platform counts are admin-controlled via
           // scraper_settings, so we no longer send a volume tier.
-          platforms: Array.from(new Set([...platforms, 'web'])),
+          platforms: SEARCH_PLATFORMS,
         };
 
         const res = await fetch('/api/search/start', {
@@ -189,8 +192,8 @@ export function ResearchTopicForm({
     const bulkHasSelection = bulkIds.length > 0;
     const bulkReady = bulkHasSelection && bulkClientId != null;
     const contentLabHref = bulkReady
-      ? `/admin/strategy-lab/${bulkClientId}`
-      : '/admin/strategy-lab';
+      ? `/lab/${bulkClientId}`
+      : '/lab';
 
     return (
       <div className="w-full">
@@ -271,13 +274,17 @@ export function ResearchTopicForm({
 
               {/* Platforms — Web / Reddit / YouTube / TikTok. Muted so the */}
               {/* pill reads as a quiet indicator, not a brand-colored legend. */}
-              <div className={pillBtn}>
-                {(['web', 'reddit', 'youtube', 'tiktok'] as const).map((p) => {
+              <div
+                className={pillBtn}
+                role="img"
+                aria-label="Platforms scanned: web, reddit, youtube, tiktok"
+              >
+                {SEARCH_PLATFORMS.map((p) => {
                   const cfg = PLATFORM_CONFIG[p];
                   if (!cfg) return null;
                   const Icon = cfg.icon;
                   return (
-                    <span key={p} title={cfg.label} className="text-text-secondary">
+                    <span key={p} aria-hidden className="text-text-secondary">
                       <Icon size={15} />
                     </span>
                   );
@@ -290,7 +297,7 @@ export function ResearchTopicForm({
               onClick={handlePrimaryClick}
               disabled={!step1Valid || loading}
               aria-label="Run research"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-accent/40 bg-accent text-white shadow-[0_0_24px_-6px_rgba(91,163,230,0.55)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40 sm:h-9 sm:w-9"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-accent/40 bg-accent text-white shadow-[0_0_24px_-6px_rgba(91,163,230,0.55)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-40"
             >
               {loading ? (
                 <Loader2 size={18} className="animate-spin" aria-hidden />

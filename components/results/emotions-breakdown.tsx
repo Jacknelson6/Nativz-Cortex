@@ -159,7 +159,7 @@ export function EmotionsBreakdown({ emotions }: EmotionsBreakdownProps) {
 
   return (
     <Card>
-      <CardTitle className="text-base font-semibold">Emotions</CardTitle>
+      <CardTitle>Emotions</CardTitle>
       <div className="mt-5 space-y-4">
         {displayed.map((e) => {
           const emoji = getEmoji(e.emotion);

@@ -250,6 +250,10 @@ export function SearchProcessing({
       setElapsed(Math.floor((Date.now() - t0) / 1000));
     }, 1000);
 
+    // Cadence: 500ms (was 100ms). The CSS on the bar already interpolates
+    // smoothly between setState ticks (transition-all duration-300 ease-out),
+    // so we don't need 10 renders/sec to look fluid. ~5x fewer re-renders
+    // over a ~4m31s run without any visible change.
     intervalsRef.current.progress = setInterval(() => {
       if (apiErrorRef.current) return;
 
@@ -274,11 +278,11 @@ export function SearchProcessing({
       const stage = stages[currentStage];
       const diff = stage.target - currentProgress;
       if (diff > 0) {
-        currentProgress += Math.max(0.1, diff * 0.03);
+        currentProgress += Math.max(0.5, diff * 0.15);
         currentProgress = Math.min(currentProgress, stage.target);
         setProgress(currentProgress);
       }
-    }, 100);
+    }, 500);
   }
 
   async function pollUntilTerminal(maxAttempts = 450): Promise<void> {

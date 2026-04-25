@@ -112,7 +112,7 @@ export function ViralCarousel({ videos }: ViralCarouselProps) {
     <div className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold text-text-primary flex items-center gap-2">
+        <h3 className="text-lg font-semibold tracking-tight text-text-primary flex items-center gap-2">
           <Flame size={18} className="text-pink-400" />
           Most viral
         </h3>

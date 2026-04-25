@@ -118,8 +118,8 @@ export function WebContextSection({ serpResults, redditThreads }: WebContextSect
       {redditThreads.length > 0 && (
         <div className="rounded-xl border border-nativz-border bg-surface p-5 space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
-              <MessageSquare size={16} className="text-orange-400" />
+            <h3 className="text-lg font-semibold tracking-tight text-text-primary flex items-center gap-2">
+              <MessageSquare size={18} className="text-orange-400" />
               Reddit discussions
             </h3>
             <span className="text-xs text-text-muted">
@@ -138,8 +138,8 @@ export function WebContextSection({ serpResults, redditThreads }: WebContextSect
       {serpResults.length > 0 && (
         <div className="rounded-xl border border-nativz-border bg-surface p-5 space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
-              <Globe size={16} className="text-cyan-400" />
+            <h3 className="text-lg font-semibold tracking-tight text-text-primary flex items-center gap-2">
+              <Globe size={18} className="text-cyan-400" />
               Web landscape
             </h3>
             <span className="text-xs text-text-muted">

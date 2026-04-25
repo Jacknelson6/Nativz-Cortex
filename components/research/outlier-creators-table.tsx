@@ -79,7 +79,7 @@ export function OutlierCreatorsTable({ videos }: OutlierCreatorsTableProps) {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h3 className="text-base font-semibold text-white flex items-center gap-2">
+          <h3 className="text-lg font-semibold tracking-tight text-text-primary flex items-center gap-2">
             <Rocket size={18} className="text-pink-400" />
             Outlier creators
           </h3>

@@ -111,7 +111,7 @@ export function ViewsOverTime({ videos }: ViewsOverTimeProps) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
         <div className="flex items-center gap-2">
           <ChartLine size={18} className="text-text-muted" />
-          <h3 className="text-sm font-bold text-text-primary">Views over time</h3>
+          <h3 className="text-lg font-semibold tracking-tight text-text-primary">Views over time</h3>
         </div>
         <div className="flex gap-1 rounded-lg bg-surface-hover p-1">
           {PLATFORM_TABS.map((tab) => (

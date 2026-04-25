@@ -64,8 +64,8 @@ export function AiTakeaways({
       {engagementDrivers.length > 0 ? (
         <div className="space-y-4">
           <div className="border-b border-nativz-border/60 pb-4">
-            <h4 className="text-lg font-semibold tracking-tight text-text-primary sm:text-xl">
-              Recommended Content Pillars
+            <h4 className="text-lg font-semibold tracking-tight text-text-primary">
+              Recommended content pillars
             </h4>
           </div>
 

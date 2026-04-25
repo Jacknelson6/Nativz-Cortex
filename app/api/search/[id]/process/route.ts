@@ -288,32 +288,55 @@ export async function POST(
       const batch1Sources = [...nonTikTokSources.map(mapSource), ...tiktokSources.slice(0, 8).map(mapSource)];
       const batch2Sources = tiktokSources.slice(8, 50).map(mapSource);
 
-      // Save in two batches to avoid PostgREST payload size limits.
-      const { error: batch1Err } = await adminClient
+      // Persistence strategy — split by payload size + criticality so a
+      // failure on the bulky platform_data write doesn't strand the LLM
+      // output the UI actually renders from.
+      //
+      // Previously a single "batch1" bundled everything into one UPDATE.
+      // When 200+ platform sources were scraped, that row would exceed
+      // PostgREST / Supabase JSONB limits and the write would fail; the
+      // minimal-save fallback then wiped emotions / content_breakdown /
+      // raw_ai_response / metrics / serp_data, leaving the user with a
+      // completed search that showed only Summary + Trending topics and
+      // nothing else — no Source Browser, Emotions, Content Breakdown,
+      // Web/Reddit summary cards, Brand Application copy, etc.
+      //
+      //   Step A — critical LLM output (small, always fits).
+      //            If this fails, retry with an even more minimal
+      //            payload so the user at least sees a completed page.
+      //   Step B — platform_data + serp_data + research_sources + pipeline_state
+      //            (bulky; may legitimately be too big). Failure here is
+      //            non-fatal — Source Browser / SERP cards just won't
+      //            render, but everything else is intact.
+
+      const criticalUpdate = {
+        status: 'completed' as const,
+        processing_started_at: null,
+        summary: result.aiResponse.summary || 'No summary generated.',
+        metrics: cloneJsonForPostgres(safeJson(result.metrics, {})),
+        emotions: cloneJsonForPostgres(safeJson(result.aiResponse.emotions, [])),
+        content_breakdown: cloneJsonForPostgres(safeJson(result.aiResponse.content_breakdown, {})),
+        trending_topics: cloneJsonForPostgres(safeJson(result.aiResponse.trending_topics, [])),
+        raw_ai_response: cloneJsonForPostgres(safeJson(result.aiResponse, {})),
+        tokens_used: result.totalTokens ?? 0,
+        estimated_cost: result.estimatedCost ?? 0,
+        completed_at: new Date().toISOString(),
+      };
+
+      const { error: criticalErr } = await adminClient
         .from('topic_searches')
-        .update({
-          status: 'completed',
-          processing_started_at: null,
-          summary: result.aiResponse.summary || 'No summary generated.',
-          metrics: cloneJsonForPostgres(safeJson(result.metrics, {})),
-          emotions: cloneJsonForPostgres(safeJson(result.aiResponse.emotions, {})),
-          content_breakdown: cloneJsonForPostgres(safeJson(result.aiResponse.content_breakdown, {})),
-          trending_topics: cloneJsonForPostgres(safeJson(result.aiResponse.trending_topics, [])),
-          raw_ai_response: cloneJsonForPostgres(safeJson(result.aiResponse, {})),
-          platform_data: cloneJsonForPostgres({
-            stats: [],
-            sourceCount: allPlatformSources.length,
-            sources: batch1Sources,
-          }),
-          tokens_used: result.totalTokens ?? 0,
-          estimated_cost: result.estimatedCost ?? 0,
-          completed_at: new Date().toISOString(),
-        })
+        .update(criticalUpdate)
         .eq('id', id);
 
-      if (batch1Err) {
-        console.error('[process] batch1 save failed:', batch1Err);
-        // Try minimal save so user at least sees a completed search
+      if (criticalErr) {
+        console.error('[process] critical LLM-output save failed:', {
+          message: criticalErr.message,
+          code: criticalErr.code,
+          details: criticalErr.details,
+          hint: criticalErr.hint,
+        });
+        // Last-resort minimal save so the search doesn't look stuck as
+        // "processing" forever.
         await adminClient
           .from('topic_searches')
           .update({
@@ -327,35 +350,49 @@ export async function POST(
           .eq('id', id);
       }
 
-      // Batch 2: remaining platform sources, serp data, research sources, pipeline state
-      if (batch2Sources.length > 0 || result.serpData || result.researchSources) {
-        await adminClient
+      // Bulky platform + SERP data — optional for UI, non-fatal if it fails.
+      const bulkUpdate = {
+        serp_data: cloneJsonForPostgres(
+          safeJson(result.serpData, { webResults: [], discussions: [], videos: [] }),
+        ),
+        research_sources: cloneJsonForPostgres(safeJson(result.researchSources, [])),
+        pipeline_state: cloneJsonForPostgres(safeJson(result.pipelineState, {})),
+        platform_data: cloneJsonForPostgres({
+          stats: [],
+          sourceCount: allPlatformSources.length,
+          sources: [...batch1Sources, ...batch2Sources],
+        }),
+      };
+
+      const { error: bulkErr } = await adminClient
+        .from('topic_searches')
+        .update(bulkUpdate)
+        .eq('id', id);
+
+      if (bulkErr) {
+        console.error('[process] bulk platform/serp save failed — retrying without platform_data:', {
+          message: bulkErr.message,
+          code: bulkErr.code,
+          sourceCount: allPlatformSources.length,
+        });
+        // Fallback: keep serp_data + research_sources + pipeline_state, drop platform_data.
+        const { error: bulkRetryErr } = await adminClient
           .from('topic_searches')
           .update({
-            serp_data: cloneJsonForPostgres(
-              safeJson(result.serpData, { webResults: [], discussions: [], videos: [] }),
-            ),
-            research_sources: cloneJsonForPostgres(safeJson(result.researchSources, [])),
-            pipeline_state: cloneJsonForPostgres(safeJson(result.pipelineState, {})),
-            platform_data: cloneJsonForPostgres({
-              stats: [],
-              sourceCount: allPlatformSources.length,
-              sources: [...batch1Sources, ...batch2Sources],
-            }),
+            serp_data: bulkUpdate.serp_data,
+            research_sources: bulkUpdate.research_sources,
+            pipeline_state: bulkUpdate.pipeline_state,
           })
-          .eq('id', id)
-          .then(({ error: batch2Err }) => {
-            if (batch2Err) {
-              console.error('[process] batch2 save failed (non-critical):', batch2Err.message);
-              adminClient
-                .from('topic_searches')
-                .update({
-                  pipeline_state: cloneJsonForPostgres(safeJson(result.pipelineState, {})),
-                })
-                .eq('id', id)
-                .then(() => {});
-            }
-          });
+          .eq('id', id);
+        if (bulkRetryErr) {
+          console.error('[process] bulk retry also failed — pipeline_state only:', bulkRetryErr.message);
+          await adminClient
+            .from('topic_searches')
+            .update({
+              pipeline_state: bulkUpdate.pipeline_state,
+            })
+            .eq('id', id);
+        }
       }
 
       // Persist platform video sources to topic_search_videos for the Sources grid
@@ -412,7 +449,7 @@ export async function POST(
         type: 'search_completed',
         title: 'Research completed',
         body: `Results ready for "${search.query}"`,
-        linkPath: `/admin/search/${id}`,
+        linkPath: `/finder/${id}`,
       }).catch(() => {});
 
       return NextResponse.json({ status: 'completed' });

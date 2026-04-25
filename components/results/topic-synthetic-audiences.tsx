@@ -60,7 +60,7 @@ export function TopicSyntheticAudiences({ data }: TopicSyntheticAudiencesProps) 
   return (
     <section className="rounded-xl border border-nativz-border bg-surface p-4 sm:p-5 shadow-[var(--shadow-card)]">
       <div className="mb-5">
-        <h2 className="text-base font-semibold text-text-primary">Audience personas</h2>
+        <h2 className="text-lg font-semibold tracking-tight text-text-primary">Audience personas</h2>
         <p className="mt-1 text-sm text-text-muted">
           Modelled ICP-style segments and personality profiles for this topic — not survey or census data.
         </p>

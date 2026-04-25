@@ -178,10 +178,8 @@ export function VideoGrid({
       <Card className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <CardTitle className="text-base font-semibold text-text-primary">
-              Videos
-            </CardTitle>
-            <p className="text-xs text-text-muted mt-1">
+            <CardTitle>Videos</CardTitle>
+            <p className="text-sm text-text-muted mt-1">
               Across all platforms · filter and sort below
             </p>
           </div>

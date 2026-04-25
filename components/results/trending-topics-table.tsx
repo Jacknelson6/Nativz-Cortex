@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { ChevronDown, ChevronRight, ChevronUp, Copy } from 'lucide-react';
+import React, { useState, useMemo, type KeyboardEvent } from 'react';
+import { ChevronRight, ChevronUp, ChevronDown, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
 import { TooltipCard } from '@/components/ui/tooltip-card';
@@ -73,12 +73,15 @@ function SortHeader({
   centered?: boolean;
 }) {
   const isActive = activeKey === sortKey;
+  const ariaSort = isActive ? (activeDir === 'asc' ? 'ascending' : 'descending') : 'none';
 
   return (
     <button
       type="button"
       onClick={() => onSort(sortKey)}
-      className={`flex w-full items-center gap-1 transition-colors hover:text-text-secondary ${
+      aria-sort={ariaSort}
+      aria-label={`Sort by ${label}${isActive ? ` (currently ${ariaSort})` : ''}`}
+      className={`flex w-full items-center gap-1 rounded-md px-0.5 py-1 transition-colors hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
         centered ? 'justify-center' : 'justify-end'
       } ${isActive ? 'text-text-secondary' : 'text-text-muted'}`}
     >
@@ -89,7 +92,7 @@ function SortHeader({
       ) : (
         <span className="text-sm font-medium normal-case">{label}</span>
       )}
-      <span className="flex flex-col -space-y-1">
+      <span aria-hidden className="flex flex-col -space-y-1">
         <ChevronUp size={10} className={isActive && activeDir === 'asc' ? 'text-accent-text' : 'opacity-30'} />
         <ChevronDown size={10} className={isActive && activeDir === 'desc' ? 'text-accent-text' : 'opacity-30'} />
       </span>
@@ -145,9 +148,9 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
     <Card padding="none" elevated className="overflow-hidden">
       <div className="border-b border-nativz-border px-4 py-3.5 sm:px-6 sm:py-4">
         <div className="flex min-w-0 items-end justify-between gap-4 sm:gap-6">
-          <span className="min-w-0 text-xs font-semibold uppercase tracking-wide text-text-muted">
+          <h3 className="min-w-0 text-lg font-semibold tracking-tight text-text-primary">
             Trending topics
-          </span>
+          </h3>
           <div className={METRICS_GRID}>
             <div className="min-w-0">
               <SortHeader
@@ -189,67 +192,79 @@ export function TrendingTopicsTable({ topics, clientId, searchId }: TrendingTopi
 
       <div className="overflow-x-auto">
         <div className="min-w-0">
-          {sortedTopics.map((topic, i) => (
-            <div key={topic.name} className="animate-stagger-in" style={{ animationDelay: `${i * 40}ms` }}>
-              <button
-                type="button"
-                onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
-                aria-expanded={expandedIndex === i}
-                className="flex w-full min-w-0 items-center justify-between gap-4 border-b border-nativz-border/80 px-4 py-4 last:border-b-0 sm:gap-6 sm:px-6 sm:py-4 transition-colors hover:bg-surface-hover/60 text-left cursor-pointer"
-              >
-                <div className="flex min-w-0 flex-1 items-center gap-2">
+          {sortedTopics.map((topic, i) => {
+            const isExpanded = expandedIndex === i;
+            function toggleRow() {
+              setExpandedIndex(isExpanded ? null : i);
+            }
+            function handleRowKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleRow();
+              }
+            }
+            return (
+              <div key={topic.name} className="animate-stagger-in" style={{ animationDelay: `${i * 40}ms` }}>
+                {/* Row uses role=button instead of a <button> element so the
+                    copy action (also a button) isn't nested inside another
+                    interactive element — invalid HTML + breaks screen readers. */}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={toggleRow}
+                  onKeyDown={handleRowKeyDown}
+                  aria-expanded={isExpanded}
+                  className="flex w-full min-w-0 items-center justify-between gap-4 border-b border-nativz-border/80 px-4 py-4 last:border-b-0 sm:gap-6 sm:px-6 sm:py-4 transition-colors hover:bg-surface-hover/60 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40"
+                >
                   <div className="flex min-w-0 flex-1 items-center gap-2">
-                    {expandedIndex === i ? (
-                      <ChevronDown size={18} className="shrink-0 text-text-muted" />
-                    ) : (
-                      <ChevronRight size={18} className="shrink-0 text-text-muted" />
-                    )}
-                    <TopicTitleCell name={topic.name} index={i} />
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                      <ChevronRight
+                        aria-hidden
+                        size={18}
+                        className={`shrink-0 text-text-muted transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
+                      />
+                      <TopicTitleCell name={topic.name} index={i} />
+                    </div>
                   </div>
-                </div>
 
-                <div className={METRICS_GRID}>
-                  <span className="min-w-0 text-center text-base font-semibold tabular-nums text-text-primary">
-                    {formatTopicReach(topic)}
-                  </span>
-                  {/* Resonance aligned with Views — same weight + colour so the row
-                      reads as rhythmic values instead of three competing styles. */}
-                  <span className="min-w-0 text-center text-base font-semibold text-text-primary">
-                    {RESONANCE_LABEL[topic.resonance] ?? topic.resonance}
-                  </span>
-                  <div className="min-w-0 flex justify-center">
-                    <SentimentSplitBar sentiment={topic.sentiment} />
-                  </div>
-                  {/* Row action — copy title. The "send to Strategy Lab" flask
-                      was removed (the handoff was unreliable); the page-level
-                      header CTA is the canonical entry point. */}
-                  <div className="flex min-w-0 items-center justify-end gap-0.5">
-                    <TooltipCard
-                      iconTrigger
-                      title={TOOLTIPS.trending_topic_copy.title}
-                      description={TOOLTIPS.trending_topic_copy.description}
-                    >
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void copyTopicTitle(topic);
-                        }}
-                        className="shrink-0 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary"
-                        aria-label="Copy topic title"
+                  <div className={METRICS_GRID}>
+                    <span className="min-w-0 text-center text-base font-semibold tabular-nums text-text-primary">
+                      {formatTopicReach(topic)}
+                    </span>
+                    <span className="min-w-0 text-center text-base font-semibold text-text-primary">
+                      {RESONANCE_LABEL[topic.resonance] ?? topic.resonance}
+                    </span>
+                    <div className="min-w-0 flex justify-center">
+                      <SentimentSplitBar sentiment={topic.sentiment} />
+                    </div>
+                    <div className="flex min-w-0 items-center justify-end gap-0.5">
+                      <TooltipCard
+                        iconTrigger
+                        title={TOOLTIPS.trending_topic_copy.title}
+                        description={TOOLTIPS.trending_topic_copy.description}
                       >
-                        <Copy size={16} />
-                      </button>
-                    </TooltipCard>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void copyTopicTitle(topic);
+                          }}
+                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                          aria-label="Copy topic title"
+                        >
+                          <Copy size={16} />
+                        </button>
+                      </TooltipCard>
+                    </div>
                   </div>
                 </div>
-              </button>
 
-              {expandedIndex === i && (
-                <TopicRowExpanded topic={topic} clientId={clientId} searchId={searchId} />
-              )}
-            </div>
-          ))}
+                {isExpanded && (
+                  <TopicRowExpanded topic={topic} clientId={clientId} searchId={searchId} />
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </Card>
