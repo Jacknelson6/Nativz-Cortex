@@ -82,6 +82,9 @@ supabase/.temp/
 !public/nativz-logo-on-light.png
 !public/anderson-logo.png
 !public/anderson-logo-on-light.png
+# Self-hosted proposal pages: agency logos, sample brand thumbnails, etc.
+!public/proposal-assets/**/*.png
+!public/proposal-assets/**/*.jpg
 !app/icon.png
 vectors.db
 vectors.db-shm

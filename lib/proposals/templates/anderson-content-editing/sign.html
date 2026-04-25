@@ -483,12 +483,7 @@
     </div>
     <div class="step-label" style="color:#16a34a;">Agreement signed</div>
     <h1 id="confirmHeadline" style="margin-bottom:8px;">You're one step from kickoff</h1>
-    <p id="confirmSub" style="max-width:440px;margin:0 auto 18px;">We sent a signed PDF to your inbox and kept a copy for our records. Your card won't be charged until you confirm on the next screen.</p>
-    <div style="background:#f7f9fb;border:1px solid var(--border);border-radius:10px;padding:14px 18px;text-align:left;max-width:480px;margin:0 auto 20px;font-size:11.5px;color:var(--text-body);line-height:1.6;">
-      <div><strong>Document ID:</strong> <span id="confirmId" style="font-family:ui-monospace,monospace;font-size:11px;"></span></div>
-      <div><strong>SHA-256:</strong> <span id="confirmHash" style="font-family:ui-monospace,monospace;font-size:10.5px;word-break:break-all;"></span></div>
-      <div><strong>Sent to:</strong> <span id="confirmEmail"></span></div>
-    </div>
+    <p id="confirmSub" style="max-width:440px;margin:0 auto 24px;">We sent a signed PDF to your inbox and kept a copy for our records. Your card won't be charged until you confirm on the next screen.</p>
     <a id="confirmPayBtn" href="#" class="submit-btn" style="display:inline-block;max-width:380px;width:100%;text-decoration:none;">Continue to pay <span id="confirmAmount"></span> first month →</a>
     <p style="margin-top:12px;font-size:10.5px;color:var(--text-muted);">Stripe Checkout · Cards · Cash App Pay · Klarna · Amazon Pay · Link</p>
   </div>
@@ -740,10 +735,10 @@
       var data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || 'Signing failed');
 
-      // Show confirmation screen, hide the sign card
-      document.getElementById('confirmId').textContent = data.id;
-      document.getElementById('confirmHash').textContent = data.pdfHash;
-      document.getElementById('confirmEmail').textContent = payload.signerEmail;
+      // Show confirmation screen, hide the sign card.
+      // Document ID / SHA-256 / Sent-to receipt block was removed from the
+      // success state — those fields still arrive on `data` but we don't
+      // surface them in the UI anymore (PDF in inbox is the canonical receipt).
       document.getElementById('confirmAmount').textContent = '$' + (data.deposit || state.deposit).toLocaleString();
       document.getElementById('confirmPayBtn').href = data.redirectUrl || state.stripe;
       // Hide the 3 signing cards, leave confirmation only
