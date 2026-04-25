@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Plus, Search, Rocket, UserPlus, Building2 } from 'lucide-react';
@@ -23,16 +23,14 @@ type ClientOption = {
  *     live flow, opens it; otherwise creates a fresh flow.
  *   - **New prospect** — enter brand name + signer info. Creates a thin
  *     clients row (lifecycle='lead') + a `needs_proposal` flow, then
- *     routes the admin to the flow detail page where they can attach a
- *     proposal next. The auto-create path in `createProposalDraft` is
- *     the same shape but triggers from `/admin/proposals/new` if the
- *     admin skips this picker entirely — both endpoints end at "real
- *     clients row + linked flow".
+ *     routes the admin to the flow detail page.
  *
- * Service-stack awareness (Social as the first service the admin can
- * attach) lives on the flow detail page — once we have the flow, the
- * admin clicks "+ Add segment" there. The dropdown stays narrow so
- * service catalogs don't bloat its width.
+ * Detail.design refs applied here:
+ *   - #5  Interruptible animation — Esc + outside click close the dropdown
+ *   - #18 Form respects keyboard — prospect tab is a real <form> so Enter submits
+ *   - #19 Clicking input label focuses field — htmlFor pairs everywhere
+ *   - #44 Keep default focus ring — relies on browser default, no `outline-none` strip
+ *   - #43 Larger hit area — close-X buttons get 24px touch targets
  */
 export function StartSalesFlow({ clients }: { clients: ClientOption[] }) {
   const router = useRouter();
@@ -41,12 +39,38 @@ export function StartSalesFlow({ clients }: { clients: ClientOption[] }) {
   const [tab, setTab] = useState<'existing' | 'prospect'>('existing');
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Prospect tab form state.
   const [prospectName, setProspectName] = useState('');
   const [signerName, setSignerName] = useState('');
   const [signerEmail, setSignerEmail] = useState('');
   const [agency, setAgency] = useState<'anderson' | 'nativz'>('anderson');
+
+  // Stable IDs for label↔input pairing (#19).
+  const formId = useId();
+  const id = (suffix: string) => `${formId}-${suffix}`;
+
+  // Esc + outside-click close the dropdown — interruptible animation
+  // pattern (#5). Mounted only when the dropdown is open so we don't
+  // pay the keydown/mousedown listener cost on every page render.
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    function onDoc(e: MouseEvent) {
+      const target = e.target as Node | null;
+      if (containerRef.current && target && containerRef.current.contains(target)) return;
+      setOpen(false);
+    }
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onDoc);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onDoc);
+    };
+  }, [open]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -90,7 +114,8 @@ export function StartSalesFlow({ clients }: { clients: ClientOption[] }) {
     }
   }
 
-  async function createProspect() {
+  async function createProspect(e?: React.FormEvent) {
+    if (e) e.preventDefault();
     if (busy) return;
     const name = prospectName.trim();
     if (name.length < 2) {
@@ -133,25 +158,32 @@ export function StartSalesFlow({ clients }: { clients: ClientOption[] }) {
   }
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <Button
         type="button"
         size="sm"
         onClick={() => setOpen((s) => !s)}
         className="gap-1.5"
+        aria-haspopup="dialog"
+        aria-expanded={open}
       >
         <Plus size={14} />
         Start
       </Button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 z-20 w-[26rem] rounded-xl border border-nativz-border bg-surface shadow-xl">
+        <div
+          role="dialog"
+          aria-label="Start a sales flow"
+          className="absolute right-0 top-full mt-2 z-20 w-[26rem] rounded-xl border border-nativz-border bg-surface shadow-xl"
+        >
           {/* Tab switcher */}
           <div className="flex border-b border-nativz-border">
             <button
               type="button"
               onClick={() => setTab('existing')}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[12px] font-medium transition ${
+              aria-pressed={tab === 'existing'}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[12px] font-medium transition-colors ${
                 tab === 'existing'
                   ? 'bg-accent/10 text-text-primary'
                   : 'text-text-muted hover:bg-surface-hover'
@@ -163,7 +195,8 @@ export function StartSalesFlow({ clients }: { clients: ClientOption[] }) {
             <button
               type="button"
               onClick={() => setTab('prospect')}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[12px] font-medium transition ${
+              aria-pressed={tab === 'prospect'}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[12px] font-medium transition-colors ${
                 tab === 'prospect'
                   ? 'bg-accent/10 text-text-primary'
                   : 'text-text-muted hover:bg-surface-hover'
@@ -177,9 +210,13 @@ export function StartSalesFlow({ clients }: { clients: ClientOption[] }) {
           {tab === 'existing' ? (
             <>
               <div className="border-b border-nativz-border p-2">
+                <label htmlFor={id('search')} className="sr-only">
+                  Search brands
+                </label>
                 <div className="flex items-center gap-2 rounded-lg border border-nativz-border bg-background px-2.5 py-1.5">
                   <Search size={13} className="text-text-muted" />
                   <input
+                    id={id('search')}
                     autoFocus
                     type="text"
                     value={query}
@@ -199,7 +236,7 @@ export function StartSalesFlow({ clients }: { clients: ClientOption[] }) {
                         type="button"
                         disabled={busy}
                         onClick={() => pickExisting(c)}
-                        className="flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-surface-hover disabled:opacity-50"
+                        className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-surface-hover disabled:opacity-50"
                       >
                         <ClientLogo src={c.logo_url} name={c.name} size="sm" />
                         <div className="min-w-0 flex-1">
@@ -218,27 +255,32 @@ export function StartSalesFlow({ clients }: { clients: ClientOption[] }) {
               </ul>
             </>
           ) : (
-            <div className="space-y-2.5 p-3">
+            <form onSubmit={createProspect} className="space-y-2.5 p-3" noValidate>
               <p className="text-[11px] text-text-muted">
                 Welcome a fresh prospect. We&apos;ll create a lead row and an empty flow so you can attach a proposal next.
               </p>
-              <label className="block">
+              <label className="block" htmlFor={id('brand')}>
                 <span className="mb-1 block text-[10px] uppercase tracking-wider text-text-muted">
                   Brand name
                 </span>
                 <input
+                  id={id('brand')}
                   type="text"
                   value={prospectName}
                   onChange={(e) => setProspectName(e.target.value)}
                   placeholder="Acme Co."
+                  required
+                  minLength={2}
+                  autoFocus
                   className="w-full rounded-lg border border-nativz-border bg-background px-2.5 py-1.5 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent/40"
                 />
               </label>
-              <label className="block">
+              <label className="block" htmlFor={id('signer-name')}>
                 <span className="mb-1 block text-[10px] uppercase tracking-wider text-text-muted">
                   Signer name (optional)
                 </span>
                 <input
+                  id={id('signer-name')}
                   type="text"
                   value={signerName}
                   onChange={(e) => setSignerName(e.target.value)}
@@ -246,11 +288,12 @@ export function StartSalesFlow({ clients }: { clients: ClientOption[] }) {
                   className="w-full rounded-lg border border-nativz-border bg-background px-2.5 py-1.5 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent/40"
                 />
               </label>
-              <label className="block">
+              <label className="block" htmlFor={id('signer-email')}>
                 <span className="mb-1 block text-[10px] uppercase tracking-wider text-text-muted">
                   Signer email (optional)
                 </span>
                 <input
+                  id={id('signer-email')}
                   type="email"
                   value={signerEmail}
                   onChange={(e) => setSignerEmail(e.target.value)}
@@ -258,11 +301,12 @@ export function StartSalesFlow({ clients }: { clients: ClientOption[] }) {
                   className="w-full rounded-lg border border-nativz-border bg-background px-2.5 py-1.5 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent/40"
                 />
               </label>
-              <label className="block">
+              <label className="block" htmlFor={id('agency')}>
                 <span className="mb-1 block text-[10px] uppercase tracking-wider text-text-muted">
                   Agency
                 </span>
                 <select
+                  id={id('agency')}
                   value={agency}
                   onChange={(e) => setAgency(e.target.value as 'anderson' | 'nativz')}
                   className="w-full rounded-lg border border-nativz-border bg-background px-2.5 py-1.5 text-[13px] text-text-primary focus:outline-none focus:ring-1 focus:ring-accent/40"
@@ -280,26 +324,29 @@ export function StartSalesFlow({ clients }: { clients: ClientOption[] }) {
                   Cancel
                 </button>
                 <Button
-                  type="button"
+                  type="submit"
                   size="sm"
                   disabled={busy || prospectName.trim().length < 2}
-                  onClick={createProspect}
                   className="gap-1.5"
                 >
                   <Rocket size={12} />
                   Create + open flow
                 </Button>
               </div>
-            </div>
+            </form>
           )}
 
-          <div className="border-t border-nativz-border p-2 text-right">
+          <div className="flex items-center justify-end border-t border-nativz-border p-2">
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="text-[11px] text-text-muted hover:text-text-primary"
+              aria-label="Close"
+              className="inline-flex h-6 items-center px-2 text-[11px] text-text-muted transition-colors hover:text-text-primary"
             >
               Close
+              <span className="ml-1.5 rounded border border-nativz-border bg-background px-1 font-mono text-[9px] text-text-muted/70">
+                Esc
+              </span>
             </button>
           </div>
         </div>

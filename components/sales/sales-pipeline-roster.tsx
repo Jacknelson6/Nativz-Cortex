@@ -1,14 +1,28 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { ClipboardList, FileText, AlertCircle, Check, Clock, Pause, Archive, Sparkles } from 'lucide-react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { toast } from 'sonner';
+import {
+  ClipboardList,
+  FileText,
+  AlertCircle,
+  Check,
+  Clock,
+  Pause,
+  Archive,
+  Sparkles,
+  MoreVertical,
+  Send,
+} from 'lucide-react';
 import { ClientLogo } from '@/components/clients/client-logo';
 import {
   PRIMARY_STATUS_LABEL,
   PRIMARY_STATUS_PILL,
   type PrimaryStatus,
   type SalesPipelineRow,
+  type SalesRowFlow,
 } from '@/lib/sales/pipeline';
 
 const FILTER_ORDER: Array<'all' | PrimaryStatus> = [
@@ -49,9 +63,14 @@ const STATUS_ICON: Record<PrimaryStatus, React.ReactNode> = {
  * admin sees "where is this brand on the journey" without bouncing
  * between two surfaces.
  *
- * Click the brand cell or the "Open" link → flow detail page (or the
- * proposal editor when the row is still pre-sign). Click the secondary
- * "Proposal" or "Onboarding" badge → jump straight to that sub-surface.
+ * Filter chip + headline-card selection writes through to the URL
+ * (`?status=foo`) so deep links work and the browser back button
+ * walks the user back through their filter history. Row enter
+ * animation is staggered for the first ~24 rows; later rows fade in
+ * without delay to avoid feeling "loading". Detail.design refs:
+ *   - #21 Keep state in URL
+ *   - #4  Stagger for the event order
+ *   - #6  Smooth highlight block transition
  */
 export function SalesPipelineRoster({
   rows,
@@ -62,10 +81,31 @@ export function SalesPipelineRoster({
   counts: Record<PrimaryStatus, number>;
   initialStatus: string;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const initial = (FILTER_ORDER as string[]).includes(initialStatus)
     ? (initialStatus as 'all' | PrimaryStatus)
     : 'all';
   const [filter, setFilter] = useState<'all' | PrimaryStatus>(initial);
+
+  // Keep the filter state in sync with the URL — useful when the user
+  // hits the back button after clicking a chip, or when the page is
+  // re-rendered with a different initialStatus from server-side.
+  useEffect(() => {
+    const qs = searchParams.get('status');
+    const next = qs && (FILTER_ORDER as string[]).includes(qs) ? (qs as 'all' | PrimaryStatus) : 'all';
+    setFilter(next);
+  }, [searchParams]);
+
+  function applyFilter(next: 'all' | PrimaryStatus) {
+    setFilter(next);
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === 'all') params.delete('status');
+    else params.set('status', next);
+    const qs = params.toString();
+    router.replace(`${pathname}${qs ? `?${qs}` : ''}`, { scroll: false });
+  }
 
   const filteredRows = useMemo(() => {
     if (filter === 'all') return rows;
@@ -73,8 +113,7 @@ export function SalesPipelineRoster({
   }, [filter, rows]);
 
   // Headline pipeline counts — show only the buckets that matter for
-  // the day-to-day "what needs my attention" question. "Lead — no
-  // proposal" hides when zero so we don't add visual noise.
+  // the day-to-day "what needs my attention" question.
   const headlineBuckets: PrimaryStatus[] = [
     'sent',
     'viewed',
@@ -91,12 +130,13 @@ export function SalesPipelineRoster({
           <button
             key={b}
             type="button"
-            onClick={() => setFilter(b)}
-            className={`rounded-xl border bg-surface px-3 py-2.5 text-left transition ${
+            onClick={() => applyFilter(b)}
+            className={`rounded-xl border bg-surface px-3 py-2.5 text-left transition-all duration-200 ease-out ${
               filter === b
-                ? 'border-accent/60 bg-accent/5'
-                : 'border-nativz-border hover:bg-surface-hover'
+                ? 'border-accent/60 bg-accent/5 ring-1 ring-accent/20'
+                : 'border-nativz-border hover:bg-surface-hover hover:border-nativz-border/80'
             }`}
+            aria-pressed={filter === b}
           >
             <div className="text-[10px] uppercase tracking-wider text-text-muted">
               {PRIMARY_STATUS_LABEL[b]}
@@ -115,13 +155,17 @@ export function SalesPipelineRoster({
             <button
               key={f}
               type="button"
-              onClick={() => setFilter(f)}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition ${
+              onClick={() => applyFilter(f)}
+              aria-pressed={active}
+              className={`relative inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors duration-150 ${
                 active
                   ? 'border-accent/60 bg-accent/10 text-text-primary'
-                  : 'border-nativz-border bg-surface text-text-muted hover:bg-surface-hover'
+                  : 'border-nativz-border bg-surface text-text-muted hover:bg-surface-hover hover:text-text-primary'
               }`}
             >
+              {/* Larger hit area for chip — extends 4px outside the visible
+                  pill on every side without affecting layout. (#43) */}
+              <span className="absolute -inset-1" aria-hidden />
               {FILTER_LABEL[f]}
               <span className="text-[10px] text-text-muted/80">{count}</span>
             </button>
@@ -132,11 +176,23 @@ export function SalesPipelineRoster({
       {/* Roster */}
       {filteredRows.length === 0 ? (
         <div className="rounded-xl border border-nativz-border bg-surface p-10 text-center">
-          <p className="text-sm text-text-muted">
-            {filter === 'all'
-              ? 'No pipeline yet. Click Start to spin up your first prospect or onboard an existing client.'
-              : `No rows in the ${FILTER_LABEL[filter]} bucket right now.`}
-          </p>
+          {filter === 'all' ? (
+            <p className="text-sm text-text-muted">
+              No pipeline yet. Click <strong className="text-text-primary">Start</strong> to spin up your first prospect or onboard an existing client.
+            </p>
+          ) : (
+            <p className="text-sm text-text-muted">
+              No rows in <strong className="text-text-primary">{FILTER_LABEL[filter]}</strong> right now.{' '}
+              <button
+                type="button"
+                onClick={() => applyFilter('all')}
+                className="text-accent-text hover:underline"
+              >
+                Show all
+              </button>
+              .
+            </p>
+          )}
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-nativz-border bg-surface">
@@ -152,88 +208,254 @@ export function SalesPipelineRoster({
               </tr>
             </thead>
             <tbody className="divide-y divide-nativz-border/60">
-              {filteredRows.map((r) => {
-                const proposalLink = r.latest_proposal
-                  ? `/admin/proposals/${r.latest_proposal.slug}`
-                  : null;
-                const flowLink = r.flow ? `/admin/onboarding/${r.flow.id}` : null;
-                const primaryLink = flowLink ?? proposalLink ?? `/admin/clients/${r.client.slug}`;
-
-                return (
-                  <tr
-                    key={r.client.id}
-                    className="transition-colors hover:bg-surface-hover/30"
-                  >
-                    <td className="px-4 py-3">
-                      <Link href={primaryLink} className="flex items-center gap-3">
-                        <ClientLogo src={r.client.logo_url} name={r.client.name} size="sm" />
-                        <div className="min-w-0">
-                          <div className="truncate font-medium text-text-primary">
-                            {r.client.name}
-                          </div>
-                          <div className="font-mono text-[11px] text-text-muted/70">
-                            {r.client.slug}
-                            {r.client.lifecycle_state === 'lead' && !r.flow ? (
-                              <span className="ml-2 rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-amber-200">
-                                Lead
-                              </span>
-                            ) : null}
-                          </div>
-                        </div>
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${PRIMARY_STATUS_PILL[r.primary_status]}`}
-                      >
-                        {STATUS_ICON[r.primary_status]}
-                        {PRIMARY_STATUS_LABEL[r.primary_status]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-text-muted">
-                      {r.latest_proposal ? (
-                        <Link
-                          href={`/admin/proposals/${r.latest_proposal.slug}`}
-                          className="text-[12px] hover:text-text-primary"
-                        >
-                          {labelForProposal(r.latest_proposal)}
-                        </Link>
-                      ) : (
-                        <span className="text-[12px] text-text-muted/60">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-text-muted">
-                      {r.flow ? (
-                        <Link
-                          href={`/admin/onboarding/${r.flow.id}`}
-                          className="text-[12px] hover:text-text-primary"
-                        >
-                          {labelForFlow(r.flow.status)}
-                        </Link>
-                      ) : (
-                        <span className="text-[12px] text-text-muted/60">Not started</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-text-muted">
-                      {r.last_activity_at
-                        ? new Date(r.last_activity_at).toLocaleDateString()
-                        : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        href={primaryLink}
-                        className="text-[12px] text-accent-text hover:underline"
-                      >
-                        Open →
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
+              {filteredRows.map((r, i) => (
+                <PipelineRow key={r.client.id} row={r} index={i} />
+              ))}
             </tbody>
           </table>
+          <style jsx>{`
+            @keyframes rowFadeIn {
+              from {
+                opacity: 0;
+                transform: translateY(4px);
+              }
+              to {
+                opacity: 1;
+                transform: translateY(0);
+              }
+            }
+            @media (prefers-reduced-motion: reduce) {
+              :global(tr[data-pipeline-row]) {
+                animation: none !important;
+              }
+            }
+          `}</style>
         </div>
       )}
+    </div>
+  );
+}
+
+function PipelineRow({ row, index }: { row: SalesPipelineRow; index: number }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+  const [openMenu, setOpenMenu] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  // Stagger only the first 24 rows so a long pipeline doesn't take a
+  // full second to land. Anything beyond skips the delay. (#4)
+  const delayMs = Math.min(index, 24) * 30;
+  const proposalLink = row.latest_proposal
+    ? `/admin/proposals/${row.latest_proposal.slug}`
+    : null;
+  const flowLink = row.flow ? `/admin/onboarding/${row.flow.id}` : null;
+  const primaryLink = flowLink ?? proposalLink ?? `/admin/clients/${row.client.slug}`;
+
+  const proposalIsResendable =
+    !!row.latest_proposal && ['sent', 'viewed'].includes(row.latest_proposal.status);
+  const flowIsArchivable = !!row.flow && row.flow.status !== 'archived';
+
+  async function resendProposal() {
+    if (!row.latest_proposal || busy) return;
+    setBusy(true);
+    setOpenMenu(false);
+    try {
+      const res = await fetch(`/api/admin/proposals/${row.latest_proposal.id}/send`, {
+        method: 'POST',
+      });
+      const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!res.ok || !json?.ok) {
+        toast.error("Couldn't resend proposal", { description: json?.error ?? `failed (${res.status})` });
+        return;
+      }
+      toast.success(`Resent to ${row.client.name}`);
+      startTransition(() => router.refresh());
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function archiveFlow() {
+    if (!row.flow || busy) return;
+    if (!confirm(`Archive the onboarding flow for ${row.client.name}? You can re-open it later.`)) return;
+    setBusy(true);
+    setOpenMenu(false);
+    try {
+      const res = await fetch(`/api/onboarding/flows/${row.flow.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ status: 'archived' }),
+      });
+      const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!res.ok || !json?.ok) {
+        toast.error("Couldn't archive flow", { description: json?.error ?? `failed (${res.status})` });
+        return;
+      }
+      toast.success(`Archived ${row.client.name}`);
+      startTransition(() => router.refresh());
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <tr
+      data-pipeline-row
+      className="transition-colors hover:bg-surface-hover/30"
+      style={{
+        animation: `rowFadeIn 220ms ease-out both`,
+        animationDelay: `${delayMs}ms`,
+      }}
+    >
+      <td className="px-4 py-3">
+        <Link href={primaryLink} className="flex items-center gap-3" aria-label={`Open ${row.client.name}`}>
+          <ClientLogo src={row.client.logo_url} name={row.client.name} size="sm" />
+          <div className="min-w-0">
+            <div className="truncate font-medium text-text-primary">{row.client.name}</div>
+            <div className="font-mono text-[11px] text-text-muted/70">
+              {row.client.slug}
+              {row.client.lifecycle_state === 'lead' && !row.flow ? (
+                <span className="ml-2 rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-amber-200">
+                  Lead
+                </span>
+              ) : null}
+            </div>
+          </div>
+        </Link>
+      </td>
+      <td className="px-4 py-3">
+        <span
+          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${PRIMARY_STATUS_PILL[row.primary_status]}`}
+        >
+          {STATUS_ICON[row.primary_status]}
+          {PRIMARY_STATUS_LABEL[row.primary_status]}
+        </span>
+      </td>
+      <td className="px-4 py-3 text-text-muted">
+        {row.latest_proposal ? (
+          <Link
+            href={`/admin/proposals/${row.latest_proposal.slug}`}
+            className="text-[12px] hover:text-text-primary"
+          >
+            {labelForProposal(row.latest_proposal)}
+          </Link>
+        ) : (
+          <span className="text-[12px] text-text-muted/60">—</span>
+        )}
+      </td>
+      <td className="px-4 py-3 text-text-muted">
+        {row.flow ? (
+          <Link
+            href={`/admin/onboarding/${row.flow.id}`}
+            className="text-[12px] hover:text-text-primary"
+          >
+            {labelForFlow(row.flow.status)}
+          </Link>
+        ) : (
+          <span className="text-[12px] text-text-muted/60">Not started</span>
+        )}
+      </td>
+      <td className="px-4 py-3 text-text-muted">
+        {row.last_activity_at
+          ? new Date(row.last_activity_at).toLocaleDateString()
+          : '—'}
+      </td>
+      <td className="px-4 py-3 text-right">
+        <div className="flex items-center justify-end gap-2">
+          <Link
+            href={primaryLink}
+            className="text-[12px] text-accent-text hover:underline"
+          >
+            Open →
+          </Link>
+          {(proposalIsResendable || flowIsArchivable) ? (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setOpenMenu((s) => !s)}
+                disabled={busy}
+                aria-label={`More actions for ${row.client.name}`}
+                aria-haspopup="menu"
+                aria-expanded={openMenu}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+              >
+                <MoreVertical size={14} />
+              </button>
+              {openMenu ? (
+                <RowActionMenu
+                  onClose={() => setOpenMenu(false)}
+                  onResend={proposalIsResendable ? resendProposal : null}
+                  onArchive={flowIsArchivable ? archiveFlow : null}
+                  busy={busy}
+                />
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function RowActionMenu({
+  onClose,
+  onResend,
+  onArchive,
+  busy,
+}: {
+  onClose: () => void;
+  onResend: (() => void) | null;
+  onArchive: (() => void) | null;
+  busy: boolean;
+}) {
+  // Esc + outside click close — interruptible animation pattern (#5).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    function onDoc(e: MouseEvent) {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('[data-row-action-menu]')) return;
+      onClose();
+    }
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onDoc);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onDoc);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      data-row-action-menu
+      role="menu"
+      className="absolute right-0 top-full z-20 mt-1 min-w-[10rem] overflow-hidden rounded-lg border border-nativz-border bg-surface text-[12px] shadow-xl"
+    >
+      {onResend ? (
+        <button
+          type="button"
+          role="menuitem"
+          disabled={busy}
+          onClick={onResend}
+          className="flex w-full items-center gap-2 px-3 py-2 text-left text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+        >
+          <Send size={12} />
+          Resend proposal
+        </button>
+      ) : null}
+      {onArchive ? (
+        <button
+          type="button"
+          role="menuitem"
+          disabled={busy}
+          onClick={onArchive}
+          className="flex w-full items-center gap-2 px-3 py-2 text-left text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+        >
+          <Archive size={12} />
+          Archive flow
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -259,7 +481,7 @@ function labelForProposal(p: NonNullable<SalesPipelineRow['latest_proposal']>): 
   }
 }
 
-function labelForFlow(status: SalesPipelineRow['flow'] extends infer F ? F extends { status: infer S } ? S : never : never): string {
+function labelForFlow(status: SalesRowFlow['status']): string {
   switch (status) {
     case 'needs_proposal':
       return 'Awaiting proposal';

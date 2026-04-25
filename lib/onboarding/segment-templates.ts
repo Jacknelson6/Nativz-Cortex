@@ -99,6 +99,7 @@ const SOCIAL_TEMPLATE: SegmentTemplate = {
       name: 'Strategy + kickoff',
       items: [
         { task: 'Schedule kickoff call', description: 'We confirm direction, content pillars, and the first two-week sprint.', owner: 'agency' },
+        { task: 'Send Cortex portal invite', description: 'Generate an invite token from /admin/clients/[slug] → Portal users → Invite. The client gets a magic link to join the dashboard so they can review topic research, watch retros, and approve content. Mark this complete once the link has been sent.', owner: 'agency' },
         { task: 'Confirm content pillars', description: 'After kickoff: 3–5 content pillars approved by the brand.', owner: 'agency' },
         { task: 'First-batch shoot list approved', description: HELP, owner: 'agency' },
       ],
