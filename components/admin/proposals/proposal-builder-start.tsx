@@ -86,7 +86,7 @@ export function ProposalBuilderStart({
         </h1>
         <p className="text-sm text-text-muted">
           Build a custom proposal one service at a time, with deterministic pricing pulled from the catalog.
-          Iterate live with the agent + the inline preview, then send when it's ready.
+          Iterate live with the agent + the inline preview, then send when it&apos;s ready.
         </p>
       </header>
 

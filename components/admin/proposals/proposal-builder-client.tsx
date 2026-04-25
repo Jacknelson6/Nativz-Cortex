@@ -6,14 +6,10 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
-  ArrowUpRight,
   ImagePlus,
   Loader2,
-  Plus,
   Send,
-  Sparkles,
   Trash2,
-  Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ClientLogo } from '@/components/clients/client-logo';
