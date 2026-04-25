@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PLATFORM_CONFIG } from './platform-icon';
-import { ResearchConsole } from './research-console';
+import { LoaderStepper } from './loader-stepper';
 import { toast } from 'sonner';
 import { useBackgroundSearch } from './background-search-tracker';
 
@@ -23,6 +23,9 @@ interface SearchProcessingProps {
   subtopicCount?: number;
   /** Server-driven: SearXNG / OpenRouter web vs LLM-only subtopic synthesis */
   webResearchMode?: 'searxng' | 'openrouter' | 'llm_only';
+  /** When true, the search row is in `pending_subtopics` and the client must
+   *  auto-run plan-subtopics + confirm before kicking off /process. */
+  pendingSubtopics?: boolean;
 }
 
 interface Stage {
@@ -145,6 +148,7 @@ export function SearchProcessing({
   pipeline = 'legacy',
   subtopicCount = 3,
   webResearchMode = 'llm_only',
+  pendingSubtopics = false,
 }: SearchProcessingProps) {
   const router = useRouter();
   const { track: trackInBackground } = useBackgroundSearch();
@@ -409,6 +413,45 @@ export function SearchProcessing({
     }
   }
 
+  /** Auto-confirm the LLM-pre-selected subtopics so the user never sees
+   *  the keyword picker. Plans the gameplan, then PATCHes with all the
+   *  returned keywords + start_processing. Returns true on success. */
+  async function autoConfirmSubtopics(): Promise<boolean> {
+    try {
+      const planRes = await fetch(`/api/search/${searchId}/plan-subtopics`, {
+        method: 'POST',
+      });
+      const planData = (await planRes.json()) as { subtopics?: string[]; error?: string };
+      if (!planRes.ok) {
+        setError(planData.error || 'Could not plan keywords. Try again.');
+        setApiError(planData.error || 'Could not plan keywords.');
+        return false;
+      }
+      const subtopics = (planData.subtopics ?? []).slice(0, 10);
+      if (subtopics.length === 0) {
+        setError('No keywords were generated. Try a different topic.');
+        setApiError('No keywords generated.');
+        return false;
+      }
+      const confirmRes = await fetch(`/api/search/${searchId}/subtopics`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subtopics, start_processing: true }),
+      });
+      if (!confirmRes.ok) {
+        const body = await confirmRes.json().catch(() => ({}));
+        setError((body as { error?: string }).error || 'Could not start research.');
+        setApiError((body as { error?: string }).error || 'Could not start research.');
+        return false;
+      }
+      return true;
+    } catch {
+      setError('Failed to set up research. Try again.');
+      setApiError('Failed to set up research.');
+      return false;
+    }
+  }
+
   useEffect(() => {
     void (async () => {
       try {
@@ -428,6 +471,14 @@ export function SearchProcessing({
         }
       } catch {
         // Continue to kick processing
+      }
+
+      // llm_v1 carve-out: when the row is `pending_subtopics`, auto-run
+      // plan + confirm first so the user lands here once and the loader
+      // covers both the planning call and the actual research.
+      if (pendingSubtopics) {
+        const ok = await autoConfirmSubtopics();
+        if (!ok) return;
       }
       runProcess();
     })();
@@ -477,11 +528,12 @@ export function SearchProcessing({
           </h2>
         </div>
 
-        {/* Live console — replaces the previous spinner / encrypted text /
-            stepper / progress-bar combo with a single transparent surface
-            that exposes what's happening server-side. */}
+        {/* Stepper — vertical pipeline rail with the active step expanded
+            to show a rotating sub-narrative. Replaces the earlier terminal-
+            chrome console; same data driving it (stages + stageIndex), just
+            a calmer visual register that doesn't grow indefinitely. */}
         {!done && !error && (
-          <ResearchConsole stages={stages} stageIndex={stageIndex} />
+          <LoaderStepper stages={stages} stageIndex={stageIndex} />
         )}
 
         {/* Quiet meta line — single elapsed counter + stage pointer. The

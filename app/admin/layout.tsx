@@ -21,6 +21,8 @@ import { BannerStrip } from '@/components/shared/banner-strip';
 import { ImpersonationBanner } from '@/components/portal/impersonation-banner';
 import { ActiveBrandProvider } from '@/lib/admin/active-client-context';
 import { getActiveBrand, listAdminAccessibleBrands } from '@/lib/active-brand';
+import { OnboardingFlowToasts } from '@/components/onboarding/onboarding-flow-toasts';
+import { getPendingFlowToastsForUser } from '@/lib/onboarding/flows';
 
 function bareShell(children: React.ReactNode) {
   return (
@@ -56,7 +58,7 @@ export default async function AdminLayout({
   // run it in parallel with brand resolution so the shell renders as soon
   // as the slowest of the three settles.
   const adminClient = createAdminClient();
-  const [userRowRes, active, availableBrands] = await Promise.all([
+  const [userRowRes, active, availableBrands, pendingFlowToasts] = await Promise.all([
     adminClient
       .from('users')
       .select('full_name, avatar_url, hidden_sidebar_items, role, is_super_admin')
@@ -68,6 +70,7 @@ export default async function AdminLayout({
       isAdmin: false,
     })),
     listAdminAccessibleBrands().catch(() => []),
+    getPendingFlowToastsForUser(user.id, adminClient).catch(() => []),
   ]);
 
   const userRow = userRowRes.data;
@@ -102,6 +105,7 @@ export default async function AdminLayout({
             <ImpersonationBanner />
             <EasterEgg />
             <CommandPalette />
+            <OnboardingFlowToasts initial={pendingFlowToasts} />
             <AdminSidebar userName={userName} avatarUrl={avatarUrl} hiddenSidebarItems={hiddenSidebarItems} />
             <SidebarInset>
               <BannerStrip />

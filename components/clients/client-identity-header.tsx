@@ -4,6 +4,7 @@ import { ClientLogo } from '@/components/clients/client-logo';
 import { ImpersonateButton } from '@/components/clients/impersonate-button';
 import { InviteButton } from '@/components/clients/invite-button';
 import { useClientAdminShell } from '@/components/clients/client-admin-shell-context';
+import { StartOnboardingButton } from '@/components/onboarding/start-onboarding-button';
 
 /**
  * Persistent client identity strip at the top of every settings page.
@@ -31,6 +32,7 @@ export function ClientIdentityHeader() {
         <p className="mt-0.5 font-mono text-[11px] text-text-muted/70 truncate">{slug}</p>
       </div>
       <div className="flex items-center gap-2 shrink-0">
+        <StartOnboardingButton clientId={clientId} clientName={clientName} variant="compact" />
         <InviteButton
           clientId={clientId}
           clientName={clientName}

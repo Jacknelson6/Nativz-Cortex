@@ -138,20 +138,18 @@ export function ResearchTopicForm({
           return;
         }
 
-        const needsSubtopics = data.topic_pipeline === 'llm_v1';
-        const prefix = portalMode ? '/portal' : '/admin';
-
+        // Always land on the processing page. The keyword picker is no
+        // longer interactive — the LLM-pre-selected subtopics are auto-
+        // confirmed server-side from the processing page when the search
+        // is in `pending_subtopics` state. One submit → one loader → done.
         onStarted?.({
           id: data.id!,
           query: topicQuery.trim(),
           mode: searchMode,
           clientName: portalMode ? fixedClientName : (selectedClient?.name ?? null),
-          needsSubtopics,
+          needsSubtopics: false,
         });
-        const dest = needsSubtopics
-          ? `${prefix}/search/${data.id}/subtopics`
-          : `${prefix}/search/${data.id}/processing`;
-        router.push(dest);
+        router.push(`/finder/${data.id}/processing`);
       } catch {
         setError('Something went wrong. Try again.');
       } finally {

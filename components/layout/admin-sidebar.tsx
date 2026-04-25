@@ -30,7 +30,6 @@ import {
   Gauge,
   ListChecks,
   Telescope,
-  Radar,
 } from 'lucide-react';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
@@ -95,15 +94,6 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'Brand tools',
     items: [
       { href: '/finder/new', label: 'Trend Finder', icon: TrendingUp },
-      {
-        // Trend monitors — recurring brand / topic listening reports.
-        // Sits directly below Trend Finder so the relationship is obvious:
-        // one is ad-hoc search, the other is ongoing listening on the same
-        // underlying Apify + LLM stack.
-        href: '/finder/monitors',
-        label: 'Trend Monitors',
-        icon: Radar,
-      },
       { href: '/lab', label: 'Strategy Lab', icon: MessagesSquare },
       {
         // NAT-62 (2026-04-22): unified landing page. Renamed back to
@@ -227,14 +217,12 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/notifications',
   '/admin/usage',
   // Cost-driving brand tools stay admin-only. Spying triggers Apify scrapes
-  // on every audit; Trend Monitors are recurring scheduled scrapes; the Ad
-  // Generator triggers Gemini 2.5 Flash Image generations. Each page also
-  // redirects non-admins server-side (defence in depth) — this set just
-  // hides them from the viewer sidebar. Brand Profile, Notes, Brain,
-  // Strategy Lab, and Trend Finder are read-friendly — RLS scopes them to
-  // the viewer's user_client_access.
+  // on every audit; the Ad Generator triggers Gemini 2.5 Flash Image
+  // generations. Each page also redirects non-admins server-side (defence
+  // in depth) — this set just hides them from the viewer sidebar. Brand
+  // Profile, Notes, Brain, Strategy Lab, and Trend Finder are read-friendly
+  // — RLS scopes them to the viewer's user_client_access.
   '/ads',
-  '/finder/monitors',
   '/spying',
   // Settings is reachable from the avatar popover — it doesn't need its
   // own nav row on the portal. Keeping it on the admin side where the gear
