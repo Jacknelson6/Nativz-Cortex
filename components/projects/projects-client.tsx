@@ -152,40 +152,35 @@ export function ProjectsClient() {
   }
 
   return (
-    <div className="cortex-page-gutter max-w-7xl mx-auto py-6">
-      <header className="mb-6">
-        <div className="flex items-end justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-text-primary">Project management</h1>
-            <p className="text-sm text-text-secondary mt-1">
-              Tasks, shoots, and edits in one place.
-            </p>
+    <div>
+      <header className="mb-4 space-y-3">
+        {/* Row 1: type pills + create dropdown */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {TYPE_PILLS.map((pill) => {
+              const active = typeFilter === pill.value;
+              const count = counts[pill.value];
+              return (
+                <button
+                  key={pill.value}
+                  type="button"
+                  onClick={() => updateParams({ type: pill.value === 'all' ? null : pill.value })}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors ${
+                    active
+                      ? 'bg-accent-surface text-text-primary font-semibold'
+                      : 'bg-surface text-text-secondary hover:bg-surface-hover hover:text-text-primary'
+                  }`}
+                >
+                  <span>{pill.label}</span>
+                  <span className="text-xs opacity-70">{count}</span>
+                </button>
+              );
+            })}
           </div>
           <NewProjectButton onCreate={createProject} />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 mb-3">
-          {TYPE_PILLS.map((pill) => {
-            const active = typeFilter === pill.value;
-            const count = counts[pill.value];
-            return (
-              <button
-                key={pill.value}
-                type="button"
-                onClick={() => updateParams({ type: pill.value === 'all' ? null : pill.value })}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors ${
-                  active
-                    ? 'bg-accent-surface text-text-primary font-semibold'
-                    : 'bg-surface text-text-secondary hover:bg-surface-hover hover:text-text-primary'
-                }`}
-              >
-                <span>{pill.label}</span>
-                <span className="text-xs opacity-70">{count}</span>
-              </button>
-            );
-          })}
-        </div>
-
+        {/* Row 2: filters + view switcher */}
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={clientFilter}

@@ -26,7 +26,6 @@ import {
   Gauge,
   Telescope,
   Briefcase,
-  CheckSquare,
   Workflow,
 } from 'lucide-react';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
@@ -144,14 +143,11 @@ const NAV_SECTIONS: NavSection[] = [
           { href: '/admin/accounting', label: 'Accounting', icon: Receipt },
           { href: '/admin/revenue', label: 'Revenue', icon: CreditCard },
           { href: '/admin/notifications', label: 'Notifications', icon: Bell },
-          // Project Management = pipelines / sprints (the editing pipeline,
-          // shoot scheduling, larger projects). /admin/shoots + /admin/edits
-          // redirect here. Tasks below is the day-to-day individual to-do
-          // list (Today / Upcoming / All view). Two surfaces, one section
-          // — Jack 2026-04-25: "they exist in one space but they're
-          // technically different."
+          // Project Management houses both pipelines (Shoots / Edits / Content
+          // boards) and individual tasks (Today / Upcoming / All) under one
+          // route. The Pipelines vs. Tasks split is a tab inside the page —
+          // /admin/shoots, /admin/edits, and /admin/tasks all redirect here.
           { href: '/admin/projects', label: 'Project Management', icon: Briefcase },
-          { href: '/admin/tasks', label: 'Tasks', icon: CheckSquare },
           { href: '/admin/usage', label: 'Usage', icon: Gauge },
           { href: '/admin/settings', label: 'Settings', icon: SettingsIcon },
         ],
