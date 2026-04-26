@@ -20,8 +20,13 @@ interface ClientOption {
 }
 
 export function useReportingData(initialClientId?: string | null) {
+  // Brand selection lives at the top-bar pill — analytics always renders the
+  // brand passed in via prop. Keep `clients` for `selectedClient` lookup
+  // (report builder needs the full record) but drop the local state + setter
+  // so switching the pill (which triggers router.refresh and a new prop) is
+  // the single source of truth.
   const [clients, setClients] = useState<ClientOption[]>([]);
-  const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const selectedClientId = initialClientId ?? '';
   const [datePreset, setDatePreset] = useState<DateRangePreset>('last_28d');
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
   const [compareEnabled, setCompareEnabled] = useState(false);
@@ -36,7 +41,8 @@ export function useReportingData(initialClientId?: string | null) {
   const [dataLoading, setDataLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
-  // Fetch clients on mount
+  // Fetch clients on mount — only for `selectedClient` lookup (name, logo)
+  // used by the report builder. Selection itself comes from `initialClientId`.
   useEffect(() => {
     async function fetchClients() {
       try {
@@ -51,14 +57,6 @@ export function useReportingData(initialClientId?: string | null) {
           agency: (c.agency as string | null) ?? null,
         }));
         setClients(list);
-        if (list.length > 0) {
-          setSelectedClientId((prev) => {
-            if (prev) return prev;
-            const preferred =
-              initialClientId && list.some((c) => c.id === initialClientId) ? initialClientId : list[0].id;
-            return preferred;
-          });
-        }
       } catch {
         toast.error('Failed to load clients');
       } finally {
@@ -66,7 +64,7 @@ export function useReportingData(initialClientId?: string | null) {
       }
     }
     fetchClients();
-  }, [initialClientId]);
+  }, []);
 
   const dateRange = resolvePresetRange(datePreset, customRange);
 
@@ -180,7 +178,6 @@ export function useReportingData(initialClientId?: string | null) {
     clients,
     selectedClient,
     selectedClientId,
-    setSelectedClientId,
     datePreset,
     setDatePreset,
     customRange,

@@ -11,22 +11,18 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   shape?: Shape;
 }
 
-// Primary = brand accent (cyan in Nativz, teal in Anderson). Uppercase Jost-700
-// with 2px letter-spacing keeps the CTA feeling distinctive vs secondary/ghost.
-// Purple remains an available accent token (--nz-purple) but is NOT used on
-// action buttons — Nativz CTAs are cyan, AC CTAs are teal. Danger stays red.
+// Primary = brand accent (cyan in Nativz, teal in Anderson). Sentence-case sans
+// matches secondary/ghost so all buttons share one type rhythm; emphasis comes
+// from color, not casing. Danger stays red.
 const variantStyles: Record<Variant, string> = {
   primary:
-    'bg-accent text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] nz-btn-label',
+    'bg-accent text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)]',
   secondary: 'bg-surface-hover text-text-primary hover:bg-nativz-border',
   outline: 'border border-nativz-border text-text-secondary hover:bg-surface-hover',
   ghost: 'text-text-secondary hover:bg-surface-hover hover:text-text-primary',
   danger: 'bg-[color:var(--error)] text-white hover:bg-[color:var(--error-hover)]',
 };
 
-// Size scale — primary (nz-btn-label) uses uppercase so sizes stay the same,
-// but visual weight reads bigger. Preserve the existing px/py scale so
-// existing layouts don't reflow.
 const sizeStyles: Record<Size, string> = {
   xs: 'px-2 py-1 text-[10px]',
   sm: 'px-3 py-1.5 text-sm',

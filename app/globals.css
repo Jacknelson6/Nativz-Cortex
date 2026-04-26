@@ -47,9 +47,6 @@ summary {
      highlight, not a tint of the brand accent. */
   --nz-highlight-underline: rgba(0, 130, 181, 0.70);
 
-  /* Button label letter-spacing */
-  --nz-btn-letter-spacing: 0.125em;
-
   /* Radius scale — matches live nativz.io ROUNDED corners.
      Buttons use --nz-btn-radius which overrides per brand mode. */
   --nz-radius-sm: 5px;
@@ -910,28 +907,6 @@ dialog:not([open]) {
 .font-display {
   font-family: var(--font-nz-display), 'Futura PT', 'futura-pt', 'Futura',
     'Century Gothic', system-ui, sans-serif;
-}
-
-/* Button label — Jost 700 uppercase with 2px letter-spacing.
-   Applied to primary CTAs and key action buttons.
-   Nativz signature; AC overrides below. */
-.nz-btn-label {
-  font-family: var(--font-nz-display), 'Futura PT', 'Futura',
-    'Century Gothic', system-ui, sans-serif;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: var(--nz-btn-letter-spacing);
-  line-height: 1.2;
-}
-
-/* Anderson brand mode — uppercase + 2px tracking is the Nativz-only button
-   signature. AC buttons read in regular case with tighter spacing using AC's
-   UI sans (Rubik) at weight 600. Confirmed against AC marketing refs. */
-[data-brand-mode="anderson"] .nz-btn-label {
-  font-family: var(--font-nz-sans), 'Rubik', system-ui, sans-serif;
-  font-weight: 600;
-  text-transform: none;
-  letter-spacing: 0;
 }
 
 /* Signature: thick translucent cyan underline sitting BEHIND glyphs.

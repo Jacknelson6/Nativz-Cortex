@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { RefreshCw, Download, Flame } from 'lucide-react';
-import { ComboSelect } from '@/components/ui/combo-select';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useReportingData } from './hooks/use-reporting-data';
@@ -20,10 +19,8 @@ const ReportBuilder = dynamic(() => import('./report-builder').then(m => ({ defa
 
 export function AnalyticsDashboard({ initialClientId }: { initialClientId?: string | null } = {}) {
   const {
-    clients,
     selectedClient,
     selectedClientId,
-    setSelectedClientId,
     datePreset,
     setDatePreset,
     customRange,
@@ -81,24 +78,11 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
     );
   }
 
-  const clientOptions = clients.map((c) => ({
-    value: c.id,
-    label: c.name,
-  }));
-
   return (
     <div className="space-y-6">
-      {/* Header row */}
-      <div className="flex flex-wrap items-end gap-4">
-        <div className="w-64">
-          <ComboSelect
-            label="Client"
-            options={clientOptions}
-            value={selectedClientId}
-            onChange={setSelectedClientId}
-            placeholder="Select a client…"
-          />
-        </div>
+      {/* Header row — brand selection lives in the top-bar pill, so this row
+          only carries the per-brand actions (sync + download). */}
+      <div className="flex flex-wrap items-center gap-3">
         <Button
           variant="outline"
           size="sm"
