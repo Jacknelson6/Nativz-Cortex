@@ -32,6 +32,7 @@ import { Button } from '@/components/ui/button';
 import { EncryptedText } from '@/components/ui/encrypted-text';
 import { toast } from 'sonner';
 import { AuditShareButton } from '@/components/audit/audit-share-button';
+import { TrackBrandButton } from '@/components/audit/track-brand-button';
 import { TrackCompetitorButton } from '@/components/audit/track-competitor-button';
 import { TikTokMark } from '@/components/integrations/tiktok-mark';
 import { InstagramMark } from '@/components/integrations/instagram-mark';
@@ -1283,6 +1284,12 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <TrackBrandButton
+                auditId={audit.id}
+                brandName={brandName}
+                platforms={platforms}
+                defaultClientId={audit.attached_client_id ?? null}
+              />
               <AuditShareButton auditId={audit.id} />
             </div>
           </div>
