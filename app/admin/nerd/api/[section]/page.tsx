@@ -35,7 +35,7 @@ export default async function SectionPage({ params }: { params: Promise<{ sectio
       <div>
         <div className="flex items-center gap-3 mb-2">
           {Icon && (
-            <div className="rounded-lg bg-white/[0.04] p-2.5">
+            <div className="rounded-lg bg-surface-hover p-2.5">
               <Icon size={20} className="text-accent-text" />
             </div>
           )}

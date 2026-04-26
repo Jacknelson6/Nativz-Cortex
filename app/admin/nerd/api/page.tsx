@@ -107,7 +107,7 @@ export default async function ApiDocsPage() {
               >
                 <Card className="h-full transition-colors group-hover:border-accent/30">
                   <div className="flex items-start gap-3">
-                    <div className="rounded-lg bg-white/[0.04] p-2 shrink-0">
+                    <div className="rounded-lg bg-surface-hover p-2 shrink-0">
                       {Icon && <Icon size={16} className="text-text-muted group-hover:text-accent-text transition-colors" />}
                     </div>
                     <div className="flex-1 min-w-0">

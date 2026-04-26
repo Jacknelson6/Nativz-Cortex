@@ -458,7 +458,7 @@ function SkillEditor({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. short-form script writing"
-            className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent/50"
+            className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent/50 focus-visible:ring-1 focus-visible:ring-accent-border"
           />
         </div>
 
@@ -472,7 +472,7 @@ function SkillEditor({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="One-line summary used in slash-command typeahead"
-              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent/50"
+              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent/50 focus-visible:ring-1 focus-visible:ring-accent-border"
             />
           </div>
         )}
@@ -509,7 +509,7 @@ function SkillEditor({
             <select
               value={clientId ?? ''}
               onChange={(e) => setClientId(e.target.value || null)}
-              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent/50"
+              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent/50 focus-visible:ring-1 focus-visible:ring-accent-border"
             >
               <option value="">— Agency-wide (all clients) —</option>
               {clients.map((c) => (
@@ -539,7 +539,7 @@ function SkillEditor({
               value={commandSlug}
               onChange={(e) => setCommandSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
               placeholder="generate"
-              className="flex-1 rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent/50"
+              className="flex-1 rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent/50 focus-visible:ring-1 focus-visible:ring-accent-border"
             />
           </div>
         </div>
@@ -616,7 +616,7 @@ function SkillEditor({
               onChange={(e) => setContent(e.target.value)}
               placeholder="# Skill name&#10;&#10;..."
               rows={14}
-              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 font-mono text-sm text-text-primary focus:outline-none focus:border-accent/50"
+              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 font-mono text-sm text-text-primary focus:outline-none focus:border-accent/50 focus-visible:ring-1 focus-visible:ring-accent-border"
             />
           </div>
         )}
@@ -632,7 +632,7 @@ function SkillEditor({
                 value={githubUrl}
                 onChange={(e) => handleGithubUrlChange(e.target.value)}
                 placeholder="https://github.com/owner/repo/blob/main/skills/example.md"
-                className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent/50"
+                className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent/50 focus-visible:ring-1 focus-visible:ring-accent-border"
               />
               <p className="mt-1 text-xs text-text-muted/80">
                 Pasting a GitHub file URL auto-fills repo, branch, and path below.
@@ -645,7 +645,7 @@ function SkillEditor({
                 value={githubRepo}
                 onChange={(e) => setGithubRepo(e.target.value)}
                 placeholder="Anderson-Collaborative/ac-docs"
-                className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent/50"
+                className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent/50 focus-visible:ring-1 focus-visible:ring-accent-border"
               />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -656,7 +656,7 @@ function SkillEditor({
                   value={githubPath}
                   onChange={(e) => setGithubPath(e.target.value)}
                   placeholder="skills/content-pillars.md"
-                  className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent/50"
+                  className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent/50 focus-visible:ring-1 focus-visible:ring-accent-border"
                 />
               </div>
               <div>
@@ -665,7 +665,7 @@ function SkillEditor({
                   type="text"
                   value={githubBranch}
                   onChange={(e) => setGithubBranch(e.target.value)}
-                  className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent/50"
+                  className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent/50 focus-visible:ring-1 focus-visible:ring-accent-border"
                 />
               </div>
             </div>

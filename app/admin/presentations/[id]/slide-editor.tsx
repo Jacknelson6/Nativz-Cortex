@@ -63,7 +63,7 @@ export function SlideEditor({
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between border-b border-nativz-border px-4 py-3">
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover transition-colors">
+          <button onClick={onBack} aria-label="Back to presentations" className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover transition-colors">
             <ArrowLeft size={18} />
           </button>
           <input
@@ -97,10 +97,10 @@ export function SlideEditor({
             <div
               key={i}
               onClick={() => setActiveSlide(i)}
-              className={`group relative rounded-lg border p-2.5 cursor-pointer transition-all ${
+              className={`group relative rounded-lg border p-2.5 cursor-pointer transition-colors ${
                 i === activeSlide
                   ? 'border-accent/40 bg-accent-surface/50 ring-1 ring-accent/20'
-                  : 'border-nativz-border hover:border-white/15 hover:bg-surface-hover'
+                  : 'border-nativz-border hover:border-accent-border/40 hover:bg-surface-hover'
               }`}
             >
               <div className="flex items-start gap-2">
@@ -111,13 +111,13 @@ export function SlideEditor({
                 </div>
               </div>
               <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
-                <button onClick={(e) => { e.stopPropagation(); moveSlide(i, -1); }} className="cursor-pointer rounded p-0.5 text-text-muted hover:text-foreground hover:bg-white/10 transition-colors" disabled={i === 0}><ChevronUp size={12} /></button>
-                <button onClick={(e) => { e.stopPropagation(); moveSlide(i, 1); }} className="cursor-pointer rounded p-0.5 text-text-muted hover:text-foreground hover:bg-white/10 transition-colors" disabled={i === presentation.slides.length - 1}><ChevronDown size={12} /></button>
-                <button onClick={(e) => { e.stopPropagation(); removeSlide(i); }} className="cursor-pointer rounded p-0.5 text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors" disabled={presentation.slides.length <= 1}><Trash2 size={12} /></button>
+                <button onClick={(e) => { e.stopPropagation(); moveSlide(i, -1); }} aria-label={`Move slide ${i + 1} up`} className="cursor-pointer rounded p-0.5 text-text-muted hover:text-foreground hover:bg-surface-hover transition-colors" disabled={i === 0}><ChevronUp size={12} /></button>
+                <button onClick={(e) => { e.stopPropagation(); moveSlide(i, 1); }} aria-label={`Move slide ${i + 1} down`} className="cursor-pointer rounded p-0.5 text-text-muted hover:text-foreground hover:bg-surface-hover transition-colors" disabled={i === presentation.slides.length - 1}><ChevronDown size={12} /></button>
+                <button onClick={(e) => { e.stopPropagation(); removeSlide(i); }} aria-label={`Remove slide ${i + 1}`} className="cursor-pointer rounded p-0.5 text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors" disabled={presentation.slides.length <= 1}><Trash2 size={12} /></button>
               </div>
             </div>
           ))}
-          <button onClick={addSlide} className="cursor-pointer w-full flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-white/15 py-2.5 text-xs text-text-muted hover:text-accent-text hover:border-accent/40 transition-colors">
+          <button onClick={addSlide} className="cursor-pointer w-full flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-nativz-border py-2.5 text-xs text-text-muted hover:text-accent-text hover:border-accent/40 transition-colors">
             <Plus size={12} /> Add slide
           </button>
         </div>

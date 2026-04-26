@@ -734,7 +734,7 @@ export function IdeasResultsClient({
                     className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-left transition-colors cursor-pointer ${
                       ctaType === preset.value
                         ? 'bg-accent2-surface text-accent2-text border border-accent2/30'
-                        : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08]'
+                        : 'bg-surface text-text-muted border border-transparent hover:bg-surface-hover'
                     }`}
                   >
                     <preset.icon size={14} className="shrink-0" />
@@ -762,7 +762,7 @@ export function IdeasResultsClient({
                   className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-left transition-colors cursor-pointer ${
                     ctaType === 'custom'
                       ? 'bg-accent2-surface text-accent2-text border border-accent2/30'
-                      : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08]'
+                      : 'bg-surface text-text-muted border border-transparent hover:bg-surface-hover'
                   }`}
                 >
                   <Pencil size={14} className="shrink-0" />
@@ -792,7 +792,7 @@ export function IdeasResultsClient({
                     className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
                       videoLength === sec && !customVideoLength
                         ? 'bg-accent2-surface text-accent2-text border border-accent2/30'
-                        : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08]'
+                        : 'bg-surface text-text-muted border border-transparent hover:bg-surface-hover'
                     }`}
                   >
                     {sec}s
@@ -813,7 +813,7 @@ export function IdeasResultsClient({
                     className={`w-16 px-3 py-2 rounded-lg text-sm font-medium text-center transition-colors focus:outline-none ${
                       customVideoLength
                         ? 'bg-accent2-surface text-accent2-text border border-accent2/30'
-                        : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08]'
+                        : 'bg-surface text-text-muted border border-transparent hover:bg-surface-hover'
                     }`}
                   />
                   {customVideoLength && <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-accent2-text/60 pointer-events-none">s</span>}
@@ -838,7 +838,7 @@ export function IdeasResultsClient({
                     className={`group/hook relative flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs text-left transition-colors cursor-pointer ${
                       selectedHooks.has(hook.id)
                         ? 'bg-accent2-surface text-accent2-text border border-accent2/30'
-                        : 'bg-white/[0.04] text-text-muted border border-transparent hover:bg-white/[0.08]'
+                        : 'bg-surface text-text-muted border border-transparent hover:bg-surface-hover'
                     }`}
                   >
                     <div className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-colors ${

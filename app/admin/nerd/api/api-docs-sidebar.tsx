@@ -81,7 +81,7 @@ export default function ApiDocsSidebar() {
                 className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs transition-colors group ${
                   isActive
                     ? 'bg-accent-surface text-accent-text'
-                    : 'text-text-muted hover:text-text-secondary hover:bg-white/[0.04]'
+                    : 'text-text-muted hover:text-text-secondary hover:bg-surface-hover'
                 }`}
               >
                 {Icon && (

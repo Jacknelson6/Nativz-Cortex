@@ -137,12 +137,12 @@ export function TierListEditor({
       {/* Top bar */}
       <div className="flex items-center justify-between border-b border-nativz-border px-4 py-3">
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover transition-colors"><ArrowLeft size={18} /></button>
+          <button onClick={onBack} aria-label="Back to presentations" className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover transition-colors"><ArrowLeft size={18} /></button>
           <input type="text" value={presentation.title} onChange={(e) => update({ title: e.target.value })} className="bg-transparent text-lg font-bold text-foreground border-none outline-none placeholder:text-foreground/30 min-w-0 flex-1" placeholder="Tier list title..." />
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-text-muted">{saving ? 'Saving...' : 'Saved'}</span>
-          <button onClick={() => setShowTierSettings(!showTierSettings)} className={`cursor-pointer rounded-lg p-2 text-text-muted hover:bg-surface-hover transition-colors ${showTierSettings ? 'bg-surface-hover text-accent-text' : ''}`} title="Tier settings"><Settings2 size={16} /></button>
+          <button onClick={() => setShowTierSettings(!showTierSettings)} aria-label="Tier settings" aria-pressed={showTierSettings} className={`cursor-pointer rounded-lg p-2 text-text-muted hover:bg-surface-hover transition-colors ${showTierSettings ? 'bg-surface-hover text-accent-text' : ''}`} title="Tier settings"><Settings2 size={16} /></button>
           <Button variant="ghost" size="sm" onClick={onSave}><Save size={14} /> Save</Button>
         </div>
       </div>
@@ -256,9 +256,9 @@ export function TierListEditor({
                     <input type="color" value={tier.color} onChange={(e) => updateTierDef(tier.id, { color: e.target.value })} className="h-5 w-5 rounded border-0 cursor-pointer bg-transparent shrink-0" />
                     <input type="text" value={tier.name} onChange={(e) => updateTierDef(tier.id, { name: e.target.value })} className="flex-1 bg-transparent text-xs text-foreground outline-none min-w-0" />
                     <div className="flex items-center gap-0.5 shrink-0">
-                      <button onClick={() => moveTier(i, -1)} disabled={i === 0} className="cursor-pointer rounded p-0.5 text-text-muted hover:text-foreground hover:bg-white/10 transition-colors disabled:opacity-30"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 15l-6-6-6 6"/></svg></button>
-                      <button onClick={() => moveTier(i, 1)} disabled={i === tiers.length - 1} className="cursor-pointer rounded p-0.5 text-text-muted hover:text-foreground hover:bg-white/10 transition-colors disabled:opacity-30"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6"/></svg></button>
-                      <button onClick={() => removeTier(tier.id)} className="cursor-pointer rounded p-0.5 text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"><Trash2 size={10} /></button>
+                      <button onClick={() => moveTier(i, -1)} disabled={i === 0} aria-label={`Move ${tier.name} tier up`} className="cursor-pointer rounded p-0.5 text-text-muted hover:text-foreground hover:bg-surface-hover transition-colors disabled:opacity-30"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 15l-6-6-6 6"/></svg></button>
+                      <button onClick={() => moveTier(i, 1)} disabled={i === tiers.length - 1} aria-label={`Move ${tier.name} tier down`} className="cursor-pointer rounded p-0.5 text-text-muted hover:text-foreground hover:bg-surface-hover transition-colors disabled:opacity-30"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6"/></svg></button>
+                      <button onClick={() => removeTier(tier.id)} aria-label={`Remove ${tier.name} tier`} className="cursor-pointer rounded p-0.5 text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"><Trash2 size={10} /></button>
                     </div>
                   </div>
                 ))}
@@ -327,7 +327,7 @@ function TierItemCard({
         {isEditing ? (
           <div className="flex items-center gap-0.5 w-full">
             <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { onUpdate({ title: editTitle }); onEdit(); } if (e.key === 'Escape') onEdit(); }} autoFocus className="flex-1 bg-transparent text-[10px] text-foreground outline-none min-w-0" />
-            <button onClick={() => { onUpdate({ title: editTitle }); onEdit(); }} className="cursor-pointer text-accent-text shrink-0"><Check size={10} /></button>
+            <button onClick={() => { onUpdate({ title: editTitle }); onEdit(); }} aria-label="Save title" className="cursor-pointer text-accent-text shrink-0"><Check size={10} /></button>
           </div>
         ) : (
           <p className="text-[10px] text-text-secondary truncate leading-tight w-full">{item.title}</p>
@@ -339,8 +339,8 @@ function TierItemCard({
         {hasUrl && (
           <a href={item.url} target="_blank" rel="noopener noreferrer" className="rounded p-0.5 bg-black/60 text-foreground/70 hover:text-foreground transition-colors" onClick={(e) => e.stopPropagation()}><ExternalLink size={10} /></a>
         )}
-        <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="cursor-pointer rounded p-0.5 bg-black/60 text-foreground/70 hover:text-foreground transition-colors"><Pencil size={10} /></button>
-        <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="cursor-pointer rounded p-0.5 bg-black/60 text-foreground/70 hover:text-red-400 transition-colors"><Trash2 size={10} /></button>
+        <button onClick={(e) => { e.stopPropagation(); onEdit(); }} aria-label="Edit" className="cursor-pointer rounded p-0.5 bg-black/60 text-foreground/70 hover:text-foreground transition-colors"><Pencil size={10} /></button>
+        <button onClick={(e) => { e.stopPropagation(); onRemove(); }} aria-label="Remove" className="cursor-pointer rounded p-0.5 bg-black/60 text-foreground/70 hover:text-red-400 transition-colors"><Trash2 size={10} /></button>
       </div>
     </div>
   );
