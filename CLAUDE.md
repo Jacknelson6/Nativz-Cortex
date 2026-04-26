@@ -6,116 +6,102 @@
 
 ## Tech Stack
 
-Next.js 15 (App Router) + TypeScript, Supabase (Postgres + Auth), SearXNG (self-hosted), Claude Sonnet 4.5 via OpenRouter, Tailwind CSS v4, Recharts, lucide-react, Zod, Obsidian vault via GitHub API
+Next.js 15 (App Router) + TypeScript, Supabase (Postgres + Auth + pgvector), SearXNG (self-hosted), Claude Sonnet 4.5 via OpenRouter, Tailwind CSS v4, Recharts, lucide-react, Zod, Obsidian vault via GitHub API, Zernio (social posting), Stripe (billing).
 
-**Social posting / analytics:** [Zernio](https://docs.zernio.com/) (`ZERNIO_API_KEY`; optional `ZERNIO_API_BASE`, `ZERNIO_WEBHOOK_SECRET`). Legacy env names `LATE_API_KEY` / `LATE_WEBHOOK_SECRET` and `POSTING_PROVIDER=late` still work as aliases. DB columns remain `late_profile_id` / `late_account_id` / `late_post_id` for now.
-
-**Zernio webhooks:** `POST https://<app>/api/scheduler/webhooks` — use the same secret in Zernio’s “Secret key” field (signature header may still be labeled `X-Late-Signature` in their UI). Enable **Post failed** and **Account disconnected**. To ping specific admins in-app, set `ZERNIO_WEBHOOK_NOTIFY_EMAILS` (comma-separated, matches `users.email` for role admin, else `team_members.email` + linked `user_id`) and/or `ZERNIO_WEBHOOK_NOTIFY_USER_IDS` (auth UUIDs). Apply migration `068_account_disconnected_notification_type.sql` for the `account_disconnected` notification type.
-
-**Zernio deploy checklist:** **`docs/zernio-setup.md`** — concrete steps (Vercel env vars, webhook URL, redeploy) plus link to [Zernio API docs](https://docs.zernio.com/).
-
-**Vercel build cache:** `vercel.json` sets `VERCEL_FORCE_NO_BUILD_CACHE=1` during build so deployments do not restore a stale remote cache (which can crash webpack with `Cannot read properties of undefined (reading 'length')` after large dependency or route-graph changes). Tradeoff: slightly longer builds. To re-enable caching after a stable period, remove that `build.env` entry and use **Redeploy** → uncheck “Use existing Build Cache” if a one-off clean build is needed.
-
-**Topic search (LLM pipeline):** **Recommended:** `SEARXNG_URL` (self-hosted SearXNG, defaults to `http://localhost:8888`) — general web SERP uses the DuckDuckGo engine via SearXNG (`SEARXNG_WEB_ENGINES`, default `duckduckgo`) + OpenAI research models (`openai/…` in admin or `TOPIC_SEARCH_*_MODEL`) — SearXNG supplies SERP; **OpenAI** runs synthesis (and optional `TOPIC_SEARCH_REFINE_SERP_QUERY=1` query shaping before SERP). If `SEARXNG_URL` is unset, default **openrouter** web search uses the OpenRouter API (not OpenAI) for retrieval. Set `TOPIC_SEARCH_WEB_RESEARCH=llm_only` for findings only (no live SERP). Optional: `TOPIC_SEARCH_REFINE_QUERY_MODEL` for refine-only. Optional: `TOPIC_SEARCH_PIPELINE` — omit or set to anything except `legacy` for **llm_v1**; set to `legacy` for the old multi-platform scrape path. Optional model overrides: `TOPIC_SEARCH_PLANNER_MODEL`, `TOPIC_SEARCH_RESEARCH_MODEL`, `TOPIC_SEARCH_MERGER_MODEL`. Apply migration `071_topic_search_llm_pipeline.sql` before relying on `llm_v1` columns in production.
-
-## Commands
+## Daily Commands
 
 ```bash
-npm run dev          # Dev server (http://localhost:3000)
+npm run dev          # Dev server (Cortex on http://localhost:3001)
 npm run build        # Production build
 npm run lint         # ESLint
-npm run test:ad-library # Vitest — Meta Ad Library URL extraction (`extract-ad-library-urls`)
-npx tsx scripts/test-ad-library-scrape.ts "<facebook ads library url>" # Live fetch + print extracted image URLs (no API/auth)
-npm run ads:ecoview:50   # EcoView — 50 Nano “Meta performance mix” ads (CLI; Brand DNA guideline required)
-npm run ads:ecoview:regenerate # EcoView — delete all global (Nano) creatives for the client, then queue 50 new ads (Brand DNA required)
-# Goldback local PNGs → client gallery (CLI outputs never auto-link to a client):
-#   GOLDBACK_IMPORT_DIR=~/Desktop/<Goldback-Idaho-Gemini-…> GOLDBACK_ADS_JSON=~/Desktop/Goldback-Meta-Top100/100-ads.generated.json GOLDBACK_CLIENT_ID=<uuid> npm run ads:goldback:import
-#   Or omit CLIENT_ID if a single client matches slug `goldback` or name %goldback% (set GOLDBACK_CLIENT_SLUG if needed).
-npm run ads:queue-nano-meta:dry # Print batch config only (any client: set NANO_META_CLIENT_ID, NANO_META_AD_COUNT)
 npx tsc --noEmit     # Type-check
-npm run kandy:upload # Local Kandy export folders → Supabase kandy_templates (see scripts/upload-kandy-templates.ts)
-npm run kandy:analyze # Backfill prompt_schema for templates missing analysis
-npm run supabase:migrate # Apply pending migrations (065+ by default; uses schema_migrations table; needs SUPABASE_DB_URL in .env.local)
-npm run supabase:apply-065 # One-off: 065_brand_dna_jobs_updated_at.sql only
-npm run supabase:apply-053 # Run migration 053 SQL via Postgres (needs SUPABASE_DB_URL in .env.local — Dashboard → Database → URI)
-# `npm run dev` runs `predev` → `supabase:migrate` first (skips quietly if no DB URL).
-npm run test:e2e       # Playwright — full matrix (see tests/*.spec.ts); dev server must return 200 on GET /api/health
-npm run test:e2e:routes # Redirect + API security only (no login UI shells)
-npm run test:e2e:shells # Login page UI smoke + health retry
-# Full signed-in crawl (admin: all static routes + first client + history links + first presentation; portal: all static routes):
-#   E2E_ADMIN_EMAIL=… E2E_ADMIN_PASSWORD=… npm run test:e2e
-#   E2E_PORTAL_EMAIL=… E2E_PORTAL_PASSWORD=… npm run test:e2e
-# PLAYWRIGHT_SKIP_WEBSERVER=1 — do not spawn `npm run dev` (use when you already have a server)
-# PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000 — alternate origin
+npm run test:e2e     # Playwright matrix
 ```
+
+Long-tail scripts (ads, kandy, migrations, e2e variants): see `docs/commands.md`.
 
 ## Reference Docs
 
-Detailed docs live in `docs/` — read only when needed for the current task:
+Full doc index lives in `docs/`. Read on-demand based on the task:
 
-- **`docs/architecture.md`** — Routes, key directories, data flow, auth system
-- **`docs/database.md`** — Table schemas, column details, credentials
-- **`docs/api-patterns.md`** — All API routes with method/purpose
-- **`docs/conventions.md`** — UI, copy, data safety, and performance patterns
-- **`docs/detail-design-patterns.md`** — 56 curated UI/UX micro-interaction patterns from detail.design
-- **`docs/spec-agency-tool.md`** — Original product spec
-- **`docs/spec-client-engagement.md`** — Client engagement features spec
-- **`docs/spec-pdr.md`** — PDR spec
-- **`docs/MOODBOARD_PRD.md`** — Moodboard feature PRD
-- **`docs/zernio-setup.md`** — Zernio env vars, webhook URL, redeploy checklist (scheduler + reporting)
+- Architecture / routes / auth → `docs/architecture.md`
+- DB schema, RLS, semantic memory layer → `docs/database.md`
+- API patterns / route inventory → `docs/api-patterns.md` + `docs/api-reference.md`
+- UI/copy/data conventions → `docs/conventions.md`
+- UI micro-interaction patterns → `docs/detail-design-patterns.md`
+- Topic search pipeline (SearXNG/OpenAI/OpenRouter, env vars) → `docs/topic-search.md`
+- Zernio setup + webhook secret + notify env → `docs/zernio-setup.md`
+- Revenue Hub + Stripe + Proposals → `docs/revenue.md`
+- Vercel build-cache flag → `docs/vercel-build.md`
+- Specs → `docs/spec-*.md`, `docs/MOODBOARD_PRD.md`
+- Latest pass-off after a long break → newest `docs/session-passoff-*.md`
 
 ## Session Startup
 
-Do these at the start of every session:
+1. **Check Linear.** The `SessionStart` hook runs `scripts/linear-todos.sh` and injects open issues assigned to Jack. If the list is non-empty, your *first* response asks which issue to work on (grouped by priority). Don't pick one unilaterally; don't start until Jack picks. If empty, proceed normally.
+2. Run `git status` — if dirty, ask whether to commit, stash, or discard before starting new work.
+3. Read `todo.md` for current status / priorities.
+4. Reference `docs/detail-design-patterns.md` when implementing any UI component.
 
-1. **Check Linear.** The `SessionStart` hook runs `scripts/linear-todos.sh` and injects any open issues assigned to Jack into your context. If that list is non-empty, your *first* response should ask which issue to work on (grouped by priority) — don't pick one unilaterally, and don't start work until Jack picks or says "something else". If the injection is empty, Linear either had nothing open or was unreachable — proceed normally.
-2. Run `git status` — if there are uncommitted changes, ask the user whether to commit, stash, or discard them before starting new work. Don't silently ignore dirty state.
-3. Read **`todo.md`** — Current status, what's done, what's left, priorities
-4. Reference **`docs/detail-design-patterns.md`** when implementing any UI component
-5. For deep handoff context after a long break, read **`docs/session-passoff-2026-04-19.md`** (or the latest dated pass-off doc in `docs/`).
+## Supabase MCP
 
-## Supabase MCP (Nativz Cortex)
+When working on **schema, SQL, migrations, RLS, or Supabase dashboard-style DB tasks**, **prefer the Supabase MCP** (read tables, run read-safe SQL, docs) over guessing. Fall back to `docs/database.md` and `supabase/migrations/` when MCP is unavailable. Setup details: project ref `phypsgxszrvwdaaqpxup`; MCP install + auth steps in `docs/supabase-mcp.md` (one-time).
 
-- **Project ref:** `phypsgxszrvwdaaqpxup` — MCP URL: `https://mcp.supabase.com/mcp?project_ref=phypsgxszrvwdaaqpxup`
-- **Claude Code:** `claude mcp add --scope project --transport http supabase "<url>"` (writes **`.mcp.json`**, gitignored). Authenticate once: run **`claude /mcp`** in a normal terminal → select **supabase** → **Authenticate**.
-- **Cursor:** `.cursor/mcp.json` registers the same HTTP MCP server for this workspace.
-- **Preference:** When working on **schema, SQL, migrations, RLS, or Supabase dashboard-style DB tasks** in this repo, **prefer the Supabase MCP** (read tables, run read-safe SQL, docs) over guessing. Fall back to `docs/database.md` and migrations in `supabase/migrations/` when MCP is unavailable.
-- **Optional:** `npx skills add supabase/agent-skills` — extra Supabase-oriented agent skills (install once per machine if desired).
+## Marketing Skills
 
-## Memory System
-
-This project uses **Ars Contexta** (`~/.claude/plugins/arscontexta/`). Key commands: `/arscontexta-help`, `/arscontexta-remember`, `/arscontexta-next`, `/arscontexta-health`
-
-## Agent tools & MCPs
-
-- **Cursor rule:** `.cursor/rules/mcp-and-tools.mdc` (always on) — **MCP-first** when the task matches Vercel, Supabase, Context7 docs, browser automation, Stripe, Figma, or Serena symbols; read each tool’s schema in `~/.cursor/projects/.../mcps/<server>/tools/*.json` before `call_mcp_tool`; pair with the matching **skill** in `.claude/skills/` / `.agents/skills/`.
-- **Inventory:** Full list of **MCP tool names** and the **built-in Cursor tool categories** lives in that rule file (update the list if you add/remove MCP servers).
-
-## Marketing skills (all agents)
-
-**[Corey Haines marketingskills](https://github.com/coreyhaines31/marketingskills)** is installed under `.agents/skills/<name>/` with Claude Code symlinks in `.claude/skills/<name>/`. For any marketing/CRO/copy/SEO/growth task, read **`.agents/MARKETING-SKILLS.md`** and the relevant **`SKILL.md`** before answering. Use **`product-marketing-context`** first when product positioning matters. Lockfile: **`skills-lock.json`**.
+For any marketing/CRO/copy/SEO/growth task, read `.agents/MARKETING-SKILLS.md` and the relevant `SKILL.md` first. Use `product-marketing-context` when product positioning matters.
 
 ## Working Preferences
 
-- **Plans are always approved** — proceed with implementation without asking for permission
-- **Don't ask "is this plan good?"** — just build it
-- **Run the commands** — Whenever you would tell the user to run a terminal command (scripts, seeds, migrations, tests, typecheck, lint), run it yourself in this environment. Do not stop at “here’s what to run.” Exceptions: steps that truly require the user (browser-only auth, dashboard clicks, deploying from their account) — say so briefly, but still run everything that can run here.
-- **Secrets in chat** — The maintainer is fine with passwords, API keys, and connection strings appearing in chat when useful. **Do not** add recurring disclaimers, lectures, or “don’t paste secrets” warnings unless they explicitly ask for a security review. Treat pasted credentials as authorized for troubleshooting and config. (`.env.local` remains gitignored; only commit example keys in `.env.example` if the repo uses one.)
+- **Plans are always approved** — proceed with implementation without asking for permission.
+- **Don't ask "is this plan good?"** — just build it.
+- **Run the commands.** Whenever you would tell the user to run a terminal command (scripts, seeds, migrations, tests, typecheck, lint), run it yourself. Don't stop at "here's what to run." Exceptions: steps that truly require the user (browser-only auth, dashboard clicks, deploying from their account) — say so briefly, but still run everything that can run here.
+- **Secrets in chat are fine.** Do not add disclaimers or "don't paste secrets" warnings unless explicitly asked for a security review. (`.env.local` stays gitignored.)
+- **Run until ship-ready, not just code-ready.** When building or modifying any feature, keep working autonomously until it is ready to ship *and* visually + experientially consistent with the rest of the site. This is required, not a recommendation. Before reporting done, verify: (1) builds clean + types pass, (2) the new surface matches existing screens — same typography, spacing, component primitives (`bg-surface` cards, `accent-text`, button styles), dark theme tokens, sentence-case copy, layout density, loading/error states. **If the new screen looks like it came from a different app, it isn't done.** Pull patterns from existing screens before inventing new ones; reference `docs/detail-design-patterns.md` and the closest sibling page in the same area (`/admin/...` or `/portal/...`).
 
 ## Key Conventions
 
 - API routes: Zod validation + auth check before processing
 - Next.js 15 params: `params: Promise<{ id: string }>` (must `await params`)
 - UI: dark theme, `bg-surface` cards on `bg-background`, blue accent (`accent-text`)
-- Copy: **sentence case** everywhere
+- Copy: **sentence case** in product UI (admin sidebar nav is the documented exception — Title Case there). Doc/file headings use Title Case.
 - AI responses: always null-safe (`?? []`, `?? ''`, `?? 0`)
 - Admin: `createAdminClient()` (service role); Portal: scope by `organization_id`
 - Charts: always `'use client'`
-- See `docs/conventions.md` for full list
+- Full list: `docs/conventions.md`
+
+## Task Delegation
+
+Spawn subagents to isolate context, parallelize independent work, or offload bulk mechanical tasks. Don't spawn when the parent needs the reasoning, when synthesis requires holding things together, or when spawn overhead dominates.
+
+Pick the cheapest model that can do the subtask well:
+- Haiku: bulk mechanical work, no judgment
+- Sonnet: scoped research, code exploration, in-scope synthesis
+- Opus: subtasks needing real planning or tradeoffs
+
+Subagents follow the same rules recursively, with two caps:
+- Haiku does not spawn further subagents. If it needs to, the task was wrong-sized for Haiku — return to the parent.
+- Max 3 tiers total (parent → subagent → one further tier). No nesting beyond that.
+
+Don't escalate tiers without a concrete reason. If a subagent realizes it needs a higher tier than itself, return to the parent rather than spawning up.
+
+Parent owns final output and cross-spawn synthesis. User instructions override.
+
+## Preferred Tools
+
+### Data Fetching
+
+1. **WebFetch** — free, text-only, works on public pages that don't block bots.
+2. **agent-browser CLI** (when installed — check with `which agent-browser`) — local Rust CLI + Chrome via CDP. For dynamic pages or auth walls. Returns accessibility tree with element refs — ~82% fewer tokens than screenshot tools. Install: `npm i -g agent-browser && agent-browser install`. If not installed, fall back to a Chrome MCP / Playwright tool.
+3. **Notice recurring fetch patterns and propose wrapping them as dedicated tools.** When the same fetch/parse logic comes up more than once, suggest wrapping it as a named tool (e.g. a skill file or a `.py` script that calls `agent-browser` with the snapshot and extraction steps baked in). Reference it by name on future calls.
+
+### PDF Files
+
+Use `pdftotext`, not the `Read` tool. Use `Read` only when the user directly asks to analyze images or charts inside the document.
 
 ## Large Data Files (skip unless directly relevant)
 
-- **`app/admin/nerd/api/api-docs-data.ts`** + **`docs/api-reference.md`** — both auto-generated from `app/api/**/route.ts` by `scripts/generate-api-docs.ts`. Do not edit by hand. Run `npm run docs:api` after adding/removing routes or tweaking the JSDoc block above an exported HTTP method.
+- `app/admin/nerd/api/api-docs-data.ts` + `docs/api-reference.md` — both auto-generated from `app/api/**/route.ts` by `scripts/generate-api-docs.ts`. Do not edit by hand. Run `npm run docs:api` after adding/removing routes or tweaking the JSDoc block above an exported HTTP method.
 
 ## Portal Security (CRITICAL)
 
@@ -149,37 +135,14 @@ if (!isAdmin) {
 | `admin` / `super_admin` | Full admin dashboard, all clients | No org filter |
 | `viewer` | Portal only, research + settings | Scoped to their `organization_id` |
 
-## Memory Layer
-
-Supabase is the single memory layer for semantic retrieval.
-
-- **Embeddings:** Gemini Embedding 001 via `lib/ai/embeddings.ts` — generated on knowledge entry create/update
-- **Storage:** pgvector columns on `client_knowledge_entries` and `knowledge_nodes`
-- **Search:** Postgres RPCs `search_knowledge_semantic`, `search_knowledge_nodes`, `search_knowledge_global` (see `supabase/migrations/082_knowledge_search_rpcs.sql`)
-- **Public API:** `searchKnowledge*` in `lib/knowledge/search.ts` and `lib/knowledge/graph-queries.ts`. Semantic-first with FTS fallback when the embedding call fails.
-- Used by Nerd, topic search, and any agent that needs QMD-style "pull only relevant context" retrieval.
-
 ## Short-form Video Focus
 
 Cortex is exclusively for **short-form video content** (TikTok, Reels, Shorts). All topic search results, video analysis, content ideas, and scripting assume short-form vertical video. Never reference long-form content in user-facing copy.
 
 ## Current Deploy
 
-- **Vercel** at `cortex.nativz.io`
-- **Supabase** project `phypsgxszrvwdaaqpxup`
-- **SearXNG** at `localhost:8888` (Mac mini only, not in production)
-- **ReClip** at `localhost:8899` (video downloader, Mac mini only)
-
-## Revenue Hub + Proposals
-
-- **Admin surfaces:** `/admin/revenue` (MRR / invoices / subs / clients / ad-spend / activity), `/admin/clients/[slug]/billing` (per-client), `/admin/proposals` (list + editor), `/admin/proposals/new` (draft), `/admin/proposals/[slug]` (editor — autosaves, status-guarded to draft-only).
-- **Portal:** `/portal/billing` — RLS-scoped (policies on `stripe_*` + `client_ad_spend` + `client_lifecycle_events`).
-- **Public:** `/proposals/[slug]` (no auth, rate-limited). Reads from `proposals.sent_snapshot` once sent so the signer always sees the version they agreed to.
-- **Stripe:** webhook at `/api/webhooks/stripe` (signature-verified, idempotent via `stripe_events`). Required events in the Stripe dashboard — see `docs/superpowers/specs/2026-04-23-revenue-hub-design.md` §14 and the round-2 commit message. Keys in `.env.local` only; mirror to Vercel with `npm run vercel:env:mirror` once the token has full-account scope.
-- **Lifecycle events** (stored in `client_lifecycle_events.type`): `invoice.*`, `subscription.*`, `onboarding.advanced`, `kickoff.*`, `contract.*`, `proposal.sent|viewed|signed|paid|expired`, `ad_spend.recorded`.
-- **Notification types** for admin bells: `payment_received`, `invoice_overdue`, `invoice_sent`, `invoice_due_soon`, `contract_signed`, `subscription_created|canceled|paused|resumed|updated`.
-- **Meta Ads sync:** per-client `meta_ad_account_id` on `clients` + `META_APP_ACCESS_TOKEN` env (passed via `Authorization: Bearer`). Daily cron `/api/cron/meta-ads-sync`.
+Vercel at `cortex.nativz.io` · Supabase project `phypsgxszrvwdaaqpxup` · SearXNG on `localhost:8888` (Mac mini, not in production) · ReClip on `localhost:8899` (video downloader, Mac mini).
 
 ## Task Specs
 
-For complex features, check `tasks/` directory for detailed specs. Build from specs without asking for confirmation.
+For complex features, check the `tasks/` directory for detailed specs. Build from specs without asking for confirmation.

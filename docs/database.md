@@ -233,3 +233,12 @@ Cortex uses a **service account JWT with `sub` = the user to impersonate** (`lib
 3. `GOOGLE_SERVICE_ACCOUNT_IMPERSONATE_EMAIL` must be a user in that Workspace domain (same domain the admin authorized). Fyxer recap messages must be visible in that user’s Gmail.
 
 If delegation or the scope is missing, token exchange returns an error (often `unauthorized_client` or `access_denied`).
+
+## Memory layer (semantic search)
+
+Supabase is the single memory layer for semantic retrieval used by Nerd, topic search, and any agent that needs QMD-style "pull only relevant context" retrieval.
+
+- **Embeddings:** Gemini Embedding 001 via `lib/ai/embeddings.ts` — generated on knowledge entry create/update.
+- **Storage:** pgvector columns on `client_knowledge_entries` and `knowledge_nodes`.
+- **Search RPCs:** `search_knowledge_semantic`, `search_knowledge_nodes`, `search_knowledge_global` — see `supabase/migrations/082_knowledge_search_rpcs.sql`.
+- **Public API:** `searchKnowledge*` in `lib/knowledge/search.ts` and `lib/knowledge/graph-queries.ts`. Semantic-first with FTS fallback when the embedding call fails.

@@ -10,7 +10,18 @@ Official API reference: [Zernio API documentation](https://docs.zernio.com/).
 | `ZERNIO_WEBHOOK_SECRET` | Same value as Zernio **webhooks → Secret key**. Used to verify `X-Zernio-Signature` / `X-Late-Signature` on `POST /api/scheduler/webhooks` and to sign OAuth state for scheduler connect. Legacy alias: `LATE_WEBHOOK_SECRET`. |
 | `ZERNIO_API_BASE` | Optional. Default `https://zernio.com/api/v1`. |
 
-Optional notify targets for webhook-driven in-app alerts: `ZERNIO_WEBHOOK_NOTIFY_EMAILS`, `ZERNIO_WEBHOOK_NOTIFY_USER_IDS` (see `CLAUDE.md`).
+Optional notify targets for webhook-driven in-app alerts:
+
+- `ZERNIO_WEBHOOK_NOTIFY_EMAILS` — comma-separated. Matches `users.email` for role admin, else `team_members.email` + linked `user_id`.
+- `ZERNIO_WEBHOOK_NOTIFY_USER_IDS` — comma-separated auth UUIDs.
+
+Apply migration `068_account_disconnected_notification_type.sql` for the `account_disconnected` notification type.
+
+## Legacy aliases (still supported)
+
+- Env: `LATE_API_KEY` → `ZERNIO_API_KEY`, `LATE_WEBHOOK_SECRET` → `ZERNIO_WEBHOOK_SECRET`, `POSTING_PROVIDER=late` still resolves.
+- DB columns: `late_profile_id` / `late_account_id` / `late_post_id` are unchanged.
+- Webhook signature header may still be labeled `X-Late-Signature` in Zernio's UI — same secret.
 
 ## Deploy checklist
 
