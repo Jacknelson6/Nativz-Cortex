@@ -31,9 +31,11 @@ export default async function AdminSearchProcessingPage({
     redirect(`/finder/${id}`);
   }
 
-  if (search.status === 'pending_subtopics') {
-    redirect(`/finder/${id}/subtopics`);
-  }
+  // The keyword picker is no longer interactive — when the search lands here
+  // in `pending_subtopics`, the SearchProcessing client auto-runs plan +
+  // confirm + start. The user sees the stepper immediately instead of a
+  // separate picker page.
+  const isPendingSubtopics = search.status === 'pending_subtopics';
 
   const topicPipeline = (search.topic_pipeline as 'legacy' | 'llm_v1' | undefined) ?? 'legacy';
   const rawSub = search.subtopics as unknown;
@@ -48,6 +50,7 @@ export default async function AdminSearchProcessingPage({
       pipeline={topicPipeline}
       subtopicCount={subtopicCount}
       webResearchMode={getTopicSearchWebResearchMode()}
+      pendingSubtopics={isPendingSubtopics}
     />
   );
 }
