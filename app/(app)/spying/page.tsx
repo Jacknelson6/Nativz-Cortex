@@ -1,11 +1,13 @@
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { CompetitorIntelligenceHero } from '@/components/spying/landing-hero';
-import { CompetitorIntelligenceActionBand } from '@/components/spying/action-band';
-import { LatestAuditsStrip } from '@/components/spying/latest-audits-strip';
-import { ActiveWatchesStrip } from '@/components/spying/active-watches-strip';
+import { SpyingPageHeader } from '@/components/spying/page-header';
+import { AuditQuickStart } from '@/components/spying/audit-quick-start';
+import { SpyStatStrip } from '@/components/spying/spy-stat-strip';
+import { LatestAuditsList } from '@/components/spying/latest-audits-list';
+import { WatchedCompetitorsList } from '@/components/spying/watched-competitors-list';
+import { RecurringReportsPreview } from '@/components/spying/recurring-reports-preview';
+import { SpyToolRail } from '@/components/spying/spy-tool-rail';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +17,13 @@ type ProspectDataShape = {
   website?: string;
   favicon?: string;
 } | null;
+
+function compactNumber(n: number | null | undefined): string {
+  if (n == null) return '0';
+  if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(n) >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
 
 export default async function CompetitorIntelligencePage() {
   const supabase = await createServerSupabaseClient();
@@ -33,22 +42,50 @@ export default async function CompetitorIntelligencePage() {
     redirect('/finder/new');
   }
 
-  const [auditsResult, benchmarksResult] = await Promise.all([
+  // eslint-disable-next-line react-hooks/purity -- async server component, not re-rendered
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [
+    auditsResult,
+    benchmarksResult,
+    auditCount7dResult,
+    snapshotCount7dResult,
+    activeWatchCountResult,
+    subscriptionsResult,
+  ] = await Promise.all([
     admin
       .from('prospect_audits')
       .select(
-        'id, status, created_at, prospect_data, scorecard, attached_client:attached_client_id(name)',
+        'id, status, created_at, prospect_data, attached_client:attached_client_id(name)',
       )
       .order('created_at', { ascending: false })
       .limit(8),
     admin
       .from('client_benchmarks')
       .select(
-        'id, client_id, cadence, last_snapshot_at, next_snapshot_due_at, is_active, client:clients(name, logo_url, agency)',
+        'id, client_id, cadence, last_snapshot_at, is_active, client:clients(name, logo_url, agency)',
       )
       .eq('is_active', true)
       .order('last_snapshot_at', { ascending: false, nullsFirst: false })
       .limit(12),
+    admin
+      .from('prospect_audits')
+      .select('id', { count: 'exact', head: true })
+      .gte('created_at', sevenDaysAgo),
+    admin
+      .from('benchmark_snapshots')
+      .select('benchmark_id', { count: 'exact', head: true })
+      .gte('captured_at', sevenDaysAgo),
+    admin
+      .from('client_benchmarks')
+      .select('id', { count: 'exact', head: true })
+      .eq('is_active', true),
+    admin
+      .from('competitor_report_subscriptions')
+      .select(
+        'id, client_id, cadence, recipients, include_portal_users, enabled, last_run_at, next_run_at, client:clients(name, agency)',
+      )
+      .order('next_run_at', { ascending: true }),
   ]);
 
   const audits = (auditsResult.data ?? []).map((a) => {
@@ -61,11 +98,9 @@ export default async function CompetitorIntelligencePage() {
       brand_name: prospect?.displayName ?? prospect?.name ?? attached?.name ?? 'Untitled audit',
       website: prospect?.website ?? null,
       favicon: prospect?.favicon ?? null,
-      scorecard: a.scorecard as Record<string, unknown> | null,
     };
   });
 
-  // Pull the last ~6 snapshots per benchmark for sparklines.
   const benchmarkIds = (benchmarksResult.data ?? []).map((b) => b.id);
   const { data: snaps } = benchmarkIds.length
     ? await admin
@@ -76,7 +111,16 @@ export default async function CompetitorIntelligencePage() {
         .limit(200)
     : { data: [] };
 
-  const snapsByBenchmark = new Map<string, Array<{ followers: number | null; captured_at: string; platform: string; username: string; display_name: string | null }>>();
+  const snapsByBenchmark = new Map<
+    string,
+    Array<{
+      followers: number | null;
+      captured_at: string;
+      platform: string;
+      username: string;
+      display_name: string | null;
+    }>
+  >();
   for (const row of snaps ?? []) {
     const list = snapsByBenchmark.get(row.benchmark_id) ?? [];
     list.push(row);
@@ -86,7 +130,6 @@ export default async function CompetitorIntelligencePage() {
   const watches = (benchmarksResult.data ?? []).map((b) => {
     const client = Array.isArray(b.client) ? b.client[0] : b.client;
     const snapsForB = snapsByBenchmark.get(b.id) ?? [];
-    // Use the first (most recent) snapshot to label the watch.
     const latest = snapsForB[0];
     const firstFollowers = snapsForB[snapsForB.length - 1]?.followers ?? null;
     const latestFollowers = latest?.followers ?? null;
@@ -113,32 +156,59 @@ export default async function CompetitorIntelligencePage() {
     };
   });
 
-  return (
-    <div className="cortex-page-gutter max-w-6xl mx-auto space-y-12">
-      <CompetitorIntelligenceHero />
-      <CompetitorIntelligenceActionBand />
-      <LatestAuditsStrip audits={audits} />
-      <ActiveWatchesStrip watches={watches} />
-      <FooterLinks />
-    </div>
-  );
-}
+  const subscriptions = (subscriptionsResult.data ?? []).map((s) => {
+    const client = Array.isArray(s.client) ? s.client[0] : s.client;
+    return {
+      id: s.id,
+      client_id: s.client_id,
+      cadence: s.cadence as 'weekly' | 'biweekly' | 'monthly',
+      recipients: s.recipients ?? [],
+      include_portal_users: s.include_portal_users,
+      enabled: s.enabled,
+      last_run_at: s.last_run_at,
+      next_run_at: s.next_run_at,
+      client_name: client?.name ?? 'Untitled client',
+      client_agency: client?.agency ?? null,
+    };
+  });
 
-function FooterLinks() {
+  const auditCount7d = auditCount7dResult.count ?? 0;
+  const snapshotCount7d = snapshotCount7dResult.count ?? 0;
+  const activeWatchCount = activeWatchCountResult.count ?? 0;
+  const subscriptionTotal = subscriptions.length;
+
+  const stats = [
+    {
+      label: 'Audits · 7d',
+      value: compactNumber(auditCount7d),
+      hint: auditCount7d === 0 ? 'Run one above' : 'Brand scorecards',
+    },
+    {
+      label: 'Active watches',
+      value: compactNumber(activeWatchCount),
+      hint: activeWatchCount === 0 ? 'No competitors enrolled' : 'Tracked competitors',
+    },
+    {
+      label: 'Snapshots · 7d',
+      value: compactNumber(snapshotCount7d),
+      hint: 'Across all platforms',
+    },
+    {
+      label: 'Recurring reports',
+      value: compactNumber(subscriptionTotal),
+      hint: subscriptionTotal === 0 ? 'None scheduled' : 'On a cadence',
+    },
+  ];
+
   return (
-    <footer className="flex flex-wrap gap-x-6 gap-y-2 border-t border-nativz-border/60 pt-6 text-xs text-text-muted">
-      <Link
-        href="/admin/competitor-tracking/tiktok-shop"
-        className="hover:text-cyan-300"
-      >
-        Legacy TikTok Shop tracker →
-      </Link>
-      <Link href="/admin/analytics?tab=benchmarking" className="hover:text-cyan-300">
-        Benchmarking history →
-      </Link>
-      <Link href="/spying/reports" className="hover:text-cyan-300">
-        Recurring reports →
-      </Link>
-    </footer>
+    <div className="cortex-page-gutter mx-auto max-w-6xl space-y-8">
+      <SpyingPageHeader />
+      <AuditQuickStart />
+      <SpyStatStrip stats={stats} />
+      <LatestAuditsList audits={audits} />
+      <WatchedCompetitorsList watches={watches} />
+      <RecurringReportsPreview subscriptions={subscriptions} totalCount={subscriptionTotal} />
+      <SpyToolRail />
+    </div>
   );
 }
