@@ -1,4 +1,4 @@
-import { History, LineChart, Store, Swords } from 'lucide-react';
+import { History, LineChart, ScanEye, Store, Swords } from 'lucide-react';
 import { SectionTile } from '@/components/admin/section-tabs';
 
 export function SpyToolRail() {
@@ -13,7 +13,14 @@ export function SpyToolRail() {
           More spying tools
         </h2>
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <SectionTile
+          href="/spying/self-audit"
+          icon={<ScanEye size={16} />}
+          title="Self-audit"
+          primary="How AI describes you"
+          secondary="Visibility + sentiment across Claude, GPT, Gemini"
+        />
         <SectionTile
           href="/spying/versus"
           icon={<Swords size={16} />}
