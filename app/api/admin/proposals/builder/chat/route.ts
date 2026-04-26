@@ -6,6 +6,7 @@ import { registerAllTools } from '@/lib/nerd/tools';
 import { getTool, getAllTools } from '@/lib/nerd/registry';
 import { getActiveModel } from '@/lib/ai/client';
 import { resolveOpenRouterApiKeyForFeature } from '@/lib/ai/provider-keys';
+import { calculateCost, trackUsage } from '@/lib/ai/usage';
 
 // Register tools on module load.
 registerAllTools();
@@ -149,6 +150,27 @@ export async function POST(req: NextRequest) {
       );
     }
     const json = await res.json();
+
+    // Track this iteration's generation. The proposals builder loops up to 8
+    // times — each iteration is a real OpenRouter call and needs its own row
+    // so /admin/usage shows the full conversation cost.
+    const usage = json?.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined;
+    const promptTokens = usage?.prompt_tokens ?? 0;
+    const completionTokens = usage?.completion_tokens ?? 0;
+    const generationId = typeof json?.id === 'string' ? (json.id as string).trim() : '';
+    trackUsage({
+      service: 'openrouter',
+      model,
+      feature: 'proposals_builder_chat',
+      inputTokens: promptTokens,
+      outputTokens: completionTokens,
+      totalTokens: promptTokens + completionTokens,
+      costUsd: calculateCost(model, promptTokens, completionTokens),
+      userId: user.id,
+      userEmail: user.email ?? undefined,
+      metadata: generationId ? { openrouter_generation_id: generationId } : undefined,
+    });
+
     const choice = json?.choices?.[0];
     if (!choice) {
       return NextResponse.json({ error: 'LLM returned no choice' }, { status: 502 });

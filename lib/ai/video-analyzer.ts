@@ -1,4 +1,4 @@
-import { calculateCost, logUsage } from './usage';
+import { calculateCost, trackUsage } from './usage';
 import { resolveDashscopeApiKeyForFeature } from './provider-keys';
 
 const DASHSCOPE_BASE_URL = 'https://dashscope-us.aliyuncs.com/compatible-mode/v1';
@@ -205,7 +205,7 @@ Respond with only valid JSON, no markdown fences.`;
   const modelKey = `dashscope/${VIDEO_ANALYSIS_MODEL}`;
   const estimatedCost = calculateCost(modelKey, promptTokens, completionTokens);
 
-  logUsage({
+  trackUsage({
     service: 'dashscope',
     model: modelKey,
     feature: 'video_analysis',
@@ -213,7 +213,7 @@ Respond with only valid JSON, no markdown fences.`;
     outputTokens: completionTokens,
     totalTokens: promptTokens + completionTokens,
     costUsd: estimatedCost,
-  }).catch(() => {});
+  });
 
   let parsed: VideoAnalysis;
   try {

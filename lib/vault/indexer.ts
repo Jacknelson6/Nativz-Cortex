@@ -10,6 +10,11 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isVaultConfigured, listFiles, readFile } from '@/lib/vault/github';
 import { parseFrontmatter } from '@/lib/vault/parser';
+import { trackUsage } from '@/lib/ai/usage';
+
+// text-embedding-3-small: $0.02 per 1M tokens (input only — embeddings have no output side).
+const EMBEDDING_MODEL = 'text-embedding-3-small';
+const EMBEDDING_INPUT_PRICE_PER_TOKEN = 0.02 / 1_000_000;
 
 // ---------------------------------------------------------------------------
 // Chunking
@@ -87,7 +92,7 @@ async function generateEmbedding(text: string): Promise<number[] | null> {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'text-embedding-3-small',
+        model: EMBEDDING_MODEL,
         input: text.slice(0, 8000), // Token limit safety
       }),
     });
@@ -97,8 +102,21 @@ async function generateEmbedding(text: string): Promise<number[] | null> {
       return null;
     }
 
-    const data = await res.json();
-    return data.data[0].embedding;
+    const data = await res.json() as {
+      data?: { embedding?: number[] }[];
+      usage?: { prompt_tokens?: number; total_tokens?: number };
+    };
+    const promptTokens = data.usage?.prompt_tokens ?? data.usage?.total_tokens ?? 0;
+    trackUsage({
+      service: 'openai',
+      model: EMBEDDING_MODEL,
+      feature: 'vault_embedding',
+      inputTokens: promptTokens,
+      outputTokens: 0,
+      totalTokens: promptTokens,
+      costUsd: promptTokens * EMBEDDING_INPUT_PRICE_PER_TOKEN,
+    });
+    return data.data?.[0]?.embedding ?? null;
   } catch (error) {
     console.error('generateEmbedding error:', error);
     return null;

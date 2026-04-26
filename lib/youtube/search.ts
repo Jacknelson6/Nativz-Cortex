@@ -1,4 +1,4 @@
-import { logUsage } from '@/lib/ai/usage';
+import { trackUsage } from '@/lib/ai/usage';
 // lib/youtube/search.ts — YouTube Data API v3 search + comment fetching
 //
 // Quota: 10,000 units/day free
@@ -327,7 +327,7 @@ export async function gatherYouTubeData(
     transcript: transcriptMap.get(v.id) ?? null,
   }));
 
-  logUsage({
+  trackUsage({
     service: 'youtube',
     model: 'data-api-v3',
     feature: 'youtube_search',
@@ -335,7 +335,7 @@ export async function gatherYouTubeData(
     outputTokens: 0,
     totalTokens: 0,
     costUsd: 0,
-  }).catch(() => {});
+  });
 
   return { videos, totalResults };
 }

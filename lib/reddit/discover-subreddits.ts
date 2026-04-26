@@ -12,6 +12,8 @@
  * keyword search across all of Reddit.
  */
 
+import { calculateCost, trackUsage } from '@/lib/ai/usage';
+
 const CACHE = new Map<string, { subs: string[]; at: number }>();
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h — topic→subreddit mapping is stable
 
@@ -62,10 +64,26 @@ export async function discoverSubredditsForTopic(
       return [];
     }
     const j = (await res.json()) as {
+      id?: string;
       choices?: { message?: { content?: string } }[];
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
     };
     const text = j.choices?.[0]?.message?.content ?? '';
     const subs = parseSubredditList(text);
+
+    const promptTokens = j.usage?.prompt_tokens ?? 0;
+    const completionTokens = j.usage?.completion_tokens ?? 0;
+    const generationId = j.id?.trim() ?? '';
+    trackUsage({
+      service: 'openrouter',
+      model,
+      feature: 'subreddit_discovery',
+      inputTokens: promptTokens,
+      outputTokens: completionTokens,
+      totalTokens: promptTokens + completionTokens,
+      costUsd: calculateCost(model, promptTokens, completionTokens),
+      metadata: generationId ? { openrouter_generation_id: generationId } : undefined,
+    });
 
     CACHE.set(k, { subs, at: Date.now() });
     return subs;

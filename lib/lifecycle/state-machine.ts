@@ -28,6 +28,7 @@ export type LifecycleEventType =
   | 'subscription.updated'
   | 'subscription.canceled'
   | 'onboarding.advanced'
+  | 'onboarding.completed'
   | 'kickoff.scheduled'
   | 'kickoff.completed'
   | 'ad_spend.recorded'

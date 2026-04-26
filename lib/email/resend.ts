@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { logUsage } from '@/lib/ai/usage';
+import { trackUsage } from '@/lib/ai/usage';
 import { getEmailBrand, getEmailLogoUrl } from '@/lib/email/brand-tokens';
 import { buildAffiliateWeeklyReportCardHtml } from '@/lib/email/templates/affiliate-weekly-report-html';
 import { buildWeeklySocialReportCardHtml } from '@/lib/email/templates/weekly-social-report-html';
@@ -179,7 +179,7 @@ export async function sendTeamInviteEmail(opts: {
     `, agency),
   });
 
-  logUsage({
+  trackUsage({
     service: 'resend',
     model: 'email-api',
     feature: 'email_delivery',
@@ -187,7 +187,7 @@ export async function sendTeamInviteEmail(opts: {
     outputTokens: 0,
     totalTokens: 0,
     costUsd: 0,
-  }).catch(() => {});
+  });
 
   return result;
 }
@@ -247,7 +247,7 @@ export async function sendClientInviteEmail(opts: {
     html: buildClientInviteEmailHtml(opts),
   });
 
-  logUsage({
+  trackUsage({
     service: 'resend',
     model: 'email-api',
     feature: 'email_delivery',
@@ -255,7 +255,7 @@ export async function sendClientInviteEmail(opts: {
     outputTokens: 0,
     totalTokens: 0,
     costUsd: 0,
-  }).catch(() => {});
+  });
 
   return result;
 }
@@ -293,7 +293,7 @@ export async function sendWelcomeEmail(opts: {
     `, agency),
   });
 
-  logUsage({
+  trackUsage({
     service: 'resend',
     model: 'email-api',
     feature: 'email_delivery',
@@ -301,7 +301,7 @@ export async function sendWelcomeEmail(opts: {
     outputTokens: 0,
     totalTokens: 0,
     costUsd: 0,
-  }).catch(() => {});
+  });
 
   return result;
 }
@@ -344,7 +344,7 @@ export async function sendAffiliateWeeklyReportEmail(opts: {
     html: layout(cardHtml, agency),
   });
 
-  logUsage({
+  trackUsage({
     service: 'resend',
     model: 'email-api',
     feature: 'email_delivery',
@@ -352,7 +352,7 @@ export async function sendAffiliateWeeklyReportEmail(opts: {
     outputTokens: 0,
     totalTokens: 0,
     costUsd: 0,
-  }).catch(() => {});
+  });
 
   return result;
 }
@@ -384,7 +384,7 @@ export async function sendWeeklySocialReportEmail(opts: {
     html: layout(cardHtml, agency),
   });
 
-  logUsage({
+  trackUsage({
     service: 'resend',
     model: 'email-api',
     feature: 'email_delivery',
@@ -392,7 +392,7 @@ export async function sendWeeklySocialReportEmail(opts: {
     outputTokens: 0,
     totalTokens: 0,
     costUsd: 0,
-  }).catch(() => {});
+  });
 
   return result;
 }
@@ -434,7 +434,7 @@ export async function sendSearchCompletedEmail(opts: {
     `, agency),
   });
 
-  logUsage({
+  trackUsage({
     service: 'resend',
     model: 'email-api',
     feature: 'email_delivery',
@@ -442,7 +442,7 @@ export async function sendSearchCompletedEmail(opts: {
     outputTokens: 0,
     totalTokens: 0,
     costUsd: 0,
-  }).catch(() => {});
+  });
 
   return result;
 }
@@ -481,7 +481,7 @@ export async function sendOnboardingEmail(opts: {
     const id = result.data?.id;
     if (!id) return { ok: false, error: 'Resend returned no id' };
 
-    logUsage({
+    trackUsage({
       service: 'resend',
       model: 'email-api',
       feature: 'onboarding_send',
@@ -489,7 +489,7 @@ export async function sendOnboardingEmail(opts: {
       outputTokens: 0,
       totalTokens: 0,
       costUsd: 0,
-    }).catch(() => {});
+    });
 
     return { ok: true, id };
   } catch (err) {
@@ -541,7 +541,7 @@ export async function sendCompetitorReportEmail(opts: {
     }
     // @ts-expect-error - Resend SDK accepts attachments; typed as generic Record for flexibility
     const result = await (await getResend()).emails.send(sendPayload);
-    logUsage({
+    trackUsage({
       service: 'resend',
       model: 'email-api',
       feature: 'email_delivery',
@@ -549,7 +549,7 @@ export async function sendCompetitorReportEmail(opts: {
       outputTokens: 0,
       totalTokens: 0,
       costUsd: 0,
-    }).catch(() => {});
+    });
     const id = result?.data?.id ?? '';
     return { ok: true, id, html };
   } catch (err) {

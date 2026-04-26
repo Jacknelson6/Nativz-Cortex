@@ -6,7 +6,7 @@
  * Docs: https://developers.cloudflare.com/changelog/post/2026-03-10-br-crawl-endpoint/
  */
 
-import { logUsage } from '@/lib/ai/usage';
+import { trackUsage } from '@/lib/ai/usage';
 
 const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID!;
 const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN!;
@@ -84,7 +84,7 @@ export async function crawlWebsite(websiteUrl: string): Promise<CrawlResult[] | 
       if (!pollData.success) continue;
 
       if (pollData.result?.status === 'completed' && pollData.result.pages) {
-        logUsage({
+        trackUsage({
           service: 'cloudflare',
           model: 'browser-rendering',
           feature: 'website_crawl',
@@ -92,7 +92,7 @@ export async function crawlWebsite(websiteUrl: string): Promise<CrawlResult[] | 
           outputTokens: 0,
           totalTokens: 0,
           costUsd: 0,
-        }).catch(() => {});
+        });
 
         return pollData.result.pages.map((p) => ({
           url: p.url,

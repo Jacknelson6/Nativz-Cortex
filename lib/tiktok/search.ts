@@ -7,7 +7,7 @@
 // transcript extractor for subtitles/Whisper transcription.
 
 import { extractTikTokTranscript } from './scraper';
-import { logUsage } from '@/lib/ai/usage';
+import { trackUsage } from '@/lib/ai/usage';
 import { runAndLogApifyActor } from '@/lib/tiktok/apify-run';
 import {
   buildApidojoInput,
@@ -362,7 +362,7 @@ export async function gatherTikTokData(
     const modelLabel =
       inputMode === 'clockworks' ? 'clockworks-tiktok-scraper' : 'apidojo-tiktok-scraper';
 
-    logUsage({
+    trackUsage({
       service: 'apify',
       model: modelLabel,
       feature: 'tiktok_search',
@@ -370,7 +370,7 @@ export async function gatherTikTokData(
       outputTokens: 0,
       totalTokens: 0,
       costUsd: 0,
-    }).catch(() => {});
+    });
 
     return { videos, topHashtags, totalResults: videos.length };
   } catch (err) {
