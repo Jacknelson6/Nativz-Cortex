@@ -29,6 +29,11 @@ const SCOPES = [
   'https://www.googleapis.com/auth/chat.spaces.readonly',
   'https://www.googleapis.com/auth/chat.messages.readonly',
   'https://www.googleapis.com/auth/gmail.readonly',
+  // Calendar read scope — used by the team-availability scheduler to query
+  // each team member's busy windows via the freebusy.query endpoint and
+  // surface overlap-free slots to clients picking a kickoff/shoot time.
+  // Existing connections need to re-consent before freebusy queries return.
+  'https://www.googleapis.com/auth/calendar.readonly',
 ].join(' ');
 
 function getClientId() {

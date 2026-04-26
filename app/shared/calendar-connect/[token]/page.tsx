@@ -44,8 +44,7 @@ export default function CalendarConnectPage() {
 
   function handleConnect() {
     setState('connecting');
-    // Redirect to Google OAuth flow with the invite token as state
-    window.location.href = `/api/google/connect?scope=calendar&invite_token=${token}`;
+    window.location.href = `/api/google?invite_token=${token}`;
   }
 
   return (

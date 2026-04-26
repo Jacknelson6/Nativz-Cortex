@@ -37,8 +37,7 @@ export function ConnectCalendar() {
   }
 
   function handleConnect() {
-    // Redirect to Google OAuth flow via our native auth endpoint
-    window.location.href = '/api/google/connect?scope=calendar';
+    window.location.href = '/api/google';
   }
 
   async function handleSync() {
