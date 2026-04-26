@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { Calendar, Plus } from 'lucide-react';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { TeamCalendarPreview } from '@/components/calendar/team-calendar-preview';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -68,7 +69,7 @@ export default async function SchedulingListPage() {
   }
 
   return (
-    <div className="cortex-page-gutter max-w-3xl space-y-8">
+    <div className="cortex-page-gutter max-w-5xl space-y-8">
       <header className="flex items-start justify-between gap-4">
         <div>
           <h1 className="ui-page-title-md">Team scheduling</h1>
@@ -85,6 +86,10 @@ export default async function SchedulingListPage() {
           New event
         </Link>
       </header>
+
+      <TeamCalendarPreview />
+
+      <div className="max-w-3xl">
 
       {eventList.length === 0 ? (
         <div className="rounded-xl border border-nativz-border bg-surface p-8 text-center text-sm text-text-muted">
@@ -123,6 +128,7 @@ export default async function SchedulingListPage() {
           })}
         </ul>
       )}
+      </div>
     </div>
   );
 }
