@@ -1,10 +1,10 @@
 'use client';
 
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useMemo } from 'react';
 import { ResponsiveContainer, Area, Tooltip, XAxis, YAxis, Line, ComposedChart } from 'recharts';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { Card } from '@/components/ui/card';
-import type { MetricCard, TimelinePost } from '@/lib/types/reporting';
+import type { MetricCard } from '@/lib/types/reporting';
 
 function formatNumber(n: number, suffix = ''): string {
   if (suffix === '%') return `${n.toFixed(2)}%`;
@@ -23,8 +23,6 @@ interface MetricSparklineCardProps {
   card: MetricCard;
   format?: 'number' | 'percent';
   colorClass?: string;
-  /** Posts published in the window — rendered as markers along the line. */
-  posts?: TimelinePost[];
   /**
    * Comparison period series — same length as `card.series`, re-indexed
    * so day N of the compare period aligns with day N of the primary. Rendered
@@ -40,7 +38,6 @@ function MetricSparklineCardImpl({
   card,
   format = 'number',
   colorClass = 'var(--accent-text)',
-  posts = [],
   compareSeries,
   compareLabel,
 }: MetricSparklineCardProps) {
@@ -61,15 +58,6 @@ function MetricSparklineCardImpl({
     card.previousTotal !== 0 &&
     card.series.length >= 4 &&
     !priorCoverageLooksShort;
-  const [hoveredDate, setHoveredDate] = useState<string | null>(null);
-
-  // date → first post on that day. Multiple posts/day collapse so markers
-  // don't stack.
-  const postsByDate = useMemo(() => {
-    const m = new Map<string, TimelinePost>();
-    for (const p of posts) if (!m.has(p.date)) m.set(p.date, p);
-    return m;
-  }, [posts]);
 
   const gradientId = `grad-${label.replace(/\s/g, '-')}`;
 
@@ -87,34 +75,6 @@ function MetricSparklineCardImpl({
   }, [card.series, compareSeries]);
 
   const hasCompare = Boolean(compareSeries && compareSeries.length > 0);
-
-  // Overlay markers: a filled ring on the trend line at every post-publish
-  // date. The 9:16 thumbnail lives in the hover tooltip, not on the line
-  // itself, keeping the sparkline readable.
-  const renderDot = useCallback(
-    (props: { cx?: number; cy?: number; payload?: { date?: string } }) => {
-      const { cx, cy, payload } = props;
-      if (cx == null || cy == null || !payload?.date) return <g />;
-      const post = postsByDate.get(payload.date);
-      if (!post) return <g />;
-      const isHovered = hoveredDate === payload.date;
-      const r = isHovered ? 5 : 4;
-      const inner = (
-        <g className={post.postUrl ? 'cursor-pointer' : undefined}>
-          <circle cx={cx} cy={cy} r={r + 2} fill={colorClass} opacity={0.22} />
-          <circle cx={cx} cy={cy} r={r} fill={colorClass} stroke="var(--background)" strokeWidth={1.5} />
-        </g>
-      );
-      return post.postUrl ? (
-        <a href={post.postUrl} target="_blank" rel="noopener noreferrer">
-          {inner}
-        </a>
-      ) : (
-        inner
-      );
-    },
-    [postsByDate, hoveredDate, colorClass],
-  );
 
   return (
     <Card className="flex h-full flex-col gap-3 p-4">
@@ -147,16 +107,11 @@ function MetricSparklineCardImpl({
         )}
       </div>
       {hasSeries && (
-        <div className="h-20 -mx-2">
+        <div className="h-24 -mx-2">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={mergedRows}
               margin={{ top: 6, bottom: 0, left: 0, right: 0 }}
-              onMouseMove={(s) => {
-                const d = s?.activeLabel;
-                setHoveredDate(typeof d === 'string' ? d : null);
-              }}
-              onMouseLeave={() => setHoveredDate(null)}
             >
               <defs>
                 <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -164,7 +119,19 @@ function MetricSparklineCardImpl({
                   <stop offset="100%" stopColor={colorClass} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <XAxis dataKey="date" hide />
+              <XAxis
+                dataKey="date"
+                axisLine={false}
+                tickLine={false}
+                interval={0}
+                height={16}
+                tickMargin={4}
+                tick={{ fontSize: 9, fill: 'var(--text-muted)' }}
+                tickFormatter={(d: string) => {
+                  const date = new Date(d + 'T00:00:00');
+                  return String(date.getDate());
+                }}
+              />
               <YAxis hide domain={['auto', 'auto']} />
               <Tooltip
                 cursor={{ stroke: 'var(--nz-line)', strokeWidth: 1 }}
@@ -173,16 +140,17 @@ function MetricSparklineCardImpl({
                   if (!first) return null;
                   const date = String(first.payload?.date ?? '');
                   const value = Number(first.value) || 0;
-                  const post = postsByDate.get(date);
+                  const compareVal = hasCompare
+                    ? Number(first.payload?.compare ?? NaN)
+                    : NaN;
                   return (
                     <div
                       style={{
                         background: 'var(--surface)',
                         border: '1px solid var(--nz-line)',
                         borderRadius: 10,
-                        padding: post ? 10 : '8px 10px',
+                        padding: '8px 10px',
                         fontSize: 13,
-                        maxWidth: 260,
                         boxShadow: 'var(--shadow-card-hover)',
                       }}
                     >
@@ -192,46 +160,25 @@ function MetricSparklineCardImpl({
                       <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: 14 }}>
                         {formatNumber(value, suffix)} {label.toLowerCase()}
                       </div>
-                      {post && (
+                      {Number.isFinite(compareVal) && (
                         <div
                           style={{
-                            marginTop: 8,
+                            marginTop: 4,
                             display: 'flex',
-                            gap: 10,
-                            alignItems: 'flex-start',
+                            alignItems: 'center',
+                            gap: 6,
+                            color: 'var(--text-muted)',
+                            fontSize: 12,
                           }}
                         >
-                          {post.thumbnailUrl && (
-                            <img
-                              src={post.thumbnailUrl}
-                              alt=""
-                              style={{
-                                width: 44,
-                                height: 78,
-                                borderRadius: 6,
-                                objectFit: 'cover',
-                                flexShrink: 0,
-                                border: `1px solid ${colorClass}`,
-                              }}
-                            />
-                          )}
-                          <div style={{ color: 'var(--text-secondary)', lineHeight: 1.4, fontSize: 13 }}>
-                            <div style={{ color: colorClass, fontWeight: 600, marginBottom: 3 }}>
-                              Post published
-                            </div>
-                            {post.caption && (
-                              <div
-                                style={{
-                                  display: '-webkit-box',
-                                  WebkitLineClamp: 4,
-                                  WebkitBoxOrient: 'vertical',
-                                  overflow: 'hidden',
-                                }}
-                              >
-                                {post.caption}
-                              </div>
-                            )}
-                          </div>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              width: 12,
+                              borderTop: '1px dashed var(--text-muted)',
+                            }}
+                          />
+                          {formatNumber(compareVal, suffix)} prior
                         </div>
                       )}
                     </div>
@@ -240,7 +187,7 @@ function MetricSparklineCardImpl({
               />
               {hasCompare && (
                 <Line
-                  type="monotone"
+                  type="linear"
                   dataKey="compare"
                   stroke="var(--text-muted)"
                   strokeWidth={1.25}
@@ -251,13 +198,18 @@ function MetricSparklineCardImpl({
                 />
               )}
               <Area
-                type="monotone"
+                type="linear"
                 dataKey="value"
                 stroke={colorClass}
                 strokeWidth={1.5}
                 fill={`url(#${gradientId})`}
-                dot={renderDot}
-                activeDot={false}
+                dot={false}
+                activeDot={{
+                  r: 3,
+                  fill: colorClass,
+                  stroke: 'var(--background)',
+                  strokeWidth: 1.5,
+                }}
               />
             </ComposedChart>
           </ResponsiveContainer>

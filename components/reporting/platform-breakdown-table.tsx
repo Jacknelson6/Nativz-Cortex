@@ -81,6 +81,33 @@ function computeEngagementRate(row: PlatformBreakdownRow): number {
   return row.engagementRate ?? 0;
 }
 
+/**
+ * Inline micro-bar rendered under a numeric cell, scaled relative to the
+ * column max so the eye can read magnitude at a glance without leaving the
+ * row. Uses each platform's chart-tint token so the bars echo the growth
+ * chart palette above.
+ */
+function MicroBar({
+  value,
+  max,
+  platform,
+}: {
+  value: number;
+  max: number;
+  platform: SocialPlatform;
+}) {
+  if (max <= 0 || value <= 0) return null;
+  const pct = Math.min(100, (value / max) * 100);
+  return (
+    <div className="mt-1.5 h-[3px] w-full overflow-hidden rounded-full bg-nativz-border/30">
+      <div
+        className="h-full rounded-full"
+        style={{ width: `${pct}%`, background: `var(--platform-${platform})` }}
+      />
+    </div>
+  );
+}
+
 interface PlatformBreakdownTableProps {
   rows: PlatformBreakdownRow[];
 }
@@ -88,6 +115,12 @@ interface PlatformBreakdownTableProps {
 export function PlatformBreakdownTable({ rows }: PlatformBreakdownTableProps) {
   if (!rows.length) return null;
   const sorted = [...rows].sort((a, b) => b.followers - a.followers);
+
+  // Column maxima for the inline micro-bars. Computed once so each row's
+  // bar scales against the row leader, not its own value.
+  const maxFollowers = Math.max(...sorted.map((r) => r.followers), 0);
+  const maxViews = Math.max(...sorted.map((r) => r.views), 0);
+  const maxEngagement = Math.max(...sorted.map((r) => r.engagement), 0);
 
   // Only show the video columns when at least one platform reports watch time.
   // Keeps the table visually quieter for clients without YouTube.

@@ -2,19 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { RefreshCw, Download, Flame } from 'lucide-react';
+import { RefreshCw, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useReportingData } from './hooks/use-reporting-data';
 import { DateRangePicker } from './date-range-picker';
 import { OverviewKpiRow } from './overview-kpi-row';
 import { PlatformSection } from './platform-section';
-import { TopPostsView } from './top-posts-view';
 import { PlatformBreakdownTable } from './platform-breakdown-table';
 import { PostDetailsGrid } from './post-details-grid';
 import { SyncErrorsPanel } from './sync-errors-panel';
 import { AnalysisChatDrawer } from '@/components/analyses/analysis-chat-drawer';
-import type { TopPostItem } from '@/lib/types/reporting';
 
 const ReportBuilder = dynamic(() => import('./report-builder').then(m => ({ default: m.ReportBuilder })));
 
@@ -44,42 +42,6 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
   } = useReportingData(initialClientId);
 
   const [reportOpen, setReportOpen] = useState(false);
-
-  // Top-performers fetch lives here so the panel is always under the summary,
-  // independent of whatever tab the rest of the dashboard is on.
-  const [topPosts, setTopPosts] = useState<TopPostItem[]>([]);
-  const [topPostsLoading, setTopPostsLoading] = useState(false);
-  const [topPostsLimit, setTopPostsLimit] = useState(5);
-
-  useEffect(() => {
-    if (!selectedClientId || !dateRange) return;
-    const range = dateRange;
-    const clientId = selectedClientId;
-    const limit = topPostsLimit;
-    let cancelled = false;
-    async function loadTopPosts() {
-      setTopPostsLoading(true);
-      try {
-        const params = new URLSearchParams({
-          clientId,
-          start: range.start,
-          end: range.end,
-          limit: String(limit),
-        });
-        const res = await fetch(`/api/reporting/top-posts?${params}`);
-        const data = res.ok ? await res.json() : { posts: [] };
-        if (!cancelled) setTopPosts(data.posts ?? []);
-      } catch {
-        if (!cancelled) setTopPosts([]);
-      } finally {
-        if (!cancelled) setTopPostsLoading(false);
-      }
-    }
-    void loadTopPosts();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedClientId, dateRange, topPostsLimit]);
 
   if (loading) {
     return (
@@ -148,20 +110,6 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
             compareData={compareEnabled ? compareSummary : null}
             compareRange={compareEnabled ? compareRange : null}
           />
-
-          {/* Top performers — compact horizontal cards. */}
-          <div className="space-y-4 rounded-xl border border-nativz-border bg-surface p-5">
-            <div className="flex items-center gap-2">
-              <Flame size={18} className="text-accent-text" />
-              <h2 className="ui-section-title">Top performing posts</h2>
-            </div>
-            <TopPostsView
-              posts={topPosts}
-              loading={topPostsLoading}
-              limit={topPostsLimit}
-              onLimitChange={setTopPostsLimit}
-            />
-          </div>
 
           {/* Platform breakdown table — always visible summary row. */}
           {summary?.platformBreakdown && summary.platformBreakdown.length > 0 && (

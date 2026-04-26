@@ -1,6 +1,5 @@
 'use client';
 
-import { Info } from 'lucide-react';
 import { PlatformBadge } from './platform-badge';
 import { MetricSparklineCard } from './metric-sparkline-card';
 import type { ChartDataPoint, PlatformSummary, SocialPlatform } from '@/lib/types/reporting';
@@ -15,33 +14,19 @@ const PLATFORM_LABELS: Record<string, string> = {
 
 const SPARKLINE_COLOR = 'var(--accent-text)';
 
-// Metrics the platform genuinely doesn't expose — calling them out keeps the
-// dashboard honest. Sourced from Zernio's data engineer (Miki, 2026-04-26):
-// TikTok's public API has no account-level watch time/impressions/profile
-// views; YouTube Analytics API v2 doesn't surface Studio impressions or CTR;
-// Instagram returns net follower delta only, not the daily add/remove split.
-const UNAVAILABLE_METRICS: Record<string, Array<{ label: string; reason: string }>> = {
-  tiktok: [
-    { label: 'Watch time', reason: 'Not exposed by TikTok’s public API' },
-    { label: 'Impressions', reason: 'Account-level impressions aren’t available' },
-    { label: 'Profile views', reason: 'Not exposed by TikTok’s public API' },
-  ],
-  youtube: [
-    { label: 'Impressions / CTR', reason: 'YouTube Analytics API v2 doesn’t return Studio impression or CTR data' },
-  ],
-  instagram: [
-    { label: 'Daily follows / unfollows', reason: 'Instagram returns net follower count only, not the daily add/remove split' },
-  ],
-};
-
 interface PlatformSectionProps {
   summary: PlatformSummary;
   // Kept for backwards compatibility with the parent dashboard; unused now
   // that each metric card carries its own sparkline.
   chartData?: ChartDataPoint[];
+  /** Same-platform summary from the prior window — its metric series feed the
+   *  ghost dashed line on each sparkline. */
+  compareSummary?: PlatformSummary | null;
+  /** Pre-formatted "vs Feb 23 – Mar 22" string from the parent dashboard. */
+  compareLabel?: string;
 }
 
-export function PlatformSection({ summary }: PlatformSectionProps) {
+export function PlatformSection({ summary, compareSummary, compareLabel }: PlatformSectionProps) {
   const label = PLATFORM_LABELS[summary.platform] ?? summary.platform;
   const color = SPARKLINE_COLOR;
   const m = summary.metrics ?? {};
@@ -51,10 +36,13 @@ export function PlatformSection({ summary }: PlatformSectionProps) {
   // can't fill. All surviving cards share one platform-brand colour so
   // the eye can scan a client page and tell networks apart without
   // reading every label.
+  type MetricKey = keyof NonNullable<PlatformSummary['metrics']>;
+  type MetricCardValue = NonNullable<PlatformSummary['metrics']>[MetricKey];
+
   const cards: Array<{
-    key: string;
+    key: MetricKey;
     label: string;
-    card: NonNullable<PlatformSummary['metrics']>[keyof NonNullable<PlatformSummary['metrics']>];
+    card: MetricCardValue;
     format?: 'number' | 'percent';
   }> = [
     { key: 'views', label: 'Views', card: m.views },
@@ -67,7 +55,7 @@ export function PlatformSection({ summary }: PlatformSectionProps) {
   ];
 
   const visible = cards.filter((c) => c.card !== undefined);
-  const unavailable = UNAVAILABLE_METRICS[summary.platform] ?? [];
+  const compareMetrics = compareSummary?.metrics ?? null;
   // Show gross follow / unfollow events when the platform reports them.
   // YouTube returns subscribers gained/lost, Instagram returns gross follow
   // events and unfollow events. Net change becomes interpretable instead of
@@ -107,31 +95,20 @@ export function PlatformSection({ summary }: PlatformSectionProps) {
         </p>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {visible.map((c) => (
-            <MetricSparklineCard
-              key={c.key}
-              label={c.label}
-              card={c.card!}
-              format={c.format ?? 'number'}
-              colorClass={color}
-              posts={summary.posts ?? []}
-            />
-          ))}
-        </div>
-      )}
-
-      {unavailable.length > 0 && (
-        <div className="rounded-lg border border-dashed border-nativz-border/60 bg-background/40 p-3 text-xs text-text-muted">
-          <div className="mb-1.5 flex items-center gap-1.5 font-medium uppercase tracking-wide">
-            <Info size={12} aria-hidden /> Not available from {label}
-          </div>
-          <ul className="space-y-1">
-            {unavailable.map((m) => (
-              <li key={m.label}>
-                <span className="text-text-secondary">{m.label}</span> — {m.reason}
-              </li>
-            ))}
-          </ul>
+          {visible.map((c) => {
+            const compareCard = compareMetrics ? compareMetrics[c.key] : undefined;
+            return (
+              <MetricSparklineCard
+                key={c.key}
+                label={c.label}
+                card={c.card!}
+                format={c.format ?? 'number'}
+                colorClass={color}
+                compareSeries={compareCard?.series}
+                compareLabel={compareLabel}
+              />
+            );
+          })}
         </div>
       )}
     </section>
