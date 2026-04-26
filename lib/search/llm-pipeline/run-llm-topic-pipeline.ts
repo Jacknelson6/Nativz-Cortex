@@ -36,6 +36,11 @@ import { gatherPlatformData, formatPlatformContext, type PlatformResults } from 
 import { transcribeAllVideos, analyzeTopVideos, buildVideoSummariesForClustering } from '@/lib/search/llm-pipeline/analyze-videos';
 import { clusterVideosToPillars, pillarsToMergerCategories, type PillarCluster } from '@/lib/search/llm-pipeline/cluster-pillars';
 import { createAdminClient } from '@/lib/supabase/admin';
+import {
+  findConstraintViolations,
+  formatClientConstraintsForPrompt,
+  getActiveClientConstraints,
+} from '@/lib/knowledge/client-constraints';
 
 function logLlmV1(event: Record<string, unknown>) {
   console.log(`[topic_search_llm_v1] ${JSON.stringify(event)}`);
@@ -519,6 +524,10 @@ export async function runLlmTopicPipeline(args: {
   let subtopics = Array.isArray(args.search.subtopics)
     ? (args.search.subtopics as string[]).map((s) => s.trim()).filter(Boolean)
     : [];
+  const clientConstraints = args.search.client_id
+    ? await getActiveClientConstraints(createAdminClient(), args.search.client_id)
+    : [];
+  const hardConstraintBlock = formatClientConstraintsForPrompt(clientConstraints);
 
   // Auto-generate subtopics if none were confirmed (fallback so searches never fail)
   if (subtopics.length === 0) {
@@ -530,6 +539,7 @@ export async function runLlmTopicPipeline(args: {
 Today's date: ${todayDate}
 Main topic: ${JSON.stringify(args.search.query)}
 Time window: **${timeLabel}**.
+${hardConstraintBlock ? `\n${hardConstraintBlock}\nDo not generate subtopics around forbidden client constraints.\n` : ''}
 
 Return ONLY valid JSON: {"subtopics": string[]} with exactly 5 distinct items. Each string is a **2–4 word keyword phrase**.
 Rules: 2–4 words each, specific to the topic, no numbering, no full sentences.`;
@@ -815,6 +825,7 @@ Today's date: ${todayDate}
 Time scope: The user chose **${timeRangeLabel}**. Emphasize themes, debates, and video ideas that fit audience and creator activity in that window (not generic evergreen filler unless the evidence supports it).
 IMPORTANT: This report is exclusively for **short-form vertical video content** (TikTok, Reels, Shorts). Every video idea, content type, and format recommendation must be for short-form video only. Do NOT recommend blog posts, listicles, articles, long-form YouTube, podcasts, newsletters, threads, or any non-video format. If the evidence mentions those formats, ignore them — only surface what can be filmed as a short-form vertical video.
 ${clientContextBlock ? `${clientContextBlock}\n\n` : ''}Research-angle findings:
+${hardConstraintBlock ? `${hardConstraintBlock}\n\n` : ''}
 ${subtopicBlock}
 ${platformContextBlock ? `\n---\n\nPlatform-specific data (Reddit threads, TikTok videos, YouTube content):\n${platformContextBlock}` : ''}${groundedPillarBlock}
 
@@ -849,6 +860,7 @@ Return ONLY valid JSON matching:
 
 Rules:
 - Generate **at least 6** distinct trending topics, aiming for up to 15 when the evidence supports that many angles; each must be distinct and grounded in the research above. Even with limited evidence, extrapolate at least 6 viable content angles — combine subtopic findings, audience questions from comments, and adjacent content opportunities. Do not return fewer than 6 topics.
+- If hard_client_constraints are present, remove any topic, video idea, CTA, claim, or brand alignment note that violates them. Do not mention forbidden items even as negative examples.
 - source_urls must be from the evidence URLs only.
 - If search_mode is general, omit brand_alignment_notes or use null.
 - emotions: exactly **6** emotions that sum to ~100%. Analyze the actual tone and sentiment of the evidence text. Colors from: #5ba3e6 blue, #a855f7 purple, #22c55e green, #f59e0b amber, #ef4444 red, #ec4899 pink, #14b8a6 teal, #6366f1 indigo. Each emotion MUST include a "subtext" — one sentence explaining why THIS emotion appears for THIS specific topic based on the evidence (not a generic description of the emotion).
@@ -996,6 +1008,46 @@ Rules:
 
   if (args.search.search_mode === 'general') {
     merger = { ...merger, brand_alignment_notes: undefined };
+  }
+
+  if (clientConstraints.length > 0) {
+    merger = {
+      ...merger,
+      brand_alignment_notes:
+        merger.brand_alignment_notes &&
+        findConstraintViolations(merger.brand_alignment_notes, clientConstraints).length === 0
+          ? merger.brand_alignment_notes
+          : undefined,
+      content_breakdown: merger.content_breakdown
+        ? {
+            intentions: (merger.content_breakdown.intentions ?? []).filter(
+              (item) => findConstraintViolations(JSON.stringify(item), clientConstraints).length === 0,
+            ),
+            categories: (merger.content_breakdown.categories ?? []).filter(
+              (item) => findConstraintViolations(JSON.stringify(item), clientConstraints).length === 0,
+            ),
+            formats: (merger.content_breakdown.formats ?? []).filter(
+              (item) => findConstraintViolations(JSON.stringify(item), clientConstraints).length === 0,
+            ),
+          }
+        : merger.content_breakdown,
+      topics: (merger.topics ?? [])
+        .map((topic) => ({
+          ...topic,
+          video_ideas: (topic.video_ideas ?? []).filter(
+            (idea) => findConstraintViolations(JSON.stringify(idea), clientConstraints).length === 0,
+          ),
+        }))
+        .filter((topic) => {
+          const topicText = [
+            topic.name,
+            topic.why_trending,
+            topic.posts_overview,
+            topic.comments_overview,
+          ].join('\n');
+          return findConstraintViolations(topicText, clientConstraints).length === 0;
+        }),
+    };
   }
 
   // Build a lookup of platform sources by keyword matching for fallback injection
@@ -1160,6 +1212,7 @@ Rules:
     platforms_requested: platforms,
     platform_scrapers_ran: hasNonWebPlatforms,
     limits,
+    hard_constraints_loaded: clientConstraints.length,
     stages: stageRows,
     grounded_pillars: groundedPillars.length > 0
       ? groundedPillars.map((p) => ({ name: p.name, pct: p.pct_of_content, er: p.avg_engagement_rate, videos: p.video_count }))

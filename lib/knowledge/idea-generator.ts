@@ -3,6 +3,11 @@ import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import { getKnowledgeEntries, getBrandProfile } from '@/lib/knowledge/queries';
 import { getBrandContext } from '@/lib/knowledge/brand-context';
+import {
+  findConstraintViolations,
+  formatClientConstraintsForPrompt,
+  getActiveClientConstraints,
+} from '@/lib/knowledge/client-constraints';
 
 export interface GeneratedIdea {
   title: string;
@@ -27,6 +32,7 @@ export async function generateVideoIdeas(config: {
     contentLogs,
     latestStrategy,
     savedIdeas,
+    activeConstraints,
   ] = await Promise.all([
     getBrandProfile(clientId),
     admin
@@ -60,10 +66,12 @@ export async function generateVideoIdeas(config: {
       .maybeSingle()
       .then(({ data }) => data),
     getKnowledgeEntries(clientId, 'idea'),
+    getActiveClientConstraints(admin, clientId),
   ]);
 
   // Build context blocks
   const contextBlocks: string[] = [];
+  const hardConstraintBlock = formatClientConstraintsForPrompt(activeConstraints);
 
   // Try Brand DNA first — unified brand context takes precedence
   let hasBrandDNA = false;
@@ -184,6 +192,10 @@ ${concept}
     );
   }
 
+  if (hardConstraintBlock) {
+    contextBlocks.push(hardConstraintBlock);
+  }
+
   const systemPrompt = `You are a creative video content strategist for a marketing agency. Generate exactly ${count} unique video ideas as a JSON array.
 
 Each idea must have these fields:
@@ -196,6 +208,7 @@ Requirements:
 - All ideas are short-form video content
 - Ideas must be actionable for a videographer showing up on set
 - Align with the brand voice and audience
+- Obey every hard client constraint. Do not generate ideas, hooks, claims, CTAs, or concepts around forbidden terms or offerings.
 - Do NOT repeat any existing saved ideas
 - Each idea must be distinct from the others
 
@@ -212,7 +225,36 @@ Output ONLY the JSON array. No other text.`;
     feature: 'idea_generation',
   });
 
-  const ideas = parseAIResponseJSON<GeneratedIdea[]>(result.text);
+  let ideas = parseAIResponseJSON<GeneratedIdea[]>(result.text)
+    .filter((idea) => findConstraintViolations(JSON.stringify(idea), activeConstraints).length === 0);
+
+  if (ideas.length < count && activeConstraints.length > 0) {
+    const needed = count - ideas.length;
+    const retryResult = await createCompletion({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+        {
+          role: 'assistant',
+          content: JSON.stringify(ideas),
+        },
+        {
+          role: 'user',
+          content: `Generate ${needed} replacement ideas that obey the hard client constraints. Do not mention forbidden terms even as negatives or disclaimers. Return ONLY a JSON array.`,
+        },
+      ],
+      maxTokens: 2000,
+      feature: 'idea_generation',
+    });
+
+    const replacements = parseAIResponseJSON<GeneratedIdea[]>(retryResult.text)
+      .filter((idea) => findConstraintViolations(JSON.stringify(idea), activeConstraints).length === 0);
+    ideas = [...ideas, ...replacements];
+  }
+
+  if (ideas.length === 0 && activeConstraints.length > 0) {
+    throw new Error('Generated ideas violated active client constraints.');
+  }
 
   return ideas.slice(0, count);
 }

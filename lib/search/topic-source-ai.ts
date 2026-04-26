@@ -3,6 +3,12 @@ import { createCompletion } from '@/lib/ai/client';
 import { DEFAULT_OPENROUTER_MODEL } from '@/lib/ai/openrouter-default-model';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import type { PlatformSource, SearchPlatform } from '@/lib/types/search';
+import {
+  findConstraintViolations,
+  formatClientConstraintsForPrompt,
+  getActiveClientConstraints,
+  type ActiveClientConstraint,
+} from '@/lib/knowledge/client-constraints';
 
 export function findPlatformSourceInSearch(
   platformData: unknown,
@@ -106,6 +112,8 @@ export async function runTopicSourceRescript(
   }
 
   let clientInfo = '';
+  let hardConstraintBlock = '';
+  let clientConstraints: ActiveClientConstraint[] = [];
   if (options.client_id) {
     const { data: client } = await adminClient
       .from('clients')
@@ -116,6 +124,9 @@ export async function runTopicSourceRescript(
     if (client) {
       clientInfo = `Client: ${client.name}\nIndustry: ${client.industry}\nTarget audience: ${client.target_audience || options.target_audience || 'Not specified'}\nBrand voice: ${client.brand_voice || options.brand_voice || 'Not specified'}`;
     }
+
+    clientConstraints = await getActiveClientConstraints(adminClient, options.client_id);
+    hardConstraintBlock = formatClientConstraintsForPrompt(clientConstraints);
   }
 
   const ideaBlock = options.ideaContext?.trim()
@@ -139,6 +150,7 @@ ORIGINAL VIDEO (format reference only — do NOT echo its topic):
 ${transcript.slice(0, 8000)}
 
 ${ideaBlock}${clientInfo ? `BRAND (what the rescript must actually be about):\n${clientInfo}\n` : ''}
+${hardConstraintBlock ? `${hardConstraintBlock}\n` : ''}
 ${options.brand_voice && !options.client_id ? `Brand voice: ${options.brand_voice}\n` : ''}
 ${options.product ? `Product/service: ${options.product}\n` : ''}
 ${options.target_audience && !options.client_id ? `Target audience: ${options.target_audience}\n` : ''}
@@ -177,6 +189,18 @@ Return JSON only:
       script = parsed2.script ?? content;
     } catch {
       script = content;
+    }
+
+    const violations = findConstraintViolations(script, clientConstraints);
+    if (violations.length > 0) {
+      return {
+        ok: false,
+        error: `Generated rescript violated active client constraints: ${violations
+          .slice(0, 5)
+          .map((v) => `"${v.term}"`)
+          .join(', ')}.`,
+        status: 422,
+      };
     }
 
     const rescriptData = {

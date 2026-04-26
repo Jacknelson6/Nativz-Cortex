@@ -6,6 +6,11 @@ import { assertUserCanAccessTopicSearch } from '@/lib/api/topic-search-access';
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
 import type { VideoIdea, TopicSearchAIResponse, TrendingTopic } from '@/lib/types/search';
+import {
+  findConstraintViolations,
+  formatClientConstraintsForPrompt,
+  getActiveClientConstraints,
+} from '@/lib/knowledge/client-constraints';
 
 export const maxDuration = 120;
 
@@ -141,12 +146,19 @@ export async function POST(
 
     // Get client context if available — include product/service details for natural integration
     let clientBlock = '';
+    let hardConstraintBlock = '';
+    let activeConstraints: Awaited<ReturnType<typeof getActiveClientConstraints>> = [];
     if (search.client_id) {
-      const { data: client } = await adminClient
-        .from('clients')
-        .select('name, industry, brand_voice, target_audience, website_url, topic_keywords, preferences')
-        .eq('id', search.client_id)
-        .single();
+      const [{ data: client }, constraints] = await Promise.all([
+        adminClient
+          .from('clients')
+          .select('name, industry, brand_voice, target_audience, website_url, topic_keywords, preferences')
+          .eq('id', search.client_id)
+          .single(),
+        getActiveClientConstraints(adminClient, search.client_id),
+      ]);
+      activeConstraints = constraints;
+      hardConstraintBlock = formatClientConstraintsForPrompt(activeConstraints);
       if (client) {
         const prefs = client.preferences as Record<string, unknown> | null;
         const lines = [
@@ -169,6 +181,7 @@ export async function POST(
 
     const canonicalTopicName = topics[topicIndex]!.name;
     const prompt = `Generate 4 new short-form video ideas for the topic "${canonicalTopicName}" from the research query "${search.query}".${clientBlock}
+${hardConstraintBlock ? `\n\n${hardConstraintBlock}` : ''}
 
 These should be for TikTok, Instagram Reels, YouTube Shorts, and Facebook Reels ONLY. Each idea must be unique, actionable, and ready to produce on set.${existingList}
 
@@ -187,7 +200,7 @@ Respond ONLY in valid JSON matching this exact schema:
   ]
 }
 
-Generate exactly 4 ideas. Make them DIFFERENT from the existing ideas — new angles, new hooks, new formats.`;
+Generate exactly 4 ideas. Make them DIFFERENT from the existing ideas — new angles, new hooks, new formats. Obey every hard client constraint; do not mention forbidden terms even as negatives or disclaimers.`;
 
     const aiResult = await createCompletion({
       messages: [{ role: 'user', content: prompt }],
@@ -197,7 +210,36 @@ Generate exactly 4 ideas. Make them DIFFERENT from the existing ideas — new an
       userEmail: user.email ?? undefined,
     });
 
-    const newIdeas = parseIdeasFromCompletion(aiResult.text);
+    let newIdeas = parseIdeasFromCompletion(aiResult.text)
+      .filter((idea) => findConstraintViolations(JSON.stringify(idea), activeConstraints).length === 0);
+
+    if (newIdeas.length < 4 && activeConstraints.length > 0) {
+      const needed = 4 - newIdeas.length;
+      const retryResult = await createCompletion({
+        messages: [
+          { role: 'user', content: prompt },
+          { role: 'assistant', content: JSON.stringify({ ideas: newIdeas }) },
+          {
+            role: 'user',
+            content: `Generate ${needed} replacement ideas that obey the active hard client constraints. Do not mention forbidden terms even as negatives or disclaimers. Respond ONLY in valid JSON matching {"ideas":[...]}.`,
+          },
+        ],
+        maxTokens: 2000,
+        feature: 'topic_search',
+        userId: user.id,
+        userEmail: user.email ?? undefined,
+      });
+      const replacements = parseIdeasFromCompletion(retryResult.text)
+        .filter((idea) => findConstraintViolations(JSON.stringify(idea), activeConstraints).length === 0);
+      newIdeas = [...newIdeas, ...replacements].slice(0, 4);
+    }
+
+    if (newIdeas.length === 0 && activeConstraints.length > 0) {
+      return NextResponse.json(
+        { error: 'Generated ideas violated active client constraints. Try a different topic.' },
+        { status: 422 },
+      );
+    }
 
     // Append new ideas to the search's trending topic
     if (newIdeas.length > 0) {

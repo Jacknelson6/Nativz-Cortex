@@ -3,6 +3,10 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { assertViewerCanCreateSearchForClient } from '@/lib/api/topic-search-access';
+import {
+  findConstraintViolations,
+  getActiveClientConstraints,
+} from '@/lib/knowledge/client-constraints';
 
 /**
  * POST /api/search/start — create a pending topic search.
@@ -70,6 +74,20 @@ export async function POST(request: NextRequest) {
         { error: clientCheck.error },
         { status: clientCheck.status },
       );
+    }
+
+    if (client_id && search_mode === 'client_strategy') {
+      const activeConstraints = await getActiveClientConstraints(adminClient, client_id);
+      const violations = findConstraintViolations(query, activeConstraints);
+      if (violations.length > 0) {
+        return NextResponse.json(
+          {
+            error: 'This search conflicts with active client constraints.',
+            blocked_terms: [...new Set(violations.map((v) => v.term))],
+          },
+          { status: 422 },
+        );
+      }
     }
 
     const { data: search, error: insertError } = await adminClient

@@ -1,6 +1,11 @@
 import { createCompletion, type AICompletionResponse } from '@/lib/ai/client';
 import { getBrandProfile } from '@/lib/knowledge/queries';
 import { createAdminClient } from '@/lib/supabase/admin';
+import {
+  findConstraintViolations,
+  formatClientConstraintsForPrompt,
+  getActiveClientConstraints,
+} from '@/lib/knowledge/client-constraints';
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -73,6 +78,8 @@ export async function generateSpokenScript(
           .then(({ data }) => data ?? [])
       : Promise.resolve([]),
   ]);
+  const clientConstraints = await getActiveClientConstraints(admin, clientId);
+  const constraintBlock = formatClientConstraintsForPrompt(clientConstraints);
 
   const contextBlocks: string[] = [];
 
@@ -89,6 +96,10 @@ Brand voice: ${clientRecord.brand_voice ?? ''}
 
   if (brandProfile) {
     contextBlocks.push(`<brand_profile>\n${(brandProfile.content ?? '').substring(0, 3000)}\n</brand_profile>`);
+  }
+
+  if (constraintBlock) {
+    contextBlocks.push(constraintBlock);
   }
 
   if (referenceVideos.length > 0) {
@@ -126,13 +137,14 @@ Rules:
 - Write ONLY the words that will be spoken on camera. No stage directions, no shot lists, no pacing notes, no "[cut to]" annotations.
 - The script is for a ${lengthSeconds}-second short-form video. Write EXACTLY ${wordCount} words (±10%). Do NOT exceed ${Math.round(wordCount * 1.1)} words. Count carefully — shorter is better than longer.
 - Match the brand voice and tone
+- Obey every hard client constraint. Do not mention, recommend, imply, or script around forbidden offerings, claims, phrases, CTAs, topics, audiences, or channels.
 - Start with a strong hook that grabs attention in the first 3 seconds
 ${hookInstructions ? `${hookInstructions}\n` : ''}- End with a clear call to action${cta ? ` — the CTA should drive viewers to: ${cta}` : ''}
 ${referenceVideos.length > 0 ? '- Match the style, energy, and delivery cadence of the reference videos' : ''}
 
 Output ONLY the script text. Nothing else — no title, no labels, no formatting markers.`;
 
-  const result = await createCompletion({
+  let result = await createCompletion({
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: contextBlocks.join('\n\n') },
@@ -142,6 +154,52 @@ Output ONLY the script text. Nothing else — no title, no labels, no formatting
     userId,
     userEmail,
   });
+
+  const violations = findConstraintViolations(result.text, clientConstraints);
+  if (violations.length > 0) {
+    const violationSummary = violations
+      .slice(0, 8)
+      .map((v) => `- Avoid "${v.term}" (${v.title})`)
+      .join('\n');
+
+    const retry = await createCompletion({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: contextBlocks.join('\n\n') },
+        {
+          role: 'assistant',
+          content: result.text,
+        },
+        {
+          role: 'user',
+          content: `Rewrite the script because it violated active hard client constraints:\n${violationSummary}\n\nReturn only a compliant spoken-word script. Do not mention the forbidden items even as negatives or disclaimers.`,
+        },
+      ],
+      maxTokens: 2000,
+      feature: 'script_generation',
+      userId,
+      userEmail,
+    });
+
+    result = {
+      ...retry,
+      usage: {
+        promptTokens: result.usage.promptTokens + retry.usage.promptTokens,
+        completionTokens: result.usage.completionTokens + retry.usage.completionTokens,
+        totalTokens: result.usage.totalTokens + retry.usage.totalTokens,
+      },
+      estimatedCost: result.estimatedCost + retry.estimatedCost,
+    };
+
+    const retryViolations = findConstraintViolations(result.text, clientConstraints);
+    if (retryViolations.length > 0) {
+      const blockedTerms = retryViolations
+        .slice(0, 8)
+        .map((v) => `"${v.term}"`)
+        .join(', ');
+      throw new Error(`Generated script violated active client constraints after retry: ${blockedTerms}`);
+    }
+  }
 
   return {
     scriptText: result.text.trim(),

@@ -4,6 +4,10 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { topicPlanSchema } from '@/lib/topic-plans/types';
 import { loadTopicSignals, matchSignal } from '@/lib/topic-plans/signals';
 import { getEffectiveAccessContext } from '@/lib/portal/effective-access';
+import {
+  findConstraintViolations,
+  getActiveClientConstraints,
+} from '@/lib/knowledge/client-constraints';
 
 /**
  * create_topic_plan — the Nerd's artifact-producing tool.
@@ -95,6 +99,39 @@ export const topicPlanTools: ToolDefinition[] = [
       // made-up plan.
       let groundedIdeas = 0;
       let totalIdeasCount = 0;
+      const activeConstraints = await getActiveClientConstraints(admin, client.id as string);
+      if (activeConstraints.length > 0) {
+        const violations: Array<{ title: string; terms: string[] }> = [];
+        for (const series of plan.series) {
+          for (const idea of series.ideas) {
+            const ideaText = JSON.stringify({
+              series: series.name,
+              title: idea.title,
+              source: idea.source,
+              why_it_works: idea.why_it_works,
+            });
+            const found = findConstraintViolations(ideaText, activeConstraints);
+            if (found.length > 0) {
+              violations.push({
+                title: idea.title,
+                terms: [...new Set(found.map((v) => v.term))],
+              });
+            }
+          }
+        }
+
+        if (violations.length > 0) {
+          return {
+            success: false,
+            error: `This plan violates active client constraints. Revise or remove: ${violations
+              .slice(0, 5)
+              .map((v) => `${v.title} (${v.terms.join(', ')})`)
+              .join('; ')}`,
+            cardType: 'topic_plan' as const,
+          };
+        }
+      }
+
       if (cleanTopicSearchIds.length > 0) {
         const signals = await loadTopicSignals(cleanTopicSearchIds);
         if (signals.length > 0) {

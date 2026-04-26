@@ -8,6 +8,7 @@ import { generateBrandProfile } from '@/lib/knowledge/brand-profile';
 import { generateVideoIdeas } from '@/lib/knowledge/idea-generator';
 import { embedKnowledgeEntry } from '@/lib/ai/embeddings';
 import { getEffectiveAccessContext } from '@/lib/portal/effective-access';
+import { createClientConstraint } from '@/lib/knowledge/client-constraints';
 
 const knowledgeTypeEnum = z.enum(KNOWLEDGE_ENTRY_TYPES as unknown as [string, ...string[]]);
 
@@ -267,6 +268,66 @@ export const knowledgeTools: ToolDefinition[] = [
     },
   },
 
+  // ── create_client_constraint ──────────────────────────────────
+  {
+    name: 'create_client_constraint',
+    description:
+      'Save a hard client correction that future AI generation must obey. Use when a client says they do not offer something, not to mention a topic, not to use a CTA/claim/phrase, or that an assumption is wrong.',
+    parameters: z.object({
+      client_id: z.string(),
+      statement: z.string().describe('Plain-language correction, e.g. "Client does not offer kitchen remodels."'),
+      forbidden_terms: z.array(z.string()).optional().describe('Terms, services, claims, CTAs, or topics future generation should avoid'),
+      replacement: z.string().optional().describe('Preferred phrasing or offering to use instead, if any'),
+      scope: z
+        .enum(['offering', 'topic', 'cta', 'claim', 'language', 'audience', 'visual', 'channel', 'other'])
+        .default('other')
+        .optional(),
+      reason: z.string().optional(),
+    }),
+    riskLevel: 'write',
+    handler: async (params, userId) => {
+      try {
+        const clientId = params.client_id as string;
+        const gate = await requireClientAccess(userId, clientId);
+        if (!gate.ok) return { success: false, error: gate.error };
+
+        const entry = await createClientConstraint(
+          clientId,
+          {
+            statement: params.statement as string,
+            forbidden_terms: (params.forbidden_terms as string[] | undefined) ?? [],
+            replacement: (params.replacement as string | undefined) ?? null,
+            scope: (params.scope as never) ?? 'other',
+            reason: (params.reason as string | undefined) ?? null,
+            confidence: 0.95,
+          },
+          {
+            createdBy: userId ?? null,
+            source: 'generated',
+          },
+        );
+
+        if (!entry) {
+          return { success: false, error: 'Constraint was too vague to save.' };
+        }
+
+        return {
+          success: true,
+          data: {
+            id: entry.id,
+            title: entry.title,
+            type: entry.type,
+          },
+        };
+      } catch (err) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Failed to save client constraint',
+        };
+      }
+    },
+  },
+
   // ── import_meeting_notes ──────────────────────────────────
   {
     name: 'import_meeting_notes',
@@ -302,6 +363,7 @@ export const knowledgeTools: ToolDefinition[] = [
             linkedEntries: result.linkedEntries,
             extracted_decisions: result.extractedDecisions,
             extracted_action_items: result.extractedActionItems,
+            extracted_constraints: result.extractedConstraints,
           },
         };
       } catch (err) {

@@ -8,6 +8,10 @@ import { notifyTopicSearchFailedOnce } from '@/lib/topic-search/ops-notify';
 import { runLlmTopicPipeline } from '@/lib/search/llm-pipeline/run-llm-topic-pipeline';
 import { cloneJsonForPostgres } from '@/lib/utils/json-for-postgres';
 import { assertUserCanAccessTopicSearch } from '@/lib/api/topic-search-access';
+import {
+  findConstraintViolations,
+  getActiveClientConstraints,
+} from '@/lib/knowledge/client-constraints';
 
 /** Vercel Pro / Fluid can use 800s — heavy multi-platform runs often exceed 5 minutes. */
 export const maxDuration = 800;
@@ -59,6 +63,32 @@ export async function POST(
 
     if (search.status !== 'processing' && search.status !== 'failed') {
       return NextResponse.json({ error: 'Search is not in processing state' }, { status: 400 });
+    }
+
+    if (
+      search.client_id &&
+      ((search as { search_mode?: string }).search_mode ?? 'general') === 'client_strategy'
+    ) {
+      const activeConstraints = await getActiveClientConstraints(adminClient, search.client_id);
+      const violations = findConstraintViolations(search.query, activeConstraints);
+      if (violations.length > 0) {
+        const blockedTerms = [...new Set(violations.map((v) => v.term))];
+        await adminClient
+          .from('topic_searches')
+          .update({
+            status: 'failed',
+            processing_started_at: null,
+            error_message: `Search conflicts with active client constraints: ${blockedTerms.join(', ')}`,
+          })
+          .eq('id', id);
+        return NextResponse.json(
+          {
+            error: 'This search conflicts with active client constraints.',
+            blocked_terms: blockedTerms,
+          },
+          { status: 422 },
+        );
+      }
     }
 
     // If retrying a failed search, reset to processing first

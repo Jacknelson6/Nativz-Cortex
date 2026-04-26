@@ -3,6 +3,10 @@ import { createKnowledgeEntry, getKnowledgeEntries } from './queries';
 import { autoLinkEntities } from './entity-linker';
 import type { KnowledgeEntry, MeetingNoteMetadata } from './types';
 import { payloadFromMeetingStrings, persistMeetingDecomposition } from './ingestion-pipeline';
+import {
+  persistClientConstraintsFromMeeting,
+  type ExtractedClientConstraint,
+} from './client-constraints';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -13,6 +17,7 @@ export interface MeetingImportResult {
   linkedEntries: number;
   extractedDecisions: number;
   extractedActionItems: number;
+  extractedConstraints: number;
 }
 
 interface MeetingExtraction {
@@ -21,6 +26,7 @@ interface MeetingExtraction {
   keyDecisions: string[];
   actionItems: string[];
   topicsDiscussed: string[];
+  clientConstraints: ExtractedClientConstraint[];
 }
 
 // ---------------------------------------------------------------------------
@@ -43,11 +49,14 @@ async function extractMeetingData(
 3. "keyDecisions": array of key decisions made
 4. "actionItems": array of action items with owners if mentioned
 5. "topicsDiscussed": array of topics/themes discussed
-6. "structuredContent": the meeting notes rewritten as clean structured markdown with these sections:
+6. "clientConstraints": array of explicit client corrections that should constrain future AI output. Extract ONLY clear constraints like "we don't do X", "don't mention Y", "we no longer offer Z", "avoid this CTA", "that's not our audience", or "we can't claim that". Do not include vague preferences. Each item must be:
+   {"statement": string, "forbidden_terms": string[], "replacement": string|null, "scope": "offering"|"topic"|"cta"|"claim"|"language"|"audience"|"visual"|"channel"|"other", "reason": string|null, "confidence": number}
+7. "structuredContent": the meeting notes rewritten as clean structured markdown with these sections:
    ## Summary
    ## Attendees
    ## Key decisions
    ## Action items
+   ## Client constraints
    ## Discussion notes
    Use [[wikilinks]] to reference any of the existing titles listed below when they are mentioned or relevant.
 ${titlesSnippet}
@@ -75,6 +84,7 @@ ${transcript.slice(0, 15_000)}`;
     keyDecisions: parsed.keyDecisions ?? [],
     actionItems: parsed.actionItems ?? [],
     topicsDiscussed: parsed.topicsDiscussed ?? [],
+    clientConstraints: Array.isArray(parsed.clientConstraints) ? parsed.clientConstraints : [],
     structuredContent: parsed.structuredContent ?? '',
   };
 }
@@ -153,6 +163,13 @@ export async function importMeetingNotes(
     options?.createdBy ?? null,
   );
 
+  const constraintIds = await persistClientConstraintsFromMeeting(
+    clientId,
+    entry.id,
+    extracted.clientConstraints,
+    options?.createdBy ?? null,
+  );
+
   // Auto-link entities
   let linkedEntries = 0;
   try {
@@ -174,5 +191,6 @@ export async function importMeetingNotes(
     linkedEntries,
     extractedDecisions: decisionIds.length,
     extractedActionItems: actionIds.length,
+    extractedConstraints: constraintIds.length,
   };
 }
