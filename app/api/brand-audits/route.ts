@@ -3,20 +3,37 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { runBrandAudit } from '@/lib/brand-audits/run';
-import { DEFAULT_AUDIT_MODELS } from '@/lib/brand-audits/types';
+import { DEFAULT_AUDIT_MODELS, DEFAULT_PROMPT_TEMPLATES } from '@/lib/brand-audits/types';
 
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
 const ADMIN_ROLES = ['admin', 'super_admin'];
 
-const createSchema = z.object({
-  brand_name: z.string().min(1).max(200),
-  category: z.string().max(200).optional().nullable(),
-  attached_client_id: z.string().uuid().optional().nullable(),
-  prompts: z.array(z.string().min(4).max(2000)).max(10).optional(),
-  models: z.array(z.string().min(2).max(120)).max(8).optional(),
-});
+// Each cell is one LLM call + one classifier call; with parallelism the wall
+// time is bounded by the slowest cell (~90s timeout). 24 cells leaves enough
+// headroom to land inside Vercel's 300s function ceiling for typical runs.
+const MAX_AUDIT_CELLS = 24;
+
+const createSchema = z
+  .object({
+    brand_name: z.string().min(1).max(200),
+    category: z.string().max(200).optional().nullable(),
+    attached_client_id: z.string().uuid().optional().nullable(),
+    prompts: z.array(z.string().min(4).max(2000)).max(10).optional(),
+    models: z.array(z.string().min(2).max(120)).max(8).optional(),
+  })
+  .refine(
+    (data) => {
+      const promptCount = data.prompts?.length ?? DEFAULT_PROMPT_TEMPLATES.length;
+      const modelCount = data.models?.length ?? DEFAULT_AUDIT_MODELS.length;
+      return promptCount * modelCount <= MAX_AUDIT_CELLS;
+    },
+    {
+      message: `Total cells (prompts × models) must be ${MAX_AUDIT_CELLS} or fewer`,
+      path: ['prompts'],
+    },
+  );
 
 /** POST /api/brand-audits — create a new audit row, run all model × prompt
  *  combos in parallel, persist the rollup. Returns the finished row id so

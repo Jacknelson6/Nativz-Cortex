@@ -105,6 +105,10 @@
     {
       "path": "/api/cron/onboarding-flow-reminders",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/sweep-stuck-brand-audits",
+      "schedule": "*/10 * * * *"
     }
   ]
 }
