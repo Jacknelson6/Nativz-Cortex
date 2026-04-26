@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, Globe } from 'lucide-react';
 
@@ -38,16 +39,8 @@ export function LatestAuditsList({ audits }: { audits: AuditRow[] }) {
     >
       <div className="flex items-end justify-between gap-4">
         <div>
-          <p
-            className="font-mono text-[10px] uppercase tracking-[0.22em] text-cyan-300/80"
-            style={{ fontStyle: 'italic', fontFamily: 'Rubik, system-ui, sans-serif' }}
-          >
-            Recent
-          </p>
-          <h2
-            className="mt-1 text-base font-semibold text-text-primary"
-            style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
-          >
+          <p className="ui-eyebrow text-cyan-300/80">Output</p>
+          <h2 className="mt-1 font-display text-base font-semibold text-text-primary">
             Latest audits
           </h2>
         </div>
@@ -69,21 +62,24 @@ export function LatestAuditsList({ audits }: { audits: AuditRow[] }) {
             <li key={a.id}>
               <Link
                 href={`/admin/analyze-social/${a.id}`}
-                className="group flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-hover/40"
+                className="group flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-hover/40 focus-visible:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-400/60"
               >
                 <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-cyan-500/10 text-cyan-300">
                   {a.favicon ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={a.favicon} alt="" className="h-9 w-9 object-cover" />
+                    <Image
+                      src={a.favicon}
+                      alt=""
+                      width={36}
+                      height={36}
+                      sizes="36px"
+                      className="h-9 w-9 object-cover"
+                    />
                   ) : (
                     <Globe size={15} />
                   )}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div
-                    className="truncate text-sm font-semibold text-text-primary"
-                    style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
-                  >
+                  <div className="truncate font-display text-sm font-semibold text-text-primary">
                     {a.brand_name}
                   </div>
                   {a.website ? (

@@ -406,6 +406,20 @@ body {
   .ui-caption {
     @apply text-xs text-text-muted;
   }
+  /* Admin product-UI eyebrow — small italic Rubik, uppercase, tracked.
+     Differs from .nz-eyebrow (marketing Jost 14px) by being denser to read
+     as a "machine-generated context label" above operator-UI sections.
+     Color is a Tailwind utility on the element (cyan-300/80 by default,
+     text-muted/85 for data labels) so callers can shift emphasis. */
+  .ui-eyebrow {
+    font-family: var(--font-ui), 'Rubik', system-ui, sans-serif;
+    font-size: 0.625rem;
+    font-style: italic;
+    font-weight: 500;
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+  }
   /* Calendar / dense grids — weekday row (add uppercase in markup when labels are Mon Tue …) */
   .ui-cal-weekday {
     @apply text-center text-[10px] font-medium tracking-wider text-text-muted;

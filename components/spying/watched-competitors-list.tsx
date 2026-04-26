@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, Radar } from 'lucide-react';
 
@@ -80,16 +81,8 @@ export function WatchedCompetitorsList({ watches }: { watches: WatchRow[] }) {
     >
       <div className="flex items-end justify-between gap-4">
         <div>
-          <p
-            className="font-mono text-[10px] uppercase tracking-[0.22em] text-cyan-300/80"
-            style={{ fontStyle: 'italic', fontFamily: 'Rubik, system-ui, sans-serif' }}
-          >
-            In-flight
-          </p>
-          <h2
-            className="mt-1 text-base font-semibold text-text-primary"
-            style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
-          >
+          <p className="ui-eyebrow text-cyan-300/80">In-flight</p>
+          <h2 className="mt-1 font-display text-base font-semibold text-text-primary">
             Watched competitors
           </h2>
         </div>
@@ -128,22 +121,25 @@ export function WatchedCompetitorsList({ watches }: { watches: WatchRow[] }) {
               <li key={w.id}>
                 <Link
                   href={`/admin/analytics?tab=benchmarking&competitor=${w.id}`}
-                  className="group flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-hover/40"
+                  className="group flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-hover/40 focus-visible:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-400/60"
                 >
                   <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-cyan-500/10 text-cyan-300">
                     {w.client_logo ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={w.client_logo} alt="" className="h-9 w-9 object-cover" />
+                      <Image
+                        src={w.client_logo}
+                        alt=""
+                        width={36}
+                        height={36}
+                        sizes="36px"
+                        className="h-9 w-9 object-cover"
+                      />
                     ) : (
                       <Radar size={14} />
                     )}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span
-                        className="truncate text-sm font-semibold text-text-primary"
-                        style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
-                      >
+                      <span className="truncate font-display text-sm font-semibold text-text-primary">
                         {w.handle ? `@${w.handle}` : w.client_name}
                       </span>
                       {platform ? (

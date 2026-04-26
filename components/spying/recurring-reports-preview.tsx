@@ -43,16 +43,8 @@ export function RecurringReportsPreview({
     >
       <div className="flex items-end justify-between gap-4">
         <div>
-          <p
-            className="font-mono text-[10px] uppercase tracking-[0.22em] text-cyan-300/80"
-            style={{ fontStyle: 'italic', fontFamily: 'Rubik, system-ui, sans-serif' }}
-          >
-            Automated
-          </p>
-          <h2
-            className="mt-1 text-base font-semibold text-text-primary"
-            style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
-          >
+          <p className="ui-eyebrow text-cyan-300/80">Automated</p>
+          <h2 className="mt-1 font-display text-base font-semibold text-text-primary">
             Recurring reports
           </h2>
         </div>
@@ -78,16 +70,13 @@ export function RecurringReportsPreview({
             <li key={s.id}>
               <Link
                 href="/spying/reports"
-                className="group flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-hover/40"
+                className="group flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-hover/40 focus-visible:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-400/60"
               >
                 <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cyan-500/10 font-mono text-[11px] font-bold text-cyan-300">
                   {s.client_name.charAt(0).toUpperCase()}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div
-                    className="truncate text-sm font-semibold text-text-primary"
-                    style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
-                  >
+                  <div className="truncate font-display text-sm font-semibold text-text-primary">
                     {s.client_name}
                     {s.client_agency ? (
                       <span className="ml-1 font-normal text-text-muted">· {s.client_agency}</span>

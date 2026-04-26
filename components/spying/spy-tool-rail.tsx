@@ -8,16 +8,8 @@ export function SpyToolRail() {
       style={{ animationDelay: '420ms' }}
     >
       <div>
-        <p
-          className="font-mono text-[10px] uppercase tracking-[0.22em] text-cyan-300/80"
-          style={{ fontStyle: 'italic', fontFamily: 'Rubik, system-ui, sans-serif' }}
-        >
-          Adjacent
-        </p>
-        <h2
-          className="mt-1 text-base font-semibold text-text-primary"
-          style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
-        >
+        <p className="ui-eyebrow text-cyan-300/80">Adjacent</p>
+        <h2 className="mt-1 font-display text-base font-semibold text-text-primary">
           More spying tools
         </h2>
       </div>

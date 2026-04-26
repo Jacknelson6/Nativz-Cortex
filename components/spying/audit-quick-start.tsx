@@ -45,16 +45,8 @@ export function AuditQuickStart() {
       className="animate-ci-rise rounded-xl border border-nativz-border bg-surface p-6"
       style={{ animationDelay: '60ms' }}
     >
-      <p
-        className="font-mono text-[10px] uppercase tracking-[0.22em] text-cyan-300/80"
-        style={{ fontStyle: 'italic', fontFamily: 'Rubik, system-ui, sans-serif' }}
-      >
-        Run audit
-      </p>
-      <h2
-        className="mt-1 text-lg font-semibold text-text-primary"
-        style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
-      >
+      <p className="ui-eyebrow text-cyan-300/80">Run audit</p>
+      <h2 className="mt-1 font-display text-lg font-semibold text-text-primary">
         Audit any brand&apos;s short-form footprint.
       </h2>
       <p className="mt-1 text-xs text-text-muted">
@@ -72,19 +64,19 @@ export function AuditQuickStart() {
             <input
               type="url"
               autoComplete="url"
+              aria-label="Brand or social URL"
               spellCheck={false}
               value={websiteUrl}
               onChange={(e) => setWebsiteUrl(e.target.value)}
               placeholder="https://brand.com or @handle on TikTok / Instagram / YouTube"
-              className="h-11 w-full rounded-lg border border-nativz-border bg-surface-hover/30 py-2 pl-9 pr-3 font-mono text-xs text-text-primary placeholder:text-text-muted/70 focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-cyan-500/30"
+              className="h-11 w-full rounded-lg border border-nativz-border bg-surface-hover/30 py-2 pl-9 pr-3 font-mono text-xs text-text-primary placeholder:text-text-muted/70 focus-visible:border-cyan-400/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-400/60"
               disabled={submitting}
             />
           </div>
           <button
             type="submit"
             disabled={!isValid || submitting}
-            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-accent px-6 text-[11px] font-semibold uppercase tracking-[2px] text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
+            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-accent px-6 text-sm font-semibold text-white transition-colors hover:bg-accent/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
             <span>{submitting ? 'Starting…' : 'Run audit'}</span>
