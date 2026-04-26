@@ -21,18 +21,22 @@ import { AISettingsSkillsClient } from './skills-client';
 export const dynamic = 'force-dynamic';
 
 /**
- * Admin Settings — the levers that configure Cortex:
- *   Model, API key, Skills. (Personal account settings moved to
- *   /admin/account on 2026-04-24.)
+ * Admin Settings — the levers that configure Cortex. Two tabs:
+ *   • AI — model, API key, and skills, stacked. (Was three separate
+ *     tabs until 2026-04-26.)
+ *   • Trend finder — per-platform scrape volumes.
  *
+ * Personal account settings moved to /admin/account on 2026-04-24.
  * Overview, Search cost, and Usage tabs were retired and moved to
- * /admin/usage (usage lives under the AI tab there; scraper volumes
- * live under the Trend finder tab). Legacy slugs redirect.
+ * /admin/usage. Legacy slugs redirect.
  */
 const LEGACY_REDIRECTS: Record<string, string> = {
   overview: '/admin/settings',
   'search-cost': '/admin/usage?tab=trend-finder',
   usage: '/admin/usage?tab=cost',
+  model: '/admin/settings?tab=ai',
+  credentials: '/admin/settings?tab=ai',
+  skills: '/admin/settings?tab=ai',
 };
 
 export default async function AISettingsPage({
@@ -67,7 +71,7 @@ export default async function AISettingsPage({
     <div className="cortex-page-gutter max-w-6xl mx-auto space-y-8">
       <SectionHeader
         title="Settings"
-        description="Pick the model, hold the key, wire the skills — that's the whole surface. Usage and search cost live under the Usage page."
+        description="Model, key, and skills in one place. Usage and search cost live under the Usage page."
         action={<RefreshButton action={refreshAiSettings} />}
       />
 
@@ -82,7 +86,7 @@ function resolveTab(raw: string | undefined): AiSettingsTabSlug {
   if (raw && (AI_SETTINGS_TAB_SLUGS as readonly string[]).includes(raw)) {
     return raw as AiSettingsTabSlug;
   }
-  return 'model';
+  return 'ai';
 }
 
 function renderTab(
@@ -90,26 +94,22 @@ function renderTab(
   clients: Array<{ id: string; name: string; slug: string }>,
 ): React.ReactNode {
   switch (slug) {
-    case 'model':
+    case 'ai':
       return (
-        <SectionPanel title="Model" description="One OpenRouter slug runs every Cortex feature.">
-          <AiRoutingSection />
-        </SectionPanel>
-      );
-    case 'credentials':
-      return (
-        <SectionPanel title="API key" description="A single OpenRouter key powers the model above.">
-          <LlmCredentialsSection />
-        </SectionPanel>
-      );
-    case 'skills':
-      return (
-        <SectionPanel
-          title="Skills"
-          description="Markdown context loaded into the Nerd's system prompt. Each skill picks which harnesses it applies to — the admin Nerd, admin Strategy Lab, and/or the portal Strategy Lab — and can be scoped to a single client."
-        >
-          <AISettingsSkillsClient clients={clients} />
-        </SectionPanel>
+        <div className="space-y-10">
+          <SectionPanel title="Model" description="One OpenRouter slug runs every Cortex feature.">
+            <AiRoutingSection />
+          </SectionPanel>
+          <SectionPanel title="API key" description="A single OpenRouter key powers the model above.">
+            <LlmCredentialsSection />
+          </SectionPanel>
+          <SectionPanel
+            title="Skills"
+            description="Markdown context loaded into the Nerd's system prompt. Each skill picks which harnesses it applies to — the admin Nerd, admin Strategy Lab, and/or the portal Strategy Lab — and can be scoped to a single client."
+          >
+            <AISettingsSkillsClient clients={clients} />
+          </SectionPanel>
+        </div>
       );
     case 'trend-finder':
       return (
