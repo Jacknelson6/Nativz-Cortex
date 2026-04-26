@@ -1,4 +1,4 @@
-import { History, LineChart, Store } from 'lucide-react';
+import { History, LineChart, Store, Swords } from 'lucide-react';
 import { SectionTile } from '@/components/admin/section-tabs';
 
 export function SpyToolRail() {
@@ -13,7 +13,14 @@ export function SpyToolRail() {
           More spying tools
         </h2>
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <SectionTile
+          href="/spying/versus"
+          icon={<Swords size={16} />}
+          title="Versus"
+          primary="Head-to-head benchmark"
+          secondary="Pick two audits, compare side-by-side"
+        />
         <SectionTile
           href="/admin/competitor-tracking/tiktok-shop"
           icon={<Store size={16} />}
