@@ -79,30 +79,28 @@ export function SourceDetailDialog({
     }
 
     let cancelled = false;
-    setInsightsLoading(true);
-    setInsightsError(null);
-
-    fetch(`/api/search/${searchId}/sources/insights`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ platform: source.platform, source_id: source.id }),
-    })
-      .then(async (res) => {
+    async function loadInsights() {
+      setInsightsLoading(true);
+      setInsightsError(null);
+      try {
+        const res = await fetch(`/api/search/${searchId}/sources/insights`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ platform: source!.platform, source_id: source!.id }),
+        });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Insights failed');
-        return data as { insights: { hook_analysis: string; frame_type_breakdown: string } };
-      })
-      .then((data) => {
         if (cancelled) return;
-        setHookAnalysis(data.insights.hook_analysis);
-        setFrameBreakdown(data.insights.frame_type_breakdown);
-      })
-      .catch((e) => {
+        const insights = (data as { insights: { hook_analysis: string; frame_type_breakdown: string } }).insights;
+        setHookAnalysis(insights.hook_analysis);
+        setFrameBreakdown(insights.frame_type_breakdown);
+      } catch (e) {
         if (!cancelled) setInsightsError(e instanceof Error ? e.message : 'Analysis failed');
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setInsightsLoading(false);
-      });
+      }
+    }
+    void loadInsights();
 
     return () => {
       cancelled = true;

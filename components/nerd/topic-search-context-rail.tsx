@@ -41,12 +41,23 @@ export function TopicSearchContextRail({
       setSearches([]);
       return;
     }
-    setLoading(true);
-    fetch(`/api/nerd/searches?clientId=${clientId}`)
-      .then((r) => r.json())
-      .then((data) => setSearches(data.searches ?? []))
-      .catch(() => setSearches([]))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    async function loadSearches() {
+      setLoading(true);
+      try {
+        const r = await fetch(`/api/nerd/searches?clientId=${clientId}`);
+        const data = await r.json();
+        if (!cancelled) setSearches(data.searches ?? []);
+      } catch {
+        if (!cancelled) setSearches([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void loadSearches();
+    return () => {
+      cancelled = true;
+    };
   }, [clientId]);
 
   const completedSearches = searches.filter((s) => s.status === 'completed');

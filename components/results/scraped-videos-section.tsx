@@ -51,14 +51,14 @@ export function ScrapedVideosSection({
     if (scrapedVideoCount === 0) return;
 
     let cancelled = false;
-    setLoading(true);
-
-    const url = shareToken
-      ? `/api/search/${searchId}/videos?token=${encodeURIComponent(shareToken)}`
-      : `/api/search/${searchId}/videos`;
-    fetch(url)
-      .then(res => res.json())
-      .then((data: { videos?: TopicSearchVideoRow[]; hooks?: TopicSearchHookRow[] }) => {
+    async function loadVideos() {
+      setLoading(true);
+      try {
+        const url = shareToken
+          ? `/api/search/${searchId}/videos?token=${encodeURIComponent(shareToken)}`
+          : `/api/search/${searchId}/videos`;
+        const res = await fetch(url);
+        const data: { videos?: TopicSearchVideoRow[]; hooks?: TopicSearchHookRow[] } = await res.json();
         if (cancelled) return;
         // Filter out non-English videos (titles with >40% non-Latin characters)
         const allVideos = data.videos ?? [];
@@ -70,13 +70,13 @@ export function ScrapedVideosSection({
         });
         setVideos(englishVideos);
         setHooks(data.hooks ?? []);
-      })
-      .catch(() => {
+      } catch {
         // Non-blocking — existing analysis still works
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    }
+    void loadVideos();
 
     return () => { cancelled = true; };
   }, [searchId, scrapedVideoCount, shareToken]);

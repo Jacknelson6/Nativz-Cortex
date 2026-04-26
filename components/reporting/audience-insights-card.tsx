@@ -36,18 +36,19 @@ export function AudienceInsightsCard({ clientId }: AudienceInsightsCardProps) {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    fetch(`/api/reporting/audience-insights?clientId=${clientId}`)
-      .then((res) => (res.ok ? res.json() : { insights: [] }))
-      .then((data) => {
+    async function loadInsights() {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/reporting/audience-insights?clientId=${clientId}`);
+        const data = res.ok ? await res.json() : { insights: [] };
         if (!cancelled) setInsights(data.insights ?? []);
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setInsights([]);
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    }
+    void loadInsights();
     return () => { cancelled = true; };
   }, [clientId]);
 

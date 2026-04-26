@@ -75,26 +75,36 @@ export function PostDetailsGrid({ clientId, start, end }: PostDetailsGridProps) 
   const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
-    setLoading(true);
-    const params = new URLSearchParams({
-      clientId,
-      start,
-      end,
-      sort,
-      page: String(page),
-      limit: '24',
-    });
-    if (platform !== 'all') params.set('platform', platform);
+    let cancelled = false;
+    async function loadPosts() {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({
+          clientId,
+          start,
+          end,
+          sort,
+          page: String(page),
+          limit: '24',
+        });
+        if (platform !== 'all') params.set('platform', platform);
 
-    fetch(`/api/reporting/post-details?${params}`)
-      .then((r) => (r.ok ? r.json() : { posts: [], total: 0, hasMore: false }))
-      .then((d) => {
+        const r = await fetch(`/api/reporting/post-details?${params}`);
+        const d = r.ok ? await r.json() : { posts: [], total: 0, hasMore: false };
+        if (cancelled) return;
         setPosts(d.posts ?? []);
         setTotal(d.total ?? 0);
         setHasMore(d.hasMore ?? false);
-      })
-      .catch(() => setPosts([]))
-      .finally(() => setLoading(false));
+      } catch {
+        if (!cancelled) setPosts([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void loadPosts();
+    return () => {
+      cancelled = true;
+    };
   }, [clientId, start, end, platform, sort, page]);
 
   const displayed = showAll ? posts : posts.slice(0, 12);

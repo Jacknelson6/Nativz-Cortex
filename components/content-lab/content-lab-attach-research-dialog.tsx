@@ -50,15 +50,19 @@ export function ContentLabAttachResearchDialog({
   useEffect(() => {
     if (!open || !clientId) return;
     let cancelled = false;
-    setLoading(true);
-    fetch(`/api/nerd/searches?clientId=${clientId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (cancelled) return;
-        setSearches((data.searches ?? []) as TopicSearchItem[]);
-      })
-      .catch(() => !cancelled && setSearches([]))
-      .finally(() => !cancelled && setLoading(false));
+    async function loadSearches() {
+      setLoading(true);
+      try {
+        const r = await fetch(`/api/nerd/searches?clientId=${clientId}`);
+        const data = await r.json();
+        if (!cancelled) setSearches((data.searches ?? []) as TopicSearchItem[]);
+      } catch {
+        if (!cancelled) setSearches([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void loadSearches();
     return () => {
       cancelled = true;
     };

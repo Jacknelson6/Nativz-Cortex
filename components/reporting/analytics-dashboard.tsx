@@ -51,19 +51,33 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
 
   useEffect(() => {
     if (!selectedClientId || !dateRange) return;
-    setTopPostsLoading(true);
-    const params = new URLSearchParams({
-      clientId: selectedClientId,
-      start: dateRange.start,
-      end: dateRange.end,
-      limit: String(topPostsLimit),
-    });
-    fetch(`/api/reporting/top-posts?${params}`)
-      .then((res) => (res.ok ? res.json() : { posts: [] }))
-      .then((data) => setTopPosts(data.posts ?? []))
-      .catch(() => setTopPosts([]))
-      .finally(() => setTopPostsLoading(false));
-  }, [selectedClientId, dateRange?.start, dateRange?.end, topPostsLimit]);
+    const range = dateRange;
+    const clientId = selectedClientId;
+    const limit = topPostsLimit;
+    let cancelled = false;
+    async function loadTopPosts() {
+      setTopPostsLoading(true);
+      try {
+        const params = new URLSearchParams({
+          clientId,
+          start: range.start,
+          end: range.end,
+          limit: String(limit),
+        });
+        const res = await fetch(`/api/reporting/top-posts?${params}`);
+        const data = res.ok ? await res.json() : { posts: [] };
+        if (!cancelled) setTopPosts(data.posts ?? []);
+      } catch {
+        if (!cancelled) setTopPosts([]);
+      } finally {
+        if (!cancelled) setTopPostsLoading(false);
+      }
+    }
+    void loadTopPosts();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedClientId, dateRange, topPostsLimit]);
 
   if (loading) {
     return (

@@ -38,6 +38,7 @@ export function OnboardReview({ clientId, clientName }: OnboardReviewProps) {
   const celebrationRef = useRef<HTMLDivElement>(null);
 
   const fetchStrategy = useCallback(async () => {
+    setLoading(true);
     try {
       const res = await fetch(`/api/clients/${clientId}/strategy`);
       if (res.ok) {
@@ -93,7 +94,7 @@ export function OnboardReview({ clientId, clientName }: OnboardReviewProps) {
     return (
       <div className="text-center py-12">
         <p className="text-text-muted">Strategy not found. The generation may still be processing.</p>
-        <Button variant="outline" size="sm" className="mt-4" onClick={() => { setLoading(true); fetchStrategy(); }}>
+        <Button variant="outline" size="sm" className="mt-4" onClick={() => { void fetchStrategy(); }}>
           Refresh
         </Button>
       </div>

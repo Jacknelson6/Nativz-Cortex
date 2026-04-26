@@ -112,12 +112,12 @@ export function NewProposalForm({
       const json = await res.json();
       if (!res.ok) {
         setError(json.error ?? `Generate failed (${res.status})`);
-        setBusy(false);
         return;
       }
       router.push(`/admin/proposals/${json.slug}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Network error');
+    } finally {
       setBusy(false);
     }
   }

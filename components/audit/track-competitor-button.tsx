@@ -45,19 +45,19 @@ export function TrackCompetitorButton({
   useEffect(() => {
     if (!open || clients.length > 0) return;
     let cancelled = false;
-    setClientsLoading(true);
-    fetch('/api/nerd/mentions')
-      .then((r) => (r.ok ? r.json() : { clients: [] }))
-      .then((data: { clients?: MentionClient[] }) => {
-        if (cancelled) return;
-        setClients(data.clients ?? []);
-      })
-      .catch(() => {
+    async function loadClients() {
+      setClientsLoading(true);
+      try {
+        const r = await fetch('/api/nerd/mentions');
+        const data: { clients?: MentionClient[] } = r.ok ? await r.json() : { clients: [] };
+        if (!cancelled) setClients(data.clients ?? []);
+      } catch {
         if (!cancelled) setClients([]);
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setClientsLoading(false);
-      });
+      }
+    }
+    void loadClients();
     return () => {
       cancelled = true;
     };

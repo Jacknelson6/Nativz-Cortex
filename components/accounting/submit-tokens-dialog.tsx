@@ -46,12 +46,23 @@ export function SubmitTokensDialog({
 
   useEffect(() => {
     if (!open) return;
-    setLoading(true);
-    fetch(`/api/accounting/periods/${periodId}/submit-tokens`)
-      .then((res) => (res.ok ? res.json() : { tokens: [] }))
-      .then((data) => setRows(data.tokens ?? []))
-      .catch(() => setRows([]))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/accounting/periods/${periodId}/submit-tokens`);
+        const data = res.ok ? await res.json() : { tokens: [] };
+        if (!cancelled) setRows(data.tokens ?? []);
+      } catch {
+        if (!cancelled) setRows([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
   }, [open, periodId]);
 
   useEffect(() => {

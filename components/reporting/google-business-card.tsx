@@ -39,13 +39,24 @@ export function GoogleBusinessCard({ clientId, start, end }: GoogleBusinessCardP
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
-    const qs = new URLSearchParams({ clientId, start, end });
-    fetch(`/api/reporting/gmb?${qs}`)
-      .then((r) => r.json())
-      .then((d) => setData(d))
-      .catch(() => setData(null))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    async function loadGmb() {
+      setLoading(true);
+      try {
+        const qs = new URLSearchParams({ clientId, start, end });
+        const r = await fetch(`/api/reporting/gmb?${qs}`);
+        const d = await r.json();
+        if (!cancelled) setData(d);
+      } catch {
+        if (!cancelled) setData(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void loadGmb();
+    return () => {
+      cancelled = true;
+    };
   }, [clientId, start, end]);
 
   if (loading) return <Skeleton className="h-48" />;

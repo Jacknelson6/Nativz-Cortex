@@ -125,11 +125,11 @@ export function TikTokEmbedCarousel({
     }
     let cancelled = false;
     setAnalysisItem(null);
-    setAnalysisLoading(true);
     setRescriptText(null);
     setRescriptLoading(false);
 
     async function loadAnalysis() {
+      setAnalysisLoading(true);
       try {
         // Create or reuse existing analysis item
         const createRes = await fetch('/api/analysis/items', {
@@ -137,7 +137,7 @@ export function TikTokEmbedCarousel({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ topic_search_id: topicSearchId, url: source!.url, type: 'video' }),
         });
-        if (!createRes.ok || cancelled) { setAnalysisLoading(false); return; }
+        if (!createRes.ok || cancelled) return;
         let item = (await createRes.json()) as MoodboardItem;
         if (cancelled) return;
         setAnalysisItem(item);
@@ -147,7 +147,6 @@ export function TikTokEmbedCarousel({
         const hasHookAlready = !!item.hook_analysis;
 
         if (hasTranscriptAlready && hasFramesAlready && hasHookAlready) {
-          setAnalysisLoading(false);
           return;
         }
 

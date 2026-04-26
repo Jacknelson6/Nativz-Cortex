@@ -58,16 +58,26 @@ export function DemographicsCard({ clientId, platform }: DemographicsCardProps) 
   const [reason, setReason] = useState<string | null>(null);
 
   useEffect(() => {
-    setLoading(true);
-    const qs = new URLSearchParams({ clientId, platform });
-    fetch(`/api/reporting/demographics?${qs}`)
-      .then((r) => r.json())
-      .then((d) => {
+    let cancelled = false;
+    async function loadDemographics() {
+      setLoading(true);
+      try {
+        const qs = new URLSearchParams({ clientId, platform });
+        const r = await fetch(`/api/reporting/demographics?${qs}`);
+        const d = await r.json();
+        if (cancelled) return;
         setData(d.demographics ?? null);
         setReason(d.reason ?? null);
-      })
-      .catch(() => setData(null))
-      .finally(() => setLoading(false));
+      } catch {
+        if (!cancelled) setData(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void loadDemographics();
+    return () => {
+      cancelled = true;
+    };
   }, [clientId, platform]);
 
   const color = platform === 'instagram' ? '#e1306c' : '#ef4444';

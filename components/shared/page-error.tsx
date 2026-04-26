@@ -30,9 +30,12 @@ export function PageError({
       <Card className="max-w-md text-center">
         <div
           aria-hidden
-          className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-500/15"
+          // Status tokens (--status-danger) instead of raw Tailwind reds so
+          // brand-mode swaps (Anderson Collaborative coral vs. Nativz coral)
+          // stay coherent. Token is defined in app/globals.css.
+          className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--status-danger)]/15"
         >
-          <AlertTriangle size={24} className="text-red-400" />
+          <AlertTriangle size={24} className="text-[color:var(--status-danger)]" />
         </div>
         <h2 className="text-base font-semibold text-text-primary">{title}</h2>
         <p className="mt-2 text-sm text-text-muted">{description}</p>

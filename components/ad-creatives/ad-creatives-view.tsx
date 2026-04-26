@@ -156,6 +156,10 @@ export function AdCreativesView({
       const body: { clientId: string; url?: string } = { clientId };
       if (isValidWebsiteUrl(normalized)) body.url = normalized;
 
+      // When polling kicks in we deliberately keep loading=true so the spinner stays
+      // until the poll resolves. Track that explicitly so the finally below knows to
+      // skip the reset.
+      let pollingStarted = false;
       try {
         const res = await fetch('/api/ad-creatives/crawl-brand', {
           method: 'POST',
@@ -167,7 +171,6 @@ export function AdCreativesView({
         if (!res.ok) {
           if (!cancelled) {
             toast.error(typeof data.error === 'string' ? data.error : 'Could not load brand context');
-            setContextLoading(false);
           }
           return;
         }
@@ -178,15 +181,16 @@ export function AdCreativesView({
           setBrand(data.brand ?? null);
           setScrapedProducts(data.products ?? []);
           setBrandContextSource((data.source as BrandContextSource) ?? 'live_scrape');
-          setContextLoading(false);
         } else if (data.status === 'generating' || data.status === 'crawling') {
+          pollingStarted = true;
           pollForBrandContext();
-        } else {
-          setContextLoading(false);
         }
       } catch {
         if (!cancelled) {
           toast.error('Could not load brand context');
+        }
+      } finally {
+        if (!cancelled && !pollingStarted) {
           setContextLoading(false);
         }
       }

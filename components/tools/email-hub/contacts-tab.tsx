@@ -329,26 +329,31 @@ function AddContactModal({
   async function submit() {
     setError(null);
     setBusy(true);
-    const res = await fetch('/api/admin/email-hub/contacts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: form.email,
-        full_name: form.full_name || null,
-        title: form.title || null,
-        company: form.company || null,
-        tags: form.tags
-          ? form.tags.split(/[,;|]/).map((t) => t.trim()).filter(Boolean)
-          : [],
-      }),
-    });
-    setBusy(false);
-    if (!res.ok) {
-      const body = await res.json().catch(() => null);
-      setError(body?.error ?? 'Failed to add contact');
-      return;
+    try {
+      const res = await fetch('/api/admin/email-hub/contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: form.email,
+          full_name: form.full_name || null,
+          title: form.title || null,
+          company: form.company || null,
+          tags: form.tags
+            ? form.tags.split(/[,;|]/).map((t) => t.trim()).filter(Boolean)
+            : [],
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setError(body?.error ?? 'Failed to add contact');
+        return;
+      }
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add contact');
+    } finally {
+      setBusy(false);
     }
-    onSaved();
   }
 
   return (
@@ -428,18 +433,28 @@ function ImportCsvModal({ onClose, onDone }: { onClose: () => void; onDone: () =
 
   async function submit() {
     setBusy(true);
-    const res = await fetch('/api/admin/email-hub/contacts/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ csv }),
-    });
-    setBusy(false);
-    const body = await res.json();
-    if (!res.ok) {
-      setResult({ inserted: 0, updated: 0, skipped: 0, errors: [{ line: 0, reason: body.error ?? 'failed' }] });
-      return;
+    try {
+      const res = await fetch('/api/admin/email-hub/contacts/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csv }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setResult({ inserted: 0, updated: 0, skipped: 0, errors: [{ line: 0, reason: body.error ?? 'failed' }] });
+        return;
+      }
+      setResult(body);
+    } catch (err) {
+      setResult({
+        inserted: 0,
+        updated: 0,
+        skipped: 0,
+        errors: [{ line: 0, reason: err instanceof Error ? err.message : 'Network error' }],
+      });
+    } finally {
+      setBusy(false);
     }
-    setResult(body);
   }
 
   return (

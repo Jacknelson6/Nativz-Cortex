@@ -98,27 +98,33 @@ export function AuditBenchmarksPanel({ clientId, clientName }: Props) {
       setRows([]);
       return;
     }
+    // Capture the narrowed (non-null) clientId so the inner async closure
+    // sees a `string` type instead of `string | null` — TS can't follow
+    // the early return through the function boundary.
+    const id = clientId;
     let cancelled = false;
-    setLoading(true);
-    setError(null);
-    fetch(`/api/benchmarks?clientId=${encodeURIComponent(clientId)}`)
-      .then(async (r) => {
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'Request failed');
-        return r.json() as Promise<{ benchmarks: BenchmarkRow[] }>;
-      })
-      .then((data) => {
+    async function loadBenchmarks() {
+      setLoading(true);
+      setError(null);
+      try {
+        const r = await fetch(`/api/benchmarks?clientId=${encodeURIComponent(id)}`);
+        if (!r.ok) {
+          const errBody = await r.json().catch(() => ({}));
+          throw new Error(errBody.error ?? 'Request failed');
+        }
+        const data = (await r.json()) as { benchmarks: BenchmarkRow[] };
         if (!cancelled) setRows(data.benchmarks ?? []);
-      })
-      .catch((e) => {
+      } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load benchmarks');
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    }
+    void loadBenchmarks();
 
     // Fetch the client's own follower series so the per-benchmark chart can
     // overlay "Your account" next to the tracked competitors.
-    fetch(`/api/analytics/client-series?clientId=${clientId}`)
+    fetch(`/api/analytics/client-series?clientId=${id}`)
       .then((r) => (r.ok ? r.json() : { series: [] }))
       .then((data) => {
         if (cancelled) return;

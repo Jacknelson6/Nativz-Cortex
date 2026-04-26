@@ -599,27 +599,26 @@ function EmailPreviewPanel({
   useEffect(() => {
     if (!expanded || !clientId) return;
     let cancelled = false;
-    setLoading(true);
-    setError(null);
-    const params = new URLSearchParams({ client_id: clientId });
-    if (previewName) params.set('name', previewName);
-    fetch(`/api/invites/preview?${params.toString()}`)
-      .then(async (res) => {
+    async function loadPreview() {
+      setLoading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams({ client_id: clientId! });
+        if (previewName) params.set('name', previewName);
+        const res = await fetch(`/api/invites/preview?${params.toString()}`);
         if (!res.ok) {
           const data = await res.json().catch(() => null);
           throw new Error(data?.error ?? 'Preview failed');
         }
-        return res.text();
-      })
-      .then((body) => {
+        const body = await res.text();
         if (!cancelled) setHtml(body);
-      })
-      .catch((err) => {
+      } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Preview failed');
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    }
+    void loadPreview();
     return () => { cancelled = true; };
   }, [expanded, clientId, previewName]);
 

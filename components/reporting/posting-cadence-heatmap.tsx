@@ -31,13 +31,24 @@ export function PostingCadenceHeatmap({ clientId, start, end }: PostingCadenceHe
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
-    const qs = new URLSearchParams({ clientId, start, end });
-    fetch(`/api/reporting/cadence?${qs}`)
-      .then((r) => (r.ok ? r.json() : { cadence: [] }))
-      .then((d) => setRows(d.cadence ?? []))
-      .catch(() => setRows([]))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    async function loadCadence() {
+      setLoading(true);
+      try {
+        const qs = new URLSearchParams({ clientId, start, end });
+        const r = await fetch(`/api/reporting/cadence?${qs}`);
+        const d = r.ok ? await r.json() : { cadence: [] };
+        if (!cancelled) setRows(d.cadence ?? []);
+      } catch {
+        if (!cancelled) setRows([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void loadCadence();
+    return () => {
+      cancelled = true;
+    };
   }, [clientId, start, end]);
 
   // Build a dense 7-row (Mon..Sun) × N-week grid so every day in the

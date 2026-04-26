@@ -29,12 +29,23 @@ export function BestTimeHeatmap({ clientId }: BestTimeHeatmapProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
-    fetch(`/api/reporting/best-time?clientId=${clientId}`)
-      .then((r) => (r.ok ? r.json() : { slots: [] }))
-      .then((d) => setSlots(d.slots ?? []))
-      .catch(() => setSlots([]))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    async function loadSlots() {
+      setLoading(true);
+      try {
+        const r = await fetch(`/api/reporting/best-time?clientId=${clientId}`);
+        const d = r.ok ? await r.json() : { slots: [] };
+        if (!cancelled) setSlots(d.slots ?? []);
+      } catch {
+        if (!cancelled) setSlots([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void loadSlots();
+    return () => {
+      cancelled = true;
+    };
   }, [clientId]);
 
   const { map, maxEng, topSlots } = useMemo(() => {

@@ -65,10 +65,11 @@ export function ContentLabTopicSearchChipBar({
       return;
     }
     let cancelled = false;
-    setLoading(true);
-    fetch(`/api/nerd/searches?clientId=${clientId}`)
-      .then((r) => r.json())
-      .then((data) => {
+    async function loadSearches() {
+      setLoading(true);
+      try {
+        const r = await fetch(`/api/nerd/searches?clientId=${clientId}`);
+        const data = await r.json();
         if (cancelled) return;
         const fetched = (data.searches ?? []) as TopicSearchItem[];
         setClientSearches(fetched);
@@ -83,13 +84,13 @@ export function ContentLabTopicSearchChipBar({
             if (latest) onToggle(latest.id);
           }
         }
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setClientSearches([]);
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    }
+    void loadSearches();
     return () => {
       cancelled = true;
     };

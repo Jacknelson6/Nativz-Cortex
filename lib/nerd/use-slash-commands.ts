@@ -57,14 +57,17 @@ export function useSlashCommands(): { commands: UnifiedSlashCommand[]; loading: 
 
   useEffect(() => {
     let cancelled = false;
-    const sync = () => {
+    async function runSync() {
       setLoading(true);
-      void loadCommands().then((list) => {
-        if (!cancelled) {
-          setCommands(list);
-          setLoading(false);
-        }
-      });
+      try {
+        const list = await loadCommands();
+        if (!cancelled) setCommands(list);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    const sync = () => {
+      void runSync();
     };
     sync();
     listeners.add(sync);

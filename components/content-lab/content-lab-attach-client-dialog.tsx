@@ -44,23 +44,22 @@ export function ContentLabAttachClientDialog({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setLoading(true);
-    fetch('/api/clients')
-      .then((r) => r.json() as Promise<{ clients?: ClientOption[] } | ClientOption[]>)
-      .then((data) => {
+    async function loadClients() {
+      setLoading(true);
+      try {
+        const r = await fetch('/api/clients');
+        const data = (await r.json()) as { clients?: ClientOption[] } | ClientOption[];
         if (cancelled) return;
         // /api/clients may return either an array directly or { clients: [...] }
         const rows = Array.isArray(data) ? data : (data.clients ?? []);
-        setClients(
-          rows.map((c) => ({ id: c.id, name: c.name, slug: c.slug })),
-        );
-      })
-      .catch(() => {
+        setClients(rows.map((c) => ({ id: c.id, name: c.name, slug: c.slug })));
+      } catch {
         if (!cancelled) toast.error('Could not load clients');
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    }
+    void loadClients();
     return () => {
       cancelled = true;
     };
