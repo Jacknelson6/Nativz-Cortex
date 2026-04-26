@@ -8,10 +8,13 @@ import { mapImageErrorToResponse } from '@/lib/ad-creatives/error-response';
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
+// 30 ads at the legacy 2-up render concurrency reliably finish under the
+// route's 300s ceiling. Larger asks would gamble on Vercel's wall clock —
+// the legacy /generate route enforces the same cap.
 const bodySchema = z.object({
   clientId: z.string().uuid(),
   prompt: z.string().min(3).max(4000),
-  count: z.coerce.number().int().min(1).max(50).default(20),
+  count: z.coerce.number().int().min(1).max(30).default(20),
 });
 
 /**
@@ -56,6 +59,15 @@ export async function POST(req: NextRequest) {
     return jsonError('Invalid body', 400);
   }
   const { clientId, prompt, count } = parsed.data;
+
+  const { data: client } = await admin
+    .from('clients')
+    .select('id')
+    .eq('id', clientId)
+    .maybeSingle();
+  if (!client) {
+    return jsonError('Client not found', 404);
+  }
 
   await admin.from('ad_generator_messages').insert({
     client_id: clientId,

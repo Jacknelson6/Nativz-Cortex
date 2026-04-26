@@ -1,24 +1,8 @@
 /**
- * Ad generator orchestration via the OpenAI Agents SDK.
- *
- * This is the streaming counterpart to `generateReferenceDrivenAdBatch` in
- * `monthly-gift-ads.ts`. The legacy function runs the same pipeline as a
- * single submit-and-wait call; this module hands the workflow to an Agent
- * that calls scoped tools and streams progress back to the caller.
- *
- * Layout:
- *   - One Agent (`Cortex Ad Director`) running gpt-5.4-mini on OpenAI direct.
- *   - Three tools wired to context: load_creative_context → compose_concept_batch
- *     → render_batch_images. Each tool emits granular SSE events through the
- *     `onEvent` callback that the route plumbs into a ReadableStream.
- *   - The agent's narration between tool calls flows through `message_output_created`
- *     stream events and is forwarded to the UI as `agent_message`.
- *
- * Why a custom event channel on top of `RunStreamEvent`: the SDK surfaces
- * tool calls as opaque `tool_called` / `tool_output` items, which is fine for
- * an inspector but useless for "rendered concept 12 of 20". We emit our own
- * typed `AdAgentEvent` union from inside the tools so the UI can show real
- * progress (a thumbnail per render) instead of a generic "Tool finished" line.
+ * Ad generator orchestration via the OpenAI Agents SDK. Streaming counterpart
+ * to `generateReferenceDrivenAdBatch` in `monthly-gift-ads.ts`. We emit a
+ * typed `AdAgentEvent` union from inside scoped tools so the UI can show real
+ * per-render progress instead of opaque tool boundaries.
  */
 
 import { OpenAI } from 'openai';
@@ -30,6 +14,7 @@ import {
   setOpenAIAPI,
   setTracingDisabled,
   type RunContext,
+  RunMessageOutputItem,
 } from '@openai/agents';
 import { z } from 'zod';
 
@@ -115,6 +100,7 @@ export interface RunAdGeneratorResult {
 
 interface AdAgentContextState {
   batchId?: string;
+  brandContext?: Awaited<ReturnType<typeof getBrandContext>>;
   referenceAds?: ReferenceAd[];
   concepts?: GeneratedConceptRow[];
   renderedConcepts?: GeneratedConceptRow[];
@@ -195,6 +181,7 @@ const loadCreativeContextTool = tool<typeof emptyParams, AdAgentContext>({
       brandContext,
       Math.max(ctx.count, 20),
     );
+    ctx.state.brandContext = brandContext;
     ctx.state.referenceAds = referenceAds;
     const brandName = brandContext.clientName || 'this client';
     const assetCount = assetsResult.data?.length ?? 0;
@@ -242,6 +229,7 @@ const composeConceptBatchTool = tool<typeof emptyParams, AdAgentContext>({
       count: ctx.count,
       referenceAds: ctx.state.referenceAds,
       userId: ctx.userId,
+      brandContext: ctx.state.brandContext,
     });
     ctx.state.batchId = result.batchId;
     ctx.state.concepts = result.concepts;
@@ -417,6 +405,7 @@ interface ComposeAndPersistInput {
   count: number;
   referenceAds: ReferenceAd[];
   userId: string | null;
+  brandContext?: Awaited<ReturnType<typeof getBrandContext>>;
 }
 
 interface ComposeAndPersistOutput {
@@ -444,9 +433,9 @@ async function composeAndPersistConcepts(
   input: ComposeAndPersistInput,
 ): Promise<ComposeAndPersistOutput> {
   const admin = createAdminClient();
-  const brandContext = await getBrandContext(input.clientId, {
-    bypassCache: true,
-  });
+  const brandContext =
+    input.brandContext ??
+    (await getBrandContext(input.clientId, { bypassCache: true }));
   const { data: assetsData } = await admin
     .from('ad_assets')
     .select('id, kind, label, notes, tags')
@@ -677,7 +666,7 @@ Return only JSON:
 }`;
 }
 
-function parseConcepts(raw: string): RawConcept[] {
+export function parseConcepts(raw: string): RawConcept[] {
   const stripped = raw
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/```\s*$/i, '')
@@ -765,11 +754,22 @@ export async function runAdGenerator(
     if (event.type !== 'run_item_stream_event') continue;
     if (event.name !== 'message_output_created') continue;
     const item = event.item;
-    if (item.type !== 'message_output_item') continue;
-    const text = extractMessageText(item);
+    if (!(item instanceof RunMessageOutputItem)) continue;
+    const text = item.content?.trim();
     if (text) {
       options.onEvent({ type: 'agent_message', text });
     }
+  }
+
+  // The render tool throws terminal errors (KEY_MISSING / AUTH_FAILED /
+  // QUOTA_EXHAUSTED) so the SDK surfaces them — but the SDK catches tool
+  // throws and feeds them back to the model rather than re-throwing. If the
+  // run finished with a stored terminal error and zero rendered concepts,
+  // promote it back into a real exception so the route emits batch_error
+  // instead of a fake batch_complete with an empty gallery.
+  const terminal = context.state.terminalRenderError;
+  if (terminal && (context.state.renderedConcepts?.length ?? 0) === 0) {
+    throw terminal;
   }
 
   // Agent finished — assemble the final result from context state.
@@ -825,21 +825,3 @@ export async function runAdGenerator(
   };
 }
 
-interface MessageOutputItem {
-  type: 'message_output_item';
-  rawItem?: {
-    content?: Array<{ type?: string; text?: string }>;
-  };
-}
-
-function extractMessageText(item: unknown): string | null {
-  const candidate = item as MessageOutputItem;
-  const parts = candidate?.rawItem?.content;
-  if (!Array.isArray(parts)) return null;
-  const text = parts
-    .filter((p) => p?.type === 'output_text' && typeof p.text === 'string')
-    .map((p) => p.text as string)
-    .join('')
-    .trim();
-  return text.length > 0 ? text : null;
-}

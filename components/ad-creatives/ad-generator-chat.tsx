@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import type { AdConcept } from './ad-concept-gallery';
 import { CHAT_COMMAND_HELP } from '@/lib/ad-creatives/chat-commands';
 import type { AdAgentEvent } from '@/lib/ad-creatives/ad-agent';
+import { parseSseFrames } from '@/lib/ad-creatives/parse-sse-frames';
 
 // Maps the wire-format codes from /api/ad-creatives/{generate,command,
 // concepts/[id]/render} into a friendly assistant slip + a short toast. The
@@ -270,10 +271,13 @@ export function AdGeneratorChat({
         const decoder = new TextDecoder();
         let buffer = '';
         let lastNarration = '';
-        let finalEvent:
-          | (Extract<AdAgentEvent, { type: 'batch_complete' }> & object)
-          | null = null;
-        let terminalError: { code: string; message: string } | null = null;
+        // These vars are mutated inside `handleEvent` (a closure). TS flow
+        // analysis can't see those writes, so reads after the SSE loop
+        // narrow back to `null`. Annotate as a wider union and cast on read.
+        type BatchComplete = Extract<AdAgentEvent, { type: 'batch_complete' }>;
+        type BatchError = { code: string; message: string };
+        let finalEvent: BatchComplete | null = null;
+        let terminalError: BatchError | null = null;
 
         const handleEvent = (event: AdAgentEvent) => {
           switch (event.type) {
@@ -359,9 +363,15 @@ export function AdGeneratorChat({
               terminalError = { code: event.code, message: event.message };
               break;
             case 'tool_finished':
-              // Don't replace the activity line on tool_finished — the
-              // next tool_started or progress event will overwrite it,
-              // and the brief "Done" flicker isn't useful.
+              // Clear the activity line so it doesn't show a stale label
+              // (e.g. "Loading brand DNA…") under fresh agent narration.
+              // The next tool_started or progress event sets it again.
+              setLiveStream((prev) => ({
+                narration: prev?.narration ?? '',
+                activity: null,
+                progress: prev?.progress ?? null,
+                failures: prev?.failures ?? 0,
+              }));
               break;
           }
         };
@@ -371,41 +381,24 @@ export function AdGeneratorChat({
             const { value, done } = await reader.read();
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
-            let sep = buffer.indexOf('\n\n');
-            while (sep !== -1) {
-              const frame = buffer.slice(0, sep);
-              buffer = buffer.slice(sep + 2);
-              const dataLine = frame
-                .split('\n')
-                .find((l) => l.startsWith('data:'));
-              if (dataLine) {
-                try {
-                  const event = JSON.parse(dataLine.slice(5).trim()) as AdAgentEvent;
-                  handleEvent(event);
-                } catch {
-                  // Malformed frame — skip and keep streaming.
-                }
-              }
-              sep = buffer.indexOf('\n\n');
-            }
+            const { events, rest } = parseSseFrames<AdAgentEvent>(buffer);
+            buffer = rest;
+            for (const event of events) handleEvent(event);
           }
         } finally {
           setLiveStream(null);
         }
 
-        if (terminalError) {
-          const err = terminalError as { code: string; message: string };
-          const friendly = friendlyErrorFor(err.code, err.message);
+        const error = terminalError as BatchError | null;
+        if (error) {
+          const friendly = friendlyErrorFor(error.code, error.message);
           appendAssistant(setMessages, friendly.assistant, null);
           toast.error(friendly.toast);
           return;
         }
 
-        if (finalEvent) {
-          const final = finalEvent as Extract<
-            AdAgentEvent,
-            { type: 'batch_complete' }
-          >;
+        const final = finalEvent as BatchComplete | null;
+        if (final) {
           const summary = lastNarration || final.summary;
           appendAssistant(setMessages, summary, final.batchId, {
             batch_status: final.status,
