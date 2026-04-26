@@ -95,6 +95,10 @@
       "schedule": "0 10 * * *"
     },
     {
+      "path": "/api/cron/monthly-gift-ads",
+      "schedule": "0 13 20 * *"
+    },
+    {
       "path": "/api/cron/revenue-anomalies",
       "schedule": "15 * * * *"
     },

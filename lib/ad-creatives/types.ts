@@ -1,19 +1,6 @@
 // ---------------------------------------------------------------------------
-// Static Ad Generation — Types & Constants
+// Ad Creatives — Shared Types & Constants
 // ---------------------------------------------------------------------------
-
-export const AD_VERTICALS = [
-  'ecommerce',
-  'saas',
-  'local_service',
-  'health_wellness',
-  'finance',
-  'education',
-  'real_estate',
-  'food_beverage',
-  'fashion',
-  'automotive',
-] as const;
 
 export const AD_CATEGORIES = [
   'promotional',
@@ -36,26 +23,16 @@ export const ASPECT_RATIOS = [
   { value: '1.91:1', width: 1200, height: 628, label: 'Facebook / Google' },
 ] as const;
 
-export const BATCH_STATUSES = [
-  'queued',
-  'generating',
-  'completed',
-  'failed',
-  'partial',
-  'cancelled',
+export const ADVERTISING_TYPES = [
+  'product_dtc',
+  'saas_service',
+  'marketplace',
+  'local_service',
 ] as const;
 
-/** Cap for `products` on POST /api/clients/[id]/ad-creatives/generate (Zod + client must match). */
-export const AD_GENERATE_MAX_PRODUCTS = 60;
-
-export type AdVertical = (typeof AD_VERTICALS)[number];
 export type AdCategory = (typeof AD_CATEGORIES)[number];
 export type AspectRatio = (typeof ASPECT_RATIOS)[number]['value'];
-export type BatchStatus = (typeof BATCH_STATUSES)[number];
-
-// ---------------------------------------------------------------------------
-// JSON Schema Types (stored in jsonb columns)
-// ---------------------------------------------------------------------------
+export type AdvertisingType = (typeof ADVERTISING_TYPES)[number];
 
 export type AdPromptSchema = {
   layout: {
@@ -112,139 +89,7 @@ export type OnScreenText = {
   cta: string;
 };
 
-/** How layout prior is supplied to image generation (default: reference_image — Kandy/template PNG + JSON prompt). */
-export const BRAND_LAYOUT_MODES = ['schema_only', 'schema_plus_wireframe', 'reference_image'] as const;
-export type BrandLayoutMode = (typeof BRAND_LAYOUT_MODES)[number];
-
-export type ProductInfo = {
-  name: string;
-  imageUrl: string | null;
-  description: string;
-};
-
-export type ProductOfferConfig = {
-  product: ProductInfo;
-  offer: string;
-  cta: string;
-};
-
-export type TemplateVariation = {
-  templateId: string;
-  count: number;
-};
-
-/** Per-creative copy from interactive prompt review (must match template × variation slots). */
-export type CreativeOverride = {
-  /** Client template UUID or global Nano Banana `slug` */
-  templateId: string;
-  variationIndex: number;
-  headline: string;
-  subheadline: string;
-  cta: string;
-  /** Extra style direction appended to the image prompt */
-  styleNotes?: string;
-};
-
-/** Global Nano Banana catalog — per-slug counts (admin wizard). */
-export type GlobalTemplateVariation = {
-  slug: string;
-  count: number;
-};
-
-export const ADVERTISING_TYPES = [
-  'product_dtc',
-  'saas_service',
-  'marketplace',
-  'local_service',
-] as const;
-export type AdvertisingType = (typeof ADVERTISING_TYPES)[number];
-
-export type AdGenerationConfig = {
-  aspectRatio: AspectRatio;
-  /** @deprecated Use templateVariations instead */
-  numVariations?: number;
-  /** Per-template variation counts (v2) */
-  templateVariations?: TemplateVariation[];
-  /**
-   * Global Nano Banana styles (mutually exclusive with client `templateVariations` / `templateIds`).
-   */
-  globalTemplateVariations?: GlobalTemplateVariation[];
-  /**
-   * When set, work items follow this slug sequence (interleaved Meta-style mix).
-   * Must agree with {@link globalTemplateVariations} aggregate counts.
-   */
-  globalTemplateSlotOrder?: string[];
-  /**
-   * When true and multiple `productImageUrls` are set, each ad uses one URL rotating by slot index.
-   */
-  rotateProductImageUrls?: boolean;
-  productService: string;
-  offer: string;
-  onScreenText: OnScreenText | 'ai_generate';
-  templateIds: string[];
-  /**
-   * Explicit product photos for the image model (batch-level single product).
-   * When set, overrides default screenshot slice from brand context.
-   */
-  productImageUrls?: string[];
-  /** Wizard-sourced product list (optional — backwards compatible) */
-  products?: ProductOfferConfig[];
-  /** Brand URL that was scraped for context */
-  brandUrl?: string;
-  /**
-   * When set (full set for all slots), orchestrator uses this copy and skips AI copy generation.
-   * Populated from interactive prompt review approvals.
-   */
-  creativeOverrides?: CreativeOverride[];
-  /**
-   * Appended to every image prompt as USER STYLE DIRECTION when a slot has no per-override styleNotes.
-   * Used for “create more like this” from a prior creative’s full prompt.
-   */
-  styleDirectionGlobal?: string;
-  /**
-   * When `onScreenText` is `ai_generate`, if set, every variation uses this exact CTA (headline/subhead still vary).
-   * Omit for legacy behavior (model may vary CTAs).
-   */
-  batchCta?: string;
-  /**
-   * Layout prior for image generation. Default `reference_image` (template PNG + JSON-assembled prompt).
-   * `schema_only` / `schema_plus_wireframe` are opt-ins when you want less template leakage.
-   */
-  brandLayoutMode?: BrandLayoutMode;
-  /**
-   * One batch-level creative direction paragraph (optional). If omitted, orchestrator generates once and may persist on the batch.
-   */
-  creativeBrief?: string;
-  /**
-   * When true, Gemini is treated as a clean-plate generator and text/logo/CTA are composited in code (see `lib/ad-creatives/compositor`).
-   */
-  useCompositor?: boolean;
-};
-
-// ---------------------------------------------------------------------------
-// Row Types
-// ---------------------------------------------------------------------------
-
-/**
- * Normalized template shape for the ad wizard grid (backed by `ad_prompt_templates` rows).
- */
-export type AdCreativeTemplate = {
-  id: string;
-  collection_name: string;
-  canva_design_id: string;
-  page_index: number;
-  image_url: string;
-  prompt_schema: AdPromptSchema;
-  vertical: AdVertical;
-  format: string;
-  ad_category: AdCategory;
-  aspect_ratio: AspectRatio;
-  is_favorite: boolean;
-  is_active: boolean;
-  created_at: string;
-  source_brand?: string | null;
-};
-
+/** Reference template row stored in `ad_prompt_templates`. Used by the template library UI. */
 export type AdPromptTemplate = {
   id: string;
   client_id: string;
@@ -257,36 +102,4 @@ export type AdPromptTemplate = {
   created_by: string;
   created_at: string;
   updated_at: string;
-};
-
-export type AdGenerationBatch = {
-  id: string;
-  client_id: string;
-  status: BatchStatus;
-  config: AdGenerationConfig;
-  total_count: number;
-  completed_count: number;
-  failed_count: number;
-  brand_context_source: string;
-  ephemeral_url: string | null;
-  created_by: string;
-  created_at: string;
-  completed_at: string | null;
-};
-
-export type AdCreative = {
-  id: string;
-  batch_id: string;
-  client_id: string;
-  template_id: string | null;
-  template_source: 'kandy' | 'custom' | 'global';
-  image_url: string;
-  aspect_ratio: AspectRatio;
-  prompt_used: string;
-  on_screen_text: OnScreenText;
-  product_service: string;
-  offer: string;
-  is_favorite: boolean;
-  metadata: Record<string, unknown>;
-  created_at: string;
 };

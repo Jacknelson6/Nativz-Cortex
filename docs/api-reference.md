@@ -2,7 +2,7 @@
 
 > **For AI agents:** This document describes every API endpoint that exists on disk. Auto-generated from `app/api/**/route.ts` by `scripts/generate-api-docs.ts` — do not edit by hand. Re-run the script after adding/removing routes or tweaking a JSDoc block.
 
-**696 endpoints across 33 sections.**
+**679 endpoints across 33 sections.**
 
 ## Authentication
 
@@ -579,237 +579,6 @@ id - Client UUID
 ```
 {Client} Updated client record
 ```
-
-### `DELETE /api/clients/:id/ad-creatives`
-
-Delete an ad creative and its storage file.
-
-**Auth:** Required (admin)
-
-**Body:**
-
-```
-creativeId (single) or creativeIds (1–50) (bulk)
-```
-
-**Query params:**
-
-```
-id - Client UUID
-```
-
-**Returns:**
-
-```
-{{ success: true }} or {{ success: true, deletedCount }} (bulk)
-```
-
-### `GET /api/clients/:id/ad-creatives`
-
-List ad creatives for a client with pagination and filtering.
-
-**Auth:** Required
-
-**Query params:**
-
-```
-id - Client UUID
-is_favorite - Filter favorites
-aspect_ratio - Filter by aspect ratio
-batch_id - Filter by batch
-page - Page number (default 1)
-limit - Items per page (default 24, max 100)
-```
-
-**Returns:**
-
-```
-{{ creatives: AdCreative[], total: number, page: number, limit: number }}
-```
-
-### `PATCH /api/clients/:id/ad-creatives`
-
-Toggle favorite status on an ad creative.
-
-**Auth:** Required
-
-**Body:**
-
-```
-creativeId + is_favorite (single) or creativeIds (1–50) + is_favorite (bulk)
-```
-
-**Query params:**
-
-```
-id - Client UUID
-```
-
-**Returns:**
-
-```
-{{ creative }} (single) or {{ updatedCount, ids }} (bulk)
-```
-
-### `GET /api/clients/:id/ad-creatives/batches`
-
-List generation batches for a client. Supports ?status= filter.
-
-### `GET /api/clients/:id/ad-creatives/batches/:batchId`
-
-Get batch status, progress counts, and list of completed creatives.
-
-**Auth:** Required
-
-**Query params:**
-
-```
-id - Client UUID
-batchId - Batch UUID
-```
-
-**Returns:**
-
-```
-{{ batch: AdGenerationBatch, creatives: AdCreative[] }}
-```
-
-### `POST /api/clients/:id/ad-creatives/batches/:batchId/cancel`
-
-Stops scheduling further images for this batch. Work already running (e.g. Gemini) may still finish.
-
-**Auth:** Required (signed-in admin / app user)
-
-### `POST /api/clients/:id/ad-creatives/generate`
-
-Empty string / bad URL from scrapers → null so Zod does not reject the batch. */ const nullableImageUrl = z.preprocess((val) => { if (val === '' || val === undefined) return null; if (typeof val !== 'string') return null; try { const u = new URL(val); if (u.protocol !== 'http:' && u.protocol !== 'https:') return null; return val; } catch { return null; } }, z.union([z.string().url(), z.null()])); const productInfoSchema = z.object({ product: z.object({ name: z.string().min(1).max(200), imageUrl: nullableImageUrl, /** Scraped catalog copy is often longer than 500 chars */ description: z.string().max(8000), }), offer: z.string().max(300), cta: z.string().max(100), }); const templateVariationSchema = z.object({ templateId: z.string().uuid(), count: z.number().int().min(1).max(200), }); const globalTemplateVariationSchema = z.object({ slug: z.string().min(1).max(80), count: z.number().int().min(1).max(200), }); /** UUID client template or global Nano Banana slug */ const creativeOverrideSchema = z.object({ templateId: z.string().min(1).max(80), variationIndex: z.number().int().min(0).max(199), headline: z.string().min(1).max(200), subheadline: z.string().min(1).max(300), cta: z.string().min(1).max(100), styleNotes: z.string().max(4000).optional(), }); const optionalBrandUrl = z.preprocess((val) => { if (val === '' || val === undefined || val === null) return undefined; return val; }, z.string().url().optional()); const bodySchema = z.object({ templateVariations: z.array(templateVariationSchema).min(1).optional(), templateIds: z.array(z.string().uuid()).optional(), numVariations: z.number().int().min(1).max(20).optional(), globalTemplateVariations: z.array(globalTemplateVariationSchema).min(1).optional(), globalTemplateSlotOrder: z.array(z.string().min(1).max(80)).max(200).optional(), rotateProductImageUrls: z.boolean().optional(), productImageUrls: z.array(z.string().url()).max(12).optional(), productService: z.string().min(1, 'Product or service description is required').max(500), offer: z.string().max(300).optional(), aspectRatio: z.enum(['1:1', '9:16', '4:5']), onScreenTextMode: z.enum(['ai_generate', 'manual']), batchCta: z.string().min(1).max(30).optional(), manualText: manualTextSchema.optional(), products: z.array(productInfoSchema).max(AD_GENERATE_MAX_PRODUCTS).optional(), brandUrl: optionalBrandUrl, placeholderConfig: z.object({ brandColors: z.array(z.string()).optional(), skeletonOnly: z.boolean().optional(), templateThumbnails: z.array(z.object({ templateId: z.string(), imageUrl: z.string(), variationIndex: z.number(), })).optional(), }).optional(), creativeOverrides: z.array(creativeOverrideSchema).max(200).optional(), styleDirectionGlobal: z.string().max(4000).optional(), brandLayoutMode: z.enum(BRAND_LAYOUT_MODES).optional(), creativeBrief: z.string().max(4000).optional(), /** Code-composited typography + logo; Gemini generates a clean plate only. */ useCompositor: z.boolean().optional(), }).refine( (data) => data.onScreenTextMode !== 'manual' || data.manualText !== undefined, { message: 'manualText is required when onScreenTextMode is "manual"', path: ['manualText'] }, ).refine( (data) => { const hasGlobal = (data.globalTemplateVariations?.length ?? 0) > 0; const hasClient = (data.templateVariations?.length ?? 0) > 0 || (data.templateIds?.length ?? 0) > 0; return (hasGlobal && !hasClient) || (!hasGlobal && hasClient); }, { message: 'Use either globalTemplateVariations (Nano Banana) or client templateVariations/templateIds, not both', path: ['globalTemplateVariations'], }, ).refine( (data) => { const co = data.creativeOverrides; if (!co?.length) return true; const hasGlobal = (data.globalTemplateVariations?.length ?? 0) > 0; const resolved = hasGlobal ? (data.globalTemplateVariations ?? []) : (data.templateVariations ?? (data.templateIds ?? []).map((id) => ({ templateId: id, count: data.numVariations ?? 2, }))); const expected = hasGlobal && data.globalTemplateSlotOrder?.length ? data.globalTemplateSlotOrder.length : resolved.reduce((sum, tv) => sum + tv.count, 0); return co.length === expected; }, { message: 'creativeOverrides must include exactly one entry per template variation', path: ['creativeOverrides'] }, ).refine( (data) => { const so = data.globalTemplateSlotOrder; const gtv = data.globalTemplateVariations; if (!so?.length) return true; if (!gtv?.length) return false; return globalSlotOrderMatchesVariations(so, gtv); }, { message: 'globalTemplateSlotOrder slug counts must match globalTemplateVariations', path: ['globalTemplateSlotOrder'], }, ); /** POST /api/clients/[id]/ad-creatives/generate
-
-### `POST /api/clients/:id/ad-creatives/preview-prompts`
-
-Same field as POST generate — merged into prompts so preview matches batch output. */ styleDirectionGlobal: z.string().max(4000).optional(), aspectRatio: z.enum(['1:1', '9:16', '4:5']), onScreenTextMode: z.enum(['ai_generate', 'manual']), manualText: z.object({ headline: z.string(), subheadline: z.string(), cta: z.string(), }).optional(), brandLayoutMode: z.enum(BRAND_LAYOUT_MODES).optional(), creativeBrief: z.string().max(4000).optional(), /** Same as POST generate — clean-canvas + Nano blank slots when true. */ useCompositor: z.boolean().optional(), }).refine( (data) => { const hasGlobal = (data.globalTemplateVariations?.length ?? 0) > 0; const hasClient = (data.templateVariations?.length ?? 0) > 0; return (hasGlobal && !hasClient) || (!hasGlobal && hasClient); }, { message: 'Use either globalTemplateVariations or templateVariations', path: ['globalTemplateVariations'], }, ).refine( (data) => { const so = data.globalTemplateSlotOrder; const gtv = data.globalTemplateVariations; if (!so?.length) return true; if (!gtv?.length) return false; return globalSlotOrderMatchesVariations(so, gtv); }, { message: 'globalTemplateSlotOrder slug counts must match globalTemplateVariations', path: ['globalTemplateSlotOrder'], }, ); export interface PromptPreview { templateId: string; templateName: string; templateImageUrl: string; variationIndex: number; copy: { headline: string; subheadline: string; cta: string }; prompt: string; styleNotes: string; } /** POST /api/clients/[id]/ad-creatives/preview-prompts Generate prompts and copy without actually generating images. Returns an array of prompt previews that can be edited before generation.
-
-### `GET /api/clients/:id/ad-creatives/templates`
-
-Ad wizard loads client library in one request (see ad-wizard.tsx limit=500). */ limit: z.coerce.number().int().min(1).max(2000).default(24), }); /** GET /api/clients/[id]/ad-creatives/templates List custom ad prompt templates for a client.
-
-**Auth:** Required
-
-**Query params:**
-
-```
-id - Client UUID
-page - Page number (default 1)
-limit - Items per page (default 24, max 2000)
-```
-
-**Returns:**
-
-```
-{{ templates: AdPromptTemplate[], total: number, page: number, limit: number }}
-```
-
-### `POST /api/clients/:id/ad-creatives/templates`
-
-Upload a winning ad image and extract its prompt schema via AI vision. The image is stored in Supabase Storage, then extractAdPrompt() analyzes it in the background. The template record is created immediately with status 'extracting', and updated once extraction completes.
-
-**Auth:** Required (admin)
-
-**Body:**
-
-```
-file - Image file (multipart/form-data; JPEG | PNG | WebP; max 10 MB)
-name - Template name
-ad_category - Ad category
-tags - Comma-separated tag list (optional)
-```
-
-**Query params:**
-
-```
-id - Client UUID
-```
-
-**Returns:**
-
-```
-{{ templateId: string, status: 'extracting' }}
-```
-
-### `DELETE /api/clients/:id/ad-creatives/templates/:templateId`
-
-Delete a single ad prompt template (the image-to-JSON extraction). Removes the storage object if it's in the `ad-creatives` bucket, then the row. Storage removal is best-effort — we still want the row gone even if the file was already pruned.
-
-### `POST /api/clients/:id/ad-creatives/templates/bulk`
-
-Bulk upload multiple ad images for prompt extraction. Each image is uploaded to Supabase Storage and an ad_prompt_templates record is created immediately. Gemini Vision extraction runs in the background via after().
-
-**Auth:** Required (admin)
-
-**Body:**
-
-```
-files - Multiple image files (multipart/form-data; JPEG | PNG | WebP; max 10 MB each; max 50 files)
-ad_category - Ad category for all templates
-```
-
-**Query params:**
-
-```
-id - Client UUID
-```
-
-**Returns:**
-
-```
-{{ templates: Array<{ id: string, name: string, status: string }>, failed: Array<{ name: string, error: string }> }}
-```
-
-### `POST /api/clients/:id/ad-creatives/templates/scrape`
-
-Extract image URLs from HTML content. Looks for <img> src attributes and <source> srcset attributes. Filters to images likely to be ads based on size attributes and URL patterns. / function extractImageUrls(html: string, baseUrl: string): string[] { const urls = new Set<string>(); // Match <img> tags with src attribute const imgRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi; let match; while ((match = imgRegex.exec(html)) !== null) { const src = match[1]; const fullTag = match[0]; // Check for size attributes — skip tiny images (icons, spacers) const widthMatch = fullTag.match(/width=["']?(\d+)/i); const heightMatch = fullTag.match(/height=["']?(\d+)/i); const width = widthMatch ? parseInt(widthMatch[1], 10) : null; const height = heightMatch ? parseInt(heightMatch[1], 10) : null; // Skip images with explicit small dimensions if ((width !== null && width < 200) || (height !== null && height < 200)) { continue; } // Skip common non-ad patterns if (isLikelyNonAd(src)) continue; urls.add(src); } // Match <source> tags (picture element) const sourceRegex = /<source[^>]+srcset=["']([^"',\s]+)/gi; while ((match = sourceRegex.exec(html)) !== null) { const src = match[1]; if (!isLikelyNonAd(src)) { urls.add(src); } } // Match og:image and twitter:image meta tags const metaRegex = /<meta[^>]+(?:property|name)=["'](?:og:image|twitter:image)["'][^>]+content=["']([^"']+)["']/gi; while ((match = metaRegex.exec(html)) !== null) { urls.add(match[1]); } // Resolve relative URLs const resolved: string[] = []; for (const url of urls) { try { const absolute = new URL(url, baseUrl).href; // Only keep http/https URLs with image-like extensions or CDN patterns if (absolute.startsWith('http') && isLikelyImage(absolute)) { resolved.push(absolute); } } catch { // Skip malformed URLs } } return resolved.slice(0, MAX_IMAGES); } function isLikelyNonAd(src: string): boolean { const lower = src.toLowerCase(); return ( lower.includes('favicon') || lower.includes('logo') || lower.includes('icon') || lower.includes('avatar') || lower.includes('emoji') || lower.includes('pixel') || lower.includes('tracking') || lower.includes('spacer') || lower.includes('1x1') || lower.endsWith('.svg') || lower.endsWith('.gif') || lower.includes('data:image') ); } function isLikelyImage(url: string): boolean { const lower = url.toLowerCase(); return ( lower.includes('.jpg') || lower.includes('.jpeg') || lower.includes('.png') || lower.includes('.webp') || lower.includes('image') || lower.includes('photo') || lower.includes('creative') || lower.includes('media') || lower.includes('cdn') || lower.includes('scontent') // Facebook CDN ); } /** POST /api/clients/[id]/ad-creatives/templates/scrape Scrape ad images from a URL. Fetches the page HTML, extracts image URLs, downloads qualifying images, uploads to storage, and creates template records.
-
-**Auth:** Required (admin)
-
-**Body:**
-
-```
-url - URL to scrape
-ad_category - Ad category for all imported templates
-```
-
-**Query params:**
-
-```
-id - Client UUID
-```
-
-**Returns:**
-
-```
-{{ found: number, imported: number, templates: Array<{ id: string, name: string }>, errors: string[] }}
-```
-
-### `POST /api/clients/:id/ad-creatives/wizard-product-image`
-
-Upload a product reference image for the ad generation wizard (e.g. when scrape has no image). Stores in `brand-assets` under `{clientId}/ad-wizard-products/`.
-
-**Auth:** Required (admin)
-
-**Body:**
-
-```
-multipart/form-data — field `file` (JPEG | PNG | WebP; max 5 MB)
-```
-
-**Returns:**
-
-```
-{{ url: string }} Public URL
-```
-
-### `GET /api/clients/:id/ad-generation-settings`
-
-### `PATCH /api/clients/:id/ad-generation-settings`
 
 ### `GET /api/clients/:id/analytics/summary`
 
@@ -1447,6 +1216,10 @@ id - Client UUID (client must have website_url set)
 ```
 {{ message: string, count: number }}
 ```
+
+### `GET /api/clients/:id/monthly-gift-ads/settings`
+
+### `PATCH /api/clients/:id/monthly-gift-ads/settings`
 
 ### `GET /api/clients/:id/pillars`
 
@@ -2697,7 +2470,7 @@ _Shoot scheduling, planning, Google Calendar integration._
 
 ### `GET /api/calendar/events`
 
-Fetches Google Calendar events from multiple connections in parallel. Query params: connection_ids — comma-separated calendar_connections.id values start — ISO datetime (range start) end — ISO datetime (range end) Returns: { calendars: { [connectionId]: { name, color, connection_type, events[] } } } Client connections (connection_type='client') have event titles replaced with "Busy" to preserve privacy.
+Returns Google Calendar events for each scheduling_people row in the given window. Events are fetched via service-account / domain-wide delegation; each person's multiple workspace emails are unioned and deduped before being returned. Response: { calendars: { [personId]: { name, color, connection_type: 'team', events[], errors? } } }
 
 ### `GET /api/calendar/gaps`
 
@@ -2718,6 +2491,22 @@ contact_id - Contact UUID to generate the invite for (required)
 ```
 {{ token: string, url: string }} Invite token and full shareable URL
 ```
+
+### `GET /api/calendar/people`
+
+Returns the configurable list of stakeholders for team availability + the unified calendar overlay. Each row is one logical person; their multiple workspace emails (e.g. jake@nativz.io and jake@andersoncollaborative.com) are returned as a string[]. Admins only.
+
+### `POST /api/calendar/people`
+
+Create a new person + their email aliases. Admins only. Emails are lowercased and validated against the authorized workspace domains client- side too, but final domain check happens at calendar fetch time.
+
+### `DELETE /api/calendar/people/:id`
+
+Soft-delete: flips is_active=false instead of removing the row, so any historical scheduling links (event members, etc.) keep their FK target.
+
+### `PATCH /api/calendar/people/:id`
+
+Update one person's attributes and optionally replace their email aliases. Email replacement is atomic: we delete the existing rows then insert the new set inside a best-effort sequence — if the insert fails we re-insert the old list so we don't strand a person with no emails.
 
 ### `POST /api/calendar/sync`
 
@@ -2939,10 +2728,6 @@ ConceptSpec — see lib/ad-creatives-v2/types.ts
 PNG binary (image/png)
 ```
 
-### `PATCH /api/ad-creatives/brand-context`
-
-Scraped site copy can exceed 2k; cap at a safe size for JSONB */ description: z.string().max(50000), }), }); /** PATCH /api/ad-creatives/brand-context Save edited brand context back to the client's knowledge entry. Updates existing brand_profile with ad_creative_context, or creates one.
-
 ### `POST /api/ad-creatives/command`
 
 Runs a slash command against a client's concept set. Returns a summary string the UI can render as the assistant turn, the updated concepts (so the gallery can react), and the persisted messages.
@@ -2955,59 +2740,15 @@ Batched comment fetch for the admin gallery. Pass `?conceptIds=a,b,c` (comma-sep
 
 ### `PATCH /api/ad-creatives/concepts/:id`
 
-### `GET /api/ad-creatives/concepts/:id/comments`
-
-List comments on a concept. Admin-scoped — the shared page joins its own comment read into the concept payload.
-
-### `POST /api/ad-creatives/concepts/:id/comments`
-
-Admin leaves an internal comment on a concept (a revision note to self, "rendered for client review", etc.). Separate from the public share-link comment route.
-
 ### `POST /api/ad-creatives/concepts/:id/render`
 
-Render the image for an ad concept. Takes the concept's stored `image_prompt`, fires Gemini image gen, uploads the result to the existing `ad-creatives` bucket, and writes the storage path back to the concept row. Overwrites any prior render — admins can re-render freely; there's no "history" of prior versions yet (could add if we need it).
-
-### `GET /api/ad-creatives/crawl-brand`
-
-Poll until Brand DNA (draft/active) is available, or surface job failure.
-
-### `POST /api/ad-creatives/crawl-brand`
-
-Prefer Brand DNA (draft/active) for ad wizard — same source as Brand DNA cards. / async function loadBrandDnaWizardContext(admin: AdminClient, clientId: string) { const { data: clientRow } = await admin .from('clients') .select('name, website_url, brand_dna_status') .eq('id', clientId) .single(); const status = clientRow?.brand_dna_status; if (status !== 'draft' && status !== 'active') return null; if (!clientRow?.name) return null; const { data: guideline } = await admin .from('client_knowledge_entries') .select('metadata') .eq('client_id', clientId) .eq('type', 'brand_guideline') .is('metadata->superseded_by', null) .order('created_at', { ascending: false }) .limit(1) .maybeSingle(); if (!guideline?.metadata) return null; const meta = guideline.metadata as unknown as BrandGuidelineMetadata; return buildAdWizardContextFromBrandDNA(clientRow.name, clientRow.website_url, meta); } function hostnameLabel(url: string) { try { return new URL(url).hostname.replace(/^www\./i, ''); } catch { return 'Website'; } } /** POST /api/ad-creatives/crawl-brand Uses Brand DNA (draft/active) when present. Otherwise kicks off the same full Brand DNA pipeline as /api/clients/[id]/brand-dna/generate, returns quick homepage scrape immediately, and includes clientId for polling (including roster-hidden URL-only clients).
-
 ### `POST /api/ad-creatives/generate`
-
-Generate N ad concepts grounded in the client's brand DNA + asset library + extracted templates. Output is text-first (headline, body, visual description, source grounding, image prompt); per-card image generation is a follow-up action so admins can cheaply triage 30+ concepts before spending image-gen budget.
-
-### `GET /api/ad-creatives/global-templates`
-
-Nano Banana catalog (admin picker). Authenticated users only.
 
 ### `GET /api/ad-creatives/messages`
 
 Read the persisted chat history for a client's Ad Generator. The UI fetches this on mount so refreshing the page doesn't lose the current session's turns. Limit capped at 200 — the chat is meant to be a recent-turns scroll, not a full audit log. Batches remain queryable via /api/ad-creatives/concepts.
 
-### `POST /api/ad-creatives/scrape-brand`
-
-Lightweight scrape of a website to extract brand info and products for the ad generation wizard.
-
-**Auth:** Required
-
-**Body:**
-
-```
-url - Website URL to scrape
-```
-
-**Returns:**
-
-```
-{{ brand, products }}
-```
-
-### `POST /api/ad-creatives/scrape-product`
-
-Scrape a single page for product data only (no brand extraction).
+### `POST /api/ad-creatives/reference-ads/sync`
 
 ### `GET /api/ad-creatives/share-links`
 
@@ -4194,7 +3935,7 @@ GET — fetch a single artifact by ID
 
 ### `POST /api/nerd/chat`
 
-Content type — pdf_text for extracted PDF content, image for base64, text for plain text files */ type: z.enum(['pdf_text', 'image', 'text']), /** Original filename */ name: z.string().max(256), /** Extracted text content (for pdf_text/text) or base64 data URL (for image) */ content: z.string().max(500_000), }); const chatSchema = z.object({ messages: z .array(z.object({ role: z.enum(['user', 'assistant', 'tool']), content: z.string(), tool_call_id: z.string().optional(), })) .min(1), /** Parsed @mentions from the latest user message */ mentions: z.array(mentionSchema).optional(), /** If a pending action was confirmed or cancelled */ actionConfirmation: z.object({ toolName: z.string(), arguments: z.record(z.string(), z.unknown()), confirmed: z.boolean(), }).optional(), /** Conversation ID for persistence — if omitted, creates a new conversation */ conversationId: z.string().uuid().optional(), /** Portal mode — set by portal client, scopes to the mentioned client only */ portalMode: z.boolean().optional(), /** Optional frontend context for first message (e.g. opened from Strategy Lab) */ sessionHint: z.string().max(500).optional(), /** IDs of topic searches to attach as context for the LLM */ searchContext: z.array(z.string().uuid()).max(5).optional(), /** Mixed-type analyses attached to this chat session. Unlike `searchContext` (which dumps full topic-search blocks into the system prompt), `scopeContext` injects only a compact index of what's available and lets the agent pull detail on demand via tools like `get_audit_summary`, `get_tiktok_shop_search_summary`, `get_topic_search_summary`. This is the progressive-context primitive the Strategy Lab + per-analysis drawer use. Portal users currently have no drawer / Strategy Lab surface that populates this field, so the server ignores it for them as defense-in-depth. / scopeContext: z .array( z.object({ type: z.enum(['topic_search', 'audit', 'tiktok_shop_search', 'social_analytics']), id: z.string().uuid(), }), ) .max(10) .optional(), /** Explicit Nerd surface mode. When 'strategy-lab' (or the legacy alias 'content-lab'), the chat route appends the Strategy Lab scripting addendum (behavioural rules + preloaded scripting skills from nerd_skills) to the base system prompt. Used by components/content-lab/content-lab-nerd-chat.tsx and the portal. / mode: z.enum(['content-lab', 'strategy-lab']).optional(), /** File attachments — client-side extracted content (PDF text, image base64, plain text) */ attachments: z.array(attachmentSchema).max(10).optional(), }); // --------------------------------------------------------------------------- // System prompt // --------------------------------------------------------------------------- /** Admin-mode system prompt. Brand-aware so an AC-domain user is told they live inside "Anderson Collaborative Cortex" — never leaks the other agency's name if a viewer asks "what agency am I using?". / function buildAdminSystemPrompt(brandName: string): string { return `You are "The Nerd" — the in-house social media marketing strategist for ${brandName}, a creative agency. You live inside ${brandName} Cortex, the agency's internal platform. You are THE expert on: - Social media marketing strategy (Instagram, TikTok, YouTube, Facebook) - Short-form video content (hooks, pacing, trends, virality) - Content pillar frameworks and editorial calendars - Platform-specific best practices and algorithm behavior - Audience growth, engagement optimization, and paid media amplification - Brand voice development and content positioning You have full access to every client in the ${brandName} portfolio and can take actions on their behalf using tools. Each client has a **knowledge vault** — an Obsidian-style knowledge base with structured entries (brand profiles, web pages, meeting notes, documents, ideas). The vault is semantically indexed — use **search_knowledge_base** with a natural language query to find the most relevant entries. Do NOT try to load all entries at once; always search first, then drill deeper if needed. You can also save useful information using create_knowledge_note, and import meeting transcripts using import_meeting_notes. KNOWLEDGE SEARCH PATTERN (QMD): 1. **Query** — use search_knowledge_base with a descriptive query to find relevant context 2. **Match** — review the returned entries and identify the most relevant ones 3. **Decide** — answer using the matched context, or search again with a refined query if needed Never load all knowledge entries into your response. The vault may contain hundreds of entries across meeting notes, brand profiles, web pages, and documents. Semantic search will find what you need. TOOL USAGE RULES: - You have tools to manage tasks, schedule posts, view analytics, manage clients, shoots, moodboards, knowledge vaults, and more. - Use tools proactively when the user's request implies an action (e.g., "create a task" → use create_task tool). - When referring to clients or team members, users use @mentions. The system resolves these to IDs for you. - For READ tools (listing, viewing): execute immediately and summarize results naturally. - For WRITE tools (creating, updating): describe what you'll do, then call the tool. The frontend will show a confirmation card. - For DESTRUCTIVE tools: tell the user to do it manually via the UI and provide a link. - After a tool call completes, summarize the result in natural language. Don't just dump JSON. - If a tool fails, explain the error clearly and suggest alternatives. - You can call multiple tools in sequence if the user's request requires it. - For Strategy Lab / analysis-board questions, prefer the dedicated board + video tools before guessing from limited context. VIDEO ANALYSIS IN CHAT (same capabilities as the former analysis UI, without sidebar navigation): - When the user pastes a **video URL** (TikTok, YouTube, Instagram Reel, or direct .mp4/.webm) or wants transcript / hook / rescript work, use **add_video_url_for_analysis** (optional client_id when a client is @mentioned), then **run_hook_analysis_for_video** after the transcript exists, and **generate_video_rescript** when they want a brand adaptation of the script. Use **transcribe_analysis_item** only to retry or refresh transcription. - If they **only upload or share a video without instructions**, guide them conversationally through the same steps the product UI would: confirm you have the video, offer transcript first, then ask in natural language whether they want hook analysis (e.g. "Want me to break down the hook and score it?" not button labels like "Generate hooks"). - Never present fake UI buttons; use short questions or bullet options in prose. - For affiliate questions, use affiliate tools before giving recommendations from memory. BEHAVIOR RULES: - Be direct, opinionated, and actionable. You're a senior strategist, not a generic chatbot. - Lead with the insight, not the preamble. Skip "Great question!" / "Absolutely!" / "Here's what I think" — jump straight to the answer. - Reference specific client data when answering questions about brands. ALWAYS search the client's knowledge vault (search_knowledge_base) before giving brand-specific advice — don't rely on memory or assumptions about their positioning. - Use markdown formatting: headers, bullets, bold for emphasis. Keep it scannable. - When you don't have data for something, say so — don't fabricate metrics. - If analytics data is provided, analyze it with strategic insight, not just number recitation. Lead with the "so what" — what should change based on these numbers. - When using @mentions, match the names the user provided to the resolved IDs in the system context. - Be specific. "Post more Reels" is useless. "Post 4 Reels/week using hook type X because your completion rate on Reels is 2x your carousel rate" is useful. Ground recommendations in data or the client's vault. - Every response the user asks for should be structured as a shareable deliverable — clear title, scannable sections, actionable next steps. The user can export any message as a PDF, so write as if your output will be printed and handed to a client. - End outputs with the final deliverable. Never append closing offers like "I can also create..." or "If you want, I can..." — deliver the complete request without upselling additional work. - When the user asks for content pillars, each pillar gets ONE sentence of justification (≤15 words), labeled "Why:" or "Justification:". No multi-paragraph explanations. - When posting cadence is requested, specify it per-pillar in a table or list. Don't bury cadence in aggregate weekly totals. - When diagnosing performance, cap root causes at 4 and prioritized tests at 3–4. Follow the diagnosis with a one-sentence severity assessment (e.g., "This is a hook problem, not a topic problem") so the user knows what to focus on first. VISUALS AND REPORTS (markdown): - When a diagram, flowchart, Gantt, or process map would help more than text, use a fenced **mermaid** code block (\`\`\`mermaid ... \`\`\`). - For compact HTML/CSS/SVG layouts (side-by-side comparisons, SVG bar charts, styled summaries), use a fenced **html** code block (\`\`\`html ... \`\`\`). Keep markup self-contained; avoid relying on external scripts — the UI renders sanitized HTML in a sandboxed frame. - For long-form deliverables, use clear headings and bullets; users can export the assistant reply as a PDF or print from the chat. - Prefer visuals over walls of text. A mermaid flowchart of a content strategy is more useful than a paragraph describing it. An html comparison table is more useful than listing pros and cons in paragraphs. SHORT-FORM VIDEO SCRIPT FORMAT (strict — when user asks for a TikTok / Reel / Shorts script): - Open IMMEDIATELY with the quoted hook on line 1. No preamble, no style notes, no metadata before the hook. - Format the body as numbered beats: \`1.\`, \`2.\`, \`3.\`, etc. Exactly ONE sentence per beat. Never use prose paragraphs for beat-by-beat scripts. - Pattern interrupts must be embedded INSIDE the dialogue/narration itself (typically beat 4-5) — a content shift, a tonal reversal, or an unexpected statement. Never use stage directions in brackets like [RECORD SCRATCH] or [PAUSE] — this is a spoken script, not a shot list. - Each numbered beat MUST be exactly ONE complete sentence. If a beat is combining multiple ideas, split it or pick the strongest. - End with a direct CTA as the final beat — a statement or command, not a rhetorical question. For Gen Z / skeptical audiences, make it ironic or self-aware. Examples: "Sleep is the real flex." / "Choose your actual recovery arc." Avoid "Follow for more" / "Want X or Y?" - End the script cleanly after the CTA. Never append meta-commentary like "I can also make..." or "Let me know if you want..." unless the user explicitly asks. AGENCY KNOWLEDGE GRAPH: You have access to the agency knowledge graph — 9,857 nodes covering SOPs, skills, patterns, methodology, meeting notes, client profiles, and more. When asked about processes, best practices, or "how do we do X", ALWAYS search the knowledge graph first using search_agency_knowledge before answering from your own knowledge. The graph contains ${brandName}'s actual documented procedures. - Use search_agency_knowledge to find relevant nodes by semantic search - Use get_knowledge_node to read the full content of a specific node - Use list_knowledge_by_kind to browse all nodes of a type (e.g. all SOPs, all skills) - Use create_agency_knowledge_note to save new knowledge from conversations`; } /** Portal-specific system prompt — scoped to a single client */ function buildPortalSystemPrompt(clientName: string, brandName: string): string { return `You are "The Nerd" — a social media marketing strategist working with ${clientName}. You live inside ${brandName} Cortex, the agency's client portal. You are THE expert on: - Social media marketing strategy (Instagram, TikTok, YouTube, Facebook) - Short-form video content (hooks, pacing, trends, virality) - Content pillar frameworks and editorial calendars - Platform-specific best practices and algorithm behavior - Audience growth, engagement optimization, and paid media amplification - Brand voice development and content positioning You are helping ${clientName} with their social media strategy. You have access to their knowledge vault and brand data. Each client has a **knowledge vault** — an Obsidian-style knowledge base with structured entries (brand profiles, web pages, meeting notes, documents, ideas). The vault is semantically indexed — use **search_knowledge_base** with a natural language query to find the most relevant entries. Do NOT try to load all entries at once; always search first, then drill deeper if needed. KNOWLEDGE SEARCH PATTERN (QMD): 1. **Query** — use search_knowledge_base with a descriptive query to find relevant context 2. **Match** — review the returned entries and identify the most relevant ones 3. **Decide** — answer using the matched context, or search again with a refined query if needed Never load all knowledge entries into your response. The vault may contain hundreds of entries. Semantic search will find what you need. TOOL USAGE RULES: - You have read-only tools to search knowledge and view client information. - Use tools proactively when the user's request implies a lookup (e.g., "what's our brand voice" → use search_knowledge_base). - For READ tools (listing, viewing): execute immediately and summarize results naturally. - After a tool call completes, summarize the result in natural language. Don't just dump JSON. - If a tool fails, explain the error clearly and suggest alternatives. BEHAVIOR RULES: - Be direct, opinionated, and actionable. You're a senior strategist, not a generic chatbot. - Reference specific client data when answering questions about the brand. - Use markdown formatting: headers, bullets, bold for emphasis. Keep it scannable. - When you don't have data for something, say so — don't fabricate metrics. - If analytics data is provided, analyze it with strategic insight, not just number recitation.`; } /** Tools that portal (viewer) users are allowed to use. ⚠️ Adding a tool here WITHOUT adding a caller-org check inside its handler is a cross-org data leak. The admin Supabase client bypasses RLS, so every handler that accepts a client_id / entry_id / search_id from the caller must look up the caller's organization_id and reject when the resource belongs to another org. Current gates (keep this block in sync with the handlers): - search_knowledge_base → requireClientAccess in knowledge.ts - query_client_knowledge → requireClientAccess in knowledge.ts - get_knowledge_entry → requireClientAccess on entry.client_id - get_client_details → inline role/org check in clients.ts - generate_video_ideas → requireClientAccess in knowledge.ts - extract_topic_signals → filter search_ids by caller org - create_topic_plan → inline role/org check before insert / const PORTAL_ALLOWED_TOOLS = new Set([ 'search_knowledge_base', 'query_client_knowledge', 'get_knowledge_entry', 'get_client_details', 'generate_video_ideas', 'extract_topic_signals', 'create_topic_plan', // Portal drawer + Strategy Lab — portal users can summarize their own // topic searches (ownership enforced at scopeContext filter + already in // get_search_results by RLS). `get_topic_search_summary` is the compact // markdown variant the drawer leans on. All "spy" tools (audit / TT Shop // summaries, live market lookups) stay off this list — admin-only. 'get_topic_search_summary', 'get_search_results', ]); // --------------------------------------------------------------------------- // Context builders // --------------------------------------------------------------------------- interface ClientRow { id: string; name: string; slug: string; industry: string | null; target_audience: string | null; brand_voice: string | null; topic_keywords: string[] | null; website_url: string | null; agency: string | null; services: string[] | null; preferences: Record<string, unknown> | null; health_score: string | null; logo_url: string | null; } interface SocialProfileRow { id: string; client_id: string; platform: string; username: string; } interface StrategyRow { client_id: string; executive_summary: string | null; content_pillars: unknown; } function buildClientSummary(c: ClientRow, profiles: SocialProfileRow[], strategy: StrategyRow | null): string { const parts: string[] = []; parts.push(`### ${c.name} (slug: ${c.slug}, id: ${c.id})`); if (c.agency) parts.push(`Agency: ${c.agency}`); if (c.industry) parts.push(`Industry: ${c.industry}`); if (c.services?.length) parts.push(`Services: ${c.services.join(', ')}`); if (c.target_audience) parts.push(`Target Audience: ${c.target_audience}`); if (c.brand_voice) parts.push(`Brand Voice: ${c.brand_voice}`); const prefs = c.preferences; if (prefs) { if ((prefs.tone_keywords as string[])?.length) parts.push(`Tone: ${(prefs.tone_keywords as string[]).join(', ')}`); if ((prefs.topics_lean_into as string[])?.length) parts.push(`Lean Into: ${(prefs.topics_lean_into as string[]).join(', ')}`); if (prefs.posting_frequency) parts.push(`Posting Frequency: ${prefs.posting_frequency}`); } if (profiles.length > 0) { parts.push(`Social Accounts:`); for (const p of profiles) { parts.push(` - ${p.platform}: @${p.username} (profile_id: ${p.id})`); } } if (strategy?.executive_summary) { parts.push(`Strategy: ${strategy.executive_summary}`); } return parts.join('\n'); } /** Notify all super_admins when a guardrail fires. Non-blocking. */ async function notifySuperAdminsGuardrail( adminClient: ReturnType<typeof createAdminClient>, ctx: { userId: string; userEmail: string; message: string; ruleName: string }, ) { try { const { data: superAdmins } = await adminClient .from('users') .select('id') .eq('is_super_admin', true); if (!superAdmins || superAdmins.length === 0) return; // Don't notify the super_admin about their own messages const recipients = superAdmins.filter((sa) => sa.id !== ctx.userId); if (recipients.length === 0) return; const truncatedMsg = ctx.message.length > 120 ? ctx.message.slice(0, 120) + '...' : ctx.message; const notifications = recipients.map((sa) => ({ recipient_user_id: sa.id, type: 'guardrail_triggered', title: `Guardrail triggered: ${ctx.ruleName}`, body: `${ctx.userEmail} asked: "${truncatedMsg}"`, link_path: '/admin/nerd/settings', is_read: false, })); await adminClient.from('notifications').insert(notifications); } catch (err) { console.error('[guardrail-notify] Failed to notify super_admins:', err); } } async function buildKnowledgeSummary(clientId: string): Promise<string> { try { const { getKnowledgeEntries, getBrandProfile } = await import('@/lib/knowledge/queries'); const entries = await getKnowledgeEntries(clientId); if (entries.length === 0) return ''; const parts: string[] = ['Knowledge Base:']; const counts: Record<string, number> = {}; for (const e of entries) { counts[e.type] = (counts[e.type] ?? 0) + 1; } parts.push(` Entries: ${Object.entries(counts).map(([t, c]) => `${c} ${t}(s)`).join(', ')}`); // Full brand profile const brandProfile = await getBrandProfile(clientId); if (brandProfile) { parts.push(` Brand Profile:\n${brandProfile.content.substring(0, 1500)}`); } // Structured entity summaries from knowledge entries const entitySummary: string[] = []; const people = new Set<string>(); const products = new Set<string>(); const locations = new Set<string>(); for (const entry of entries) { const meta = entry.metadata as Record<string, unknown> | null; const entities = meta?.entities as { people?: { name: string; role?: string }[]; products?: { name: string; description?: string }[]; locations?: { address: string }[]; } | undefined; if (!entities) continue; for (const p of entities.people ?? []) people.add(p.role ? `${p.name} (${p.role})` : p.name); for (const p of entities.products ?? []) products.add(p.name); for (const l of entities.locations ?? []) locations.add(l.address); } if (people.size > 0) entitySummary.push(` Key People: ${[...people].join(', ')}`); if (products.size > 0) entitySummary.push(` Products/Services: ${[...products].join(', ')}`); if (locations.size > 0) entitySummary.push(` Locations: ${[...locations].join(', ')}`); if (entitySummary.length > 0) parts.push(...entitySummary); // Meeting notes summaries (last 5) const meetings = entries .filter((e) => e.type === 'meeting_note') .slice(0, 5); if (meetings.length > 0) { parts.push(' Recent Meetings:'); for (const m of meetings) { const summary = m.content.substring(0, 200); parts.push(` - ${m.title}: ${summary}...`); } } return parts.join('\n'); } catch (err) { console.error(`buildKnowledgeSummary failed for client ${clientId}:`, err instanceof Error ? err.message : err); return ''; } } // --------------------------------------------------------------------------- // Handler // --------------------------------------------------------------------------- /** POST /api/nerd/chat Streaming AI chat endpoint for "The Nerd" — an in-house social media strategist AI. Loads the full client portfolio and team context, then streams a response from Claude via OpenRouter. Supports tool use with up to 5 sequential tool calls per request. Write-risk tools emit action_confirmation events; destructive tools are blocked.
+Content type — pdf_text for extracted PDF content, image for base64, text for plain text files */ type: z.enum(['pdf_text', 'image', 'text']), /** Original filename */ name: z.string().max(256), /** Extracted text content (for pdf_text/text) or base64 data URL (for image) */ content: z.string().max(500_000), }); const chatSchema = z.object({ messages: z .array(z.object({ role: z.enum(['user', 'assistant', 'tool']), content: z.string(), tool_call_id: z.string().optional(), })) .min(1), /** Parsed @mentions from the latest user message */ mentions: z.array(mentionSchema).optional(), /** If a pending action was confirmed or cancelled */ actionConfirmation: z.object({ toolName: z.string(), arguments: z.record(z.string(), z.unknown()), confirmed: z.boolean(), }).optional(), /** Conversation ID for persistence — if omitted, creates a new conversation */ conversationId: z.string().uuid().optional(), /** Portal mode — set by portal client, scopes to the mentioned client only */ portalMode: z.boolean().optional(), /** Optional frontend context for first message (e.g. opened from Strategy Lab) */ sessionHint: z.string().max(500).optional(), /** IDs of topic searches to attach as context for the LLM */ searchContext: z.array(z.string().uuid()).max(5).optional(), /** Mixed-type analyses attached to this chat session. Unlike `searchContext` (which dumps full topic-search blocks into the system prompt), `scopeContext` injects only a compact index of what's available and lets the agent pull detail on demand via tools like `get_audit_summary`, `get_tiktok_shop_search_summary`, `get_topic_search_summary`. This is the progressive-context primitive the Strategy Lab + per-analysis drawer use. Portal users currently have no drawer / Strategy Lab surface that populates this field, so the server ignores it for them as defense-in-depth. / scopeContext: z .array( z.object({ type: z.enum(['topic_search', 'audit', 'tiktok_shop_search', 'social_analytics']), id: z.string().uuid(), }), ) .max(10) .optional(), /** Explicit Nerd surface mode. When 'strategy-lab' (or the legacy alias 'content-lab'), the chat route appends the Strategy Lab scripting addendum (behavioural rules + preloaded scripting skills from nerd_skills) to the base system prompt. Used by components/content-lab/content-lab-nerd-chat.tsx and the portal. / mode: z.enum(['content-lab', 'strategy-lab']).optional(), /** File attachments — client-side extracted content (PDF text, image base64, plain text) */ attachments: z.array(attachmentSchema).max(10).optional(), }); // --------------------------------------------------------------------------- // System prompt // --------------------------------------------------------------------------- /** Admin-mode system prompt. Brand-aware so an AC-domain user is told they live inside "Anderson Collaborative Cortex" — never leaks the other agency's name if a viewer asks "what agency am I using?". / function buildAdminSystemPrompt(brandName: string): string { return `You are "The Nerd" — the in-house social media marketing strategist for ${brandName}, a creative agency. You live inside ${brandName} Cortex, the agency's internal platform. You are THE expert on: - Social media marketing strategy (Instagram, TikTok, YouTube, Facebook) - Short-form video content (hooks, pacing, trends, virality) - Content pillar frameworks and editorial calendars - Platform-specific best practices and algorithm behavior - Audience growth, engagement optimization, and paid media amplification - Brand voice development and content positioning You have full access to every client in the ${brandName} portfolio and can take actions on their behalf using tools. Each client has a **knowledge vault** — an Obsidian-style knowledge base with structured entries (brand profiles, web pages, meeting notes, documents, ideas). The vault is semantically indexed — use **search_knowledge_base** with a natural language query to find the most relevant entries. Do NOT try to load all entries at once; always search first, then drill deeper if needed. You can also save useful information using create_knowledge_note, save hard client corrections using create_client_constraint, and import meeting transcripts using import_meeting_notes. KNOWLEDGE SEARCH PATTERN (QMD): 1. **Query** — use search_knowledge_base with a descriptive query to find relevant context 2. **Match** — review the returned entries and identify the most relevant ones 3. **Decide** — answer using the matched context, or search again with a refined query if needed Never load all knowledge entries into your response. The vault may contain hundreds of entries across meeting notes, brand profiles, web pages, and documents. Semantic search will find what you need. TOOL USAGE RULES: - You have tools to manage tasks, schedule posts, view analytics, manage clients, shoots, moodboards, knowledge vaults, and more. - Use tools proactively when the user's request implies an action (e.g., "create a task" → use create_task tool). - When referring to clients or team members, users use @mentions. The system resolves these to IDs for you. - For READ tools (listing, viewing): execute immediately and summarize results naturally. - For WRITE tools (creating, updating): describe what you'll do, then call the tool. The frontend will show a confirmation card. - For DESTRUCTIVE tools: tell the user to do it manually via the UI and provide a link. - After a tool call completes, summarize the result in natural language. Don't just dump JSON. - If a tool fails, explain the error clearly and suggest alternatives. - You can call multiple tools in sequence if the user's request requires it. - For Strategy Lab / analysis-board questions, prefer the dedicated board + video tools before guessing from limited context. VIDEO ANALYSIS IN CHAT (same capabilities as the former analysis UI, without sidebar navigation): - When the user pastes a **video URL** (TikTok, YouTube, Instagram Reel, or direct .mp4/.webm) or wants transcript / hook / rescript work, use **add_video_url_for_analysis** (optional client_id when a client is @mentioned), then **run_hook_analysis_for_video** after the transcript exists, and **generate_video_rescript** when they want a brand adaptation of the script. Use **transcribe_analysis_item** only to retry or refresh transcription. - If they **only upload or share a video without instructions**, guide them conversationally through the same steps the product UI would: confirm you have the video, offer transcript first, then ask in natural language whether they want hook analysis (e.g. "Want me to break down the hook and score it?" not button labels like "Generate hooks"). - Never present fake UI buttons; use short questions or bullet options in prose. - For affiliate questions, use affiliate tools before giving recommendations from memory. BEHAVIOR RULES: - Be direct, opinionated, and actionable. You're a senior strategist, not a generic chatbot. - Lead with the insight, not the preamble. Skip "Great question!" / "Absolutely!" / "Here's what I think" — jump straight to the answer. - Reference specific client data when answering questions about brands. ALWAYS search the client's knowledge vault (search_knowledge_base) before giving brand-specific advice — don't rely on memory or assumptions about their positioning. - When a client correction changes what future AI should generate ("we don't do that", "don't mention that", "we no longer offer that", "never use that CTA"), save it with create_client_constraint so future Trend Finder, topic plan, and script generation avoids it. - Use markdown formatting: headers, bullets, bold for emphasis. Keep it scannable. - When you don't have data for something, say so — don't fabricate metrics. - If analytics data is provided, analyze it with strategic insight, not just number recitation. Lead with the "so what" — what should change based on these numbers. - When using @mentions, match the names the user provided to the resolved IDs in the system context. - Be specific. "Post more Reels" is useless. "Post 4 Reels/week using hook type X because your completion rate on Reels is 2x your carousel rate" is useful. Ground recommendations in data or the client's vault. - Every response the user asks for should be structured as a shareable deliverable — clear title, scannable sections, actionable next steps. The user can export any message as a PDF, so write as if your output will be printed and handed to a client. - End outputs with the final deliverable. Never append closing offers like "I can also create..." or "If you want, I can..." — deliver the complete request without upselling additional work. - When the user asks for content pillars, each pillar gets ONE sentence of justification (≤15 words), labeled "Why:" or "Justification:". No multi-paragraph explanations. - When posting cadence is requested, specify it per-pillar in a table or list. Don't bury cadence in aggregate weekly totals. - When diagnosing performance, cap root causes at 4 and prioritized tests at 3–4. Follow the diagnosis with a one-sentence severity assessment (e.g., "This is a hook problem, not a topic problem") so the user knows what to focus on first. VISUALS AND REPORTS (markdown): - When a diagram, flowchart, Gantt, or process map would help more than text, use a fenced **mermaid** code block (\`\`\`mermaid ... \`\`\`). - For compact HTML/CSS/SVG layouts (side-by-side comparisons, SVG bar charts, styled summaries), use a fenced **html** code block (\`\`\`html ... \`\`\`). Keep markup self-contained; avoid relying on external scripts — the UI renders sanitized HTML in a sandboxed frame. - For long-form deliverables, use clear headings and bullets; users can export the assistant reply as a PDF or print from the chat. - Prefer visuals over walls of text. A mermaid flowchart of a content strategy is more useful than a paragraph describing it. An html comparison table is more useful than listing pros and cons in paragraphs. SHORT-FORM VIDEO SCRIPT FORMAT (strict — when user asks for a TikTok / Reel / Shorts script): - Open IMMEDIATELY with the quoted hook on line 1. No preamble, no style notes, no metadata before the hook. - Format the body as numbered beats: \`1.\`, \`2.\`, \`3.\`, etc. Exactly ONE sentence per beat. Never use prose paragraphs for beat-by-beat scripts. - Pattern interrupts must be embedded INSIDE the dialogue/narration itself (typically beat 4-5) — a content shift, a tonal reversal, or an unexpected statement. Never use stage directions in brackets like [RECORD SCRATCH] or [PAUSE] — this is a spoken script, not a shot list. - Each numbered beat MUST be exactly ONE complete sentence. If a beat is combining multiple ideas, split it or pick the strongest. - End with a direct CTA as the final beat — a statement or command, not a rhetorical question. For Gen Z / skeptical audiences, make it ironic or self-aware. Examples: "Sleep is the real flex." / "Choose your actual recovery arc." Avoid "Follow for more" / "Want X or Y?" - End the script cleanly after the CTA. Never append meta-commentary like "I can also make..." or "Let me know if you want..." unless the user explicitly asks. AGENCY KNOWLEDGE GRAPH: You have access to the agency knowledge graph — 9,857 nodes covering SOPs, skills, patterns, methodology, meeting notes, client profiles, and more. When asked about processes, best practices, or "how do we do X", ALWAYS search the knowledge graph first using search_agency_knowledge before answering from your own knowledge. The graph contains ${brandName}'s actual documented procedures. - Use search_agency_knowledge to find relevant nodes by semantic search - Use get_knowledge_node to read the full content of a specific node - Use list_knowledge_by_kind to browse all nodes of a type (e.g. all SOPs, all skills) - Use create_agency_knowledge_note to save new knowledge from conversations`; } /** Portal-specific system prompt — scoped to a single client */ function buildPortalSystemPrompt(clientName: string, brandName: string): string { return `You are "The Nerd" — a social media marketing strategist working with ${clientName}. You live inside ${brandName} Cortex, the agency's client portal. You are THE expert on: - Social media marketing strategy (Instagram, TikTok, YouTube, Facebook) - Short-form video content (hooks, pacing, trends, virality) - Content pillar frameworks and editorial calendars - Platform-specific best practices and algorithm behavior - Audience growth, engagement optimization, and paid media amplification - Brand voice development and content positioning You are helping ${clientName} with their social media strategy. You have access to their knowledge vault and brand data. Each client has a **knowledge vault** — an Obsidian-style knowledge base with structured entries (brand profiles, web pages, meeting notes, documents, ideas). The vault is semantically indexed — use **search_knowledge_base** with a natural language query to find the most relevant entries. Do NOT try to load all entries at once; always search first, then drill deeper if needed. KNOWLEDGE SEARCH PATTERN (QMD): 1. **Query** — use search_knowledge_base with a descriptive query to find relevant context 2. **Match** — review the returned entries and identify the most relevant ones 3. **Decide** — answer using the matched context, or search again with a refined query if needed Never load all knowledge entries into your response. The vault may contain hundreds of entries. Semantic search will find what you need. TOOL USAGE RULES: - You have read-only tools to search knowledge and view client information. - Use tools proactively when the user's request implies a lookup (e.g., "what's our brand voice" → use search_knowledge_base). - For READ tools (listing, viewing): execute immediately and summarize results naturally. - After a tool call completes, summarize the result in natural language. Don't just dump JSON. - If a tool fails, explain the error clearly and suggest alternatives. BEHAVIOR RULES: - Be direct, opinionated, and actionable. You're a senior strategist, not a generic chatbot. - Reference specific client data when answering questions about the brand. - Use markdown formatting: headers, bullets, bold for emphasis. Keep it scannable. - When you don't have data for something, say so — don't fabricate metrics. - If analytics data is provided, analyze it with strategic insight, not just number recitation.`; } /** Tools that portal (viewer) users are allowed to use. ⚠️ Adding a tool here WITHOUT adding a caller-org check inside its handler is a cross-org data leak. The admin Supabase client bypasses RLS, so every handler that accepts a client_id / entry_id / search_id from the caller must look up the caller's organization_id and reject when the resource belongs to another org. Current gates (keep this block in sync with the handlers): - search_knowledge_base → requireClientAccess in knowledge.ts - query_client_knowledge → requireClientAccess in knowledge.ts - get_knowledge_entry → requireClientAccess on entry.client_id - get_client_details → inline role/org check in clients.ts - generate_video_ideas → requireClientAccess in knowledge.ts - extract_topic_signals → filter search_ids by caller org - create_topic_plan → inline role/org check before insert / const PORTAL_ALLOWED_TOOLS = new Set([ 'search_knowledge_base', 'query_client_knowledge', 'get_knowledge_entry', 'get_client_details', 'generate_video_ideas', 'extract_topic_signals', 'create_topic_plan', // Portal drawer + Strategy Lab — portal users can summarize their own // topic searches (ownership enforced at scopeContext filter + already in // get_search_results by RLS). `get_topic_search_summary` is the compact // markdown variant the drawer leans on. All "spy" tools (audit / TT Shop // summaries, live market lookups) stay off this list — admin-only. 'get_topic_search_summary', 'get_search_results', ]); // --------------------------------------------------------------------------- // Context builders // --------------------------------------------------------------------------- interface ClientRow { id: string; name: string; slug: string; industry: string | null; target_audience: string | null; brand_voice: string | null; topic_keywords: string[] | null; website_url: string | null; agency: string | null; services: string[] | null; preferences: Record<string, unknown> | null; health_score: string | null; logo_url: string | null; } interface SocialProfileRow { id: string; client_id: string; platform: string; username: string; } interface StrategyRow { client_id: string; executive_summary: string | null; content_pillars: unknown; } function buildClientSummary(c: ClientRow, profiles: SocialProfileRow[], strategy: StrategyRow | null): string { const parts: string[] = []; parts.push(`### ${c.name} (slug: ${c.slug}, id: ${c.id})`); if (c.agency) parts.push(`Agency: ${c.agency}`); if (c.industry) parts.push(`Industry: ${c.industry}`); if (c.services?.length) parts.push(`Services: ${c.services.join(', ')}`); if (c.target_audience) parts.push(`Target Audience: ${c.target_audience}`); if (c.brand_voice) parts.push(`Brand Voice: ${c.brand_voice}`); const prefs = c.preferences; if (prefs) { if ((prefs.tone_keywords as string[])?.length) parts.push(`Tone: ${(prefs.tone_keywords as string[]).join(', ')}`); if ((prefs.topics_lean_into as string[])?.length) parts.push(`Lean Into: ${(prefs.topics_lean_into as string[]).join(', ')}`); if (prefs.posting_frequency) parts.push(`Posting Frequency: ${prefs.posting_frequency}`); } if (profiles.length > 0) { parts.push(`Social Accounts:`); for (const p of profiles) { parts.push(` - ${p.platform}: @${p.username} (profile_id: ${p.id})`); } } if (strategy?.executive_summary) { parts.push(`Strategy: ${strategy.executive_summary}`); } return parts.join('\n'); } /** Notify all super_admins when a guardrail fires. Non-blocking. */ async function notifySuperAdminsGuardrail( adminClient: ReturnType<typeof createAdminClient>, ctx: { userId: string; userEmail: string; message: string; ruleName: string }, ) { try { const { data: superAdmins } = await adminClient .from('users') .select('id') .eq('is_super_admin', true); if (!superAdmins || superAdmins.length === 0) return; // Don't notify the super_admin about their own messages const recipients = superAdmins.filter((sa) => sa.id !== ctx.userId); if (recipients.length === 0) return; const truncatedMsg = ctx.message.length > 120 ? ctx.message.slice(0, 120) + '...' : ctx.message; const notifications = recipients.map((sa) => ({ recipient_user_id: sa.id, type: 'guardrail_triggered', title: `Guardrail triggered: ${ctx.ruleName}`, body: `${ctx.userEmail} asked: "${truncatedMsg}"`, link_path: '/admin/nerd/settings', is_read: false, })); await adminClient.from('notifications').insert(notifications); } catch (err) { console.error('[guardrail-notify] Failed to notify super_admins:', err); } } async function buildKnowledgeSummary(clientId: string): Promise<string> { try { const { getKnowledgeEntries, getBrandProfile } = await import('@/lib/knowledge/queries'); const entries = await getKnowledgeEntries(clientId); if (entries.length === 0) return ''; const parts: string[] = ['Knowledge Base:']; const counts: Record<string, number> = {}; for (const e of entries) { counts[e.type] = (counts[e.type] ?? 0) + 1; } parts.push(` Entries: ${Object.entries(counts).map(([t, c]) => `${c} ${t}(s)`).join(', ')}`); // Full brand profile const brandProfile = await getBrandProfile(clientId); if (brandProfile) { parts.push(` Brand Profile:\n${brandProfile.content.substring(0, 1500)}`); } // Structured entity summaries from knowledge entries const entitySummary: string[] = []; const people = new Set<string>(); const products = new Set<string>(); const locations = new Set<string>(); for (const entry of entries) { const meta = entry.metadata as Record<string, unknown> | null; const entities = meta?.entities as { people?: { name: string; role?: string }[]; products?: { name: string; description?: string }[]; locations?: { address: string }[]; } | undefined; if (!entities) continue; for (const p of entities.people ?? []) people.add(p.role ? `${p.name} (${p.role})` : p.name); for (const p of entities.products ?? []) products.add(p.name); for (const l of entities.locations ?? []) locations.add(l.address); } if (people.size > 0) entitySummary.push(` Key People: ${[...people].join(', ')}`); if (products.size > 0) entitySummary.push(` Products/Services: ${[...products].join(', ')}`); if (locations.size > 0) entitySummary.push(` Locations: ${[...locations].join(', ')}`); if (entitySummary.length > 0) parts.push(...entitySummary); // Meeting notes summaries (last 5) const meetings = entries .filter((e) => e.type === 'meeting_note') .slice(0, 5); if (meetings.length > 0) { parts.push(' Recent Meetings:'); for (const m of meetings) { const summary = m.content.substring(0, 200); parts.push(` - ${m.title}: ${summary}...`); } } return parts.join('\n'); } catch (err) { console.error(`buildKnowledgeSummary failed for client ${clientId}:`, err instanceof Error ? err.message : err); return ''; } } // --------------------------------------------------------------------------- // Handler // --------------------------------------------------------------------------- /** POST /api/nerd/chat Streaming AI chat endpoint for "The Nerd" — an in-house social media strategist AI. Loads the full client portfolio and team context, then streams a response from Claude via OpenRouter. Supports tool use with up to 5 sequential tool calls per request. Write-risk tools emit action_confirmation events; destructive tools are blocked.
 
 **Auth:** Required (any authenticated user)
 

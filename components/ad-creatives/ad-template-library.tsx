@@ -2,12 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
-import { Upload, Loader2, Trash2, X, Eye, RefreshCw } from 'lucide-react';
+import { Upload, Loader2, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 // ---------------------------------------------------------------------------
-// Types — mirror the ad_prompt_templates row shape. Only the fields the UI
-// consumes are listed; extra columns are ignored.
+// Types
 // ---------------------------------------------------------------------------
 
 export interface AdPromptTemplate {
@@ -22,8 +21,6 @@ export interface AdPromptTemplate {
   updated_at: string;
 }
 
-// Matches AD_CATEGORIES from lib/ad-creatives/types.ts. Duplicated here so the
-// template library isn't dragging in the full ad-creatives types module.
 const AD_CATEGORIES: { value: string; label: string }[] = [
   { value: 'promotional', label: 'Promotional' },
   { value: 'brand_awareness', label: 'Brand awareness' },
@@ -37,13 +34,11 @@ const AD_CATEGORIES: { value: string; label: string }[] = [
   { value: 'comparison', label: 'Comparison' },
 ];
 
-// 10 MB matches the upload route's ceiling.
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
-
-// Polling interval for in-flight extractions. The Gemini vision call
-// typically settles within 5-15s; we poll every 3s so the UI reflects it
-// without hammering the DB.
 const EXTRACTION_POLL_MS = 3000;
+
+const DISPLAY_FONT = 'var(--font-nz-display), system-ui, sans-serif';
+const BODY_FONT = 'Poppins, system-ui, sans-serif';
 
 // ---------------------------------------------------------------------------
 // Component
@@ -54,17 +49,6 @@ interface Props {
   initialTemplates: AdPromptTemplate[];
 }
 
-/**
- * Per-client ad-template library. Admins drop an ad screenshot, the
- * server runs it through Gemini vision to extract a reproducible JSON
- * spec (layout / composition / typography / color strategy / content
- * blocks), and the extracted schema powers Phase-2 generation.
- *
- * Existing backend: POST /api/clients/[id]/ad-creatives/templates kicks
- * extraction off as a Vercel `after()` background task. This UI polls
- * the list until every row has a non-empty prompt_schema so admins see
- * extraction finish in-place instead of refreshing.
- */
 export function AdTemplateLibrary({ clientId, initialTemplates }: Props) {
   const [templates, setTemplates] = useState<AdPromptTemplate[]>(initialTemplates);
   const [openTemplateId, setOpenTemplateId] = useState<string | null>(null);
@@ -75,8 +59,6 @@ export function AdTemplateLibrary({ clientId, initialTemplates }: Props) {
     [templates, openTemplateId],
   );
 
-  // Refetch the full list — cheap, and keeps this file from needing to
-  // reconcile partial updates against polling state.
   const refetch = useCallback(async () => {
     try {
       const res = await fetch(
@@ -87,13 +69,10 @@ export function AdTemplateLibrary({ clientId, initialTemplates }: Props) {
       const data = (await res.json()) as { templates: AdPromptTemplate[] };
       setTemplates(data.templates ?? []);
     } catch {
-      // Network blip — silent, next poll will retry.
+      // silent — next poll retries
     }
   }, [clientId]);
 
-  // Poll while any row has an empty prompt_schema (extraction pending).
-  // Stops the interval once everything has settled so we're not chatty
-  // when the library is idle.
   useEffect(() => {
     const pending = templates.some((t) => isExtractionPending(t));
     if (!pending) return;
@@ -122,28 +101,30 @@ export function AdTemplateLibrary({ clientId, initialTemplates }: Props) {
     [clientId, openTemplateId, templates],
   );
 
-  const handleUploadComplete = useCallback(
-    (template: AdPromptTemplate) => {
-      setTemplates((prev) => [template, ...prev]);
-      setUploadOpen(false);
-    },
-    [],
-  );
+  const handleUploadComplete = useCallback((template: AdPromptTemplate) => {
+    setTemplates((prev) => [template, ...prev]);
+    setUploadOpen(false);
+  }, []);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-text-muted">
-            Drop winning ad screenshots here. We extract the structural JSON
-            (layout / composition / typography / color strategy) so Phase-2
-            generation can reproduce the pattern with the active brand's content.
+    <div className="space-y-7">
+      {/* ── Header strip ─────────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="max-w-xl space-y-1">
+          <p className="nz-eyebrow">Pattern library</p>
+          <p
+            className="text-sm text-text-muted leading-relaxed"
+            style={{ fontFamily: BODY_FONT, fontWeight: 300 }}
+          >
+            Drop winning ad screenshots here. Cortex extracts the structural
+            spec — layout, composition, typography, color strategy — so the
+            generator can reproduce the pattern in this brand&apos;s voice.
           </p>
         </div>
         <button
           type="button"
           onClick={() => setUploadOpen(true)}
-          className="inline-flex items-center gap-2 rounded-lg border border-nativz-border bg-surface px-3 py-1.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover"
+          className="inline-flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-full bg-accent px-5 text-sm font-medium text-white transition-colors hover:bg-accent/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
         >
           <Upload size={14} />
           Upload template
@@ -151,14 +132,9 @@ export function AdTemplateLibrary({ clientId, initialTemplates }: Props) {
       </div>
 
       {templates.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-nativz-border bg-surface/40 p-10 text-center">
-          <p className="text-sm text-text-muted">
-            No templates yet. Upload a reference ad screenshot to get started —
-            the vision model extracts its structure into a reusable JSON spec.
-          </p>
-        </div>
+        <EmptyTemplates />
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {templates.map((t) => (
             <TemplateCard
               key={t.id}
@@ -189,6 +165,32 @@ export function AdTemplateLibrary({ clientId, initialTemplates }: Props) {
 }
 
 // ---------------------------------------------------------------------------
+// Empty state
+// ---------------------------------------------------------------------------
+
+function EmptyTemplates() {
+  return (
+    <div className="space-y-2 py-12">
+      <p className="nz-eyebrow">Pattern library</p>
+      <h3
+        className="text-[22px] leading-tight text-text-primary"
+        style={{ fontFamily: DISPLAY_FONT }}
+      >
+        No templates yet
+      </h3>
+      <p
+        className="max-w-xl text-sm text-text-muted leading-relaxed"
+        style={{ fontFamily: BODY_FONT, fontWeight: 300 }}
+      >
+        Upload a reference ad screenshot to get started. The vision model
+        extracts its structure into a reusable JSON spec — every future batch
+        can pull from this library.
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Card
 // ---------------------------------------------------------------------------
 
@@ -205,48 +207,61 @@ function TemplateCard({
   const category = template.ad_category ?? 'other';
 
   return (
-    <div className="group relative overflow-hidden rounded-lg border border-nativz-border bg-surface">
+    <article className="group flex flex-col gap-2">
       <button
         type="button"
         onClick={onOpen}
-        className="block w-full cursor-pointer text-left"
+        className="relative block w-full cursor-pointer overflow-hidden rounded-lg ring-1 ring-nativz-border/60 bg-surface-hover transition-all duration-200 hover:ring-accent/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400/60"
+        aria-label={`Open template ${template.name}`}
       >
-        <div className="relative aspect-square bg-surface-hover">
+        <div className="aspect-square">
           <Image
             src={template.reference_image_url}
             alt={template.name}
             width={360}
             height={360}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.02]"
           />
-          {pending && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-              <div className="flex flex-col items-center gap-1.5 text-white/90">
-                <Loader2 size={18} className="animate-spin" />
-                <span className="text-[11px] font-medium">Extracting…</span>
-              </div>
+        </div>
+
+        {pending && (
+          <div className="absolute inset-0 flex items-center justify-center bg-bg/60 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-2 text-text-primary">
+              <Loader2 size={18} className="animate-spin text-accent" />
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-text-muted">
+                Extracting
+              </span>
             </div>
-          )}
-        </div>
-        <div className="space-y-0.5 p-2">
-          <p className="truncate text-[12px] font-medium text-text-primary" title={template.name}>
-            {template.name}
-          </p>
-          <p className="text-[10px] uppercase tracking-wide text-text-muted/70">
-            {category.replaceAll('_', ' ')}
-          </p>
-        </div>
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          aria-label={`Delete ${template.name}`}
+          title={`Delete ${template.name}`}
+          className="absolute right-2 top-2 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-bg/80 text-text-muted opacity-0 backdrop-blur-sm transition-all hover:bg-nz-coral/90 hover:text-white group-hover:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400/60"
+        >
+          <Trash2 size={12} />
+        </button>
       </button>
-      <button
-        type="button"
-        onClick={onDelete}
-        aria-label={`Delete ${template.name}`}
-        title={`Delete ${template.name}`}
-        className="absolute right-1.5 top-1.5 flex h-7 w-7 cursor-pointer items-center justify-center rounded-md bg-surface/90 text-text-muted opacity-0 shadow-sm transition-opacity hover:bg-red-500/20 hover:text-red-400 group-hover:opacity-100"
-      >
-        <Trash2 size={12} />
-      </button>
-    </div>
+
+      <div className="space-y-1">
+        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-text-muted/80">
+          {category.replaceAll('_', ' ')}
+        </p>
+        <p
+          className="truncate text-[13px] text-text-primary leading-tight"
+          title={template.name}
+          style={{ fontFamily: DISPLAY_FONT }}
+        >
+          {template.name}
+        </p>
+      </div>
+    </article>
   );
 }
 
@@ -310,9 +325,6 @@ function UploadDialog({
       }
       const { templateId } = (await res.json()) as { templateId: string; status: string };
 
-      // Construct an optimistic row so the grid shows it immediately in
-      // "Extracting…" state. The polling loop will replace it with the
-      // server truth once extraction completes.
       const optimistic: AdPromptTemplate = {
         id: templateId,
         name: name.trim(),
@@ -340,36 +352,42 @@ function UploadDialog({
         className="flex w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-nativz-border bg-surface shadow-elevated"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-nativz-border/50 px-5 py-3">
-          <p className="text-sm font-semibold text-text-primary">Upload ad template</p>
+        {/* Header */}
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-nativz-border/50 px-6 py-4">
+          <div className="space-y-1">
+            <p className="nz-eyebrow">Pattern library</p>
+            <h2
+              className="text-[20px] leading-tight text-text-primary"
+              style={{ fontFamily: DISPLAY_FONT }}
+            >
+              Add a new template
+            </h2>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
+            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400/60"
             aria-label="Close"
           >
             <X size={16} />
           </button>
         </div>
-        <div className="space-y-4 px-5 py-4">
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-text-muted">
-              Reference image (JPEG / PNG / WebP, max 10 MB)
-            </label>
+
+        {/* Body */}
+        <div className="space-y-5 px-6 py-5">
+          <Field label="Reference image" hint="JPEG, PNG, or WebP — 10 MB max">
             {previewUrl ? (
-              <div className="relative overflow-hidden rounded-lg border border-nativz-border">
-                {/* Preview is a blob: URL from URL.createObjectURL — Next/Image
-                    can't resolve blob URLs, so this stays an <img>. */}
+              <div className="relative overflow-hidden rounded-lg ring-1 ring-nativz-border/60 bg-background">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={previewUrl}
                   alt="preview"
-                  className="h-48 w-full object-contain bg-background"
+                  className="h-48 w-full object-contain"
                 />
                 <button
                   type="button"
                   onClick={() => setFile(null)}
-                  className="absolute right-2 top-2 flex h-7 w-7 cursor-pointer items-center justify-center rounded-md bg-black/60 text-white hover:bg-black/80"
+                  className="absolute right-2 top-2 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-bg/80 text-white backdrop-blur-sm transition-colors hover:bg-nz-coral/90"
                   aria-label="Remove file"
                 >
                   <X size={14} />
@@ -379,10 +397,12 @@ function UploadDialog({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex h-32 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-nativz-border bg-background text-sm text-text-muted transition-colors hover:border-accent/50 hover:text-text-secondary"
+                className="flex h-32 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg bg-background ring-1 ring-inset ring-nativz-border/60 text-sm text-text-muted transition-colors hover:bg-surface-hover hover:ring-accent/40 hover:text-text-secondary"
               >
                 <Upload size={18} />
-                Click to pick an image
+                <span style={{ fontFamily: BODY_FONT, fontWeight: 300 }}>
+                  Click to pick an image
+                </span>
               </button>
             )}
             <input
@@ -392,25 +412,25 @@ function UploadDialog({
               className="hidden"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-text-muted">Name</label>
+          <Field label="Name">
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. 'Testimonial card — five-star overlay'"
-              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent/40 focus:outline-none"
+              placeholder="e.g. Testimonial card — five-star overlay"
+              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/70 focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/20"
+              style={{ fontFamily: BODY_FONT, fontWeight: 300 }}
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-text-muted">Category</label>
+          <Field label="Category">
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="w-full cursor-pointer rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:border-accent/40 focus:outline-none"
+              className="w-full cursor-pointer rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/20"
+              style={{ fontFamily: BODY_FONT, fontWeight: 300 }}
             >
               {AD_CATEGORIES.map((c) => (
                 <option key={c.value} value={c.value}>
@@ -418,26 +438,27 @@ function UploadDialog({
                 </option>
               ))}
             </select>
-          </div>
+          </Field>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-text-muted">
-              Tags (optional, comma-separated)
-            </label>
+          <Field label="Tags" hint="Optional, comma-separated">
             <input
               type="text"
               value={tags}
               onChange={(e) => setTags(e.target.value)}
-              placeholder="e.g. split-screen, product-hero, sale"
-              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent/40 focus:outline-none"
+              placeholder="split-screen, product-hero, sale"
+              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/70 focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/20"
+              style={{ fontFamily: BODY_FONT, fontWeight: 300 }}
             />
-          </div>
+          </Field>
         </div>
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-nativz-border/50 bg-surface/60 px-5 py-3">
+
+        {/* Footer */}
+        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-nativz-border/50 bg-surface/60 px-6 py-4">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
+            className="text-sm text-text-muted transition-colors hover:text-text-primary cursor-pointer"
+            style={{ fontFamily: DISPLAY_FONT }}
           >
             Cancel
           </button>
@@ -445,10 +466,14 @@ function UploadDialog({
             type="button"
             onClick={() => void handleSubmit()}
             disabled={submitting || !file || !name.trim()}
-            className="inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-accent/90 disabled:opacity-50"
+            className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-accent px-5 text-sm font-medium text-white transition-colors hover:bg-accent/90 disabled:cursor-default disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
           >
-            {submitting ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-            Upload &amp; extract
+            {submitting ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Upload size={14} />
+            )}
+            {submitting ? 'Uploading' : 'Upload & extract'}
           </button>
         </div>
       </div>
@@ -456,8 +481,37 @@ function UploadDialog({
   );
 }
 
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-baseline justify-between gap-3">
+        <label
+          className="text-[13px] italic text-text-secondary"
+          style={{ fontFamily: DISPLAY_FONT }}
+        >
+          {label}
+        </label>
+        {hint && (
+          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-text-muted/70">
+            {hint}
+          </span>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
-// Detail dialog — preview + JSON viewer
+// Detail dialog
 // ---------------------------------------------------------------------------
 
 function TemplateDetailDialog({
@@ -472,6 +526,7 @@ function TemplateDetailDialog({
     () => JSON.stringify(template.prompt_schema, null, 2),
     [template.prompt_schema],
   );
+  const category = (template.ad_category ?? 'other').replaceAll('_', ' ');
 
   return (
     <div
@@ -482,52 +537,71 @@ function TemplateDetailDialog({
         className="flex max-h-full w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-nativz-border bg-surface shadow-elevated"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-nativz-border/50 px-5 py-3">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-text-primary" title={template.name}>
+        {/* Header */}
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-nativz-border/50 px-6 py-4">
+          <div className="min-w-0 space-y-1">
+            <p className="nz-eyebrow">
+              {category}
+              {template.tags && template.tags.length > 0 && (
+                <span className="text-text-muted/70 italic">
+                  {' '}
+                  · {template.tags.join(' · ')}
+                </span>
+              )}
+            </p>
+            <h2
+              className="truncate text-[22px] leading-tight text-text-primary"
+              title={template.name}
+              style={{ fontFamily: DISPLAY_FONT }}
+            >
               {template.name}
-            </p>
-            <p className="truncate text-[11px] text-text-muted">
-              {(template.ad_category ?? 'other').replaceAll('_', ' ')}
-              {template.tags && template.tags.length > 0 ? ` · ${template.tags.join(' · ')}` : ''}
-            </p>
+            </h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
+            className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400/60"
             aria-label="Close"
           >
             <X size={16} />
           </button>
         </div>
+
+        {/* Body */}
         <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-2">
-          <div className="flex min-h-0 items-center justify-center bg-background p-4 md:border-r md:border-nativz-border/50">
+          {/* Reference image */}
+          <div className="flex min-h-0 items-center justify-center bg-background p-5 md:border-r md:border-nativz-border/50">
             <Image
               src={template.reference_image_url}
               alt={template.name}
               width={600}
               height={600}
-              className="max-h-[520px] w-auto object-contain"
+              className="max-h-[520px] w-auto rounded-lg object-contain ring-1 ring-nativz-border/60"
             />
           </div>
+
+          {/* Spec column */}
           <div className="flex min-h-0 flex-col overflow-hidden">
-            <div className="flex shrink-0 items-center gap-2 border-b border-nativz-border/50 px-4 py-2 text-xs text-text-muted">
-              {pending ? (
-                <>
-                  <Loader2 size={12} className="animate-spin" /> Extracting structure…
-                </>
-              ) : (
-                <>
-                  <Eye size={12} /> Extracted spec
-                </>
-              )}
+            <div className="flex shrink-0 items-baseline justify-between gap-3 border-b border-nativz-border/50 px-5 py-3">
+              <span
+                className="text-[13px] italic text-text-secondary"
+                style={{ fontFamily: DISPLAY_FONT }}
+              >
+                Extracted spec
+              </span>
+              <StatusDot pending={pending} />
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto bg-background px-4 py-3">
+            <div className="min-h-0 flex-1 overflow-y-auto bg-background px-5 py-4">
               {pending ? (
-                <div className="flex items-center gap-2 text-sm text-text-muted">
-                  <RefreshCw size={14} className="animate-spin" />
-                  Vision model is reading the layout. This usually takes 5–15s.
+                <div className="space-y-2">
+                  <p className="nz-eyebrow">Vision pass</p>
+                  <p
+                    className="text-sm text-text-muted leading-relaxed"
+                    style={{ fontFamily: BODY_FONT, fontWeight: 300 }}
+                  >
+                    Reading the layout, composition, typography, and color
+                    strategy. This usually takes 5–15s.
+                  </p>
                 </div>
               ) : (
                 <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-snug text-text-secondary">
@@ -542,15 +616,31 @@ function TemplateDetailDialog({
   );
 }
 
+function StatusDot({ pending }: { pending: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span
+        aria-hidden
+        className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+          pending ? 'bg-amber-400 animate-pulse' : 'bg-accent'
+        }`}
+      />
+      <span
+        className={`font-mono text-[10px] uppercase tracking-[0.16em] ${
+          pending ? 'text-text-secondary' : 'text-text-muted'
+        }`}
+      >
+        {pending ? 'Extracting' : 'Ready'}
+      </span>
+    </span>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function isExtractionPending(t: AdPromptTemplate): boolean {
-  // The POST route seeds prompt_schema with an empty object and the
-  // background extractor replaces it. Treat {} (or missing/null) as
-  // "still running". A successful extraction populates at least the
-  // `layout` + `composition` blocks.
   const s = t.prompt_schema;
   if (!s || typeof s !== 'object') return true;
   return Object.keys(s).length === 0;

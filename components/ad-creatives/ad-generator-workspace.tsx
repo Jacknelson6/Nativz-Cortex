@@ -2,16 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import Image from 'next/image';
-import {
-  MessagesSquare,
-  Images,
-  FolderOpen,
-  LayoutTemplate,
-  Sparkles,
-  ShieldCheck,
-  ShieldAlert,
-  Loader2,
-} from 'lucide-react';
+import { Sparkles, ShieldAlert } from 'lucide-react';
 import { AdAssetLibrary, type AdAsset } from './ad-asset-library';
 import { AdTemplateLibrary, type AdPromptTemplate } from './ad-template-library';
 import { AdGeneratorChat } from './ad-generator-chat';
@@ -23,14 +14,13 @@ interface TabDef {
   id: TabId;
   label: string;
   hint: string;
-  icon: typeof MessagesSquare;
 }
 
 const TABS: readonly TabDef[] = [
-  { id: 'chat',      label: 'Chat',      hint: 'Brief the generator',         icon: MessagesSquare },
-  { id: 'gallery',   label: 'Gallery',   hint: 'Review what it made',         icon: Images },
-  { id: 'assets',    label: 'Assets',    hint: 'Brand reference photos',      icon: FolderOpen },
-  { id: 'templates', label: 'Templates', hint: 'Reusable ad blueprints',      icon: LayoutTemplate },
+  { id: 'chat',      label: 'Brief',     hint: 'Tell Cortex what to make' },
+  { id: 'gallery',   label: 'Proofs',    hint: 'Approve the concepts it returned' },
+  { id: 'assets',    label: 'Library',   hint: 'Reference photos for the brand' },
+  { id: 'templates', label: 'Patterns',  hint: 'Winning ad structures, distilled' },
 ] as const;
 
 interface Props {
@@ -126,129 +116,135 @@ export function AdGeneratorWorkspace({
               className="max-w-2xl text-sm text-text-muted"
               style={{ fontFamily: 'Poppins, system-ui, sans-serif', fontWeight: 300 }}
             >
-              Chat-led creative generation grounded in brand DNA, reference assets, and
-              reusable templates. Cortex writes copy, drafts visuals with Gemini 2.5 Flash,
-              and keeps every variation auditable in the gallery.
+              Monthly gift-ad generation grounded in Brand DNA, Cortex memory, and the
+              proven ad reference library. Cortex matches the brand to winning patterns,
+              writes the batch, renders with ChatGPT Image, and keeps every variation
+              auditable in the gallery.
             </p>
           </div>
 
           <button
             type="button"
             onClick={() => setActiveTab('chat')}
-            className="shrink-0 inline-flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-xs font-bold uppercase tracking-[2px] text-white transition-colors hover:bg-accent/90 cursor-pointer"
-            style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
+            className="inline-flex h-11 shrink-0 cursor-pointer items-center gap-2 rounded-full bg-accent px-6 text-sm font-semibold text-white transition-colors hover:bg-accent/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
           >
-            <Sparkles size={14} />
+            <Sparkles size={15} />
             New batch
           </button>
         </div>
 
-        {/* Brand context strip — logo, DNA status, stats. Flat, pill-shaped */}
+        {/* Single-line typographic readout. Replaces the old pill cluster
+            with editorial separators — feels like the masthead strip on a
+            magazine front page rather than a row of admin badges. */}
         <div
-          className="flex flex-wrap items-center gap-3 animate-stagger-in"
+          className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs animate-stagger-in"
           style={{ animationDelay: '120ms' }}
         >
-          <div className="flex items-center gap-2 rounded-full border border-nativz-border bg-surface pr-4 pl-1.5 py-1.5">
+          <div className="flex items-center gap-2">
             {clientLogoUrl ? (
               <Image
                 src={clientLogoUrl}
                 alt={brandDisplayName}
-                width={28}
-                height={28}
-                className="h-7 w-7 rounded-full object-cover"
+                width={24}
+                height={24}
+                className="h-6 w-6 rounded-full object-cover"
               />
             ) : (
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-accent/10 text-[10px] font-semibold uppercase tracking-wider text-accent-text">
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-accent/15 text-[10px] font-semibold uppercase tracking-wider text-accent-text">
                 {brandDisplayName.slice(0, 2)}
               </span>
             )}
-            <span className="text-xs font-medium text-text-primary">{brandDisplayName}</span>
+            <span className="text-text-primary font-medium">{brandDisplayName}</span>
           </div>
+
+          <Separator />
 
           <DnaBadge tone={dnaTone} />
 
-          <StatPill label="concepts"   value={concepts.length} />
-          <StatPill label="templates"  value={initialTemplates.length} />
-          <StatPill label="assets"     value={initialAssets.length} />
+          <Separator />
+
+          <Readout value={concepts.length} label="concepts" />
+          <Readout value={initialTemplates.length} label="templates" />
+          <Readout value={initialAssets.length} label="assets" />
         </div>
 
         {/* Brand DNA callout — elevated when missing, quiet when ready */}
         {dnaTone === 'missing' && (
           <div
-            className="animate-stagger-in rounded-xl border border-nz-coral/35 bg-nz-coral/[0.06] p-4"
+            className="animate-stagger-in flex items-start gap-3 rounded-xl border border-nz-coral/35 bg-nz-coral/[0.06] p-4"
             style={{ animationDelay: '200ms' }}
           >
-            <div className="flex items-start gap-3">
-              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-nz-coral/15 text-nz-coral">
-                <ShieldAlert size={17} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <h2 className="text-sm font-semibold text-text-primary">
-                  Brand DNA hasn&apos;t been generated yet
-                </h2>
-                <p className="mt-1 text-xs text-text-muted">
-                  Without it, generations run on surface-level prompts and lose the
-                  brand&apos;s actual voice. Head to the brand profile to run a DNA pass
-                  — it takes about a minute and upgrades every future batch.
-                </p>
-              </div>
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-nz-coral/15 text-nz-coral">
+              <ShieldAlert size={17} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-semibold text-text-primary">
+                Brand DNA hasn&apos;t been generated yet
+              </h2>
+              <p className="mt-1 text-xs text-text-muted">
+                Without it, generations run on surface-level prompts and lose the
+                brand&apos;s actual voice. Head to the brand profile to run a DNA pass
+                — it takes about a minute and upgrades every future batch.
+              </p>
             </div>
           </div>
         )}
       </header>
 
-      {/* ── Tab bar ────────────────────────────────────────────────────────── */}
+      {/* ── Section nav ────────────────────────────────────────────────────
+          Editorial row sharing a baseline rule. Active tab anchors a 2px
+          cyan bar that overlaps the rule — no boxed cards, no icons, no
+          rounded chrome. Reads like a magazine table-of-contents strip. */}
       <nav
         aria-label="Ad generator sections"
-        className="flex flex-wrap items-stretch gap-1 animate-stagger-in"
+        className="relative flex flex-wrap items-end gap-x-8 gap-y-4 border-b border-nativz-border/60 animate-stagger-in"
         style={{ animationDelay: '240ms' }}
       >
         {TABS.map((tab) => {
           const isActive = activeTab === tab.id;
           const count = tabCounts[tab.id];
-          const Icon = tab.icon;
           return (
             <button
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`group relative flex min-w-[9rem] flex-1 items-center gap-3 rounded-xl border bg-surface px-4 py-3 text-left transition-colors cursor-pointer sm:flex-none ${
-                isActive
-                  ? 'border-accent/40 bg-accent/[0.06]'
-                  : 'border-nativz-border hover:border-nativz-border/90 hover:bg-surface-hover/40'
-              }`}
+              className="group relative flex flex-col items-start gap-1 pb-3 text-left cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-400/60"
               aria-current={isActive ? 'page' : undefined}
             >
-              <span
-                className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors ${
-                  isActive
-                    ? 'bg-accent/15 text-accent-text'
-                    : 'bg-surface-hover/60 text-text-muted group-hover:text-text-secondary'
-                }`}
-              >
-                <Icon size={15} />
-              </span>
-              <span className="flex min-w-0 flex-col">
-                <span className="flex items-baseline gap-1.5">
+              <span className="flex items-baseline gap-2">
+                <span
+                  className={`text-[15px] font-medium leading-none transition-colors ${
+                    isActive
+                      ? 'text-text-primary'
+                      : 'text-text-secondary group-hover:text-text-primary'
+                  }`}
+                  style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
+                >
+                  {tab.label}
+                </span>
+                {count !== null && (
                   <span
-                    className={`text-sm font-semibold ${
-                      isActive ? 'text-text-primary' : 'text-text-secondary'
+                    className={`font-mono text-[10px] tabular-nums leading-none ${
+                      isActive ? 'text-accent-text' : 'text-text-muted/80'
                     }`}
                   >
-                    {tab.label}
+                    {String(count).padStart(2, '0')}
                   </span>
-                  {count !== null && (
-                    <span
-                      className={`font-mono text-[10px] tabular-nums ${
-                        isActive ? 'text-accent-text' : 'text-text-muted/80'
-                      }`}
-                    >
-                      {count}
-                    </span>
-                  )}
-                </span>
-                <span className="text-[11px] text-text-muted truncate">{tab.hint}</span>
+                )}
               </span>
+              <span
+                className={`text-[11px] leading-none transition-colors ${
+                  isActive ? 'text-text-muted' : 'text-text-muted/70'
+                }`}
+              >
+                {tab.hint}
+              </span>
+              {isActive && (
+                <span
+                  aria-hidden
+                  className="absolute -bottom-px left-0 right-0 h-[2px] bg-accent"
+                />
+              )}
             </button>
           );
         })}
@@ -286,41 +282,45 @@ export function AdGeneratorWorkspace({
   );
 }
 
-function StatPill({ label, value }: { label: string; value: number }) {
+function Separator() {
   return (
-    <div className="inline-flex items-center gap-1.5 rounded-full border border-nativz-border bg-surface px-3 py-1.5">
-      <span
-        className="font-mono text-xs font-semibold tabular-nums text-text-primary"
-        style={{ fontVariantNumeric: 'tabular-nums' }}
-      >
-        {value}
-      </span>
-      <span className="text-[11px] uppercase tracking-wider text-text-muted">{label}</span>
-    </div>
+    <span aria-hidden className="text-text-muted/30">
+      ·
+    </span>
   );
 }
 
-function DnaBadge({ tone }: { tone: DnaTone }) {
-  if (tone === 'ready') {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1.5 text-[11px] font-medium text-accent-text">
-        <ShieldCheck size={12} />
-        Brand DNA loaded
-      </span>
-    );
-  }
-  if (tone === 'pending') {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-[11px] font-medium text-amber-300">
-        <Loader2 size={12} className="animate-spin" />
-        Brand DNA generating
-      </span>
-    );
-  }
+function Readout({ value, label }: { value: number; label: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-nz-coral/35 bg-nz-coral/10 px-3 py-1.5 text-[11px] font-medium text-nz-coral">
-      <ShieldAlert size={12} />
-      Brand DNA missing
+    <span className="inline-flex items-baseline gap-1.5">
+      <span className="font-mono text-[11px] font-medium tabular-nums text-text-primary">
+        {String(value).padStart(2, '0')}
+      </span>
+      <span className="text-[11px] text-text-muted">{label}</span>
+    </span>
+  );
+}
+
+const DNA_CONFIG: Record<
+  DnaTone,
+  { dot: string; text: string; label: string }
+> = {
+  ready:   { dot: 'bg-accent',                 text: 'text-text-primary',   label: 'Brand DNA loaded' },
+  pending: { dot: 'bg-amber-400 animate-pulse', text: 'text-text-secondary', label: 'Brand DNA generating' },
+  missing: { dot: 'bg-nz-coral',                text: 'text-nz-coral',       label: 'Brand DNA missing' },
+};
+
+function DnaBadge({ tone }: { tone: DnaTone }) {
+  const config = DNA_CONFIG[tone];
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span
+        aria-hidden
+        className={`h-1.5 w-1.5 shrink-0 rounded-full ${config.dot}`}
+      />
+      <span className={`text-[11px] font-medium ${config.text}`}>
+        {config.label}
+      </span>
     </span>
   );
 }

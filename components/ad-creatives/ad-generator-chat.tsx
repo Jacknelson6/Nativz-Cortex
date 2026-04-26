@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Sparkles, Loader2, Terminal, User as UserIcon, Bot } from 'lucide-react';
+import { Sparkles, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { AdConcept } from './ad-concept-gallery';
 import { CHAT_COMMAND_HELP } from '@/lib/ad-creatives/chat-commands';
@@ -27,10 +27,12 @@ const COUNT_PRESETS = [5, 10, 20, 30];
 const DEFAULT_COUNT = 20;
 
 const EXAMPLE_PROMPTS: string[] = [
-  'Generate ads that emphasize testimonials and social proof. Cycle through review cards, testimonial stacks, and problem/solution framings.',
-  'Focus on the current offer — build urgency without being salesy. Mix stat callouts with comparison framings.',
-  'Lead with customer pain points pulled from the reviews in the asset library. Each concept should quote a reviewer directly where possible.',
+  'Generate this month’s 20 gift ads. Match the brand to proven reference ads, then vary testimonial, offer, comparison, and problem-solution angles.',
+  'Build a polished monthly drop for client review. Use Brand DNA and Cortex memory first, then borrow only the layout mechanics from the reference library.',
+  'Focus on the current offer, but keep the batch diverse. Render every ad with ChatGPT Image and make each concept ready for the gallery.',
 ];
+
+const DISPLAY_FONT = 'var(--font-nz-display), system-ui, sans-serif';
 
 /**
  * Multi-turn chat intake. Hydrates persisted messages on mount, renders
@@ -38,7 +40,7 @@ const EXAMPLE_PROMPTS: string[] = [
  * backends depending on content:
  *
  *   - `/`-prefixed input → /api/ad-creatives/command (slash commands)
- *   - Anything else      → /api/ad-creatives/generate (concept batch)
+ *   - Anything else      → /api/ad-creatives/generate (reference-matched ad batch)
  *
  * Both endpoints write their own user/assistant pair to
  * ad_generator_messages, so the history stays truthful even on refresh.
@@ -92,8 +94,6 @@ export function AdGeneratorChat({
     const trimmed = input.trim();
     if (trimmed.length < 1) return;
 
-    // Optimistic user bubble — replaced by the server's canonical row
-    // when the response lands.
     const optimisticUserId = `tmp-u-${Date.now()}`;
     const optimisticUser: ChatMessage = {
       id: optimisticUserId,
@@ -160,8 +160,13 @@ export function AdGeneratorChat({
           batchId: string;
           status: 'completed' | 'partial' | 'failed';
           concepts: AdConcept[];
+          referenceAdsUsed?: number;
         };
-        const summary = `Generated ${data.concepts.length} concept${data.concepts.length === 1 ? '' : 's'}${data.status === 'partial' ? ' (partial)' : ''}.`;
+        const refSuffix =
+          typeof data.referenceAdsUsed === 'number'
+            ? ` using ${data.referenceAdsUsed} matched reference ad${data.referenceAdsUsed === 1 ? '' : 's'}`
+            : '';
+        const summary = `Generated ${data.concepts.length} ad${data.concepts.length === 1 ? '' : 's'}${refSuffix}${data.status === 'partial' ? ' (partial)' : ''}.`;
         appendAssistant(setMessages, summary, data.batchId);
         onBatchComplete(data.concepts);
         toast.success(summary);
@@ -172,41 +177,66 @@ export function AdGeneratorChat({
     }
   }, [input, clientId, count, onBatchComplete, onConceptsChanged, onSwitchToGallery]);
 
+  // Pre-compute reply numbers so each Cortex slip can reference its index
+  // in the conversation. User briefs aren't numbered — they're the prompt,
+  // not the report.
+  const replyIndexes = useMemo(() => {
+    const map = new Map<string, number>();
+    let n = 0;
+    for (const m of messages) {
+      if (m.role === 'assistant') {
+        n += 1;
+        map.set(m.id, n);
+      }
+    }
+    return map;
+  }, [messages]);
+
   const transcript = useMemo(() => {
     if (!historyLoaded) {
       return (
-        <div className="flex items-center justify-center py-12 text-sm text-text-muted">
-          <Loader2 size={14} className="mr-2 animate-spin" />
-          Loading history…
+        <div className="flex items-center gap-2 py-12 text-xs text-text-muted">
+          <Loader2 size={12} className="animate-spin" />
+          <span style={{ fontFamily: DISPLAY_FONT, fontStyle: 'italic' }}>
+            Loading transcript…
+          </span>
         </div>
       );
     }
     if (messages.length === 0) {
-      return (
-        <div className="space-y-4 py-4">
-          <EmptyStateHint />
-        </div>
-      );
+      return <EmptyStateHint />;
     }
     return (
-      <div className="space-y-4 py-2">
+      <ol className="space-y-7 py-2">
         {messages.map((m) => (
-          <MessageBubble key={m.id} message={m} />
+          <MessageSlip
+            key={m.id}
+            message={m}
+            replyIndex={replyIndexes.get(m.id) ?? null}
+          />
         ))}
-      </div>
+      </ol>
     );
-  }, [historyLoaded, messages]);
+  }, [historyLoaded, messages, replyIndexes]);
 
   return (
-    <div className="flex h-[calc(100vh-260px)] min-h-[480px] flex-col gap-3 overflow-hidden">
-      <div
-        ref={scrollRef}
-        className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-nativz-border bg-surface/60 px-4"
-      >
+    <div className="flex h-[calc(100vh-300px)] min-h-[520px] flex-col gap-0 overflow-hidden">
+      {/* Transcript — flat surface, scrolls inside flexbox */}
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto pb-6 pr-1">
         {transcript}
       </div>
 
-      <div className="shrink-0 space-y-2 rounded-xl border border-nativz-border bg-surface p-3">
+      {/* Composer — separated from transcript by a thin rule, no boxed
+          chrome. The eyebrow flips between Brief / Slash command based on
+          input, and ⌘↵ hint sits opposite as a monospace caption. */}
+      <div className="shrink-0 space-y-3 border-t border-nativz-border/60 pt-5">
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="nz-eyebrow">{isCommand ? 'Slash command' : 'Brief'}</p>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-text-muted/70">
+            ⌘↵ to send
+          </span>
+        </div>
+
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -218,50 +248,38 @@ export function AdGeneratorChat({
           }}
           rows={3}
           disabled={submitting}
-          placeholder="Describe the batch, or type /help for slash commands. ⌘↵ to submit."
-          className="w-full resize-y rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm leading-relaxed text-text-primary placeholder:text-text-muted focus:border-accent/40 focus:outline-none"
+          placeholder="Describe this month’s ad drop, or type /help for slash commands."
+          className="w-full resize-y rounded-lg border border-nativz-border/70 bg-background/60 px-3.5 py-2.5 text-[14px] leading-relaxed text-text-primary placeholder:text-text-muted/80 focus:border-accent/60 focus:outline-none focus:ring-1 focus:ring-accent/20"
         />
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            {isCommand ? (
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-accent-surface/70 px-2.5 py-1 text-[11px] font-medium text-accent-text">
-                <Terminal size={11} />
-                Slash command
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-text-muted">Count</span>
-                <div className="inline-flex rounded-lg bg-surface-hover/60 p-0.5">
-                  {COUNT_PRESETS.map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setCount(n)}
-                      className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer ${
-                        count === n
-                          ? 'bg-accent text-white shadow-sm'
-                          : 'text-text-muted hover:text-text-secondary'
-                      }`}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          {isCommand ? (
+            <p
+              className="text-[12px] italic text-text-muted"
+              style={{ fontFamily: DISPLAY_FONT }}
+            >
+              Cortex will run this command and reply with the result.
+            </p>
+          ) : (
+            <CountSelector value={count} onChange={setCount} />
+          )}
+
           <button
             type="button"
             onClick={() => void handleSubmit()}
             disabled={submitting || input.trim().length < 1}
-            className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent/90 disabled:opacity-50"
+            className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-accent px-5 text-sm font-semibold text-white transition-colors hover:bg-accent/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {submitting ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+            {submitting ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Sparkles size={14} />
+            )}
             {submitting
               ? 'Working…'
               : isCommand
                 ? 'Run command'
-                : `Generate ${count} concepts`}
+                : `Generate ${count} ads`}
           </button>
         </div>
       </div>
@@ -293,31 +311,97 @@ function appendAssistant(
   ]);
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/**
+ * One transcript row. User briefs are styled in cyan to claim authorship;
+ * Cortex replies are neutral and numbered. No bubbles, no avatars — the
+ * eyebrow alone carries the speaker.
+ */
+function MessageSlip({
+  message,
+  replyIndex,
+}: {
+  message: ChatMessage;
+  replyIndex: number | null;
+}) {
   const isUser = message.role === 'user';
+  const time = formatTime(message.created_at);
   return (
-    <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
-      <div
-        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
-          isUser ? 'bg-accent/20 text-accent-text' : 'bg-surface-hover text-text-secondary'
-        }`}
-      >
-        {isUser ? <UserIcon size={14} /> : <Bot size={14} />}
+    <li className="space-y-2">
+      <div className="flex items-baseline gap-2">
+        <span
+          className={`font-mono text-[10px] tabular-nums ${
+            isUser ? 'text-accent-text' : 'text-text-muted/70'
+          }`}
+        >
+          {time}
+        </span>
+        <span
+          className={`text-[12px] italic tracking-wide ${
+            isUser ? 'text-accent-text' : 'text-text-muted'
+          }`}
+          style={{ fontFamily: DISPLAY_FONT }}
+        >
+          {isUser
+            ? 'Brief'
+            : `Cortex · ${String(replyIndex ?? 0).padStart(2, '0')}`}
+        </span>
       </div>
-      <div
-        className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
-          isUser
-            ? 'bg-accent-surface text-text-primary'
-            : 'border border-nativz-border bg-background text-text-secondary'
+      <p
+        className={`whitespace-pre-wrap text-[14px] leading-relaxed ${
+          isUser ? 'text-text-primary' : 'text-text-secondary'
         }`}
       >
-        {message.command && isUser && (
-          <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-            <Terminal size={10} />
-            /{message.command}
-          </div>
-        )}
-        <p className="whitespace-pre-wrap">{message.content}</p>
+        {message.content}
+      </p>
+    </li>
+  );
+}
+
+function CountSelector({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <span
+        className="text-[11px] italic tracking-wide text-text-muted"
+        style={{ fontFamily: DISPLAY_FONT }}
+      >
+        Count
+      </span>
+      <div className="flex items-center gap-2 font-mono text-[12px] tabular-nums">
+        {COUNT_PRESETS.map((n, i) => {
+          const active = value === n;
+          return (
+            <span key={n} className="flex items-center gap-2">
+              {i > 0 && (
+                <span aria-hidden className="text-text-muted/30">
+                  ·
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => onChange(n)}
+                aria-pressed={active}
+                className={`cursor-pointer transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-cyan-400/60 ${
+                  active
+                    ? 'font-semibold text-accent-text underline decoration-accent decoration-2 underline-offset-4'
+                    : 'text-text-muted hover:text-text-secondary'
+                }`}
+              >
+                {n}
+              </button>
+            </span>
+          );
+        })}
       </div>
     </div>
   );
@@ -325,24 +409,25 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 
 function EmptyStateHint() {
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-dashed border-nativz-border bg-surface/40 p-4">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
-          Try a direction
-        </p>
-        <div className="space-y-1.5">
+    <div className="max-w-2xl space-y-9 py-8">
+      <div className="space-y-3">
+        <p className="nz-eyebrow">Direction examples</p>
+        <ul className="space-y-3">
           {EXAMPLE_PROMPTS.map((p) => (
-            <p key={p} className="text-[13px] leading-relaxed text-text-secondary">
-              {p}
-            </p>
+            <li
+              key={p}
+              className="flex gap-3 text-[13px] leading-relaxed text-text-secondary"
+            >
+              <span aria-hidden className="select-none text-text-muted/40">
+                —
+              </span>
+              <span>{p}</span>
+            </li>
           ))}
-        </div>
+        </ul>
       </div>
-      <div className="rounded-xl border border-dashed border-nativz-border bg-surface/40 p-4">
-        <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-text-muted">
-          <Terminal size={11} />
-          Or use a slash command
-        </div>
+      <div className="space-y-3">
+        <p className="nz-eyebrow">Slash commands</p>
         <pre className="whitespace-pre-wrap font-mono text-[11px] leading-snug text-text-secondary">
           {CHAT_COMMAND_HELP}
         </pre>

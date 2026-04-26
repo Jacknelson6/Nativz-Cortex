@@ -55,14 +55,13 @@ interface Props {
   onDelete: (id: string) => void;
 }
 
+const DISPLAY_FONT = 'var(--font-nz-display), system-ui, sans-serif';
+
 /**
- * Concept gallery. Renders every row in the current batch set as a card
- * with quick actions (approve / reject / regenerate image / delete) plus
- * a detail dialog for full copy inspection.
- *
- * Phase 2a uses optimistic updates for status changes and deletes — the
- * parent workspace holds the concept list and mutates it in response to
- * child callbacks.
+ * Concept gallery. Renders every row in the current batch set as a
+ * contact-sheet card (image + caption + action row) plus a detail dialog
+ * for full copy inspection. Optimistic updates flow through parent
+ * callbacks so the gallery stays in lockstep with the workspace state.
  */
 export function AdConceptGallery({ clientId, concepts, onUpdate, onDelete }: Props) {
   const [filter, setFilter] = useState<StatusFilter>('all');
@@ -177,54 +176,26 @@ export function AdConceptGallery({ clientId, concepts, onUpdate, onDelete }: Pro
   );
 
   if (concepts.length === 0) {
-    return (
-      <div className="rounded-xl border border-dashed border-nativz-border bg-surface/40 p-10 text-center">
-        <p className="text-sm text-text-muted">
-          No concepts yet. Head to the Chat tab and describe the batch you want.
-        </p>
-      </div>
-    );
+    return <EmptyGallery />;
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-1">
-          <FilterChip
-            label={`All · ${counts.all}`}
-            active={filter === 'all'}
-            onClick={() => setFilter('all')}
-          />
-          <FilterChip
-            label={`Pending · ${counts.pending}`}
-            active={filter === 'pending'}
-            onClick={() => setFilter('pending')}
-            dim={counts.pending === 0}
-          />
-          <FilterChip
-            label={`Approved · ${counts.approved}`}
-            active={filter === 'approved'}
-            onClick={() => setFilter('approved')}
-            dim={counts.approved === 0}
-          />
-          <FilterChip
-            label={`Rejected · ${counts.rejected}`}
-            active={filter === 'rejected'}
-            onClick={() => setFilter('rejected')}
-            dim={counts.rejected === 0}
-          />
-        </div>
+    <div className="space-y-6">
+      {/* Filter strip — editorial labels with dot separators, share CTA on the right */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-nativz-border/60 pb-4">
+        <FilterRow filter={filter} counts={counts} onChange={setFilter} />
         <button
           type="button"
           onClick={() => setShareOpen(true)}
-          className="inline-flex items-center gap-2 rounded-lg border border-nativz-border bg-surface px-3 py-1.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-hover"
+          className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-full border border-nativz-border bg-surface px-4 text-[12px] font-medium text-text-primary transition-colors hover:border-accent/40 hover:bg-surface-hover"
         >
-          <Share2 size={14} />
+          <Share2 size={13} />
           Share with client
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {/* Contact sheet — each card is a stack, no enclosing chrome */}
+      <div className="grid grid-cols-1 gap-x-5 gap-y-9 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {filtered.map((concept) => (
           <ConceptCard
             key={concept.id}
@@ -264,31 +235,95 @@ export function AdConceptGallery({ clientId, concepts, onUpdate, onDelete }: Pro
 // Subcomponents
 // ---------------------------------------------------------------------------
 
-function FilterChip({
-  label,
-  active,
-  onClick,
-  dim,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  dim?: boolean;
-}) {
+function EmptyGallery() {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer ${
-        active
-          ? 'bg-accent-surface text-accent-text'
-          : dim
-            ? 'text-text-muted/50 hover:bg-surface-hover hover:text-text-muted'
-            : 'text-text-muted hover:bg-surface-hover hover:text-text-primary'
-      }`}
-    >
-      {label}
-    </button>
+    <div className="mx-auto max-w-md space-y-3 py-20 text-center">
+      <p className="nz-eyebrow">No concepts yet</p>
+      <p className="text-[13px] leading-relaxed text-text-muted">
+        Head to the Brief tab and describe the batch you want. Cortex matches
+        the brand to proven reference ads, writes the copy, and renders each
+        concept here.
+      </p>
+    </div>
+  );
+}
+
+function FilterRow({
+  filter,
+  counts,
+  onChange,
+}: {
+  filter: StatusFilter;
+  counts: Record<StatusFilter, number>;
+  onChange: (id: StatusFilter) => void;
+}) {
+  const items: { id: StatusFilter; label: string; count: number }[] = [
+    { id: 'all',      label: 'All',      count: counts.all },
+    { id: 'pending',  label: 'Pending',  count: counts.pending },
+    { id: 'approved', label: 'Approved', count: counts.approved },
+    { id: 'rejected', label: 'Rejected', count: counts.rejected },
+  ];
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
+      {items.map((item, i) => {
+        const active = filter === item.id;
+        const dim = !active && item.count === 0;
+        return (
+          <span key={item.id} className="inline-flex items-baseline gap-3">
+            {i > 0 && (
+              <span aria-hidden className="text-text-muted/30">
+                ·
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => onChange(item.id)}
+              aria-pressed={active}
+              className="group inline-flex cursor-pointer items-baseline gap-1.5 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-cyan-400/60"
+            >
+              <span
+                className={`text-[13px] transition-colors ${
+                  active
+                    ? 'font-medium text-text-primary underline decoration-accent decoration-2 underline-offset-[5px]'
+                    : dim
+                      ? 'text-text-muted/50 group-hover:text-text-muted'
+                      : 'text-text-muted group-hover:text-text-primary'
+                }`}
+                style={{ fontFamily: DISPLAY_FONT }}
+              >
+                {item.label}
+              </span>
+              <span
+                className={`font-mono text-[10px] tabular-nums ${
+                  active ? 'text-accent-text' : 'text-text-muted/70'
+                }`}
+              >
+                {String(item.count).padStart(2, '0')}
+              </span>
+            </button>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+const STATUS_CONFIG: Record<
+  AdConcept['status'],
+  { dot: string; text: string; label: string }
+> = {
+  approved: { dot: 'bg-accent',         text: 'text-accent-text', label: 'Approved' },
+  rejected: { dot: 'bg-nz-coral',       text: 'text-nz-coral',    label: 'Rejected' },
+  pending:  { dot: 'bg-text-muted/50',  text: 'text-text-muted',  label: 'Pending'  },
+};
+
+function StatusDot({ status }: { status: AdConcept['status'] }) {
+  const cfg = STATUS_CONFIG[status];
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
+      <span className={`text-[10px] font-medium ${cfg.text}`}>{cfg.label}</span>
+    </span>
   );
 }
 
@@ -314,19 +349,15 @@ function ConceptCard({
   onRender,
 }: CardProps) {
   const imageUrl = concept.image_storage_path ? publicImageUrl(concept.image_storage_path) : null;
-  const statusColor =
-    concept.status === 'approved'
-      ? 'text-emerald-400 border-emerald-400/30 bg-emerald-500/10'
-      : concept.status === 'rejected'
-        ? 'text-red-400 border-red-400/30 bg-red-500/10'
-        : 'text-text-muted border-nativz-border bg-surface-hover/60';
 
   return (
-    <div className="group flex flex-col overflow-hidden rounded-xl border border-nativz-border bg-surface">
+    <article className="group flex flex-col gap-3">
+      {/* Image — thin ring, no floating overlays except the rendering shade */}
       <button
         type="button"
         onClick={onOpen}
-        className="relative block aspect-[4/5] w-full cursor-pointer overflow-hidden bg-surface-hover text-left"
+        className="relative block aspect-[4/5] w-full cursor-pointer overflow-hidden rounded-lg bg-surface-hover/60 text-left ring-1 ring-nativz-border/60 transition-shadow duration-300 hover:ring-accent/50"
+        aria-label={`Open ${concept.headline}`}
       >
         {imageUrl ? (
           <Image
@@ -334,93 +365,97 @@ function ConceptCard({
             alt={concept.headline}
             width={400}
             height={500}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center text-xs text-text-muted">
-            <Wand2 size={22} />
-            <span>No image yet — click Render to fire Gemini.</span>
+            <Wand2 size={20} />
+            <span>No image yet · click render to fire Gemini</span>
           </div>
         )}
         {isRendering && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="flex flex-col items-center gap-1.5 text-white/90">
-              <Loader2 size={18} className="animate-spin" />
-              <span className="text-[11px] font-medium">Rendering…</span>
-            </div>
+          <div className="absolute inset-0 flex items-center justify-center bg-black/55 backdrop-blur-sm">
+            <span
+              className="inline-flex items-center gap-2 text-white/95"
+              style={{ fontFamily: DISPLAY_FONT, fontStyle: 'italic' }}
+            >
+              <Loader2 size={14} className="animate-spin" />
+              <span className="text-[11px]">Rendering</span>
+            </span>
           </div>
-        )}
-        <span className="absolute left-2 top-2 rounded-full bg-accent/80 px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm">
-          {concept.slug}
-        </span>
-        <span
-          className={`absolute right-2 top-2 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${statusColor}`}
-        >
-          {concept.status}
-        </span>
-        {commentCount > 0 && (
-          <span
-            className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-accent-surface/90 px-2 py-0.5 text-[10px] font-semibold text-accent-text shadow-sm"
-            title={`${commentCount} comment${commentCount === 1 ? '' : 's'}`}
-          >
-            <MessageSquare size={10} />
-            {commentCount}
-          </span>
         )}
       </button>
 
-      <div className="flex flex-1 flex-col gap-2 p-3">
-        <div>
-          <p className="text-[10px] uppercase tracking-wide text-text-muted/70">
-            {concept.template_name}
-          </p>
-          <p className="mt-0.5 line-clamp-2 text-sm font-semibold text-text-primary">
-            {concept.headline}
-          </p>
+      {/* Caption strip — slug + status, headline, template + grounding */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between gap-3">
+          <span className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
+            {concept.slug}
+          </span>
+          <StatusDot status={concept.status} />
         </div>
+        <h3 className="line-clamp-2 text-[14px] font-medium leading-snug text-text-primary">
+          {concept.headline}
+        </h3>
+        <p className="text-[11px] text-text-muted/80">
+          {concept.template_name}
+        </p>
         {concept.source_grounding && (
           <p className="line-clamp-2 text-[11px] italic text-text-muted">
             {concept.source_grounding}
           </p>
         )}
-        <div className="mt-auto flex items-center gap-1 pt-2">
-          <IconButton
-            label="Approve"
-            onClick={onApprove}
-            active={concept.status === 'approved'}
-            tone="emerald"
-          >
-            <Check size={14} />
-          </IconButton>
-          <IconButton
-            label="Reject"
-            onClick={onReject}
-            active={concept.status === 'rejected'}
-            tone="red"
-          >
-            <XIcon size={14} />
-          </IconButton>
-          <IconButton
-            label={imageUrl ? 'Re-render image' : 'Render image'}
-            onClick={onRender}
-            disabled={isRendering}
-          >
-            <Wand2 size={14} />
-          </IconButton>
-          <IconButton label="View detail" onClick={onOpen}>
-            <Eye size={14} />
-          </IconButton>
-          <div className="flex-1" />
-          <IconButton label="Delete" onClick={onDelete} tone="red">
-            <Trash2 size={14} />
-          </IconButton>
-        </div>
       </div>
-    </div>
+
+      {/* Actions — full-circle icon buttons, mono comment count if any */}
+      <div className="flex items-center gap-1.5 pt-1">
+        <CircleButton
+          label="Approve"
+          onClick={onApprove}
+          active={concept.status === 'approved'}
+          tone="accent"
+        >
+          <Check size={13} />
+        </CircleButton>
+        <CircleButton
+          label="Reject"
+          onClick={onReject}
+          active={concept.status === 'rejected'}
+          tone="coral"
+        >
+          <XIcon size={13} />
+        </CircleButton>
+        <CircleButton
+          label={imageUrl ? 'Re-render image' : 'Render image'}
+          onClick={onRender}
+          disabled={isRendering}
+        >
+          <Wand2 size={13} />
+        </CircleButton>
+        <CircleButton label="View detail" onClick={onOpen}>
+          <Eye size={13} />
+        </CircleButton>
+        {commentCount > 0 && (
+          <button
+            type="button"
+            onClick={onOpen}
+            title={`${commentCount} comment${commentCount === 1 ? '' : 's'}`}
+            className="ml-1 inline-flex cursor-pointer items-center gap-1 font-mono text-[10px] tabular-nums text-accent-text transition-colors hover:text-accent"
+          >
+            <MessageSquare size={11} />
+            {String(commentCount).padStart(2, '0')}
+          </button>
+        )}
+        <div className="flex-1" />
+        <CircleButton label="Delete" onClick={onDelete} tone="coral-ghost">
+          <Trash2 size={13} />
+        </CircleButton>
+      </div>
+    </article>
   );
 }
 
-function IconButton({
+function CircleButton({
   label,
   onClick,
   children,
@@ -433,15 +468,15 @@ function IconButton({
   children: React.ReactNode;
   active?: boolean;
   disabled?: boolean;
-  tone?: 'emerald' | 'red';
+  tone?: 'accent' | 'coral' | 'coral-ghost';
 }) {
-  const toneClasses = active
-    ? tone === 'emerald'
-      ? 'bg-emerald-500/20 text-emerald-300'
-      : tone === 'red'
-        ? 'bg-red-500/20 text-red-300'
-        : 'bg-accent-surface text-accent-text'
-    : 'text-text-muted hover:bg-surface-hover hover:text-text-primary';
+  const classes = active
+    ? tone === 'coral'
+      ? 'bg-nz-coral text-white'
+      : 'bg-accent text-white'
+    : tone === 'coral-ghost'
+      ? 'text-text-muted hover:bg-nz-coral/10 hover:text-nz-coral'
+      : 'text-text-muted hover:bg-surface-hover hover:text-text-primary';
   return (
     <button
       type="button"
@@ -449,7 +484,7 @@ function IconButton({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className={`flex h-7 w-7 cursor-pointer items-center justify-center rounded-md transition-colors disabled:opacity-50 ${toneClasses}`}
+      className={`flex h-7 w-7 cursor-pointer items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${classes}`}
     >
       {children}
     </button>
@@ -479,26 +514,39 @@ function ConceptDetailDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-4 py-8"
       onClick={onClose}
     >
       <div
         className="flex max-h-full w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-nativz-border bg-surface shadow-elevated"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-nativz-border/50 px-5 py-3">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-text-primary" title={concept.headline}>
-              {concept.slug} · {concept.headline}
-            </p>
-            <p className="truncate text-[11px] text-text-muted">
-              {concept.template_name}
-            </p>
+        {/* Header — eyebrow with slug + template, headline as Jost display */}
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-nativz-border/50 px-6 py-5">
+          <div className="min-w-0 space-y-1.5">
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
+                {concept.slug}
+              </span>
+              <span aria-hidden className="text-text-muted/30">·</span>
+              <span className="text-[11px] text-text-muted">
+                {concept.template_name}
+              </span>
+              <span aria-hidden className="text-text-muted/30">·</span>
+              <StatusDot status={concept.status} />
+            </div>
+            <h2
+              className="text-[20px] font-semibold leading-tight text-text-primary"
+              style={{ fontFamily: DISPLAY_FONT }}
+              title={concept.headline}
+            >
+              {concept.headline}
+            </h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
+            className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
             aria-label="Close"
           >
             <XIcon size={16} />
@@ -506,7 +554,8 @@ function ConceptDetailDialog({
         </div>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-2">
-          <div className="flex min-h-0 items-center justify-center bg-background p-4 md:border-r md:border-nativz-border/50">
+          {/* Image pane */}
+          <div className="flex min-h-0 items-center justify-center bg-background p-5 md:border-r md:border-nativz-border/50">
             {imageUrl ? (
               <Image
                 src={imageUrl}
@@ -517,120 +566,139 @@ function ConceptDetailDialog({
               />
             ) : (
               <div className="flex flex-col items-center gap-3 text-text-muted">
-                <Wand2 size={32} />
+                <Wand2 size={28} />
                 <p className="text-sm">No image rendered yet.</p>
                 <button
                   type="button"
                   onClick={onRender}
                   disabled={isRendering}
-                  className="inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-accent/90 disabled:opacity-50"
+                  className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-full bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isRendering ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+                  {isRendering ? (
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : (
+                    <Wand2 size={13} />
+                  )}
                   {isRendering ? 'Rendering…' : 'Render with Gemini'}
                 </button>
               </div>
             )}
           </div>
 
-          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto px-5 py-4">
+          {/* Detail pane */}
+          <div className="flex min-h-0 flex-col gap-5 overflow-y-auto px-6 py-5">
             {concept.body_copy && (
               <Section label="Body copy">
-                <p className="whitespace-pre-wrap text-sm text-text-secondary">
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-secondary">
                   {concept.body_copy}
                 </p>
               </Section>
             )}
             {concept.visual_description && (
               <Section label="Visual description">
-                <p className="whitespace-pre-wrap text-sm text-text-secondary">
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-secondary">
                   {concept.visual_description}
                 </p>
               </Section>
             )}
             <Section label="Source grounding">
-              <p className="text-sm italic text-text-secondary">{concept.source_grounding}</p>
+              <p className="text-sm italic leading-relaxed text-text-secondary">
+                {concept.source_grounding}
+              </p>
             </Section>
             <Section label="Image prompt">
-              <pre className="whitespace-pre-wrap break-words rounded-md bg-background/80 p-2 font-mono text-[11px] leading-snug text-text-secondary">
+              <pre className="whitespace-pre-wrap break-words rounded-md border border-nativz-border/60 bg-background/80 px-3 py-2 font-mono text-[11px] leading-snug text-text-secondary">
                 {concept.image_prompt}
               </pre>
             </Section>
-            <Section label={`Client comments · ${comments.length}`}>
+            <Section label={`Client comments · ${String(comments.length).padStart(2, '0')}`}>
               {comments.length === 0 ? (
                 <p className="text-[12px] text-text-muted">
-                  No feedback yet. Share the gallery with the client and their replies land here.
+                  No feedback yet. Share the gallery with the client and their
+                  replies land here.
                 </p>
               ) : (
-                <div className="space-y-2">
+                <ul className="space-y-3">
                   {comments.map((c) => (
-                    <div
-                      key={c.id}
-                      className={`rounded-md border px-2.5 py-2 text-[12px] ${
-                        c.kind === 'approval'
-                          ? 'border-emerald-500/30 bg-emerald-500/5'
-                          : c.kind === 'rejection'
-                            ? 'border-red-500/30 bg-red-500/5'
-                            : 'border-nativz-border bg-background'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2 text-[10px] text-text-muted">
-                        <span className="font-semibold text-text-primary">
-                          {c.author_name}
+                    <li key={c.id} className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="flex items-center gap-2">
+                          <CommentDot kind={c.kind} />
+                          <span className="text-[12px] font-medium text-text-primary">
+                            {c.author_name}
+                          </span>
                         </span>
-                        <span>{new Date(c.created_at).toLocaleString()}</span>
+                        <span className="font-mono text-[10px] tabular-nums text-text-muted">
+                          {new Date(c.created_at).toLocaleString()}
+                        </span>
                       </div>
-                      <p className="mt-1 whitespace-pre-wrap text-text-secondary">
+                      <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-text-secondary">
                         {c.body}
                       </p>
-                    </div>
+                    </li>
                   ))}
-                </div>
+                </ul>
               )}
             </Section>
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-nativz-border/50 bg-surface/60 px-5 py-3">
-          <button
-            type="button"
-            onClick={onReject}
-            className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-              concept.status === 'rejected'
-                ? 'bg-red-500/20 text-red-300'
-                : 'text-text-muted hover:bg-surface-hover hover:text-text-primary'
-            }`}
-          >
-            <XIcon size={14} /> Reject
-          </button>
-          <button
-            type="button"
-            onClick={onApprove}
-            className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-              concept.status === 'approved'
-                ? 'bg-emerald-500/20 text-emerald-300'
-                : 'text-text-muted hover:bg-surface-hover hover:text-text-primary'
-            }`}
-          >
-            <Check size={14} /> Approve
-          </button>
-          <div className="flex-1" />
+        {/* Footer — Delete on the far left, Reject + Approve on the right */}
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-nativz-border/50 bg-surface/60 px-6 py-4">
           <button
             type="button"
             onClick={onDelete}
-            className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium text-text-muted transition-colors hover:bg-red-500/10 hover:text-red-400"
+            className="inline-flex cursor-pointer items-center gap-2 rounded-full px-3 py-1.5 text-[12px] text-text-muted transition-colors hover:bg-nz-coral/10 hover:text-nz-coral"
           >
-            <Trash2 size={14} /> Delete
+            <Trash2 size={13} /> Delete concept
           </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onReject}
+              className={`inline-flex h-9 cursor-pointer items-center gap-2 rounded-full px-4 text-[13px] transition-colors ${
+                concept.status === 'rejected'
+                  ? 'bg-nz-coral text-white'
+                  : 'border border-nativz-border text-text-secondary hover:border-nz-coral/40 hover:bg-nz-coral/10 hover:text-nz-coral'
+              }`}
+            >
+              <XIcon size={13} /> Reject
+            </button>
+            <button
+              type="button"
+              onClick={onApprove}
+              className={`inline-flex h-9 cursor-pointer items-center gap-2 rounded-full px-4 text-[13px] font-semibold transition-colors ${
+                concept.status === 'approved'
+                  ? 'bg-accent text-white'
+                  : 'border border-accent/40 bg-accent/10 text-accent-text hover:bg-accent/20'
+              }`}
+            >
+              <Check size={13} /> Approve
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
+function CommentDot({ kind }: { kind: ConceptComment['kind'] }) {
+  const cls =
+    kind === 'approval'
+      ? 'bg-accent'
+      : kind === 'rejection'
+        ? 'bg-nz-coral'
+        : 'bg-text-muted/40';
+  return <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${cls}`} />;
+}
+
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
-      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+    <div className="space-y-2">
+      <p
+        className="text-[11px] italic tracking-wide text-text-muted"
+        style={{ fontFamily: DISPLAY_FONT }}
+      >
         {label}
       </p>
       {children}
@@ -730,38 +798,46 @@ function ShareDialog({ clientId, onClose }: { clientId: string; onClose: () => v
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-4 py-8"
       onClick={onClose}
     >
       <div
         className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-nativz-border bg-surface shadow-elevated"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-nativz-border/50 px-5 py-3">
-          <p className="text-sm font-semibold text-text-primary">Share with client</p>
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-nativz-border/50 px-6 py-5">
+          <div className="space-y-1">
+            <p className="nz-eyebrow">Share with client</p>
+            <h2
+              className="text-[18px] font-semibold leading-tight text-text-primary"
+              style={{ fontFamily: DISPLAY_FONT }}
+            >
+              Public review links
+            </h2>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
+            className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
             aria-label="Close"
           >
             <XIcon size={16} />
           </button>
         </div>
 
-        <div className="shrink-0 space-y-2 border-b border-nativz-border/50 bg-surface/60 px-5 py-4">
-          <p className="text-xs text-text-muted">
+        <div className="shrink-0 space-y-3 border-b border-nativz-border/50 bg-surface/60 px-6 py-5">
+          <p className="text-[12px] leading-relaxed text-text-muted">
             Creates a public URL for the whole concept gallery (pending +
-            approved only — rejected stays internal). Anyone with the link
-            can leave comments; they come back on each card.
+            approved only — rejected stays internal). Anyone with the link can
+            leave comments; they come back on each card.
           </p>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <input
               type="text"
               value={label}
               onChange={(e) => setLabel(e.target.value)}
-              placeholder="Label (optional — e.g. 'Q2 testimonial drop')"
-              className="flex-1 rounded-md border border-nativz-border bg-background px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent/40 focus:outline-none"
+              placeholder="Label (optional — e.g. Q2 testimonial drop)"
+              className="min-w-0 flex-1 rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/20"
             />
             <input
               type="number"
@@ -770,36 +846,42 @@ function ShareDialog({ clientId, onClose }: { clientId: string; onClose: () => v
               value={expiresInDays}
               onChange={(e) => setExpiresInDays(e.target.value)}
               placeholder="Expires in days"
-              className="w-40 rounded-md border border-nativz-border bg-background px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent/40 focus:outline-none"
+              className="w-44 rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/20"
             />
             <button
               type="button"
               onClick={() => void handleCreate()}
               disabled={creating}
-              className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-accent/90 disabled:opacity-50"
+              className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-accent px-5 text-sm font-semibold text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {creating ? <Loader2 size={14} className="animate-spin" /> : <Share2 size={14} />}
+              {creating ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Share2 size={14} />
+              )}
               Create link
             </button>
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
           {loading ? (
             <div className="flex items-center gap-2 py-8 text-sm text-text-muted">
               <Loader2 size={14} className="animate-spin" />
-              Loading share links…
+              <span style={{ fontFamily: DISPLAY_FONT, fontStyle: 'italic' }}>
+                Loading share links…
+              </span>
             </div>
           ) : tokens.length === 0 ? (
-            <p className="py-8 text-center text-sm text-text-muted">
+            <p className="py-12 text-center text-sm text-text-muted">
               No share links yet. Create one above.
             </p>
           ) : (
-            <div className="space-y-2">
+            <ul className="space-y-3">
               {tokens.map((t) => (
                 <ShareTokenRowCard key={t.id} token={t} onRevoke={() => void handleRevoke(t.id)} />
               ))}
-            </div>
+            </ul>
           )}
         </div>
       </div>
@@ -818,7 +900,8 @@ function ShareTokenRowCard({
     typeof window !== 'undefined'
       ? `${window.location.origin}/shared/ad-creatives/${token.token}`
       : `/shared/ad-creatives/${token.token}`;
-  const isDead = !!token.revoked_at || (!!token.expires_at && new Date(token.expires_at) < new Date());
+  const isDead =
+    !!token.revoked_at || (!!token.expires_at && new Date(token.expires_at) < new Date());
   const status = token.revoked_at
     ? 'Revoked'
     : token.expires_at && new Date(token.expires_at) < new Date()
@@ -828,17 +911,19 @@ function ShareTokenRowCard({
         : 'No expiry';
 
   return (
-    <div
-      className={`rounded-lg border px-3 py-2 ${
-        isDead ? 'border-nativz-border/40 bg-surface/40 opacity-60' : 'border-nativz-border bg-background'
+    <li
+      className={`rounded-lg border px-4 py-3 transition-colors ${
+        isDead
+          ? 'border-nativz-border/40 bg-surface/40 opacity-60'
+          : 'border-nativz-border bg-background hover:border-accent/30'
       }`}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0 flex-1">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-1">
           <p className="truncate text-sm font-medium text-text-primary">
             {token.label ?? 'Shared gallery'}
           </p>
-          <p className="mt-0.5 truncate font-mono text-[11px] text-text-muted" title={url}>
+          <p className="truncate font-mono text-[11px] text-text-muted" title={url}>
             {url}
           </p>
         </div>
@@ -850,7 +935,7 @@ function ShareTokenRowCard({
               toast.success('Copied');
             }}
             disabled={isDead}
-            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
             title="Copy URL"
           >
             <Copy size={12} />
@@ -859,7 +944,7 @@ function ShareTokenRowCard({
             <button
               type="button"
               onClick={onRevoke}
-              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-text-muted transition-colors hover:bg-red-500/10 hover:text-red-400"
+              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-text-muted transition-colors hover:bg-nz-coral/10 hover:text-nz-coral"
               title="Revoke link"
             >
               <Trash2 size={12} />
@@ -867,9 +952,9 @@ function ShareTokenRowCard({
           )}
         </div>
       </div>
-      <p className="mt-1 text-[10px] text-text-muted">
+      <p className="mt-2 font-mono text-[10px] tabular-nums text-text-muted/80">
         {status} · Created {new Date(token.created_at).toLocaleString()}
       </p>
-    </div>
+    </li>
   );
 }

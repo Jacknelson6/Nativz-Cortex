@@ -122,6 +122,11 @@ test.describe('API without session', () => {
     expect(res.status()).toBe(401);
   });
 
+  test('GET /api/cron/monthly-gift-ads without bearer returns 401', async ({ request }) => {
+    const res = await request.get('/api/cron/monthly-gift-ads');
+    expect(res.status()).toBe(401);
+  });
+
   test('GET /api/cron/weekly-social-report without bearer returns 401', async ({ request }) => {
     // Cron-style endpoint but accepts admin session too — no session = 401
     const res = await request.get('/api/cron/weekly-social-report');
