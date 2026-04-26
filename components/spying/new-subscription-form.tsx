@@ -88,7 +88,7 @@ export function NewSubscriptionForm({
         <select
           value={clientId}
           onChange={(e) => setClientId(e.target.value)}
-          className="w-full rounded-lg border border-nativz-border bg-surface-hover/30 px-3 py-2 text-sm text-text-primary focus:border-cyan-500/50 focus:outline-none"
+          className="w-full rounded-lg border border-nativz-border bg-surface-hover/30 px-3 py-2 text-sm text-text-primary focus:border-accent/50 focus:outline-none"
         >
           {clients.map((c) => (
             <option key={c.id} value={c.id}>
@@ -110,7 +110,7 @@ export function NewSubscriptionForm({
               className={
                 'cursor-pointer rounded-lg border px-4 py-3 text-sm transition-colors ' +
                 (cadence === c.value
-                  ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-200'
+                  ? 'border-accent/50 bg-accent/10 text-accent-text'
                   : 'border-nativz-border bg-surface-hover/30 text-text-secondary hover:border-nativz-border/90')
               }
             >
@@ -138,7 +138,7 @@ export function NewSubscriptionForm({
           value={recipientsText}
           onChange={(e) => setRecipientsText(e.target.value)}
           placeholder="team@example.com"
-          className="w-full rounded-lg border border-nativz-border bg-surface-hover/30 px-3 py-2 font-mono text-xs text-text-primary focus:border-cyan-500/50 focus:outline-none"
+          className="w-full rounded-lg border border-nativz-border bg-surface-hover/30 px-3 py-2 font-mono text-xs text-text-primary focus:border-accent/50 focus:outline-none"
         />
       </div>
 
@@ -147,7 +147,7 @@ export function NewSubscriptionForm({
           type="checkbox"
           checked={includePortal}
           onChange={(e) => setIncludePortal(e.target.checked)}
-          className="mt-0.5 accent-cyan-400"
+          className="mt-0.5 accent-[var(--accent)]"
         />
         <div>
           <div className="text-sm text-text-primary">Also send to portal users for this client</div>

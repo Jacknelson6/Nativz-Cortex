@@ -45,7 +45,7 @@ export function AuditQuickStart() {
       className="animate-ci-rise rounded-xl border border-nativz-border bg-surface p-6"
       style={{ animationDelay: '60ms' }}
     >
-      <p className="ui-eyebrow text-cyan-300/80">Run audit</p>
+      <p className="ui-eyebrow text-accent-text/80">Run audit</p>
       <h2 className="mt-1 font-display text-lg font-semibold text-text-primary">
         Audit any brand&apos;s short-form footprint.
       </h2>
@@ -69,14 +69,14 @@ export function AuditQuickStart() {
               value={websiteUrl}
               onChange={(e) => setWebsiteUrl(e.target.value)}
               placeholder="https://brand.com or @handle on TikTok / Instagram / YouTube"
-              className="h-11 w-full rounded-lg border border-nativz-border bg-surface-hover/30 py-2 pl-9 pr-3 font-mono text-xs text-text-primary placeholder:text-text-muted/70 focus-visible:border-cyan-400/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-400/60"
+              className="h-11 w-full rounded-lg border border-nativz-border bg-surface-hover/30 py-2 pl-9 pr-3 font-mono text-xs text-text-primary placeholder:text-text-muted/70 focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
               disabled={submitting}
             />
           </div>
           <button
             type="submit"
             disabled={!isValid || submitting}
-            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-accent px-6 text-sm font-semibold text-white transition-colors hover:bg-accent/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-accent px-6 text-sm font-semibold text-white transition-colors hover:bg-accent/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
             <span>{submitting ? 'Starting…' : 'Run audit'}</span>

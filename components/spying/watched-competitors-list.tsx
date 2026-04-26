@@ -81,14 +81,14 @@ export function WatchedCompetitorsList({ watches }: { watches: WatchRow[] }) {
     >
       <div className="flex items-end justify-between gap-4">
         <div>
-          <p className="ui-eyebrow text-cyan-300/80">In-flight</p>
+          <p className="ui-eyebrow text-accent-text/80">In-flight</p>
           <h2 className="mt-1 font-display text-base font-semibold text-text-primary">
             Watched competitors
           </h2>
         </div>
         <Link
           href="/admin/analytics?tab=benchmarking"
-          className="inline-flex items-center gap-1 text-xs text-text-muted transition-colors hover:text-cyan-300"
+          className="inline-flex items-center gap-1 text-xs text-text-muted transition-colors hover:text-accent-text"
         >
           Open benchmarking <ArrowRight size={12} />
         </Link>
@@ -97,8 +97,8 @@ export function WatchedCompetitorsList({ watches }: { watches: WatchRow[] }) {
       {sorted.length === 0 ? (
         <div className="rounded-xl border border-dashed border-nativz-border bg-surface/40 p-8 text-center text-sm text-text-muted">
           No competitors enrolled. Run an audit and click{' '}
-          <span className="text-cyan-300">Watch this competitor</span> on any result, or{' '}
-          <Link href="/spying/watch" className="text-cyan-300 underline decoration-dotted">
+          <span className="text-accent-text">Watch this competitor</span> on any result, or{' '}
+          <Link href="/spying/watch" className="text-accent-text underline decoration-dotted">
             set up watch
           </Link>
           .
@@ -121,9 +121,9 @@ export function WatchedCompetitorsList({ watches }: { watches: WatchRow[] }) {
               <li key={w.id}>
                 <Link
                   href={`/admin/analytics?tab=benchmarking&competitor=${w.id}`}
-                  className="group flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-hover/40 focus-visible:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-400/60"
+                  className="group flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-hover/40 focus-visible:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
                 >
-                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-cyan-500/10 text-cyan-300">
+                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent/10 text-accent-text">
                     {w.client_logo ? (
                       <Image
                         src={w.client_logo}
@@ -156,7 +156,7 @@ export function WatchedCompetitorsList({ watches }: { watches: WatchRow[] }) {
                   </div>
                   <Sparkline
                     values={w.series.length ? w.series : [0, 0]}
-                    className="hidden text-cyan-400 sm:block"
+                    className="hidden text-accent sm:block"
                   />
                   <div className="hidden shrink-0 text-right font-mono text-[11px] tabular-nums sm:block">
                     <div className="text-text-primary">{compactNumber(w.followers)}</div>
@@ -164,7 +164,7 @@ export function WatchedCompetitorsList({ watches }: { watches: WatchRow[] }) {
                   </div>
                   <ArrowRight
                     size={13}
-                    className="shrink-0 text-text-muted/40 transition-all group-hover:translate-x-0.5 group-hover:text-cyan-300"
+                    className="shrink-0 text-text-muted/40 transition-all group-hover:translate-x-0.5 group-hover:text-accent-text"
                   />
                 </Link>
               </li>

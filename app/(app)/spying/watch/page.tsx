@@ -46,7 +46,7 @@ export default async function WatchPage() {
         </p>
         <Link
           href="/spying"
-          className="inline-block text-xs text-text-muted hover:text-cyan-300"
+          className="inline-block text-xs text-text-muted hover:text-accent-text"
         >
           ← Back to Competitor intelligence
         </Link>

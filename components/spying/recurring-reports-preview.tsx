@@ -24,7 +24,7 @@ function nextRunLabel(iso: string): string {
 }
 
 const CADENCE_TONE: Record<string, string> = {
-  weekly: 'bg-cyan-500/15 text-cyan-200',
+  weekly: 'bg-accent/15 text-accent-text',
   biweekly: 'bg-fuchsia-500/15 text-fuchsia-200',
   monthly: 'bg-amber-500/15 text-amber-200',
 };
@@ -43,14 +43,14 @@ export function RecurringReportsPreview({
     >
       <div className="flex items-end justify-between gap-4">
         <div>
-          <p className="ui-eyebrow text-cyan-300/80">Automated</p>
+          <p className="ui-eyebrow text-accent-text/80">Automated</p>
           <h2 className="mt-1 font-display text-base font-semibold text-text-primary">
             Recurring reports
           </h2>
         </div>
         <Link
           href="/spying/reports"
-          className="inline-flex items-center gap-1 text-xs text-text-muted transition-colors hover:text-cyan-300"
+          className="inline-flex items-center gap-1 text-xs text-text-muted transition-colors hover:text-accent-text"
         >
           {totalCount > 0 ? `Manage all (${totalCount})` : 'Set up first report'} <ArrowRight size={12} />
         </Link>
@@ -59,7 +59,7 @@ export function RecurringReportsPreview({
       {subscriptions.length === 0 ? (
         <div className="rounded-xl border border-dashed border-nativz-border bg-surface/40 p-8 text-center text-sm text-text-muted">
           No recurring reports yet —{' '}
-          <Link href="/spying/reports/new" className="text-cyan-300 underline decoration-dotted">
+          <Link href="/spying/reports/new" className="text-accent-text underline decoration-dotted">
             schedule a branded competitor update
           </Link>{' '}
           for any client.
@@ -70,9 +70,9 @@ export function RecurringReportsPreview({
             <li key={s.id}>
               <Link
                 href="/spying/reports"
-                className="group flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-hover/40 focus-visible:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-400/60"
+                className="group flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-hover/40 focus-visible:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
               >
-                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cyan-500/10 font-mono text-[11px] font-bold text-cyan-300">
+                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent/10 font-mono text-[11px] font-bold text-accent-text">
                   {s.client_name.charAt(0).toUpperCase()}
                 </span>
                 <div className="min-w-0 flex-1">
@@ -106,7 +106,7 @@ export function RecurringReportsPreview({
                 </span>
                 <ArrowRight
                   size={13}
-                  className="shrink-0 text-text-muted/40 transition-all group-hover:translate-x-0.5 group-hover:text-cyan-300"
+                  className="shrink-0 text-text-muted/40 transition-all group-hover:translate-x-0.5 group-hover:text-accent-text"
                 />
               </Link>
             </li>

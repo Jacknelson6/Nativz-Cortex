@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getActiveBrand } from '@/lib/active-brand';
 import { SpyingPageHeader } from '@/components/spying/page-header';
 import { AuditQuickStart } from '@/components/spying/audit-quick-start';
 import { SpyStatStrip } from '@/components/spying/spy-stat-strip';
@@ -42,8 +43,77 @@ export default async function CompetitorIntelligencePage() {
     redirect('/finder/new');
   }
 
+  const { brand } = await getActiveBrand();
+
   // eslint-disable-next-line react-hooks/purity -- async server component, not re-rendered
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  // Brand-scope: when an admin has a working brand selected, every list/count
+  // filters to that brand's competitors only. With no brand (super-admin
+  // global view), all queries fall back to the unscoped portfolio rollup.
+  let brandBenchmarkIds: string[] | null = null;
+  if (brand) {
+    const { data: benchRows } = await admin
+      .from('client_benchmarks')
+      .select('id')
+      .eq('client_id', brand.id)
+      .eq('is_active', true);
+    brandBenchmarkIds = (benchRows ?? []).map((r) => r.id);
+  }
+
+  let auditsQuery = admin
+    .from('prospect_audits')
+    .select(
+      'id, status, created_at, prospect_data, attached_client:attached_client_id(name)',
+    )
+    .order('created_at', { ascending: false })
+    .limit(8);
+  if (brand) auditsQuery = auditsQuery.eq('attached_client_id', brand.id);
+
+  let benchmarksQuery = admin
+    .from('client_benchmarks')
+    .select(
+      'id, client_id, cadence, last_snapshot_at, is_active, client:clients(name, logo_url, agency)',
+    )
+    .eq('is_active', true)
+    .order('last_snapshot_at', { ascending: false, nullsFirst: false })
+    .limit(12);
+  if (brand) benchmarksQuery = benchmarksQuery.eq('client_id', brand.id);
+
+  let auditCountQuery = admin
+    .from('prospect_audits')
+    .select('id', { count: 'exact', head: true })
+    .gte('created_at', sevenDaysAgo);
+  if (brand) auditCountQuery = auditCountQuery.eq('attached_client_id', brand.id);
+
+  // Skip the snapshot count when brand-scoped to zero benchmarks — `.in('col', [])`
+  // is unreliable across PostgREST versions.
+  const snapshotCountPromise: Promise<{ count: number | null }> = (async () => {
+    if (brandBenchmarkIds !== null && brandBenchmarkIds.length === 0) {
+      return { count: 0 };
+    }
+    let q = admin
+      .from('benchmark_snapshots')
+      .select('benchmark_id', { count: 'exact', head: true })
+      .gte('captured_at', sevenDaysAgo);
+    if (brandBenchmarkIds !== null) q = q.in('benchmark_id', brandBenchmarkIds);
+    const result = await q;
+    return { count: result.count };
+  })();
+
+  let activeWatchQuery = admin
+    .from('client_benchmarks')
+    .select('id', { count: 'exact', head: true })
+    .eq('is_active', true);
+  if (brand) activeWatchQuery = activeWatchQuery.eq('client_id', brand.id);
+
+  let subscriptionsQuery = admin
+    .from('competitor_report_subscriptions')
+    .select(
+      'id, client_id, cadence, recipients, include_portal_users, enabled, last_run_at, next_run_at, client:clients(name, agency)',
+    )
+    .order('next_run_at', { ascending: true });
+  if (brand) subscriptionsQuery = subscriptionsQuery.eq('client_id', brand.id);
 
   const [
     auditsResult,
@@ -53,39 +123,12 @@ export default async function CompetitorIntelligencePage() {
     activeWatchCountResult,
     subscriptionsResult,
   ] = await Promise.all([
-    admin
-      .from('prospect_audits')
-      .select(
-        'id, status, created_at, prospect_data, attached_client:attached_client_id(name)',
-      )
-      .order('created_at', { ascending: false })
-      .limit(8),
-    admin
-      .from('client_benchmarks')
-      .select(
-        'id, client_id, cadence, last_snapshot_at, is_active, client:clients(name, logo_url, agency)',
-      )
-      .eq('is_active', true)
-      .order('last_snapshot_at', { ascending: false, nullsFirst: false })
-      .limit(12),
-    admin
-      .from('prospect_audits')
-      .select('id', { count: 'exact', head: true })
-      .gte('created_at', sevenDaysAgo),
-    admin
-      .from('benchmark_snapshots')
-      .select('benchmark_id', { count: 'exact', head: true })
-      .gte('captured_at', sevenDaysAgo),
-    admin
-      .from('client_benchmarks')
-      .select('id', { count: 'exact', head: true })
-      .eq('is_active', true),
-    admin
-      .from('competitor_report_subscriptions')
-      .select(
-        'id, client_id, cadence, recipients, include_portal_users, enabled, last_run_at, next_run_at, client:clients(name, agency)',
-      )
-      .order('next_run_at', { ascending: true }),
+    auditsQuery,
+    benchmarksQuery,
+    auditCountQuery,
+    snapshotCountPromise,
+    activeWatchQuery,
+    subscriptionsQuery,
   ]);
 
   const audits = (auditsResult.data ?? []).map((a) => {

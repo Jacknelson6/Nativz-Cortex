@@ -104,7 +104,7 @@ export function ReportHistoryFeed({ reports }: { reports: ReportRow[] }) {
                   <button
                     type="button"
                     onClick={() => view(r.id)}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-nativz-border/60 bg-surface-hover/30 px-2 py-1 text-[11px] text-text-secondary transition-colors hover:border-cyan-500/30 hover:text-cyan-300"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-nativz-border/60 bg-surface-hover/30 px-2 py-1 text-[11px] text-text-secondary transition-colors hover:border-accent/30 hover:text-accent-text"
                   >
                     <FileText size={13} />
                     {expanded ? 'Hide' : 'View'}
@@ -113,7 +113,7 @@ export function ReportHistoryFeed({ reports }: { reports: ReportRow[] }) {
                     href={`/api/competitor-reports/${r.id}/pdf`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-md border border-nativz-border/60 bg-surface-hover/30 px-2 py-1 text-[11px] text-text-secondary transition-colors hover:border-cyan-500/30 hover:text-cyan-300"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-nativz-border/60 bg-surface-hover/30 px-2 py-1 text-[11px] text-text-secondary transition-colors hover:border-accent/30 hover:text-accent-text"
                   >
                     <Download size={13} />
                     PDF
@@ -122,7 +122,7 @@ export function ReportHistoryFeed({ reports }: { reports: ReportRow[] }) {
                     type="button"
                     disabled={pendingId === r.id}
                     onClick={() => resend(r.id)}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-nativz-border/60 bg-surface-hover/30 px-2 py-1 text-[11px] text-text-secondary transition-colors hover:border-cyan-500/30 hover:text-cyan-300 disabled:opacity-40"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-nativz-border/60 bg-surface-hover/30 px-2 py-1 text-[11px] text-text-secondary transition-colors hover:border-accent/30 hover:text-accent-text disabled:opacity-40"
                   >
                     <Send size={13} />
                     Resend
@@ -154,7 +154,7 @@ export function ReportHistoryFeed({ reports }: { reports: ReportRow[] }) {
 function StatusBadge({ status, error }: { status: string; error: string | null }) {
   const tone =
     status === 'sent'
-      ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
+      ? 'border-accent/30 bg-accent/10 text-accent-text'
       : status === 'failed'
         ? 'border-coral-500/30 bg-coral-500/10 text-coral-300'
         : 'border-text-muted/30 bg-surface-hover/60 text-text-secondary';

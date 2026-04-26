@@ -22,7 +22,7 @@ function timeAgo(iso: string): string {
 }
 
 const STATUS_TONE: Record<string, string> = {
-  completed: 'bg-cyan-500/15 text-cyan-200',
+  completed: 'bg-accent/15 text-accent-text',
   failed: 'bg-coral-500/15 text-coral-200',
   processing: 'bg-amber-500/15 text-amber-200',
 };
@@ -39,14 +39,14 @@ export function LatestAuditsList({ audits }: { audits: AuditRow[] }) {
     >
       <div className="flex items-end justify-between gap-4">
         <div>
-          <p className="ui-eyebrow text-cyan-300/80">Output</p>
+          <p className="ui-eyebrow text-accent-text/80">Output</p>
           <h2 className="mt-1 font-display text-base font-semibold text-text-primary">
             Latest audits
           </h2>
         </div>
         <Link
           href="/spying/audits"
-          className="inline-flex items-center gap-1 text-xs text-text-muted transition-colors hover:text-cyan-300"
+          className="inline-flex items-center gap-1 text-xs text-text-muted transition-colors hover:text-accent-text"
         >
           View all <ArrowRight size={12} />
         </Link>
@@ -62,9 +62,9 @@ export function LatestAuditsList({ audits }: { audits: AuditRow[] }) {
             <li key={a.id}>
               <Link
                 href={`/admin/analyze-social/${a.id}`}
-                className="group flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-hover/40 focus-visible:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-400/60"
+                className="group flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-hover/40 focus-visible:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
               >
-                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-cyan-500/10 text-cyan-300">
+                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-accent/10 text-accent-text">
                   {a.favicon ? (
                     <Image
                       src={a.favicon}
@@ -96,7 +96,7 @@ export function LatestAuditsList({ audits }: { audits: AuditRow[] }) {
                 </span>
                 <ArrowRight
                   size={13}
-                  className="shrink-0 text-text-muted/40 transition-all group-hover:translate-x-0.5 group-hover:text-cyan-300"
+                  className="shrink-0 text-text-muted/40 transition-all group-hover:translate-x-0.5 group-hover:text-accent-text"
                 />
               </Link>
             </li>

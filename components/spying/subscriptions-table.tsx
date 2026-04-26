@@ -99,7 +99,7 @@ export function SubscriptionsTable({ subscriptions }: { subscriptions: Subscript
   if (subscriptions.length === 0) {
     return (
       <div className="rounded-xl border border-nativz-border bg-surface p-8 text-center text-sm text-text-muted">
-        No subscriptions yet. Click <span className="text-cyan-300">+ New subscription</span> to
+        No subscriptions yet. Click <span className="text-accent-text">+ New subscription</span> to
         schedule the first one.
       </div>
     );
@@ -132,7 +132,7 @@ export function SubscriptionsTable({ subscriptions }: { subscriptions: Subscript
               <div className="truncate text-text-primary">{client?.name ?? '(client deleted)'}</div>
               <div className="truncate font-mono text-[10px] text-text-muted">{s.client_id.slice(0, 8)}</div>
             </div>
-            <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-cyan-300">
+            <span className="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent-text">
               {s.cadence}
             </span>
             <span className="text-right text-xs tabular-nums text-text-muted">
@@ -144,7 +144,7 @@ export function SubscriptionsTable({ subscriptions }: { subscriptions: Subscript
                 <div className="text-[10px] text-text-muted/70">+{s.recipients.length - 2} more</div>
               )}
               {s.include_portal_users && (
-                <div className="text-[10px] text-cyan-300/70">+ portal users</div>
+                <div className="text-[10px] text-accent-text/70">+ portal users</div>
               )}
             </div>
             <span className="text-right">
@@ -152,7 +152,7 @@ export function SubscriptionsTable({ subscriptions }: { subscriptions: Subscript
                 className={
                   'rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ' +
                   (s.enabled
-                    ? 'border border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
+                    ? 'border border-accent/30 bg-accent/10 text-accent-text'
                     : 'border border-text-muted/30 bg-surface-hover/60 text-text-secondary')
                 }
               >
@@ -215,7 +215,7 @@ function ActionButton({
         'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] transition-colors disabled:opacity-40 ' +
         (variant === 'danger'
           ? 'border-coral-500/30 bg-coral-500/10 text-coral-300 hover:bg-coral-500/20'
-          : 'border-nativz-border/60 bg-surface-hover/30 text-text-secondary hover:border-cyan-500/30 hover:text-cyan-300')
+          : 'border-nativz-border/60 bg-surface-hover/30 text-text-secondary hover:border-accent/30 hover:text-accent-text')
       }
     >
       {icon}

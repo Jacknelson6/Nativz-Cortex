@@ -66,10 +66,10 @@ export default async function CompetitorReportsPage() {
           </Link>
         </div>
         <nav className="mt-4 flex flex-wrap gap-4 text-xs text-text-muted">
-          <Link href="/spying" className="hover:text-cyan-300">
+          <Link href="/spying" className="hover:text-accent-text">
             ← Back to Competitor intelligence
           </Link>
-          <Link href="/admin/analytics?tab=benchmarking" className="hover:text-cyan-300">
+          <Link href="/admin/analytics?tab=benchmarking" className="hover:text-accent-text">
             Benchmarking analytics →
           </Link>
         </nav>

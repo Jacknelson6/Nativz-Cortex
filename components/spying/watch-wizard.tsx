@@ -159,7 +159,7 @@ export function WatchWizard({ clients }: { clients: Client[] }) {
         <select
           value={clientId}
           onChange={(e) => setClientId(e.target.value)}
-          className="w-full rounded-lg border border-nativz-border bg-surface-hover/30 px-3 py-2.5 text-sm text-text-primary focus:border-cyan-500/50 focus:outline-none"
+          className="w-full rounded-lg border border-nativz-border bg-surface-hover/30 px-3 py-2.5 text-sm text-text-primary focus:border-accent/50 focus:outline-none"
         >
           {clients.map((c) => (
             <option key={c.id} value={c.id}>
@@ -177,7 +177,7 @@ export function WatchWizard({ clients }: { clients: Client[] }) {
               key={row.id}
               className="flex items-center gap-2 rounded-lg border border-nativz-border bg-surface-hover/20 p-2"
             >
-              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cyan-500/10 text-cyan-300">
+              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent-text">
                 {platformIcon(row.detected_platform)}
               </span>
               <div className="min-w-0 flex-1">
@@ -186,11 +186,11 @@ export function WatchWizard({ clients }: { clients: Client[] }) {
                   value={row.url}
                   onChange={(e) => updateRow(row.id, e.target.value)}
                   placeholder="https://tiktok.com/@handle"
-                  className="w-full rounded-md border border-nativz-border/60 bg-surface/60 px-3 py-1.5 font-mono text-xs text-text-primary focus:border-cyan-500/50 focus:outline-none"
+                  className="w-full rounded-md border border-nativz-border/60 bg-surface/60 px-3 py-1.5 font-mono text-xs text-text-primary focus:border-accent/50 focus:outline-none"
                 />
                 {row.url && row.detected_handle && (
                   <div className="mt-1 flex items-center gap-2 text-[11px]">
-                    <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 text-cyan-300">
+                    <span className="rounded-full border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-accent-text">
                       {row.detected_platform}
                     </span>
                     <span className="font-mono text-text-muted">@{row.detected_handle}</span>
@@ -215,7 +215,7 @@ export function WatchWizard({ clients }: { clients: Client[] }) {
             type="button"
             onClick={addRow}
             disabled={rows.length >= 5}
-            className="inline-flex items-center gap-2 rounded-lg border border-dashed border-nativz-border px-4 py-2 text-xs text-text-muted hover:border-cyan-500/30 hover:text-cyan-300 disabled:opacity-40"
+            className="inline-flex items-center gap-2 rounded-lg border border-dashed border-nativz-border px-4 py-2 text-xs text-text-muted hover:border-accent/30 hover:text-accent-text disabled:opacity-40"
           >
             <Plus size={12} />
             Add another {rows.length >= 5 && '(max 5)'}
@@ -231,7 +231,7 @@ export function WatchWizard({ clients }: { clients: Client[] }) {
               className={
                 'cursor-pointer rounded-lg border px-4 py-3 text-sm transition-colors ' +
                 (cadence === c.value
-                  ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-200'
+                  ? 'border-accent/50 bg-accent/10 text-accent-text'
                   : 'border-nativz-border bg-surface-hover/30 text-text-secondary hover:border-nativz-border/90')
               }
             >
@@ -287,7 +287,7 @@ function Step({
   return (
     <section className="space-y-3 rounded-2xl border border-nativz-border bg-surface p-5">
       <div className="flex items-baseline gap-3">
-        <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-cyan-500/30 bg-cyan-500/10 text-[11px] font-semibold text-cyan-300">
+        <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-accent/30 bg-accent/10 text-[11px] font-semibold text-accent-text">
           {number}
         </span>
         <h2

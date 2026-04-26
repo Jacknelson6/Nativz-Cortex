@@ -146,3 +146,7 @@ Vercel at `cortex.nativz.io` · Supabase project `phypsgxszrvwdaaqpxup` · SearX
 ## Task Specs
 
 For complex features, check the `tasks/` directory for detailed specs. Build from specs without asking for confirmation.
+
+## Long-running sessions
+
+Auto-compaction is configured (threshold lowered to 80% per `490221a4`). You can run multi-phase, multi-day phased builds continuously without worrying about the context window — old turns are summarized as needed. When Jack approves a multi-phase plan ("continue on phase 1-4 until you're done"), execute every phase end-to-end with the verify gates per phase (typecheck + lint + dev visual + `/audit` + commit), pausing only for genuine blockers (missing creds, browser-only auth, destructive ops). No "stopping for the night" prompts; no "should I continue?" — just keep shipping.

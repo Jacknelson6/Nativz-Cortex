@@ -8,7 +8,7 @@ export function SpyToolRail() {
       style={{ animationDelay: '420ms' }}
     >
       <div>
-        <p className="ui-eyebrow text-cyan-300/80">Adjacent</p>
+        <p className="ui-eyebrow text-accent-text/80">Adjacent</p>
         <h2 className="mt-1 font-display text-base font-semibold text-text-primary">
           More spying tools
         </h2>
