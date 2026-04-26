@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Bot,
@@ -20,20 +20,27 @@ interface SelfAuditDetailProps {
   audit: BrandAuditRow;
 }
 
+// 150 polls × 4s = 10 min, matches the sweeper TTL. Once we cross this
+// without seeing a terminal status, give up polling and surface a
+// "stuck" panel — the cron sweep will mark the row failed within the
+// next sweep window.
+const MAX_POLL_ATTEMPTS = 150;
+
 export function SelfAuditDetail({ audit: initialAudit }: SelfAuditDetailProps) {
   const router = useRouter();
   const [audit, setAudit] = useState<BrandAuditRow>(initialAudit);
+  const [pollExhausted, setPollExhausted] = useState(false);
+  const attemptsRef = useRef(0);
 
-  // Poll while the audit is still running so the detail page lights up
-  // automatically once the run engine finishes. Stops as soon as we
-  // reach a terminal state.
   useEffect(() => {
     if (audit.status !== 'running' && audit.status !== 'pending') return;
+    if (pollExhausted) return;
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const poll = async () => {
+      attemptsRef.current += 1;
       try {
         const res = await fetch(`/api/brand-audits/${audit.id}`, { cache: 'no-store' });
         if (!res.ok) return;
@@ -48,7 +55,13 @@ export function SelfAuditDetail({ audit: initialAudit }: SelfAuditDetailProps) {
       } catch {
         // swallow — next tick will retry
       } finally {
-        if (!cancelled) timer = setTimeout(poll, 4000);
+        if (!cancelled) {
+          if (attemptsRef.current >= MAX_POLL_ATTEMPTS) {
+            setPollExhausted(true);
+          } else {
+            timer = setTimeout(poll, 4000);
+          }
+        }
       }
     };
 
@@ -57,10 +70,10 @@ export function SelfAuditDetail({ audit: initialAudit }: SelfAuditDetailProps) {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [audit.id, audit.status, router]);
+  }, [audit.id, audit.status, router, pollExhausted]);
 
   if (audit.status === 'running' || audit.status === 'pending') {
-    return <RunningState audit={audit} />;
+    return pollExhausted ? <StuckState audit={audit} /> : <RunningState audit={audit} />;
   }
 
   if (audit.status === 'failed') {
@@ -100,6 +113,26 @@ function FailedState({ audit }: { audit: BrandAuditRow }) {
           </h2>
           <p className="mt-1 text-sm text-coral-200/80">
             {audit.error_message ?? 'Something went wrong. Try running it again.'}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StuckState({ audit }: { audit: BrandAuditRow }) {
+  return (
+    <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-6">
+      <div className="flex items-start gap-3">
+        <CircleAlert size={20} className="mt-0.5 flex-shrink-0 text-amber-300" />
+        <div>
+          <h2 className="font-display text-base font-semibold text-amber-200">
+            Still running after 10 minutes
+          </h2>
+          <p className="mt-1 text-sm text-amber-200/80">
+            The audit for {audit.brand_name} hasn&apos;t reported back. The sweeper
+            cron will mark it failed within the next sweep — refresh in a few
+            minutes, or start a new audit.
           </p>
         </div>
       </div>
