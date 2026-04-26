@@ -1,12 +1,23 @@
 'use client';
 
 import { memo, useEffect, useState } from 'react';
-import { ExternalLink, Heart, MessageCircle, Eye, TrendingUp, Play } from 'lucide-react';
+import {
+  ExternalLink,
+  Heart,
+  MessageCircle,
+  Eye,
+  TrendingUp,
+  Play,
+  Facebook,
+  Instagram,
+  Linkedin,
+  Youtube,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PlatformBadge } from './platform-badge';
+import { TikTokMark } from '@/components/integrations/tiktok-mark';
 import type { SocialPlatform } from '@/lib/types/reporting';
 
 interface PostRow {
@@ -63,6 +74,33 @@ const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
 ];
 
 const VERTICAL_PLATFORMS: SocialPlatform[] = ['tiktok', 'instagram', 'youtube'];
+
+/**
+ * Monochrome platform glyph rendered inline in each post card header. Echoes
+ * the topic-search input aesthetic: simple silhouettes in muted text color,
+ * no colored pill backgrounds, no brand-color fills. The icon is the only
+ * platform identifier on the card now, so we render it at 22px in
+ * `text-text-secondary` — present enough to read at a glance without
+ * competing with the thumbnail or caption.
+ */
+function PlatformGlyph({ platform }: { platform: SocialPlatform }) {
+  const size = 22;
+  const className = 'shrink-0 text-text-secondary';
+  switch (platform) {
+    case 'tiktok':
+      return <TikTokMark variant="mono" size={size} className={className} />;
+    case 'instagram':
+      return <Instagram size={size} className={className} aria-hidden />;
+    case 'facebook':
+      return <Facebook size={size} className={className} aria-hidden />;
+    case 'youtube':
+      return <Youtube size={size} className={className} aria-hidden />;
+    case 'linkedin':
+      return <Linkedin size={size} className={className} aria-hidden />;
+    default:
+      return null;
+  }
+}
 
 export function PostDetailsGrid({ clientId, start, end }: PostDetailsGridProps) {
   const [posts, setPosts] = useState<PostRow[]>([]);
@@ -250,9 +288,9 @@ const PostCard = memo(function PostCard({ post }: { post: PostRow }) {
         }
       }}
     >
-      <div className="flex gap-2.5 px-4 pt-3 pb-3">
+      <div className="flex gap-3 px-4 pt-3 pb-3">
         <div className="shrink-0 pt-0.5">
-          <PlatformBadge platform={post.platform} showLabel={false} size="sm" />
+          <PlatformGlyph platform={post.platform} />
         </div>
         <div className="min-w-0 flex-1 space-y-1.5">
           <div className="flex items-start justify-between gap-2">

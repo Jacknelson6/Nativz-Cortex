@@ -13,9 +13,26 @@ export function TikTokMark({
   className?: string;
   /** 'auto' uses currentColor for the foreground so it adapts to light/dark brand modes automatically.
    *  'onLight' forces a solid black mark (strips the chromatic split — cleaner at small sizes on white).
-   *  'onDark' forces a solid white foreground with the chromatic cyan/pink split. */
-  variant?: 'auto' | 'onDark' | 'onLight';
+   *  'onDark' forces a solid white foreground with the chromatic cyan/pink split.
+   *  'mono' renders the note path in currentColor only — no chromatic split, no
+   *  hard-coded color — so it can sit alongside lucide brand icons at the same
+   *  visual weight in muted/secondary text contexts. */
+  variant?: 'auto' | 'onDark' | 'onLight' | 'mono';
 }) {
+  if (variant === 'mono') {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        className={cn('shrink-0', className)}
+        aria-hidden
+      >
+        <path d={NOTE_PATH} fill="currentColor" />
+      </svg>
+    );
+  }
   if (variant === 'onLight') {
     return (
       <svg

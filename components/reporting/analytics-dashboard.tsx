@@ -16,6 +16,13 @@ import { AnalysisChatDrawer } from '@/components/analyses/analysis-chat-drawer';
 
 const ReportBuilder = dynamic(() => import('./report-builder').then(m => ({ default: m.ReportBuilder })));
 
+function fmtCompareDate(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 export function AnalyticsDashboard({ initialClientId }: { initialClientId?: string | null } = {}) {
   const {
     selectedClient,
@@ -42,6 +49,14 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
   } = useReportingData(initialClientId);
 
   const [reportOpen, setReportOpen] = useState(false);
+
+  // Pre-formatted "vs Mar 1 – Mar 28" hint — the per-platform sparkline cards
+  // surface this beneath the prior-period total so a reader can tell at a
+  // glance which window the dashed ghost line represents.
+  const compareLabel =
+    compareEnabled && compareRange
+      ? `vs ${fmtCompareDate(compareRange.start)} – ${fmtCompareDate(compareRange.end)}`
+      : undefined;
 
   if (loading) {
     return (
@@ -116,25 +131,31 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
             <PlatformBreakdownTable rows={summary.platformBreakdown} />
           )}
 
-          {/* Per-platform sections — always expanded per Jack's 2026-04-21 ask. */}
+          {/* Per-platform sections — always expanded per Jack's 2026-04-21 ask.
+              Eyebrow removed: the platform-brand badge inside each section
+              header already names the network, so a "Platform details" h2
+              was redundant chrome. */}
           {summary?.platforms && summary.platforms.length > 0 && (
-            <section className="space-y-5 rounded-xl border border-nativz-border bg-surface p-5">
-              <h2 className="ui-section-title">Platform details</h2>
-              <div className="space-y-8">
-                {(['tiktok', 'instagram', 'youtube', 'facebook', 'linkedin'] as const)
-                  .filter((p) => summary.platforms.some((ps) => ps.platform === p))
-                  .map((platform) => {
-                    const ps = summary.platforms.find((s) => s.platform === platform)!;
-                    const chartData = summary.platformCharts?.[platform] ?? [];
-                    return (
-                      <PlatformSection
-                        key={platform}
-                        summary={ps}
-                        chartData={chartData}
-                      />
-                    );
-                  })}
-              </div>
+            <section className="space-y-8 rounded-xl border border-nativz-border bg-surface p-5">
+              {(['tiktok', 'instagram', 'youtube', 'facebook', 'linkedin'] as const)
+                .filter((p) => summary.platforms.some((ps) => ps.platform === p))
+                .map((platform) => {
+                  const ps = summary.platforms.find((s) => s.platform === platform)!;
+                  const cs =
+                    compareEnabled
+                      ? compareSummary?.platforms?.find((s) => s.platform === platform) ?? null
+                      : null;
+                  const chartData = summary.platformCharts?.[platform] ?? [];
+                  return (
+                    <PlatformSection
+                      key={platform}
+                      summary={ps}
+                      chartData={chartData}
+                      compareSummary={cs}
+                      compareLabel={compareLabel}
+                    />
+                  );
+                })}
             </section>
           )}
 
