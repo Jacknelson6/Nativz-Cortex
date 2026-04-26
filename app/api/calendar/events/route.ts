@@ -2,19 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getValidToken } from '@/lib/google/auth';
+import { fetchEventsForPerson } from '@/lib/scheduling/google-events';
 
-// ─── In-memory cache ──────────────────────────────────────────────────────────
+export const runtime = 'nodejs';
 
 interface CacheEntry {
-  data: CalendarResult;
+  data: PersonCalendarResult;
   timestamp: number;
 }
 
-const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+const CACHE_TTL_MS = 2 * 60 * 1000;
 const eventsCache = new Map<string, CacheEntry>();
 
-function getCached(key: string): CalendarResult | null {
+function getCached(key: string): PersonCalendarResult | null {
   const entry = eventsCache.get(key);
   if (!entry) return null;
   if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
@@ -24,11 +24,9 @@ function getCached(key: string): CalendarResult | null {
   return entry.data;
 }
 
-function setCache(key: string, data: CalendarResult): void {
+function setCache(key: string, data: PersonCalendarResult): void {
   eventsCache.set(key, { data, timestamp: Date.now() });
 }
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface CalendarEvent {
   id: string;
@@ -38,91 +36,53 @@ interface CalendarEvent {
   is_all_day: boolean;
 }
 
-interface CalendarResult {
+interface PersonCalendarResult {
   name: string;
   color: string;
-  connection_type: string;
+  connection_type: 'team';
   events: CalendarEvent[];
+  errors?: { email: string; error: string }[];
 }
-
-// ─── Google Calendar fetch helper ─────────────────────────────────────────────
-
-interface GoogleCalendarEvent {
-  id: string;
-  summary?: string;
-  start: { dateTime?: string; date?: string };
-  end: { dateTime?: string; date?: string };
-  location?: string;
-  description?: string;
-  status: string;
-}
-
-async function fetchCalendarEvents(
-  accessToken: string,
-  timeMin: string,
-  timeMax: string,
-): Promise<GoogleCalendarEvent[]> {
-  const params = new URLSearchParams({
-    timeMin,
-    timeMax,
-    singleEvents: 'true',
-    orderBy: 'startTime',
-    maxResults: '250',
-  });
-
-  const res = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Google Calendar API error: ${err}`);
-  }
-
-  const data = await res.json();
-  return data.items ?? [];
-}
-
-// ─── Zod validation ───────────────────────────────────────────────────────────
 
 const querySchema = z.object({
-  connection_ids: z.string().min(1, 'connection_ids is required'),
+  person_ids: z.string().min(1, 'person_ids is required'),
   start: z.string().datetime({ message: 'start must be a valid ISO date' }),
   end: z.string().datetime({ message: 'end must be a valid ISO date' }),
 });
 
-// ─── GET /api/calendar/events ─────────────────────────────────────────────────
-
 /**
- * GET /api/calendar/events
+ * GET /api/calendar/events?person_ids=p1,p2&start=ISO&end=ISO
  *
- * Fetches Google Calendar events from multiple connections in parallel.
+ * Returns Google Calendar events for each scheduling_people row in the given
+ * window. Events are fetched via service-account / domain-wide delegation;
+ * each person's multiple workspace emails are unioned and deduped before
+ * being returned.
  *
- * Query params:
- *   connection_ids  — comma-separated calendar_connections.id values
- *   start           — ISO datetime (range start)
- *   end             — ISO datetime (range end)
- *
- * Returns:
- *   { calendars: { [connectionId]: { name, color, connection_type, events[] } } }
- *
- * Client connections (connection_type='client') have event titles replaced
- * with "Busy" to preserve privacy.
+ * Response:
+ *   { calendars: { [personId]: { name, color, connection_type: 'team', events[], errors? } } }
  */
 export async function GET(request: NextRequest) {
   try {
-    // ── Auth ──────────────────────────────────────────────────────────────────
     const supabase = await createServerSupabaseClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // ── Validate query params ─────────────────────────────────────────────────
+    const adminClient = createAdminClient();
+    const { data: me } = await adminClient
+      .from('users')
+      .select('role, is_super_admin')
+      .eq('id', user.id)
+      .maybeSingle();
+    const isAdmin = me?.role === 'admin' || me?.is_super_admin === true;
+    if (!isAdmin) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const { searchParams } = new URL(request.url);
     const parsed = querySchema.safeParse({
-      connection_ids: searchParams.get('connection_ids') ?? '',
+      person_ids: searchParams.get('person_ids') ?? '',
       start: searchParams.get('start') ?? '',
       end: searchParams.get('end') ?? '',
     });
@@ -134,88 +94,82 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { connection_ids: connectionIdsParam, start, end } = parsed.data;
-    const connectionIds = connectionIdsParam.split(',').map((s) => s.trim()).filter(Boolean);
+    const { person_ids: personIdsParam, start, end } = parsed.data;
+    const personIds = [...new Set(personIdsParam.split(',').map((s) => s.trim()).filter(Boolean))];
 
-    if (connectionIds.length === 0) {
-      return NextResponse.json(
-        { error: 'At least one connection_id is required' },
-        { status: 400 },
-      );
+    if (personIds.length === 0) {
+      return NextResponse.json({ error: 'At least one person_id is required' }, { status: 400 });
     }
 
-    // ── Fetch calendar_connections rows ───────────────────────────────────────
-    const adminClient = createAdminClient();
-    const { data: connections, error: connError } = await adminClient
-      .from('calendar_connections')
-      .select('id, user_id, connection_type, display_name, display_color')
-      .in('id', connectionIds)
-      .eq('is_active', true);
+    const [{ data: peopleRows, error: peopleErr }, { data: emailRows, error: emailErr }] = await Promise.all([
+      adminClient
+        .from('scheduling_people')
+        .select('id, display_name, color, is_active')
+        .in('id', personIds),
+      adminClient
+        .from('scheduling_person_emails')
+        .select('person_id, email')
+        .in('person_id', personIds),
+    ]);
 
-    if (connError) {
-      console.error('GET /api/calendar/events — DB error:', connError);
-      return NextResponse.json({ error: 'Failed to fetch calendar connections' }, { status: 500 });
+    if (peopleErr || emailErr) {
+      console.error('GET /api/calendar/events — DB error:', peopleErr ?? emailErr);
+      return NextResponse.json({ error: 'Failed to load people' }, { status: 500 });
     }
 
-    if (!connections || connections.length === 0) {
-      return NextResponse.json({ calendars: {} });
+    const emailsByPerson = new Map<string, string[]>();
+    for (const row of emailRows ?? []) {
+      const list = emailsByPerson.get(row.person_id as string) ?? [];
+      list.push(row.email as string);
+      emailsByPerson.set(row.person_id as string, list);
     }
 
-    // ── Fetch events in parallel (Promise.allSettled) ──────────────────────────
+    const timeMin = new Date(start);
+    const timeMax = new Date(end);
+
     const results = await Promise.allSettled(
-      connections.map(async (conn) => {
-        // Cache key scoped to connection + date range
-        const cacheKey = `${conn.id}::${start}::${end}`;
-        const cached = getCached(cacheKey);
-        if (cached) {
-          return { connectionId: conn.id, result: cached };
-        }
+      (peopleRows ?? [])
+        .filter((p) => p.is_active)
+        .map(async (p) => {
+          const personId = p.id as string;
+          const emails = emailsByPerson.get(personId) ?? [];
 
-        // Get a valid Google OAuth token for the connection's user
-        const accessToken = await getValidToken(conn.user_id);
-        if (!accessToken) {
-          throw new Error(`No valid Google token for connection ${conn.id}`);
-        }
+          const cacheKey = `${personId}::${start}::${end}`;
+          const cached = getCached(cacheKey);
+          if (cached) return { personId, result: cached };
 
-        const rawEvents = await fetchCalendarEvents(accessToken, start, end);
+          const fetched = await fetchEventsForPerson({
+            personId,
+            emails,
+            timeMin,
+            timeMax,
+          });
 
-        const isClient = conn.connection_type === 'client';
-
-        const events: CalendarEvent[] = rawEvents.map((e) => {
-          const isAllDay = !e.start.dateTime;
-          const eventStart = e.start.dateTime ?? e.start.date ?? start;
-          const eventEnd = e.end.dateTime ?? e.end.date ?? end;
-
-          return {
-            id: e.id,
-            title: isClient ? 'Busy' : (e.summary ?? 'Untitled'),
-            start: eventStart,
-            end: eventEnd,
-            is_all_day: isAllDay,
+          const calendarResult: PersonCalendarResult = {
+            name: p.display_name as string,
+            color: p.color as string,
+            connection_type: 'team',
+            events: fetched.events.map((e) => ({
+              id: e.id,
+              title: e.title,
+              start: e.start,
+              end: e.end,
+              is_all_day: e.isAllDay,
+            })),
+            errors: fetched.errors.length ? fetched.errors : undefined,
           };
-        });
 
-        const calendarResult: CalendarResult = {
-          name: conn.display_name ?? 'Calendar',
-          color: conn.display_color ?? '#6366f1',
-          connection_type: conn.connection_type ?? 'team',
-          events,
-        };
-
-        setCache(cacheKey, calendarResult);
-        return { connectionId: conn.id, result: calendarResult };
-      }),
+          setCache(cacheKey, calendarResult);
+          return { personId, result: calendarResult };
+        }),
     );
 
-    // ── Assemble response — include partial results, log failures ─────────────
-    const calendars: Record<string, CalendarResult> = {};
-
+    const calendars: Record<string, PersonCalendarResult> = {};
     for (const outcome of results) {
       if (outcome.status === 'fulfilled') {
-        const { connectionId, result } = outcome.value;
-        calendars[connectionId] = result;
+        calendars[outcome.value.personId] = outcome.value.result;
       } else {
-        console.error('GET /api/calendar/events — fetch failed for a connection:', outcome.reason);
+        console.error('GET /api/calendar/events — fetch failed for a person:', outcome.reason);
       }
     }
 

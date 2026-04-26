@@ -330,24 +330,53 @@ export function useCalendarData({ view, currentDate, clientFilter }: UseCalendar
     ));
   }
 
-  // Fetch external calendar events for connected people
-  const fetchPeopleCalendars = useCallback(async (connectionIds: string[]) => {
-    if (connectionIds.length === 0) return;
+  // Load the configured people list once on mount
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/calendar/people')
+      .then((res) => (res.ok ? res.json() : { people: [] }))
+      .then((data: { people?: { id: string; displayName: string; color: string; priorityTier: 1 | 2 | 3; emails: string[] }[] }) => {
+        if (cancelled) return;
+        const fetched = (data.people ?? []).map((p, idx) => ({
+          connectionId: p.id,
+          name: p.displayName,
+          color: p.color || PERSON_COLORS[idx % PERSON_COLORS.length],
+          connectionType: 'team' as const,
+          priorityTier: p.priorityTier,
+          emails: p.emails,
+          events: [],
+          enabled: true,
+        }));
+        setPeople(fetched);
+      })
+      .catch(() => {
+        // Soft-fail — calendar still renders internal events without people overlay
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Fetch external calendar events for the given person ids via SA
+  const fetchPeopleCalendars = useCallback(async (personIds: string[]) => {
+    if (personIds.length === 0) return;
     const { start, end } = getDateRange(view, currentDate);
     try {
       const res = await fetch(
-        `/api/calendar/events?connection_ids=${connectionIds.join(',')}&start=${start.toISOString()}&end=${end.toISOString()}`
+        `/api/calendar/events?person_ids=${personIds.join(',')}&start=${start.toISOString()}&end=${end.toISOString()}`,
       );
       if (!res.ok) return;
       const data = await res.json();
       const calendars = data.calendars ?? {};
 
-      setPeople(prev => {
+      setPeople((prev) => {
         const updated = [...prev];
-        let colorIdx = 0;
-        for (const [connId, cal] of Object.entries(calendars) as [string, { name: string; color: string; events: { id: string; title: string; start: string; end: string; is_all_day: boolean }[] }][]) {
-          const existing = updated.find(p => p.connectionId === connId);
-          const events = (cal.events ?? []).map(e => ({
+        for (const [personId, cal] of Object.entries(calendars) as [
+          string,
+          { name: string; color: string; events: { id: string; title: string; start: string; end: string; is_all_day: boolean }[] },
+        ][]) {
+          const existing = updated.find((p) => p.connectionId === personId);
+          const events = (cal.events ?? []).map((e) => ({
             id: e.id,
             title: e.title,
             start: e.start,
@@ -356,17 +385,9 @@ export function useCalendarData({ view, currentDate, clientFilter }: UseCalendar
           }));
           if (existing) {
             existing.events = events;
-          } else {
-            updated.push({
-              connectionId: connId,
-              name: cal.name ?? 'Calendar',
-              color: cal.color ?? PERSON_COLORS[colorIdx % PERSON_COLORS.length],
-              connectionType: 'team',
-              events,
-              enabled: true,
-            });
+            existing.name = cal.name ?? existing.name;
+            existing.color = cal.color ?? existing.color;
           }
-          colorIdx++;
         }
         return updated;
       });
@@ -374,6 +395,16 @@ export function useCalendarData({ view, currentDate, clientFilter }: UseCalendar
       // Partial failure OK
     }
   }, [view, currentDate]);
+
+  // Auto-fetch events for all loaded people whenever the date/view changes
+  useEffect(() => {
+    const ids = people.map((p) => p.connectionId);
+    if (ids.length === 0) return;
+    fetchPeopleCalendars(ids);
+    // We intentionally only re-run when the visible window or the loaded
+    // people set changes — not on every individual toggle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, currentDate, people.length]);
 
   return {
     events: filteredEvents,

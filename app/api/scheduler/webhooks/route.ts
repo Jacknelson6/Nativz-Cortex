@@ -272,7 +272,7 @@ async function autoTickOnboardingForConnection(
     // Resolve the social_profile we just flipped → client + platform
     const { data: profile } = await admin
       .from('social_profiles')
-      .select('client_id, platform, username')
+      .select('id, client_id, platform, username')
       .eq('late_account_id', accountId)
       .maybeSingle();
     if (!profile?.client_id || !profile.platform) return;
@@ -302,7 +302,7 @@ async function autoTickOnboardingForConnection(
 
     const { data: items } = await admin
       .from('onboarding_checklist_items')
-      .select('id, task, group_id, owner, status')
+      .select('id, task, group_id, owner, status, kind, data, template_key, dont_have')
       .in('group_id', groupIds)
       .eq('owner', 'client')
       .eq('status', 'pending');
@@ -312,15 +312,34 @@ async function autoTickOnboardingForConnection(
       (typeof profile.username === 'string' ? profile.username : '');
 
     for (const item of items ?? []) {
-      const detected = detectPlatform(item.task);
-      if (!detected) continue;
-      if (!platformKeys.includes(detected.key)) continue;
+      // Two ways to match: blueprint items carry `data.platform` directly;
+      // legacy admin-typed items match via detectPlatform(item.task).
+      const itemData = (item.data as Record<string, unknown> | null) ?? {};
+      const dataPlatform = typeof itemData.platform === 'string' ? itemData.platform : null;
+      const matchedByData = dataPlatform ? (platformKeys as readonly string[]).includes(dataPlatform) : false;
+      const detected = matchedByData ? null : detectPlatform(item.task);
+      const detectedMatch = detected ? platformKeys.includes(detected.key) : false;
+      if (!matchedByData && !detectedMatch) continue;
 
-      // Tick it.
-      await admin.from('onboarding_checklist_items').update({ status: 'done' }).eq('id', item.id);
+      // Tick it. For blueprint oauth_socials items, persist connection
+      // details into the data jsonb so the public intake page renders the
+      // confirmed state and so re-instantiation can detect a prior connect.
+      const update: Record<string, unknown> = { status: 'done' };
+      if ((item as { kind?: string }).kind === 'oauth_socials') {
+        update.data = {
+          ...itemData,
+          connected_at: new Date().toISOString(),
+          social_profile_id: profile.id,
+          username: displayName || null,
+        };
+        update.dont_have = false;
+      }
+      await admin.from('onboarding_checklist_items').update(update).eq('id', item.id);
 
       const trackerId = groupToTracker.get(item.group_id);
       if (!trackerId) continue;
+
+      const detectedLabel = detected?.name ?? dataPlatform ?? profile.platform;
 
       // Event + batched notification so the admin feed + digests reflect it.
       await admin.from('onboarding_events').insert({
@@ -336,9 +355,23 @@ async function autoTickOnboardingForConnection(
       });
       await queueOnboardingNotification(admin, trackerId, {
         kind: 'connection_confirmed',
-        detail: displayName ? `${detected.name} (@${displayName})` : detected.name,
+        detail: displayName ? `${detectedLabel} (@${displayName})` : detectedLabel,
       });
       await recomputePhaseStatuses(admin, trackerId);
+
+      // After a webhook-driven tick, re-check whether the parent flow is
+      // fully satisfied. We resolve the flow_id from the segment that points
+      // at this tracker — silent no-op for legacy trackers without a flow.
+      const { data: linkedSegment } = await admin
+        .from('onboarding_flow_segments')
+        .select('flow_id')
+        .eq('tracker_id', trackerId)
+        .maybeSingle();
+      const flowId = (linkedSegment as { flow_id?: string | null } | null)?.flow_id ?? null;
+      if (flowId) {
+        const { checkAndFlipFlowCompletion } = await import('@/lib/onboarding/check-completion');
+        await checkAndFlipFlowCompletion(admin, flowId);
+      }
     }
   } catch (err) {
     console.error('[webhook account.connected] auto-tick failed:', err);

@@ -139,6 +139,7 @@ const NAV_SECTIONS: NavSection[] = [
           // bookmarks land on the correct sub-filter.
           { href: '/admin/sales', label: 'Sales', icon: Workflow },
           { href: '/admin/users', label: 'Users', icon: Users },
+          { href: '/admin/calendar', label: 'Calendar', icon: Calendar },
           { href: '/admin/scheduling', label: 'Scheduling', icon: Calendar },
           { href: '/admin/accounting', label: 'Accounting', icon: Receipt },
           { href: '/admin/revenue', label: 'Revenue', icon: CreditCard },
