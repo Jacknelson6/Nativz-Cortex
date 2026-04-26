@@ -32,17 +32,15 @@ export default function AdminForgotPasswordPage() {
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: 'Failed to send reset email' }));
         setError(data.error || 'Failed to send reset email');
-        setLoading(false);
         return;
       }
+
+      setSubmitted(true);
     } catch {
       setError('Failed to send reset email. Please try again.');
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setSubmitted(true);
-    setLoading(false);
   }
 
   return (

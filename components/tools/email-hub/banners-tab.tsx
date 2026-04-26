@@ -527,10 +527,15 @@ function BannerEditor({
       return;
     }
     setBusy(true);
-    const payload = draftToPayload(draft);
-    const ok = await onSave(payload);
-    setBusy(false);
-    if (!ok) return;
+    try {
+      const payload = draftToPayload(draft);
+      const ok = await onSave(payload);
+      if (!ok) return;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Save failed');
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

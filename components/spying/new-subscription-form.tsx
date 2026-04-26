@@ -68,6 +68,7 @@ export function NewSubscriptionForm({
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Create failed');
+    } finally {
       setSubmitting(false);
     }
   }

@@ -31,12 +31,17 @@ export function InvoicesTable() {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const res = await fetch(
-      `/api/revenue/invoices?limit=200${statusFilter !== 'all' ? `&status=${statusFilter}` : ''}`,
-    );
-    const json = await res.json();
-    setInvoices(json.invoices ?? []);
-    setLoading(false);
+    try {
+      const res = await fetch(
+        `/api/revenue/invoices?limit=200${statusFilter !== 'all' ? `&status=${statusFilter}` : ''}`,
+      );
+      const json = await res.json();
+      setInvoices(json.invoices ?? []);
+    } catch (err) {
+      console.error('[invoices-table] refresh failed', err);
+    } finally {
+      setLoading(false);
+    }
   }, [statusFilter]);
 
   useEffect(() => {
@@ -219,18 +224,23 @@ function RefundDialog({
       return;
     }
     setBusy(true);
-    const res = await fetch(`/api/revenue/invoices/${invoice.id}/refund`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ amount_dollars: Number(amount), reason, note }),
-    });
-    setBusy(false);
-    if (!res.ok) {
-      const text = await res.text();
-      alert(`Refund failed: ${text}`);
-      return;
+    try {
+      const res = await fetch(`/api/revenue/invoices/${invoice.id}/refund`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ amount_dollars: Number(amount), reason, note }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        alert(`Refund failed: ${text}`);
+        return;
+      }
+      onDone();
+    } catch (err) {
+      alert(`Refund failed: ${err instanceof Error ? err.message : 'unknown'}`);
+    } finally {
+      setBusy(false);
     }
-    onDone();
   }
 
   return (

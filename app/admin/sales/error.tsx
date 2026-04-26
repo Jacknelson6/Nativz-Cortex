@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { PageError } from '@/components/shared/page-error';
 
-export default function CalendarError({
+export default function SalesError({
   error,
   reset,
 }: {
@@ -11,13 +11,13 @@ export default function CalendarError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('Calendar page error:', error);
+    console.error('Sales page error:', error);
   }, [error]);
 
   return (
     <PageError
-      title="Couldn't load calendar"
-      description="Something went wrong loading the calendar. Check your connection and try again."
+      title="Couldn't load the sales pipeline"
+      description="Something went wrong loading proposals or onboarding flows. Check your connection and try again."
       reset={reset}
     />
   );

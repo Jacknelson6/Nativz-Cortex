@@ -80,11 +80,12 @@ export function NotificationsWidget() {
     variant: 'danger',
   });
 
-  const fetchNotifications = useCallback(async () => {
+  const fetchNotifications = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/notifications?limit=8');
+      const res = await fetch('/api/notifications?limit=8', { signal });
       if (res.ok) {
         const data = await res.json();
+        if (signal?.aborted) return;
         const normalized: Notification[] = (data.notifications ?? []).map(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (n: any) => ({
@@ -101,15 +102,21 @@ export function NotificationsWidget() {
         setUnreadCount(data.unread_count ?? 0);
         sessionStorage.setItem('notifications-widget', JSON.stringify({ notifications: normalized, unreadCount: data.unread_count ?? 0 }));
       }
-    } catch {
-      /* ignore */
+    } catch (err) {
+      if ((err as { name?: string }).name === 'AbortError') return;
+      /* ignore — keep showing cached values */
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    // Load from cache instantly
+    // AbortController + interval guard so unmount during a fetch (or
+    // after a tick fires) cancels the in-flight request and skips any
+    // setState that would otherwise warn about an unmounted component.
+    const controller = new AbortController();
+
+    // Load from cache instantly so the bell paints before the network.
     const cached = sessionStorage.getItem('notifications-widget');
     if (cached) {
       try {
@@ -121,9 +128,15 @@ export function NotificationsWidget() {
     }
 
     // Then refresh in background
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 60000);
-    return () => clearInterval(interval);
+    void fetchNotifications(controller.signal);
+    const interval = setInterval(() => {
+      void fetchNotifications(controller.signal);
+    }, 60000);
+
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
   }, [fetchNotifications]);
 
   async function markAllRead() {

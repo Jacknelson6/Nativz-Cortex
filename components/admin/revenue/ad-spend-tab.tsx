@@ -36,10 +36,15 @@ export function AdSpendTab({ clients }: { clients: ClientOption[] }) {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const res = await fetch('/api/revenue/ad-spend?limit=200');
-    const json = await res.json();
-    setEntries(json.entries ?? []);
-    setLoading(false);
+    try {
+      const res = await fetch('/api/revenue/ad-spend?limit=200');
+      const json = await res.json();
+      setEntries(json.entries ?? []);
+    } catch (err) {
+      console.error('[ad-spend-tab] refresh failed', err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -50,27 +55,32 @@ export function AdSpendTab({ clients }: { clients: ClientOption[] }) {
     e.preventDefault();
     if (!form.client_id || !form.spend_dollars) return;
     setSaving(true);
-    const res = await fetch('/api/revenue/ad-spend', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        client_id: form.client_id,
-        platform: form.platform,
-        campaign_label: form.campaign_label || null,
-        period_month: form.period_month,
-        spend_cents: dollarsToCents(form.spend_dollars),
-        notes: form.notes || null,
-      }),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      alert('Save failed — check console');
-      console.error(await res.text());
-      return;
+    try {
+      const res = await fetch('/api/revenue/ad-spend', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          client_id: form.client_id,
+          platform: form.platform,
+          campaign_label: form.campaign_label || null,
+          period_month: form.period_month,
+          spend_cents: dollarsToCents(form.spend_dollars),
+          notes: form.notes || null,
+        }),
+      });
+      if (!res.ok) {
+        alert('Save failed — check console');
+        console.error(await res.text());
+        return;
+      }
+      setShowForm(false);
+      setForm((f) => ({ ...f, spend_dollars: '', campaign_label: '', notes: '' }));
+      await refresh();
+    } catch (err) {
+      alert(`Save failed: ${err instanceof Error ? err.message : 'unknown'}`);
+    } finally {
+      setSaving(false);
     }
-    setShowForm(false);
-    setForm((f) => ({ ...f, spend_dollars: '', campaign_label: '', notes: '' }));
-    await refresh();
   }
 
   async function remove(id: string) {

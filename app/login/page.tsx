@@ -32,43 +32,51 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
 
-    const supabase = createClient();
-    const { data, error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    // Outer try/finally — auth or role-lookup throws (network drop, RLS
+    // hiccup) shouldn't strand the loading spinner.
+    try {
+      const supabase = createClient();
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (authError) {
-      console.error('Login error:', authError);
-      setError(authError.message || 'Login failed — check browser console');
+      if (authError) {
+        console.error('Login error:', authError);
+        setError(authError.message || 'Login failed — check browser console');
+        return;
+      }
+
+      // Role-based landing. The optional `next` query param wins for resume-
+      // after-expiry deep links, but we still gate it through role: viewers
+      // attempting to land on /admin/* fall back to the viewer home.
+      const userId = data.user?.id;
+      let role: string | null = null;
+      if (userId) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', userId)
+          .single();
+        role = userData?.role ?? null;
+      }
+
+      const isAdmin = role === 'admin' || role === 'super_admin';
+      const safeNext = requestedNext && requestedNext.startsWith('/') ? requestedNext : null;
+      const target = isAdmin
+        ? safeNext ?? ADMIN_HOME
+        : safeNext && !safeNext.startsWith('/admin')
+          ? safeNext
+          : VIEWER_HOME;
+
+      router.push(target);
+      router.refresh();
+    } catch (err) {
+      console.error('Unexpected login error:', err);
+      setError(err instanceof Error ? err.message : 'Unexpected error — try again.');
+    } finally {
       setLoading(false);
-      return;
     }
-
-    // Role-based landing. The optional `next` query param wins for resume-
-    // after-expiry deep links, but we still gate it through role: viewers
-    // attempting to land on /admin/* fall back to the viewer home.
-    const userId = data.user?.id;
-    let role: string | null = null;
-    if (userId) {
-      const { data: userData } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', userId)
-        .single();
-      role = userData?.role ?? null;
-    }
-
-    const isAdmin = role === 'admin' || role === 'super_admin';
-    const safeNext = requestedNext && requestedNext.startsWith('/') ? requestedNext : null;
-    const target = isAdmin
-      ? safeNext ?? ADMIN_HOME
-      : safeNext && !safeNext.startsWith('/admin')
-        ? safeNext
-        : VIEWER_HOME;
-
-    router.push(target);
-    router.refresh();
   }
 
   return (

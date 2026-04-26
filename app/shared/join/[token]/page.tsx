@@ -92,13 +92,13 @@ export default function TeamJoinPage() {
 
       if (!res.ok) {
         setError(data.error || 'Something went wrong. Try again.');
-        setSubmitting(false);
         return;
       }
 
       setSuccess(true);
     } catch {
       setError('Something went wrong. Check your connection and try again.');
+    } finally {
       setSubmitting(false);
     }
   }

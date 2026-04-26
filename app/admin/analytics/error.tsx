@@ -5,6 +5,7 @@ import { PageError } from '@/components/shared/page-error';
 
 export default function AnalyticsError({
   error,
+  reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
@@ -13,5 +14,11 @@ export default function AnalyticsError({
     console.error('Analytics page error:', error);
   }, [error]);
 
-  return <PageError title="Couldn't load analytics" description="Something went wrong loading analytics. Check your connection and try again." />;
+  return (
+    <PageError
+      title="Couldn't load analytics"
+      description="Something went wrong loading analytics. Check your connection and try again."
+      reset={reset}
+    />
+  );
 }

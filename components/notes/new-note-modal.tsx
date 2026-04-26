@@ -80,13 +80,13 @@ export function NewNoteModal({
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         setError(d.error ?? 'Failed to create note');
-        setSubmitting(false);
         return;
       }
       const d = await res.json();
       onCreated(d.board.id);
     } catch {
       setError('Network error — try again');
+    } finally {
       setSubmitting(false);
     }
   }

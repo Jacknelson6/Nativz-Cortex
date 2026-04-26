@@ -26,37 +26,48 @@ export default function AdminLoginPage() {
     setError('');
     setLoading(true);
 
-    const supabase = createClient();
-    const { data, error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    // Outer try/finally guarantees `setLoading(false)` runs even when an
+    // unexpected throw escapes (network drop, role lookup failure). The
+    // happy path navigates away — the unmount swallows any extra state
+    // update — but staying on the page after an error needs the loader
+    // to clear or the button stays disabled forever.
+    try {
+      const supabase = createClient();
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (authError) {
-      console.error('Login error:', authError);
-      setError(authError.message || 'Login failed — check browser console');
-      setLoading(false);
-      return;
-    }
-
-    // Look up user role to redirect appropriately
-    const userId = data.user?.id;
-    if (userId) {
-      const { data: userData } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', userId)
-        .single();
-
-      if (userData?.role === 'viewer') {
-        router.push(PORTAL_HOME_PATH);
-        router.refresh();
+      if (authError) {
+        console.error('Login error:', authError);
+        setError(authError.message || 'Login failed — check browser console');
         return;
       }
-    }
 
-    router.push('/admin/dashboard');
-    router.refresh();
+      // Look up user role to redirect appropriately
+      const userId = data.user?.id;
+      if (userId) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', userId)
+          .single();
+
+        if (userData?.role === 'viewer') {
+          router.push(PORTAL_HOME_PATH);
+          router.refresh();
+          return;
+        }
+      }
+
+      router.push('/admin/dashboard');
+      router.refresh();
+    } catch (err) {
+      console.error('Unexpected login error:', err);
+      setError(err instanceof Error ? err.message : 'Unexpected error — try again.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

@@ -74,16 +74,21 @@ export default function AdminResetPasswordPage() {
     }
 
     setLoading(true);
-    const supabase = createClient();
-    const { error: updateError } = await supabase.auth.updateUser({ password });
+    try {
+      const supabase = createClient();
+      const { error: updateError } = await supabase.auth.updateUser({ password });
 
-    if (updateError) {
-      setError(updateError.message || 'Failed to update password');
+      if (updateError) {
+        setError(updateError.message || 'Failed to update password');
+        return;
+      }
+
+      router.push('/admin/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update password');
+    } finally {
       setLoading(false);
-      return;
     }
-
-    router.push('/admin/dashboard');
   }
 
   return (

@@ -85,11 +85,9 @@ export default function PortalJoinPage() {
           setError('');
           setLinkEmail(email.trim());
           setFlowMode('link-existing');
-          setSubmitting(false);
           return;
         }
         setError(data.error || 'Something went wrong. Try again.');
-        setSubmitting(false);
         return;
       }
 
@@ -106,7 +104,6 @@ export default function PortalJoinPage() {
           setLinkEmail(email.trim());
           setFlowMode('link-existing');
           setError('Your account has been linked to this brand. Sign in with your existing password.');
-          setSubmitting(false);
           return;
         }
         // New account created but auto-sign-in failed — show success with manual login
@@ -119,6 +116,7 @@ export default function PortalJoinPage() {
       router.refresh();
     } catch {
       setError('Something went wrong. Check your connection and try again.');
+    } finally {
       setSubmitting(false);
     }
   }
@@ -153,13 +151,13 @@ export default function PortalJoinPage() {
 
       if (!res.ok) {
         setError(data.error || 'Failed to link account.');
-        setSubmitting(false);
         return;
       }
 
       setLinkSuccess(true);
     } catch {
       setError('Something went wrong. Check your connection and try again.');
+    } finally {
       setSubmitting(false);
     }
   }

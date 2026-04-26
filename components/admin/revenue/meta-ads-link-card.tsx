@@ -21,30 +21,35 @@ export function MetaAdsLinkCard({
   async function save(syncNow: boolean) {
     setBusy(true);
     setStatus(null);
-    const res = await fetch(`/api/revenue/clients/${clientId}/meta-ad-account`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        meta_ad_account_id: value.trim() || null,
-        sync_now: syncNow,
-      }),
-    });
-    const json = await res.json().catch(() => ({}));
-    setBusy(false);
-    if (!res.ok) {
-      setStatus(`Error: ${json.error ?? 'unknown'}`);
-      return;
+    try {
+      const res = await fetch(`/api/revenue/clients/${clientId}/meta-ad-account`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          meta_ad_account_id: value.trim() || null,
+          sync_now: syncNow,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setStatus(`Error: ${json.error ?? 'unknown'}`);
+        return;
+      }
+      if (json.sync) {
+        setStatus(
+          json.sync.ok
+            ? `Synced: ${json.sync.rows} rows across ${json.sync.months} months.`
+            : `Linked, but sync failed: ${json.sync.error}`,
+        );
+      } else {
+        setStatus('Saved.');
+      }
+      router.refresh();
+    } catch (err) {
+      setStatus(`Error: ${err instanceof Error ? err.message : 'request failed'}`);
+    } finally {
+      setBusy(false);
     }
-    if (json.sync) {
-      setStatus(
-        json.sync.ok
-          ? `Synced: ${json.sync.rows} rows across ${json.sync.months} months.`
-          : `Linked, but sync failed: ${json.sync.error}`,
-      );
-    } else {
-      setStatus('Saved.');
-    }
-    router.refresh();
   }
 
   return (

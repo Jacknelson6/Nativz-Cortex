@@ -250,7 +250,6 @@ function AddCompetitorModal({
       const data = await res.json();
       if (!res.ok) {
         toast.error(typeof data.error === 'string' ? data.error : 'Scrape failed');
-        setSubmitting(false);
         return;
       }
       // Brief success confirmation before closing so the admin sees
@@ -263,6 +262,7 @@ function AddCompetitorModal({
       setTimeout(() => onAdded(), 800);
     } catch {
       toast.error('Scrape failed — network error');
+    } finally {
       setSubmitting(false);
     }
   }

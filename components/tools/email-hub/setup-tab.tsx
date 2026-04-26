@@ -279,14 +279,19 @@ function TestSendButton({ agency }: { agency: 'nativz' | 'anderson' }) {
     if (!to) return;
     setBusy(true);
     setStatus('idle');
-    const res = await fetch('/api/admin/email-hub/setup/test-send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to, agency }),
-    });
-    setBusy(false);
-    setStatus(res.ok ? 'ok' : 'err');
-    setTimeout(() => setStatus('idle'), 4000);
+    try {
+      const res = await fetch('/api/admin/email-hub/setup/test-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to, agency }),
+      });
+      setStatus(res.ok ? 'ok' : 'err');
+    } catch {
+      setStatus('err');
+    } finally {
+      setBusy(false);
+      setTimeout(() => setStatus('idle'), 4000);
+    }
   }
 
   const stateClass =
@@ -500,19 +505,24 @@ function SecretEditModal({
       return;
     }
     setBusy(true);
-    const res = await fetch(`/api/admin/secrets/${encodeURIComponent(secretKey)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value }),
-    });
-    setBusy(false);
-    if (!res.ok) {
-      const body = await res.json().catch(() => null);
-      toast.error(body?.error ?? 'Failed to save');
-      return;
+    try {
+      const res = await fetch(`/api/admin/secrets/${encodeURIComponent(secretKey)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        toast.error(body?.error ?? 'Failed to save');
+        return;
+      }
+      toast.success(`${secretKey} updated — takes effect on next request`);
+      onSaved();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setBusy(false);
     }
-    toast.success(`${secretKey} updated — takes effect on next request`);
-    onSaved();
   }
 
   return (

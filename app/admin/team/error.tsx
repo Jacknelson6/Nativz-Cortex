@@ -5,6 +5,7 @@ import { PageError } from '@/components/shared/page-error';
 
 export default function TeamError({
   error,
+  reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
@@ -13,5 +14,11 @@ export default function TeamError({
     console.error('Team page error:', error);
   }, [error]);
 
-  return <PageError title="Couldn't load team" description="Something went wrong loading team members. Check your connection and try again." />;
+  return (
+    <PageError
+      title="Couldn't load team"
+      description="Something went wrong loading team members. Check your connection and try again."
+      reset={reset}
+    />
+  );
 }

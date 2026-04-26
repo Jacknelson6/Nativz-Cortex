@@ -24,7 +24,13 @@ export function TodoWidget() {
   const today = getToday();
 
   useEffect(() => {
-    // Load from cache instantly
+    // AbortController scoped to the lifetime of this mount so unmount
+    // mid-fetch (rapid sidebar navigation) cancels the request and
+    // prevents the React "state update on unmounted component" warning.
+    const controller = new AbortController();
+    const { signal } = controller;
+
+    // Load from cache instantly so the widget paints before the network.
     const cached = sessionStorage.getItem('todo-widget');
     if (cached) {
       try {
@@ -36,54 +42,60 @@ export function TodoWidget() {
       } catch { /* ignore */ }
     }
 
-    // Then refresh from API in background
-    loadData();
+    async function loadData() {
+      try {
+        const [tasksRes, clientsRes, teamRes] = await Promise.all([
+          fetch('/api/tasks', { signal }),
+          fetch('/api/clients?minimal=true', { signal }),
+          fetch('/api/team', { signal }),
+        ]);
+        const [tasksData, clientsData, teamData] = await Promise.all([
+          tasksRes.json(),
+          clientsRes.json(),
+          teamRes.json(),
+        ]);
+        if (signal.aborted) return;
+        const t = tasksData.tasks ?? (Array.isArray(tasksData) ? tasksData : []);
+        const c = Array.isArray(clientsData) ? clientsData : clientsData.clients ?? [];
+        const m = Array.isArray(teamData) ? teamData : teamData.members ?? [];
+        setTasks(t);
+        setClients(c);
+        setTeamMembers(m);
+        sessionStorage.setItem('todo-widget', JSON.stringify({ tasks: t, clients: c, team: m }));
+      } catch (err) {
+        if ((err as { name?: string }).name === 'AbortError') return;
+        console.warn('Failed to load todo widget data');
+      } finally {
+        if (!signal.aborted) setLoading(false);
+      }
+    }
 
-    fetch('/api/todoist/sync?auto=true', { method: 'POST' })
-      .then((r) => r.ok ? r.json() : null)
+    async function refreshAfterTodoistSync() {
+      try {
+        const res = await fetch('/api/tasks', { signal });
+        const data = await res.json();
+        if (signal.aborted) return;
+        setTasks(data.tasks ?? (Array.isArray(data) ? data : []));
+      } catch (err) {
+        if ((err as { name?: string }).name === 'AbortError') return;
+        console.warn('Failed to fetch tasks');
+      }
+    }
+
+    void loadData();
+
+    fetch('/api/todoist/sync?auto=true', { method: 'POST', signal })
+      .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
+        if (signal.aborted) return;
         if (data && !data.skipped && (data.pulled > 0 || data.pushed > 0)) {
-          fetchTasks();
+          void refreshAfterTodoistSync();
         }
       })
-      .catch(() => {});
+      .catch(() => { /* swallow — abort + network errors both end here */ });
+
+    return () => controller.abort();
   }, []);
-
-  async function loadData() {
-    try {
-      const [tasksRes, clientsRes, teamRes] = await Promise.all([
-        fetch('/api/tasks'),
-        fetch('/api/clients?minimal=true'),
-        fetch('/api/team'),
-      ]);
-      const [tasksData, clientsData, teamData] = await Promise.all([
-        tasksRes.json(),
-        clientsRes.json(),
-        teamRes.json(),
-      ]);
-      const t = tasksData.tasks ?? (Array.isArray(tasksData) ? tasksData : []);
-      const c = Array.isArray(clientsData) ? clientsData : clientsData.clients ?? [];
-      const m = Array.isArray(teamData) ? teamData : teamData.members ?? [];
-      setTasks(t);
-      setClients(c);
-      setTeamMembers(m);
-      sessionStorage.setItem('todo-widget', JSON.stringify({ tasks: t, clients: c, team: m }));
-    } catch {
-      console.warn('Failed to load todo widget data');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function fetchTasks() {
-    try {
-      const res = await fetch('/api/tasks');
-      const data = await res.json();
-      setTasks(data.tasks ?? (Array.isArray(data) ? data : []));
-    } catch {
-      console.warn('Failed to fetch tasks');
-    }
-  }
 
   // Filter to today only, sorted by priority
   const todayTasks = useMemo(() => {

@@ -35,10 +35,15 @@ export function AnomaliesTab() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch(`/api/revenue/anomalies?scope=${scope}`);
-    const json = await res.json();
-    setItems(json.anomalies ?? []);
-    setLoading(false);
+    try {
+      const res = await fetch(`/api/revenue/anomalies?scope=${scope}`);
+      const json = await res.json();
+      setItems(json.anomalies ?? []);
+    } catch (err) {
+      console.error('[anomalies-tab] load failed', err);
+    } finally {
+      setLoading(false);
+    }
   }, [scope]);
 
   useEffect(() => {
@@ -49,17 +54,22 @@ export function AnomaliesTab() {
     const reason = prompt('Why are you dismissing this? (optional)');
     if (reason === null) return;
     setBusyId(id);
-    const res = await fetch('/api/revenue/anomalies', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id, reason }),
-    });
-    setBusyId(null);
-    if (!res.ok) {
-      alert('Dismiss failed');
-      return;
+    try {
+      const res = await fetch('/api/revenue/anomalies', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id, reason }),
+      });
+      if (!res.ok) {
+        alert('Dismiss failed');
+        return;
+      }
+      await load();
+    } catch (err) {
+      alert(`Dismiss failed: ${err instanceof Error ? err.message : 'unknown'}`);
+    } finally {
+      setBusyId(null);
     }
-    await load();
   }
 
   const counts = items.reduce(

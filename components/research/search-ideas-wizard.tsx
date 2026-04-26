@@ -116,7 +116,6 @@ export function SearchIdeasWizard({ open, onClose, searchId, clientId: initialCl
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || 'Generation failed');
-        setLoading(false);
         return;
       }
 
@@ -125,6 +124,7 @@ export function SearchIdeasWizard({ open, onClose, searchId, clientId: initialCl
       router.push(`/admin/ideas/${data.id}`);
     } catch {
       setError('Something went wrong. Try again.');
+    } finally {
       setLoading(false);
     }
   }

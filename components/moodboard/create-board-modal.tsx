@@ -101,6 +101,7 @@ export function CreateBoardModal({ open, onClose, onCreated, initialClientId }: 
       onCreated(board);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to create board');
+    } finally {
       setLoading(false);
     }
   }

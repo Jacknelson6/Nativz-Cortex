@@ -142,6 +142,7 @@ export function WatchWizard({ clients }: { clients: Client[] }) {
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to set up watch');
+    } finally {
       setSubmitting(false);
     }
   }

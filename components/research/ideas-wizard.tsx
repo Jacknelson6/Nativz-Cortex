@@ -111,7 +111,6 @@ export function IdeasWizard({ open, onClose, clients, onStarted }: IdeasWizardPr
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || 'Generation failed');
-        setLoading(false);
         return;
       }
 
@@ -128,6 +127,7 @@ export function IdeasWizard({ open, onClose, clients, onStarted }: IdeasWizardPr
       router.push(`/admin/ideas/${data.id}`);
     } catch {
       setError('Something went wrong. Try again.');
+    } finally {
       setLoading(false);
     }
   }

@@ -58,38 +58,43 @@ export function ScheduleShootsModal({ open, onClose, initialClientId }: Schedule
 
     async function load() {
       setLoading(true);
-      const supabase = createClient();
-      const [clientsRes, linksRes, mondayRes] = await Promise.all([
-        supabase.from('clients').select('id, name').eq('is_active', true).order('name'),
-        fetch('/api/settings/scheduling').then((r) => r.ok ? r.json() : { settings: [] }),
-        fetch('/api/clients/monday-cache').then((r) => r.ok ? r.json() : []),
-      ]);
-      
-      const mondayClients = (Array.isArray(mondayRes) ? mondayRes : []) as ParsedMondayClient[];
+      try {
+        const supabase = createClient();
+        const [clientsRes, linksRes, mondayRes] = await Promise.all([
+          supabase.from('clients').select('id, name').eq('is_active', true).order('name'),
+          fetch('/api/settings/scheduling').then((r) => r.ok ? r.json() : { settings: [] }),
+          fetch('/api/clients/monday-cache').then((r) => r.ok ? r.json() : []),
+        ]);
 
-      if (clientsRes.data) {
-        const enriched = clientsRes.data.map((client) => {
-          const mClient = mondayClients.find((m) => m.name.toLowerCase() === client.name.toLowerCase());
-          return {
-            ...client,
-            agency: mClient?.agency || 'Nativz',
-            poc_email: mClient?.contacts?.[0]?.email || '',
-          };
-        });
-        setClients(enriched);
-        if (initialClientId) {
-          const initial = enriched.find(c => c.id === initialClientId);
-          if (initial) {
-            setActiveTab(initial.agency?.toLowerCase().includes('anderson') ? 'ac' : 'nativz');
+        const mondayClients = (Array.isArray(mondayRes) ? mondayRes : []) as ParsedMondayClient[];
+
+        if (clientsRes.data) {
+          const enriched = clientsRes.data.map((client) => {
+            const mClient = mondayClients.find((m) => m.name.toLowerCase() === client.name.toLowerCase());
+            return {
+              ...client,
+              agency: mClient?.agency || 'Nativz',
+              poc_email: mClient?.contacts?.[0]?.email || '',
+            };
+          });
+          setClients(enriched);
+          if (initialClientId) {
+            const initial = enriched.find(c => c.id === initialClientId);
+            if (initial) {
+              setActiveTab(initial.agency?.toLowerCase().includes('anderson') ? 'ac' : 'nativz');
+            }
           }
         }
+        const links: Record<string, string> = {};
+        for (const s of linksRes.settings) {
+          if (s.scheduling_link) links[s.agency] = s.scheduling_link;
+        }
+        setSchedulingLinks(links);
+      } catch (err) {
+        console.error('[schedule-shoot-modal] load failed', err);
+      } finally {
+        setLoading(false);
       }
-      const links: Record<string, string> = {};
-      for (const s of linksRes.settings) {
-        if (s.scheduling_link) links[s.agency] = s.scheduling_link;
-      }
-      setSchedulingLinks(links);
-      setLoading(false);
     }
     load();
   }, [open]);

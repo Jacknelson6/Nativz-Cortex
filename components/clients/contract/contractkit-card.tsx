@@ -52,19 +52,25 @@ export function ContractKitCard({
 
   async function save(patch: Record<string, unknown>) {
     setBusy(true);
-    const res = await fetch(`/api/clients/${clientId}/contracts/${primary.id}/external`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(patch),
-    });
-    setBusy(false);
-    if (!res.ok) {
-      alert('Save failed');
-      console.error(await res.text());
+    try {
+      const res = await fetch(`/api/clients/${clientId}/contracts/${primary.id}/external`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) {
+        alert('Save failed');
+        console.error(await res.text());
+        return false;
+      }
+      router.refresh();
+      return true;
+    } catch (err) {
+      alert(`Save failed: ${err instanceof Error ? err.message : 'unknown'}`);
       return false;
+    } finally {
+      setBusy(false);
     }
-    router.refresh();
-    return true;
   }
 
   async function saveForm(e: React.FormEvent) {
