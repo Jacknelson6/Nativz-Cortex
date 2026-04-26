@@ -42,12 +42,12 @@ const METRIC_OPTIONS: { key: MetricKey; label: string }[] = [
 
 // Stable per-platform colors — keeps the stacked series recognisable.
 const PLATFORM_COLORS: Record<SocialPlatform, string> = {
-  tiktok: '#ff4d67',
-  instagram: '#e1306c',
-  youtube: '#ef4444',
-  facebook: '#60a5fa',
-  linkedin: '#0ea5e9',
-  googlebusiness: '#34d399',
+  tiktok: 'var(--platform-tiktok)',
+  instagram: 'var(--platform-instagram)',
+  youtube: 'var(--platform-youtube)',
+  facebook: 'var(--platform-facebook)',
+  linkedin: 'var(--platform-linkedin)',
+  googlebusiness: 'var(--platform-googlebusiness)',
 };
 
 const PLATFORM_LABELS: Record<SocialPlatform, string> = {
@@ -226,7 +226,7 @@ export function OverviewGrowthChart({
     <Card className="p-5">
       <div className="mb-4 flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-base font-semibold text-text-primary">Growth</h2>
+          <h2 className="ui-card-title">Growth</h2>
           <p className="text-xs text-text-muted">
             Stacked by platform · post markers show publish days
           </p>
@@ -266,27 +266,28 @@ export function OverviewGrowthChart({
                 </linearGradient>
               ))}
             </defs>
-            <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
+            <CartesianGrid stroke="var(--nz-line)" strokeOpacity={0.5} vertical={false} />
             <XAxis
               dataKey="date"
               tickFormatter={formatShortDate}
-              stroke="rgba(255,255,255,0.35)"
+              stroke="var(--text-muted)"
               fontSize={11}
               tickLine={false}
             />
             <YAxis
               tickFormatter={formatValue}
-              stroke="rgba(255,255,255,0.35)"
+              stroke="var(--text-muted)"
               fontSize={11}
               tickLine={false}
               axisLine={false}
             />
             <Tooltip
               contentStyle={{
-                background: 'rgba(15,17,22,0.97)',
-                border: '1px solid rgba(255,255,255,0.08)',
+                background: 'var(--surface)',
+                border: '1px solid var(--nz-line)',
                 borderRadius: 10,
                 fontSize: 12,
+                boxShadow: 'var(--shadow-card-hover)',
               }}
               labelFormatter={(v) => formatShortDate(String(v))}
               formatter={(value, name) => {
@@ -318,11 +319,11 @@ export function OverviewGrowthChart({
                 type="monotone"
                 dataKey="__compare"
                 name={compareRange ? `Prior · ${fmtCompareLabel(compareRange)}` : 'Prior period'}
-                stroke="rgba(255,255,255,0.6)"
+                stroke="var(--text-muted)"
                 strokeWidth={1.5}
                 strokeDasharray="4 4"
                 dot={false}
-                activeDot={{ r: 3, fill: 'rgba(255,255,255,0.85)' }}
+                activeDot={{ r: 3, fill: 'var(--text-secondary)' }}
                 isAnimationActive={false}
               />
             )}
@@ -332,8 +333,8 @@ export function OverviewGrowthChart({
                 x={date}
                 y={0}
                 r={3}
-                fill="#fbbf24"
-                stroke="#0f1116"
+                fill="var(--accent)"
+                stroke="var(--background)"
                 strokeWidth={1.5}
                 ifOverflow="extendDomain"
               />

@@ -85,6 +85,36 @@ export async function getFile(userId: string, fileId: string): Promise<DriveFile
 }
 
 /**
+ * Download a binary Drive file with the authenticated user's read-only token.
+ * Google Docs/Sheets/Slides are intentionally unsupported here; the ad
+ * reference sync only accepts actual image files.
+ */
+export async function downloadFile(
+  userId: string,
+  fileId: string,
+): Promise<{ buffer: Buffer; mimeType: string; size: number }> {
+  const token = await getValidToken(userId);
+  if (!token) throw new Error('Google account not connected');
+
+  const res = await fetch(`${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => '');
+    throw new Error(`Drive download failed: ${res.status} ${err.slice(0, 200)}`);
+  }
+
+  const arrayBuffer = await res.arrayBuffer();
+  const mimeType = res.headers.get('content-type') ?? 'application/octet-stream';
+  return {
+    buffer: Buffer.from(arrayBuffer),
+    mimeType,
+    size: arrayBuffer.byteLength,
+  };
+}
+
+/**
  * Extract a folder ID from a Google Drive URL.
  * Supports: /folders/ID, /file/d/ID, open?id=ID
  */

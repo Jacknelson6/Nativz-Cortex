@@ -59,7 +59,7 @@ export function AudienceInsightsCard({ clientId }: AudienceInsightsCardProps) {
     <div className="rounded-xl border border-nativz-border bg-surface p-5 space-y-4">
       <div className="flex items-center gap-2">
         <Users2 size={16} className="text-text-muted" />
-        <h2 className="text-sm font-semibold text-text-primary">Audience insights</h2>
+        <h2 className="ui-card-title">Audience insights</h2>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {insights.map((ins) => (

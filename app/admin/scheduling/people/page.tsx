@@ -6,10 +6,10 @@ import { PeopleManager } from './people-manager';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export default async function CalendarPeoplePage() {
+export default async function SchedulingPeoplePage() {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/auth/login?next=/admin/calendar/people');
+  if (!user) redirect('/auth/login?next=/admin/scheduling/people');
 
   const admin = createAdminClient();
   const { data: me } = await admin

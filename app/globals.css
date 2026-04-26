@@ -114,6 +114,25 @@ summary {
   --status-info:     var(--nz-cyan);
   --status-trending: #F59E0B;
 
+  /* Platform tints — chart-stroke palette (Recharts series colors). Softer
+     than the official brand marks below so multi-platform stacks read
+     cleanly in dense charts. */
+  --platform-tiktok: #ff4d67;
+  --platform-instagram: #e1306c;
+  --platform-youtube: #ef4444;
+  --platform-facebook: #60a5fa;
+  --platform-linkedin: #0ea5e9;
+  --platform-googlebusiness: #34d399;
+
+  /* Platform marks — official brand-identity gradients/colors used as
+     fallback tile backgrounds when a post has no thumbnail. */
+  --platform-tiktok-mark: linear-gradient(135deg, #25F4EE 0%, #000000 50%, #FE2C55 100%);
+  --platform-instagram-mark: linear-gradient(135deg, #FDC830 0%, #F37335 50%, #C13584 100%);
+  --platform-facebook-mark: #1877F2;
+  --platform-youtube-mark: #FF0300;
+  --platform-linkedin-mark: #0A66C2;
+  --platform-default-mark: #2a2a2a;
+
   /* Shadow depth tokens — Nativz is FLAT. No resting shadow on cards.
      Shadows only appear on hover lift, sticky surfaces, and active press. */
   --shadow-card: none;

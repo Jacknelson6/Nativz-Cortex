@@ -94,11 +94,15 @@ export function PlatformBreakdownTable({ rows }: PlatformBreakdownTableProps) {
   const hasVideoData = sorted.some(
     (r) => (r.watchTimeSeconds ?? 0) > 0 || (r.avgViewDurationSeconds ?? 0) > 0,
   );
+  // Unfollows column only shows when at least one platform reports a number.
+  // YT (subscribers lost) + IG (unfollow events) both populate this; FB/TikTok
+  // / LinkedIn don't, so the column self-hides for clients on those alone.
+  const hasUnfollowsData = sorted.some((r) => (r.unfollows ?? 0) > 0);
 
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between px-5 py-3 border-b border-nativz-border/70">
-        <h3 className="text-base font-semibold text-text-primary">Platform breakdown</h3>
+        <h3 className="ui-card-title">Platform breakdown</h3>
         <span className="text-xs text-text-muted">{rows.length} network{rows.length === 1 ? '' : 's'}</span>
       </div>
       <div className="overflow-x-auto">
@@ -113,6 +117,14 @@ export function PlatformBreakdownTable({ rows }: PlatformBreakdownTableProps) {
               >
                 Follows
               </th>
+              {hasUnfollowsData && (
+                <th
+                  className="text-right font-medium px-3 py-2"
+                  title="Unfollow events in the window. YouTube reports subscribers lost; Instagram reports unfollows. Other networks don't expose this signal."
+                >
+                  Unfollows
+                </th>
+              )}
               <th className="text-right font-medium px-3 py-2">Posts</th>
               <th className="text-right font-medium px-3 py-2">Views</th>
               {hasVideoData && (
@@ -158,6 +170,13 @@ export function PlatformBreakdownTable({ rows }: PlatformBreakdownTableProps) {
                       ? formatNumber(r.newFollows)
                       : `${r.followerChange > 0 ? '+' : ''}${r.followerChange}`}
                   </td>
+                  {hasUnfollowsData && (
+                    <td className="px-3 py-3 text-right tabular-nums text-text-muted">
+                      {r.unfollows != null && r.unfollows > 0
+                        ? `−${formatNumber(r.unfollows)}`
+                        : <span className="text-text-muted/60">—</span>}
+                    </td>
+                  )}
                   <td className="px-3 py-3 text-right tabular-nums text-text-muted">{r.postsCount}</td>
                   <td className="px-3 py-3 text-right tabular-nums text-text-primary">{formatNumber(r.views)}</td>
                   {hasVideoData && (

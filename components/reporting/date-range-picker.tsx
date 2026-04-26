@@ -137,7 +137,7 @@ function CalendarMonth({
               onMouseEnter={() => onDateHover(date)}
               onMouseLeave={() => onDateHover(null)}
               className={`
-                relative h-8 w-full text-xs font-medium transition-colors cursor-pointer
+                relative h-10 w-full text-xs font-medium transition-colors cursor-pointer
                 ${isDisabled ? 'text-text-muted/30 cursor-not-allowed' : ''}
                 ${isSelected ? 'bg-accent text-white z-10' : ''}
                 ${isInRange && !isSelected ? 'bg-accent/15 text-accent-text' : ''}

@@ -176,7 +176,7 @@ function SocialBenchmarkingPanel({
   return (
     <div className="space-y-8">
       <header>
-        <h2 className="text-lg font-semibold text-text-primary">Benchmarking</h2>
+        <h2 className="ui-section-title">Benchmarking</h2>
         <p className="mt-0.5 text-sm text-text-secondary">
           How {clientName} stacks up against tracked social competitors and audit-driven peers.
           Add new competitors from Competitor Spying.
@@ -222,7 +222,7 @@ function ComingSoonTab({ kind }: { kind: 'paid' | 'seo' }) {
 
   return (
     <div className="rounded-xl border border-nativz-border bg-surface p-12 text-center">
-      <h2 className="text-lg font-semibold text-text-primary">{copy.title}</h2>
+      <h2 className="ui-section-title">{copy.title}</h2>
       <p className="mt-2 text-sm text-text-muted max-w-md mx-auto">{copy.body}</p>
     </div>
   );

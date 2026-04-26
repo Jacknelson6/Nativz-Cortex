@@ -297,15 +297,34 @@ export async function GET(request: NextRequest) {
       combinedPrevEngRate += prevAvgEngRate;
       platformCount++;
 
+      // For each metric, prefer per-row daily values when populated; fall back
+      // to the account-level window total stamped on the end-of-window
+      // snapshot. This is what surfaces FB page views / LI org page views /
+      // YT channel-wide views — none of them publish per-day series, but
+      // their window totals are real numbers we should show.
+      const accountColumnPicker =
+        (rowCol: keyof PlatformSnapshot, accountCol: keyof PlatformSnapshot) =>
+        (s: PlatformSnapshot): number => {
+          const rowVal = (s[rowCol] as number | null) ?? 0;
+          if (rowVal > 0) return rowVal;
+          // Account totals only sit on the end-of-window row, so the sparkline
+          // shows a single bar — that's honest. The header number is correct.
+          return (s[accountCol] as number | null) ?? 0;
+        };
+
       // Per-metric cards. A card returns undefined when both current and
       // prior totals are zero so the UI can auto-hide unsupported metrics
       // (e.g. Facebook has no profile-visits signal from Zernio).
       const metrics = {
-        views: buildMetricCard(snaps, prevSnapsForProfile, (s) => s.views_count ?? 0),
+        views: buildMetricCard(
+          snaps,
+          prevSnapsForProfile,
+          accountColumnPicker('views_count', 'account_views_count'),
+        ),
         engagement: buildMetricCard(
           snaps,
           prevSnapsForProfile,
-          (s) => s.engagement_count ?? 0,
+          accountColumnPicker('engagement_count', 'account_engagement_count'),
         ),
         followersGained: (() => {
           // Follower gains aren't summable — the series's `followers_change`
@@ -329,7 +348,11 @@ export async function GET(request: NextRequest) {
             series,
           };
         })(),
-        reach: buildMetricCard(snaps, prevSnapsForProfile, (s) => s.reach_count ?? 0),
+        reach: buildMetricCard(
+          snaps,
+          prevSnapsForProfile,
+          accountColumnPicker('reach_count', 'account_reach_count'),
+        ),
         impressions: buildMetricCard(
           snaps,
           prevSnapsForProfile,
@@ -338,7 +361,7 @@ export async function GET(request: NextRequest) {
         profileVisits: buildMetricCard(
           snaps,
           prevSnapsForProfile,
-          (s) => s.profile_visits_count ?? 0,
+          accountColumnPicker('profile_visits_count', 'account_profile_visits_count'),
         ),
         engagementRate: (() => {
           // Engagement rate isn't summable — report the window average and

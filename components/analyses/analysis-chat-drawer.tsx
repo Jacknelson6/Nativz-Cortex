@@ -268,7 +268,7 @@ export function AnalysisChatDrawer({
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          'fixed bottom-6 right-6 z-30 flex h-12 items-center gap-2 rounded-full border border-accent/40 bg-accent px-4 text-sm font-medium text-white shadow-[0_0_24px_-6px_rgba(91,163,230,0.55)] transition hover:brightness-110',
+          'fixed bottom-6 right-6 z-30 flex h-12 items-center gap-2 rounded-full border border-accent/30 bg-accent px-4 text-sm font-medium text-white transition hover:brightness-110',
           open && 'hidden',
         )}
         aria-label="Open chat"

@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { Calendar, Plus } from 'lucide-react';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { TeamCalendarPreview } from '@/components/calendar/team-calendar-preview';
+import { TeamAvailability } from '@/components/calendar/team-availability';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -87,7 +87,7 @@ export default async function SchedulingListPage() {
         </Link>
       </header>
 
-      <TeamCalendarPreview />
+      <TeamAvailability />
 
       <div className="max-w-3xl">
 

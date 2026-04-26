@@ -49,7 +49,7 @@ export function NewSchedulingEventForm({
     : '';
   const [name, setName] = useState(defaultName);
   const [duration, setDuration] = useState(30);
-  const [lookahead, setLookahead] = useState(14);
+  const [lookahead, setLookahead] = useState(28);
   const [workingStart, setWorkingStart] = useState('09:00');
   const [workingEnd, setWorkingEnd] = useState('17:00');
   const [timezone, setTimezone] = useState('America/New_York');
@@ -201,7 +201,7 @@ export function NewSchedulingEventForm({
             min={1}
             max={60}
             value={lookahead}
-            onChange={(e) => setLookahead(Math.max(1, Math.min(60, Number(e.target.value) || 14)))}
+            onChange={(e) => setLookahead(Math.max(1, Math.min(60, Number(e.target.value) || 28)))}
             className="w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm focus:border-accent-text focus:outline-none"
           />
         </div>

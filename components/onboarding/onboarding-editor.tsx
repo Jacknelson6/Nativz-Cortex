@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import {
   ArrowLeft,
   Bookmark,
+  Calendar,
   ChevronDown,
   Copy,
   Check,
@@ -81,6 +82,14 @@ export type Item = {
   owner: ItemOwner;
   status: ItemStatus;
   sort_order: number;
+  kind?: string | null;
+};
+
+export type SchedulingEvent = {
+  id: string;
+  item_id: string | null;
+  share_token: string;
+  status: 'open' | 'scheduled' | 'canceled' | 'expired';
 };
 
 const PHASE_STATUS_LABELS: Record<PhaseStatus, { label: string; className: string }> = {
@@ -108,6 +117,7 @@ export function OnboardingEditor({
   initialItems,
   availableTemplates = [],
   initialUploads = [],
+  initialSchedulingEvents = [],
 }: {
   initialTracker: Tracker;
   initialPhases: Phase[];
@@ -115,6 +125,7 @@ export function OnboardingEditor({
   initialItems: Item[];
   availableTemplates?: AvailableTemplate[];
   initialUploads?: UploadRow[];
+  initialSchedulingEvents?: SchedulingEvent[];
 }) {
   const router = useRouter();
   const [tracker, setTracker] = useState<Tracker>(initialTracker);
@@ -412,6 +423,14 @@ export function OnboardingEditor({
   const doneItems = items.filter((it) => it.status === 'done').length;
   const progressPct = totalItems === 0 ? 0 : Math.round((doneItems / totalItems) * 100);
 
+  const schedulingEventByItemId = useMemo(() => {
+    const map = new Map<string, SchedulingEvent>();
+    for (const ev of initialSchedulingEvents) {
+      if (ev.item_id) map.set(ev.item_id, ev);
+    }
+    return map;
+  }, [initialSchedulingEvents]);
+
   const shareUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
     const slug = tracker.clients?.slug ?? 'onboarding';
@@ -502,6 +521,7 @@ export function OnboardingEditor({
                   key={g.id}
                   group={g}
                   items={groupItems}
+                  schedulingEventByItemId={schedulingEventByItemId}
                   onRename={(name) => void updateGroup(g.id, { name })}
                   onDelete={() => void deleteGroup(g.id)}
                   onAddItem={() => void addItem(g.id)}
@@ -1097,6 +1117,7 @@ function PhaseActionsEditor({
 function GroupBlock({
   group,
   items,
+  schedulingEventByItemId,
   onRename,
   onDelete,
   onAddItem,
@@ -1107,6 +1128,7 @@ function GroupBlock({
 }: {
   group: Group;
   items: Item[];
+  schedulingEventByItemId: Map<string, SchedulingEvent>;
   onRename: (name: string) => void;
   onDelete: () => void;
   onAddItem: () => void;
@@ -1156,6 +1178,7 @@ function GroupBlock({
             <ItemRow
               key={it.id}
               item={it}
+              schedulingEvent={schedulingEventByItemId.get(it.id) ?? null}
               onUpdate={(fields) => onUpdateItem(it.id, fields)}
               onDelete={() => onDeleteItem(it.id)}
               onReorder={(sourceId, targetId) => onReorderItem(sourceId, targetId)}
@@ -1169,17 +1192,20 @@ function GroupBlock({
 
 function ItemRow({
   item,
+  schedulingEvent,
   onUpdate,
   onDelete,
   onReorder,
 }: {
   item: Item;
+  schedulingEvent: SchedulingEvent | null;
   onUpdate: (fields: Partial<Item>) => void;
   onDelete: () => void;
   onReorder: (sourceId: string, targetId: string) => void;
 }) {
   const done = item.status === 'done';
   const [dragOver, setDragOver] = useState(false);
+  const isScheduleMeeting = item.kind === 'schedule_meeting';
 
   // Each item's drag payload is namespaced to its group so a drag across
   // groups is a no-op (the drop target ignores it).
@@ -1237,6 +1263,26 @@ function ItemRow({
         }}
         className={`flex-1 bg-transparent text-[14px] focus:outline-none ${done ? 'line-through text-text-muted' : 'text-text-primary'}`}
       />
+      {isScheduleMeeting && (schedulingEvent ? (
+        <a
+          href={`/schedule/${schedulingEvent.share_token}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 rounded-full bg-accent-surface text-accent-text ring-1 ring-inset ring-accent/20 px-2.5 py-0.5 text-[11px] font-medium hover:bg-accent-surface/80 transition-colors shrink-0"
+          title={`Status: ${schedulingEvent.status}`}
+        >
+          <Calendar size={11} />
+          Picker live
+        </a>
+      ) : (
+        <Link
+          href={`/admin/scheduling/new?item_id=${item.id}`}
+          className="inline-flex items-center gap-1 rounded-full bg-surface-hover text-text-secondary ring-1 ring-inset ring-nativz-border px-2.5 py-0.5 text-[11px] font-medium hover:text-text-primary hover:ring-accent-border transition-colors shrink-0"
+        >
+          <Calendar size={11} />
+          Set up availability
+        </Link>
+      ))}
       <select
         value={item.owner}
         onChange={(e) => onUpdate({ owner: e.target.value as ItemOwner })}

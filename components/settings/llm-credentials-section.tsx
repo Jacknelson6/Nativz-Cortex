@@ -19,13 +19,59 @@ interface VercelMirror {
   dbEmpty?: boolean;
 }
 
+type Provider = 'openrouter' | 'openai';
+
+interface ProviderConfig {
+  id: Provider;
+  title: string;
+  description: React.ReactNode;
+  manageHref: string;
+  manageLabel: string;
+  inputPlaceholder: string;
+  vercelEnvName: string;
+}
+
+const PROVIDERS: Record<Provider, ProviderConfig> = {
+  openrouter: {
+    id: 'openrouter',
+    title: 'OpenRouter API key',
+    description: (
+      <>
+        One key drives every model call across Cortex. Saving here writes to the DB
+        <em> and</em> pushes the same value up to Vercel&apos;s{' '}
+        <code className="font-mono text-text-secondary">OPENROUTER_API_KEY</code>{' '}
+        env var — so the two sources never drift.
+      </>
+    ),
+    manageHref: 'https://openrouter.ai/settings/keys',
+    manageLabel: 'Manage keys on OpenRouter',
+    inputPlaceholder: 'sk-or-v1-…',
+    vercelEnvName: 'OPENROUTER_API_KEY',
+  },
+  openai: {
+    id: 'openai',
+    title: 'OpenAI API key',
+    description: (
+      <>
+        Powers ChatGPT Image generation in the ad creator (gpt-image-1.5). Saving here writes
+        to the DB <em>and</em> mirrors the value to Vercel&apos;s{' '}
+        <code className="font-mono text-text-secondary">OPENAI_API_KEY</code> env var.
+      </>
+    ),
+    manageHref: 'https://platform.openai.com/api-keys',
+    manageLabel: 'Manage keys on OpenAI',
+    inputPlaceholder: 'sk-…',
+    vercelEnvName: 'OPENAI_API_KEY',
+  },
+};
+
 const ALL_BUCKETS: LlmProviderKeyBucket[] = ['default', 'topic_search', 'nerd'];
 
 /**
- * Picks the most-likely-current OpenRouter key out of the legacy 3-bucket
- * storage (default / topic_search / nerd). Prefers `default`, falls back to
- * any bucket that has a value. After the first save through this UI all three
- * buckets converge to the same key.
+ * Picks the most-likely-current key out of the legacy 3-bucket storage
+ * (default / topic_search / nerd). Prefers `default`, falls back to any bucket
+ * with a value. After the first save through this UI all three buckets
+ * converge to the same key.
  */
 function pickRepresentativeKey(block: MaskedBlock): Masked {
   if (block.default.configured) return block.default;
@@ -34,6 +80,12 @@ function pickRepresentativeKey(block: MaskedBlock): Masked {
   }
   return { configured: false, masked: null };
 }
+
+const EMPTY_BLOCK: MaskedBlock = {
+  default: { configured: false, masked: null },
+  topic_search: { configured: false, masked: null },
+  nerd: { configured: false, masked: null },
+};
 
 function relativeTime(ts: number | null | undefined): string {
   if (!ts) return '';
@@ -46,39 +98,40 @@ function relativeTime(ts: number | null | undefined): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+interface SharedState {
+  blocks: Record<Provider, MaskedBlock>;
+  mirrors: Record<Provider, VercelMirror>;
+}
+
 /**
- * Single-key OpenRouter credentials UI with bi-directional Vercel env sync.
+ * Provider credentials UI — renders both OpenRouter and OpenAI panels stacked.
+ * Each panel writes to its own provider bucket but shares one server fetch so
+ * mirror status stays consistent.
  *
- *   • Type a new key + Save → writes to DB AND pushes up to Vercel's
- *     OPENROUTER_API_KEY env var (production + preview + development).
- *   • "Use Vercel value" button (shown when Vercel's env differs from DB) →
- *     pulls the decrypted Vercel value into the DB so the dashboard matches.
- *
- * This keeps the two storage locations — agency_settings.llm_provider_keys
- * in Postgres, and OPENROUTER_API_KEY on Vercel — from silently drifting.
+ *   • Type a new key + Save → writes to DB AND pushes the same value up to
+ *     Vercel's matching env var (production + preview + development).
+ *   • "Use Vercel value" button (when Vercel's env differs from DB) → pulls
+ *     the decrypted Vercel value into the DB so the dashboard matches.
  */
 export function LlmCredentialsSection() {
-  const [current, setCurrent] = useState<Masked>({ configured: false, masked: null });
-  const [mirror, setMirror] = useState<VercelMirror>({ available: false });
-  const [input, setInput] = useState('');
+  const [state, setState] = useState<SharedState>({
+    blocks: { openrouter: EMPTY_BLOCK, openai: EMPTY_BLOCK },
+    mirrors: { openrouter: { available: false }, openai: { available: false } },
+  });
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const applyResponse = useCallback((data: Record<string, unknown>) => {
-    const block = (data.openrouter as MaskedBlock | undefined) ?? {
-      default: { configured: false, masked: null },
-      topic_search: { configured: false, masked: null },
-      nerd: { configured: false, masked: null },
-    };
-    setCurrent(pickRepresentativeKey(block));
-    const mirrorBlock =
-      (data.vercelMirror as { openrouter?: VercelMirror } | undefined)?.openrouter ?? {
-        available: false,
-      };
-    setMirror(mirrorBlock);
+    const openrouter = (data.openrouter as MaskedBlock | undefined) ?? EMPTY_BLOCK;
+    const openai = (data.openai as MaskedBlock | undefined) ?? EMPTY_BLOCK;
+    const mirror = (data.vercelMirror as { openrouter?: VercelMirror; openai?: VercelMirror } | undefined) ?? {};
+    setState({
+      blocks: { openrouter, openai },
+      mirrors: {
+        openrouter: mirror.openrouter ?? { available: false },
+        openai: mirror.openai ?? { available: false },
+      },
+    });
   }, []);
 
   useEffect(() => {
@@ -88,13 +141,80 @@ export function LlmCredentialsSection() {
         if (!res.ok) throw new Error('Failed to load');
         applyResponse(await res.json());
       } catch {
-        setError('Failed to load API key');
+        setLoadError('Failed to load API keys');
       } finally {
         setLoading(false);
       }
     }
     load();
   }, [applyResponse]);
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <CardSkeleton />
+        <CardSkeleton />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <Card>
+        <p className="text-[13px] text-red-400">{loadError}</p>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <ProviderKeyPanel
+        config={PROVIDERS.openrouter}
+        block={state.blocks.openrouter}
+        mirror={state.mirrors.openrouter}
+        onResponse={applyResponse}
+      />
+      <ProviderKeyPanel
+        config={PROVIDERS.openai}
+        block={state.blocks.openai}
+        mirror={state.mirrors.openai}
+        onResponse={applyResponse}
+      />
+    </div>
+  );
+}
+
+function CardSkeleton() {
+  return (
+    <Card>
+      <div className="flex animate-pulse items-center gap-3 py-4">
+        <div className="h-10 w-10 rounded-xl bg-surface-hover" />
+        <div className="flex-1 space-y-2">
+          <div className="h-4 w-48 rounded bg-surface-hover" />
+          <div className="h-3 w-full rounded bg-surface-hover" />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function ProviderKeyPanel({
+  config,
+  block,
+  mirror,
+  onResponse,
+}: {
+  config: ProviderConfig;
+  block: MaskedBlock;
+  mirror: VercelMirror;
+  onResponse: (data: Record<string, unknown>) => void;
+}) {
+  const current = pickRepresentativeKey(block);
+  const [input, setInput] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const dirty = input.trim() !== '';
 
@@ -112,7 +232,7 @@ export function LlmCredentialsSection() {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || 'Failed to save');
       }
-      applyResponse(await res.json());
+      onResponse(await res.json());
       setInput('');
       setSuccess(successMessage);
       setTimeout(() => setSuccess(null), 3000);
@@ -124,37 +244,26 @@ export function LlmCredentialsSection() {
   }
 
   async function saveFromInput(value: string | null) {
-    const openrouter = ALL_BUCKETS.reduce<Record<string, string | null>>(
+    const fanned = ALL_BUCKETS.reduce<Record<string, string | null>>(
       (acc, b) => ({ ...acc, [b]: value }),
       {},
     );
-    const msg = value === null ? 'Key removed.' : mirror.available
-      ? 'Key saved + mirrored to Vercel.'
-      : 'Key saved.';
-    await patch({ openrouter }, msg);
+    const msg =
+      value === null
+        ? 'Key removed.'
+        : mirror.available
+          ? 'Key saved + mirrored to Vercel.'
+          : 'Key saved.';
+    await patch({ [config.id]: fanned }, msg);
   }
 
   async function syncFromVercel() {
     setSyncing(true);
     try {
-      await patch({ syncFromVercel: { openrouter: true } }, 'Pulled from Vercel.');
+      await patch({ syncFromVercel: { [config.id]: true } }, 'Pulled from Vercel.');
     } finally {
       setSyncing(false);
     }
-  }
-
-  if (loading) {
-    return (
-      <Card>
-        <div className="flex animate-pulse items-center gap-3 py-4">
-          <div className="h-10 w-10 rounded-xl bg-surface-hover" />
-          <div className="flex-1 space-y-2">
-            <div className="h-4 w-48 rounded bg-surface-hover" />
-            <div className="h-3 w-full rounded bg-surface-hover" />
-          </div>
-        </div>
-      </Card>
-    );
   }
 
   return (
@@ -162,21 +271,16 @@ export function LlmCredentialsSection() {
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <h2 className="text-[15px] font-semibold text-text-primary">OpenRouter API key</h2>
-            <p className="mt-1 text-[13px] text-text-muted">
-              One key drives every model call across Cortex. Saving here writes to the DB
-              <em> and</em> pushes the same value up to Vercel&apos;s{' '}
-              <code className="font-mono text-text-secondary">OPENROUTER_API_KEY</code>{' '}
-              env var — so the two sources never drift.
-            </p>
+            <h2 className="text-[15px] font-semibold text-text-primary">{config.title}</h2>
+            <p className="mt-1 text-[13px] text-text-muted">{config.description}</p>
           </div>
           <a
-            href="https://openrouter.ai/settings/keys"
+            href={config.manageHref}
             target="_blank"
             rel="noreferrer"
             className="inline-flex shrink-0 items-center gap-1.5 text-[12px] text-text-muted transition-colors hover:text-accent-text"
           >
-            <ExternalLink size={12} /> Manage keys on OpenRouter
+            <ExternalLink size={12} /> {config.manageLabel}
           </a>
         </div>
 
@@ -208,7 +312,7 @@ export function LlmCredentialsSection() {
             autoComplete="off"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={current.configured ? 'Replace with a new key…' : 'sk-or-v1-…'}
+            placeholder={current.configured ? 'Replace with a new key…' : config.inputPlaceholder}
             className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 font-mono text-[14px] text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent/30"
           />
         </div>
@@ -301,8 +405,6 @@ function VercelMirrorPill({
     );
   }
 
-  // Either the two values differ, or DB is empty while Vercel has a value —
-  // in both cases the user probably wants to pull from Vercel.
   return (
     <div
       className="flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2 text-[12px]"
@@ -337,8 +439,6 @@ function VercelMirrorPill({
         style={{
           borderColor: 'color-mix(in srgb, var(--status-warning) 55%, transparent)',
           backgroundColor: 'var(--status-warning)',
-          /* Status warning is a light amber in both brand modes — dark ink
-             is the only foreground that passes contrast on it. */
           color: '#1a1400',
         }}
       >

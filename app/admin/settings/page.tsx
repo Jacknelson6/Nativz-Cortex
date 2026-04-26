@@ -100,7 +100,10 @@ function renderTab(
           <SectionPanel title="Model" description="One OpenRouter slug runs every Cortex feature.">
             <AiRoutingSection />
           </SectionPanel>
-          <SectionPanel title="API key" description="A single OpenRouter key powers the model above.">
+          <SectionPanel
+            title="API keys"
+            description="OpenRouter powers the model above. OpenAI powers ChatGPT Image generation in the ad creator."
+          >
             <LlmCredentialsSection />
           </SectionPanel>
           <SectionPanel

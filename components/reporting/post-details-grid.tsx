@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { ExternalLink, Heart, MessageCircle, Eye, TrendingUp, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
@@ -115,7 +115,7 @@ export function PostDetailsGrid({ clientId, start, end }: PostDetailsGridProps) 
     <section className="rounded-2xl border border-nativz-border/60 bg-background/20 p-4 sm:p-5">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h3 className="text-lg font-semibold tracking-tight text-text-primary sm:text-xl">Post details</h3>
+          <h3 className="ui-section-title">Post details</h3>
           <p className="mt-1 text-sm text-text-muted">
             {total > 0 ? `${total} total posts` : 'All posts published in this window'}
           </p>
@@ -225,7 +225,7 @@ export function PostDetailsGrid({ clientId, start, end }: PostDetailsGridProps) 
   );
 }
 
-function PostCard({ post }: { post: PostRow }) {
+const PostCard = memo(function PostCard({ post }: { post: PostRow }) {
   const isVertical = VERTICAL_PLATFORMS.includes(post.platform);
   const thumb = post.thumbnailUrl;
 
@@ -238,6 +238,7 @@ function PostCard({ post }: { post: PostRow }) {
       className={cn(
         'group flex h-auto w-full cursor-pointer flex-col self-start overflow-hidden rounded-2xl border border-nativz-border bg-surface shadow-[var(--shadow-card)] transition-all duration-200',
         'hover:-translate-y-0.5 hover:border-accent/35 hover:shadow-[var(--shadow-card-hover)]',
+        'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-text/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
       )}
       role="button"
       tabIndex={0}
@@ -326,4 +327,4 @@ function PostCard({ post }: { post: PostRow }) {
       )}
     </article>
   );
-}
+});

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { memo, useState, useEffect, useCallback } from 'react';
 import {
   Plus,
   RefreshCw,
@@ -660,9 +660,16 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
   );
 }
 
-const CHART_COLORS = ['#5BA3E6', '#A78BFA', '#34D399', '#F97316', '#EC4899', '#14B8A6'];
+const CHART_COLORS = [
+  'var(--accent)',
+  'var(--nz-coral)',
+  'var(--accent2)',
+  'var(--status-warning)',
+  'var(--text-muted)',
+  'var(--accent-text)',
+];
 
-function CompetitorCard({
+const CompetitorCard = memo(function CompetitorCard({
   competitor,
   refreshing,
   onRefresh,
@@ -760,9 +767,9 @@ function CompetitorCard({
       )}
     </div>
   );
-}
+});
 
-function MiniStat({ icon: Icon, label, value }: { icon: typeof Users; label: string; value: string }) {
+const MiniStat = memo(function MiniStat({ icon: Icon, label, value }: { icon: typeof Users; label: string; value: string }) {
   return (
     <div className="rounded-lg bg-background px-2.5 py-2 border border-nativz-border">
       <div className="flex items-center gap-1 text-text-muted mb-0.5">
@@ -772,7 +779,7 @@ function MiniStat({ icon: Icon, label, value }: { icon: typeof Users; label: str
       <p className="text-xs font-semibold text-text-primary">{value}</p>
     </div>
   );
-}
+});
 
 export const CLIENT_SERIES_KEY = 'Your account';
 

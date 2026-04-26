@@ -66,7 +66,7 @@ export function BestTimeHeatmap({ clientId }: BestTimeHeatmapProps) {
     <Card className="p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-base font-semibold text-text-primary">Best time to post</h3>
+          <h3 className="ui-card-title">Best time to post</h3>
           <p className="text-sm text-text-muted mt-0.5">
             Average engagement by day × hour, from posting history.
           </p>

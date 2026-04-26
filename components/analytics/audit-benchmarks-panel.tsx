@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   LineChart,
@@ -199,7 +199,7 @@ const CLIENT_SERIES_KEY = 'Your account';
 
 // ── Internal components ────────────────────────────────────────────────
 
-function BenchmarkCard({
+const BenchmarkCard = memo(function BenchmarkCard({
   benchmark,
   clientSeries,
 }: {
@@ -332,9 +332,9 @@ function BenchmarkCard({
       )}
     </div>
   );
-}
+});
 
-function CompetitorRow({ latest }: { latest: Snapshot }) {
+const CompetitorRow = memo(function CompetitorRow({ latest }: { latest: Snapshot }) {
   const hasError = !!latest.scrape_error;
   return (
     <div className="rounded-lg border border-nativz-border bg-background/40 p-4 space-y-2">
@@ -411,9 +411,9 @@ function CompetitorRow({ latest }: { latest: Snapshot }) {
       )}
     </div>
   );
-}
+});
 
-function DeltaStat({
+const DeltaStat = memo(function DeltaStat({
   label,
   delta,
 }: {
@@ -438,11 +438,18 @@ function DeltaStat({
       </span>
     </div>
   );
-}
+});
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
-const CHART_COLORS = ['#046bd2', '#f97316', '#14b8a6', '#a855f7', '#facc15', '#ec4899'];
+const CHART_COLORS = [
+  'var(--accent)',
+  'var(--nz-coral)',
+  'var(--accent2)',
+  'var(--status-warning)',
+  'var(--text-muted)',
+  'var(--accent-text)',
+];
 
 function formatNumber(n: number): string {
   if (n == null || Number.isNaN(n)) return '0';

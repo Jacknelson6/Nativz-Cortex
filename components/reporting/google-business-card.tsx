@@ -67,7 +67,7 @@ export function GoogleBusinessCard({ clientId, start, end }: GoogleBusinessCardP
       <Card className="p-5">
         <div className="flex items-center gap-2 mb-2">
           <GoogleBusinessMark size={18} />
-          <h3 className="text-base font-semibold text-text-primary">Google Business Profile</h3>
+          <h3 className="ui-card-title">Google Business Profile</h3>
         </div>
         <p className="text-sm text-text-muted">
           No Google Business Profile connected to Zernio for this client yet.
@@ -101,7 +101,7 @@ export function GoogleBusinessCard({ clientId, start, end }: GoogleBusinessCardP
     <Card className="p-5 space-y-4">
       <div className="flex items-center gap-2">
         <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-[#4285F4] text-white text-[10px] font-bold">G</span>
-        <h3 className="text-sm font-semibold text-text-primary">Google Business Profile</h3>
+        <h3 className="ui-card-title">Google Business Profile</h3>
       </div>
 
       {stats.length > 0 && (
@@ -112,7 +112,7 @@ export function GoogleBusinessCard({ clientId, start, end }: GoogleBusinessCardP
                 {s.icon}
                 {s.label}
               </div>
-              <p className="mt-1 text-xl font-semibold text-text-primary tabular-nums">
+              <p className="mt-1 text-xl font-semibold tracking-tight text-text-primary tabular-nums font-display">
                 {formatNumber(s.value)}
               </p>
             </div>

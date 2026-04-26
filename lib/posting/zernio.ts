@@ -923,6 +923,273 @@ export class ZernioPostingService implements PostingService {
   }
 
   /**
+   * GET /v1/analytics/facebook/page-insights — page-level window totals.
+   *
+   * Meta deprecated `page_fan_adds` and `page_fan_removes`, so Zernio
+   * synthesises `followers_gained` / `followers_lost` from the daily
+   * follower count delta server-side. Other metrics come straight from
+   * the Page Insights API. All values are window aggregates — written to
+   * the end-of-window snapshot row.
+   */
+  async getFacebookPageInsights(
+    accountId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<{
+    followersGained: number;
+    followersLost: number;
+    impressions: number;
+    impressionsUnique: number;
+    pageViews: number;
+    postEngagements: number;
+    videoViews: number;
+    videoViewSeconds: number;
+  } | null> {
+    const params = new URLSearchParams({ accountId, since: startDate, until: endDate });
+    try {
+      const raw = await zernioRequest<unknown>(`/analytics/facebook/page-insights?${params}`);
+      const root = asRecord(raw) ?? {};
+      const metrics = asRecord(root.metrics) ?? root;
+      const pickWindow = (...keys: string[]): number => {
+        for (const k of keys) {
+          const v = metrics[k];
+          if (typeof v === 'number') return v;
+          const entry = asRecord(v);
+          if (!entry) continue;
+          const t =
+            pickNum(entry, 'total') ||
+            pickNum(entry, 'value') ||
+            pickNum(entry, 'sum');
+          if (t) return t;
+        }
+        return 0;
+      };
+      return {
+        followersGained: pickWindow('followers_gained', 'followersGained'),
+        followersLost: pickWindow('followers_lost', 'followersLost'),
+        impressions: pickWindow('page_impressions', 'impressions'),
+        impressionsUnique: pickWindow('page_impressions_unique', 'impressions_unique'),
+        pageViews: pickWindow('page_views_total', 'page_views', 'pageViews'),
+        postEngagements: pickWindow('page_post_engagements', 'post_engagements', 'engagements'),
+        videoViews: pickWindow('page_video_views', 'video_views'),
+        videoViewSeconds: pickWindow('page_video_view_time', 'video_view_time'),
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('402') && !msg.includes('404') && !msg.includes('501')) {
+        console.warn(`[zernio] FB page insights failed for ${accountId}: ${msg}`);
+      }
+      return null;
+    }
+  }
+
+  /**
+   * GET /v1/analytics/youtube/channel-insights — channel-level window
+   * aggregates. Studio's impressions / CTR are NOT exposed by the YouTube
+   * Analytics API for any principal — that's a Google-side gap, not a
+   * Zernio one. We render an honest empty state for those metrics.
+   */
+  async getYoutubeChannelInsights(
+    accountId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<{
+    views: number;
+    watchTimeMinutes: number;
+    subscribersGained: number;
+    subscribersLost: number;
+    averageViewDuration: number;
+  } | null> {
+    const params = new URLSearchParams({ accountId, since: startDate, until: endDate });
+    try {
+      const raw = await zernioRequest<unknown>(`/analytics/youtube/channel-insights?${params}`);
+      const root = asRecord(raw) ?? {};
+      const metrics = asRecord(root.metrics) ?? root;
+      return {
+        views: pickNum(metrics, 'views') || pickNum(metrics, 'totalViews'),
+        watchTimeMinutes:
+          pickNum(metrics, 'estimatedMinutesWatched') ||
+          pickNum(metrics, 'watchTimeMinutes') ||
+          pickNum(metrics, 'watch_time_minutes'),
+        subscribersGained:
+          pickNum(metrics, 'subscribersGained') || pickNum(metrics, 'subscribers_gained'),
+        subscribersLost:
+          pickNum(metrics, 'subscribersLost') || pickNum(metrics, 'subscribers_lost'),
+        averageViewDuration:
+          pickNum(metrics, 'averageViewDuration') || pickNum(metrics, 'average_view_duration'),
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('402') && !msg.includes('404') && !msg.includes('501')) {
+        console.warn(`[zernio] YT channel insights failed for ${accountId}: ${msg}`);
+      }
+      return null;
+    }
+  }
+
+  /**
+   * GET /v1/analytics/linkedin/org-aggregate-analytics — org-level window
+   * aggregates. Returns 412 Precondition Failed when the connected account
+   * lacks `r_organization_social` / `r_organization_followers` /
+   * `r_organization_admin` scopes or ADMINISTRATOR role on the page; the
+   * response includes a `reauthUrl` we surface to the UI so the admin can
+   * fix it without leaving the dashboard.
+   */
+  async getLinkedInOrgAggregateAnalytics(
+    accountId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<
+    | {
+        ok: true;
+        impressions: number;
+        clicks: number;
+        engagementRate: number;
+        followerGains: number;
+        pageViews: number;
+        pageViewsByPage: Record<string, number>;
+      }
+    | { ok: false; needsReauth: true; reauthUrl: string | null }
+    | null
+  > {
+    const params = new URLSearchParams({ accountId, since: startDate, until: endDate });
+    try {
+      const raw = await zernioRequest<unknown>(`/analytics/linkedin/org-aggregate-analytics?${params}`);
+      const root = asRecord(raw) ?? {};
+      const metrics = asRecord(root.metrics) ?? root;
+      const byPageRaw = asRecord(metrics.pageViewsByPage) ?? asRecord(metrics.page_views_by_page) ?? {};
+      const pageViewsByPage: Record<string, number> = {};
+      for (const [k, v] of Object.entries(byPageRaw)) {
+        if (typeof v === 'number') pageViewsByPage[k] = v;
+        else {
+          const r = asRecord(v);
+          if (r) pageViewsByPage[k] = pickNum(r, 'value') || pickNum(r, 'total');
+        }
+      }
+      return {
+        ok: true,
+        impressions: pickNum(metrics, 'impressions'),
+        clicks: pickNum(metrics, 'clicks'),
+        engagementRate:
+          pickNum(metrics, 'engagementRate') || pickNum(metrics, 'engagement_rate'),
+        followerGains:
+          pickNum(metrics, 'followerGains') ||
+          pickNum(metrics, 'follower_gains') ||
+          pickNum(metrics, 'followersGained'),
+        pageViews: pickNum(metrics, 'pageViews') || pickNum(metrics, 'page_views'),
+        pageViewsByPage,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('412')) {
+        // Surface the re-auth link if Zernio included one so the admin UI
+        // can prompt the connected user to grant the missing scopes.
+        let reauthUrl: string | null = null;
+        const match = msg.match(/"reauthUrl"\s*:\s*"([^"]+)"/);
+        if (match) reauthUrl = match[1];
+        return { ok: false, needsReauth: true, reauthUrl };
+      }
+      if (!msg.includes('402') && !msg.includes('404') && !msg.includes('501')) {
+        console.warn(`[zernio] LI org analytics failed for ${accountId}: ${msg}`);
+      }
+      return null;
+    }
+  }
+
+  /**
+   * GET /v1/analytics/tiktok/account-insights — current-state account
+   * snapshot (follower / following / likes / video counts). NOT window-
+   * aggregated; this is what's true at fetch time. TikTok's public API
+   * does NOT expose profile_views, watch time, impression sources, or
+   * account-level impressions / reach for any principal — those stay
+   * unavailable on Cortex and render as honest empty states.
+   */
+  async getTikTokAccountInsights(
+    accountId: string,
+  ): Promise<{
+    followerCount: number;
+    followingCount: number;
+    likesCount: number;
+    videoCount: number;
+  } | null> {
+    try {
+      const raw = await zernioRequest<unknown>(
+        `/analytics/tiktok/account-insights?accountId=${encodeURIComponent(accountId)}`,
+      );
+      const root = asRecord(raw) ?? {};
+      const metrics = asRecord(root.metrics) ?? asRecord(root.data) ?? root;
+      return {
+        followerCount:
+          pickNum(metrics, 'followerCount') ||
+          pickNum(metrics, 'follower_count') ||
+          pickNum(metrics, 'followers'),
+        followingCount:
+          pickNum(metrics, 'followingCount') || pickNum(metrics, 'following_count'),
+        likesCount:
+          pickNum(metrics, 'likesCount') ||
+          pickNum(metrics, 'likes_count') ||
+          pickNum(metrics, 'likes'),
+        videoCount:
+          pickNum(metrics, 'videoCount') ||
+          pickNum(metrics, 'video_count') ||
+          pickNum(metrics, 'videos'),
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('402') && !msg.includes('404') && !msg.includes('501')) {
+        console.warn(`[zernio] TT account insights failed for ${accountId}: ${msg}`);
+      }
+      return null;
+    }
+  }
+
+  /**
+   * GET /v1/analytics/instagram/follower-history — daily follower count
+   * series. IG only returns `total_value` for `follows_and_unfollows`, so
+   * per-day follow / unfollow split is impossible. The series we get is
+   * the absolute follower count per day, which we persist into
+   * `platform_follower_daily` so the chart can render an actual curve
+   * instead of guessing from the most recent point.
+   */
+  async getInstagramFollowerHistory(
+    accountId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<Array<{ date: string; followers: number }> | null> {
+    const params = new URLSearchParams({ accountId, since: startDate, until: endDate });
+    try {
+      const raw = await zernioRequest<unknown>(`/analytics/instagram/follower-history?${params}`);
+      const root = asRecord(raw);
+      const list =
+        (root?.series as unknown[] | undefined) ??
+        (root?.data as unknown[] | undefined) ??
+        (root?.history as unknown[] | undefined) ??
+        (Array.isArray(raw) ? (raw as unknown[]) : []);
+      if (!Array.isArray(list) || list.length === 0) return null;
+      return list
+        .map((item) => {
+          const r = asRecord(item);
+          if (!r) return null;
+          const date = pickString(r, 'date', 'day', 'timestamp');
+          if (!date) return null;
+          const followers =
+            pickNum(r, 'followers') ||
+            pickNum(r, 'count') ||
+            pickNum(r, 'value') ||
+            pickNum(r, 'total');
+          return { date: date.split('T')[0], followers };
+        })
+        .filter((x): x is { date: string; followers: number } => x !== null);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('402') && !msg.includes('404') && !msg.includes('501')) {
+        console.warn(`[zernio] IG follower history failed for ${accountId}: ${msg}`);
+      }
+      return null;
+    }
+  }
+
+  /**
    * Per-account paginated pull of /v1/analytics. Bypasses the 120-day
    * `fetchMergedAnalytics` cache so historical backfills see every indexed
    * post. Zernio caps each query at 100 results/page and 1-year range.

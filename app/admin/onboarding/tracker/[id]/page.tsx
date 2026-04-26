@@ -57,7 +57,7 @@ export default async function OnboardingTrackerEditorPage({
     groupIds.length
       ? admin
           .from('onboarding_checklist_items')
-          .select('id, group_id, task, description, owner, status, sort_order')
+          .select('id, group_id, task, description, owner, status, sort_order, kind')
           .in('group_id', groupIds)
           .order('sort_order', { ascending: true })
       : Promise.resolve({ data: [] as unknown[] }),
@@ -78,6 +78,17 @@ export default async function OnboardingTrackerEditorPage({
           .order('created_at', { ascending: false }),
   ]);
 
+  // Once we have items, look up any team scheduling events back-linked to
+  // them so the editor can render "picker live" vs "set up availability"
+  // affordances on schedule_meeting items. Templates never have events.
+  const itemIds = ((itemsRes.data ?? []) as Array<{ id: string }>).map((it) => it.id);
+  const schedulingEventsRes = !initialTracker.is_template && itemIds.length
+    ? await admin
+        .from('team_scheduling_events')
+        .select('id, item_id, share_token, status')
+        .in('item_id', itemIds)
+    : { data: [] as unknown[] };
+
   return (
     <OnboardingEditor
       initialTracker={initialTracker}
@@ -86,6 +97,7 @@ export default async function OnboardingTrackerEditorPage({
       initialItems={(itemsRes.data as Parameters<typeof OnboardingEditor>[0]['initialItems']) ?? []}
       availableTemplates={(availableTemplatesRes.data as Parameters<typeof OnboardingEditor>[0]['availableTemplates']) ?? []}
       initialUploads={(uploadsRes.data as Parameters<typeof OnboardingEditor>[0]['initialUploads']) ?? []}
+      initialSchedulingEvents={(schedulingEventsRes.data as Parameters<typeof OnboardingEditor>[0]['initialSchedulingEvents']) ?? []}
     />
   );
 }

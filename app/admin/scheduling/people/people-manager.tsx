@@ -136,17 +136,17 @@ export function PeopleManager() {
       <div className="mb-6 flex items-center justify-between gap-4">
         <div>
           <Link
-            href="/admin/calendar"
+            href="/admin/scheduling"
             className="mb-2 inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-text-secondary transition-colors"
           >
             <ArrowLeft size={12} />
-            Back to calendar
+            Back to scheduling
           </Link>
-          <h1 className="text-2xl font-semibold text-text-primary">Calendar people</h1>
+          <h1 className="text-2xl font-semibold text-text-primary">Scheduling people</h1>
           <p className="mt-1 text-sm text-text-muted">
-            Stakeholders whose calendars overlay the team view, grouped by scheduling priority.
-            Service-account driven — email aliases must live on{' '}
-            {ALLOWED_DOMAINS.map((d) => `@${d}`).join(' or ')}.
+            Teammates whose calendars overlay the team availability view, grouped by scheduling
+            priority. Pulled via service-account / domain-wide delegation — email aliases must live
+            on {ALLOWED_DOMAINS.map((d) => `@${d}`).join(' or ')}.
           </p>
         </div>
         <Button onClick={() => setAdding(true)} disabled={adding}>

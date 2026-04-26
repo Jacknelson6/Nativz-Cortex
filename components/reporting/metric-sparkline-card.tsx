@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { ResponsiveContainer, Area, Tooltip, XAxis, YAxis, Line, ComposedChart } from 'recharts';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -35,11 +35,11 @@ interface MetricSparklineCardProps {
   compareLabel?: string;
 }
 
-export function MetricSparklineCard({
+function MetricSparklineCardImpl({
   label,
   card,
   format = 'number',
-  colorClass = '#60a5fa',
+  colorClass = 'var(--accent-text)',
   posts = [],
   compareSeries,
   compareLabel,
@@ -88,36 +88,33 @@ export function MetricSparklineCard({
 
   const hasCompare = Boolean(compareSeries && compareSeries.length > 0);
 
-  type DotProps = {
-    cx?: number;
-    cy?: number;
-    payload?: { date?: string };
-  };
-
   // Overlay markers: a filled ring on the trend line at every post-publish
   // date. The 9:16 thumbnail lives in the hover tooltip, not on the line
   // itself, keeping the sparkline readable.
-  const renderDot = (props: DotProps) => {
-    const { cx, cy, payload } = props;
-    if (cx == null || cy == null || !payload?.date) return <g />;
-    const post = postsByDate.get(payload.date);
-    if (!post) return <g />;
-    const isHovered = hoveredDate === payload.date;
-    const r = isHovered ? 5 : 4;
-    const inner = (
-      <g className={post.postUrl ? 'cursor-pointer' : undefined}>
-        <circle cx={cx} cy={cy} r={r + 2} fill={colorClass} opacity={0.22} />
-        <circle cx={cx} cy={cy} r={r} fill={colorClass} stroke="#0f1116" strokeWidth={1.5} />
-      </g>
-    );
-    return post.postUrl ? (
-      <a href={post.postUrl} target="_blank" rel="noopener noreferrer">
-        {inner}
-      </a>
-    ) : (
-      inner
-    );
-  };
+  const renderDot = useCallback(
+    (props: { cx?: number; cy?: number; payload?: { date?: string } }) => {
+      const { cx, cy, payload } = props;
+      if (cx == null || cy == null || !payload?.date) return <g />;
+      const post = postsByDate.get(payload.date);
+      if (!post) return <g />;
+      const isHovered = hoveredDate === payload.date;
+      const r = isHovered ? 5 : 4;
+      const inner = (
+        <g className={post.postUrl ? 'cursor-pointer' : undefined}>
+          <circle cx={cx} cy={cy} r={r + 2} fill={colorClass} opacity={0.22} />
+          <circle cx={cx} cy={cy} r={r} fill={colorClass} stroke="var(--background)" strokeWidth={1.5} />
+        </g>
+      );
+      return post.postUrl ? (
+        <a href={post.postUrl} target="_blank" rel="noopener noreferrer">
+          {inner}
+        </a>
+      ) : (
+        inner
+      );
+    },
+    [postsByDate, hoveredDate, colorClass],
+  );
 
   return (
     <Card className="flex h-full flex-col gap-3 p-4">
@@ -138,7 +135,7 @@ export function MetricSparklineCard({
         )}
       </div>
       <div>
-        <p className="text-2xl font-semibold text-text-primary tabular-nums">
+        <p className="text-2xl font-semibold tracking-tight text-text-primary tabular-nums font-display">
           {formatNumber(card.total, suffix)}
         </p>
         {compareLabel && (
@@ -170,7 +167,7 @@ export function MetricSparklineCard({
               <XAxis dataKey="date" hide />
               <YAxis hide domain={['auto', 'auto']} />
               <Tooltip
-                cursor={{ stroke: 'rgba(255,255,255,0.12)', strokeWidth: 1 }}
+                cursor={{ stroke: 'var(--nz-line)', strokeWidth: 1 }}
                 content={(t) => {
                   const first = t.payload?.[0];
                   if (!first) return null;
@@ -180,19 +177,19 @@ export function MetricSparklineCard({
                   return (
                     <div
                       style={{
-                        background: 'rgba(15,17,22,0.97)',
-                        border: '1px solid rgba(255,255,255,0.08)',
+                        background: 'var(--surface)',
+                        border: '1px solid var(--nz-line)',
                         borderRadius: 10,
                         padding: post ? 10 : '8px 10px',
                         fontSize: 13,
                         maxWidth: 260,
-                        boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                        boxShadow: 'var(--shadow-card-hover)',
                       }}
                     >
-                      <div style={{ color: 'rgba(255,255,255,0.6)', marginBottom: 3, fontSize: 12 }}>
+                      <div style={{ color: 'var(--text-muted)', marginBottom: 3, fontSize: 12 }}>
                         {formatDate(date)}
                       </div>
-                      <div style={{ color: '#fff', fontWeight: 600, fontSize: 14 }}>
+                      <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: 14 }}>
                         {formatNumber(value, suffix)} {label.toLowerCase()}
                       </div>
                       {post && (
@@ -218,7 +215,7 @@ export function MetricSparklineCard({
                               }}
                             />
                           )}
-                          <div style={{ color: 'rgba(255,255,255,0.8)', lineHeight: 1.4, fontSize: 13 }}>
+                          <div style={{ color: 'var(--text-secondary)', lineHeight: 1.4, fontSize: 13 }}>
                             <div style={{ color: colorClass, fontWeight: 600, marginBottom: 3 }}>
                               Post published
                             </div>
@@ -245,7 +242,7 @@ export function MetricSparklineCard({
                 <Line
                   type="monotone"
                   dataKey="compare"
-                  stroke="rgba(255,255,255,0.55)"
+                  stroke="var(--text-muted)"
                   strokeWidth={1.25}
                   strokeDasharray="3 3"
                   dot={false}
@@ -269,3 +266,5 @@ export function MetricSparklineCard({
     </Card>
   );
 }
+
+export const MetricSparklineCard = memo(MetricSparklineCardImpl);

@@ -40,6 +40,7 @@ export function useReportingData(initialClientId?: string | null) {
   const [loading, setLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncErrors, setSyncErrors] = useState<string[]>([]);
 
   // Fetch clients on mount — only for `selectedClient` lookup (name, logo)
   // used by the report builder. Selection itself comes from `initialClientId`.
@@ -142,7 +143,14 @@ export function useReportingData(initialClientId?: string | null) {
         }),
       });
       if (!res.ok) throw new Error('Sync failed');
-      toast.success('Sync complete');
+      const result = await res.json();
+      const errors = Array.isArray(result?.errors) ? (result.errors as string[]) : [];
+      setSyncErrors(errors);
+      if (errors.length === 0) {
+        toast.success('Sync complete');
+      } else {
+        toast.success(`Sync complete · ${errors.length} platform${errors.length === 1 ? '' : 's'} need attention`);
+      }
       await fetchData();
     } catch {
       toast.error('Failed to sync data');
@@ -199,6 +207,7 @@ export function useReportingData(initialClientId?: string | null) {
     loading,
     dataLoading,
     syncing,
+    syncErrors,
     syncNow,
     refreshData,
     fetchTopPostsForReport,

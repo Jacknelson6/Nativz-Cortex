@@ -20,7 +20,7 @@ export const ADMIN_PROTECTED_ROUTES: string[] = [
   '/admin/shoots',
   '/admin/edits',
   '/admin/projects',
-  '/admin/calendar',
+  '/admin/scheduling',
   '/admin/analytics',
   '/admin/analytics/social',
   '/admin/analytics/affiliates',

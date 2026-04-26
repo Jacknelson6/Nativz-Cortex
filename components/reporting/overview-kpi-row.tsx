@@ -143,21 +143,18 @@ export function OverviewKpiRow({
       <MetricSparklineCard
         label="New followers"
         card={cards.followers}
-        colorClass="#60a5fa"
         compareSeries={cards.compareFollowerSeries}
         compareLabel={compareLabel}
       />
       <MetricSparklineCard
         label="Views"
         card={cards.views}
-        colorClass="#34d399"
         compareSeries={cards.compareViewsSeries}
         compareLabel={compareLabel}
       />
       <MetricSparklineCard
         label="Engagement"
         card={cards.engagement}
-        colorClass="#f472b6"
         compareSeries={cards.compareEngagementSeries}
         compareLabel={compareLabel}
       />

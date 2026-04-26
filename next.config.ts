@@ -82,10 +82,14 @@ const nextConfig: NextConfig = {
       // links into a dedicated route fall back to the brand home.
       { source: '/portal/notifications', destination: '/finder/new', permanent: false },
       { source: '/portal/notifications/:path*', destination: '/finder/new', permanent: false },
-      // Calendar surface is admin-only at /admin/calendar — viewer-side
-      // calendar UI didn't have a real consumer, so retiring it for now.
+      // Calendar surface was retired 2026-04-26 — team availability now
+      // lives at /admin/scheduling, no portal-side equivalent.
       { source: '/portal/calendar', destination: '/finder/new', permanent: false },
       { source: '/portal/calendar/:path*', destination: '/finder/new', permanent: false },
+      // /admin/calendar deep links → /admin/scheduling (closest live surface).
+      { source: '/admin/calendar', destination: '/admin/scheduling', permanent: false },
+      { source: '/admin/calendar/people', destination: '/admin/scheduling/people', permanent: false },
+      { source: '/admin/calendar/:path*', destination: '/admin/scheduling', permanent: false },
       // Retired per the brand-root migration plan: ideas, nerd, analyze,
       // reports, competitor-tracking. Each redirects to the closest live
       // surface so old links resolve into something useful.

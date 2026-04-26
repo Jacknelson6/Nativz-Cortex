@@ -74,12 +74,12 @@ export function PostingCadenceHeatmap({ clientId, start, end }: PostingCadenceHe
 
   const maxCount = Math.max(1, ...rows.map((r) => r.count));
   const intensity = (c: number) => {
-    if (c === 0) return 'bg-white/5 border-white/5';
+    if (c === 0) return 'bg-white/[0.04] border-white/[0.05]';
     const t = c / maxCount;
-    if (t > 0.75) return 'bg-blue-400 border-blue-400';
-    if (t > 0.5) return 'bg-blue-500/80 border-blue-500/60';
-    if (t > 0.25) return 'bg-blue-500/55 border-blue-500/40';
-    return 'bg-blue-500/30 border-blue-500/20';
+    if (t > 0.75) return 'bg-accent border-accent';
+    if (t > 0.5) return 'bg-accent/75 border-accent/50';
+    if (t > 0.25) return 'bg-accent/45 border-accent/30';
+    return 'bg-accent/20 border-accent/15';
   };
 
   const totalPosts = rows.reduce((s, r) => s + r.count, 0);
@@ -88,7 +88,7 @@ export function PostingCadenceHeatmap({ clientId, start, end }: PostingCadenceHe
     <Card className="p-5">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h3 className="text-base font-semibold text-text-primary">Posting cadence</h3>
+          <h3 className="ui-card-title">Posting cadence</h3>
           <p className="text-sm text-text-muted mt-0.5">
             {totalPosts} posts · {grid.length} week{grid.length === 1 ? '' : 's'}
           </p>
@@ -96,11 +96,11 @@ export function PostingCadenceHeatmap({ clientId, start, end }: PostingCadenceHe
         <div className="flex items-center gap-1 text-xs text-text-muted">
           <span>Less</span>
           <div className="flex gap-0.5">
-            <div className="h-2.5 w-2.5 rounded-sm bg-white/5" />
-            <div className="h-2.5 w-2.5 rounded-sm bg-blue-500/30" />
-            <div className="h-2.5 w-2.5 rounded-sm bg-blue-500/55" />
-            <div className="h-2.5 w-2.5 rounded-sm bg-blue-500/80" />
-            <div className="h-2.5 w-2.5 rounded-sm bg-blue-400" />
+            <div className="h-2.5 w-2.5 rounded-sm bg-white/[0.04]" />
+            <div className="h-2.5 w-2.5 rounded-sm bg-accent/20" />
+            <div className="h-2.5 w-2.5 rounded-sm bg-accent/45" />
+            <div className="h-2.5 w-2.5 rounded-sm bg-accent/75" />
+            <div className="h-2.5 w-2.5 rounded-sm bg-accent" />
           </div>
           <span>More</span>
         </div>

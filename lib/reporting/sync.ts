@@ -44,12 +44,25 @@ export async function syncSocialProfile(
   const platform = profile.platform;
   const lateAccountId = profile.late_account_id;
 
-  // Follower stats + daily metrics + IG insights + per-post analytics in parallel.
-  // Posts are pulled here (instead of in a later try/catch) so YouTube can fan
-  // out to per-video daily-views endpoints without serializing an extra round-
-  // trip.
+  // Follower stats + daily metrics + per-platform account insights + per-post
+  // analytics in parallel. Posts are pulled here (instead of in a later
+  // try/catch) so YouTube can fan out to per-video daily-views endpoints
+  // without serializing an extra round-trip. The account-insights pulls (one
+  // per platform) all return null on 402/404/501 so missing add-ons degrade
+  // soft.
   try {
-    const [followerStats, dailyMetrics, igInsights, igAccountMetrics, posts] = await Promise.all([
+    const [
+      followerStats,
+      dailyMetrics,
+      igInsights,
+      igAccountMetrics,
+      fbInsights,
+      ytChannelInsights,
+      liOrgAnalytics,
+      ttAccountInsights,
+      igFollowerHistory,
+      posts,
+    ] = await Promise.all([
       service.getFollowerStats(lateAccountId, dateRange.start, dateRange.end),
       service.getDailyMetrics({
         accountId: lateAccountId,
@@ -59,10 +72,23 @@ export async function syncSocialProfile(
       platform === 'instagram'
         ? zernio.getInstagramInsights(lateAccountId, dateRange.start, dateRange.end)
         : Promise.resolve({ profileVisits: [], reachSeries: [] }),
-      // MBS-equivalent account-wide totals for IG. Null for other platforms —
-      // Zernio doesn't expose account-level insights for TikTok / FB / YouTube.
       platform === 'instagram'
         ? zernio.getInstagramAccountMetrics(lateAccountId, dateRange.start, dateRange.end)
+        : Promise.resolve(null),
+      platform === 'facebook'
+        ? zernio.getFacebookPageInsights(lateAccountId, dateRange.start, dateRange.end)
+        : Promise.resolve(null),
+      platform === 'youtube'
+        ? zernio.getYoutubeChannelInsights(lateAccountId, dateRange.start, dateRange.end)
+        : Promise.resolve(null),
+      platform === 'linkedin'
+        ? zernio.getLinkedInOrgAggregateAnalytics(lateAccountId, dateRange.start, dateRange.end)
+        : Promise.resolve(null),
+      platform === 'tiktok'
+        ? zernio.getTikTokAccountInsights(lateAccountId)
+        : Promise.resolve(null),
+      platform === 'instagram'
+        ? zernio.getInstagramFollowerHistory(lateAccountId, dateRange.start, dateRange.end)
         : Promise.resolve(null),
       service.getPostAnalytics({
         accountId: lateAccountId,
@@ -70,6 +96,83 @@ export async function syncSocialProfile(
         endDate: dateRange.end,
       }),
     ]);
+
+    // Surface a LinkedIn re-auth prompt to the caller (Sync button → admin
+    // UI) without tearing the rest of the sync down. The 412 path returns a
+    // structured object instead of throwing so the rest of the parallel
+    // pulls keep flowing.
+    if (
+      platform === 'linkedin' &&
+      liOrgAnalytics &&
+      'ok' in liOrgAnalytics &&
+      liOrgAnalytics.ok === false
+    ) {
+      const link = liOrgAnalytics.reauthUrl
+        ? ` Reconnect: ${liOrgAnalytics.reauthUrl}`
+        : '';
+      result.errors.push(
+        `LinkedIn org analytics needs re-auth — missing r_organization_social / r_organization_followers / r_organization_admin scopes or ADMINISTRATOR role.${link}`,
+      );
+    }
+
+    // Normalise per-platform account insights into a single window-totals
+    // shape so the row-building step is platform-agnostic. Each platform
+    // exposes a different subset of fields — undefined values stay null in
+    // the snapshot so the UI's "MetricCard returns undefined when both
+    // current and prior totals are 0" path keeps working as an honest
+    // empty state.
+    type AccountTotals = {
+      newFollows?: number;
+      unfollows?: number;
+      views?: number;
+      reach?: number;
+      totalInteractions?: number;
+      profileLinksTaps?: number;
+      accountsEngaged?: number;
+    };
+    let accountTotals: AccountTotals | null = null;
+    if (platform === 'instagram' && igAccountMetrics) {
+      accountTotals = {
+        newFollows: igAccountMetrics.newFollows,
+        unfollows: igAccountMetrics.unfollows,
+        views: igAccountMetrics.views,
+        reach: igAccountMetrics.reach,
+        totalInteractions: igAccountMetrics.totalInteractions,
+        profileLinksTaps: igAccountMetrics.profileLinksTaps,
+        accountsEngaged: igAccountMetrics.accountsEngaged,
+      };
+    } else if (platform === 'facebook' && fbInsights) {
+      accountTotals = {
+        newFollows: fbInsights.followersGained,
+        unfollows: fbInsights.followersLost,
+        views: fbInsights.pageViews,
+        reach: fbInsights.impressionsUnique,
+        totalInteractions: fbInsights.postEngagements,
+      };
+    } else if (platform === 'youtube' && ytChannelInsights) {
+      accountTotals = {
+        newFollows: ytChannelInsights.subscribersGained,
+        unfollows: ytChannelInsights.subscribersLost,
+        views: ytChannelInsights.views,
+      };
+    } else if (
+      platform === 'linkedin' &&
+      liOrgAnalytics &&
+      'ok' in liOrgAnalytics &&
+      liOrgAnalytics.ok === true
+    ) {
+      accountTotals = {
+        newFollows: liOrgAnalytics.followerGains,
+        views: liOrgAnalytics.pageViews,
+        totalInteractions: liOrgAnalytics.clicks,
+        reach: liOrgAnalytics.impressions,
+      };
+    }
+    // TikTok account-insights is a current-state snapshot, not a window
+    // aggregate — don't write it into account_views_count etc. (which are
+    // window totals). It's used downstream as an authoritative follower
+    // count when getFollowerStats returns nothing.
+    void ttAccountInsights;
 
     // Per-video watch time + retention. YouTube only — Zernio's standard
     // /analytics endpoint returns views/likes/etc, but watch time lives on
@@ -171,8 +274,31 @@ export async function syncSocialProfile(
       }
     }
 
+    // Merge IG follower-history into the follower series so we get a real
+    // daily curve for IG instead of falling back to the most-recent-point
+    // workaround. follower-history wins on conflict because it returns the
+    // full backfilled window from Meta directly, whereas getFollowerStats
+    // only exposes the last ~7-30 days depending on Zernio plan.
+    const mergedSeries: Array<{ date: string; followers: number }> = [
+      ...followerStats.series,
+    ];
+    if (igFollowerHistory && igFollowerHistory.length > 0) {
+      const seen = new Set(mergedSeries.map((p) => p.date));
+      for (const p of igFollowerHistory) {
+        if (seen.has(p.date)) {
+          // Override the existing point with the history value (more
+          // authoritative — full Meta backfill).
+          const idx = mergedSeries.findIndex((m) => m.date === p.date);
+          if (idx >= 0) mergedSeries[idx] = p;
+        } else {
+          mergedSeries.push(p);
+          seen.add(p.date);
+        }
+      }
+    }
+
     const followersByDay = new Map<string, number>();
-    for (const p of followerStats.series) followersByDay.set(p.date, p.followers);
+    for (const p of mergedSeries) followersByDay.set(p.date, p.followers);
     const profileVisitsByDay = new Map<string, number>();
     for (const p of igInsights.profileVisits) profileVisitsByDay.set(p.date, p.value);
     const igReachByDay = new Map<string, number>();
@@ -182,7 +308,7 @@ export async function syncSocialProfile(
     // Use the oldest series point (or the current count) as a fill-in for
     // earlier days rather than writing 0 — follower counts change slowly
     // and "unknown" is closer to "current" than to zero.
-    const sortedSeries = [...followerStats.series].sort((a, b) =>
+    const sortedSeries = [...mergedSeries].sort((a, b) =>
       a.date.localeCompare(b.date),
     );
     const oldestSeriesValue =
@@ -225,7 +351,7 @@ export async function syncSocialProfile(
 
       const rows = dailyMetrics.map((day) => {
         const isWindowEnd = day.date === endOfWindowDate;
-        const igTotals = isWindowEnd ? igAccountMetrics : null;
+        const totals = isWindowEnd ? accountTotals : null;
         return {
           social_profile_id: profile.id,
           client_id: clientId,
@@ -246,17 +372,19 @@ export async function syncSocialProfile(
           // IG / FB because Zernio doesn't expose watch-time for those platforms.
           watch_time_seconds: Math.round((ytWatchMinutesByDay.get(day.date) ?? 0) * 60),
           follower_growth_percent: followerStats.growthPercent,
-          // IG account-wide window totals — mirrors what Meta Business Suite
-          // shows. Populated on the end-of-window row only because Zernio's
-          // endpoint returns aggregates, not per-day values.
-          new_follows_count: igTotals?.newFollows ?? null,
-          unfollows_count: igTotals?.unfollows ?? null,
-          account_views_count: igTotals?.views ?? null,
-          account_engagement_count: igTotals?.totalInteractions ?? null,
-          account_reach_count: igTotals?.reach ?? null,
-          account_profile_visits_count: igTotals?.profileLinksTaps ?? null,
-          accounts_engaged_count: igTotals?.accountsEngaged ?? null,
-          window_days: igTotals ? windowDays : null,
+          // Account-wide window totals — written to the end-of-window row
+          // only. Each platform exposes a different subset; missing fields
+          // stay null so the UI's "MetricCard returns undefined when both
+          // totals are 0" path renders an honest empty state instead of a
+          // misleading zero.
+          new_follows_count: totals?.newFollows ?? null,
+          unfollows_count: totals?.unfollows ?? null,
+          account_views_count: totals?.views ?? null,
+          account_engagement_count: totals?.totalInteractions ?? null,
+          account_reach_count: totals?.reach ?? null,
+          account_profile_visits_count: totals?.profileLinksTaps ?? null,
+          accounts_engaged_count: totals?.accountsEngaged ?? null,
+          window_days: totals ? windowDays : null,
         };
       });
 
@@ -287,8 +415,8 @@ export async function syncSocialProfile(
       );
     }
 
-    if (followerStats.series.length > 0) {
-      const rows = followerStats.series.map((p) => ({
+    if (mergedSeries.length > 0) {
+      const rows = mergedSeries.map((p) => ({
         social_profile_id: profile.id,
         client_id: clientId,
         platform,

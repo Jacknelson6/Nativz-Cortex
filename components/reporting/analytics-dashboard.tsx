@@ -12,6 +12,7 @@ import { PlatformSection } from './platform-section';
 import { TopPostsView } from './top-posts-view';
 import { PlatformBreakdownTable } from './platform-breakdown-table';
 import { PostDetailsGrid } from './post-details-grid';
+import { SyncErrorsPanel } from './sync-errors-panel';
 import { AnalysisChatDrawer } from '@/components/analyses/analysis-chat-drawer';
 import type { TopPostItem } from '@/lib/types/reporting';
 
@@ -37,6 +38,7 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
     loading,
     dataLoading,
     syncing,
+    syncErrors,
     syncNow,
     fetchTopPostsForReport,
   } = useReportingData(initialClientId);
@@ -137,6 +139,8 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
             />
           </div>
 
+          {syncErrors.length > 0 && <SyncErrorsPanel errors={syncErrors} />}
+
           {/* KPI tiles — 3 tiles: Followers Δ, Views, Engagement. */}
           <OverviewKpiRow
             data={summary}
@@ -148,8 +152,8 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
           {/* Top performers — compact horizontal cards. */}
           <div className="space-y-4 rounded-xl border border-nativz-border bg-surface p-5">
             <div className="flex items-center gap-2">
-              <Flame size={18} className="text-orange-400" />
-              <h2 className="text-base font-semibold text-text-primary">Top performing posts</h2>
+              <Flame size={18} className="text-accent-text" />
+              <h2 className="ui-section-title">Top performing posts</h2>
             </div>
             <TopPostsView
               posts={topPosts}
@@ -167,7 +171,7 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
           {/* Per-platform sections — always expanded per Jack's 2026-04-21 ask. */}
           {summary?.platforms && summary.platforms.length > 0 && (
             <section className="space-y-5 rounded-xl border border-nativz-border bg-surface p-5">
-              <h2 className="text-base font-semibold text-text-primary">Platform details</h2>
+              <h2 className="ui-section-title">Platform details</h2>
               <div className="space-y-8">
                 {(['tiktok', 'instagram', 'youtube', 'facebook', 'linkedin'] as const)
                   .filter((p) => summary.platforms.some((ps) => ps.platform === p))

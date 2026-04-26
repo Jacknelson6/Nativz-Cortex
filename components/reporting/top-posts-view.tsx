@@ -31,12 +31,12 @@ const limitOptions = [3, 5, 10];
 
 function platformTint(platform: string): string {
   switch (platform) {
-    case 'tiktok': return 'linear-gradient(135deg, #25F4EE 0%, #000000 50%, #FE2C55 100%)';
-    case 'instagram': return 'linear-gradient(135deg, #FDC830 0%, #F37335 50%, #C13584 100%)';
-    case 'facebook': return '#1877F2';
-    case 'youtube': return '#FF0300';
-    case 'linkedin': return '#0A66C2';
-    default: return '#2a2a2a';
+    case 'tiktok': return 'var(--platform-tiktok-mark)';
+    case 'instagram': return 'var(--platform-instagram-mark)';
+    case 'facebook': return 'var(--platform-facebook-mark)';
+    case 'youtube': return 'var(--platform-youtube-mark)';
+    case 'linkedin': return 'var(--platform-linkedin-mark)';
+    default: return 'var(--platform-default-mark)';
   }
 }
 
