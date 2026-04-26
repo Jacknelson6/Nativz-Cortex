@@ -953,14 +953,6 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     "sectionSlug": "admin"
   },
   {
-    "method": "POST",
-    "path": "/api/admin/proposals/builder/chat",
-    "description": "Inline chat for /admin/proposals/builder. Single-turn (non-streaming) but with full tool-call loop: the LLM can fire any of the proposal-builder tools (add_service_line, etc.), the results feed back, and we keep looping until the model returns plain text. Caps at 8 iterations to bound runaway loops. History is client-managed — the component keeps the message array locally and posts it back on each turn. Conversation persistence can come later; the proposal_drafts row is the durable artifact.",
-    "auth": "",
-    "section": "Admin Ops",
-    "sectionSlug": "admin"
-  },
-  {
     "method": "GET",
     "path": "/api/admin/proposals/drafts",
     "description": "GET /api/admin/proposals/drafts — list this admin's recent drafts.",

@@ -2,7 +2,7 @@
 
 > **For AI agents:** This document describes every API endpoint that exists on disk. Auto-generated from `app/api/**/route.ts` by `scripts/generate-api-docs.ts` — do not edit by hand. Re-run the script after adding/removing routes or tweaking a JSDoc block.
 
-**697 endpoints across 33 sections.**
+**696 endpoints across 33 sections.**
 
 ## Authentication
 
@@ -5870,10 +5870,6 @@ Delete a proposal. Allowed for any status EXCEPT `paid` — paid proposals have 
 ### `PATCH /api/admin/proposals/:id`
 
 ### `POST /api/admin/proposals/:id/send`
-
-### `POST /api/admin/proposals/builder/chat`
-
-Inline chat for /admin/proposals/builder. Single-turn (non-streaming) but with full tool-call loop: the LLM can fire any of the proposal-builder tools (add_service_line, etc.), the results feed back, and we keep looping until the model returns plain text. Caps at 8 iterations to bound runaway loops. History is client-managed — the component keeps the message array locally and posts it back on each turn. Conversation persistence can come later; the proposal_drafts row is the durable artifact.
 
 ### `GET /api/admin/proposals/drafts`
 

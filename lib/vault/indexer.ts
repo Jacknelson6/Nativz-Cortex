@@ -10,11 +10,11 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isVaultConfigured, listFiles, readFile } from '@/lib/vault/github';
 import { parseFrontmatter } from '@/lib/vault/parser';
-import { trackUsage } from '@/lib/ai/usage';
+import { calculateCost, trackUsage } from '@/lib/ai/usage';
 
-// text-embedding-3-small: $0.02 per 1M tokens (input only — embeddings have no output side).
 const EMBEDDING_MODEL = 'text-embedding-3-small';
-const EMBEDDING_INPUT_PRICE_PER_TOKEN = 0.02 / 1_000_000;
+
+type EmbeddingFeature = 'vault_embedding_index' | 'vault_embedding_query';
 
 // ---------------------------------------------------------------------------
 // Chunking
@@ -80,7 +80,10 @@ function chunkMarkdown(path: string, raw: string): Chunk[] {
 // Embeddings (optional — requires OPENAI_API_KEY)
 // ---------------------------------------------------------------------------
 
-async function generateEmbedding(text: string): Promise<number[] | null> {
+async function generateEmbedding(
+  text: string,
+  feature: EmbeddingFeature,
+): Promise<number[] | null> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
 
@@ -110,11 +113,11 @@ async function generateEmbedding(text: string): Promise<number[] | null> {
     trackUsage({
       service: 'openai',
       model: EMBEDDING_MODEL,
-      feature: 'vault_embedding',
+      feature,
       inputTokens: promptTokens,
       outputTokens: 0,
       totalTokens: promptTokens,
-      costUsd: promptTokens * EMBEDDING_INPUT_PRICE_PER_TOKEN,
+      costUsd: calculateCost(EMBEDDING_MODEL, promptTokens, 0),
     });
     return data.data?.[0]?.embedding ?? null;
   } catch (error) {
@@ -152,7 +155,7 @@ export async function indexVaultFile(path: string, content: string): Promise<Ind
 
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i];
-    const embedding = await generateEmbedding(chunk.content);
+    const embedding = await generateEmbedding(chunk.content, 'vault_embedding_index');
 
     const row: Record<string, unknown> = {
       path,
@@ -279,7 +282,7 @@ export async function searchVaultSemantic(
   query: string,
   limit = 10,
 ): Promise<VaultSearchResult[]> {
-  const embedding = await generateEmbedding(query);
+  const embedding = await generateEmbedding(query, 'vault_embedding_query');
 
   if (!embedding) {
     // Fall back to full-text search

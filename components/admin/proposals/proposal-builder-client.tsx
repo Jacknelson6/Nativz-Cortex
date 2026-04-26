@@ -4,17 +4,9 @@ import { useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import {
-  ArrowLeft,
-  ChevronDown,
-  ChevronRight as ChevronRightIcon,
-  Loader2,
-  Send,
-  Trash2,
-} from 'lucide-react';
+import { ArrowLeft, Loader2, Send, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ClientLogo } from '@/components/clients/client-logo';
-import { ProposalBuilderChat } from '@/components/admin/proposals/proposal-builder-chat';
 import type { ServiceLine, CustomBlock } from '@/lib/proposals/draft-engine';
 
 // ─── Types ────────────────────────────────────────────────────────────
@@ -58,16 +50,10 @@ const fmt = (c: number | null | undefined) =>
 // ─── Component ────────────────────────────────────────────────────────
 
 /**
- * Three-pane builder:
- *   - Left:   inline chat (the primary surface)
- *   - Middle: collapsible quick-add drawer — catalog click-to-add,
- *             service-line list with qty/unit-$ inline editors, signer
- *             fields, payment model, totals. Default-collapsed; admin
- *             expands when they want manual control.
- *   - Right:  live preview iframe pointing at /admin/proposals/draft/[id]/preview
- *
- * Every mutation through the chat or the manual panel bumps `previewKey`
- * so the iframe re-renders.
+ * Two-pane builder:
+ *   - Left:  manual editor — service-line list + catalog click-to-add,
+ *            signer fields, payment model, totals.
+ *   - Right: live preview iframe pointing at /admin/proposals/draft/[id]/preview
  */
 export function ProposalBuilderClient({
   draft: initialDraft,
@@ -80,7 +66,6 @@ export function ProposalBuilderClient({
   const [draft, setDraft] = useState<DraftRow>(initialDraft);
   const [busy, setBusy] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
-  const [manualOpen, setManualOpen] = useState(false);
 
   const client = Array.isArray(draft.clients) ? draft.clients[0] : draft.clients;
   const previewUrl = `/admin/proposals/draft/${draft.id}/preview`;
@@ -101,13 +86,7 @@ export function ProposalBuilderClient({
     }
   }, [draft.id]);
 
-  // Called after every chat turn that ran a tool, OR after every manual
-  // mutation — both reload the canonical draft state and bump the iframe.
-  const onDraftMutated = useCallback(() => {
-    void reloadDraft();
-  }, [reloadDraft]);
-
-  // ── Service-line + signer + payment-model mutations (manual) ───────
+  // ── Service-line + signer + payment-model mutations ────────────────
 
   const addService = useCallback(
     async (svc: CatalogService) => {
@@ -213,8 +192,8 @@ export function ProposalBuilderClient({
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] flex-col lg:flex-row">
-      {/* LEFT: chat */}
-      <div className="lg:w-[38%] flex flex-col border-r border-nativz-border min-w-0">
+      {/* LEFT: manual editor */}
+      <div className="lg:w-[34%] flex flex-col border-r border-nativz-border bg-surface/40 min-w-0">
         <header className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-nativz-border bg-surface/60 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <Link
@@ -248,12 +227,149 @@ export function ProposalBuilderClient({
           </Button>
         </header>
 
-        <div className="flex-1 min-h-0">
-          <ProposalBuilderChat
-            draftId={draft.id}
-            agencyName={agencyName}
-            onDraftMutated={onDraftMutated}
-          />
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-5 min-h-0">
+          {/* Service lines */}
+          {draft.service_lines.length > 0 && (
+            <section className="space-y-2">
+              <h3 className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                In this proposal
+              </h3>
+              {draft.service_lines.map((line) => (
+                <div key={line.id} className="rounded-lg border border-nativz-border bg-background p-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[13px] font-medium text-text-primary truncate">
+                      {line.name_snapshot}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => updateLine(line.id, { remove: true })}
+                      className="text-text-muted opacity-50 hover:opacity-100"
+                      aria-label="Remove"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    <NumberInput
+                      label="Qty"
+                      value={line.quantity}
+                      onChange={(v) => updateLine(line.id, { quantity: v })}
+                    />
+                    <NumberInput
+                      label="Unit $"
+                      value={Math.round(line.unit_price_cents / 100)}
+                      onChange={(v) => updateLine(line.id, { unit_price_cents: v * 100 })}
+                    />
+                    <div className="text-[10px] text-text-muted self-end pb-1">
+                      {fmt(line.line_total_cents ?? line.unit_price_cents * line.quantity)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </section>
+          )}
+
+          {/* Catalog */}
+          <section className="space-y-2">
+            <h3 className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+              Catalog
+            </h3>
+            {grouped.map(([cat, list]) => (
+              <div key={cat} className="space-y-1">
+                <div className="text-[9px] font-semibold uppercase tracking-wider text-text-muted/70 mt-2">{cat}</div>
+                {list.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => addService(s)}
+                    disabled={busy}
+                    className="block w-full text-left rounded-lg border border-nativz-border bg-background hover:bg-surface-hover px-2.5 py-1.5 transition disabled:opacity-50"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[12px] font-medium text-text-primary truncate">{s.name}</div>
+                      <div className="text-[11px] text-accent-text font-medium shrink-0">
+                        {fmt(s.base_unit_price_cents)}/{s.billing_unit.replace('per_', '')}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ))}
+          </section>
+
+          {/* Payment model */}
+          <section className="space-y-2">
+            <h3 className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Payment</h3>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => patchDraft({ payment_model: 'subscription', cadence: 'month' })}
+                className={`rounded-md border px-2 py-1 text-[11px] font-medium transition ${
+                  isSub ? 'border-accent/40 bg-accent/10 text-accent-text' : 'border-nativz-border bg-background text-text-muted'
+                }`}
+              >
+                Recurring
+              </button>
+              <button
+                type="button"
+                onClick={() => patchDraft({ payment_model: 'one_off', cadence: null })}
+                className={`rounded-md border px-2 py-1 text-[11px] font-medium transition ${
+                  !isSub ? 'border-accent/40 bg-accent/10 text-accent-text' : 'border-nativz-border bg-background text-text-muted'
+                }`}
+              >
+                One-off
+              </button>
+            </div>
+            {isSub && (
+              <select
+                value={draft.cadence ?? 'month'}
+                onChange={(e) => patchDraft({ cadence: e.target.value as never })}
+                className="w-full rounded-md border border-nativz-border bg-background px-2 py-1 text-[11px] text-text-primary"
+              >
+                <option value="week">Weekly</option>
+                <option value="month">Monthly</option>
+                <option value="quarter">Quarterly</option>
+                <option value="year">Annually</option>
+              </select>
+            )}
+          </section>
+
+          {/* Signer */}
+          <section className="space-y-1.5">
+            <h3 className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Signer</h3>
+            <input
+              type="text"
+              value={draft.signer_legal_entity ?? ''}
+              onChange={(e) => setDraft((d) => ({ ...d, signer_legal_entity: e.target.value }))}
+              onBlur={() => patchDraft({ signer_legal_entity: draft.signer_legal_entity })}
+              placeholder="Legal entity"
+              className="w-full rounded-md border border-nativz-border bg-background px-2 py-1.5 text-[12px] text-text-primary"
+            />
+            <input
+              type="text"
+              value={draft.signer_name ?? ''}
+              onChange={(e) => setDraft((d) => ({ ...d, signer_name: e.target.value }))}
+              onBlur={() => patchDraft({ signer_name: draft.signer_name })}
+              placeholder="Signer name"
+              className="w-full rounded-md border border-nativz-border bg-background px-2 py-1.5 text-[12px] text-text-primary"
+            />
+            <input
+              type="email"
+              value={draft.signer_email ?? ''}
+              onChange={(e) => setDraft((d) => ({ ...d, signer_email: e.target.value }))}
+              onBlur={() => patchDraft({ signer_email: draft.signer_email })}
+              placeholder="Signer email"
+              className="w-full rounded-md border border-nativz-border bg-background px-2 py-1.5 text-[12px] text-text-primary"
+            />
+            <input
+              type="text"
+              value={draft.signer_title ?? ''}
+              onChange={(e) => setDraft((d) => ({ ...d, signer_title: e.target.value }))}
+              onBlur={() => patchDraft({ signer_title: draft.signer_title })}
+              placeholder="Signer title"
+              className="w-full rounded-md border border-nativz-border bg-background px-2 py-1.5 text-[12px] text-text-primary"
+            />
+          </section>
         </div>
 
         {/* Compact totals bar — always visible. */}
@@ -271,199 +387,10 @@ export function ProposalBuilderClient({
         </div>
       </div>
 
-      {/* MIDDLE: collapsible quick-add drawer */}
-      {manualOpen && (
-        <div className="lg:w-[24%] flex flex-col border-r border-nativz-border bg-surface/40 min-w-0">
-          <header className="flex items-center justify-between px-4 py-2.5 border-b border-nativz-border shrink-0">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-              Quick add
-            </div>
-            <button
-              type="button"
-              onClick={() => setManualOpen(false)}
-              className="text-text-muted hover:text-text-primary text-[11px]"
-            >
-              Hide
-            </button>
-          </header>
-
-          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-5">
-            {/* Service lines */}
-            {draft.service_lines.length > 0 && (
-              <section className="space-y-2">
-                <h3 className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-                  In this proposal
-                </h3>
-                {draft.service_lines.map((line) => (
-                  <div key={line.id} className="rounded-lg border border-nativz-border bg-background p-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-[13px] font-medium text-text-primary truncate">
-                        {line.name_snapshot}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => updateLine(line.id, { remove: true })}
-                        className="text-text-muted opacity-50 hover:opacity-100"
-                        aria-label="Remove"
-                      >
-                        <Trash2 size={11} />
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 mt-2">
-                      <NumberInput
-                        label="Qty"
-                        value={line.quantity}
-                        onChange={(v) => updateLine(line.id, { quantity: v })}
-                      />
-                      <NumberInput
-                        label="Unit $"
-                        value={Math.round(line.unit_price_cents / 100)}
-                        onChange={(v) => updateLine(line.id, { unit_price_cents: v * 100 })}
-                      />
-                      <div className="text-[10px] text-text-muted self-end pb-1">
-                        {fmt(line.line_total_cents ?? line.unit_price_cents * line.quantity)}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </section>
-            )}
-
-            {/* Catalog */}
-            <section className="space-y-2">
-              <h3 className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-                Catalog
-              </h3>
-              {grouped.map(([cat, list]) => (
-                <div key={cat} className="space-y-1">
-                  <div className="text-[9px] font-semibold uppercase tracking-wider text-text-muted/70 mt-2">{cat}</div>
-                  {list.map((s) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => addService(s)}
-                      disabled={busy}
-                      className="block w-full text-left rounded-lg border border-nativz-border bg-background hover:bg-surface-hover px-2.5 py-1.5 transition disabled:opacity-50"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-[12px] font-medium text-text-primary truncate">{s.name}</div>
-                        <div className="text-[11px] text-accent-text font-medium shrink-0">
-                          {fmt(s.base_unit_price_cents)}/{s.billing_unit.replace('per_', '')}
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              ))}
-            </section>
-
-            {/* Payment model */}
-            <section className="space-y-2">
-              <h3 className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Payment</h3>
-              <div className="grid grid-cols-2 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => patchDraft({ payment_model: 'subscription', cadence: 'month' })}
-                  className={`rounded-md border px-2 py-1 text-[11px] font-medium transition ${
-                    isSub ? 'border-accent/40 bg-accent/10 text-accent-text' : 'border-nativz-border bg-background text-text-muted'
-                  }`}
-                >
-                  Recurring
-                </button>
-                <button
-                  type="button"
-                  onClick={() => patchDraft({ payment_model: 'one_off', cadence: null })}
-                  className={`rounded-md border px-2 py-1 text-[11px] font-medium transition ${
-                    !isSub ? 'border-accent/40 bg-accent/10 text-accent-text' : 'border-nativz-border bg-background text-text-muted'
-                  }`}
-                >
-                  One-off
-                </button>
-              </div>
-              {isSub && (
-                <select
-                  value={draft.cadence ?? 'month'}
-                  onChange={(e) => patchDraft({ cadence: e.target.value as never })}
-                  className="w-full rounded-md border border-nativz-border bg-background px-2 py-1 text-[11px] text-text-primary"
-                >
-                  <option value="week">Weekly</option>
-                  <option value="month">Monthly</option>
-                  <option value="quarter">Quarterly</option>
-                  <option value="year">Annually</option>
-                </select>
-              )}
-            </section>
-
-            {/* Signer */}
-            <section className="space-y-1.5">
-              <h3 className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Signer</h3>
-              <input
-                type="text"
-                value={draft.signer_legal_entity ?? ''}
-                onChange={(e) => setDraft((d) => ({ ...d, signer_legal_entity: e.target.value }))}
-                onBlur={() => patchDraft({ signer_legal_entity: draft.signer_legal_entity })}
-                placeholder="Legal entity"
-                className="w-full rounded-md border border-nativz-border bg-background px-2 py-1.5 text-[12px] text-text-primary"
-              />
-              <input
-                type="text"
-                value={draft.signer_name ?? ''}
-                onChange={(e) => setDraft((d) => ({ ...d, signer_name: e.target.value }))}
-                onBlur={() => patchDraft({ signer_name: draft.signer_name })}
-                placeholder="Signer name"
-                className="w-full rounded-md border border-nativz-border bg-background px-2 py-1.5 text-[12px] text-text-primary"
-              />
-              <input
-                type="email"
-                value={draft.signer_email ?? ''}
-                onChange={(e) => setDraft((d) => ({ ...d, signer_email: e.target.value }))}
-                onBlur={() => patchDraft({ signer_email: draft.signer_email })}
-                placeholder="Signer email"
-                className="w-full rounded-md border border-nativz-border bg-background px-2 py-1.5 text-[12px] text-text-primary"
-              />
-              <input
-                type="text"
-                value={draft.signer_title ?? ''}
-                onChange={(e) => setDraft((d) => ({ ...d, signer_title: e.target.value }))}
-                onBlur={() => patchDraft({ signer_title: draft.signer_title })}
-                placeholder="Signer title"
-                className="w-full rounded-md border border-nativz-border bg-background px-2 py-1.5 text-[12px] text-text-primary"
-              />
-            </section>
-          </div>
-        </div>
-      )}
-
-      {/* Toggle button when collapsed — anchored to the left edge of the preview pane. */}
-      {!manualOpen && (
-        <button
-          type="button"
-          onClick={() => setManualOpen(true)}
-          className="hidden lg:flex shrink-0 self-stretch items-center justify-center w-7 border-r border-nativz-border bg-surface/40 text-text-muted hover:text-text-primary hover:bg-surface-hover/50"
-          title="Show quick-add panel"
-        >
-          <ChevronRightIcon size={14} />
-        </button>
-      )}
-      {manualOpen ? null : null}
-
       {/* RIGHT: live preview. Outside the iframe is the page-background
           matte; the iframe interior renders the proposal on its own paper
           backdrop (mirrors the canonical signed PDF). */}
       <div className="flex-1 bg-background overflow-hidden relative min-w-0">
-        {!manualOpen && (
-          <div className="absolute top-2 left-2 z-10">
-            <button
-              type="button"
-              onClick={() => setManualOpen(true)}
-              className="rounded-md border border-nativz-border bg-surface/95 backdrop-blur px-2 py-1 text-[11px] text-text-muted hover:text-text-primary"
-              title="Open quick-add panel"
-            >
-              <ChevronDown size={11} className="inline mr-1" />
-              Quick add
-            </button>
-          </div>
-        )}
         {busy && (
           <div className="absolute top-2 right-2 z-10 rounded-md border border-nativz-border bg-surface/95 backdrop-blur px-2 py-1 text-[11px] text-text-muted flex items-center gap-1">
             <Loader2 size={10} className="animate-spin" /> Updating
