@@ -14,7 +14,7 @@ import { buildMarketingSkillsContext } from '@/lib/nerd/marketing-skills';
 import { checkGuardrails } from '@/lib/nerd/guardrails';
 import { buildDbSkillsContext } from '@/lib/nerd/skills-loader';
 import { buildContentLabSystemAddendum } from '@/lib/nerd/content-lab-scripting-context';
-import { logUsage, calculateCost } from '@/lib/ai/usage';
+import { trackUsage, calculateCost } from '@/lib/ai/usage';
 import { logApiError } from '@/lib/api/error-log';
 import { getBrandFromRequest } from '@/lib/agency/brand-from-request';
 
@@ -1449,7 +1449,7 @@ export async function POST(req: NextRequest) {
           const totalTokens = finalUsage && finalUsage.total_tokens != null
             ? finalUsage.total_tokens
             : inputTokens + outputTokens;
-          logUsage({
+          trackUsage({
             service: 'openrouter',
             model: requestModel,
             feature: 'nerd_chat',
@@ -1462,7 +1462,7 @@ export async function POST(req: NextRequest) {
             metadata: streamedGenerationId
               ? { openrouter_generation_id: streamedGenerationId }
               : undefined,
-          }).catch(() => {});
+          });
 
           controller.close();
         }

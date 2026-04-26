@@ -1,4 +1,4 @@
-import { calculateCost, logUsage } from './usage';
+import { calculateCost, trackUsage } from './usage';
 import { checkCostBudget } from './cost-guard';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { DEFAULT_OPENROUTER_MODEL } from './openrouter-default-model';
@@ -248,7 +248,7 @@ function buildCompletionResult(
     // usable id here, so we skip the stamp for them.
     const rawId = typeof data.id === 'string' ? data.id.trim() : '';
     const generationId = service === 'openrouter' && rawId ? rawId : null;
-    logUsage({
+    trackUsage({
       service,
       model,
       feature: options.feature,
@@ -259,7 +259,7 @@ function buildCompletionResult(
       userId: options.userId,
       userEmail: options.userEmail,
       metadata: generationId ? { openrouter_generation_id: generationId } : undefined,
-    }).catch(() => {});
+    });
   }
 
   return {

@@ -1,3 +1,4 @@
+import { after } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 // ── Pricing per token ───────────────────────────────────────────────────────
@@ -79,6 +80,22 @@ export function calculateCost(
 
 export function calculateGroqAudioCost(durationSeconds: number): number {
   return durationSeconds * GROQ_AUDIO_PRICE_PER_SECOND;
+}
+
+/**
+ * Schedule a usage row write that survives the response. Vercel Fluid Compute
+ * can freeze the function instance the moment a route returns, which kills
+ * any in-flight `logUsage(...).catch()` promise before it reaches Supabase.
+ * `next/server`'s `after()` keeps the work alive past the response. Falls back
+ * to fire-and-forget for CLI scripts and other non-request contexts where
+ * `after()` is unavailable.
+ */
+export function trackUsage(entry: UsageEntry): void {
+  try {
+    after(() => logUsage(entry));
+  } catch {
+    void logUsage(entry).catch(() => {});
+  }
 }
 
 /**

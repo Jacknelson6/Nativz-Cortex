@@ -1,6 +1,6 @@
 import { getActiveModel } from './client';
 import { resolveOpenRouterApiKeyForFeature } from './provider-keys';
-import { calculateCost, logUsage } from './usage';
+import { calculateCost, trackUsage } from './usage';
 
 export type OpenRouterRichMessage = {
   role: 'system' | 'user' | 'assistant';
@@ -112,7 +112,7 @@ export async function createOpenRouterRichCompletion(options: {
 
     if (options.feature) {
       const generationId = data.id?.trim();
-      logUsage({
+      trackUsage({
         service: 'openrouter',
         model,
         feature: options.feature,
@@ -127,7 +127,7 @@ export async function createOpenRouterRichCompletion(options: {
         // this, the webhook takes the insert path every time and the
         // "Reconciled %" tile can't climb past 50%.
         metadata: generationId ? { openrouter_generation_id: generationId } : undefined,
-      }).catch(() => {});
+      });
     }
 
     return {
