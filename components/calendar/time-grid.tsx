@@ -31,6 +31,16 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
+function formatSlotLabel(date: Date, hour: number, half: boolean): string {
+  const h24 = Math.floor(hour);
+  const minute = half ? 30 : 0;
+  const slot = new Date(date);
+  slot.setHours(h24, minute, 0, 0);
+  const day = slot.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const time = slot.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return `Create event on ${day} at ${time}`;
+}
+
 function isSameDay(dateStr: string, targetDate: Date): boolean {
   const d = new Date(dateStr);
   return (
@@ -82,11 +92,12 @@ function computeColumns<T extends { startMin: number; endMin: number }>(
 
 function EventIcon({ type }: { type: string }) {
   const size = 11;
+  const props = { size, 'aria-hidden': true } as const;
   switch (type) {
-    case 'shoot': return <Camera size={size} />;
-    case 'meeting': return <CalendarDays size={size} />;
-    case 'task': return <CheckSquare size={size} />;
-    default: return <Hash size={size} />;
+    case 'shoot': return <Camera {...props} />;
+    case 'meeting': return <CalendarDays {...props} />;
+    case 'task': return <CheckSquare {...props} />;
+    default: return <Hash {...props} />;
   }
 }
 
@@ -261,18 +272,17 @@ export function TimeGrid({ dates, events, people, onSlotClick, onEventClick }: T
                   className={`relative border-l border-nativz-border/50 ${today ? 'bg-accent-surface/5' : ''}`}
                   style={{ height: TOTAL_HEIGHT }}
                 >
-                  {/* Click slots (every 30 min) */}
                   {HOURS.slice(0, -1).map((hour) => (
                     <div key={hour} className="absolute left-0 right-0" style={{ top: (hour - START_HOUR) * HOUR_HEIGHT, height: HOUR_HEIGHT }}>
                       <button
                         onClick={() => onSlotClick(col.date, hour)}
-                        className="absolute inset-x-0 top-0 h-1/2 cursor-pointer hover:bg-accent-surface/10 transition-colors"
-                        aria-label={`${hour}:00`}
+                        className="absolute inset-x-0 top-0 h-1/2 cursor-pointer hover:bg-accent-surface/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-text/60"
+                        aria-label={formatSlotLabel(col.date, hour, false)}
                       />
                       <button
                         onClick={() => onSlotClick(col.date, hour + 0.5)}
-                        className="absolute inset-x-0 bottom-0 h-1/2 cursor-pointer hover:bg-accent-surface/10 transition-colors"
-                        aria-label={`${hour}:30`}
+                        className="absolute inset-x-0 bottom-0 h-1/2 cursor-pointer hover:bg-accent-surface/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-text/60"
+                        aria-label={formatSlotLabel(col.date, hour, true)}
                       />
                     </div>
                   ))}
@@ -302,7 +312,8 @@ export function TimeGrid({ dates, events, people, onSlotClick, onEventClick }: T
                       <button
                         key={e.id}
                         onClick={() => onEventClick(e)}
-                        className="absolute rounded-md px-1.5 py-1 text-left cursor-pointer hover:brightness-125 transition-all overflow-hidden border-l-2"
+                        aria-label={`${e.type} ${e.title} at ${formatTime(e.start)}${e.end ? ` – ${formatTime(e.end)}` : ''}`}
+                        className="absolute rounded-md px-1.5 py-1 text-left cursor-pointer hover:brightness-125 transition-all overflow-hidden border-l-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-text/60"
                         style={{
                           top: minutesToTop(e.startMin),
                           height: minutesToHeight(e.startMin, e.endMin),
@@ -331,15 +342,16 @@ export function TimeGrid({ dates, events, people, onSlotClick, onEventClick }: T
                     );
                   })}
 
-                  {/* Current time indicator */}
                   {today && nowMinutes >= START_HOUR * 60 && nowMinutes <= END_HOUR * 60 && (
                     <div
+                      role="presentation"
+                      aria-hidden="true"
                       className="absolute left-0 right-0 z-20 pointer-events-none"
                       style={{ top: minutesToTop(nowMinutes) }}
                     >
                       <div className="flex items-center">
-                        <div className="h-2.5 w-2.5 rounded-full bg-red-500 -ml-1" />
-                        <div className="flex-1 h-[2px] bg-red-500" />
+                        <div className="h-2.5 w-2.5 rounded-full -ml-1" style={{ backgroundColor: 'var(--nz-coral, #ED6B63)' }} />
+                        <div className="flex-1 h-[2px]" style={{ backgroundColor: 'var(--nz-coral, #ED6B63)' }} />
                       </div>
                     </div>
                   )}

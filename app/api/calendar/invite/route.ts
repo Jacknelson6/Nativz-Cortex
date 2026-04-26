@@ -6,10 +6,10 @@ import { createAdminClient } from '@/lib/supabase/admin';
 
 const DISPLAY_COLORS = [
   '#3b82f6',
-  '#8b5cf6',
+  '#eab308',
   '#ec4899',
   '#f97316',
-  '#06b6d4',
+  '#00AEEF',
   '#84cc16',
   '#f43f5e',
   '#14b8a6',

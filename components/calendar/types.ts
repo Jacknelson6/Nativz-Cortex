@@ -31,10 +31,15 @@ export interface ExternalCalendarEvent {
 }
 
 export interface CalendarPerson {
+  /** scheduling_people.id — the SA-driven person identity. */
   connectionId: string;
   name: string;
   color: string;
   connectionType: 'team' | 'client';
+  /** 1 = required, 2 = preferred, 3 = optional/can-overlap. Undefined = legacy/client. */
+  priorityTier?: 1 | 2 | 3;
+  /** Workspace email aliases unioned for this person's calendar fetch. */
+  emails?: string[];
   events: ExternalCalendarEvent[];
   enabled: boolean;
 }
@@ -59,9 +64,12 @@ export const EVENT_BG_COLORS: Record<EventType, string> = {
   task: 'rgba(16, 185, 129, 0.15)',
 };
 
+// 8-color cycling palette for distinguishing teammates on the calendar.
+// Purple was retired 2026-04-24 (see .impeccable.md); cyan slot uses the
+// canonical Nativz brand value rather than tailwind's cyan-500.
 export const PERSON_COLORS = [
-  '#3b82f6', '#8b5cf6', '#ec4899', '#f97316',
-  '#06b6d4', '#84cc16', '#f43f5e', '#14b8a6',
+  '#3b82f6', '#eab308', '#ec4899', '#f97316',
+  '#00AEEF', '#84cc16', '#f43f5e', '#14b8a6',
 ];
 
 export const HOURS = Array.from({ length: 13 }, (_, i) => i + 8); // 8am to 8pm
