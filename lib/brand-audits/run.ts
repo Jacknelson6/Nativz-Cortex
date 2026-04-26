@@ -56,7 +56,8 @@ const SENTIMENT_TO_NUMERIC: Record<BrandAuditResponse['sentiment'], number | nul
 
 /** Classify sentiment for a mentioned brand using the configured model.
  *  Falls back to 'neutral' on any parsing failure — better to under-claim
- *  than to fabricate. */
+ *  than to fabricate. Returns `error` so the caller can tag the cell
+ *  rather than silently bucketing failures into the neutral pile. */
 async function classifySentiment(args: {
   brandName: string;
   prompt: string;
@@ -64,7 +65,12 @@ async function classifySentiment(args: {
   feature: string;
   userId?: string;
   userEmail?: string;
-}): Promise<{ sentiment: BrandAuditResponse['sentiment']; summary: string; cost: number }> {
+}): Promise<{
+  sentiment: BrandAuditResponse['sentiment'];
+  summary: string;
+  cost: number;
+  error: string | null;
+}> {
   const { brandName, prompt, response, feature, userId, userEmail } = args;
 
   const systemPrompt =
@@ -115,10 +121,12 @@ async function classifySentiment(args: {
       sentiment,
       summary: typeof parsed.summary === 'string' ? parsed.summary : '',
       cost: result.estimatedCost,
+      error: null,
     };
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     console.error('[brand-audit] sentiment classification failed:', err);
-    return { sentiment: 'neutral', summary: '', cost: 0 };
+    return { sentiment: 'neutral', summary: '', cost: 0, error: message };
   }
 }
 
@@ -161,6 +169,7 @@ async function runOneCell(args: {
     let sentiment: BrandAuditResponse['sentiment'] = 'not_mentioned';
     let summary = '';
     let sentimentCost = 0;
+    let classifierError: string | null = null;
     if (mentioned) {
       const classification = await classifySentiment({
         brandName,
@@ -173,6 +182,7 @@ async function runOneCell(args: {
       sentiment = classification.sentiment === 'not_mentioned' ? 'neutral' : classification.sentiment;
       summary = classification.summary;
       sentimentCost = classification.cost;
+      classifierError = classification.error;
     }
 
     const sources: { url: string; title: string }[] = (result.webCitations ?? []).map((c) => ({
@@ -191,6 +201,7 @@ async function runOneCell(args: {
       position: mentioned ? position : null,
       cost: result.estimatedCost + sentimentCost,
       error: null,
+      classifier_error: classifierError,
     };
   } catch (err) {
     return {
@@ -204,6 +215,7 @@ async function runOneCell(args: {
       position: null,
       cost: 0,
       error: err instanceof Error ? err.message : String(err),
+      classifier_error: null,
     };
   }
 }
@@ -215,7 +227,6 @@ function aggregate(responses: BrandAuditResponse[], models: string[]): {
   top_sources: BrandAuditSourceRollup[];
   model_summary: BrandAuditModelRollup[];
 } {
-  const total = responses.length;
   const usable = responses.filter((r) => !r.error);
   const visibility = usable.length === 0
     ? 0
@@ -228,10 +239,14 @@ function aggregate(responses: BrandAuditResponse[], models: string[]): {
     not_mentioned: 0,
   };
 
+  // Visibility breakdown counts every cell that succeeded at the LLM-call
+  // layer; sentiment_score additionally requires a successful classifier
+  // pass — silent classifier-fallbacks would bias the average toward zero.
   let sentimentSum = 0;
   let sentimentCount = 0;
   for (const r of usable) {
     breakdown[r.sentiment]++;
+    if (r.classifier_error) continue;
     const numeric = SENTIMENT_TO_NUMERIC[r.sentiment];
     if (numeric !== null) {
       sentimentSum += numeric;
@@ -265,6 +280,7 @@ function aggregate(responses: BrandAuditResponse[], models: string[]): {
     const successful = rows.filter((r) => !r.error);
     const mentionedCount = successful.filter((r) => r.mentioned).length;
     const sentiments = successful
+      .filter((r) => !r.classifier_error)
       .map((r) => SENTIMENT_TO_NUMERIC[r.sentiment])
       .filter((v): v is number => v !== null);
     const avg = sentiments.length === 0
@@ -277,9 +293,6 @@ function aggregate(responses: BrandAuditResponse[], models: string[]): {
       sentiment_avg: avg,
     };
   });
-
-  // Expose totals to satisfy the unused-var linter when the caller wants them.
-  void total;
 
   return {
     visibility_score: visibility,

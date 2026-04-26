@@ -11,10 +11,16 @@ export interface BrandAuditResponse {
   /** One-sentence summary of how the model talks about the brand. */
   summary: string;
   sources: { url: string; title: string }[];
-  /** Index of the brand name in the response (case-insensitive substring). */
+  /** Index of the brand name in the response (case-insensitive, word-boundary match). */
   position: number | null;
   cost: number;
   error: string | null;
+  /**
+   * Set when the secondary sentiment classifier call failed for this cell.
+   * The brand was mentioned and the response text is valid, but the
+   * sentiment label defaulted to 'neutral' and is excluded from sentiment_score.
+   */
+  classifier_error?: string | null;
 }
 
 export interface BrandAuditSourceRollup {
