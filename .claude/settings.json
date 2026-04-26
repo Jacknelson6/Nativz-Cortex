@@ -6,6 +6,10 @@
   "defaultMode": "acceptEdits",
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": ["playwright", "context7", "sequential-thinking"],
+  "env": {
+    "CLAUDE_CODE_DISABLE_1M_CONTEXT": "1",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "80"
+  },
   "hooks": {
     "UserPromptSubmit": [],
     "PreToolUse": [],
