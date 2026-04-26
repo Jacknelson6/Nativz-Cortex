@@ -1,6 +1,10 @@
+'use client';
+
+import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, Radar } from 'lucide-react';
+import { WatchHistoryDrawer } from '@/components/spying/watch-history-drawer';
 
 interface WatchRow {
   id: string;
@@ -35,29 +39,49 @@ function timeAgo(iso: string | null): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-function Sparkline({ values, className }: { values: number[]; className?: string }) {
-  if (values.length < 2) return <div className={`h-4 w-14 ${className ?? ''}`} aria-hidden />;
+function MiniChart({
+  values,
+  positive,
+  className,
+}: {
+  values: number[];
+  positive: boolean | null;
+  className?: string;
+}) {
+  if (values.length < 2) return <div className={`h-7 w-20 ${className ?? ''}`} aria-hidden />;
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
-  const w = 56;
-  const h = 16;
+  const w = 80;
+  const h = 28;
   const step = w / (values.length - 1);
-  const points = values
-    .map((v, i) => `${(i * step).toFixed(1)},${(h - ((v - min) / range) * h).toFixed(1)}`)
-    .join(' ');
+  const points = values.map((v, i) => ({
+    x: i * step,
+    y: h - ((v - min) / range) * h,
+  }));
+  const linePoints = points.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const areaPoints = `0,${h} ${linePoints} ${w},${h}`;
+  const stroke =
+    positive === null ? 'currentColor' : positive ? '#34D399' : '#F87171';
+  const fillId = `mini-${stroke.replace('#', '')}`;
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className={className} aria-hidden>
+      <defs>
+        <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={stroke} stopOpacity="0.18" />
+          <stop offset="100%" stopColor={stroke} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polygon points={areaPoints} fill={`url(#${fillId})`} />
       <polyline
-        points={points}
+        points={linePoints}
         fill="none"
-        stroke="currentColor"
+        stroke={stroke}
         strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
-        className="animate-ci-sparkline"
-        style={{ strokeDasharray: 200, strokeDashoffset: 200 }}
       />
+      <circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r="1.8" fill={stroke} />
     </svg>
   );
 }
@@ -70,6 +94,7 @@ const PLATFORM_MARK: Record<string, { bg: string; label: string }> = {
 };
 
 export function WatchedCompetitorsList({ watches }: { watches: WatchRow[] }) {
+  const [activeWatch, setActiveWatch] = useState<WatchRow | null>(null);
   const sorted = [...watches]
     .sort((a, b) => Math.abs(b.delta_pct ?? 0) - Math.abs(a.delta_pct ?? 0))
     .slice(0, 6);
@@ -117,11 +142,14 @@ export function WatchedCompetitorsList({ watches }: { watches: WatchRow[] }) {
               w.delta_pct == null
                 ? '—'
                 : `${w.delta_pct > 0 ? '+' : ''}${(w.delta_pct * 100).toFixed(1)}%`;
+            const positiveDirection =
+              w.delta_pct == null ? null : w.delta_pct >= 0;
             return (
               <li key={w.id}>
-                <Link
-                  href={`/admin/analytics?tab=benchmarking&competitor=${w.id}`}
-                  className="group flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-hover/40 focus-visible:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
+                <button
+                  type="button"
+                  onClick={() => setActiveWatch(w)}
+                  className="group flex w-full items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-surface-hover/40 focus-visible:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
                 >
                   <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent/10 text-accent-text">
                     {w.client_logo ? (
@@ -154,9 +182,10 @@ export function WatchedCompetitorsList({ watches }: { watches: WatchRow[] }) {
                       {w.client_name} · {w.cadence} · {timeAgo(w.last_snapshot_at)}
                     </div>
                   </div>
-                  <Sparkline
+                  <MiniChart
                     values={w.series.length ? w.series : [0, 0]}
-                    className="hidden text-accent sm:block"
+                    positive={positiveDirection}
+                    className="hidden sm:block"
                   />
                   <div className="hidden shrink-0 text-right font-mono text-[11px] tabular-nums sm:block">
                     <div className="text-text-primary">{compactNumber(w.followers)}</div>
@@ -166,12 +195,22 @@ export function WatchedCompetitorsList({ watches }: { watches: WatchRow[] }) {
                     size={13}
                     className="shrink-0 text-text-muted/40 transition-all group-hover:translate-x-0.5 group-hover:text-accent-text"
                   />
-                </Link>
+                </button>
               </li>
             );
           })}
         </ul>
       )}
+
+      <WatchHistoryDrawer
+        open={activeWatch !== null}
+        onClose={() => setActiveWatch(null)}
+        watchId={activeWatch?.id ?? null}
+        fallbackTitle={activeWatch?.handle ? `@${activeWatch.handle}` : activeWatch?.client_name ?? ''}
+        fallbackSubtitle={activeWatch?.client_name ?? ''}
+        fallbackLogo={activeWatch?.client_logo ?? null}
+        fallbackPlatform={activeWatch?.platform ?? null}
+      />
     </section>
   );
 }
