@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { fetchBusyForUser } from '@/lib/scheduling/google-busy';
+import { fetchBusyForEmail } from '@/lib/scheduling/google-busy';
 import { computeFreeSlots, groupSlotsByDay } from '@/lib/scheduling/overlap';
 
 export const runtime = 'nodejs';
@@ -79,10 +79,10 @@ export async function GET(
   const timeMin = now;
   const timeMax = new Date(now.getTime() + event.lookahead_days * 24 * 60 * 60 * 1000);
 
-  // Parallel freebusy fetch.
+  // Parallel freebusy fetch via service-account / DWD impersonation.
   const freebusyResults = await Promise.all(
     requiredMembers.map((m) =>
-      fetchBusyForUser({ userId: m.user_id as string, timeMin, timeMax }).then((r) => ({
+      fetchBusyForEmail({ email: m.email as string, timeMin, timeMax }).then((r) => ({
         member: m,
         ...r,
       })),
@@ -92,7 +92,7 @@ export async function GET(
   const memberErrors = freebusyResults
     .filter((r) => !r.ok)
     .map((r) => ({
-      user_id: r.member.user_id as string,
+      email: r.member.email as string,
       display_name: (r.member.display_name as string | null) ?? (r.member.email as string),
       error: r.error ?? 'unknown',
     }));

@@ -248,8 +248,8 @@ export function NewSchedulingEventForm({
         </label>
         {connectedUsers.length === 0 ? (
           <div className="rounded-md border border-yellow-500/30 bg-yellow-500/5 px-3 py-3 text-xs text-yellow-200">
-            No teammates have connected Google yet — they need to do that under Settings →
-            Integrations before they can be added to a scheduling event.
+            No internal teammates found. Add a user with a nativz.io or andersoncollaborative.com
+            email before creating a scheduling event.
           </div>
         ) : (
           <div className="grid gap-2 sm:grid-cols-2">

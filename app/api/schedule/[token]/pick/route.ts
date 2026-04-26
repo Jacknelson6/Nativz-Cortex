@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { fetchBusyForUser } from '@/lib/scheduling/google-busy';
+import { fetchBusyForEmail } from '@/lib/scheduling/google-busy';
 import { checkAndFlipFlowCompletion } from '@/lib/onboarding/check-completion';
 import { logLifecycleEvent } from '@/lib/lifecycle/state-machine';
 
@@ -101,8 +101,8 @@ export async function POST(
 
     const conflict = await Promise.all(
       requiredMembers.map(async (m) => {
-        const r = await fetchBusyForUser({
-          userId: m.user_id as string,
+        const r = await fetchBusyForEmail({
+          email: m.email as string,
           timeMin: new Date(startMs - 60_000),
           timeMax: new Date(endMs + 60_000),
         });

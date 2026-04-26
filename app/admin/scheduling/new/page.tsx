@@ -7,16 +7,16 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * Admin form to create a new team_scheduling_event. The form lists every team
- * member who has connected Google (via google_tokens) so admins can only pick
- * members whose calendars we can actually query — picking someone without a
- * connection would just produce a blanket "available" answer with no real
- * conflict-checking.
+ * Admin form to create a new team_scheduling_event. Lists every internal
+ * teammate (users in nativz.io / andersoncollaborative.com) — calendar reads
+ * happen via service-account / domain-wide delegation, so no per-user OAuth
+ * is required to pick someone.
  *
  * Optional ?item_id= prepopulates the linked schedule_meeting onboarding
  * item, threading from the onboarding builder when an admin clicks "Set up
  * team availability" on an item.
  */
+const TEAM_DOMAINS = ['nativz.io', 'andersoncollaborative.com'] as const;
 export default async function NewSchedulingEventPage({
   searchParams,
 }: {
@@ -41,31 +41,26 @@ export default async function NewSchedulingEventPage({
   const rawItemId = typeof sp.item_id === 'string' ? sp.item_id : null;
   const rawClientId = typeof sp.client_id === 'string' ? sp.client_id : null;
 
-  // Pull every user with a google_tokens row — those are the only candidates
-  // whose freebusy queries will succeed.
-  const { data: connectedTokens } = await admin
-    .from('google_tokens')
-    .select('user_id, email');
-  const connectedUserIds = (connectedTokens ?? []).map((t) => t.user_id as string);
-
+  // Internal teammates from authorized workspace domains — DWD lets us read
+  // their calendars without per-user OAuth.
   type ConnectedUser = {
     id: string;
     email: string;
     name: string | null;
   };
-  let connectedUsers: ConnectedUser[] = [];
-  if (connectedUserIds.length > 0) {
-    const { data: userRows } = await admin
-      .from('users')
-      .select('id, email, name')
-      .in('id', connectedUserIds)
-      .order('name', { ascending: true });
-    connectedUsers = (userRows ?? []).map((u) => ({
+  const domainFilter = TEAM_DOMAINS.map((d) => `email.ilike.%@${d}`).join(',');
+  const { data: userRows } = await admin
+    .from('users')
+    .select('id, email, name')
+    .or(domainFilter)
+    .order('name', { ascending: true });
+  const connectedUsers: ConnectedUser[] = (userRows ?? [])
+    .filter((u) => !!u.email)
+    .map((u) => ({
       id: u.id as string,
-      email: (u.email as string | null) ?? '',
+      email: u.email as string,
       name: (u.name as string | null) ?? null,
     }));
-  }
 
   // If linked to a schedule_meeting item, hydrate its task name + linked
   // flow/client so we can prepopulate the event name.
