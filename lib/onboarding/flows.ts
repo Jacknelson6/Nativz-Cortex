@@ -15,13 +15,14 @@ export type FlowStatus =
   | 'completed'
   | 'archived';
 
-export type SegmentKind = 'agreement_payment' | 'social' | 'paid_media' | 'web';
+export type SegmentKind = 'agreement_payment' | 'social' | 'paid_media' | 'web' | 'editing';
 
 export const SEGMENT_KIND_LABEL: Record<SegmentKind, string> = {
   agreement_payment: 'Agreement & Payment',
   social: 'Social',
   paid_media: 'Paid Media',
   web: 'Web',
+  editing: 'Editing',
 };
 
 export type Flow = {

@@ -131,6 +131,12 @@ const DEFAULT_TEMPLATE_BY_KIND: Record<SegmentKind, SegmentTemplate> = {
     phases: [],
     groups: [],
   },
+  editing: {
+    service: 'editing',
+    title: 'Editing kickoff',
+    phases: [],
+    groups: [],
+  },
 };
 
 export function getSegmentTemplate(kind: SegmentKind): SegmentTemplate {

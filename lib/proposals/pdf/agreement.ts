@@ -700,6 +700,10 @@ export function emailClientSigned(input: {
   subscription?: boolean;
   cadence?: 'month' | 'year' | 'week';
   agency?: AgencyBrand;
+  /** Anyone-with-link onboarding intake URL. When present, surfaced after the
+   *  payment CTA so signers can start filling in footage / socials / Cortex
+   *  account emails without waiting for payment to clear. */
+  intakeUrl?: string;
 }): string {
   const brand = resolveEmailAgencyBrand(input.agency ?? 'anderson');
   const first = input.signerName.split(' ')[0] || input.signerName;
@@ -741,6 +745,11 @@ export function emailClientSigned(input: {
       </table></div>
       <p style="margin-top: 18px;">${nextStep}</p>
       <div class="cta-wrap"><a class="cta" href="${esc(href)}">${esc(ctaLabel)}</a></div>
+      ${input.intakeUrl ? `
+      <hr style="border: none; border-top: 1px solid #e6e8eb; margin: 22px 0 18px 0;">
+      <p style="margin: 0 0 10px 0;"><strong>Get a head start on onboarding.</strong></p>
+      <p style="margin: 0 0 14px 0; font-size: 13px; color: #4a5568;">While your first payment is processing, drop your raw footage, brand assets, and connect your socials so we can begin the moment it clears.</p>
+      <div class="cta-wrap"><a class="cta" style="background: #2d3748;" href="${esc(input.intakeUrl)}">Start onboarding intake →</a></div>` : ''}
       <p style="font-size: 12px; color: #7b8794; margin-top: 18px;">${clearedLine}</p>
     </div>
   </div>`;
