@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { renderConceptImageWithOpenAI } from '@/lib/ad-creatives/monthly-gift-ads';
+import { mapImageErrorToResponse } from '@/lib/ad-creatives/error-response';
 
 export const maxDuration = 300;
 
@@ -27,11 +28,20 @@ export async function POST(
 
   const { id } = await params;
   try {
-    const concept = await renderConceptImageWithOpenAI(id);
+    const concept = await renderConceptImageWithOpenAI(id, {
+      userId: user.id,
+      userEmail: user.email ?? null,
+    });
     return NextResponse.json({ concept });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Image generation failed';
-    const status = message === 'Concept not found' ? 404 : 502;
-    return NextResponse.json({ error: message }, { status });
+    const message = err instanceof Error ? err.message : '';
+    if (message === 'Concept not found') {
+      return NextResponse.json({ error: message, code: 'concept_not_found' }, { status: 404 });
+    }
+    if (message === 'Concept has no image prompt') {
+      return NextResponse.json({ error: message, code: 'concept_no_prompt' }, { status: 400 });
+    }
+    const mapped = mapImageErrorToResponse(err);
+    return NextResponse.json(mapped.body, { status: mapped.status });
   }
 }

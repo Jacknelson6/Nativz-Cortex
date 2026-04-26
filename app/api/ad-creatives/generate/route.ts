@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateReferenceDrivenAdBatch } from '@/lib/ad-creatives/monthly-gift-ads';
+import { mapImageErrorToResponse } from '@/lib/ad-creatives/error-response';
 
 export const maxDuration = 300;
 
@@ -41,6 +42,7 @@ export async function POST(req: NextRequest) {
       prompt: parsed.data.prompt,
       count: parsed.data.count,
       userId: user.id,
+      userEmail: user.email ?? null,
       renderImages: parsed.data.renderImages ?? true,
       pipeline: 'chatgpt_image_chat',
     });
@@ -52,7 +54,7 @@ export async function POST(req: NextRequest) {
       referenceAdsUsed: result.referenceAds.length,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Generation failed';
-    return NextResponse.json({ error: message }, { status: 500 });
+    const mapped = mapImageErrorToResponse(err);
+    return NextResponse.json(mapped.body, { status: mapped.status });
   }
 }

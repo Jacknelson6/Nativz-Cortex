@@ -2,12 +2,18 @@ import { randomUUID } from 'crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createOpenRouterRichCompletion } from '@/lib/ai/openrouter-rich';
 import { getBrandContext } from '@/lib/knowledge/brand-context';
+import { resolveOpenAiApiKeyForFeature } from '@/lib/ai/provider-keys';
+import { trackUsage } from '@/lib/ai/usage';
 import {
   formatReferenceAdsForPrompt,
   selectReferenceAdsForBrand,
   type ReferenceAd,
 } from '@/lib/ad-creatives/reference-ad-library';
-import { generateOpenAiAdImage } from '@/lib/ad-creatives/openai-image';
+import {
+  generateOpenAiAdImage,
+  OpenAiImageError,
+  estimateImageCostUsd,
+} from '@/lib/ad-creatives/openai-image';
 
 const CONCEPT_MODEL = process.env.AD_CONCEPT_MODEL?.trim() || 'openai/gpt-5.4-mini';
 const DEFAULT_COUNT = 20;
@@ -27,6 +33,7 @@ export interface GenerateReferenceDrivenBatchOptions {
   prompt: string;
   count?: number;
   userId?: string | null;
+  userEmail?: string | null;
   renderImages?: boolean;
   pipeline?: 'chatgpt_image_monthly_gift' | 'chatgpt_image_chat';
 }
@@ -62,6 +69,20 @@ export async function generateReferenceDrivenAdBatch(
   const admin = createAdminClient();
   const count = Math.min(Math.max(options.count ?? DEFAULT_COUNT, 1), 50);
   const pipeline = options.pipeline ?? 'chatgpt_image_chat';
+  const willRender = options.renderImages !== false;
+
+  // Preflight: surface a typed OpenAiImageError BEFORE we burn an OpenRouter
+  // call on concepts the user can't actually render. The chat UI maps
+  // KEY_MISSING to a "set your OpenAI key" banner with a settings link.
+  if (willRender) {
+    const apiKey = await resolveOpenAiApiKeyForFeature('ad_image_generation');
+    if (!apiKey) {
+      throw new OpenAiImageError(
+        'KEY_MISSING',
+        'OpenAI API key is not configured. Add a key in Cortex settings → AI credentials before generating images.',
+      );
+    }
+  }
 
   const [brandContext, assetsResult, referenceAds] = await Promise.all([
     getBrandContext(options.clientId, { bypassCache: true }),
@@ -77,6 +98,7 @@ export async function generateReferenceDrivenAdBatch(
   ]);
 
   const assets = assetsResult.data ?? [];
+  const imageModel = process.env.CHATGPT_IMAGE_MODEL ?? process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-2';
 
   const { data: batchRow, error: batchErr } = await admin
     .from('ad_generation_batches')
@@ -91,8 +113,8 @@ export async function generateReferenceDrivenAdBatch(
         user_prompt: options.prompt,
         reference_ad_ids: referenceAds.map((r) => r.id),
         asset_ids: assets.map((a) => a.id),
-        image_model: process.env.CHATGPT_IMAGE_MODEL ?? process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-1.5',
-        render_images: options.renderImages !== false,
+        image_model: imageModel,
+        render_images: willRender,
       },
       brand_context_source: 'brand_dna',
       created_by: options.userId ?? null,
@@ -118,7 +140,7 @@ export async function generateReferenceDrivenAdBatch(
       brandBlock: brandContext.toPromptBlock(),
       assets,
       referenceAds,
-      renderImages: options.renderImages !== false,
+      renderImages: willRender,
     });
 
     const completion = await createOpenRouterRichCompletion({
@@ -175,10 +197,16 @@ export async function generateReferenceDrivenAdBatch(
 
     let completed = inserted.length;
     let failed = count - inserted.length;
-    if (options.renderImages !== false) {
-      const renderResult = await renderConceptsWithLimit(inserted.map((c) => c.id), 2);
+    let renderError: OpenAiImageError | null = null;
+    if (willRender) {
+      const renderResult = await renderConceptsWithLimit(
+        inserted.map((c) => c.id),
+        2,
+        { userId: options.userId ?? null, userEmail: options.userEmail ?? null },
+      );
       completed = renderResult.ok;
       failed = inserted.length - renderResult.ok + (count - inserted.length);
+      renderError = renderResult.terminalError;
     }
 
     const partial = failed > 0 || inserted.length < count;
@@ -202,18 +230,25 @@ export async function generateReferenceDrivenAdBatch(
       {
         client_id: options.clientId,
         role: 'assistant',
-        content: `Generated ${inserted.length} reference-driven ad${inserted.length === 1 ? '' : 's'} with ChatGPT Image${partial ? ' (partial)' : ''}.`,
+        content: `Generated ${inserted.length} reference-driven ad${inserted.length === 1 ? '' : 's'} with gpt-image-2${partial ? ' (partial)' : ''}.`,
         batch_id: batchRow.id,
         metadata: {
           requested: count,
           returned: inserted.length,
-          rendered: options.renderImages !== false,
+          rendered: willRender,
           reference_ad_ids: referenceAds.map((r) => r.id),
           partial,
+          render_error_code: renderError?.code ?? null,
         },
         author_user_id: options.userId ?? null,
       },
     ]);
+
+    // Bubble up a terminal OpenAI error so the route returns the structured
+    // code (key missing, quota exhausted, auth failed, content blocked) and
+    // the chat surfaces an actionable message — even though some concepts
+    // were inserted, the batch is unusable without imagery.
+    if (renderError) throw renderError;
 
     const { data: refreshed } = await admin
       .from('ad_concepts')
@@ -238,7 +273,15 @@ export async function generateReferenceDrivenAdBatch(
   }
 }
 
-export async function renderConceptImageWithOpenAI(conceptId: string): Promise<GeneratedConceptRow> {
+interface RenderAttribution {
+  userId?: string | null;
+  userEmail?: string | null;
+}
+
+export async function renderConceptImageWithOpenAI(
+  conceptId: string,
+  attribution: RenderAttribution = {},
+): Promise<GeneratedConceptRow> {
   const admin = createAdminClient();
   const { data: concept } = await admin
     .from('ad_concepts')
@@ -248,11 +291,40 @@ export async function renderConceptImageWithOpenAI(conceptId: string): Promise<G
   if (!concept) throw new Error('Concept not found');
   if (!concept.image_prompt) throw new Error('Concept has no image prompt');
 
-  const result = await generateOpenAiAdImage({
-    prompt: concept.image_prompt as string,
-    aspectRatio: '1:1',
-    feature: 'ad_image_generation',
-  });
+  let result: Awaited<ReturnType<typeof generateOpenAiAdImage>>;
+  try {
+    result = await generateOpenAiAdImage({
+      prompt: concept.image_prompt as string,
+      aspectRatio: '1:1',
+      feature: 'ad_image_generation',
+    });
+  } catch (err) {
+    // Log a 0-token failure row so the usage dashboard surfaces incidents
+    // (rate-limited, quota-exhausted, content-blocked) alongside successful
+    // renders. The metadata.error_code lets us filter for "renders that
+    // didn't bill" later.
+    if (err instanceof OpenAiImageError) {
+      trackUsage({
+        service: 'openai',
+        model: process.env.CHATGPT_IMAGE_MODEL ?? process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-2',
+        feature: 'ad_image_generation',
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        costUsd: 0,
+        userId: attribution.userId ?? undefined,
+        userEmail: attribution.userEmail ?? undefined,
+        metadata: {
+          concept_id: concept.id,
+          client_id: concept.client_id,
+          error_code: err.code,
+          provider_message: err.providerMessage,
+          status: 'failed',
+        },
+      });
+    }
+    throw err;
+  }
 
   if (concept.image_storage_path) {
     await admin.storage.from('ad-creatives').remove([concept.image_storage_path as string]);
@@ -277,6 +349,9 @@ export async function renderConceptImageWithOpenAI(conceptId: string): Promise<G
         image_quality: result.quality,
         image_size: result.size,
         rendered_at: new Date().toISOString(),
+        cost_usd: result.estimatedCostUsd,
+        input_tokens: result.inputTokens,
+        output_tokens: result.outputTokens,
       },
     })
     .eq('id', concept.id)
@@ -290,30 +365,88 @@ export async function renderConceptImageWithOpenAI(conceptId: string): Promise<G
     throw new Error(`Update failed: ${updateErr?.message ?? 'unknown'}`);
   }
 
+  // Successful render — log usage with estimated cost. When OpenAI returns
+  // token counts, we record those too; when it doesn't, the cost still lands
+  // via the static price table so the dashboard reflects spend.
+  trackUsage({
+    service: 'openai',
+    model: result.model,
+    feature: 'ad_image_generation',
+    inputTokens: result.inputTokens,
+    outputTokens: result.outputTokens,
+    totalTokens: result.inputTokens + result.outputTokens,
+    costUsd: result.estimatedCostUsd,
+    userId: attribution.userId ?? undefined,
+    userEmail: attribution.userEmail ?? undefined,
+    metadata: {
+      concept_id: concept.id,
+      client_id: concept.client_id,
+      quality: result.quality,
+      size: result.size,
+      cost_basis: 'estimated', // flip to 'reconciled' once we have a usage webhook
+      estimated_cost_lookup: estimateImageCostUsd(result.model, result.quality, result.size),
+    },
+  });
+
   return updated as GeneratedConceptRow;
 }
 
-async function renderConceptsWithLimit(ids: string[], limit: number): Promise<{ ok: number; failed: number }> {
+interface BatchRenderResult {
+  ok: number;
+  failed: number;
+  /**
+   * If a render hit a terminal OpenAI error (key missing, quota exhausted,
+   * auth failed, content blocked) we surface the FIRST one so the batch can
+   * fail fast instead of grinding through 19 more identical errors. Transient
+   * errors (rate-limited, generic 5xx) don't populate this — we want those to
+   * stay best-effort.
+   */
+  terminalError: OpenAiImageError | null;
+}
+
+async function renderConceptsWithLimit(
+  ids: string[],
+  limit: number,
+  attribution: RenderAttribution,
+): Promise<BatchRenderResult> {
   let ok = 0;
   let failed = 0;
+  let terminalError: OpenAiImageError | null = null;
   const queue = [...ids];
 
   async function worker() {
     while (queue.length > 0) {
+      // If a terminal error already popped, drain the queue without retrying.
+      if (terminalError) {
+        failed += queue.length;
+        queue.length = 0;
+        return;
+      }
       const id = queue.shift();
       if (!id) return;
       try {
-        await renderConceptImageWithOpenAI(id);
+        await renderConceptImageWithOpenAI(id, attribution);
         ok++;
       } catch (err) {
         failed++;
         console.error('[monthly-gift-ads] render failed:', id, err);
+        if (err instanceof OpenAiImageError && isTerminalForBatch(err.code)) {
+          terminalError = err;
+        }
       }
     }
   }
 
   await Promise.all(Array.from({ length: Math.min(limit, queue.length) }, () => worker()));
-  return { ok, failed };
+  return { ok, failed, terminalError };
+}
+
+function isTerminalForBatch(code: OpenAiImageError['code']): boolean {
+  return (
+    code === 'KEY_MISSING' ||
+    code === 'AUTH_FAILED' ||
+    code === 'QUOTA_EXHAUSTED'
+  );
 }
 
 function parseConcepts(raw: string): RawConcept[] {
@@ -349,6 +482,13 @@ interface PromptInputs {
   renderImages: boolean;
 }
 
+/**
+ * System prompt for the concept-generation step. The image_prompt rules are
+ * pulled from OpenAI's gpt-image-2 prompting guide (background → subject →
+ * details → constraints; on-image text in quotes; explicit framing/lighting;
+ * exclude watermarks/clip-art) so the prompts we emit are immediately
+ * render-ready instead of needing a second pass.
+ */
 function buildSystemPrompt({ count, brandBlock, assets, referenceAds, renderImages }: PromptInputs): string {
   const assetManifest =
     assets.length === 0
@@ -376,7 +516,7 @@ ${assetManifest}
 
 ${formatReferenceAdsForPrompt(referenceAds)}
 
-# Requirements
+# Concept requirements
 
 - Produce exactly ${count} concepts.
 - Each concept must use one matched reference ad when available. Put that row's UUID in reference_ad_id.
@@ -384,8 +524,23 @@ ${formatReferenceAdsForPrompt(referenceAds)}
 - Borrow only the reusable mechanism: layout, pacing, hierarchy, emotional angle, CTA treatment, offer framing, visual rhythm.
 - Ground claims in Brand DNA or uploaded assets only. If a claim is not supported, make it softer.
 - Vary the batch: testimonial/social proof, problem-solution, offer, comparison, stat callout, product/service showcase, founder/authority, and FAQ/objection.
-- The image_prompt must be ready for OpenAI GPT Image generation: precise visual direction, final on-image copy, brand palette, logo placement, product/service depiction, composition, and negative prompts.
-- ${renderImages ? 'These prompts will be rendered immediately, so keep them visually concrete and avoid vague art direction.' : 'These prompts may be rendered later, so keep them inspectable and editable.'}
+- ${renderImages
+  ? 'These prompts will be rendered immediately, so keep them visually concrete and avoid vague art direction.'
+  : 'These prompts may be rendered later, so keep them inspectable and editable.'}
+
+# image_prompt rules (gpt-image-2)
+
+Each image_prompt must read like a creative brief for a real photographer, not concept-art language. Follow this structure in order:
+
+1. Scene & background — physical setting, surface, environment.
+2. Subject — what is featured (product, person, object, abstract composition). Name camera framing (close-up, medium, wide), viewpoint (eye-level, low-angle, top-down), and lighting (soft diffuse, golden hour, studio key + fill).
+3. On-image text — write the EXACT copy in quotes, e.g. headline "Sleep deeper tonight" rendered verbatim. Specify font character (sans / serif / display), size relative to the ad, color, and placement (top-left, lower third, etc.). For tricky words, spell out letter-by-letter.
+4. Brand identity — describe brand personality and palette in plain English (warm earth tones, energetic neon accent on charcoal, premium muted neutrals). Avoid hex codes; let the model interpret tasteful color direction. Place the logo only if Brand DNA confirms a clean lockup, and name its location ("logo bottom-right, small").
+5. Composition & layout — name the visual hierarchy ("subject centered, headline lower third, CTA pill bottom-right"). Reference the borrowed reference-ad mechanic by feel, not by name.
+6. Constraints — list what must NOT appear: "no watermarks, no extra logos, no clip-art icons, no stock-photo feeling, no decorative gradients, no unrelated text".
+7. Render mode — for photoreal ads include "photorealistic, professional campaign photography"; for graphic ads include "flat editorial illustration" or "clean magazine layout".
+
+Quality is set to medium by default. Only the BAD_REQUEST hint "small dense type" warrants the high tier — keep prompts tight enough that medium reads cleanly.
 
 # Output JSON
 
@@ -400,7 +555,7 @@ Return only JSON:
       "body_copy": "supporting on-screen text or null",
       "visual_description": "plain-English description of the final ad",
       "source_grounding": "specific Brand DNA, asset label, or reference ad reason",
-      "image_prompt": "full GPT Image prompt for the final static ad"
+      "image_prompt": "full gpt-image-2 prompt following the rules above"
     }
   ]
 }`;

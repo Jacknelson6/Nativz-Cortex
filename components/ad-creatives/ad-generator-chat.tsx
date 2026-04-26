@@ -6,6 +6,75 @@ import { toast } from 'sonner';
 import type { AdConcept } from './ad-concept-gallery';
 import { CHAT_COMMAND_HELP } from '@/lib/ad-creatives/chat-commands';
 
+// Maps the wire-format codes from /api/ad-creatives/{generate,command,
+// concepts/[id]/render} into a friendly assistant slip + a short toast. The
+// goal is that whichever surface hits an OpenAI wall, the operator gets the
+// same actionable instruction ("set your key", "top up billing"). Anything
+// not in this map falls back to the raw provider message.
+type FriendlyError = {
+  /** Multi-line markdown-ish string for the assistant transcript slip. */
+  assistant: string;
+  /** Short single-line for the toast. */
+  toast: string;
+};
+
+const SETTINGS_PATH = '/admin/settings';
+
+function friendlyErrorFor(
+  code: string | undefined,
+  fallback: string,
+): FriendlyError {
+  switch (code) {
+    case 'openai_key_missing':
+      return {
+        assistant: `OpenAI API key isn't set. Add it in Cortex settings → AI credentials (${SETTINGS_PATH}) and try the brief again.`,
+        toast: 'Set your OpenAI API key in settings → AI credentials.',
+      };
+    case 'openai_auth_failed':
+      return {
+        assistant: `OpenAI rejected the API key. Check that the key in Cortex settings → AI credentials (${SETTINGS_PATH}) is current and has image-generation access.`,
+        toast: 'OpenAI rejected the key. Update it in settings.',
+      };
+    case 'openai_quota_exhausted':
+      return {
+        assistant: `OpenAI account is out of credits. Top up billing at platform.openai.com/billing, then retry the brief — no concepts were charged.`,
+        toast: 'OpenAI is out of credits. Top up billing.',
+      };
+    case 'openai_rate_limited':
+      return {
+        assistant: `OpenAI is rate-limiting image requests right now. Wait a minute and retry — partial concepts may have rendered.`,
+        toast: 'OpenAI rate-limited. Wait and retry.',
+      };
+    case 'openai_content_blocked':
+      return {
+        assistant: `OpenAI's content policy blocked one of the prompts. Soften the brief (avoid sensitive claims, real people, or specific brands) and retry.`,
+        toast: 'Content policy blocked the prompt.',
+      };
+    case 'openai_bad_request':
+      return {
+        assistant: `OpenAI rejected the request format. ${fallback}`,
+        toast: 'OpenAI rejected the request.',
+      };
+    case 'openai_timeout':
+      return {
+        assistant: `Image generation timed out. The brief is fine — OpenAI just took too long. Retry to pick up where it left off.`,
+        toast: 'Image generation timed out. Retry.',
+      };
+    case 'concept_not_found':
+      return {
+        assistant: `That concept no longer exists. It may have been deleted from the gallery.`,
+        toast: 'Concept not found.',
+      };
+    case 'concept_no_prompt':
+      return {
+        assistant: `That concept has no image prompt to render. Edit the concept and add an image prompt before regenerating.`,
+        toast: 'Concept has no image prompt.',
+      };
+    default:
+      return { assistant: fallback, toast: fallback.slice(0, 120) };
+  }
+}
+
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -116,10 +185,13 @@ export function AdGeneratorChat({
           body: JSON.stringify({ clientId, input: trimmed }),
         });
         if (!res.ok) {
-          const body = await res.json().catch(() => null);
-          const errorMsg = body?.error ?? `Command failed (${res.status})`;
-          appendAssistant(setMessages, errorMsg, null);
-          toast.error(errorMsg.slice(0, 120));
+          const body = (await res.json().catch(() => null)) as
+            | { error?: string; code?: string }
+            | null;
+          const fallback = body?.error ?? `Command failed (${res.status})`;
+          const friendly = friendlyErrorFor(body?.code, fallback);
+          appendAssistant(setMessages, friendly.assistant, null);
+          toast.error(friendly.toast);
           return;
         }
         const data = (await res.json()) as {
@@ -150,10 +222,13 @@ export function AdGeneratorChat({
           body: JSON.stringify({ clientId, prompt: trimmed, count }),
         });
         if (!res.ok) {
-          const body = await res.json().catch(() => null);
-          const errorMsg = body?.error ?? `Generation failed (${res.status})`;
-          appendAssistant(setMessages, errorMsg, null);
-          toast.error(errorMsg.slice(0, 120));
+          const body = (await res.json().catch(() => null)) as
+            | { error?: string; code?: string }
+            | null;
+          const fallback = body?.error ?? `Generation failed (${res.status})`;
+          const friendly = friendlyErrorFor(body?.code, fallback);
+          appendAssistant(setMessages, friendly.assistant, null);
+          toast.error(friendly.toast);
           return;
         }
         const data = (await res.json()) as {

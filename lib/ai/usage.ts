@@ -39,6 +39,13 @@ const PRICING: Record<string, { input: number; output: number }> = {
   // OpenAI embeddings (input-only — embeddings have no output side)
   'text-embedding-3-small': { input: 0.02 / 1_000_000, output: 0 },
   'text-embedding-3-large': { input: 0.13 / 1_000_000, output: 0 },
+  // OpenAI Images — gpt-image-2 is priced per image, NOT per token. The cost
+  // is computed in lib/ad-creatives/openai-image.ts via a per-image lookup
+  // table and passed to trackUsage() as costUsd directly. We keep zeros here
+  // so calculateCost() returns 0 (avoiding double-counting) while keeping
+  // the model named in the dashboard's model dropdown.
+  'gpt-image-2': { input: 0, output: 0 },
+  'gpt-image-2-2026-04-21': { input: 0, output: 0 },
 };
 
 // Groq audio pricing: $0.006 per minute of audio
