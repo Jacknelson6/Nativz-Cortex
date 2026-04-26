@@ -5,6 +5,7 @@ import { Sparkles, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { AdConcept } from './ad-concept-gallery';
 import { CHAT_COMMAND_HELP } from '@/lib/ad-creatives/chat-commands';
+import type { AdAgentEvent } from '@/lib/ad-creatives/ad-agent';
 
 // Maps the wire-format codes from /api/ad-creatives/{generate,command,
 // concepts/[id]/render} into a friendly assistant slip + a short toast. The
@@ -85,6 +86,19 @@ interface ChatMessage {
   created_at: string;
 }
 
+/**
+ * Transient state for an in-flight agent run. Replaced (not appended) on
+ * every event so the slip below the transcript stays a single live row,
+ * not a wall of intermediate steps. Cleared on `batch_complete` /
+ * `batch_error` once the persistent assistant slip takes over.
+ */
+interface LiveStream {
+  narration: string;
+  activity: string | null;
+  progress: { current: number; total: number; slug: string | null } | null;
+  failures: number;
+}
+
 interface Props {
   clientId: string;
   onBatchComplete: (concepts: AdConcept[]) => void;
@@ -125,6 +139,7 @@ export function AdGeneratorChat({
   const [input, setInput] = useState('');
   const [count, setCount] = useState<number>(DEFAULT_COUNT);
   const [submitting, setSubmitting] = useState(false);
+  const [liveStream, setLiveStream] = useState<LiveStream | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const isCommand = input.trim().startsWith('/');
@@ -151,13 +166,18 @@ export function AdGeneratorChat({
     };
   }, [clientId]);
 
-  // Scroll to bottom on new messages. The transcript is a bounded height
-  // flex child; scrollTo on the inner container keeps the composer fixed.
+  // Scroll to bottom on new messages or live-stream updates. The transcript
+  // is a bounded height flex child; scrollTo on the inner container keeps
+  // the composer fixed. We watch the progress counter so each rendered ad
+  // nudges the slip back into view, and the narration so longer agent
+  // messages don't get cut off behind the composer.
+  const liveProgressCurrent = liveStream?.progress?.current ?? null;
+  const liveNarrationLen = liveStream?.narration.length ?? 0;
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [messages.length]);
+  }, [messages.length, liveProgressCurrent, liveNarrationLen]);
 
   const handleSubmit = useCallback(async () => {
     const trimmed = input.trim();
@@ -216,12 +236,23 @@ export function AdGeneratorChat({
           toast.success(data.summary.slice(0, 120));
         }
       } else {
-        const res = await fetch('/api/ad-creatives/generate', {
+        // Open the SSE stream from the agent run. Auth/validation errors
+        // come back as a normal JSON body (status !== 200); a 200 response
+        // is always a streaming `text/event-stream` body.
+        setLiveStream({
+          narration: '',
+          activity: 'Starting agent…',
+          progress: null,
+          failures: 0,
+        });
+
+        const res = await fetch('/api/ad-creatives/agent-stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ clientId, prompt: trimmed, count }),
         });
-        if (!res.ok) {
+        if (!res.ok || !res.body) {
+          setLiveStream(null);
           const body = (await res.json().catch(() => null)) as
             | { error?: string; code?: string }
             | null;
@@ -231,21 +262,171 @@ export function AdGeneratorChat({
           toast.error(friendly.toast);
           return;
         }
-        const data = (await res.json()) as {
-          batchId: string;
-          status: 'completed' | 'partial' | 'failed';
-          concepts: AdConcept[];
-          referenceAdsUsed?: number;
+
+        // Stream consumer. We accumulate a UTF-8 buffer because a single
+        // network chunk can contain a partial frame OR several frames,
+        // and SSE frames are delimited by a blank line (`\n\n`).
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let lastNarration = '';
+        let finalEvent:
+          | (Extract<AdAgentEvent, { type: 'batch_complete' }> & object)
+          | null = null;
+        let terminalError: { code: string; message: string } | null = null;
+
+        const handleEvent = (event: AdAgentEvent) => {
+          switch (event.type) {
+            case 'agent_started':
+              setLiveStream({
+                narration: '',
+                activity: 'Reading the brief…',
+                progress: null,
+                failures: 0,
+              });
+              break;
+            case 'tool_started':
+              setLiveStream((prev) => ({
+                narration: prev?.narration ?? '',
+                activity: event.label,
+                progress: prev?.progress ?? null,
+                failures: prev?.failures ?? 0,
+              }));
+              break;
+            case 'context_loaded':
+              setLiveStream((prev) => ({
+                narration: prev?.narration ?? '',
+                activity: `Matched ${event.referenceAdCount} reference ad${event.referenceAdCount === 1 ? '' : 's'} for ${event.brandName}.`,
+                progress: prev?.progress ?? null,
+                failures: prev?.failures ?? 0,
+              }));
+              break;
+            case 'concepts_composed':
+              setLiveStream((prev) => ({
+                narration: prev?.narration ?? '',
+                activity: `Composed ${event.concepts.length} concept${event.concepts.length === 1 ? '' : 's'}. Rendering…`,
+                progress: { current: 0, total: event.concepts.length, slug: null },
+                failures: prev?.failures ?? 0,
+              }));
+              break;
+            case 'concept_rendering':
+              setLiveStream((prev) => ({
+                narration: prev?.narration ?? '',
+                activity: 'Rendering image',
+                progress: {
+                  current: Math.max(event.index - 1, 0),
+                  total: event.total,
+                  slug: event.slug,
+                },
+                failures: prev?.failures ?? 0,
+              }));
+              break;
+            case 'concept_rendered':
+              setLiveStream((prev) => ({
+                narration: prev?.narration ?? '',
+                activity: 'Rendering image',
+                progress: {
+                  current: event.index,
+                  total: event.total,
+                  slug: event.concept.slug,
+                },
+                failures: prev?.failures ?? 0,
+              }));
+              break;
+            case 'concept_render_failed':
+              setLiveStream((prev) => ({
+                narration: prev?.narration ?? '',
+                activity: `Skipped ${event.slug}: ${event.message}`,
+                progress: prev?.progress
+                  ? { ...prev.progress, current: event.index }
+                  : null,
+                failures: (prev?.failures ?? 0) + 1,
+              }));
+              break;
+            case 'agent_message':
+              lastNarration = event.text;
+              setLiveStream((prev) => ({
+                narration: event.text,
+                activity: prev?.activity ?? null,
+                progress: prev?.progress ?? null,
+                failures: prev?.failures ?? 0,
+              }));
+              break;
+            case 'batch_complete':
+              finalEvent = event;
+              break;
+            case 'batch_error':
+              terminalError = { code: event.code, message: event.message };
+              break;
+            case 'tool_finished':
+              // Don't replace the activity line on tool_finished — the
+              // next tool_started or progress event will overwrite it,
+              // and the brief "Done" flicker isn't useful.
+              break;
+          }
         };
-        const refSuffix =
-          typeof data.referenceAdsUsed === 'number'
-            ? ` using ${data.referenceAdsUsed} matched reference ad${data.referenceAdsUsed === 1 ? '' : 's'}`
-            : '';
-        const summary = `Generated ${data.concepts.length} ad${data.concepts.length === 1 ? '' : 's'}${refSuffix}${data.status === 'partial' ? ' (partial)' : ''}.`;
-        appendAssistant(setMessages, summary, data.batchId);
-        onBatchComplete(data.concepts);
-        toast.success(summary);
-        onSwitchToGallery();
+
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            let sep = buffer.indexOf('\n\n');
+            while (sep !== -1) {
+              const frame = buffer.slice(0, sep);
+              buffer = buffer.slice(sep + 2);
+              const dataLine = frame
+                .split('\n')
+                .find((l) => l.startsWith('data:'));
+              if (dataLine) {
+                try {
+                  const event = JSON.parse(dataLine.slice(5).trim()) as AdAgentEvent;
+                  handleEvent(event);
+                } catch {
+                  // Malformed frame — skip and keep streaming.
+                }
+              }
+              sep = buffer.indexOf('\n\n');
+            }
+          }
+        } finally {
+          setLiveStream(null);
+        }
+
+        if (terminalError) {
+          const err = terminalError as { code: string; message: string };
+          const friendly = friendlyErrorFor(err.code, err.message);
+          appendAssistant(setMessages, friendly.assistant, null);
+          toast.error(friendly.toast);
+          return;
+        }
+
+        if (finalEvent) {
+          const final = finalEvent as Extract<
+            AdAgentEvent,
+            { type: 'batch_complete' }
+          >;
+          const summary = lastNarration || final.summary;
+          appendAssistant(setMessages, summary, final.batchId, {
+            batch_status: final.status,
+            concept_count: final.concepts.length,
+            reference_ads_used: final.referenceAdsUsed,
+          });
+          onBatchComplete(final.concepts as AdConcept[]);
+          toast.success(
+            `Generated ${final.concepts.length} ad${final.concepts.length === 1 ? '' : 's'}${final.status === 'partial' ? ' (partial)' : ''}.`,
+          );
+          onSwitchToGallery();
+          return;
+        }
+
+        // Stream closed without a terminal event. Treat as a hung run.
+        appendAssistant(
+          setMessages,
+          'The agent stream ended without a final result. Try the brief again.',
+          null,
+        );
+        toast.error('Stream closed unexpectedly.');
       }
     } finally {
       setSubmitting(false);
@@ -278,7 +459,7 @@ export function AdGeneratorChat({
         </div>
       );
     }
-    if (messages.length === 0) {
+    if (messages.length === 0 && !liveStream) {
       return <EmptyStateHint />;
     }
     return (
@@ -290,9 +471,10 @@ export function AdGeneratorChat({
             replyIndex={replyIndexes.get(m.id) ?? null}
           />
         ))}
+        {liveStream && <LiveStreamSlip stream={liveStream} />}
       </ol>
     );
-  }, [historyLoaded, messages, replyIndexes]);
+  }, [historyLoaded, messages, replyIndexes, liveStream]);
 
   return (
     <div className="flex h-[calc(100vh-300px)] min-h-[520px] flex-col gap-0 overflow-hidden">
@@ -433,6 +615,79 @@ function MessageSlip({
       >
         {message.content}
       </p>
+    </li>
+  );
+}
+
+/**
+ * In-flight agent run, shown below the persisted transcript while the
+ * SSE stream is open. One slip — narration on top (refreshed on each
+ * `agent_message`), then the current activity, then a hairline progress
+ * bar tied to per-image render events. Cleared when the stream ends.
+ */
+function LiveStreamSlip({ stream }: { stream: LiveStream }) {
+  const pct = stream.progress
+    ? Math.min(
+        100,
+        Math.round((stream.progress.current / Math.max(stream.progress.total, 1)) * 100),
+      )
+    : 0;
+  return (
+    <li className="space-y-2">
+      <div className="flex items-baseline gap-2">
+        <span className="font-mono text-[10px] tabular-nums text-text-muted/70">
+          live
+        </span>
+        <span
+          className="inline-flex items-baseline gap-2 text-[12px] italic tracking-wide text-accent-text"
+          style={{ fontFamily: DISPLAY_FONT }}
+        >
+          Cortex · drafting
+          <span
+            aria-hidden
+            className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent"
+          />
+        </span>
+      </div>
+      {stream.narration && (
+        <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-text-secondary">
+          {stream.narration}
+        </p>
+      )}
+      {stream.activity && (
+        <p
+          className="text-[12px] italic text-text-muted"
+          style={{ fontFamily: DISPLAY_FONT }}
+        >
+          {stream.activity}
+        </p>
+      )}
+      {stream.progress && (
+        <div className="space-y-1.5 pt-0.5">
+          <div className="flex items-baseline justify-between gap-3 font-mono text-[11px] tabular-nums text-text-muted">
+            <span>
+              {String(stream.progress.current).padStart(2, '0')} /{' '}
+              {String(stream.progress.total).padStart(2, '0')}
+              {stream.failures > 0 && (
+                <span className="ml-2 text-red-400/80">
+                  · {stream.failures} skipped
+                </span>
+              )}
+            </span>
+            {stream.progress.slug && (
+              <span className="truncate text-[10px] text-text-muted/70">
+                {stream.progress.slug}
+              </span>
+            )}
+          </div>
+          <div className="h-px w-full overflow-hidden bg-nativz-border/50">
+            <div
+              className="h-full bg-accent transition-[width] duration-300 ease-out"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </div>
+      )}
     </li>
   );
 }
