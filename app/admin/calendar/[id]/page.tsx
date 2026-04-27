@@ -14,6 +14,7 @@ import {
   Loader2,
   MessageSquare,
   Pencil,
+  RefreshCw,
   Save,
   Send,
   XCircle,
@@ -326,6 +327,25 @@ function VideoCard({ dropId, video, comments, onUpdated }: VideoCardProps) {
   const [hashtags, setHashtags] = useState((video.draft_hashtags ?? []).join(' '));
   const [scheduledAt, setScheduledAt] = useState(toLocalDateTime(video.draft_scheduled_at));
   const [saving, setSaving] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+
+  async function handleRetry() {
+    setRetrying(true);
+    try {
+      const res = await fetch(
+        `/api/calendar/drops/${dropId}/videos/${video.id}/retry`,
+        { method: 'POST' },
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Retry failed');
+      toast.success('Retry queued');
+      onUpdated();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Retry failed');
+    } finally {
+      setRetrying(false);
+    }
+  }
 
   // Pull live values when polling refreshes the parent — only when not actively editing.
   useEffect(() => {
@@ -428,9 +448,23 @@ function VideoCard({ dropId, video, comments, onUpdated }: VideoCardProps) {
         </div>
 
         {video.error_detail && (
-          <p className="rounded-lg border border-red-500/30 bg-red-500/5 p-2 text-xs text-red-300">
-            {video.error_detail}
-          </p>
+          <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-2">
+            <p className="text-xs text-red-300">{video.error_detail}</p>
+            {video.status === 'failed' && (
+              <button
+                onClick={handleRetry}
+                disabled={retrying}
+                className="mt-2 inline-flex cursor-pointer items-center gap-1 rounded-md border border-red-500/40 bg-red-500/10 px-2 py-1 text-[11px] font-medium text-red-200 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+              >
+                {retrying ? (
+                  <Loader2 size={11} className="animate-spin" />
+                ) : (
+                  <RefreshCw size={11} />
+                )}
+                {retrying ? 'Retrying…' : 'Retry'}
+              </button>
+            )}
+          </div>
         )}
 
         {editing ? (
