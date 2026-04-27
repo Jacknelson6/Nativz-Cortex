@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { ExternalLink, RefreshCcw, Send, Undo2 } from 'lucide-react';
 import { formatCents, dollarsToCents, centsToDollars } from '@/lib/format/money';
 import { InvoiceStatusPill } from './status-pill';
+import { Dialog } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 type Invoice = {
   id: string;
@@ -244,75 +246,58 @@ function RefundDialog({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md rounded-xl border border-nativz-border bg-surface p-5 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="text-sm font-semibold text-text-primary">
-          Refund invoice {invoice.number ?? ''}
-        </h3>
-        <p className="mt-1 text-[11px] text-text-muted">
-          {invoice.clients?.name} — paid {formatCents(invoice.amount_paid_cents, invoice.currency)}
-        </p>
-        <div className="mt-4 space-y-3">
-          <label className="block">
-            <span className="mb-1 block text-[10px] uppercase tracking-wider text-text-muted">
-              Amount ($)
-            </span>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              max={maxDollars}
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="w-full rounded border border-nativz-border bg-background px-2 py-1.5 text-sm text-text-primary"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-[10px] uppercase tracking-wider text-text-muted">Reason</span>
-            <select
-              value={reason}
-              onChange={(e) => setReason(e.target.value as typeof reason)}
-              className="w-full rounded border border-nativz-border bg-background px-2 py-1.5 text-sm text-text-primary"
-            >
-              <option value="requested_by_customer">Requested by customer</option>
-              <option value="duplicate">Duplicate</option>
-              <option value="fraudulent">Fraudulent</option>
-            </select>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-[10px] uppercase tracking-wider text-text-muted">Note (internal)</span>
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              rows={2}
-              className="w-full rounded border border-nativz-border bg-background px-2 py-1.5 text-sm text-text-primary"
-            />
-          </label>
-        </div>
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-nativz-border bg-surface px-3 py-1 text-xs text-text-primary hover:bg-white/5"
+    <Dialog open onClose={onClose} title="" maxWidth="md" bodyClassName="p-5">
+      <h3 className="text-sm font-semibold text-text-primary pr-10">
+        Refund invoice {invoice.number ?? ''}
+      </h3>
+      <p className="mt-1 text-[11px] text-text-muted">
+        {invoice.clients?.name} — paid {formatCents(invoice.amount_paid_cents, invoice.currency)}
+      </p>
+      <div className="mt-4 space-y-3">
+        <label className="block">
+          <span className="mb-1 block text-[10px] uppercase tracking-wider text-text-muted">
+            Amount ($)
+          </span>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            max={maxDollars}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="w-full rounded border border-nativz-border bg-background px-2 py-1.5 text-sm text-text-primary"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-[10px] uppercase tracking-wider text-text-muted">Reason</span>
+          <select
+            value={reason}
+            onChange={(e) => setReason(e.target.value as typeof reason)}
+            className="w-full rounded border border-nativz-border bg-background px-2 py-1.5 text-sm text-text-primary"
           >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={busy}
-            className="rounded-full bg-coral-500/20 px-3 py-1 text-xs font-medium text-coral-300 hover:bg-coral-500/30 disabled:opacity-50"
-          >
-            {busy ? 'Refunding…' : 'Refund in Stripe'}
-          </button>
-        </div>
+            <option value="requested_by_customer">Requested by customer</option>
+            <option value="duplicate">Duplicate</option>
+            <option value="fraudulent">Fraudulent</option>
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-[10px] uppercase tracking-wider text-text-muted">Note (internal)</span>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+            className="w-full rounded border border-nativz-border bg-background px-2 py-1.5 text-sm text-text-primary"
+          />
+        </label>
       </div>
-    </div>
+      <div className="mt-5 flex justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button variant="danger" size="sm" onClick={submit} disabled={busy}>
+          {busy ? 'Refunding…' : 'Refund in Stripe'}
+        </Button>
+      </div>
+    </Dialog>
   );
 }

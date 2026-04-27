@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowLeft, Search, Globe, Sparkles, Loader2, Plus, X } from 'lucide-react';
+import { ArrowLeft, Search, Globe, Sparkles, Loader2, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { useClientAdminShell } from '@/components/clients/client-admin-shell-context';
+import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
 
 interface VaultHeaderProps {
   clientId: string;
@@ -161,70 +163,61 @@ export function VaultHeader({
       </div>
 
       {/* Add entry modal */}
-      {showAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setShowAdd(false)} />
-          <div className="relative w-full max-w-sm rounded-2xl border border-nativz-border bg-surface p-5 shadow-elevated">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-text-primary">Add knowledge entry</h3>
-              <button onClick={() => setShowAdd(false)} className="p-1 rounded-lg text-text-muted hover:text-text-primary cursor-pointer">
-                <X size={14} />
-              </button>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-text-muted mb-1 block">Type</label>
-                <select
-                  value={addType}
-                  onChange={(e) => setAddType(e.target.value)}
-                  className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:outline-none"
-                >
-                  {ENTRY_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>{t.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-text-muted mb-1 block">Title</label>
-                <input
-                  type="text"
-                  value={addTitle}
-                  onChange={(e) => setAddTitle(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddEntry()}
-                  placeholder="Entry title..."
-                  className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="text-xs text-text-muted mb-1 block">Content <span className="text-text-muted/50">(optional)</span></label>
-                <textarea
-                  value={addContent}
-                  onChange={(e) => setAddContent(e.target.value)}
-                  placeholder="Entry content..."
-                  rows={4}
-                  className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none resize-none"
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-1">
-                <button
-                  onClick={() => setShowAdd(false)}
-                  className="px-3 py-1.5 rounded-lg text-xs text-text-muted hover:text-text-primary cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAddEntry}
-                  disabled={!addTitle.trim() || adding}
-                  className="px-4 py-1.5 rounded-lg bg-accent text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-40 cursor-pointer"
-                >
-                  {adding ? 'Adding...' : 'Add'}
-                </button>
-              </div>
-            </div>
+      <Dialog
+        open={showAdd}
+        onClose={() => setShowAdd(false)}
+        title="Add knowledge entry"
+        maxWidth="sm"
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-text-muted mb-1 block">Type</label>
+            <select
+              value={addType}
+              onChange={(e) => setAddType(e.target.value)}
+              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:outline-none"
+            >
+              {ENTRY_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-text-muted mb-1 block">Title</label>
+            <input
+              type="text"
+              value={addTitle}
+              onChange={(e) => setAddTitle(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddEntry()}
+              placeholder="Entry title..."
+              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="text-xs text-text-muted mb-1 block">Content <span className="text-text-muted/50">(optional)</span></label>
+            <textarea
+              value={addContent}
+              onChange={(e) => setAddContent(e.target.value)}
+              placeholder="Entry content..."
+              rows={4}
+              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none resize-none"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="ghost" size="sm" onClick={() => setShowAdd(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleAddEntry}
+              disabled={!addTitle.trim() || adding}
+            >
+              {adding ? 'Adding...' : 'Add'}
+            </Button>
           </div>
         </div>
-      )}
+      </Dialog>
     </div>
   );
 }

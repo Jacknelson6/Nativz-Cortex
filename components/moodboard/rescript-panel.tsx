@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-// modal is built inline, no Dialog import needed
-import { GlassButton } from '@/components/ui/glass-button';
+import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Copy, Loader2, FileText, Check, Hash, Target, Lightbulb, Clapperboard, Sparkles } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -119,24 +118,17 @@ export function RescriptPanel({ item, onClose, onSaved }: RescriptPanelProps) {
   }
 
   return (
-    <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-        <div className="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border border-nativz-border bg-surface shadow-2xl p-6" onClick={e => e.stopPropagation()}>
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-gradient-to-br from-indigo-500 to-accent2 p-2">
-                <Sparkles size={18} className="text-white" />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-text-primary">Rescript / Adapt</h2>
-                <p className="text-xs text-text-muted">{item.title || 'Video'}</p>
-              </div>
-            </div>
-            <button onClick={onClose} className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover transition-colors">✕</button>
-          </div>
+    <Dialog open onClose={onClose} title="" maxWidth="2xl" bodyClassName="p-6 max-h-[85vh] overflow-y-auto">
+      <div className="flex items-center gap-3 mb-6 pr-10">
+        <div className="rounded-lg bg-gradient-to-br from-indigo-500 to-accent2 p-2">
+          <Sparkles size={18} className="text-white" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-text-primary">Rescript / adapt</h2>
+          <p className="text-xs text-text-muted">{item.title || 'Video'}</p>
+        </div>
+      </div>
 
-          {/* Configure Step */}
           {step === 'configure' && (
             <div className="space-y-4">
               {/* Client Picker */}
@@ -187,10 +179,10 @@ export function RescriptPanel({ item, onClose, onSaved }: RescriptPanelProps) {
                 />
               </div>
 
-              <GlassButton onClick={handleGenerate} className="w-full justify-center gap-2 bg-gradient-to-r from-indigo-500 to-accent2 hover:from-indigo-600 hover:to-accent2-hover text-white">
+              <Button onClick={handleGenerate} className="w-full justify-center">
                 <Sparkles size={16} />
-                Generate Rescript
-              </GlassButton>
+                Generate rescript
+              </Button>
             </div>
           )}
 
@@ -320,8 +312,6 @@ export function RescriptPanel({ item, onClose, onSaved }: RescriptPanelProps) {
               )}
             </div>
           )}
-        </div>
-      </div>
-    </>
+    </Dialog>
   );
 }

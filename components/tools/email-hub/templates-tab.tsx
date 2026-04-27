@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { FileText, Plus, Save, Trash2 } from 'lucide-react';
 import { LabeledInput, ModalShell } from './contacts-tab';
 import { SkeletonRows } from '@/components/ui/loading-skeletons';
+import { Button } from '@/components/ui/button';
 
 type Category = 'followup' | 'reminder' | 'calendar' | 'welcome' | 'general';
 
@@ -236,27 +237,19 @@ function TemplateEditor({
       </div>
       <div className="mt-4 flex items-center justify-between gap-2">
         {onDelete ? (
-          <button
-            type="button"
-            onClick={onDelete}
-            className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-500 hover:bg-rose-500/20"
-          >
+          <Button variant="danger" size="sm" onClick={onDelete}>
             <Trash2 size={12} />
             Delete
-          </button>
+          </Button>
         ) : (
           <div />
         )}
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-nativz-border bg-background px-4 py-1.5 text-sm text-text-secondary hover:text-text-primary"
-          >
+          <Button variant="ghost" size="sm" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            size="sm"
             onClick={() =>
               onSave({
                 id: template?.id,
@@ -267,11 +260,10 @@ function TemplateEditor({
               })
             }
             disabled={!name.trim()}
-            className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-50"
           >
             <Save size={12} />
             {template ? 'Save changes' : 'Create template'}
-          </button>
+          </Button>
         </div>
       </div>
     </ModalShell>

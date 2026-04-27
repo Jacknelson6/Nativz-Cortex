@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
-import { Plus, Trash2, Globe, ExternalLink, Instagram, Facebook, Youtube, Sparkles, Loader2, X } from 'lucide-react';
+import { Plus, Trash2, Globe, ExternalLink, Instagram, Facebook, Youtube, Sparkles, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Dialog } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 // NAT-57 follow-up (polish pass 3): radical simplification per Jack.
 //
@@ -222,15 +224,6 @@ function AddCompetitorModal({
     handle_count: number;
   } | null>(null);
 
-  // ESC closes. Click-outside closes too (on the backdrop).
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !submitting) onClose();
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, submitting]);
-
   async function submit() {
     const trimmed = url.trim();
     if (!trimmed) {
@@ -268,109 +261,80 @@ function AddCompetitorModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150"
-      onClick={(e) => {
-        // Click outside the dialog closes.
-        if (e.target === e.currentTarget && !submitting) onClose();
-      }}
-    >
-      <div className="w-full max-w-lg rounded-2xl border border-nativz-border bg-surface shadow-2xl overflow-hidden">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-3 p-5 border-b border-nativz-border">
-          <div className="flex items-start gap-3">
-            <div className="shrink-0 flex h-10 w-10 items-center justify-center rounded-xl bg-accent-text/10 text-accent-text">
-              <Plus size={18} />
+    <Dialog open onClose={() => { if (!submitting) onClose(); }} title="" maxWidth="lg" bodyClassName="p-0">
+      <div className="flex items-start gap-3 p-5 pr-14 border-b border-nativz-border">
+        <div className="shrink-0 flex h-10 w-10 items-center justify-center rounded-xl bg-accent-text/10 text-accent-text">
+          <Plus size={18} />
+        </div>
+        <div>
+          <h2 className="text-base font-semibold text-text-primary">Add competitor</h2>
+          <p className="text-xs text-text-muted mt-0.5">
+            Paste their URL and we&apos;ll scrape the brand details + social handles.
+          </p>
+        </div>
+      </div>
+
+      <div className="p-5 space-y-4">
+        {scrapeSummary ? (
+          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2">
+            <div className="flex items-center gap-2 text-sm text-emerald-300">
+              <Sparkles size={14} />
+              <span className="font-medium">{scrapeSummary.brand_name}</span>
+              <span className="text-emerald-400/70">saved</span>
             </div>
+            <p className="text-xs text-emerald-300/80">
+              {scrapeSummary.handle_count > 0
+                ? `Found ${scrapeSummary.handle_count} social ${scrapeSummary.handle_count === 1 ? 'handle' : 'handles'} from their site.`
+                : 'No social handles detected on their site — you can add them manually later.'}
+            </p>
+          </div>
+        ) : (
+          <>
             <div>
-              <h2 className="text-base font-semibold text-text-primary">Add competitor</h2>
-              <p className="text-xs text-text-muted mt-0.5">
-                Paste their URL and we&apos;ll scrape the brand details + social handles.
-              </p>
+              <label className="text-[10px] uppercase tracking-wider text-text-muted font-semibold flex items-center gap-1 mb-2">
+                <Globe size={11} /> Competitor URL
+              </label>
+              <input
+                type="text"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !submitting) void submit();
+                }}
+                placeholder="https://liquiddeath.com"
+                autoFocus
+                disabled={submitting}
+                className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted/60 focus:border-accent-text/50 focus:outline-none focus:ring-1 focus:ring-accent-text/20 disabled:opacity-50"
+              />
             </div>
-          </div>
-          <button
-            onClick={() => { if (!submitting) onClose(); }}
-            disabled={submitting}
-            className="shrink-0 text-text-muted hover:text-text-primary p-1 rounded disabled:opacity-40"
-            aria-label="Close"
-          >
-            <X size={16} />
-          </button>
-        </div>
 
-        {/* Body */}
-        <div className="p-5 space-y-4">
-          {scrapeSummary ? (
-            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2">
-              <div className="flex items-center gap-2 text-sm text-emerald-300">
-                <Sparkles size={14} />
-                <span className="font-medium">{scrapeSummary.brand_name}</span>
-                <span className="text-emerald-400/70">saved</span>
-              </div>
-              <p className="text-xs text-emerald-300/80">
-                {scrapeSummary.handle_count > 0
-                  ? `Found ${scrapeSummary.handle_count} social ${scrapeSummary.handle_count === 1 ? 'handle' : 'handles'} from their site.`
-                  : 'No social handles detected on their site — you can add them manually later.'}
-              </p>
-            </div>
-          ) : (
-            <>
-              <div>
-                <label className="text-[10px] uppercase tracking-wider text-text-muted font-semibold flex items-center gap-1 mb-2">
-                  <Globe size={11} /> Competitor URL
-                </label>
-                <input
-                  type="text"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !submitting) void submit();
-                  }}
-                  placeholder="https://liquiddeath.com"
-                  autoFocus
-                  disabled={submitting}
-                  className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted/60 focus:border-accent-text/50 focus:outline-none focus:ring-1 focus:ring-accent-text/20 disabled:opacity-50"
-                />
-              </div>
-
-              <ul className="text-[11px] text-text-muted space-y-1 leading-relaxed">
-                <li className="flex items-start gap-2">
-                  <span className="text-accent-text shrink-0 mt-0.5">•</span>
-                  We&apos;ll pull the brand name, description, and their
-                  Instagram, TikTok, Facebook, and YouTube handles.
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-accent-text shrink-0 mt-0.5">•</span>
-                  Any handles we can&apos;t find are left blank — you can
-                  add them manually afterward.
-                </li>
-              </ul>
-            </>
-          )}
-        </div>
-
-        {/* Footer */}
-        {!scrapeSummary && (
-          <div className="flex items-center justify-end gap-2 p-4 border-t border-nativz-border bg-background/30">
-            <button
-              onClick={() => { if (!submitting) onClose(); }}
-              disabled={submitting}
-              className="rounded-lg px-3 py-1.5 text-xs text-text-muted hover:text-text-primary disabled:opacity-40"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => void submit()}
-              disabled={submitting || !url.trim()}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-accent-text text-background px-4 py-1.5 text-sm font-medium hover:opacity-90 disabled:opacity-40"
-            >
-              {submitting ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
-              {submitting ? 'Scraping…' : 'Add competitor'}
-            </button>
-          </div>
+            <ul className="text-[11px] text-text-muted space-y-1 leading-relaxed">
+              <li className="flex items-start gap-2">
+                <span className="text-accent-text shrink-0 mt-0.5">•</span>
+                We&apos;ll pull the brand name, description, and their
+                Instagram, TikTok, Facebook, and YouTube handles.
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-accent-text shrink-0 mt-0.5">•</span>
+                Any handles we can&apos;t find are left blank — you can
+                add them manually afterward.
+              </li>
+            </ul>
+          </>
         )}
       </div>
-    </div>
+
+      {!scrapeSummary && (
+        <div className="flex items-center justify-end gap-2 p-4 border-t border-nativz-border bg-background/30">
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={() => void submit()} disabled={submitting || !url.trim()}>
+            {submitting ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+            {submitting ? 'Scraping…' : 'Add competitor'}
+          </Button>
+        </div>
+      )}
+    </Dialog>
   );
 }

@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
-import { Link2, Unlink, Loader2, X, Check, Search, MoreHorizontal } from 'lucide-react';
+import { Link2, Unlink, Loader2, Check, Search, MoreHorizontal } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Dialog } from '@/components/ui/dialog';
 import { UpPromoteLogo } from '@/components/integrations/uppromote-logo';
 import { TikTokMark } from '@/components/integrations/tiktok-mark';
 import { InstagramMark } from '@/components/integrations/instagram-mark';
@@ -71,48 +72,34 @@ function UpPromoteModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div
-        className="relative w-full max-w-sm bg-background rounded-xl border border-nativz-border p-5"
-        style={{ boxShadow: '0 24px 64px rgba(0,0,0,0.4)' }}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <UpPromoteLogo size={28} className="h-7 w-7 ring-1 ring-white/10" />
-            <h3 className="text-sm font-semibold text-text-primary">Connect UpPromote</h3>
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
-          >
-            <X size={16} />
-          </button>
-        </div>
-        <p className="text-xs text-text-muted mb-3">
-          Find your API key in UpPromote → Settings → Integrations.
-        </p>
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <input
-            type="text"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="pk_..."
-            autoFocus
-            className="w-full rounded-lg border border-nativz-border bg-surface-hover px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/20"
-          />
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" size="sm" disabled={saving || !apiKey.trim()}>
-              {saving ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />}
-              {saving ? 'Connecting...' : 'Connect'}
-            </Button>
-          </div>
-        </form>
+    <Dialog open onClose={onClose} title="" maxWidth="sm" bodyClassName="p-5">
+      <div className="flex items-center gap-2 mb-4 pr-10">
+        <UpPromoteLogo size={28} className="h-7 w-7 ring-1 ring-white/10" />
+        <h3 className="text-sm font-semibold text-text-primary">Connect UpPromote</h3>
       </div>
-    </div>
+      <p className="text-xs text-text-muted mb-3">
+        Find your API key in UpPromote → Settings → Integrations.
+      </p>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <input
+          type="text"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          placeholder="pk_..."
+          autoFocus
+          className="w-full rounded-lg border border-nativz-border bg-surface-hover px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/20"
+        />
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" size="sm" disabled={saving || !apiKey.trim()}>
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />}
+            {saving ? 'Connecting...' : 'Connect'}
+          </Button>
+        </div>
+      </form>
+    </Dialog>
   );
 }
 

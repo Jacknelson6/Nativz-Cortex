@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { GlassButton } from '@/components/ui/glass-button';
 import { Badge } from '@/components/ui/badge';
+import { Dialog } from '@/components/ui/dialog';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { toast } from 'sonner';
 
@@ -53,41 +54,37 @@ function AddClientModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative bg-surface rounded-2xl border border-nativz-border shadow-2xl w-full max-w-sm p-5">
-        <h3 className="text-sm font-semibold text-text-primary mb-4">Add client to {monthLabel}</h3>
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-text-muted mb-1 block">Client name</label>
-            <input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="e.g. Weston Funding"
-              className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary"
-              autoFocus
-            />
-          </div>
-          <div>
-            <label className="text-xs text-text-muted mb-1 block">Agency</label>
-            <select
-              value={agency}
-              onChange={e => setAgency(e.target.value)}
-              className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary"
-            >
-              <option value="Nativz">Nativz</option>
-              <option value="AC">AC</option>
-            </select>
-          </div>
+    <Dialog open onClose={onClose} title={`Add client to ${monthLabel}`} maxWidth="sm">
+      <div className="space-y-3">
+        <div>
+          <label className="text-xs text-text-muted mb-1 block">Client name</label>
+          <input
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="e.g. Weston Funding"
+            className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary"
+            autoFocus
+          />
         </div>
-        <div className="flex justify-end gap-2 mt-4">
-          <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
-          <GlassButton onClick={() => { if (name.trim()) { onAdd(name.trim(), agency); setName(''); onClose(); } }}>
-            Add
-          </GlassButton>
+        <div>
+          <label className="text-xs text-text-muted mb-1 block">Agency</label>
+          <select
+            value={agency}
+            onChange={e => setAgency(e.target.value)}
+            className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary"
+          >
+            <option value="Nativz">Nativz</option>
+            <option value="AC">AC</option>
+          </select>
         </div>
       </div>
-    </div>
+      <div className="flex justify-end gap-2 mt-4">
+        <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+        <GlassButton onClick={() => { if (name.trim()) { onAdd(name.trim(), agency); setName(''); onClose(); } }}>
+          Add
+        </GlassButton>
+      </div>
+    </Dialog>
   );
 }
 

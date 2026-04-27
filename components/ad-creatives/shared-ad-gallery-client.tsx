@@ -2,8 +2,9 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import Image from 'next/image';
-import { MessageSquare, ThumbsUp, ThumbsDown, Send, Loader2, X } from 'lucide-react';
+import { MessageSquare, ThumbsUp, ThumbsDown, Send, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Dialog } from '@/components/ui/dialog';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -346,34 +347,25 @@ function SharedDetailDialog({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-8"
-      onClick={onClose}
+    <Dialog
+      open
+      onClose={onClose}
+      title=""
+      maxWidth="5xl"
+      bodyClassName="p-0 flex flex-col max-h-[90vh] overflow-hidden"
     >
-      <div
-        className="flex max-h-full w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-nativz-border bg-surface shadow-elevated"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-nativz-border/50 px-5 py-3">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-text-primary">
-              {concept.slug} · {concept.headline}
-            </p>
-            <p className="truncate text-[11px] text-text-muted">
-              {concept.template_name}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
-            aria-label="Close"
-          >
-            <X size={16} />
-          </button>
+      <div className="flex shrink-0 items-center gap-3 border-b border-nativz-border/50 px-5 py-3 pr-14">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-text-primary">
+            {concept.slug} · {concept.headline}
+          </p>
+          <p className="truncate text-[11px] text-text-muted">
+            {concept.template_name}
+          </p>
         </div>
+      </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[1fr,340px]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[1fr,340px]">
           <div className="flex min-h-0 items-center justify-center bg-background p-4 md:border-r md:border-nativz-border/50">
             {imageUrl ? (
               <Image
@@ -475,8 +467,7 @@ function SharedDetailDialog({
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }
 

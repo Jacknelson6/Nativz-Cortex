@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { GlassButton } from '@/components/ui/glass-button';
 import { Badge } from '@/components/ui/badge';
+import { Dialog } from '@/components/ui/dialog';
 import { DateTimePicker } from '@/components/ui/date-time-picker';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { toast } from 'sonner';
@@ -306,48 +307,50 @@ export function PostEditor({
   // Select Cover mode
   if (selectingCover && videoUrl) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-black/60" onClick={() => setSelectingCover(false)} />
-        <div className="relative bg-surface rounded-2xl border border-nativz-border shadow-2xl w-full max-w-xl flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3 border-b border-nativz-border">
-            <h2 className="text-base font-semibold text-text-primary">Select cover frame</h2>
-            <button onClick={() => setSelectingCover(false)} className="cursor-pointer p-1 rounded-lg hover:bg-surface-hover text-text-muted">
-              <X size={18} />
-            </button>
-          </div>
-          <div className="p-5">
-            <p className="text-xs text-text-muted mb-3">
-              Scrub through the video to find the perfect frame, then click &ldquo;Use this frame&rdquo;.
-            </p>
-            <div className="rounded-xl overflow-hidden bg-black flex items-center justify-center">
-              <video
-                ref={coverVideoRef}
-                src={videoUrl}
-                className="max-h-[50vh] w-auto"
-                controls
-                muted
-                preload="auto"
-              />
-            </div>
-          </div>
-          <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-nativz-border">
-            <Button variant="ghost" size="sm" onClick={() => setSelectingCover(false)}>Cancel</Button>
-            <GlassButton onClick={handleCaptureCover}>Use this frame</GlassButton>
+      <Dialog
+        open
+        onClose={() => setSelectingCover(false)}
+        title=""
+        maxWidth="xl"
+        bodyClassName="p-0 flex flex-col overflow-hidden"
+      >
+        <div className="flex items-center px-5 py-3 border-b border-nativz-border pr-14">
+          <h2 className="text-base font-semibold text-text-primary">Select cover frame</h2>
+        </div>
+        <div className="p-5">
+          <p className="text-xs text-text-muted mb-3">
+            Scrub through the video to find the perfect frame, then click &ldquo;Use this frame&rdquo;.
+          </p>
+          <div className="rounded-xl overflow-hidden bg-black flex items-center justify-center">
+            <video
+              ref={coverVideoRef}
+              src={videoUrl}
+              className="max-h-[50vh] w-auto"
+              controls
+              muted
+              preload="auto"
+            />
           </div>
         </div>
-      </div>
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-nativz-border">
+          <Button variant="ghost" size="sm" onClick={() => setSelectingCover(false)}>Cancel</Button>
+          <GlassButton onClick={handleCaptureCover}>Use this frame</GlassButton>
+        </div>
+      </Dialog>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-
-      {/* Center modal */}
-      <div className="relative bg-surface rounded-2xl border border-nativz-border shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <>
+      <Dialog
+        open={open}
+        onClose={onClose}
+        title=""
+        maxWidth="2xl"
+        bodyClassName="p-0 flex flex-col max-h-[90vh] overflow-hidden"
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-nativz-border shrink-0">
+        <div className="flex items-center px-5 py-3 border-b border-nativz-border shrink-0 pr-14">
           <div className="flex items-center gap-2">
             <h2 className="text-base font-semibold text-text-primary">
               {isEditing ? 'Edit post' : 'Create post'}
@@ -356,9 +359,6 @@ export function PostEditor({
               <Badge variant={statusConfig.variant}>{statusConfig.label}</Badge>
             )}
           </div>
-          <button onClick={onClose} className="cursor-pointer p-1 rounded-lg hover:bg-surface-hover text-text-muted">
-            <X size={18} />
-          </button>
         </div>
 
         {/* Content — two-column layout */}
@@ -617,8 +617,8 @@ export function PostEditor({
             </GlassButton>
           </div>
         </div>
-      </div>
+      </Dialog>
       {deleteDialog}
-    </div>
+    </>
   );
 }

@@ -11,6 +11,8 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
 import type { GeneratedIdea, Generation, PillarInfo, IdeasResultsClientProps } from './types';
 import { CTA_PRESETS, HOOK_STRATEGIES } from './types';
 import { IdeaResultCard, normalizeReasons } from './idea-result-card';
@@ -680,24 +682,13 @@ export function IdeasResultsClient({
       )}
 
       {/* Script generation modal */}
-      <AnimatePresence>
-        {showScriptModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowScriptModal(false)}
-            />
-            <motion.div
-              className="relative w-full max-w-md rounded-2xl border border-white/[0.08] bg-surface shadow-2xl p-6"
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              transition={{ type: 'spring', duration: 0.35, bounce: 0.15 }}
-            >
-              <div className="flex items-center gap-3 mb-4">
+      <Dialog
+        open={showScriptModal}
+        onClose={() => setShowScriptModal(false)}
+        title=""
+        maxWidth="md"
+      >
+        <div className="flex items-center gap-3 mb-4 pr-10">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent2-surface">
                   <FileText size={20} className="text-accent2-text" />
                 </div>
@@ -857,28 +848,26 @@ export function IdeasResultsClient({
               </div>
 
               <div className="flex justify-end gap-2">
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setShowScriptModal(false)}
-                  className="rounded-xl px-4 py-2.5 text-sm text-text-muted hover:text-text-secondary transition-colors"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  size="sm"
                   onClick={() => {
                     setShowScriptModal(false);
                     handleGenerateScripts();
                     deselectAll();
                   }}
                   disabled={ideas.some((i) => i.selected && i.scriptLoading)}
-                  className="rounded-xl bg-accent2-surface border border-accent2/30 px-5 py-2.5 text-sm font-medium text-accent2-text hover:bg-accent2/25 transition-colors disabled:opacity-40 cursor-pointer"
                 >
                   Generate {selectedCount} script{selectedCount !== 1 ? 's' : ''}
-                </button>
+                </Button>
               </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      </Dialog>
     </div>
   );
 }

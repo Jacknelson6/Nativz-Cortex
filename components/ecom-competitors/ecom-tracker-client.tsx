@@ -9,13 +9,13 @@ import {
   Plus,
   RefreshCw,
   Trash2,
-  X,
   ShoppingBag,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ComboSelect } from '@/components/ui/combo-select';
+import { Dialog } from '@/components/ui/dialog';
 
 /**
  * NAT-51 — ecom competitor tracker UI. Pairs with the NAT-21 backend:
@@ -409,29 +409,13 @@ function AddCompetitorModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onClick={onClose}
-    >
-      <form
-        onSubmit={handleSubmit}
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md space-y-4 rounded-xl border border-nativz-border bg-surface p-6"
-      >
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-text-primary">Track a store</h2>
-            <p className="text-xs text-text-muted">
-              Paste the storefront domain — we'll run the Apify scraper on refresh + daily cron.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1 text-text-muted hover:text-text-primary"
-          >
-            <X size={16} />
-          </button>
+    <Dialog open onClose={onClose} title="" maxWidth="md" bodyClassName="p-6">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="pr-10">
+          <h2 className="text-base font-semibold text-text-primary">Track a store</h2>
+          <p className="text-xs text-text-muted">
+            Paste the storefront domain — we&apos;ll run the Apify scraper on refresh + daily cron.
+          </p>
         </div>
 
         <div className="space-y-1">
@@ -484,6 +468,6 @@ function AddCompetitorModal({
           </Button>
         </div>
       </form>
-    </div>
+    </Dialog>
   );
 }

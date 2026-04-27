@@ -5,6 +5,7 @@ import { Check, Copy, KeyRound, Loader2, Trash2, Unlink } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
 
 interface ApiKeyData {
   id: string;
@@ -213,78 +214,80 @@ export function ApiKeysSection() {
         )}
       </Card>
 
-      {/* Create key dialog */}
-      {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-surface border border-nativz-border rounded-xl p-6 w-full max-w-md shadow-xl">
-            <h3 className="text-base font-semibold text-text-primary mb-4">Create API key</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-text-muted mb-1">Name</label>
-                <input
-                  value={newKeyName}
-                  onChange={(e) => setNewKeyName(e.target.value)}
-                  placeholder="e.g. Claude agent, n8n workflow"
-                  className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-text-muted mb-2">Scopes</label>
-                <div className="flex flex-wrap gap-2">
-                  {ALL_SCOPES.map((scope) => (
-                    <button
-                      key={scope}
-                      type="button"
-                      onClick={() => toggleScope(scope)}
-                      className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
-                        newKeyScopes.includes(scope)
-                          ? 'bg-accent/15 border-accent/30 text-accent-text'
-                          : 'bg-transparent border-nativz-border text-text-muted hover:text-text-secondary'
-                      }`}
-                    >
-                      {scope}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="ghost" size="sm" onClick={() => setShowCreate(false)}>
-                  Cancel
-                </Button>
-                <Button size="sm" onClick={handleCreate} disabled={creating}>
-                  {creating && <Loader2 size={14} className="animate-spin" />}
-                  {creating ? 'Creating...' : 'Create key'}
-                </Button>
-              </div>
+      <Dialog
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        title=""
+        maxWidth="md"
+        bodyClassName="p-6"
+      >
+        <h3 className="text-base font-semibold text-text-primary mb-4 pr-10">Create API key</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-text-muted mb-1">Name</label>
+            <input
+              value={newKeyName}
+              onChange={(e) => setNewKeyName(e.target.value)}
+              placeholder="e.g. Claude agent, n8n workflow"
+              className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-text-muted mb-2">Scopes</label>
+            <div className="flex flex-wrap gap-2">
+              {ALL_SCOPES.map((scope) => (
+                <button
+                  key={scope}
+                  type="button"
+                  onClick={() => toggleScope(scope)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
+                    newKeyScopes.includes(scope)
+                      ? 'bg-accent/15 border-accent/30 text-accent-text'
+                      : 'bg-transparent border-nativz-border text-text-muted hover:text-text-secondary'
+                  }`}
+                >
+                  {scope}
+                </button>
+              ))}
             </div>
           </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="ghost" size="sm" onClick={() => setShowCreate(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleCreate} disabled={creating}>
+              {creating && <Loader2 size={14} className="animate-spin" />}
+              {creating ? 'Creating...' : 'Create key'}
+            </Button>
+          </div>
         </div>
-      )}
+      </Dialog>
 
-      {/* Created key display */}
-      {createdKey && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-surface border border-nativz-border rounded-xl p-6 w-full max-w-md shadow-xl">
-            <h3 className="text-base font-semibold text-text-primary mb-2">Your API key</h3>
-            <p className="text-xs text-amber-400 mb-4">
-              Copy this key now — you won&apos;t be able to see it again.
-            </p>
-            <code className="block rounded-lg bg-background border border-nativz-border px-3 py-2.5 text-sm text-text-primary font-mono break-all select-all">
-              {createdKey}
-            </code>
-            <div className="flex justify-end gap-2 mt-4">
-              <Button size="sm" onClick={copyKey} variant="outline">
-                {copied ? <Check size={14} /> : <Copy size={14} />}
-                {copied ? 'Copied' : 'Copy'}
-              </Button>
-              <Button size="sm" onClick={() => setCreatedKey(null)}>
-                Done
-              </Button>
-            </div>
-          </div>
+      <Dialog
+        open={!!createdKey}
+        onClose={() => setCreatedKey(null)}
+        title=""
+        maxWidth="md"
+        bodyClassName="p-6"
+      >
+        <h3 className="text-base font-semibold text-text-primary mb-2 pr-10">Your API key</h3>
+        <p className="text-xs text-amber-400 mb-4">
+          Copy this key now — you won&apos;t be able to see it again.
+        </p>
+        <code className="block rounded-lg bg-background border border-nativz-border px-3 py-2.5 text-sm text-text-primary font-mono break-all select-all">
+          {createdKey}
+        </code>
+        <div className="flex justify-end gap-2 mt-4">
+          <Button size="sm" onClick={copyKey} variant="outline">
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+            {copied ? 'Copied' : 'Copy'}
+          </Button>
+          <Button size="sm" onClick={() => setCreatedKey(null)}>
+            Done
+          </Button>
         </div>
-      )}
+      </Dialog>
     </>
   );
 }

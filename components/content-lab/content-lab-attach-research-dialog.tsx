@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Clock, FileText, Loader2, Search as SearchIcon, X, Sparkles } from 'lucide-react';
+import { Check, Clock, FileText, Loader2, Search as SearchIcon, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils/cn';
 import { formatRelativeTime } from '@/lib/utils/format';
+import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
 
 interface TopicSearchItem {
   id: string;
@@ -68,16 +70,6 @@ export function ContentLabAttachResearchDialog({
     };
   }, [open, clientId]);
 
-  // Close on Escape
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [open, onClose]);
-
   const completed = useMemo(
     () => searches.filter((s) => s.status === 'completed'),
     [searches],
@@ -95,41 +87,26 @@ export function ContentLabAttachResearchDialog({
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
+    <Dialog
+      open
+      onClose={onClose}
+      title=""
+      maxWidth="xl"
+      bodyClassName="p-0 flex flex-col max-h-[80vh] overflow-hidden"
     >
-      {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
+      {/* Header */}
+      <div className="border-b border-nativz-border px-5 py-4 pr-14">
+        <h2 className="flex items-center gap-2 text-base font-semibold text-text-primary">
+          <FileText size={16} className="text-accent-text" aria-hidden />
+          Attach topic research
+        </h2>
+        <p className="mt-0.5 text-xs text-text-muted">
+          Ground the Nerd in {clientName}&apos;s topic searches — multiple can be attached at once.
+        </p>
+      </div>
 
-      {/* Panel */}
-      <div
-        className="relative z-10 flex max-h-[80vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-nativz-border bg-surface shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-nativz-border px-5 py-4">
-          <div>
-            <h2 className="flex items-center gap-2 text-base font-semibold text-text-primary">
-              <FileText size={16} className="text-accent-text" aria-hidden />
-              Attach topic research
-            </h2>
-            <p className="mt-0.5 text-xs text-text-muted">
-              Ground the Nerd in {clientName}&apos;s topic searches — multiple can be attached at once.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-text-muted transition hover:bg-surface-hover hover:text-text-primary"
-            aria-label="Close"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Filter input */}
-        <div className="border-b border-nativz-border px-5 py-3">
+      {/* Filter input */}
+      <div className="border-b border-nativz-border px-5 py-3">
           <div className="relative">
             <SearchIcon
               size={14}
@@ -232,15 +209,8 @@ export function ContentLabAttachResearchDialog({
           <span className="text-text-muted">
             {attachedCount} attached · {completed.length} available
           </span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 font-medium text-accent-text transition hover:bg-accent/20"
-          >
-            Done
-          </button>
+          <Button size="sm" onClick={onClose}>Done</Button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

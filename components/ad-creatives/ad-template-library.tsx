@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { Upload, Loader2, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { Dialog } from '@/components/ui/dialog';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -344,36 +345,27 @@ function UploadDialog({
   }, [file, name, category, tags, clientId, previewUrl, onComplete]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8"
-      onClick={onClose}
+    <Dialog
+      open
+      onClose={onClose}
+      title=""
+      maxWidth="xl"
+      bodyClassName="p-0 flex flex-col overflow-hidden"
     >
-      <div
-        className="flex w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-nativz-border bg-surface shadow-elevated"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-nativz-border/50 px-6 py-4">
-          <div className="space-y-1">
-            <p className="nz-eyebrow">Pattern library</p>
-            <h2
-              className="text-[20px] leading-tight text-text-primary"
-              style={{ fontFamily: DISPLAY_FONT }}
-            >
-              Add a new template
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400/60"
-            aria-label="Close"
+      {/* Header */}
+      <div className="flex shrink-0 items-start justify-between gap-3 border-b border-nativz-border/50 px-6 py-4 pr-14">
+        <div className="space-y-1">
+          <p className="nz-eyebrow">Pattern library</p>
+          <h2
+            className="text-[20px] leading-tight text-text-primary"
+            style={{ fontFamily: DISPLAY_FONT }}
           >
-            <X size={16} />
-          </button>
+            Add a new template
+          </h2>
         </div>
+      </div>
 
-        {/* Body */}
+      {/* Body */}
         <div className="space-y-5 px-6 py-5">
           <Field label="Reference image" hint="JPEG, PNG, or WebP — 10 MB max">
             {previewUrl ? (
@@ -476,8 +468,7 @@ function UploadDialog({
             {submitting ? 'Uploading' : 'Upload & extract'}
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }
 
@@ -529,45 +520,36 @@ function TemplateDetailDialog({
   const category = (template.ad_category ?? 'other').replaceAll('_', ' ');
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8"
-      onClick={onClose}
+    <Dialog
+      open
+      onClose={onClose}
+      title=""
+      maxWidth="5xl"
+      bodyClassName="p-0 flex flex-col max-h-[90vh] overflow-hidden"
     >
-      <div
-        className="flex max-h-full w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-nativz-border bg-surface shadow-elevated"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-nativz-border/50 px-6 py-4">
-          <div className="min-w-0 space-y-1">
-            <p className="nz-eyebrow">
-              {category}
-              {template.tags && template.tags.length > 0 && (
-                <span className="text-text-muted/70 italic">
-                  {' '}
-                  · {template.tags.join(' · ')}
-                </span>
-              )}
-            </p>
-            <h2
-              className="truncate text-[22px] leading-tight text-text-primary"
-              title={template.name}
-              style={{ fontFamily: DISPLAY_FONT }}
-            >
-              {template.name}
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400/60"
-            aria-label="Close"
+      {/* Header */}
+      <div className="flex shrink-0 items-start justify-between gap-3 border-b border-nativz-border/50 px-6 py-4 pr-14">
+        <div className="min-w-0 space-y-1">
+          <p className="nz-eyebrow">
+            {category}
+            {template.tags && template.tags.length > 0 && (
+              <span className="text-text-muted/70 italic">
+                {' '}
+                · {template.tags.join(' · ')}
+              </span>
+            )}
+          </p>
+          <h2
+            className="truncate text-[22px] leading-tight text-text-primary"
+            title={template.name}
+            style={{ fontFamily: DISPLAY_FONT }}
           >
-            <X size={16} />
-          </button>
+            {template.name}
+          </h2>
         </div>
+      </div>
 
-        {/* Body */}
+      {/* Body */}
         <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-2">
           {/* Reference image */}
           <div className="flex min-h-0 items-center justify-center bg-background p-5 md:border-r md:border-nativz-border/50">
@@ -611,8 +593,7 @@ function TemplateDetailDialog({
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }
 

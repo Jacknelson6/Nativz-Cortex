@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Link2, Copy, Check, Shield, Clock, Loader2, Trash2 } from 'lucide-react';
+import { Link2, Copy, Check, Shield, Clock, Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Dialog } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 
 interface ShareBoardModalProps {
@@ -96,24 +97,15 @@ export function ShareBoardModal({ boardId, open, onClose }: ShareBoardModalProps
     }
   }
 
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-surface border border-nativz-border rounded-xl shadow-elevated animate-fade-in">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-nativz-border">
-          <div className="flex items-center gap-2">
-            <Link2 size={16} className="text-accent-text" />
-            <h2 className="text-sm font-semibold text-text-primary">Share Board</h2>
-          </div>
-          <button onClick={onClose} className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover transition-colors">
-            <X size={16} />
-          </button>
-        </div>
+    <Dialog open={open} onClose={onClose} title="" maxWidth="md" bodyClassName="p-0">
+      <div className="flex items-center gap-2 p-4 pr-14 border-b border-nativz-border">
+        <Link2 size={16} className="text-accent-text" />
+        <h2 className="text-sm font-semibold text-text-primary">Share board</h2>
+      </div>
 
-        <div className="p-4 space-y-4">
-          {loading ? (
+      <div className="p-4 space-y-4">
+        {loading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 size={20} className="animate-spin text-text-muted" />
             </div>
@@ -159,7 +151,7 @@ export function ShareBoardModal({ boardId, open, onClose }: ShareBoardModalProps
                   className="w-full"
                 >
                   <Trash2 size={14} />
-                  Revoke Share Link
+                  Revoke share link
                 </Button>
               </div>
             </>
@@ -203,13 +195,12 @@ export function ShareBoardModal({ boardId, open, onClose }: ShareBoardModalProps
                   className="w-full"
                 >
                   {saving ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />}
-                  Create Share Link
+                  Create share link
                 </Button>
               </div>
             </>
           )}
-        </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

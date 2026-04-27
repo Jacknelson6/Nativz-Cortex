@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { X, Copy, Trash2, Pencil, Network, Activity, BarChart3, Sparkles } from 'lucide-react';
+import { Copy, Trash2, Pencil, Network, Activity, BarChart3, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
+import { Dialog } from '@/components/ui/dialog';
 import type { KnowledgeEntry, KnowledgeGraphData } from '@/lib/knowledge/types';
 import { VaultHeader } from './VaultHeader';
 import { FileExplorer } from './FileExplorer';
@@ -303,40 +304,27 @@ export function VaultLayout({
 
       {/* Centered editor modal */}
       {selectedEntry && (
-        <>
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-black/40 z-40 animate-in fade-in duration-200"
-            onClick={handleCloseEditor}
-          />
-
-          {/* Centered modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-8 pointer-events-none">
-            <div className="w-full max-w-2xl pointer-events-auto animate-in fade-in zoom-in-95 duration-200">
-              <div className="bg-surface border border-nativz-border rounded-2xl shadow-elevated max-h-[75vh] overflow-y-auto">
-                {/* Modal header */}
-                <div className="flex items-center justify-between px-5 py-3 border-b border-nativz-border sticky top-0 bg-surface z-10">
-                  <span className="text-xs text-text-muted">Quick edit</span>
-                  <button
-                    onClick={handleCloseEditor}
-                    className="cursor-pointer p-1 rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-colors"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-
-                {/* Editor content */}
-                <EntryEditor
-                  key={selectedEntry.id}
-                  entry={selectedEntry}
-                  allEntries={entries}
-                  clientId={clientId}
-                  onEntryUpdated={handleEntryUpdated}
-                />
-              </div>
-            </div>
+        <Dialog
+          open
+          onClose={handleCloseEditor}
+          title=""
+          maxWidth="2xl"
+          bodyClassName="p-0 max-h-[75vh] overflow-y-auto"
+        >
+          {/* Modal header */}
+          <div className="flex items-center px-5 py-3 border-b border-nativz-border sticky top-0 bg-surface z-10 pr-14">
+            <span className="text-xs text-text-muted">Quick edit</span>
           </div>
-        </>
+
+          {/* Editor content */}
+          <EntryEditor
+            key={selectedEntry.id}
+            entry={selectedEntry}
+            allEntries={entries}
+            clientId={clientId}
+            onEntryUpdated={handleEntryUpdated}
+          />
+        </Dialog>
       )}
     </div>
   );

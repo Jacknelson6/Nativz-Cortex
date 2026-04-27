@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 import { toast } from 'sonner';
 import {
@@ -11,9 +11,10 @@ import {
   Search,
   Upload,
   UserRound,
-  X,
 } from 'lucide-react';
 import { SkeletonRows, InlineSpinner } from '@/components/ui/loading-skeletons';
+import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
 import { TONE_PILL } from './_status-tokens';
 
 type Contact = {
@@ -395,21 +396,12 @@ function AddContactModal({
         {error ? <p className="text-xs text-rose-500">{error}</p> : null}
       </div>
       <div className="mt-4 flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-full border border-nativz-border bg-background px-4 py-1.5 text-sm text-text-secondary hover:text-text-primary"
-        >
+        <Button variant="ghost" size="sm" onClick={onClose}>
           Cancel
-        </button>
-        <button
-          type="button"
-          onClick={submit}
-          disabled={busy || !form.email}
-          className="rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-50"
-        >
+        </Button>
+        <Button size="sm" onClick={submit} disabled={busy || !form.email}>
           {busy ? 'Saving…' : 'Save contact'}
-        </button>
+        </Button>
       </div>
     </ModalShell>
   );
@@ -501,37 +493,19 @@ function ImportCsvModal({ onClose, onDone }: { onClose: () => void; onDone: () =
         </div>
       ) : null}
       <div className="mt-4 flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-full border border-nativz-border bg-background px-4 py-1.5 text-sm text-text-secondary hover:text-text-primary"
-        >
+        <Button variant="ghost" size="sm" onClick={onClose}>
           {result ? 'Close' : 'Cancel'}
-        </button>
+        </Button>
         {!result && (
-          <button
-            type="button"
-            onClick={submit}
-            disabled={busy || !csv.trim()}
-            className="rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-50"
-          >
-            {busy ? (
-              <span className="inline-flex items-center gap-1.5">
-                <Loader2 size={12} className="animate-spin" /> Importing…
-              </span>
-            ) : (
-              'Import'
-            )}
-          </button>
+          <Button size="sm" onClick={submit} disabled={busy || !csv.trim()}>
+            {busy && <Loader2 size={12} className="animate-spin" />}
+            {busy ? 'Importing…' : 'Import'}
+          </Button>
         )}
         {result && (
-          <button
-            type="button"
-            onClick={onDone}
-            className="rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-white hover:bg-accent/90"
-          >
+          <Button size="sm" onClick={onDone}>
             Done
-          </button>
+          </Button>
         )}
       </div>
     </ModalShell>
@@ -614,13 +588,9 @@ function DuplicatesModal({ onClose }: { onClose: () => void }) {
         </div>
       )}
       <div className="mt-4 flex justify-end">
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-full border border-nativz-border bg-background px-4 py-1.5 text-sm text-text-secondary hover:text-text-primary"
-        >
+        <Button variant="ghost" size="sm" onClick={onClose}>
           Close
-        </button>
+        </Button>
       </div>
     </ModalShell>
   );
@@ -635,65 +605,10 @@ export function ModalShell({
   onClose: () => void;
   children: React.ReactNode;
 }) {
-  const titleId = useId();
-  const panelRef = useRef<HTMLDivElement>(null);
-  const previouslyFocused = useRef<HTMLElement | null>(null);
-
-  // Escape to close + focus the first focusable element on open + restore
-  // focus to the trigger on close. The native <dialog> element would handle
-  // this for free, but ModalShell predates the Dialog component and is still
-  // used by Add/Import/Duplicates/Template editor flows.
-  useEffect(() => {
-    previouslyFocused.current = document.activeElement as HTMLElement | null;
-    document.body.style.overflow = 'hidden';
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    window.addEventListener('keydown', onKey);
-    const panel = panelRef.current;
-    if (panel) {
-      const focusable = panel.querySelector<HTMLElement>(
-        'input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled])',
-      );
-      focusable?.focus();
-    }
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
-      previouslyFocused.current?.focus?.();
-    };
-  }, [onClose]);
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onClick={onClose}
-      role="presentation"
-    >
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className="w-full max-w-lg max-h-[calc(100vh-4rem)] overflow-y-auto rounded-2xl border border-nativz-border bg-surface p-5 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h3 id={titleId} className="text-base font-semibold text-text-primary">
-            {title}
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close dialog"
-            className="rounded-md p-1.5 text-text-muted hover:bg-surface-hover/40 hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30"
-          >
-            <X size={18} />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
+    <Dialog open onClose={onClose} title={title} maxWidth="lg" bodyClassName="p-5">
+      {children}
+    </Dialog>
   );
 }
 

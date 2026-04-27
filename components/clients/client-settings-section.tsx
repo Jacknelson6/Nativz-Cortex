@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Dialog } from '@/components/ui/dialog';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -438,45 +439,47 @@ export function DangerZone({
         </div>
       </div>
 
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowDeleteConfirm(false)} />
-          <div className="relative w-full max-w-md rounded-xl border border-red-500/20 bg-surface p-6 shadow-2xl">
-            <h3 className="text-lg font-semibold text-text-primary mb-2">Delete {clientName}?</h3>
-            <p className="text-sm text-text-muted mb-4">
-              This will permanently delete all data associated with this client including searches, ideas, strategies, and settings. This action cannot be undone.
-            </p>
-            <div className="mb-4">
-              <label className="block text-xs font-medium text-text-muted mb-1.5">
-                Type <span className="font-mono text-red-400">{clientName}</span> to confirm
-              </label>
-              <input
-                type="text"
-                value={deleteConfirmText}
-                onChange={(e) => setDeleteConfirmText(e.target.value)}
-                className="w-full rounded-lg border border-nativz-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/20"
-                placeholder={clientName}
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" size="sm" type="button" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}>
-                Cancel
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                type="button"
-                disabled={deleteConfirmText !== clientName || deleting}
-                onClick={handleDelete}
-                className="border-red-500/30 text-red-400 hover:bg-red-500/10"
-              >
-                <Trash2 size={14} />
-                {deleting ? 'Deleting...' : 'Delete permanently'}
-              </Button>
-            </div>
+      <Dialog
+        open={showDeleteConfirm}
+        onClose={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}
+        title=""
+        maxWidth="md"
+        bodyClassName="p-6"
+      >
+        <div className="pr-10">
+          <h3 className="text-lg font-semibold text-text-primary mb-2">Delete {clientName}?</h3>
+          <p className="text-sm text-text-muted mb-4">
+            This will permanently delete all data associated with this client including searches, ideas, strategies, and settings. This action cannot be undone.
+          </p>
+          <div className="mb-4">
+            <label className="block text-xs font-medium text-text-muted mb-1.5">
+              Type <span className="font-mono text-red-400">{clientName}</span> to confirm
+            </label>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              className="w-full rounded-lg border border-nativz-border bg-surface-hover px-3 py-2 text-sm text-text-primary focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/20"
+              placeholder={clientName}
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" type="button" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              type="button"
+              disabled={deleteConfirmText !== clientName || deleting}
+              onClick={handleDelete}
+            >
+              <Trash2 size={14} />
+              {deleting ? 'Deleting...' : 'Delete permanently'}
+            </Button>
           </div>
         </div>
-      )}
+      </Dialog>
     </>
   );
 }

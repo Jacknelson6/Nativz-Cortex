@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { X, Check } from 'lucide-react';
+import { Dialog } from '@/components/ui/dialog';
+import { Check } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ConnectedProfile } from './types';
 
@@ -42,17 +43,10 @@ export function ConnectAccountDialog({ open, onClose, clientId, profiles }: Conn
     }
   }
 
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div className="bg-surface rounded-xl border border-nativz-border p-6 w-96 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-text-primary">Connect account</h2>
-          <button onClick={onClose} className="text-text-muted hover:text-text-primary transition-colors cursor-pointer">
-            <X size={18} />
-          </button>
-        </div>
+    <Dialog open={open} onClose={onClose} title="" maxWidth="md" bodyClassName="p-6">
+      <div className="pr-10">
+        <h2 className="text-lg font-semibold text-text-primary mb-4">Connect account</h2>
         <p className="text-sm text-text-muted mb-4">
           Connect a social media account to start scheduling posts.
         </p>
@@ -90,6 +84,6 @@ export function ConnectAccountDialog({ open, onClose, clientId, profiles }: Conn
           })}
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

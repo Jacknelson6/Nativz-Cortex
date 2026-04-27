@@ -2,13 +2,14 @@
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
-  X, Play, Copy as CopyIcon, Check, Film, Clock,
+  Play, Copy as CopyIcon, Check, Film, Clock,
   ChevronRight, Search, Download, Quote,
   FileText, Image as ImageIcon, Target, Music, Eye, Loader2, Sparkles, Plus
 } from 'lucide-react';
 import { useActiveBrand } from '@/lib/admin/active-client-context';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import type { MoodboardItem, TranscriptSegment } from '@/lib/types/moodboard';
 import { PacingTimeline } from './pacing-timeline';
@@ -158,41 +159,30 @@ export function VideoAnalysisPanel({ item: initialItem, onClose }: VideoAnalysis
   }, [transcribeFailed, hasFrames, extractingFrames, item.type, runExtractFrames]);
 
   return (
-    <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-
-      {/* Modal */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-6 pointer-events-none">
-        <div className="pointer-events-auto w-full max-w-lg max-h-[75vh] rounded-2xl border border-nativz-border bg-surface shadow-elevated overflow-hidden flex flex-col animate-fade-slide-in">
+    <Dialog open onClose={onClose} title="" maxWidth="lg" bodyClassName="p-0 flex flex-col max-h-[75vh] overflow-hidden">
         {/* Header */}
         <div className="px-5 pt-5 pb-3 border-b border-nativz-border shrink-0">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3 min-w-0">
-              <Film size={18} className="text-accent-text shrink-0" />
-              <div className="min-w-0">
-                <h2 className="text-sm font-semibold text-text-primary truncate">{item.title || 'Video analysis'}</h2>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${platformClass}`}>
-                    {platform}
+          <div className="flex items-center gap-3 min-w-0 pr-10">
+            <Film size={18} className="text-accent-text shrink-0" />
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-text-primary truncate">{item.title || 'Video analysis'}</h2>
+              <div className="flex items-center gap-2 mt-1">
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${platformClass}`}>
+                  {platform}
+                </span>
+                {item.duration && (
+                  <span className="text-[10px] text-text-muted flex items-center gap-1">
+                    <Clock size={9} />
+                    {Math.floor(item.duration / 60)}:{String(item.duration % 60).padStart(2, '0')}
                   </span>
-                  {item.duration && (
-                    <span className="text-[10px] text-text-muted flex items-center gap-1">
-                      <Clock size={9} />
-                      {Math.floor(item.duration / 60)}:{String(item.duration % 60).padStart(2, '0')}
-                    </span>
-                  )}
-                  {item.stats && (
-                    <span className="text-[10px] text-text-muted">
-                      {formatNumber(item.stats.views)} views
-                    </span>
-                  )}
-                </div>
+                )}
+                {item.stats && (
+                  <span className="text-[10px] text-text-muted">
+                    {formatNumber(item.stats.views)} views
+                  </span>
+                )}
               </div>
             </div>
-            <button onClick={onClose} className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors">
-              <X size={18} />
-            </button>
           </div>
 
           {/* Watch video + Export */}
@@ -274,9 +264,7 @@ export function VideoAnalysisPanel({ item: initialItem, onClose }: VideoAnalysis
             </div>
           </div>
         )}
-      </div>
-      </div>
-    </>
+    </Dialog>
   );
 }
 

@@ -20,7 +20,8 @@
  */
 
 import { Download, Expand, Minimize2 } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { Dialog } from '@/components/ui/dialog';
 
 type Tone = 'brand' | 'action' | 'warn' | 'err' | 'neutral';
 
@@ -68,17 +69,6 @@ export function ChartCard({
   padContent = true,
 }: ChartCardProps) {
   const [expanded, setExpanded] = useState(false);
-
-  // Esc collapses the overlay. Only active while expanded so we don't attach
-  // global listeners unnecessarily.
-  useEffect(() => {
-    if (!expanded) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setExpanded(false);
-    }
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [expanded]);
 
   const inner = (
     <>
@@ -164,15 +154,15 @@ export function ChartCard({
             Chart expanded · press Esc or the collapse button to restore.
           </div>
         </section>
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-auto bg-background/85 backdrop-blur-sm p-4 md:p-8"
-          role="dialog"
-          aria-modal="true"
+        <Dialog
+          open
+          onClose={() => setExpanded(false)}
+          title=""
+          maxWidth="full"
+          bodyClassName="p-6"
         >
-          <section className="w-full max-w-6xl rounded-2xl border border-nativz-border bg-surface p-6 shadow-elevated">
-            {inner}
-          </section>
-        </div>
+          {inner}
+        </Dialog>
       </>
     );
   }

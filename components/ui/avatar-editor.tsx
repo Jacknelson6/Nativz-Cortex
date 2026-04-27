@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Camera, Loader2, X, Check, ZoomIn, ZoomOut } from 'lucide-react';
+import { Camera, Loader2, Check, ZoomIn, ZoomOut } from 'lucide-react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
 
 interface AvatarEditorProps {
   value: string | null;
@@ -284,17 +285,8 @@ function CropModal({ src, onSave, onCancel }: CropModalProps) {
   const canvasSize = CROP_SIZE + 80;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[color:var(--nz-ink)]/80 backdrop-blur-sm">
-      <div className="bg-surface border border-nativz-border rounded-2xl p-6 shadow-xl max-w-md w-full mx-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold text-text-primary">Position your photo</h3>
-          <button
-            onClick={onCancel}
-            className="rounded-lg p-1.5 text-text-muted hover:bg-surface-hover transition-colors"
-          >
-            <X size={18} />
-          </button>
-        </div>
+    <Dialog open onClose={onCancel} title="" maxWidth="md" bodyClassName="p-6 space-y-4">
+        <h3 className="text-base font-semibold text-text-primary pr-10">Position your photo</h3>
 
         <p className="text-sm text-text-muted">Drag to reposition. Scroll or use buttons to zoom.</p>
 
@@ -346,7 +338,6 @@ function CropModal({ src, onSave, onCancel }: CropModalProps) {
             Save photo
           </Button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }
