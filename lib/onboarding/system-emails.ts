@@ -54,6 +54,13 @@ function flowShareUrl(agency: AgencyBrand, slug: string, token: string): string 
   return `${host.replace(/\/+$/, '')}/onboarding/${encodeURIComponent(slug)}?token=${token}`;
 }
 
+function kickoffPickerUrl(agency: AgencyBrand, token: string): string {
+  const host = agency === 'anderson'
+    ? process.env.PROPOSALS_PUBLIC_HOST_ANDERSON ?? 'https://cortex.andersoncollaborative.com'
+    : process.env.PROPOSALS_PUBLIC_HOST_NATIVZ ?? 'https://cortex.nativz.io';
+  return `${host.replace(/\/+$/, '')}/schedule/${token}`;
+}
+
 async function getResendClient(): Promise<Resend | null> {
   const key = (await getSecret('RESEND_API_KEY')) ?? '';
   if (!key) return null;
@@ -300,7 +307,24 @@ export async function sendFlowStakeholderMilestone(
   const resend = await getResendClient();
   if (!resend) return;
 
-  const headline = milestoneHeadline(milestone, detail);
+  // For onboarding_complete, surface the auto-created kickoff picker as the
+  // primary CTA. If auto-create-kickoff failed (no scheduling people, etc.)
+  // the URL stays null and the email falls back to "Open the flow →" so it
+  // still reaches stakeholders with something actionable.
+  let kickoffShareUrl: string | null = null;
+  if (milestone === 'onboarding_complete') {
+    const { data: kickoff } = await admin
+      .from('team_scheduling_events')
+      .select('share_token')
+      .eq('flow_id', flowId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const token = (kickoff as { share_token?: string | null } | null)?.share_token ?? null;
+    if (token) kickoffShareUrl = kickoffPickerUrl(agency, token);
+  }
+
+  const headline = milestoneHeadline(milestone, detail, c?.name ?? null, !!kickoffShareUrl);
   const flowAdminUrl = flowAdminUrlFor(agency, flowId);
   const subject = `[${c?.name ?? 'Onboarding'}] ${headline}`;
 
@@ -310,6 +334,7 @@ export async function sendFlowStakeholderMilestone(
       clientName: c?.name ?? 'this client',
       headline,
       flowUrl: flowAdminUrl,
+      kickoffShareUrl,
       agency,
     });
     try {
@@ -327,7 +352,12 @@ export async function sendFlowStakeholderMilestone(
   }
 }
 
-function milestoneHeadline(milestone: Milestone, detail?: { segmentKind?: SegmentKind; amountCents?: number | null }): string {
+function milestoneHeadline(
+  milestone: Milestone,
+  detail?: { segmentKind?: SegmentKind; amountCents?: number | null },
+  clientName?: string | null,
+  hasKickoffUrl?: boolean,
+): string {
   if (milestone === 'invoice_paid') {
     const amt = detail?.amountCents ? `$${(detail.amountCents / 100).toFixed(2)} ` : '';
     return `${amt}invoice paid`;
@@ -335,6 +365,11 @@ function milestoneHeadline(milestone: Milestone, detail?: { segmentKind?: Segmen
   if (milestone === 'segment_completed') {
     const seg = detail?.segmentKind ? SEGMENT_KIND_LABEL[detail.segmentKind] : 'A segment';
     return `${seg} completed`;
+  }
+  // onboarding_complete: when we have a kickoff picker URL, lead with the
+  // action. Otherwise fall back to a status note.
+  if (hasKickoffUrl) {
+    return clientName ? `Schedule kickoff with ${clientName}` : 'Schedule kickoff';
   }
   return 'Onboarding complete — kickoff time';
 }
@@ -352,24 +387,32 @@ function stakeholderMilestoneHtml({
   clientName,
   headline,
   flowUrl,
+  kickoffShareUrl,
   agency,
 }: {
   stakeholderName: string;
   clientName: string;
   headline: string;
   flowUrl: string;
+  kickoffShareUrl: string | null;
   agency: AgencyBrand;
 }): string {
   const greeting = stakeholderName ? `Hi ${esc(stakeholderName.split(' ')[0])}` : 'FYI';
+  const subtext = kickoffShareUrl
+    ? `<strong>${esc(clientName)}</strong> finished onboarding — pick a kickoff time when the team's free.`
+    : `<strong>${esc(clientName)}</strong> just hit a milestone you opted into.`;
+  const primaryCta = kickoffShareUrl
+    ? `<a class="button" href="${esc(kickoffShareUrl)}">Schedule kickoff &rarr;</a>`
+    : `<a class="button" href="${esc(flowUrl)}">Open the flow &rarr;</a>`;
+  const secondaryCta = kickoffShareUrl
+    ? `<p class="subtext" style="margin-top:16px;font-size:13px;"><a href="${esc(flowUrl)}">Or open the onboarding tracker &rarr;</a></p>`
+    : '';
   const inner = `
     <div class="card">
       <h1 class="heading">${greeting} — ${esc(headline)}.</h1>
-      <p class="subtext">
-        <strong>${esc(clientName)}</strong> just hit a milestone you opted into.
-      </p>
-      <div class="button-wrap">
-        <a class="button" href="${esc(flowUrl)}">Open the flow &rarr;</a>
-      </div>
+      <p class="subtext">${subtext}</p>
+      <div class="button-wrap">${primaryCta}</div>
+      ${secondaryCta}
     </div>`;
   return layout(inner, agency);
 }

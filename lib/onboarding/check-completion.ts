@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { logLifecycleEvent } from '@/lib/lifecycle/state-machine';
 import { autoCreateKickoffEvent } from '@/lib/onboarding/auto-create-kickoff';
+import { sendFlowStakeholderMilestone } from '@/lib/onboarding/system-emails';
 
 /**
  * Recompute whether all required client-owned intake items in a flow are
@@ -98,6 +99,14 @@ export async function checkAndFlipFlowCompletion(
     // still create one manually from /admin/scheduling.
     await autoCreateKickoffEvent(admin, flowId, flow.client_id as string).catch((err) =>
       console.error('[check-completion] kickoff auto-create failed', err),
+    );
+
+    // Email internal stakeholders on `onboarding_flow_stakeholders` who
+    // opted into onboarding_complete. The email reads the kickoff picker
+    // URL itself, so this fires after auto-create-kickoff so the link
+    // exists by the time the email queries for it.
+    await sendFlowStakeholderMilestone(admin, flowId, 'onboarding_complete').catch((err) =>
+      console.error('[check-completion] stakeholder milestone email failed', err),
     );
   }
 
