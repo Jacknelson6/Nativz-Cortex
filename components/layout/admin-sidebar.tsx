@@ -21,7 +21,6 @@ import {
   ShoppingBag,
   Bell,
   Calendar,
-  Brain,
   Cpu,
   Gauge,
   Telescope,
@@ -102,15 +101,6 @@ const NAV_SECTIONS: NavSection[] = [
         label: 'Spying',
         icon: Telescope,
       },
-      { href: '/brain', label: 'Brain', icon: Brain },
-      // NAT-57 follow-up: single entry point for the pinned brand's
-      // profile. Sits between Brain (AI knowledge) and Notes (manual
-      // notes) — both adjacent to it in the user's mental model as
-      // "stuff about the brand that isn't a generator/tool."
-      // NAT-57 follow-up: BookUser — a notebook-with-person icon reads
-      // closer to "profile page" than the generic Building we started
-      // with. Keeps the visual theme (outlined lucide) consistent with
-      // the rest of the rail.
       { href: '/brand-profile', label: 'Brand Profile', icon: BookUser },
       { href: '/notes', label: 'Notes', icon: StickyNote },
     ],
@@ -161,15 +151,6 @@ function isActivePath(pathname: string, href: string, searchParams?: URLSearchPa
     return pathname.startsWith(`${prefix}/finder`);
   }
 
-  // Brain (formerly Knowledge): graph and meetings roll up into a single
-  // sidebar item. Phase 1 of the brand-root migration renamed the directory
-  // to `/(app)/brain`, so the canonical URL and the filesystem dir match.
-  if (href.endsWith('/brain')) {
-    const prefix = href.replace('/brain', '');
-    if (pathname === `${prefix}/meetings` || pathname.startsWith(`${prefix}/meetings/`)) return true;
-    return pathname === href || pathname.startsWith(href + '/');
-  }
-
   // NOTE: the old "Competitor Tracking → /admin/analyze-social" and
   // "Settings → /admin/settings" broad-match blocks were removed. They
   // previously made the first sub-item (which shared an href with its parent
@@ -213,7 +194,7 @@ const ADMIN_ONLY_HREFS = new Set([
   // on every audit; the Ad Generator triggers Gemini 2.5 Flash Image
   // generations. Each page also redirects non-admins server-side (defence
   // in depth) — this set just hides them from the viewer sidebar. Brand
-  // Profile, Notes, Brain, Strategy Lab, and Trend Finder are read-friendly
+  // Profile, Notes, Strategy Lab, and Trend Finder are read-friendly
   // — RLS scopes them to the viewer's user_client_access.
   '/ads',
   '/spying',
