@@ -192,7 +192,12 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/onboarding/') ||
     pathname.startsWith('/api/onboarding/public/') ||
     pathname.startsWith('/proposals/') ||
-    pathname.startsWith('/api/proposals/public/')
+    pathname.startsWith('/api/proposals/public/') ||
+    // Public content-calendar review surface — share-token-gated. The /c/[token]
+    // page is server-rendered and the /api/calendar/share/[token]/* routes
+    // validate the token on every request, so neither needs an auth session.
+    pathname.startsWith('/c/') ||
+    pathname.startsWith('/api/calendar/share/')
   ) {
     if (pathname.startsWith('/api/')) {
       setCorsHeaders(supabaseResponse, requestOrigin);
