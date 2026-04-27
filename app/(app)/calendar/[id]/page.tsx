@@ -125,13 +125,13 @@ export default async function ViewerCalendarDropPage({
           className="inline-flex items-center gap-1 text-xs text-text-muted transition-colors hover:text-text-secondary"
         >
           <ArrowLeft size={12} />
-          All drops
+          All content calendars
         </Link>
       </div>
 
       <header className="rounded-xl border border-nativz-border bg-surface px-6 py-5">
         <h1 className="text-xl font-semibold text-text-primary">
-          {active.brand.name} — Content drop
+          {active.brand.name} — Content calendar
         </h1>
         <p className="mt-1 text-sm text-text-secondary">
           {totalPosts} post{totalPosts !== 1 ? 's' : ''} · scheduled {drop.start_date} → {drop.end_date}
@@ -164,7 +164,7 @@ export default async function ViewerCalendarDropPage({
         })}
         {totalPosts === 0 && (
           <div className="rounded-xl border border-nativz-border bg-surface p-12 text-center text-sm text-text-secondary">
-            This drop has no posts ready to review yet.
+            This content calendar has no posts ready to review yet.
           </div>
         )}
       </main>

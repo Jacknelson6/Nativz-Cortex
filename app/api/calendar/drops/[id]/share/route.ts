@@ -20,7 +20,7 @@ export async function POST(
     .select('id, status')
     .eq('id', id)
     .single();
-  if (!drop) return NextResponse.json({ error: 'drop not found' }, { status: 404 });
+  if (!drop) return NextResponse.json({ error: 'content calendar not found' }, { status: 404 });
 
   const { data: videos } = await admin
     .from('content_drop_videos')
@@ -33,7 +33,7 @@ export async function POST(
     .filter((p): p is string => typeof p === 'string');
 
   if (postIds.length === 0) {
-    return NextResponse.json({ error: 'No scheduled posts in this drop yet' }, { status: 400 });
+    return NextResponse.json({ error: 'No scheduled posts in this content calendar yet' }, { status: 400 });
   }
 
   const linkRows = postIds.map((postId) => ({ post_id: postId }));

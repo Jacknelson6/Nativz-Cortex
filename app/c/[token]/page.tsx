@@ -123,7 +123,7 @@ function SharedDropView({
       <header className="border-b border-nativz-border bg-surface px-6 py-5">
         <div className="mx-auto max-w-3xl">
           <h1 className="text-xl font-semibold text-text-primary">
-            {data.clientName} — Content drop
+            {data.clientName} — Content calendar
           </h1>
           <p className="mt-1 text-sm text-text-secondary">
             {total} post{total !== 1 ? 's' : ''} to review · scheduled {data.drop.start_date} → {data.drop.end_date}

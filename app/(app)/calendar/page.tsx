@@ -22,7 +22,7 @@ export default async function ViewerCalendarPage() {
         </header>
         <div className="rounded-xl border border-nativz-border bg-surface p-12 text-center">
           <CalendarDays className="mx-auto mb-3 h-8 w-8 text-text-tertiary" />
-          <p className="text-sm text-text-secondary">Pick a brand from the top bar to see its drops.</p>
+          <p className="text-sm text-text-secondary">Pick a brand from the top bar to see its content calendars.</p>
         </div>
       </div>
     );
@@ -65,9 +65,9 @@ export default async function ViewerCalendarPage() {
       {(drops ?? []).length === 0 ? (
         <div className="rounded-xl border border-nativz-border bg-surface p-12 text-center">
           <CalendarDays className="mx-auto mb-3 h-8 w-8 text-text-tertiary" />
-          <p className="text-sm text-text-secondary">No drops to review yet.</p>
+          <p className="text-sm text-text-secondary">No content calendars to review yet.</p>
           <p className="mt-1 text-xs text-text-muted">
-            Once your team finishes captioning a batch, it&rsquo;ll show up here.
+            Once your team finishes captioning a batch of content, it&rsquo;ll show up here.
           </p>
         </div>
       ) : (

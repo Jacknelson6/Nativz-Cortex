@@ -47,7 +47,7 @@ export async function POST(
     .select('id, client_id, created_by')
     .eq('id', id)
     .single();
-  if (!drop) return NextResponse.json({ error: 'drop missing' }, { status: 404 });
+  if (!drop) return NextResponse.json({ error: 'content calendar missing' }, { status: 404 });
 
   // Pick the earliest stage that hasn't completed for this video. Stage helpers
   // filter by status, so resetting to the earlier stage and running everything

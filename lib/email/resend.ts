@@ -561,7 +561,7 @@ export async function sendCompetitorReportEmail(opts: {
   }
 }
 
-// ── Drop share-link comment notification ──────────────────────────────────
+// ── Content calendar share-link comment notification ─────────────────────
 
 export async function sendDropCommentEmail(opts: {
   to: string;
@@ -594,13 +594,13 @@ export async function sendDropCommentEmail(opts: {
       <div class="card">
         <h1 class="heading">${headlineByStatus[opts.status]}</h1>
         <p class="subtext">
-          <span class="highlight">${opts.authorName}</span> ${verbBySubject[opts.status]} on the ${opts.clientName} drop.
+          <span class="highlight">${opts.authorName}</span> ${verbBySubject[opts.status]} on the ${opts.clientName} content calendar.
         </p>
         <p class="small" style="margin-bottom: 24px;">
           &ldquo;${opts.contentPreview}&rdquo;
         </p>
         <div class="button-wrap">
-          <a href="${opts.dropUrl}" class="button">Open drop &rarr;</a>
+          <a href="${opts.dropUrl}" class="button">Open content calendar &rarr;</a>
         </div>
       </div>
     `, agency),

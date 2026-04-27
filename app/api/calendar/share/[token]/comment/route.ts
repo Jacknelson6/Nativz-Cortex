@@ -110,6 +110,6 @@ async function notifyAdminsOfComment(
       status: comment.status,
       contentPreview: preview,
       dropUrl: `${appUrl}${linkPath}`,
-    }).catch((err) => console.error('Drop comment email send failed:', err));
+    }).catch((err) => console.error('Content calendar comment email send failed:', err));
   }
 }

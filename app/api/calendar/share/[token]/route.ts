@@ -57,7 +57,7 @@ export async function GET(
       .select('id, client_id, caption, hashtags, scheduled_at, status, cover_image_url, late_post_id')
       .in('id', link.included_post_ids),
   ]);
-  if (!drop) return NextResponse.json({ error: 'drop missing' }, { status: 404 });
+  if (!drop) return NextResponse.json({ error: 'content calendar missing' }, { status: 404 });
 
   const { data: client } = await admin
     .from('clients')

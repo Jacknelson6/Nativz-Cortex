@@ -113,7 +113,7 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
       if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Schedule failed');
       toast.success(`Scheduled ${json.scheduled ?? 0} post(s)`);
       if (json.failed > 0) {
-        toast.error(`${json.failed} post(s) failed — see drop for details`);
+        toast.error(`${json.failed} post(s) failed — see content calendar for details`);
       }
       await refresh();
     } catch (err) {
@@ -142,7 +142,7 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
     return (
       <div className="cortex-page-gutter max-w-6xl mx-auto">
         <div className="rounded-xl border border-nativz-border bg-surface p-12 text-center text-sm text-text-secondary">
-          Loading drop…
+          Loading content calendar…
         </div>
       </div>
     );
@@ -153,7 +153,7 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
       <div className="cortex-page-gutter max-w-6xl mx-auto">
         <div className="rounded-xl border border-nativz-border bg-surface p-12 text-center">
           <XCircle className="mx-auto mb-3 h-8 w-8 text-text-tertiary" />
-          <p className="text-sm text-text-secondary">Drop not found.</p>
+          <p className="text-sm text-text-secondary">Content calendar not found.</p>
           <Link
             href="/admin/calendar"
             className="mt-3 inline-flex items-center gap-1 text-sm text-accent-text hover:underline"
@@ -215,7 +215,7 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
 
       {failed && videos.length === 0 && (
         <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-6 text-sm text-red-300">
-          {drop.error_detail ?? 'Drop failed'}
+          {drop.error_detail ?? 'Content calendar failed'}
         </div>
       )}
 

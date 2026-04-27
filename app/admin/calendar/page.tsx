@@ -45,13 +45,13 @@ export default function CalendarPage() {
         <div className="min-w-0 shrink">
           <h1 className="text-2xl font-semibold text-text-primary">Content calendar</h1>
           <p className="mt-1 text-sm text-text-secondary">
-            Drop a Drive folder, get scheduled posts and a client share link.
+            Paste a Drive folder of content, get scheduled posts and a client share link.
           </p>
         </div>
         {brand && (
           <Button onClick={() => setShowNew(true)}>
             <Plus size={16} />
-            New drop
+            New content calendar
           </Button>
         )}
       </header>
@@ -65,16 +65,16 @@ export default function CalendarPage() {
 
       {brand && loading && (
         <div className="rounded-xl border border-nativz-border bg-surface p-12 text-center text-sm text-text-secondary">
-          Loading drops…
+          Loading content calendars…
         </div>
       )}
 
       {brand && !loading && drops.length === 0 && (
         <div className="rounded-xl border border-nativz-border bg-surface p-12 text-center">
           <CalendarDays className="mx-auto mb-3 h-8 w-8 text-text-tertiary" />
-          <p className="text-sm text-text-secondary">No drops yet for {brand.name}.</p>
+          <p className="text-sm text-text-secondary">No content calendars yet for {brand.name}.</p>
           <p className="mt-1 text-xs text-text-muted">
-            Click <span className="text-text-secondary">New drop</span> to upload your first batch.
+            Click <span className="text-text-secondary">New content calendar</span> to add your first batch of content.
           </p>
         </div>
       )}
@@ -94,7 +94,7 @@ export default function CalendarPage() {
           clientId={brand.id}
           onCreated={(id) => {
             setShowNew(false);
-            toast.success('Drop created — analysing videos…');
+            toast.success('Content calendar created — analysing content…');
             router.push(`/admin/calendar/${id}`);
           }}
         />
@@ -201,11 +201,11 @@ function NewDropDialog({ open, onClose, clientId, onCreated }: NewDropDialogProp
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Failed to create drop');
+      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Failed to create content calendar');
       success = true;
       onCreated(data.drop.id);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create drop');
+      toast.error(err instanceof Error ? err.message : 'Failed to create content calendar');
     } finally {
       // Keep "Creating…" state on success — parent unmounts the dialog.
       if (!success) setSubmitting(false);
@@ -213,7 +213,7 @@ function NewDropDialog({ open, onClose, clientId, onCreated }: NewDropDialogProp
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="New content drop" maxWidth="lg">
+    <Dialog open={open} onClose={onClose} title="New content calendar" maxWidth="lg">
       <div className="space-y-4">
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-text-secondary">
@@ -271,7 +271,7 @@ function NewDropDialog({ open, onClose, clientId, onCreated }: NewDropDialogProp
           </Button>
           <Button onClick={handleCreate} disabled={submitting}>
             {submitting ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-            {submitting ? 'Creating…' : 'Create drop'}
+            {submitting ? 'Creating…' : 'Create content calendar'}
           </Button>
         </div>
       </div>

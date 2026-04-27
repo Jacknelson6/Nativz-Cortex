@@ -49,9 +49,9 @@ export async function scheduleDrop(
     .select('id, client_id, created_by, start_date, end_date, default_post_time, status')
     .eq('id', input.dropId)
     .single();
-  if (dropErr || !drop) throw new Error('Drop not found');
+  if (dropErr || !drop) throw new Error('Content calendar not found');
   if ((drop as DropRow).status !== 'ready') {
-    throw new Error(`Drop status must be 'ready' to schedule (got '${(drop as DropRow).status}')`);
+    throw new Error(`Content calendar status must be 'ready' to schedule (got '${(drop as DropRow).status}')`);
   }
 
   const { data: rows } = await admin

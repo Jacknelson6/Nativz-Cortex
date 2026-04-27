@@ -82,7 +82,7 @@ export async function POST(req: Request) {
     .select('*')
     .single();
   if (dropErr || !drop) {
-    return NextResponse.json({ error: dropErr?.message ?? 'Failed to create drop' }, { status: 500 });
+    return NextResponse.json({ error: dropErr?.message ?? 'Failed to create content calendar' }, { status: 500 });
   }
 
   const videoRows = videos.map((v, idx) => ({
