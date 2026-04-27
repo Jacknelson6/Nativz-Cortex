@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, Loader2, Settings } from 'lucide-react';
 import type { CalendarPerson, ExternalCalendarEvent } from './types';
@@ -10,9 +10,11 @@ import type { CalendarPerson, ExternalCalendarEvent } from './types';
  *
  * Pulls busy blocks for each configured `scheduling_people` row from
  * `/api/calendar/events` (Google Calendar via service account / domain-wide
- * delegation). The grid renders the full 24h day with no internal scroll —
- * the page itself scrolls if the day is taller than the viewport. When
- * multiple people are busy at overlapping times the blocks are merged into
+ * delegation, daily-cached server-side). Renders only the visible working-hour
+ * window (7am–10pm) so the grid fits the viewport without internal or page
+ * scrolling — overnight events get clipped at the edges, which is fine for a
+ * scheduling-decision view (slot finder still has full-day data on the server).
+ * When multiple people are busy at overlapping times the blocks are merged into
  * a single band labeled with everyone's initials (e.g. "C T J") so a glance
  * tells you "this slot is blocked" rather than forcing your eye to zigzag
  * between adjacent lanes.
@@ -21,8 +23,16 @@ import type { CalendarPerson, ExternalCalendarEvent } from './types';
  */
 
 const DAYS_PER_PAGE = 4;
-const HOUR_HEIGHT = 56;
-const HOURS_24 = Array.from({ length: 24 }, (_, i) => i); // 0..23
+const HOUR_HEIGHT = 44;
+const VISIBLE_START_HOUR = 7;
+const VISIBLE_END_HOUR = 22;
+const VISIBLE_HOURS = Array.from(
+  { length: VISIBLE_END_HOUR - VISIBLE_START_HOUR },
+  (_, i) => VISIBLE_START_HOUR + i,
+);
+const VISIBLE_START_MIN = VISIBLE_START_HOUR * 60;
+const VISIBLE_END_MIN = VISIBLE_END_HOUR * 60;
+const VISIBLE_RANGE_MIN = VISIBLE_END_MIN - VISIBLE_START_MIN;
 
 function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -82,6 +92,11 @@ function clampToDay(min: number): number {
   return Math.max(0, Math.min(24 * 60, min));
 }
 
+/** Offset minutes-from-midnight into the visible working-hour range. */
+function toVisibleOffset(min: number): number {
+  return Math.max(0, Math.min(VISIBLE_RANGE_MIN, min - VISIBLE_START_MIN));
+}
+
 function initial(name: string): string {
   return name.trim().charAt(0).toUpperCase() || '?';
 }
@@ -118,19 +133,26 @@ interface MergedBand {
   persons: CalendarPerson[];
 }
 
+// Fetch a wide window once and paginate locally — prev/next inside the window
+// is instant. We refetch only when the visible 4-day range falls outside the
+// cached window (rare unless an admin scrolls weeks ahead).
+const FETCH_WINDOW_DAYS_BACK = 14;
+const FETCH_WINDOW_DAYS_FORWARD = 75;
+
 export function TeamAvailability() {
   const [anchor, setAnchor] = useState(() => startOfDay(new Date()));
   const [people, setPeople] = useState<CalendarPerson[]>([]);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState<Date>(() => new Date());
+  const cachedWindowRef = useRef<{ start: Date; end: Date } | null>(null);
 
   const gridDates = useMemo(
     () => getRangeDates(anchor, DAYS_PER_PAGE),
     [anchor],
   );
 
-  const rangeStart = useMemo(() => gridDates[0], [gridDates]);
-  const rangeEnd = useMemo(() => {
+  const visibleStart = useMemo(() => gridDates[0], [gridDates]);
+  const visibleEnd = useMemo(() => {
     const last = new Date(gridDates[gridDates.length - 1]);
     last.setDate(last.getDate() + 1);
     return last;
@@ -144,6 +166,19 @@ export function TeamAvailability() {
 
   useEffect(() => {
     let cancelled = false;
+
+    // Cache hit — visible 4-day range fits inside the wider window we already
+    // fetched, so the grid can render from current `people` state without
+    // hitting Google again.
+    const cached = cachedWindowRef.current;
+    if (
+      cached &&
+      visibleStart.getTime() >= cached.start.getTime() &&
+      visibleEnd.getTime() <= cached.end.getTime()
+    ) {
+      return;
+    }
+
     async function load() {
       setLoading(true);
       try {
@@ -156,10 +191,15 @@ export function TeamAvailability() {
           return;
         }
 
+        const fetchStart = new Date(anchor);
+        fetchStart.setDate(fetchStart.getDate() - FETCH_WINDOW_DAYS_BACK);
+        const fetchEnd = new Date(anchor);
+        fetchEnd.setDate(fetchEnd.getDate() + FETCH_WINDOW_DAYS_FORWARD);
+
         const params = new URLSearchParams({
           person_ids: active.map((p) => p.id).join(','),
-          start: rangeStart.toISOString(),
-          end: rangeEnd.toISOString(),
+          start: fetchStart.toISOString(),
+          end: fetchEnd.toISOString(),
         });
 
         const eventsRes = await fetch(`/api/calendar/events?${params.toString()}`);
@@ -177,7 +217,10 @@ export function TeamAvailability() {
           events: calendars[p.id]?.events ?? [],
         }));
 
-        if (!cancelled) setPeople(merged);
+        if (!cancelled) {
+          setPeople(merged);
+          cachedWindowRef.current = { start: fetchStart, end: fetchEnd };
+        }
       } catch {
         if (!cancelled) setPeople([]);
       } finally {
@@ -188,7 +231,7 @@ export function TeamAvailability() {
     return () => {
       cancelled = true;
     };
-  }, [rangeStart, rangeEnd]);
+  }, [anchor, visibleStart, visibleEnd]);
 
   function navigate(direction: 'prev' | 'next' | 'today') {
     if (direction === 'today') {
@@ -435,8 +478,11 @@ function mergeOverlapping(
 
 function AvailabilityGrid({ dates, people, now }: AvailabilityGridProps) {
   const colCount = dates.length;
-  const totalHeight = 24 * HOUR_HEIGHT;
+  const totalHeight = VISIBLE_RANGE_MIN / 60 * HOUR_HEIGHT;
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const nowVisible =
+    nowMinutes >= VISIBLE_START_MIN && nowMinutes <= VISIBLE_END_MIN;
+  const nowOffsetMin = nowMinutes - VISIBLE_START_MIN;
 
   const isToday = (date: Date) =>
     date.getFullYear() === now.getFullYear() &&
@@ -445,16 +491,19 @@ function AvailabilityGrid({ dates, people, now }: AvailabilityGridProps) {
 
   const hourTicks = useMemo(
     () =>
-      HOURS_24.map((hour) => ({
+      VISIBLE_HOURS.map((hour) => ({
         hour,
-        top: hour * HOUR_HEIGHT,
+        top: (hour - VISIBLE_START_HOUR) * HOUR_HEIGHT,
         label: formatHourLabel(hour),
       })),
     [],
   );
 
   const halfHourTops = useMemo(
-    () => HOURS_24.slice(0, -1).map((hour) => hour * HOUR_HEIGHT + HOUR_HEIGHT / 2),
+    () =>
+      VISIBLE_HOURS.slice(0, -1).map(
+        (hour) => (hour - VISIBLE_START_HOUR) * HOUR_HEIGHT + HOUR_HEIGHT / 2,
+      ),
     [],
   );
 
@@ -465,10 +514,18 @@ function AvailabilityGrid({ dates, people, now }: AvailabilityGridProps) {
         for (const ev of person.events) {
           if (!isSameDay(ev.start, date)) continue;
           if (ev.isAllDay) continue;
-          const startMin = clampToDay(getMinutesFromMidnight(ev.start));
-          const endMin = clampToDay(getMinutesFromMidnight(ev.end));
-          if (endMin <= startMin) continue;
-          raw.push({ person, startMin, endMin });
+          const rawStart = clampToDay(getMinutesFromMidnight(ev.start));
+          const rawEnd = clampToDay(getMinutesFromMidnight(ev.end));
+          if (rawEnd <= rawStart) continue;
+          // Skip events fully outside the visible window — clip the rest to
+          // the visible edges so a 6am–8am block still shows as a stub at 7am.
+          if (rawEnd <= VISIBLE_START_MIN) continue;
+          if (rawStart >= VISIBLE_END_MIN) continue;
+          raw.push({
+            person,
+            startMin: toVisibleOffset(rawStart),
+            endMin: toVisibleOffset(rawEnd),
+          });
         }
       }
       return { date, bands: mergeOverlapping(raw) };
@@ -563,12 +620,12 @@ function AvailabilityGrid({ dates, people, now }: AvailabilityGridProps) {
                     <BusyBand key={band.key} band={band} hourHeight={HOUR_HEIGHT} />
                   ))}
 
-                  {today && nowMinutes >= 0 && nowMinutes <= 24 * 60 && (
+                  {today && nowVisible && (
                     <div
                       role="presentation"
                       aria-hidden="true"
                       className="absolute left-0 right-0 z-20 pointer-events-none"
-                      style={{ top: (nowMinutes / 60) * HOUR_HEIGHT }}
+                      style={{ top: (nowOffsetMin / 60) * HOUR_HEIGHT }}
                     >
                       <div className="flex items-center">
                         <div

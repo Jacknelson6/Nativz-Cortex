@@ -2,31 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { fetchEventsForPerson } from '@/lib/scheduling/google-events';
+import { fetchEventsForPersonCached, emailsCacheKey } from '@/lib/scheduling/calendar-cache';
 
 export const runtime = 'nodejs';
-
-interface CacheEntry {
-  data: PersonCalendarResult;
-  timestamp: number;
-}
-
-const CACHE_TTL_MS = 2 * 60 * 1000;
-const eventsCache = new Map<string, CacheEntry>();
-
-function getCached(key: string): PersonCalendarResult | null {
-  const entry = eventsCache.get(key);
-  if (!entry) return null;
-  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
-    eventsCache.delete(key);
-    return null;
-  }
-  return entry.data;
-}
-
-function setCache(key: string, data: PersonCalendarResult): void {
-  eventsCache.set(key, { data, timestamp: Date.now() });
-}
 
 interface CalendarEvent {
   id: string;
@@ -124,9 +102,6 @@ export async function GET(request: NextRequest) {
       emailsByPerson.set(row.person_id as string, list);
     }
 
-    const timeMin = new Date(start);
-    const timeMax = new Date(end);
-
     const results = await Promise.allSettled(
       (peopleRows ?? [])
         .filter((p) => p.is_active)
@@ -134,16 +109,12 @@ export async function GET(request: NextRequest) {
           const personId = p.id as string;
           const emails = emailsByPerson.get(personId) ?? [];
 
-          const cacheKey = `${personId}::${start}::${end}`;
-          const cached = getCached(cacheKey);
-          if (cached) return { personId, result: cached };
-
-          const fetched = await fetchEventsForPerson({
+          const fetched = await fetchEventsForPersonCached(
             personId,
-            emails,
-            timeMin,
-            timeMax,
-          });
+            emailsCacheKey(emails),
+            start,
+            end,
+          );
 
           const calendarResult: PersonCalendarResult = {
             name: p.display_name as string,
@@ -159,7 +130,6 @@ export async function GET(request: NextRequest) {
             errors: fetched.errors.length ? fetched.errors : undefined,
           };
 
-          setCache(cacheKey, calendarResult);
           return { personId, result: calendarResult };
         }),
     );
