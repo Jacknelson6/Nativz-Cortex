@@ -561,3 +561,60 @@ export async function sendCompetitorReportEmail(opts: {
   }
 }
 
+// ── Drop share-link comment notification ──────────────────────────────────
+
+export async function sendDropCommentEmail(opts: {
+  to: string;
+  authorName: string;
+  clientName: string;
+  status: 'approved' | 'changes_requested' | 'comment';
+  contentPreview: string;
+  dropUrl: string;
+  agency?: AgencyBrand;
+}) {
+  const agency = opts.agency ?? 'nativz';
+  const verbBySubject = {
+    approved: 'approved a post',
+    changes_requested: 'requested changes',
+    comment: 'left a comment',
+  } as const;
+  const headlineByStatus = {
+    approved: 'Approved.',
+    changes_requested: 'Changes requested.',
+    comment: 'New comment.',
+  } as const;
+  const subject = `${opts.authorName} ${verbBySubject[opts.status]} — ${opts.clientName}`;
+
+  const result = await (await getResend()).emails.send({
+    from: getFromAddress(agency),
+    replyTo: getReplyTo(agency),
+    to: opts.to,
+    subject,
+    html: layout(`
+      <div class="card">
+        <h1 class="heading">${headlineByStatus[opts.status]}</h1>
+        <p class="subtext">
+          <span class="highlight">${opts.authorName}</span> ${verbBySubject[opts.status]} on the ${opts.clientName} drop.
+        </p>
+        <p class="small" style="margin-bottom: 24px;">
+          &ldquo;${opts.contentPreview}&rdquo;
+        </p>
+        <div class="button-wrap">
+          <a href="${opts.dropUrl}" class="button">Open drop &rarr;</a>
+        </div>
+      </div>
+    `, agency),
+  });
+
+  trackUsage({
+    service: 'resend',
+    model: 'email-api',
+    feature: 'email_delivery',
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    costUsd: 0,
+  });
+
+  return result;
+}
