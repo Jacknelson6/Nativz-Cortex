@@ -34,8 +34,8 @@ export interface PublishPostInput {
   platformProfileIds: string[];
   /** Map of profileId -> platform for building platform-specific config */
   platformHints?: Record<string, SocialPlatform>;
-  /** Per-platform caption override */
-  customCaption?: string;
+  /** Optional per-platform caption overrides. Falls back to `caption` when a platform key is missing or empty. */
+  captionByPlatform?: Partial<Record<SocialPlatform, string>>;
   /** Schedule for later (ISO 8601) or omit to publish immediately */
   scheduledAt?: string;
 }

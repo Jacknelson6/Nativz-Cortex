@@ -3,10 +3,20 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+const VariantSchema = z
+  .object({
+    tiktok: z.string().max(2000).optional(),
+    instagram: z.string().max(2000).optional(),
+    youtube: z.string().max(2000).optional(),
+    facebook: z.string().max(2000).optional(),
+  })
+  .strict();
+
 const PatchSchema = z.object({
   caption: z.string().min(1).max(2000).optional(),
   hashtags: z.array(z.string()).optional(),
   scheduledAt: z.string().datetime().optional(),
+  captionVariants: VariantSchema.optional(),
 });
 
 export async function PATCH(
@@ -50,6 +60,14 @@ export async function PATCH(
       .filter(Boolean);
   }
   if (parsed.data.scheduledAt !== undefined) update.draft_scheduled_at = parsed.data.scheduledAt;
+  if (parsed.data.captionVariants !== undefined) {
+    const cleaned: Record<string, string> = {};
+    for (const [key, value] of Object.entries(parsed.data.captionVariants)) {
+      const trimmed = (value ?? '').trim();
+      if (trimmed) cleaned[key] = trimmed;
+    }
+    update.caption_variants = cleaned;
+  }
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: 'nothing to update' }, { status: 400 });
   }

@@ -44,6 +44,14 @@ export interface GeminiContext {
   degraded?: boolean;
 }
 
+/**
+ * Per-platform caption overrides. Keys correspond to SocialPlatform values
+ * the brand actually targets — `tiktok | instagram | youtube | facebook`.
+ * Empty string or missing key falls back to draft_caption at schedule time.
+ */
+export type CaptionVariantPlatform = 'tiktok' | 'instagram' | 'youtube' | 'facebook';
+export type CaptionVariants = Partial<Record<CaptionVariantPlatform, string>>;
+
 export interface ContentDropVideo {
   id: string;
   drop_id: string;
@@ -62,6 +70,7 @@ export interface ContentDropVideo {
   draft_caption: string | null;
   draft_hashtags: string[];
   draft_scheduled_at: string | null;
+  caption_variants: CaptionVariants;
   order_index: number;
   status: DropVideoStatus;
   error_detail: string | null;

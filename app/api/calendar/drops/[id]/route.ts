@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import type { CaptionVariantPlatform } from '@/lib/types/calendar';
+
+const VARIANT_PLATFORMS: ReadonlySet<CaptionVariantPlatform> = new Set([
+  'tiktok',
+  'instagram',
+  'youtube',
+  'facebook',
+]);
 
 interface ShareLinkRow {
   post_review_link_map: Record<string, string> | null;
@@ -34,7 +42,7 @@ export async function GET(
   if (error || !drop) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
   const admin = createAdminClient();
-  const [{ data: videos }, { data: shareLinks }] = await Promise.all([
+  const [{ data: videos }, { data: shareLinks }, { data: socialProfiles }] = await Promise.all([
     supabase
       .from('content_drop_videos')
       .select('*')
@@ -44,7 +52,25 @@ export async function GET(
       .from('content_drop_share_links')
       .select('post_review_link_map')
       .eq('drop_id', id),
+    admin
+      .from('social_profiles')
+      .select('platform, late_account_id, is_active')
+      .eq('client_id', drop.client_id)
+      .eq('is_active', true),
   ]);
+
+  const variantPlatforms = Array.from(
+    new Set(
+      (socialProfiles ?? [])
+        .filter(
+          (p) =>
+            typeof p.late_account_id === 'string' &&
+            p.late_account_id.length > 0 &&
+            VARIANT_PLATFORMS.has(p.platform as CaptionVariantPlatform),
+        )
+        .map((p) => p.platform as CaptionVariantPlatform),
+    ),
+  );
 
   // Build a combined postId → reviewLinkId[] map across all share links for the drop.
   // A post can appear in multiple links if Jack regenerates the share, so collect them all.
@@ -73,5 +99,10 @@ export async function GET(
     (commentsByPostId[postId] ||= []).push(c);
   }
 
-  return NextResponse.json({ drop, videos: videos ?? [], commentsByPostId });
+  return NextResponse.json({
+    drop,
+    videos: videos ?? [],
+    commentsByPostId,
+    variantPlatforms,
+  });
 }

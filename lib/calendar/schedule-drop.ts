@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getPostingService, type SocialPlatform } from '@/lib/posting';
+import type { CaptionVariants } from '@/lib/types/calendar';
 import { distributeSlots } from './distribute-slots';
 
 interface ScheduleInput {
@@ -15,6 +16,7 @@ interface VideoRow {
   thumbnail_url: string | null;
   draft_caption: string | null;
   draft_hashtags: string[] | null;
+  caption_variants: CaptionVariants | null;
   drive_file_name: string;
   duration_seconds: number | null;
   size_bytes: number | null;
@@ -55,7 +57,7 @@ export async function scheduleDrop(
   const { data: rows } = await admin
     .from('content_drop_videos')
     .select(
-      'id, drop_id, video_url, thumbnail_url, draft_caption, draft_hashtags, drive_file_name, duration_seconds, size_bytes, mime_type, order_index',
+      'id, drop_id, video_url, thumbnail_url, draft_caption, draft_hashtags, caption_variants, drive_file_name, duration_seconds, size_bytes, mime_type, order_index',
     )
     .eq('drop_id', input.dropId)
     .eq('status', 'ready')
@@ -154,6 +156,8 @@ export async function scheduleDrop(
         .insert({ post_id: post.id, media_id: media.id, sort_order: 0 });
       if (linkErr) throw new Error(linkErr.message);
 
+      const captionByPlatform = pickActiveVariants(video.caption_variants, lateProfiles);
+
       const publish = await service.publishPost({
         videoUrl: video.video_url,
         caption: video.draft_caption,
@@ -161,6 +165,7 @@ export async function scheduleDrop(
         coverImageUrl: video.thumbnail_url ?? undefined,
         platformProfileIds: lateProfiles.map((p) => p.late_account_id),
         platformHints: Object.fromEntries(lateProfiles.map((p) => [p.late_account_id, p.platform])),
+        captionByPlatform,
         scheduledAt: slot.scheduledAt,
       });
 
@@ -202,4 +207,20 @@ export async function scheduleDrop(
   }
 
   return result;
+}
+
+function pickActiveVariants(
+  variants: CaptionVariants | null,
+  profiles: { platform: SocialPlatform }[],
+): Partial<Record<SocialPlatform, string>> {
+  if (!variants) return {};
+  const active = new Set(profiles.map((p) => p.platform));
+  const out: Partial<Record<SocialPlatform, string>> = {};
+  for (const [key, value] of Object.entries(variants)) {
+    const platform = key as SocialPlatform;
+    if (!active.has(platform)) continue;
+    const trimmed = (value ?? '').trim();
+    if (trimmed) out[platform] = trimmed;
+  }
+  return out;
 }

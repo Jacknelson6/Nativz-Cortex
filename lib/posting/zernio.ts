@@ -332,8 +332,9 @@ function buildPublishBody(input: PublishPostInput): Record<string, unknown> {
   const platforms = input.platformProfileIds.map((accountId) => {
     const platform = input.platformHints?.[accountId] ?? 'instagram';
     const entry: Record<string, unknown> = { platform, accountId };
-    if (input.customCaption) {
-      entry.customContent = input.customCaption;
+    const variant = input.captionByPlatform?.[platform]?.trim();
+    if (variant) {
+      entry.customContent = variant;
     }
 
     if (platform === 'instagram') {

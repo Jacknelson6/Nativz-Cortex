@@ -23,11 +23,20 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import type {
+  CaptionVariantPlatform,
+  CaptionVariants,
   ContentDrop,
   ContentDropVideo,
   DropStatus,
   DropVideoStatus,
 } from '@/lib/types/calendar';
+
+const PLATFORM_LABEL: Record<CaptionVariantPlatform, string> = {
+  tiktok: 'TikTok',
+  instagram: 'Instagram',
+  youtube: 'YouTube',
+  facebook: 'Facebook',
+};
 
 const POLL_MS = 3000;
 const IN_FLIGHT_DROP: DropStatus[] = ['ingesting', 'analyzing', 'generating'];
@@ -48,6 +57,7 @@ interface DropResponse {
   drop: ContentDrop;
   videos: ContentDropVideo[];
   commentsByPostId: Record<string, DropComment[]>;
+  variantPlatforms: CaptionVariantPlatform[];
 }
 
 function latestReview(comments: DropComment[]): 'approved' | 'changes_requested' | null {
@@ -219,6 +229,7 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
               comments={
                 v.scheduled_post_id ? data.commentsByPostId[v.scheduled_post_id] ?? [] : []
               }
+              variantPlatforms={data.variantPlatforms ?? []}
               onUpdated={refresh}
             />
           ))}
@@ -318,14 +329,19 @@ interface VideoCardProps {
   dropId: string;
   video: ContentDropVideo;
   comments: DropComment[];
+  variantPlatforms: CaptionVariantPlatform[];
   onUpdated: () => void;
 }
 
-function VideoCard({ dropId, video, comments, onUpdated }: VideoCardProps) {
+type CaptionTab = 'master' | CaptionVariantPlatform;
+
+function VideoCard({ dropId, video, comments, variantPlatforms, onUpdated }: VideoCardProps) {
   const [editing, setEditing] = useState(false);
   const [caption, setCaption] = useState(video.draft_caption ?? '');
   const [hashtags, setHashtags] = useState((video.draft_hashtags ?? []).join(' '));
   const [scheduledAt, setScheduledAt] = useState(toLocalDateTime(video.draft_scheduled_at));
+  const [variants, setVariants] = useState<CaptionVariants>(video.caption_variants ?? {});
+  const [activeTab, setActiveTab] = useState<CaptionTab>('master');
   const [saving, setSaving] = useState(false);
   const [retrying, setRetrying] = useState(false);
 
@@ -353,7 +369,14 @@ function VideoCard({ dropId, video, comments, onUpdated }: VideoCardProps) {
     setCaption(video.draft_caption ?? '');
     setHashtags((video.draft_hashtags ?? []).join(' '));
     setScheduledAt(toLocalDateTime(video.draft_scheduled_at));
-  }, [editing, video.draft_caption, video.draft_hashtags, video.draft_scheduled_at]);
+    setVariants(video.caption_variants ?? {});
+  }, [
+    editing,
+    video.draft_caption,
+    video.draft_hashtags,
+    video.draft_scheduled_at,
+    video.caption_variants,
+  ]);
 
   const score = video.caption_score;
   const ready = video.status === 'ready';
@@ -368,6 +391,11 @@ function VideoCard({ dropId, video, comments, onUpdated }: VideoCardProps) {
         .map((t) => t.replace(/^#/, '').trim())
         .filter(Boolean);
       const isoScheduled = scheduledAt ? new Date(scheduledAt).toISOString() : undefined;
+      const cleanedVariants: CaptionVariants = {};
+      for (const platform of variantPlatforms) {
+        const value = (variants[platform] ?? '').trim();
+        if (value) cleanedVariants[platform] = value;
+      }
       const res = await fetch(`/api/calendar/drops/${dropId}/videos/${video.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -375,6 +403,7 @@ function VideoCard({ dropId, video, comments, onUpdated }: VideoCardProps) {
           caption: caption.trim(),
           hashtags: tags,
           scheduledAt: isoScheduled,
+          captionVariants: cleanedVariants,
         }),
       });
       const json = await res.json();
@@ -469,14 +498,53 @@ function VideoCard({ dropId, video, comments, onUpdated }: VideoCardProps) {
 
         {editing ? (
           <div className="space-y-2">
-            <textarea
-              value={caption}
-              onChange={(e) => setCaption(e.target.value)}
-              rows={5}
-              disabled={saving}
-              className="block w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-              placeholder="Caption…"
-            />
+            {variantPlatforms.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1 rounded-lg border border-nativz-border bg-background p-1">
+                <CaptionTabButton
+                  active={activeTab === 'master'}
+                  onClick={() => setActiveTab('master')}
+                  label="Master"
+                  filled={Boolean(caption.trim())}
+                  disabled={saving}
+                />
+                {variantPlatforms.map((platform) => (
+                  <CaptionTabButton
+                    key={platform}
+                    active={activeTab === platform}
+                    onClick={() => setActiveTab(platform)}
+                    label={PLATFORM_LABEL[platform]}
+                    filled={Boolean((variants[platform] ?? '').trim())}
+                    disabled={saving}
+                  />
+                ))}
+              </div>
+            )}
+            {activeTab === 'master' ? (
+              <textarea
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                rows={5}
+                disabled={saving}
+                className="block w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                placeholder="Master caption — used wherever no platform override is set."
+              />
+            ) : (
+              <div className="space-y-1.5">
+                <textarea
+                  value={variants[activeTab] ?? ''}
+                  onChange={(e) =>
+                    setVariants((prev) => ({ ...prev, [activeTab]: e.target.value }))
+                  }
+                  rows={5}
+                  disabled={saving}
+                  className="block w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  placeholder={`${PLATFORM_LABEL[activeTab]} override — leave blank to use master.`}
+                />
+                <p className="text-[11px] text-text-muted">
+                  Empty = falls back to master caption on {PLATFORM_LABEL[activeTab]}.
+                </p>
+              </div>
+            )}
             <div className="flex items-center gap-2 rounded-lg border border-nativz-border bg-background px-3 py-2">
               <Hash size={12} className="shrink-0 text-text-muted" />
               <input
@@ -518,6 +586,23 @@ function VideoCard({ dropId, video, comments, onUpdated }: VideoCardProps) {
                 {(video.draft_hashtags ?? []).map((h) => `#${h}`).join(' ')}
               </p>
             )}
+            {Object.entries(video.caption_variants ?? {}).some(
+              ([, value]) => (value ?? '').trim().length > 0,
+            ) && (
+              <div className="flex flex-wrap gap-1">
+                {variantPlatforms
+                  .filter((p) => (video.caption_variants?.[p] ?? '').trim().length > 0)
+                  .map((p) => (
+                    <span
+                      key={p}
+                      className="inline-flex items-center rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent-text"
+                      title={video.caption_variants?.[p] ?? ''}
+                    >
+                      {PLATFORM_LABEL[p]} override
+                    </span>
+                  ))}
+              </div>
+            )}
             <div className="flex items-center justify-between gap-2 pt-1">
               <p className="text-xs text-text-muted">
                 {video.draft_scheduled_at ? formatScheduled(video.draft_scheduled_at) : 'Unscheduled'}
@@ -549,6 +634,38 @@ function VideoCard({ dropId, video, comments, onUpdated }: VideoCardProps) {
         </div>
       )}
     </div>
+  );
+}
+
+interface CaptionTabButtonProps {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  filled: boolean;
+  disabled: boolean;
+}
+
+function CaptionTabButton({ active, onClick, label, filled, disabled }: CaptionTabButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+        active
+          ? 'bg-accent/15 text-accent-text'
+          : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary'
+      } disabled:cursor-not-allowed disabled:opacity-50`}
+    >
+      {label}
+      {filled && (
+        <span
+          className={`inline-block h-1.5 w-1.5 rounded-full ${
+            active ? 'bg-accent' : 'bg-text-muted'
+          }`}
+        />
+      )}
+    </button>
   );
 }
 
