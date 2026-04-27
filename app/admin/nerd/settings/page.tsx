@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   Shield, BookOpen, Plus, Trash2, RefreshCw, ToggleLeft, ToggleRight,
-  Github, ChevronDown, ChevronUp, Pencil, X, Check, ArrowLeft,
+  Github, ChevronDown, ChevronUp, Pencil, Check, ArrowLeft,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { SubNav, type SubNavItem } from '@/components/ui/sub-nav';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -39,6 +40,11 @@ interface Guardrail {
 }
 
 type Tab = 'skills' | 'guardrails';
+
+const NERD_TABS: SubNavItem<Tab>[] = [
+  { slug: 'skills', label: 'Skills', icon: <BookOpen size={13} /> },
+  { slug: 'guardrails', label: 'Guardrails', icon: <Shield size={13} /> },
+];
 
 // ---------------------------------------------------------------------------
 // Page
@@ -90,24 +96,13 @@ export default function NerdSettingsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-nativz-border">
-        {([
-          { id: 'skills' as Tab, label: 'Skills', icon: BookOpen },
-          { id: 'guardrails' as Tab, label: 'Guardrails', icon: Shield },
-        ]).map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
-              tab === t.id
-                ? 'border-accent text-accent-text'
-                : 'border-transparent text-text-muted hover:text-text-secondary'
-            }`}
-          >
-            <t.icon size={14} />
-            {t.label}
-          </button>
-        ))}
+      <div className="mb-6">
+        <SubNav
+          items={NERD_TABS}
+          active={tab}
+          onChange={setTab}
+          ariaLabel="Nerd settings sections"
+        />
       </div>
 
       {tab === 'skills' ? <SkillsTab /> : <GuardrailsTab />}

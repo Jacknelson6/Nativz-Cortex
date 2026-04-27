@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X, Film, FileText, Mic, Eye, Zap } from 'lucide-react';
 import type { MoodboardItem } from '@/lib/types/moodboard';
+import { SubNav, type SubNavItem } from '@/components/ui/sub-nav';
 
 interface SharedAnalysisPanelProps {
   item: MoodboardItem;
@@ -11,14 +12,14 @@ interface SharedAnalysisPanelProps {
 
 type Tab = 'overview' | 'transcript' | 'brief';
 
+const ANALYSIS_TABS: SubNavItem<Tab>[] = [
+  { slug: 'overview', label: 'Overview', icon: <Eye size={13} /> },
+  { slug: 'transcript', label: 'Transcript', icon: <Mic size={13} /> },
+  { slug: 'brief', label: 'Brief', icon: <FileText size={13} /> },
+];
+
 export function SharedAnalysisPanel({ item, onClose }: SharedAnalysisPanelProps) {
   const [tab, setTab] = useState<Tab>('overview');
-
-  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: 'overview', label: 'Overview', icon: <Eye size={12} /> },
-    { id: 'transcript', label: 'Transcript', icon: <Mic size={12} /> },
-    { id: 'brief', label: 'Brief', icon: <FileText size={12} /> },
-  ];
 
   return (
     <div className="fixed top-0 right-0 h-full w-[420px] bg-surface border-l border-nativz-border shadow-elevated z-50 flex flex-col animate-slide-in-right">
@@ -34,21 +35,13 @@ export function SharedAnalysisPanel({ item, onClose }: SharedAnalysisPanelProps)
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 px-4 pt-3 pb-2">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-              tab === t.id
-                ? 'bg-accent-surface text-accent-text'
-                : 'text-text-muted hover:text-text-secondary hover:bg-surface-hover'
-            }`}
-          >
-            {t.icon}
-            {t.label}
-          </button>
-        ))}
+      <div className="px-4 pt-3">
+        <SubNav
+          items={ANALYSIS_TABS}
+          active={tab}
+          onChange={setTab}
+          ariaLabel="Analysis sections"
+        />
       </div>
 
       {/* Content */}

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { SubNav, type SubNavItem } from '@/components/ui/sub-nav';
 import { centsToDollars, dollarsToCents } from '@/lib/accounting/periods';
 import { EmployeeDrawer } from './employee-drawer';
 import { ImportDialog } from './import-dialog';
@@ -71,13 +72,14 @@ const ENTRY_TYPE_LABELS: Record<EntryType, string> = {
   blogging: 'Blogging',
 };
 
-const SERVICE_TABS: Array<{ key: TabKey; label: string }> = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'editing', label: 'Editing' },
-  { key: 'smm', label: 'SMM' },
-  { key: 'affiliate', label: 'Affiliate' },
-  { key: 'blogging', label: 'Blogging' },
-];
+const SERVICE_TAB_LABELS: Record<TabKey, string> = {
+  overview: 'Overview',
+  editing: 'Editing',
+  smm: 'SMM',
+  affiliate: 'Affiliate',
+  blogging: 'Blogging',
+};
+const SERVICE_TAB_ORDER: TabKey[] = ['overview', 'editing', 'smm', 'affiliate', 'blogging'];
 
 export function PeriodDetailClient({
   period,
@@ -118,6 +120,18 @@ export function PeriodDetailClient({
     }
     return out;
   }, [entries]);
+
+  const serviceTabItems = useMemo<SubNavItem<TabKey>[]>(
+    () => SERVICE_TAB_ORDER.map((slug) => {
+      const count = slug === 'overview' ? entries.length : entriesByService[slug].length;
+      return {
+        slug,
+        label: SERVICE_TAB_LABELS[slug],
+        count: count > 0 ? count : null,
+      };
+    }),
+    [entries.length, entriesByService],
+  );
 
   function payeeFor(e: Entry): string {
     if (e.team_member_id) {
@@ -207,36 +221,12 @@ export function PeriodDetailClient({
       </div>
 
       {/* Service tabs */}
-      <div className="flex flex-wrap items-center gap-1 border-b border-nativz-border">
-        {SERVICE_TABS.map((tab) => {
-          const count = tab.key === 'overview' ? entries.length : entriesByService[tab.key].length;
-          const active = activeTab === tab.key;
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              className={`relative inline-flex items-center gap-1.5 px-4 py-2.5 text-base font-medium transition-colors cursor-pointer ${
-                active
-                  ? 'text-text-primary'
-                  : 'text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              {tab.label}
-              {count > 0 && (
-                <span className={`rounded-full px-2 py-0.5 text-xs tabular-nums ${
-                  active ? 'bg-accent text-white' : 'bg-surface-hover text-text-secondary'
-                }`}>
-                  {count}
-                </span>
-              )}
-              {active && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent rounded-full" />
-              )}
-            </button>
-          );
-        })}
-      </div>
+      <SubNav
+        items={serviceTabItems}
+        active={activeTab}
+        onChange={setActiveTab}
+        ariaLabel="Service entries"
+      />
 
       {/* Tab content */}
       {activeTab === 'overview' ? (

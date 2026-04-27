@@ -9,6 +9,11 @@ export interface SubNavItem<TSlug extends string = string> {
   slug: TSlug;
   label: string;
   icon?: ReactNode;
+  /**
+   * Optional count rendered quietly after the label (e.g. "Editing 5"). Use
+   * `null`/`undefined` to omit. Zeros render — let the caller hide them.
+   */
+  count?: number | null;
 }
 
 interface SubNavRowProps {
@@ -33,10 +38,11 @@ interface SubNavTabProps {
   onClick?: () => void;
   href?: string;
   icon?: ReactNode;
+  count?: number | null;
   children: ReactNode;
 }
 
-function SubNavTab({ active, pending, onClick, href, icon, children }: SubNavTabProps) {
+function SubNavTab({ active, pending, onClick, href, icon, count, children }: SubNavTabProps) {
   const cls =
     'inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors cursor-pointer border-b-2 -mb-px ' +
     (active
@@ -47,6 +53,16 @@ function SubNavTab({ active, pending, onClick, href, icon, children }: SubNavTab
     <>
       {pending ? <Loader2 size={13} className="animate-spin" /> : icon}
       {children}
+      {count != null && (
+        <span
+          className={
+            'tabular-nums text-[11px] ' +
+            (active ? 'text-accent-text' : 'text-text-muted/70')
+          }
+        >
+          {count}
+        </span>
+      )}
     </>
   );
 
@@ -95,6 +111,7 @@ export function SubNav<TSlug extends string>({
           active={it.slug === active}
           onClick={() => onChange(it.slug)}
           icon={it.icon}
+          count={it.count}
         >
           {it.label}
         </SubNavTab>
