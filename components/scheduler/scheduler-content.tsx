@@ -10,13 +10,14 @@ import { useSchedulerData } from '@/components/scheduler/hooks/use-scheduler-dat
 import type { CalendarPost, CalendarViewMode, MediaItem, ClientOption } from '@/components/scheduler/types';
 import { ComboSelect } from '@/components/ui/combo-select';
 import { Button } from '@/components/ui/button';
-import { Plus, Loader2, Link2, Share2, Wand2, Send } from 'lucide-react';
+import { Plus, Loader2, Link2, Share2, Wand2, Send, FolderInput } from 'lucide-react';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 
 const PostEditor = dynamic(() => import('@/components/scheduler/post-editor').then(m => ({ default: m.PostEditor })));
 const ConnectAccountDialog = dynamic(() => import('@/components/scheduler/connect-account-dialog').then(m => ({ default: m.ConnectAccountDialog })));
 const SharePostsDialog = dynamic(() => import('@/components/scheduler/share-posts-dialog').then(m => ({ default: m.SharePostsDialog })));
 const AutoScheduleDialog = dynamic(() => import('@/components/scheduler/auto-schedule-dialog').then(m => ({ default: m.AutoScheduleDialog })));
+const NewDropDialog = dynamic(() => import('@/components/scheduler/new-drop-dialog').then(m => ({ default: m.NewDropDialog })));
 import { toast } from 'sonner';
 
 function SchedulerInner({ initialClients }: { initialClients: ClientOption[] }) {
@@ -43,7 +44,7 @@ function SchedulerInner({ initialClients }: { initialClients: ClientOption[] }) 
     const connected = searchParams.get('connected');
     if (connected) {
       toast.success(`${connected.charAt(0).toUpperCase() + connected.slice(1)} connected`);
-      router.replace('/admin/scheduling', { scroll: false });
+      router.replace('/admin/calendar', { scroll: false });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -52,6 +53,7 @@ function SchedulerInner({ initialClients }: { initialClients: ClientOption[] }) 
   const [showConnect, setShowConnect] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [showAutoSchedule, setShowAutoSchedule] = useState(false);
+  const [showNewDrop, setShowNewDrop] = useState(false);
   const [showUnusedOnly, setShowUnusedOnly] = useState(false);
 
   // Post editor state
@@ -275,6 +277,15 @@ function SchedulerInner({ initialClients }: { initialClients: ClientOption[] }) 
             Connect
           </Button>
           <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowNewDrop(true)}
+            disabled={!selectedClientId}
+          >
+            <FolderInput size={14} />
+            From Drive
+          </Button>
+          <Button
             size="sm"
             onClick={() => {
               setEditingPost(null);
@@ -379,6 +390,19 @@ function SchedulerInner({ initialClients }: { initialClients: ClientOption[] }) 
           profiles={profiles}
           media={media}
           onComplete={handleAutoScheduleComplete}
+        />
+      )}
+
+      {showNewDrop && (
+        <NewDropDialog
+          open={showNewDrop}
+          onClose={() => setShowNewDrop(false)}
+          clientId={selectedClientId}
+          onCreated={(id) => {
+            setShowNewDrop(false);
+            toast.success('Content calendar created — analysing content…');
+            router.push(`/admin/calendar/${id}`);
+          }}
         />
       )}
 

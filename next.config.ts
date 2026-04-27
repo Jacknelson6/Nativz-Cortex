@@ -141,6 +141,10 @@ const nextConfig: NextConfig = {
       // Brand profile — moved to /(app)/brand-profile (slug preserved per Jack).
       { source: '/admin/brand-profile', destination: '/brand-profile', permanent: false },
       { source: '/admin/brand-profile/:path*', destination: '/brand-profile/:path*', permanent: false },
+      // Scheduler view consolidated under /admin/calendar (2026-04-27) — same
+      // SchedulerContent renders at both URLs, so collapse to one canonical URL.
+      // Preserves the ?postId=… query string that opens the post editor on load.
+      { source: '/admin/scheduler', destination: '/admin/calendar', permanent: false },
     ];
   },
   async rewrites() {
