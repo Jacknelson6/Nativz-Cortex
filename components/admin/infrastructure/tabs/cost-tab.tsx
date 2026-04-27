@@ -20,6 +20,7 @@ import { UsageDashboard } from '@/components/settings/usage-dashboard';
 import { ApifyTab } from './apify-tab';
 import { RangeToolbar } from '../range-toolbar';
 import { rangeFromSearchParams } from '../range-utils';
+import { HeadingHelp } from '../heading-help';
 import type { DateRange, DateRangePreset } from '@/lib/types/reporting';
 import { presetLabel } from '@/lib/reporting/date-presets';
 import { rangeToUtcIso } from '@/lib/reporting/range-utc';
@@ -80,11 +81,12 @@ export async function CostTab({ preset, from, to }: Props) {
     <div className="space-y-10">
       {/* Range picker drives everything below. URL-synced. */}
       <div className="flex items-center justify-between gap-3">
-        <div>
+        <div className="flex items-center gap-1.5">
           <h2 className="text-sm font-semibold text-text-primary">Spend</h2>
-          <p className="text-[12px] text-text-muted">
-            Pick a range — total cost, AI spend, and Apify runs all follow.
-          </p>
+          <HeadingHelp
+            title="Spend"
+            description="Pick a range — total cost, AI spend, and Apify runs all follow."
+          />
         </div>
         <RangeToolbar />
       </div>
@@ -119,12 +121,13 @@ export async function CostTab({ preset, from, to }: Props) {
 
       {/* AI — the larger share in most ranges. */}
       <section className="space-y-3">
-        <header className="flex items-baseline justify-between gap-3">
-          <div>
+        <header className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5">
             <h2 className="text-sm font-semibold text-text-primary">AI providers</h2>
-            <p className="text-[12px] text-text-muted">
-              OpenRouter + direct providers · tokens, spend, top models.
-            </p>
+            <HeadingHelp
+              title="AI providers"
+              description="OpenRouter + direct providers · tokens, spend, top models."
+            />
           </div>
           <span className="font-mono text-[12px] tabular-nums text-text-muted">
             {formatUsd(s.aiSpend)} · {label}
@@ -141,12 +144,13 @@ export async function CostTab({ preset, from, to }: Props) {
 
       {/* Apify — range-driven, matches the toolbar above. */}
       <section className="space-y-3">
-        <header className="flex items-baseline justify-between gap-3">
-          <div>
+        <header className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5">
             <h2 className="text-sm font-semibold text-text-primary">Apify scrapers</h2>
-            <p className="text-[12px] text-text-muted">
-              Actor runs, failure rate, account plan, proxy + storage.
-            </p>
+            <HeadingHelp
+              title="Apify scrapers"
+              description="Actor runs, failure rate, account plan, proxy + storage."
+            />
           </div>
           <span className="font-mono text-[12px] tabular-nums text-text-muted">
             {formatUsd(s.apifySpend)} · {label}

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Loader2,
-  Plus,
   RefreshCw,
   Trash2,
   Github,
@@ -86,11 +85,29 @@ interface ClientOption {
   slug: string;
 }
 
-export function AISettingsSkillsClient({ clients }: { clients: ClientOption[] }) {
+export function AISettingsSkillsClient({
+  clients,
+  createOpen: createOpenProp,
+  onCreateOpenChange,
+}: {
+  clients: ClientOption[];
+  /** Controlled — when provided, the parent owns the create-dialog state and renders the trigger. */
+  createOpen?: boolean;
+  onCreateOpenChange?: (open: boolean) => void;
+}) {
+  const controlled = createOpenProp !== undefined;
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingSkill, setEditingSkill] = useState<Skill | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
+  const [createOpenInternal, setCreateOpenInternal] = useState(false);
+  const createOpen = controlled ? createOpenProp! : createOpenInternal;
+  const setCreateOpen = useCallback(
+    (next: boolean) => {
+      if (controlled) onCreateOpenChange?.(next);
+      else setCreateOpenInternal(next);
+    },
+    [controlled, onCreateOpenChange],
+  );
 
   const clientMap = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients]);
 
@@ -169,12 +186,6 @@ export function AISettingsSkillsClient({ clients }: { clients: ClientOption[] })
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-end">
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus size={14} /> New skill
-        </Button>
-      </div>
-
       {skills.length === 0 ? (
         <button
           type="button"

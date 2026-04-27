@@ -1,67 +1,37 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, Check, ExternalLink, Cloud, CloudOff, ArrowDownFromLine } from 'lucide-react';
+import { Loader2, Check, ExternalLink } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import type { LlmProviderKeyBucket } from '@/lib/ai/provider-keys';
 
 type Masked = { configured: boolean; masked: string | null };
 type MaskedBlock = Record<LlmProviderKeyBucket, Masked>;
 
-interface VercelMirror {
-  available: boolean;
-  envKey?: string;
-  configured?: boolean;
-  masked?: string | null;
-  updatedAt?: number | null;
-  targets?: string[];
-  differsFromDb?: boolean;
-  dbEmpty?: boolean;
-}
-
 type Provider = 'openrouter' | 'openai';
 
 interface ProviderConfig {
   id: Provider;
   title: string;
-  description: React.ReactNode;
   manageHref: string;
   manageLabel: string;
   inputPlaceholder: string;
-  vercelEnvName: string;
 }
 
 const PROVIDERS: Record<Provider, ProviderConfig> = {
   openrouter: {
     id: 'openrouter',
     title: 'OpenRouter API key',
-    description: (
-      <>
-        One key drives every model call across Cortex. Saving here writes to the DB
-        <em> and</em> pushes the same value up to Vercel&apos;s{' '}
-        <code className="font-mono text-text-secondary">OPENROUTER_API_KEY</code>{' '}
-        env var — so the two sources never drift.
-      </>
-    ),
     manageHref: 'https://openrouter.ai/settings/keys',
     manageLabel: 'Manage keys on OpenRouter',
     inputPlaceholder: 'sk-or-v1-…',
-    vercelEnvName: 'OPENROUTER_API_KEY',
   },
   openai: {
     id: 'openai',
     title: 'OpenAI API key',
-    description: (
-      <>
-        Powers ChatGPT Image generation in the ad creator (gpt-image-1.5). Saving here writes
-        to the DB <em>and</em> mirrors the value to Vercel&apos;s{' '}
-        <code className="font-mono text-text-secondary">OPENAI_API_KEY</code> env var.
-      </>
-    ),
     manageHref: 'https://platform.openai.com/api-keys',
     manageLabel: 'Manage keys on OpenAI',
     inputPlaceholder: 'sk-…',
-    vercelEnvName: 'OPENAI_API_KEY',
   },
 };
 
@@ -87,36 +57,19 @@ const EMPTY_BLOCK: MaskedBlock = {
   nerd: { configured: false, masked: null },
 };
 
-function relativeTime(ts: number | null | undefined): string {
-  if (!ts) return '';
-  const diff = Date.now() - ts;
-  const m = Math.floor(diff / 60_000);
-  if (m < 1) return 'just now';
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
-}
-
 interface SharedState {
   blocks: Record<Provider, MaskedBlock>;
-  mirrors: Record<Provider, VercelMirror>;
 }
 
 /**
- * Provider credentials UI — renders both OpenRouter and OpenAI panels stacked.
- * Each panel writes to its own provider bucket but shares one server fetch so
- * mirror status stays consistent.
- *
- *   • Type a new key + Save → writes to DB AND pushes the same value up to
- *     Vercel's matching env var (production + preview + development).
- *   • "Use Vercel value" button (when Vercel's env differs from DB) → pulls
- *     the decrypted Vercel value into the DB so the dashboard matches.
+ * Provider credentials UI — one card per provider with a key-or-no-key
+ * indicator + an input. The Vercel mirror still happens server-side on save
+ * (so production runtime keeps working), but is intentionally hidden from
+ * this view to keep the surface minimal.
  */
 export function LlmCredentialsSection() {
   const [state, setState] = useState<SharedState>({
     blocks: { openrouter: EMPTY_BLOCK, openai: EMPTY_BLOCK },
-    mirrors: { openrouter: { available: false }, openai: { available: false } },
   });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -124,14 +77,7 @@ export function LlmCredentialsSection() {
   const applyResponse = useCallback((data: Record<string, unknown>) => {
     const openrouter = (data.openrouter as MaskedBlock | undefined) ?? EMPTY_BLOCK;
     const openai = (data.openai as MaskedBlock | undefined) ?? EMPTY_BLOCK;
-    const mirror = (data.vercelMirror as { openrouter?: VercelMirror; openai?: VercelMirror } | undefined) ?? {};
-    setState({
-      blocks: { openrouter, openai },
-      mirrors: {
-        openrouter: mirror.openrouter ?? { available: false },
-        openai: mirror.openai ?? { available: false },
-      },
-    });
+    setState({ blocks: { openrouter, openai } });
   }, []);
 
   useEffect(() => {
@@ -171,13 +117,11 @@ export function LlmCredentialsSection() {
       <ProviderKeyPanel
         config={PROVIDERS.openrouter}
         block={state.blocks.openrouter}
-        mirror={state.mirrors.openrouter}
         onResponse={applyResponse}
       />
       <ProviderKeyPanel
         config={PROVIDERS.openai}
         block={state.blocks.openai}
-        mirror={state.mirrors.openai}
         onResponse={applyResponse}
       />
     </div>
@@ -201,18 +145,15 @@ function CardSkeleton() {
 function ProviderKeyPanel({
   config,
   block,
-  mirror,
   onResponse,
 }: {
   config: ProviderConfig;
   block: MaskedBlock;
-  mirror: VercelMirror;
   onResponse: (data: Record<string, unknown>) => void;
 }) {
   const current = pickRepresentativeKey(block);
   const [input, setInput] = useState('');
   const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -248,32 +189,14 @@ function ProviderKeyPanel({
       (acc, b) => ({ ...acc, [b]: value }),
       {},
     );
-    const msg =
-      value === null
-        ? 'Key removed.'
-        : mirror.available
-          ? 'Key saved + mirrored to Vercel.'
-          : 'Key saved.';
-    await patch({ [config.id]: fanned }, msg);
-  }
-
-  async function syncFromVercel() {
-    setSyncing(true);
-    try {
-      await patch({ syncFromVercel: { [config.id]: true } }, 'Pulled from Vercel.');
-    } finally {
-      setSyncing(false);
-    }
+    await patch({ [config.id]: fanned }, value === null ? 'Key removed.' : 'Key saved.');
   }
 
   return (
     <Card>
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <h2 className="text-[15px] font-semibold text-text-primary">{config.title}</h2>
-            <p className="mt-1 text-[13px] text-text-muted">{config.description}</p>
-          </div>
+          <h2 className="text-[15px] font-semibold text-text-primary">{config.title}</h2>
           <a
             href={config.manageHref}
             target="_blank"
@@ -284,18 +207,11 @@ function ProviderKeyPanel({
           </a>
         </div>
 
-        <VercelMirrorPill
-          mirror={mirror}
-          dbConfigured={current.configured}
-          onSync={syncFromVercel}
-          syncing={syncing}
-        />
-
         <div className="rounded-lg border border-nativz-border/70 bg-surface-hover/25 p-4">
           {current.configured && (
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="font-mono text-[12px] text-text-secondary">
-                Saved in DB: {current.masked ?? '••••'}
+                Saved: {current.masked ?? '••••'}
               </p>
               <button
                 type="button"
@@ -335,116 +251,5 @@ function ProviderKeyPanel({
         </div>
       </div>
     </Card>
-  );
-}
-
-function VercelMirrorPill({
-  mirror,
-  dbConfigured,
-  onSync,
-  syncing,
-}: {
-  mirror: VercelMirror;
-  dbConfigured: boolean;
-  onSync: () => void;
-  syncing: boolean;
-}) {
-  if (!mirror.available) {
-    return (
-      <div className="flex items-center gap-2 rounded-lg border border-nativz-border/60 bg-background/40 px-3 py-2 text-[12px] text-text-muted">
-        <CloudOff size={13} />
-        <span>
-          Vercel sync not configured — add <code className="font-mono">VERCEL_TOKEN</code> and{' '}
-          <code className="font-mono">VERCEL_PROJECT_ID</code> to enable two-way sync.
-        </span>
-      </div>
-    );
-  }
-
-  if (!mirror.configured) {
-    return (
-      <div
-        className="flex items-center gap-2 rounded-lg border px-3 py-2 text-[12px]"
-        style={{
-          borderColor: 'color-mix(in srgb, var(--status-warning) 35%, transparent)',
-          backgroundColor: 'color-mix(in srgb, var(--status-warning) 10%, transparent)',
-          color: 'var(--text-primary)',
-        }}
-      >
-        <Cloud size={13} style={{ color: 'var(--status-warning)' }} />
-        <span>
-          Vercel&apos;s <code className="font-mono">{mirror.envKey}</code> is empty. Saving a key
-          here will create it.
-        </span>
-      </div>
-    );
-  }
-
-  const differs = mirror.differsFromDb && dbConfigured;
-  const matches = !differs && dbConfigured;
-  const envOnly = !dbConfigured && mirror.configured;
-
-  if (matches) {
-    return (
-      <div
-        className="flex items-center gap-2 rounded-lg border px-3 py-2 text-[12px]"
-        style={{
-          borderColor: 'color-mix(in srgb, var(--status-success) 35%, transparent)',
-          backgroundColor: 'color-mix(in srgb, var(--status-success) 10%, transparent)',
-          color: 'var(--text-primary)',
-        }}
-      >
-        <Cloud size={13} style={{ color: 'var(--status-success)' }} />
-        <span>
-          In sync with Vercel{' '}
-          <code className="font-mono">{mirror.envKey}</code>
-          {mirror.targets && mirror.targets.length > 0 ? ` · ${mirror.targets.join(' · ')}` : ''}
-          {mirror.updatedAt ? ` · updated ${relativeTime(mirror.updatedAt)}` : ''}
-        </span>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2 text-[12px]"
-      style={{
-        borderColor: 'color-mix(in srgb, var(--status-warning) 40%, transparent)',
-        backgroundColor: 'color-mix(in srgb, var(--status-warning) 12%, transparent)',
-        color: 'var(--text-primary)',
-      }}
-    >
-      <div className="flex items-start gap-2">
-        <Cloud size={13} className="mt-0.5 shrink-0" style={{ color: 'var(--status-warning)' }} />
-        <span>
-          {envOnly ? (
-            <>
-              Vercel has a value for <code className="font-mono">{mirror.envKey}</code>
-              {' '}({mirror.masked ?? '••••'}) but the DB is empty.
-            </>
-          ) : (
-            <>
-              Vercel&apos;s <code className="font-mono">{mirror.envKey}</code>{' '}
-              ({mirror.masked ?? '••••'}) differs from the DB key.
-              {mirror.updatedAt ? ` Vercel updated ${relativeTime(mirror.updatedAt)}.` : ''}
-            </>
-          )}
-        </span>
-      </div>
-      <button
-        type="button"
-        onClick={onSync}
-        disabled={syncing}
-        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[12px] font-medium transition-colors disabled:opacity-50"
-        style={{
-          borderColor: 'color-mix(in srgb, var(--status-warning) 55%, transparent)',
-          backgroundColor: 'var(--status-warning)',
-          color: '#1a1400',
-        }}
-      >
-        {syncing ? <Loader2 size={12} className="animate-spin" /> : <ArrowDownFromLine size={12} />}
-        Use Vercel value
-      </button>
-    </div>
   );
 }

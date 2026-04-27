@@ -8,6 +8,7 @@
 import { TopicSearchTab } from './topic-search-tab';
 import { RangeToolbar } from '../range-toolbar';
 import { rangeFromSearchParams } from '../range-utils';
+import { HeadingHelp } from '../heading-help';
 
 interface Props {
   preset?: string;
@@ -21,11 +22,12 @@ export async function SearchRunsTab({ preset, from, to }: Props) {
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <div>
+        <div className="flex items-center gap-1.5">
           <h2 className="text-sm font-semibold text-text-primary">Topic search runs</h2>
-          <p className="text-[12px] text-text-muted">
-            Success rate, stage timings, and recent runs — all for the range you pick.
-          </p>
+          <HeadingHelp
+            title="Topic search runs"
+            description="Success rate, stage timings, and recent runs — all for the range you pick."
+          />
         </div>
         <RangeToolbar />
       </div>

@@ -14,6 +14,8 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect } from 'react';
+import { HelpCircle } from 'lucide-react';
+import { TooltipCard } from '@/components/ui/tooltip-card';
 
 export interface SectionTabDef {
   slug: string;
@@ -137,19 +139,43 @@ export function SectionHeader({ title, action }: SectionHeaderProps) {
 interface SectionPanelProps {
   title?: string;
   description?: string;
+  /**
+   * Long-form explainer surfaced via a `?` tooltip next to the title — keeps
+   * the page visually quiet while still answering "what is this?" on demand.
+   */
+  helpText?: string;
+  /** Optional override for the tooltip heading (defaults to `title`). */
+  helpTitle?: string;
+  /** Right-aligned slot rendered on the same row as the title (e.g. action button). */
+  action?: React.ReactNode;
   children: React.ReactNode;
 }
 
-export function SectionPanel({ title, description, children }: SectionPanelProps) {
-  if (!title && !description) return <>{children}</>;
+export function SectionPanel({ title, description, helpText, helpTitle, action, children }: SectionPanelProps) {
+  const hasHeader = !!title || !!description || !!helpText || !!action;
+  if (!hasHeader) return <>{children}</>;
   return (
     <section className="space-y-4">
-      {title || description ? (
-        <div>
-          {title ? <h2 className="text-base font-semibold text-text-primary">{title}</h2> : null}
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            {title ? <h2 className="text-base font-semibold text-text-primary">{title}</h2> : null}
+            {helpText ? (
+              <TooltipCard title={helpTitle ?? title ?? ''} description={helpText} iconTrigger>
+                <button
+                  type="button"
+                  aria-label={`Learn more about ${title ?? 'this section'}`}
+                  className="inline-flex h-5 w-5 items-center justify-center rounded-full text-text-muted/60 transition-colors hover:bg-surface-hover hover:text-text-secondary cursor-help"
+                >
+                  <HelpCircle size={13} />
+                </button>
+              </TooltipCard>
+            ) : null}
+          </div>
           {description ? <p className="mt-1 max-w-2xl text-xs text-text-muted">{description}</p> : null}
         </div>
-      ) : null}
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
       {children}
     </section>
   );

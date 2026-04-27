@@ -16,7 +16,7 @@ import { refreshAiSettings } from './actions';
 import { AiRoutingSection } from '@/components/settings/ai-routing-section';
 import { LlmCredentialsSection } from '@/components/settings/llm-credentials-section';
 import { ScraperVolumesSection } from '@/components/settings/scraper-volumes-section';
-import { AISettingsSkillsClient } from './skills-client';
+import { AISettingsSkillsPanel } from './skills-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -97,21 +97,19 @@ function renderTab(
     case 'ai':
       return (
         <div className="space-y-10">
-          <SectionPanel title="Model" description="One OpenRouter slug runs every Cortex feature.">
+          <SectionPanel
+            title="Model"
+            helpText="One OpenRouter slug runs every Cortex feature — the Nerd, topic search, ad concepting, brand DNA, everything. Change it here and the whole app picks up the new model on the next request."
+          >
             <AiRoutingSection />
           </SectionPanel>
           <SectionPanel
             title="API keys"
-            description="OpenRouter powers the model above. OpenAI powers ChatGPT Image generation in the ad creator."
+            helpText="OpenRouter powers the model above. OpenAI powers ChatGPT Image generation in the ad creator. Saving a key here writes it to the database and mirrors it to Vercel so production runtime keeps working."
           >
             <LlmCredentialsSection />
           </SectionPanel>
-          <SectionPanel
-            title="Skills"
-            description="Markdown context loaded into the Nerd's system prompt. Each skill picks which harnesses it applies to — the admin Nerd, admin Strategy Lab, and/or the portal Strategy Lab — and can be scoped to a single client."
-          >
-            <AISettingsSkillsClient clients={clients} />
-          </SectionPanel>
+          <AISettingsSkillsPanel clients={clients} />
         </div>
       );
     case 'trend-finder':
