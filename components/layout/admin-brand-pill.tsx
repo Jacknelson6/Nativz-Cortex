@@ -47,8 +47,26 @@ export function AdminBrandPill() {
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [activeDropBrandIds, setActiveDropBrandIds] = useState<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/calendar/drops/active-brands');
+        if (!res.ok) return;
+        const json = (await res.json()) as { brandIds?: string[] };
+        if (!cancelled) setActiveDropBrandIds(new Set(json.brandIds ?? []));
+      } catch {
+        // Indicator is non-critical — failures are silently ignored.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Active brand first; everything else alphabetical underneath.
   const orderedBrands = useMemo(() => {
@@ -107,6 +125,7 @@ export function AdminBrandPill() {
   );
 
   const triggerLabel = brand?.name ?? 'Select a brand';
+  const triggerHasActiveDrop = brand ? activeDropBrandIds.has(brand.id) : false;
 
   return (
     <div ref={containerRef} className="relative w-full">
@@ -126,7 +145,15 @@ export function AdminBrandPill() {
          *  not a control. Muting moves to the label + chevron only so
          *  admin-only routes still read as "brand context paused" without
          *  visually punishing the brand itself. */}
-        <BrandIcon brand={brand} size={20} />
+        <div className="relative shrink-0">
+          <BrandIcon brand={brand} size={20} />
+          {triggerHasActiveDrop && (
+            <span
+              className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-background"
+              title="Has an active content drop"
+            />
+          )}
+        </div>
         <div
           className={`min-w-0 flex-1 text-left transition-opacity duration-150 ${
             isMuted ? 'opacity-60' : ''
@@ -175,6 +202,7 @@ export function AdminBrandPill() {
             ) : (
               filtered.map((b) => {
                 const isActive = brand?.id === b.id;
+                const hasDrop = activeDropBrandIds.has(b.id);
                 return (
                   <button
                     key={b.id}
@@ -188,7 +216,15 @@ export function AdminBrandPill() {
                         : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary'
                     }`}
                   >
-                    <BrandIcon brand={b} size={20} />
+                    <div className="relative shrink-0">
+                      <BrandIcon brand={b} size={20} />
+                      {hasDrop && (
+                        <span
+                          className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-surface"
+                          title="Has an active content drop"
+                        />
+                      )}
+                    </div>
                     <span className="min-w-0 flex-1 truncate text-left">{b.name}</span>
                     {isActive && <Check size={14} className="shrink-0 text-accent-text" />}
                   </button>
