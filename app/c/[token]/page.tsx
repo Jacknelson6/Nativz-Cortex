@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { use, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle, AlertTriangle, CalendarDays, CheckCircle, Clock, File as FileIcon,
@@ -7,6 +8,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog } from '@/components/ui/dialog';
+import { useBrandMode } from '@/components/layout/brand-mode-provider';
 
 interface CommentAttachment {
   url: string;
@@ -197,6 +199,9 @@ function SharedDropView({
     <div className="min-h-screen bg-background">
       <header className="border-b border-nativz-border bg-surface px-4 py-4 sm:px-6 sm:py-5">
         <div className="mx-auto max-w-5xl">
+          <div className="mb-3 flex items-center">
+            <ShareHeaderLogo />
+          </div>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <h1 className="text-base font-semibold text-text-primary sm:text-xl">
@@ -347,6 +352,33 @@ function SharedDropView({
         }}
       />
     </div>
+  );
+}
+
+function ShareHeaderLogo() {
+  const { mode } = useBrandMode();
+  if (mode === 'nativz') {
+    return (
+      <Image
+        src="/nativz-logo.png"
+        alt="Nativz"
+        width={120}
+        height={45}
+        className="h-5 w-auto sm:h-6"
+        priority
+      />
+    );
+  }
+  // eslint-disable-next-line @next/next/no-img-element
+  return (
+    <img
+      src="/anderson-logo-dark.svg"
+      alt="Anderson Collaborative"
+      className="h-5 w-auto sm:h-6"
+      loading="eager"
+      fetchPriority="high"
+      decoding="async"
+    />
   );
 }
 
