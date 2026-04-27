@@ -3,13 +3,16 @@
 import { useCallback, useEffect, useRef, useState, use } from 'react';
 import Link from 'next/link';
 import {
+  AlertTriangle,
   ArrowLeft,
   CalendarDays,
+  CheckCircle,
   CheckCircle2,
   Copy,
   Hash,
   Link2,
   Loader2,
+  MessageSquare,
   Pencil,
   Save,
   Send,
@@ -29,9 +32,29 @@ const POLL_MS = 3000;
 const IN_FLIGHT_DROP: DropStatus[] = ['ingesting', 'analyzing', 'generating'];
 const IN_FLIGHT_VIDEO: DropVideoStatus[] = ['pending', 'downloading', 'analyzing', 'caption_pending'];
 
+type ReviewStatus = 'approved' | 'changes_requested' | 'comment';
+
+interface DropComment {
+  id: string;
+  review_link_id: string;
+  author_name: string;
+  content: string;
+  status: ReviewStatus;
+  created_at: string;
+}
+
 interface DropResponse {
   drop: ContentDrop;
   videos: ContentDropVideo[];
+  commentsByPostId: Record<string, DropComment[]>;
+}
+
+function latestReview(comments: DropComment[]): 'approved' | 'changes_requested' | null {
+  for (let i = comments.length - 1; i >= 0; i--) {
+    const c = comments[i];
+    if (c.status === 'approved' || c.status === 'changes_requested') return c.status;
+  }
+  return null;
 }
 
 export default function DropDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -188,7 +211,15 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
       {videos.length > 0 && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {videos.map((v) => (
-            <VideoCard key={v.id} dropId={drop.id} video={v} onUpdated={refresh} />
+            <VideoCard
+              key={v.id}
+              dropId={drop.id}
+              video={v}
+              comments={
+                v.scheduled_post_id ? data.commentsByPostId[v.scheduled_post_id] ?? [] : []
+              }
+              onUpdated={refresh}
+            />
           ))}
         </div>
       )}
@@ -285,10 +316,11 @@ function VideoStatusPill({ status }: { status: DropVideoStatus }) {
 interface VideoCardProps {
   dropId: string;
   video: ContentDropVideo;
+  comments: DropComment[];
   onUpdated: () => void;
 }
 
-function VideoCard({ dropId, video, onUpdated }: VideoCardProps) {
+function VideoCard({ dropId, video, comments, onUpdated }: VideoCardProps) {
   const [editing, setEditing] = useState(false);
   const [caption, setCaption] = useState(video.draft_caption ?? '');
   const [hashtags, setHashtags] = useState((video.draft_hashtags ?? []).join(' '));
@@ -337,6 +369,8 @@ function VideoCard({ dropId, video, onUpdated }: VideoCardProps) {
     }
   }
 
+  const review = latestReview(comments);
+
   return (
     <div className="overflow-hidden rounded-xl border border-nativz-border bg-surface">
       <div className="relative aspect-[9/16] w-full bg-background">
@@ -353,8 +387,18 @@ function VideoCard({ dropId, video, onUpdated }: VideoCardProps) {
             No thumbnail
           </div>
         )}
-        <div className="absolute right-2 top-2">
+        <div className="absolute right-2 top-2 flex flex-col items-end gap-1">
           <VideoStatusPill status={video.status} />
+          {review === 'approved' && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/90 px-2 py-0.5 text-[11px] font-medium text-emerald-950">
+              <CheckCircle size={10} /> Approved
+            </span>
+          )}
+          {review === 'changes_requested' && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/90 px-2 py-0.5 text-[11px] font-medium text-amber-950">
+              <AlertTriangle size={10} /> Changes
+            </span>
+          )}
         </div>
         {scheduled && (
           <div className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/90 px-2 py-0.5 text-[11px] font-medium text-emerald-950">
@@ -456,6 +500,51 @@ function VideoCard({ dropId, video, onUpdated }: VideoCardProps) {
           </div>
         )}
       </div>
+
+      {comments.length > 0 && (
+        <div className="border-t border-nativz-border bg-background/40 px-4 py-3">
+          <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-text-muted">
+            <MessageSquare size={11} />
+            {comments.length} comment{comments.length === 1 ? '' : 's'}
+          </div>
+          <div className="space-y-2">
+            {comments.map((c) => (
+              <CommentRow key={c.id} comment={c} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CommentRow({ comment }: { comment: DropComment }) {
+  const tone =
+    comment.status === 'approved'
+      ? 'text-emerald-300'
+      : comment.status === 'changes_requested'
+        ? 'text-amber-300'
+        : 'text-text-secondary';
+  const Icon =
+    comment.status === 'approved'
+      ? CheckCircle
+      : comment.status === 'changes_requested'
+        ? AlertTriangle
+        : MessageSquare;
+  const time = new Date(comment.created_at).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  return (
+    <div className="rounded-lg border border-nativz-border bg-surface px-3 py-2">
+      <div className="mb-0.5 flex items-center gap-1.5 text-[11px]">
+        <Icon size={11} className={tone} />
+        <span className="font-medium text-text-primary">{comment.author_name}</span>
+        <span className="text-text-muted">· {time}</span>
+      </div>
+      <p className="whitespace-pre-wrap text-xs text-text-secondary">{comment.content}</p>
     </div>
   );
 }
