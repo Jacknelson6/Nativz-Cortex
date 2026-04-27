@@ -117,6 +117,7 @@ function SharedDropView({
   const [pendingName, setPendingName] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [playingPost, setPlayingPost] = useState<SharedPost | null>(null);
+  const [detailPostId, setDetailPostId] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -267,7 +268,7 @@ function SharedDropView({
             ))}
           </div>
         ) : (
-          <CalendarGrid posts={data.posts} drop={data.drop} onSelect={(p) => setPlayingPost(p)} />
+          <CalendarGrid posts={data.posts} drop={data.drop} onSelect={(p) => setDetailPostId(p.id)} />
         )}
       </main>
 
@@ -314,6 +315,20 @@ function SharedDropView({
       </Dialog>
 
       <VideoPlayerModal post={playingPost} onClose={() => setPlayingPost(null)} />
+
+      <PostDetailModal
+        post={detailPostId ? data.posts.find((p) => p.id === detailPostId) ?? null : null}
+        index={detailPostId ? data.posts.findIndex((p) => p.id === detailPostId) + 1 : 0}
+        token={token}
+        authorName={authorName}
+        onCommentAdded={appendComment}
+        onCaptionUpdated={updatePostCaption}
+        onClose={() => setDetailPostId(null)}
+        requireName={() => {
+          setPendingName(authorName);
+          setNameModalOpen(true);
+        }}
+      />
     </div>
   );
 }
@@ -355,6 +370,44 @@ function VideoPlayerModal({ post, onClose }: { post: SharedPost | null; onClose:
             </div>
           </div>
         )}
+      </div>
+    </Dialog>
+  );
+}
+
+function PostDetailModal({
+  post,
+  index,
+  token,
+  authorName,
+  onCommentAdded,
+  onCaptionUpdated,
+  onClose,
+  requireName,
+}: {
+  post: SharedPost | null;
+  index: number;
+  token: string;
+  authorName: string;
+  onCommentAdded: (postId: string, c: SharedComment) => void;
+  onCaptionUpdated: (postId: string, caption: string, c: SharedComment) => void;
+  onClose: () => void;
+  requireName: () => void;
+}) {
+  if (!post) return null;
+  return (
+    <Dialog open={!!post} onClose={onClose} title="" maxWidth="2xl" bodyClassName="p-0" className="max-h-[92vh]">
+      <div className="max-h-[92vh] overflow-y-auto">
+        <PostCard
+          index={index}
+          post={post}
+          token={token}
+          authorName={authorName}
+          onCommentAdded={(c) => onCommentAdded(post.id, c)}
+          onCaptionUpdated={(caption, c) => onCaptionUpdated(post.id, caption, c)}
+          requireName={requireName}
+          withVideoHeader
+        />
       </div>
     </Dialog>
   );
@@ -448,8 +501,10 @@ function CalendarCell({
               </div>
             )}
             {p.video_url && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/30">
-                <Play size={14} className="text-white opacity-0 group-hover:opacity-100" fill="white" />
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-black/55 shadow ring-1 ring-white/20 backdrop-blur-sm">
+                  <Play size={10} className="ml-px text-white" fill="white" />
+                </div>
               </div>
             )}
             {review === 'approved' && (
@@ -530,6 +585,7 @@ function PostCard({
   onCaptionUpdated,
   onPlay,
   requireName,
+  withVideoHeader = false,
 }: {
   index: number;
   post: SharedPost;
@@ -537,8 +593,9 @@ function PostCard({
   authorName: string;
   onCommentAdded: (c: SharedComment) => void;
   onCaptionUpdated: (caption: string, c: SharedComment) => void;
-  onPlay: () => void;
+  onPlay?: () => void;
   requireName: () => void;
+  withVideoHeader?: boolean;
 }) {
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -631,7 +688,7 @@ function PostCard({
       requireName();
       return;
     }
-    if (status === 'comment' && !commentText.trim() && pendingAttachments.length === 0) {
+    if (status === 'changes_requested' && !commentText.trim() && pendingAttachments.length === 0) {
       toast.error('Please enter a comment or attach a file');
       return;
     }
@@ -646,11 +703,7 @@ function PostCard({
           authorName: authorName.trim(),
           content:
             commentText.trim() ||
-            (status === 'approved'
-              ? 'Approved'
-              : status === 'changes_requested'
-                ? 'Changes requested'
-                : ''),
+            (status === 'approved' ? 'Approved' : ''),
           status,
           attachments: pendingAttachments,
         }),
@@ -660,13 +713,7 @@ function PostCard({
       onCommentAdded(json.comment as SharedComment);
       setCommentText('');
       setPendingAttachments([]);
-      toast.success(
-        status === 'approved'
-          ? 'Post approved'
-          : status === 'changes_requested'
-            ? 'Changes requested'
-            : 'Comment added',
-      );
+      toast.success(status === 'approved' ? 'Post approved' : 'Comment posted');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to submit');
     } finally {
@@ -674,125 +721,154 @@ function PostCard({
     }
   }
 
-  return (
-    <article className="overflow-hidden rounded-xl border border-nativz-border bg-surface">
-      <div className="flex gap-3 p-3 sm:gap-4 sm:p-4 md:flex-row">
-        <div className="shrink-0">
+  const captionBlock = (
+    <div className="min-w-0 flex-1 space-y-2 sm:space-y-3">
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+        <span className="text-xs font-medium text-text-muted">Post {index}</span>
+        <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-xs text-blue-300">
+          <Clock size={11} /> {scheduledLabel}
+        </span>
+        {review === 'approved' && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-300">
+            <CheckCircle size={11} /> Approved
+          </span>
+        )}
+        {review === 'changes_requested' && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-300">
+            <AlertTriangle size={11} /> Changes requested
+          </span>
+        )}
+      </div>
+
+      {editingCaption ? (
+        <div className="space-y-2">
+          <textarea
+            value={draftCaption}
+            onChange={(e) => setDraftCaption(e.target.value)}
+            rows={Math.max(3, Math.min(10, draftCaption.split('\n').length + 1))}
+            disabled={savingCaption}
+            autoFocus
+            className="w-full resize-none rounded-lg border border-accent-text/40 bg-background/60 px-3 py-2 text-base leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text sm:text-sm"
+          />
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setDraftCaption(post.caption);
+                setEditingCaption(false);
+              }}
+              disabled={savingCaption}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-nativz-border bg-transparent px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={saveCaption}
+              disabled={savingCaption || !draftCaption.trim()}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent-text px-3 py-1.5 text-xs font-medium text-white transition-colors hover:opacity-90 disabled:opacity-50"
+            >
+              {savingCaption ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
+              Save caption
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="group relative">
+          <p className="whitespace-pre-wrap pr-10 text-sm leading-relaxed text-text-primary">
+            {post.caption || (
+              <span className="italic text-text-muted">No caption yet</span>
+            )}
+          </p>
           <button
             type="button"
-            onClick={onPlay}
-            disabled={!post.video_url}
-            className="group relative aspect-[9/16] w-24 overflow-hidden rounded-lg bg-surface-hover sm:w-32 md:w-36 disabled:cursor-default"
+            onClick={() => {
+              if (!authorName.trim()) {
+                requireName();
+                return;
+              }
+              setDraftCaption(post.caption);
+              setEditingCaption(true);
+            }}
+            className="absolute right-0 top-0 inline-flex items-center gap-1 rounded-md border border-nativz-border bg-surface px-2 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-hover"
+            title="Edit caption"
           >
-            {post.cover_image_url ? (
-              <img
-                src={post.cover_image_url}
-                alt=""
-                className="h-full w-full object-cover"
+            <Pencil size={11} /> Edit
+          </button>
+        </div>
+      )}
+
+      {!editingCaption && post.hashtags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {post.hashtags.map((h) => (
+            <span key={h} className="text-xs text-accent-text">
+              #{h}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <article
+      className={
+        withVideoHeader
+          ? 'overflow-hidden bg-surface'
+          : 'overflow-hidden rounded-xl border border-nativz-border bg-surface'
+      }
+    >
+      {withVideoHeader ? (
+        <>
+          <div className="relative bg-black">
+            {post.video_url ? (
+              <video
+                src={post.video_url}
+                controls
+                playsInline
+                poster={post.cover_image_url ?? undefined}
+                className="mx-auto block max-h-[55vh] w-auto"
               />
             ) : (
-              <div className="flex h-full w-full items-center justify-center">
-                <Film size={28} className="text-text-muted" />
-              </div>
-            )}
-            {post.video_url && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 sm:h-10 sm:w-10">
-                  <Play size={16} fill="black" className="ml-0.5 text-black sm:hidden" />
-                  <Play size={18} fill="black" className="ml-0.5 hidden text-black sm:block" />
+              <div className="flex aspect-[9/16] max-h-[55vh] w-full items-center justify-center">
+                <div className="text-center text-text-muted">
+                  <Film className="mx-auto mb-2" size={32} />
+                  <p className="text-sm">Video not available</p>
                 </div>
               </div>
             )}
-          </button>
-        </div>
-
-        <div className="min-w-0 flex-1 space-y-2 sm:space-y-3">
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-            <span className="text-xs font-medium text-text-muted">Post {index}</span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-xs text-blue-300">
-              <Clock size={11} /> {scheduledLabel}
-            </span>
-            {review === 'approved' && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-300">
-                <CheckCircle size={11} /> Approved
-              </span>
-            )}
-            {review === 'changes_requested' && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-300">
-                <AlertTriangle size={11} /> Changes requested
-              </span>
-            )}
           </div>
-
-          {editingCaption ? (
-            <div className="space-y-2">
-              <textarea
-                value={draftCaption}
-                onChange={(e) => setDraftCaption(e.target.value)}
-                rows={Math.max(3, Math.min(10, draftCaption.split('\n').length + 1))}
-                disabled={savingCaption}
-                autoFocus
-                className="w-full resize-none rounded-lg border border-accent-text/40 bg-background/60 px-3 py-2 text-base leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text sm:text-sm"
-              />
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDraftCaption(post.caption);
-                    setEditingCaption(false);
-                  }}
-                  disabled={savingCaption}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-nativz-border bg-transparent px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={saveCaption}
-                  disabled={savingCaption || !draftCaption.trim()}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-accent-text px-3 py-1.5 text-xs font-medium text-white transition-colors hover:opacity-90 disabled:opacity-50"
-                >
-                  {savingCaption ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
-                  Save caption
-                </button>
+          <div className="p-3 sm:p-4">{captionBlock}</div>
+        </>
+      ) : (
+        <div className="flex gap-3 p-3 sm:gap-4 sm:p-4 md:flex-row">
+          <div className="shrink-0">
+            <button
+              type="button"
+              onClick={onPlay}
+              className="relative aspect-[9/16] w-24 overflow-hidden rounded-lg bg-surface-hover sm:w-32 md:w-36"
+            >
+              {post.cover_image_url ? (
+                <img
+                  src={post.cover_image_url}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center">
+                  <Film size={28} className="text-text-muted" />
+                </div>
+              )}
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black/55 shadow-lg ring-1 ring-white/20 backdrop-blur-sm">
+                  <Play size={18} fill="white" className="ml-0.5 text-white" />
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="group relative">
-              <p className="whitespace-pre-wrap pr-10 text-sm leading-relaxed text-text-primary">
-                {post.caption || (
-                  <span className="italic text-text-muted">No caption yet</span>
-                )}
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!authorName.trim()) {
-                    requireName();
-                    return;
-                  }
-                  setDraftCaption(post.caption);
-                  setEditingCaption(true);
-                }}
-                className="absolute right-0 top-0 inline-flex items-center gap-1 rounded-md border border-nativz-border bg-surface px-2 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-hover"
-                title="Edit caption"
-              >
-                <Pencil size={11} /> Edit
-              </button>
-            </div>
-          )}
-
-          {!editingCaption && post.hashtags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {post.hashtags.map((h) => (
-                <span key={h} className="text-xs text-accent-text">
-                  #{h}
-                </span>
-              ))}
-            </div>
-          )}
+            </button>
+          </div>
+          {captionBlock}
         </div>
-      </div>
+      )}
 
       {post.comments.length > 0 && (
         <div className="border-t border-nativz-border bg-background/40 px-3 py-3 sm:px-4">
@@ -849,7 +925,7 @@ function PostCard({
           <span className="text-[10px] text-text-muted">images, video, pdf · 25 MB</span>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
           <button
             type="button"
             onClick={() => submit('approved')}
@@ -861,14 +937,6 @@ function PostCard({
           <button
             type="button"
             onClick={() => submit('changes_requested')}
-            disabled={submitting || uploading}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs font-medium text-amber-300 transition-colors hover:bg-amber-500/10 disabled:opacity-50 sm:py-1.5"
-          >
-            <AlertTriangle size={12} /> Changes
-          </button>
-          <button
-            type="button"
-            onClick={() => submit('comment')}
             disabled={submitting || uploading || (!commentText.trim() && pendingAttachments.length === 0)}
             className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50 sm:py-1.5"
           >
