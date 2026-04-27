@@ -12,8 +12,23 @@ export function FacebookMark({
 }: {
   size?: number;
   className?: string;
-  variant?: 'full' | 'onBrand';
+  variant?: 'full' | 'onBrand' | 'mono';
 }) {
+  if (variant === 'mono') {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        className={cn('shrink-0', className)}
+        aria-hidden
+      >
+        <path d={F_ON_BRAND_PATH} fill="currentColor" />
+      </svg>
+    );
+  }
+
   if (variant === 'onBrand') {
     return (
       <svg

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Users2 } from 'lucide-react';
-import { PlatformBadge } from './platform-badge';
+import { PlatformGlyph } from '@/components/integrations/platform-glyph';
 import type { SocialPlatform } from '@/lib/types/reporting';
 
 interface Bucket { name: string; percent: number }
@@ -65,7 +65,7 @@ export function AudienceInsightsCard({ clientId }: AudienceInsightsCardProps) {
         {insights.map((ins) => (
           <div key={`${ins.platform}-${ins.username}`} className="rounded-lg border border-nativz-border bg-background p-4 space-y-3">
             <div className="flex items-center gap-2">
-              <PlatformBadge platform={ins.platform as SocialPlatform} size="sm" showLabel={false} />
+              <PlatformGlyph platform={ins.platform as SocialPlatform} size={16} colorClass="text-text-muted" />
               <span className="text-sm font-medium text-text-primary">@{ins.username}</span>
               {ins.followersTotal != null && (
                 <span className="ml-auto text-xs text-text-muted tabular-nums">

@@ -7,7 +7,6 @@ import {
   Key,
   KeyRound,
   User,
-  Link as LinkIcon,
   Bell,
   Sidebar as SidebarIcon,
 } from 'lucide-react';
@@ -18,7 +17,6 @@ import { Button } from '@/components/ui/button';
 import { AvatarEditor } from '@/components/ui/avatar-editor';
 import { NotificationPreferencesSection } from '@/components/settings/notification-preferences';
 import { SidebarPreferencesSection } from '@/components/settings/sidebar-preferences';
-import { TodoistSection } from '@/components/settings/todoist-section';
 import { ApiKeysSection } from '@/components/settings/api-keys-section';
 import { TrustPolicyModal } from '@/components/settings/trust-policy-modal';
 
@@ -31,15 +29,11 @@ interface UserData {
   email: string;
   avatar_url: string | null;
   job_title: string | null;
-  todoist_api_key: string | null;
-  todoist_project_id: string | null;
-  todoist_synced_at: string | null;
 }
 
 const SECTIONS = [
   { id: 'profile', label: 'Profile', icon: User },
   { id: 'sidebar', label: 'Sidebar', icon: SidebarIcon },
-  { id: 'connections', label: 'Connections', icon: LinkIcon },
   { id: 'api-keys', label: 'API keys', icon: Key },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'security', label: 'Security', icon: KeyRound },
@@ -77,22 +71,8 @@ export default function AdminSettingsPage() {
         .eq('id', authUser.id)
         .single();
 
-      let todoistData = { connected: false, project_id: null as string | null, synced_at: null as string | null };
-      try {
-        const todoistRes = await fetch('/api/todoist/connect');
-        if (todoistRes.ok) {
-          const td = await todoistRes.json();
-          todoistData = { connected: td.connected, project_id: td.project_id ?? null, synced_at: td.synced_at ?? null };
-        }
-      } catch { /* silent */ }
-
       if (data) {
-        setUser({
-          ...data,
-          todoist_api_key: todoistData.connected ? 'connected' : null,
-          todoist_project_id: todoistData.project_id,
-          todoist_synced_at: todoistData.synced_at,
-        });
+        setUser(data);
         setFullName(data.full_name);
         setAvatarUrl(data.avatar_url);
         setJobTitle(data.job_title || '');
@@ -297,33 +277,6 @@ export default function AdminSettingsPage() {
         <div id="sidebar" ref={(el) => { sectionRefs.current['sidebar'] = el; }}>
           <h2 className="text-base font-semibold text-text-primary mb-4">Sidebar</h2>
           <SidebarPreferencesSection role="admin" />
-        </div>
-
-        {/* Connections */}
-        <div id="connections" ref={(el) => { sectionRefs.current['connections'] = el; }}>
-          <h2 className="text-base font-semibold text-text-primary mb-4">Connections</h2>
-          <div className="space-y-4">
-            <TodoistSection
-              connected={!!user.todoist_api_key}
-              projectId={user.todoist_project_id}
-              syncedAt={user.todoist_synced_at}
-              onConnectionChange={(connected) =>
-                setUser((prev) =>
-                  prev
-                    ? {
-                        ...prev,
-                        todoist_api_key: connected ? 'connected' : null,
-                        todoist_project_id: connected ? prev.todoist_project_id : null,
-                        todoist_synced_at: connected ? prev.todoist_synced_at : null,
-                      }
-                    : prev,
-                )
-              }
-              onSyncComplete={(syncedAt) =>
-                setUser((prev) => (prev ? { ...prev, todoist_synced_at: syncedAt } : prev))
-              }
-            />
-          </div>
         </div>
 
         {/* API Keys */}

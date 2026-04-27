@@ -11,10 +11,6 @@ export function truncateNotificationBody(text: string): string {
 }
 
 export type NotificationType =
-  | 'task_assigned'
-  | 'task_due_tomorrow'
-  | 'task_overdue'
-  | 'task_completed'
   | 'post_top_performer'
   | 'engagement_spike'
   | 'follower_milestone'
@@ -25,7 +21,8 @@ export type NotificationType =
   | 'account_disconnected'
   | 'search_completed'
   | 'topic_search_failed'
-  | 'topic_search_stuck';
+  | 'topic_search_stuck'
+  | 'pipeline_alert';
 
 /** Load merged notification preferences for a user */
 export async function getUserNotificationPreferences(userId: string): Promise<NotificationPreferences> {
@@ -45,10 +42,9 @@ export async function createNotification(params: {
   body?: string;
   message?: string;
   linkPath?: string;
-  taskId?: string;
 }) {
   const admin = createAdminClient();
-  const linkPath = params.linkPath ?? (params.taskId ? `/admin/tasks?task=${params.taskId}` : null);
+  const linkPath = params.linkPath ?? null;
   const { error } = await admin.from('notifications').insert({
     recipient_user_id: params.userId,
     type: params.type,
@@ -78,7 +74,7 @@ function isNotificationAllowed(
     case 'post_trending':
       return prefs.trendingPost?.enabled ?? true;
     default:
-      return true; // task/sync/post notifications always allowed if inApp is on
+      return true; // sync/post notifications always allowed if inApp is on
   }
 }
 

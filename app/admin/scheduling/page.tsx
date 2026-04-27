@@ -71,7 +71,7 @@ export default async function SchedulingListPage() {
   return (
     <div className="cortex-page-gutter max-w-5xl space-y-8">
       <header className="flex items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <h1 className="ui-page-title-md">Team scheduling</h1>
           <p className="text-sm text-text-muted">
             Spin up a cal.diy-style picker for any group of teammates. Clients pick a slot when
@@ -80,7 +80,7 @@ export default async function SchedulingListPage() {
         </div>
         <Link
           href="/admin/scheduling/new"
-          className="inline-flex items-center gap-2 rounded-md bg-accent-text px-3 py-2 text-sm font-semibold text-background transition hover:opacity-90"
+          className="inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[var(--nz-btn-radius)] bg-accent px-4 py-2 text-sm font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all duration-[var(--duration-fast)] ease-out hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98]"
         >
           <Plus size={14} />
           New event
@@ -92,8 +92,18 @@ export default async function SchedulingListPage() {
       <div className="max-w-3xl">
 
       {eventList.length === 0 ? (
-        <div className="rounded-xl border border-nativz-border bg-surface p-8 text-center text-sm text-text-muted">
-          No scheduling events yet.
+        <div className="rounded-xl border border-nativz-border bg-surface p-10 text-center">
+          <p className="text-sm font-medium text-text-primary">No events yet</p>
+          <p className="mx-auto mt-1 max-w-sm text-xs text-text-muted">
+            Spin up a picker, share the link, and the client books a slot when everyone&apos;s free.
+          </p>
+          <Link
+            href="/admin/scheduling/new"
+            className="mt-4 inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[var(--nz-btn-radius)] bg-accent px-4 py-2 text-sm font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all duration-[var(--duration-fast)] ease-out hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98]"
+          >
+            <Plus size={14} />
+            New event
+          </Link>
         </div>
       ) : (
         <ul className="space-y-3">
@@ -116,7 +126,7 @@ export default async function SchedulingListPage() {
                       href={`/schedule/${e.share_token}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 rounded-md border border-nativz-border px-3 py-1.5 text-xs text-text-primary hover:bg-surface-hover"
+                      className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md border border-nativz-border px-3 py-1.5 text-xs text-text-primary transition hover:bg-surface-hover"
                     >
                       <Calendar size={12} />
                       Picker URL

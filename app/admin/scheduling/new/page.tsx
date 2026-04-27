@@ -51,15 +51,15 @@ export default async function NewSchedulingEventPage({
   const domainFilter = TEAM_DOMAINS.map((d) => `email.ilike.%@${d}`).join(',');
   const { data: userRows } = await admin
     .from('users')
-    .select('id, email, name')
+    .select('id, email, full_name')
     .or(domainFilter)
-    .order('name', { ascending: true });
+    .order('full_name', { ascending: true });
   const connectedUsers: ConnectedUser[] = (userRows ?? [])
     .filter((u) => !!u.email)
     .map((u) => ({
       id: u.id as string,
       email: u.email as string,
-      name: (u.name as string | null) ?? null,
+      name: (u.full_name as string | null) ?? null,
     }));
 
   // If linked to a schedule_meeting item, hydrate its task name + linked

@@ -9,7 +9,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PlatformBadge } from './platform-badge';
+import { PlatformGlyph } from '@/components/integrations/platform-glyph';
 import type { TopPostItem } from '@/lib/types/reporting';
 
 function formatNumber(n: number): string {
@@ -135,8 +135,10 @@ function TopPostRow({ post }: { post: TopPostItem }) {
             <Eye size={16} className="text-white/70" />
           </div>
         )}
-        <div className="absolute bottom-0 right-0 p-0.5">
-          <PlatformBadge platform={post.platform} showLabel={false} size="sm" />
+        <div className="absolute bottom-1 right-1">
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-black/65 ring-1 ring-white/15">
+            <PlatformGlyph platform={post.platform} size={12} colorClass="text-white" />
+          </span>
         </div>
       </div>
 

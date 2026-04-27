@@ -11,7 +11,6 @@ import { assertUserCanAccessClient } from '@/lib/api/client-access';
  * - Team assignments (who's working on this client)
  * - Pipeline status for the current month
  * - Upcoming shoots
- * - Recent task counts (open, overdue, done)
  * - Latest research searches
  * - Idea generation count
  *
@@ -47,7 +46,6 @@ export async function GET(
       teamResult,
       pipelineResult,
       shootsResult,
-      tasksResult,
       searchesResult,
       ideasResult,
     ] = await Promise.all([
@@ -77,12 +75,6 @@ export async function GET(
         .gte('start_time', todayStr)
         .order('start_time', { ascending: true })
         .limit(5),
-      // Task counts
-      admin
-        .from('tasks')
-        .select('status', { count: 'exact' })
-        .eq('client_id', id)
-        .is('archived_at', null),
       // Recent searches
       admin
         .from('topic_searches')
@@ -102,14 +94,6 @@ export async function GET(
       return NextResponse.json({ error: 'Client not found' }, { status: 404 });
     }
 
-    // Compute task stats
-    const allTasks = tasksResult.data ?? [];
-    const taskStats = {
-      total: allTasks.length,
-      open: allTasks.filter((t) => t.status !== 'done').length,
-      done: allTasks.filter((t) => t.status === 'done').length,
-    };
-
     return NextResponse.json({
       client: clientResult.data,
       team: (teamResult.data ?? []).map((a) => ({
@@ -119,7 +103,6 @@ export async function GET(
       })),
       pipeline: pipelineResult.data ?? null,
       upcomingShoots: shootsResult.data ?? [],
-      taskStats,
       recentSearches: searchesResult.data ?? [],
       ideaGenerations: ideasResult.count ?? 0,
     });

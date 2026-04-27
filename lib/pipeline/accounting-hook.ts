@@ -107,7 +107,7 @@ export async function autoLinkEditingDoneToPayroll(opts: {
   }
 
   await notifyAdmins({
-    type: 'task_completed',
+    type: 'pipeline_alert',
     title: `Editor ${editorName} finished an edit — ready for payroll`,
     body: clientName
       ? `${clientName}: fill in the editing amount on the current period.`

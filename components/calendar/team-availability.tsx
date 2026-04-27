@@ -347,7 +347,7 @@ export function TeamAvailability() {
         <div
           role="status"
           aria-live="polite"
-          className="h-[520px] flex items-center justify-center"
+          className="h-[calc(100dvh-16rem)] min-h-[520px] flex items-center justify-center"
         >
           <span className="sr-only">Loading team availability…</span>
           <Loader2
@@ -359,7 +359,7 @@ export function TeamAvailability() {
       ) : people.length === 0 ? (
         <EmptyState />
       ) : viewMode === 'week' ? (
-        <div className="h-[520px] flex flex-col">
+        <div className="h-[calc(100dvh-16rem)] min-h-[520px] flex flex-col">
           <ScreenReaderSummary
             dates={gridDates}
             people={people}
@@ -456,14 +456,14 @@ function ScreenReaderSummary({ dates, people, rangeLabel }: ScreenReaderSummaryP
 
 function EmptyState() {
   return (
-    <div className="h-[520px] flex flex-col items-center justify-center gap-3 px-6 py-10 text-center">
+    <div className="h-[calc(100dvh-16rem)] min-h-[520px] flex flex-col items-center justify-center gap-3 px-6 py-10 text-center">
       <p className="text-sm text-text-secondary max-w-sm">
         No teammates configured yet. Add who should appear on the availability
         view to start overlaying calendars.
       </p>
       <Link
         href="/admin/scheduling/people"
-        className="inline-flex items-center gap-1.5 rounded-md bg-accent-text px-3 py-1.5 text-xs font-semibold text-background hover:opacity-90 transition-opacity"
+        className="inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[var(--nz-btn-radius)] bg-accent px-3 py-1.5 text-sm font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all duration-[var(--duration-fast)] ease-out hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98]"
       >
         <Settings size={12} />
         Configure people

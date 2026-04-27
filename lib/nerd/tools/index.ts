@@ -1,5 +1,4 @@
 import { registerTools } from '../registry';
-import { taskTools } from './tasks';
 import { schedulerTools } from './scheduler';
 import { clientTools } from './clients';
 import { shootTools } from './shoots';
@@ -23,7 +22,6 @@ import { proposalTools } from './proposals';
 
 /** Register all tool domains. Call once at startup. */
 export function registerAllTools() {
-  registerTools(taskTools);
   registerTools(schedulerTools);
   registerTools(clientTools);
   registerTools(shootTools);

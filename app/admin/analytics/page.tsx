@@ -8,20 +8,24 @@ import {
 } from '@/components/analytics/analytics-landing';
 import { getActiveBrand } from '@/lib/active-brand';
 
-const VALID_TABS: readonly TabId[] = ['social', 'paid', 'seo', 'affiliates'];
+const VALID_TABS: readonly TabId[] = ['social', 'affiliates'];
 const VALID_SUBS: readonly SubTabId[] = ['overview', 'benchmarking'];
 
 function normalizeTabs(
   rawTab: string | undefined,
   rawSub: string | undefined,
+  hasAffiliates: boolean,
 ): { tab: TabId; sub: SubTabId } {
   // Legacy URL: ?tab=benchmarking → Social / Benchmarking
   if (rawTab === 'benchmarking') {
     return { tab: 'social', sub: 'benchmarking' };
   }
-  const tab = (VALID_TABS as readonly string[]).includes(rawTab ?? '')
+  // Old paid/seo bookmarks fall through to Social rather than 404.
+  let tab: TabId = (VALID_TABS as readonly string[]).includes(rawTab ?? '')
     ? (rawTab as TabId)
     : 'social';
+  // Affiliate URLs land on Social if the client doesn't carry that service.
+  if (tab === 'affiliates' && !hasAffiliates) tab = 'social';
   const sub = (VALID_SUBS as readonly string[]).includes(rawSub ?? '')
     ? (rawSub as SubTabId)
     : 'overview';
@@ -49,7 +53,7 @@ export default async function AdminAnalyticsPage({
     active,
   ] = await Promise.all([
     searchParams,
-    adminClient.from('clients').select('id, name, slug, logo_url, agency').order('name'),
+    adminClient.from('clients').select('id, name, slug, logo_url, agency, services').order('name'),
     adminClient.from('social_profiles').select('client_id, status'),
     getActiveBrand().catch(() => null),
   ]);
@@ -74,10 +78,19 @@ export default async function AdminAnalyticsPage({
     connectionStatus: (connectionMap[c.id] ?? 'disconnected') as 'connected' | 'disconnected' | 'paused',
   }));
 
-  const { tab: initialTab, sub: initialSub } = normalizeTabs(tab, sub);
-
   const resolvedInitialClientId =
     clientId?.trim() || active?.brand?.id || null;
+
+  // Affiliates is a client-scoped service: only the brands carrying that
+  // contract item see the Affiliates tab. Without it the entire tab strip
+  // collapses (Social is the only remaining option, and a one-tab strip is
+  // chrome with no purpose).
+  const activeClientServices =
+    (clients ?? []).find((c) => c.id === resolvedInitialClientId)?.services ?? [];
+  const hasAffiliates = Array.isArray(activeClientServices)
+    && activeClientServices.includes('Affiliates');
+
+  const { tab: initialTab, sub: initialSub } = normalizeTabs(tab, sub, hasAffiliates);
 
   return (
     <AnalyticsLanding
@@ -85,6 +98,7 @@ export default async function AdminAnalyticsPage({
       initialClientId={resolvedInitialClientId}
       initialTab={initialTab}
       initialSub={initialSub}
+      hasAffiliates={hasAffiliates}
     />
   );
 }

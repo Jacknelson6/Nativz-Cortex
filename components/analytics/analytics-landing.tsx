@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { Share2, Handshake, DollarSign, Search } from 'lucide-react';
+import { Share2, Handshake } from 'lucide-react';
 import type { PortfolioClient } from '@/components/ui/client-portfolio-selector';
 
 const AnalyticsDashboard = dynamic(
@@ -19,21 +19,18 @@ const AuditBenchmarksPanel = dynamic(
   () => import('@/components/analytics/audit-benchmarks-panel').then(m => ({ default: m.AuditBenchmarksPanel })),
 );
 
-// NAT-37 — top-level tab hierarchy per the approved NAT-36 spec. Paid media
-// and SEO are placeholder tabs for now so the structure is in place when we
-// build them (GBP moves to Paid media; SEO lands when the rank/traffic data
-// does).
-export type TabId = 'social' | 'paid' | 'seo' | 'affiliates';
+// Tab hierarchy. Affiliates is a client-scoped service — surfaced only for
+// brands carrying that contract item — so the tab strip collapses entirely
+// when Social would be the lone option.
+export type TabId = 'social' | 'affiliates';
 export type SubTabId = 'overview' | 'benchmarking';
 
-const TABS: { id: TabId; label: string; icon: typeof Share2 }[] = [
+const ALL_TABS: { id: TabId; label: string; icon: typeof Share2 }[] = [
   { id: 'social', label: 'Social', icon: Share2 },
-  { id: 'paid', label: 'Paid media', icon: DollarSign },
-  { id: 'seo', label: 'SEO', icon: Search },
   { id: 'affiliates', label: 'Affiliates', icon: Handshake },
 ];
 
-const TABS_WITH_SUBS: TabId[] = ['social', 'paid', 'seo'];
+const TABS_WITH_SUBS: TabId[] = ['social'];
 
 const SUB_TABS: { id: SubTabId; label: string }[] = [
   { id: 'overview', label: 'Overview' },
@@ -45,6 +42,7 @@ interface AnalyticsLandingProps {
   initialClientId: string | null;
   initialTab: TabId;
   initialSub: SubTabId;
+  hasAffiliates: boolean;
 }
 
 export function AnalyticsLanding({
@@ -52,6 +50,7 @@ export function AnalyticsLanding({
   initialClientId,
   initialTab,
   initialSub,
+  hasAffiliates,
 }: AnalyticsLandingProps) {
   const router = useRouter();
   // Client selection lives at the top-bar brand pill now — no in-page
@@ -100,6 +99,10 @@ export function AnalyticsLanding({
   }
 
   const showSubTabs = TABS_WITH_SUBS.includes(activeTab);
+  // Tab strip only earns its place when there's something to switch to.
+  // Affiliates is the only optional surface today, so without it the strip
+  // would render a single Social pill — chrome with no purpose.
+  const visibleTabs = hasAffiliates ? ALL_TABS : [];
 
   return (
     <div className="cortex-page-gutter space-y-6">
@@ -111,22 +114,24 @@ export function AnalyticsLanding({
           </p>
         </div>
 
-        <div className="flex items-center rounded-lg border border-nativz-border bg-surface p-0.5">
-          {TABS.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => handleChangeTab(tab.id)}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
-                activeTab === tab.id
-                  ? 'bg-accent-surface text-accent-text shadow-sm'
-                  : 'text-text-muted hover:text-text-secondary hover:bg-surface-hover'
-              }`}
-            >
-              <tab.icon size={14} />
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        {visibleTabs.length > 0 && (
+          <div className="flex items-center rounded-lg border border-nativz-border bg-surface p-0.5">
+            {visibleTabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => handleChangeTab(tab.id)}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                  activeTab === tab.id
+                    ? 'bg-accent-surface text-accent-text shadow-sm'
+                    : 'text-text-muted hover:text-text-secondary hover:bg-surface-hover'
+                }`}
+              >
+                <tab.icon size={14} />
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {showSubTabs && (
@@ -158,10 +163,7 @@ export function AnalyticsLanding({
         />
       )}
 
-      {activeTab === 'paid' && <ComingSoonTab kind="paid" />}
-      {activeTab === 'seo' && <ComingSoonTab kind="seo" />}
-
-      {activeTab === 'affiliates' && <AffiliatesDashboard />}
+      {activeTab === 'affiliates' && hasAffiliates && <AffiliatesDashboard />}
     </div>
   );
 }
@@ -208,22 +210,3 @@ function SocialBenchmarkingPanel({
   );
 }
 
-function ComingSoonTab({ kind }: { kind: 'paid' | 'seo' }) {
-  const copy = {
-    paid: {
-      title: 'Paid media',
-      body: 'Unified view of Google Ads, Meta ads, and Google Business Profile insights. Coming with the Paid media milestone.',
-    },
-    seo: {
-      title: 'SEO',
-      body: 'Rankings, traffic sources, and backlink deltas. Coming with the SEO milestone.',
-    },
-  }[kind];
-
-  return (
-    <div className="rounded-xl border border-nativz-border bg-surface p-12 text-center">
-      <h2 className="ui-section-title">{copy.title}</h2>
-      <p className="mt-2 text-sm text-text-muted max-w-md mx-auto">{copy.body}</p>
-    </div>
-  );
-}

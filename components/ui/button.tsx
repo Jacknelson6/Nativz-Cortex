@@ -51,7 +51,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         type={type}
         className={cn(
-          'inline-flex items-center justify-center gap-2 font-medium cursor-pointer',
+          'inline-flex items-center justify-center gap-2 font-medium cursor-pointer whitespace-nowrap',
           'transition-all duration-[var(--duration-fast)] ease-out',
           'active:scale-[0.98]',
           focusRing,

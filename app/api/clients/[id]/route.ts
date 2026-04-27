@@ -435,7 +435,7 @@ export async function PATCH(
 /**
  * DELETE /api/clients/[id]
  *
- * Permanently delete a client and related rows (moodboards, todos, tasks, searches, ideas,
+ * Permanently delete a client and related rows (moodboards, todos, searches, ideas,
  * strategies, invites, shoot events when present, then client).
  * Also removes the client folder from the Obsidian vault (non-blocking).
  *
@@ -478,7 +478,7 @@ export async function DELETE(
       .single();
 
     // Delete related records first, then the client. Tables with NO ACTION / missing
-    // cascade on client_id (todos, tasks, moodboard_boards) are covered here and by
+    // cascade on client_id (todos, moodboard_boards) are covered here and by
     // migration 056_client_delete_cascade_fks.sql. knowledge_nodes (Brand DNA / KG sync)
     // is deleted here and via migration 057 ON DELETE CASCADE. shoot_events has no
     // migration in-repo but exists in production and can block deletes without an explicit delete.
@@ -486,7 +486,6 @@ export async function DELETE(
       adminClient.from('knowledge_nodes').delete().eq('client_id', id),
       adminClient.from('moodboard_boards').delete().eq('client_id', id),
       adminClient.from('todos').delete().eq('client_id', id),
-      adminClient.from('tasks').delete().eq('client_id', id),
       adminClient.from('topic_searches').delete().eq('client_id', id),
       adminClient.from('idea_submissions').delete().eq('client_id', id),
       adminClient.from('client_strategies').delete().eq('client_id', id),

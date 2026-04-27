@@ -23,9 +23,6 @@ import type { AdminBrand } from '@/lib/active-brand';
 // contents in admin-sidebar.tsx.
 const ADMIN_ONLY_PREFIXES = [
   '/admin/dashboard',
-  '/admin/tasks',
-  '/admin/edits',
-  '/admin/shoots',
   '/admin/scheduling',
   '/admin/accounting',
   '/admin/clients',

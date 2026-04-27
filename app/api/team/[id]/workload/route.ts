@@ -7,9 +7,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
  *
  * Returns a team member's current workload:
  * - Their client assignments (with roles)
- * - Open task count (total + overdue)
  * - Pipeline items they're assigned to this month (by role)
- * - Upcoming shoots they're involved in
  *
  * Use when: Checking capacity before assigning new work, building
  * team dashboards, or balancing workload across the team.
@@ -41,22 +39,13 @@ export async function GET(
 
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-    const todayStr = now.toISOString().split('T')[0];
 
-    const [assignmentsResult, tasksResult, pipelineResult] = await Promise.all([
+    const [assignmentsResult, pipelineResult] = await Promise.all([
       // Client assignments
       admin
         .from('client_assignments')
         .select('role, is_lead, clients(id, name, slug, agency)')
         .eq('team_member_id', id),
-      // Open tasks assigned to this member
-      admin
-        .from('tasks')
-        .select('id, title, status, priority, due_date, clients(id, name)')
-        .eq('assignee_id', id)
-        .is('archived_at', null)
-        .neq('status', 'done')
-        .order('due_date', { ascending: true, nullsFirst: false }),
       // Pipeline items where this member is assigned (current month)
       admin
         .from('content_pipeline')
@@ -65,9 +54,6 @@ export async function GET(
         .or(`editor.eq.${member.full_name},smm.eq.${member.full_name},videographer.eq.${member.full_name},strategist.eq.${member.full_name},editing_manager.eq.${member.full_name}`),
     ]);
 
-    const tasks = tasksResult.data ?? [];
-    const overdueTasks = tasks.filter((t) => t.due_date && t.due_date < todayStr);
-
     return NextResponse.json({
       member,
       assignments: (assignmentsResult.data ?? []).map((a) => ({
@@ -75,11 +61,6 @@ export async function GET(
         isLead: a.is_lead,
         client: a.clients,
       })),
-      tasks: {
-        open: tasks.length,
-        overdue: overdueTasks.length,
-        items: tasks.slice(0, 10),
-      },
       pipeline: {
         count: (pipelineResult.data ?? []).length,
         items: pipelineResult.data ?? [],

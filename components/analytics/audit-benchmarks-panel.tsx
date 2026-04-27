@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/utils/format';
 import { cn } from '@/lib/utils/cn';
-import { PlatformBadge } from '@/components/reporting/platform-badge';
+import { PlatformGlyph } from '@/components/integrations/platform-glyph';
 import type { SocialPlatform } from '@/lib/types/reporting';
 
 interface CompetitorRef {
@@ -344,7 +344,7 @@ const CompetitorRow = memo(function CompetitorRow({ latest }: { latest: Snapshot
             {latest.display_name ?? latest.username}
           </p>
           <div className="mt-1 flex items-center gap-1.5 text-[11px] text-text-muted">
-            <PlatformBadge platform={latest.platform as SocialPlatform} size="sm" showLabel={false} />
+            <PlatformGlyph platform={latest.platform as SocialPlatform} size={12} colorClass="text-text-muted" />
             <span>@{latest.username}</span>
           </div>
         </div>

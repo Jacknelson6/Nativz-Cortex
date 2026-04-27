@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PlatformBadge } from './platform-badge';
+import { PlatformGlyph } from '@/components/integrations/platform-glyph';
 import type { SocialPlatform } from '@/lib/types/reporting';
 
 interface DemoRow { dimension: string; value: number }
@@ -98,12 +98,12 @@ export function DemographicsCard({ clientId, platform }: DemographicsCardProps) 
     return (
       <Card className="p-5">
         <div className="flex items-center gap-2 mb-2">
-          <PlatformBadge platform={platform as SocialPlatform} showLabel={false} size="sm" />
+          <PlatformGlyph platform={platform as SocialPlatform} size={16} colorClass="text-text-muted" />
           <h3 className="ui-card-title">{label} audience</h3>
         </div>
         <p className="text-xs text-text-muted">
           {reason === 'not_connected'
-            ? `No ${label} account connected to Zernio for this client.`
+            ? `No ${label} account connected for this client.`
             : platform === 'instagram'
               ? 'Demographics require 100+ followers and a business / creator account.'
               : 'YouTube demographics not yet returned (requires analytics scope + 48h of data).'}
@@ -117,7 +117,7 @@ export function DemographicsCard({ clientId, platform }: DemographicsCardProps) 
   return (
     <Card className="p-5">
       <div className="mb-4 flex items-center gap-2">
-        <PlatformBadge platform={platform as SocialPlatform} showLabel={false} size="sm" />
+        <PlatformGlyph platform={platform as SocialPlatform} size={16} colorClass="text-text-muted" />
         <h3 className="ui-card-title">{label} audience</h3>
         <span className="text-xs text-text-muted ml-auto">{totalAge.toLocaleString()} followers</span>
       </div>

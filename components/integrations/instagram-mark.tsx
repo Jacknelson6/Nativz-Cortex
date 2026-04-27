@@ -11,8 +11,26 @@ export function InstagramMark({
 }: {
   size?: number;
   className?: string;
-  variant?: 'full' | 'onBrand';
+  variant?: 'full' | 'onBrand' | 'mono';
 }) {
+  if (variant === 'mono') {
+    const sw = size >= 16 ? 1.75 : 1.35;
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        className={cn('shrink-0', className)}
+        aria-hidden
+      >
+        <rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" strokeWidth={sw} />
+        <circle cx="12" cy="12" r="3.35" stroke="currentColor" strokeWidth={sw} />
+        <circle cx="17.2" cy="6.8" r="0.95" fill="currentColor" />
+      </svg>
+    );
+  }
+
   if (variant === 'onBrand') {
     const sw = size >= 16 ? 1.75 : 1.35;
     return (

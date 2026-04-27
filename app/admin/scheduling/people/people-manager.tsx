@@ -25,10 +25,10 @@ interface DraftPerson {
   emails: string[];
 }
 
-const TIER_COPY: Record<1 | 2 | 3, { label: string; help: string }> = {
-  1: { label: 'Tier 1 — Required', help: 'Hard required for slot generation. A meeting cannot be scheduled without them.' },
-  2: { label: 'Tier 2 — Preferred', help: 'Surfaces a soft warning when unavailable, but slots can still be picked.' },
-  3: { label: 'Tier 3 — Optional', help: 'Free to overlap. Their calendar is informational only.' },
+const TIER_COPY: Record<1 | 2 | 3, { label: string }> = {
+  1: { label: 'Tier 1 — Required' },
+  2: { label: 'Tier 2 — Preferred' },
+  3: { label: 'Tier 3 — Optional' },
 };
 
 const ALLOWED_DOMAINS = ['nativz.io', 'andersoncollaborative.com'];
@@ -116,7 +116,6 @@ export function PeopleManager() {
   }
 
   async function handleDelete(id: string, name: string) {
-    if (!confirm(`Remove ${name} from the scheduling list?`)) return;
     try {
       const res = await fetch(`/api/calendar/people/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete');
@@ -132,9 +131,9 @@ export function PeopleManager() {
   for (const p of people) grouped[p.priorityTier].push(p);
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-8">
+    <div className="mx-auto max-w-5xl px-6 py-8">
       <div className="mb-6 flex items-center justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <Link
             href="/admin/scheduling"
             className="mb-2 inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-text-secondary transition-colors"
@@ -143,13 +142,8 @@ export function PeopleManager() {
             Back to scheduling
           </Link>
           <h1 className="text-2xl font-semibold text-text-primary">Scheduling people</h1>
-          <p className="mt-1 text-sm text-text-muted">
-            Teammates whose calendars overlay the team availability view, grouped by scheduling
-            priority. Pulled via service-account / domain-wide delegation — email aliases must live
-            on {ALLOWED_DOMAINS.map((d) => `@${d}`).join(' or ')}.
-          </p>
         </div>
-        <Button onClick={() => setAdding(true)} disabled={adding}>
+        <Button onClick={() => setAdding(true)} disabled={adding} className="shrink-0">
           <Plus size={14} />
           Add person
         </Button>
@@ -192,34 +186,34 @@ export function PeopleManager() {
           <Loader2 size={20} className="animate-spin text-text-muted" />
         </div>
       ) : people.length === 0 ? (
-        <div className="rounded-lg border border-nativz-border bg-surface p-8 text-center">
-          <p className="text-sm text-text-muted">
-            No people configured. Add one above to start overlaying calendars.
-          </p>
+        <div className="rounded-lg border border-dashed border-nativz-border bg-surface p-8 text-center">
+          <p className="text-sm text-text-muted">No people yet.</p>
         </div>
       ) : (
         <div className="space-y-6">
           {([1, 2, 3] as const).map((tier) => {
             const group = grouped[tier];
-            if (group.length === 0) return null;
             return (
               <section key={tier}>
-                <div className="mb-2">
-                  <h2 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
-                    {TIER_COPY[tier].label}
-                  </h2>
-                  <p className="text-[11px] text-text-muted/80">{TIER_COPY[tier].help}</p>
-                </div>
-                <div className="space-y-2">
-                  {group.map((person) => (
-                    <PersonCard
-                      key={person.id}
-                      person={person}
-                      onPatch={(updates) => handlePatch(person.id, updates).then(load)}
-                      onDelete={() => handleDelete(person.id, person.displayName)}
-                    />
-                  ))}
-                </div>
+                <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
+                  {TIER_COPY[tier].label}
+                </h2>
+                {group.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-nativz-border/60 px-3 py-2 text-xs text-text-muted">
+                    No tier {tier} people yet.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {group.map((person) => (
+                      <PersonCard
+                        key={person.id}
+                        person={person}
+                        onPatch={(updates) => handlePatch(person.id, updates).then(load)}
+                        onDelete={() => handleDelete(person.id, person.displayName)}
+                      />
+                    ))}
+                  </div>
+                )}
               </section>
             );
           })}
@@ -241,6 +235,7 @@ function PersonCard({
   onDelete: () => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [draft, setDraft] = useState<DraftPerson>({
     displayName: person.displayName,
     color: person.color,
@@ -248,6 +243,12 @@ function PersonCard({
     emails: person.emails,
   });
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!confirmingDelete) return;
+    const t = setTimeout(() => setConfirmingDelete(false), 3000);
+    return () => clearTimeout(t);
+  }, [confirmingDelete]);
 
   async function handleSave() {
     const invalid = draft.emails.filter((e) => !isAllowedEmail(e));
@@ -284,17 +285,31 @@ function PersonCard({
           <button
             onClick={() => setEditing(true)}
             className="rounded-md px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors"
+            aria-label={`Edit ${person.displayName}`}
           >
             Edit
           </button>
-          <button
-            onClick={onDelete}
-            className="rounded-md p-1.5 text-text-muted hover:bg-surface-hover hover:text-red-400 transition-colors"
-            aria-label={`Remove ${person.displayName}`}
-            title="Remove"
-          >
-            <Trash2 size={13} />
-          </button>
+          {confirmingDelete ? (
+            <button
+              onClick={() => {
+                setConfirmingDelete(false);
+                onDelete();
+              }}
+              className="rounded-md px-2 py-1 text-xs font-semibold text-[--nz-coral] ring-1 ring-[--nz-coral]/40 hover:bg-[--nz-coral]/10 transition-colors"
+              autoFocus
+            >
+              Confirm remove
+            </button>
+          ) : (
+            <button
+              onClick={() => setConfirmingDelete(true)}
+              className="rounded-md p-1.5 text-text-muted hover:bg-surface-hover hover:text-[--nz-coral] transition-colors"
+              aria-label={`Remove ${person.displayName}`}
+              title="Remove"
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
         </div>
       </div>
     );
@@ -351,7 +366,7 @@ function PersonForm({
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label className="mb-1 block text-xs font-medium text-text-secondary">Priority tier</label>
           <select
@@ -374,11 +389,12 @@ function PersonForm({
                 key={c}
                 type="button"
                 onClick={() => onChange({ ...value, color: c })}
-                className={`h-6 w-6 rounded-full border-2 transition-transform ${
+                className={`h-6 w-6 rounded-full border-2 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
                   value.color === c ? 'scale-110 border-text-primary' : 'border-transparent'
                 }`}
                 style={{ backgroundColor: c }}
                 aria-label={`Color ${c}`}
+                aria-pressed={value.color === c}
               />
             ))}
           </div>
@@ -392,12 +408,11 @@ function PersonForm({
         <TagInput
           value={value.emails}
           onChange={(emails) => onChange({ ...value, emails })}
-          placeholder="jack@nativz.io, jack@andersoncollaborative.com"
+          placeholder="jack@nativz.io"
           maxTags={8}
         />
-        <p className="mt-1 text-[11px] text-text-muted">
-          Multiple emails union into one calendar overlay (e.g. nativz.io + AC accounts).
-          Must be on {ALLOWED_DOMAINS.map((d) => `@${d}`).join(' or ')}.
+        <p className="mt-1 text-xs text-text-muted">
+          Must end in {ALLOWED_DOMAINS.map((d) => `@${d}`).join(' or ')}.
         </p>
       </div>
     </div>

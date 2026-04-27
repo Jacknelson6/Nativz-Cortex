@@ -70,8 +70,8 @@ export function GoogleBusinessCard({ clientId, start, end }: GoogleBusinessCardP
           <h3 className="ui-card-title">Google Business Profile</h3>
         </div>
         <p className="text-sm text-text-muted">
-          No Google Business Profile connected to Zernio for this client yet.
-          Connect one in Zernio to see map views, website clicks, call buttons,
+          No Google Business Profile connected for this client yet.
+          Connect one to see map views, website clicks, call buttons,
           direction requests, and the search keywords driving the listing.
         </p>
       </Card>
@@ -142,7 +142,7 @@ export function GoogleBusinessCard({ clientId, start, end }: GoogleBusinessCardP
 
       {stats.length === 0 && keywords.length === 0 && (
         <p className="text-xs text-text-muted">
-          Connected, but Zernio returned no performance data for this window yet.
+          Connected, but no performance data available for this window yet.
         </p>
       )}
     </Card>

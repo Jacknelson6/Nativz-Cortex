@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, Check, Trash2, Lightbulb, FileText, MessageSquare, Settings2, Mail, Search, Camera, CheckSquare, Clock, AlertTriangle, CheckCircle, TrendingUp, Flame, Users, RefreshCcw, Zap, WifiOff } from 'lucide-react';
+import { Bell, Check, Trash2, Lightbulb, FileText, MessageSquare, Settings2, Mail, Search, Camera, Clock, AlertTriangle, CheckCircle, TrendingUp, Flame, Users, RefreshCcw, Zap, WifiOff } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/utils/format';
 
 interface Notification {
@@ -24,10 +24,6 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
   weekly_digest: <Mail size={14} className="text-text-muted" />,
   search_completed: <Search size={14} className="text-emerald-400" />,
   shoot_scheduled: <Camera size={14} className="text-blue-400" />,
-  task_assigned: <CheckSquare size={14} className="text-blue-400" />,
-  task_due_tomorrow: <Clock size={14} className="text-amber-400" />,
-  task_overdue: <AlertTriangle size={14} className="text-red-400" />,
-  task_completed: <CheckCircle size={14} className="text-emerald-400" />,
   post_top_performer: <Flame size={14} className="text-orange-400" />,
   engagement_spike: <TrendingUp size={14} className="text-emerald-400" />,
   follower_milestone: <Users size={14} className="text-accent2-text" />,
@@ -59,7 +55,7 @@ export function NotificationBell() {
             type: n.type,
             title: n.title,
             body: n.body ?? n.message ?? null,
-            link_path: n.link_path ?? (n.task_id ? `/admin/tasks?task=${n.task_id}` : null),
+            link_path: n.link_path ?? null,
             is_read: n.is_read ?? n.read ?? false,
             created_at: n.created_at,
           })

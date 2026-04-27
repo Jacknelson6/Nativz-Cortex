@@ -8,16 +8,12 @@ import {
   Eye,
   TrendingUp,
   Play,
-  Facebook,
-  Instagram,
-  Linkedin,
-  Youtube,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TikTokMark } from '@/components/integrations/tiktok-mark';
+import { PlatformGlyph } from '@/components/integrations/platform-glyph';
 import type { SocialPlatform } from '@/lib/types/reporting';
 
 interface PostRow {
@@ -74,33 +70,6 @@ const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
 ];
 
 const VERTICAL_PLATFORMS: SocialPlatform[] = ['tiktok', 'instagram', 'youtube'];
-
-/**
- * Monochrome platform glyph rendered inline in each post card header. Echoes
- * the topic-search input aesthetic: simple silhouettes in muted text color,
- * no colored pill backgrounds, no brand-color fills. The icon is the only
- * platform identifier on the card now, so we render it at 22px in
- * `text-text-secondary` — present enough to read at a glance without
- * competing with the thumbnail or caption.
- */
-function PlatformGlyph({ platform }: { platform: SocialPlatform }) {
-  const size = 22;
-  const className = 'shrink-0 text-text-secondary';
-  switch (platform) {
-    case 'tiktok':
-      return <TikTokMark variant="mono" size={size} className={className} />;
-    case 'instagram':
-      return <Instagram size={size} className={className} aria-hidden />;
-    case 'facebook':
-      return <Facebook size={size} className={className} aria-hidden />;
-    case 'youtube':
-      return <Youtube size={size} className={className} aria-hidden />;
-    case 'linkedin':
-      return <Linkedin size={size} className={className} aria-hidden />;
-    default:
-      return null;
-  }
-}
 
 export function PostDetailsGrid({ clientId, start, end }: PostDetailsGridProps) {
   const [posts, setPosts] = useState<PostRow[]>([]);
@@ -265,7 +234,13 @@ export function PostDetailsGrid({ clientId, start, end }: PostDetailsGridProps) 
 
 const PostCard = memo(function PostCard({ post }: { post: PostRow }) {
   const isVertical = VERTICAL_PLATFORMS.includes(post.platform);
-  const thumb = post.thumbnailUrl;
+  // CDN thumbnails from Zernio occasionally 404 (expired links, deleted
+  // posts). Track that per-card so we can swap to the platform-glyph fallback
+  // instead of leaving a broken-image icon in the grid.
+  const [imgFailed, setImgFailed] = useState(false);
+  const showThumb = Boolean(post.thumbnailUrl) && !imgFailed;
+  const platformLabel =
+    PLATFORM_OPTIONS.find((o) => o.value === post.platform)?.label ?? post.platform;
 
   const open = () => {
     if (post.postUrl) window.open(post.postUrl, '_blank', 'noopener,noreferrer');
@@ -327,42 +302,47 @@ const PostCard = memo(function PostCard({ post }: { post: PostRow }) {
         </div>
       </div>
 
-      {thumb ? (
-        <div
-          className={cn(
-            'group/thumb relative w-full shrink-0 overflow-hidden bg-black/30 outline-none',
-            isVertical
-              ? 'aspect-[9/16] min-h-0 w-full max-h-[min(15rem,45vw)] sm:max-h-[min(16rem,24vw)] lg:max-h-[min(17rem,20vw)]'
-              : 'aspect-video min-h-0 w-full max-h-[min(15rem,45vw)] sm:max-h-[min(16rem,24vw)] lg:max-h-[min(17rem,20vw)]',
-          )}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={thumb}
-            alt=""
-            className="pointer-events-none h-full w-full object-cover object-center"
-            loading="lazy"
-          />
-          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-black/55 opacity-0 transition-opacity group-hover/thumb:pointer-events-auto group-hover/thumb:opacity-100">
-            {post.postUrl && (
-              <span className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 shadow-md transition-all duration-200 group-hover/thumb:scale-105 group-hover/thumb:shadow-lg hover:bg-accent hover:text-white">
-                <Play size={16} className="shrink-0 fill-current" aria-hidden />
-                View
+      <div
+        className={cn(
+          'relative w-full shrink-0 overflow-hidden outline-none',
+          isVertical
+            ? 'aspect-[9/16] min-h-0 w-full max-h-[min(15rem,45vw)] sm:max-h-[min(16rem,24vw)] lg:max-h-[min(17rem,20vw)]'
+            : 'aspect-video min-h-0 w-full max-h-[min(15rem,45vw)] sm:max-h-[min(16rem,24vw)] lg:max-h-[min(17rem,20vw)]',
+          showThumb ? 'group/thumb bg-black/30' : 'bg-background/40',
+        )}
+      >
+        {showThumb ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={post.thumbnailUrl!}
+              alt=""
+              className="pointer-events-none h-full w-full object-cover object-center"
+              loading="lazy"
+              onError={() => setImgFailed(true)}
+            />
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-black/55 opacity-0 transition-opacity group-hover/thumb:pointer-events-auto group-hover/thumb:opacity-100">
+              {post.postUrl && (
+                <span className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 shadow-md transition-all duration-200 group-hover/thumb:scale-105 group-hover/thumb:shadow-lg hover:bg-accent hover:text-white">
+                  <Play size={16} className="shrink-0 fill-current" aria-hidden />
+                  View
+                </span>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center">
+            <PlatformGlyph platform={post.platform} size={36} colorClass="text-text-muted/70" />
+            {post.postUrl ? (
+              <span className="inline-flex items-center gap-1.5 text-xs text-text-muted">
+                Open on {platformLabel} <ExternalLink size={12} aria-hidden />
               </span>
+            ) : (
+              <span className="text-xs text-text-muted">No thumbnail</span>
             )}
           </div>
-        </div>
-      ) : (
-        <div className="mx-4 mb-2 flex min-h-[88px] shrink-0 items-center justify-center self-stretch rounded-xl border border-dashed border-nativz-border/60 bg-background/40 px-3 text-center text-sm text-text-muted">
-          {post.postUrl ? (
-            <span className="inline-flex items-center gap-1.5">
-              Open on {post.platform} <ExternalLink size={12} />
-            </span>
-          ) : (
-            'No thumbnail'
-          )}
-        </div>
-      )}
+        )}
+      </div>
     </article>
   );
 });

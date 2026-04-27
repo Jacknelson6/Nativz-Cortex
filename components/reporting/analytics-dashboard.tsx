@@ -9,7 +9,6 @@ import { useReportingData } from './hooks/use-reporting-data';
 import { DateRangePicker } from './date-range-picker';
 import { OverviewKpiRow } from './overview-kpi-row';
 import { PlatformSection } from './platform-section';
-import { PlatformBreakdownTable } from './platform-breakdown-table';
 import { PostDetailsGrid } from './post-details-grid';
 import { SyncErrorsPanel } from './sync-errors-panel';
 import { AnalysisChatDrawer } from '@/components/analyses/analysis-chat-drawer';
@@ -125,11 +124,6 @@ export function AnalyticsDashboard({ initialClientId }: { initialClientId?: stri
             compareData={compareEnabled ? compareSummary : null}
             compareRange={compareEnabled ? compareRange : null}
           />
-
-          {/* Platform breakdown table — always visible summary row. */}
-          {summary?.platformBreakdown && summary.platformBreakdown.length > 0 && (
-            <PlatformBreakdownTable rows={summary.platformBreakdown} />
-          )}
 
           {/* Per-platform sections — always expanded per Jack's 2026-04-21 ask.
               Eyebrow removed: the platform-brand badge inside each section

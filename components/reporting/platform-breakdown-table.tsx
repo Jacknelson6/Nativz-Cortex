@@ -117,8 +117,9 @@ export function PlatformBreakdownTable({ rows }: PlatformBreakdownTableProps) {
   const sorted = [...rows].sort((a, b) => b.followers - a.followers);
 
   // Column maxima for the inline micro-bars. Computed once so each row's
-  // bar scales against the row leader, not its own value.
-  const maxFollowers = Math.max(...sorted.map((r) => r.followers), 0);
+  // bar scales against the row leader, not its own value. Followers is the
+  // sort key so its bar would just mirror row order — skip it and only show
+  // bars under columns where magnitude isn't already implied by position.
   const maxViews = Math.max(...sorted.map((r) => r.views), 0);
   const maxEngagement = Math.max(...sorted.map((r) => r.engagement), 0);
 
@@ -211,7 +212,10 @@ export function PlatformBreakdownTable({ rows }: PlatformBreakdownTableProps) {
                     </td>
                   )}
                   <td className="px-3 py-3 text-right tabular-nums text-text-muted">{r.postsCount}</td>
-                  <td className="px-3 py-3 text-right tabular-nums text-text-primary">{formatNumber(r.views)}</td>
+                  <td className="px-3 py-3 text-right">
+                    <div className="tabular-nums text-text-primary">{formatNumber(r.views)}</div>
+                    <MicroBar value={r.views} max={maxViews} platform={r.platform as SocialPlatform} />
+                  </td>
                   {hasVideoData && (
                     <>
                       <td className="px-3 py-3 text-right tabular-nums text-text-primary">
@@ -222,7 +226,10 @@ export function PlatformBreakdownTable({ rows }: PlatformBreakdownTableProps) {
                       </td>
                     </>
                   )}
-                  <td className="px-3 py-3 text-right tabular-nums text-text-primary">{formatNumber(r.engagement)}</td>
+                  <td className="px-3 py-3 text-right">
+                    <div className="tabular-nums text-text-primary">{formatNumber(r.engagement)}</div>
+                    <MicroBar value={r.engagement} max={maxEngagement} platform={r.platform as SocialPlatform} />
+                  </td>
                   <td className="px-5 py-3 text-right tabular-nums text-text-primary">{er.toFixed(2)}%</td>
                 </tr>
               );

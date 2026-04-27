@@ -8,8 +8,24 @@ export function LinkedInMark({
 }: {
   size?: number;
   className?: string;
-  variant?: 'full' | 'onBrand';
+  variant?: 'full' | 'onBrand' | 'mono';
 }) {
+  if (variant === 'mono') {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        className={cn('shrink-0', className)}
+        aria-hidden
+      >
+        <rect x="2" y="2" width="20" height="20" rx="4" stroke="currentColor" strokeWidth="1.75" />
+        <path d="M6.94 8.5H3.56v11.92h3.38V8.5zM5.25 3.1a1.96 1.96 0 100 3.92 1.96 1.96 0 000-3.92zM20.44 20.42v-6.53c0-3.5-1.87-5.12-4.36-5.12-2.01 0-2.91 1.11-3.41 1.88V8.5H9.29c.04.95 0 11.92 0 11.92h3.38v-6.66c0-.3.02-.61.11-.82.24-.6.8-1.23 1.72-1.23 1.22 0 1.71.93 1.71 2.28v6.43h3.23z" fill="currentColor" />
+      </svg>
+    );
+  }
+
   if (variant === 'onBrand') {
     return (
       <svg

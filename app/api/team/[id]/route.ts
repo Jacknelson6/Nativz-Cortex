@@ -142,9 +142,6 @@ export async function DELETE(
       return NextResponse.json({ error: 'Cannot delete yourself' }, { status: 400 });
     }
 
-    // Unlink from tables that reference team_members(id) without CASCADE
-    await adminClient.from('tasks').update({ assignee_id: null }).eq('assignee_id', id);
-
     // If linked, delete the auth account + users record first
     if (member.user_id) {
       await adminClient.from('users').delete().eq('id', member.user_id);

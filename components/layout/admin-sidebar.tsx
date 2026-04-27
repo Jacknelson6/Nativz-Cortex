@@ -25,7 +25,6 @@ import {
   Cpu,
   Gauge,
   Telescope,
-  Briefcase,
   Workflow,
 } from 'lucide-react';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
@@ -124,7 +123,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'Admin',
     items: [
       {
-        href: '/admin/projects',
+        href: '/admin/clients',
         label: 'Admin',
         icon: SettingsIcon,
         children: [
@@ -146,11 +145,6 @@ const NAV_SECTIONS: NavSection[] = [
           { href: '/admin/accounting', label: 'Accounting', icon: Receipt },
           { href: '/admin/revenue', label: 'Revenue', icon: CreditCard },
           { href: '/admin/notifications', label: 'Notifications', icon: Bell },
-          // Project Management houses both pipelines (Shoots / Edits / Content
-          // boards) and individual tasks (Today / Upcoming / All) under one
-          // route. The Pipelines vs. Tasks split is a tab inside the page —
-          // /admin/shoots, /admin/edits, and /admin/tasks all redirect here.
-          { href: '/admin/projects', label: 'Project Management', icon: Briefcase },
           { href: '/admin/usage', label: 'Usage', icon: Gauge },
           { href: '/admin/settings', label: 'Settings', icon: SettingsIcon },
         ],
@@ -207,8 +201,6 @@ function isActivePath(pathname: string, href: string, searchParams?: URLSearchPa
 const ADMIN_ONLY_HREFS = new Set([
   '/admin/dashboard',
   '/admin/accounting',
-  '/admin/projects',
-  '/admin/tasks',
   '/admin/scheduling',
   '/admin/clients',
   '/admin/sales',

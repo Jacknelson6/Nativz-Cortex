@@ -58,53 +58,6 @@ export function matchCommands(query: string): SlashCommand[] {
 // ── Direct commands (no AI, just API calls) ──
 
 registerCommand({
-  name: 'tasks',
-  description: "View your open tasks",
-  type: 'direct',
-  example: '/tasks',
-  handler: async (_args, userId) => {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || ''}/api/todos?user_id=${userId}&status=pending`, {
-      headers: { 'Content-Type': 'application/json' },
-    });
-    if (!res.ok) {
-      return { content: "Couldn't load your tasks right now — try the Tasks page directly." };
-    }
-    const data = await res.json();
-    const todos = (data.todos ?? []) as Array<{ id: string; content: string; project?: { name: string } }>;
-    if (todos.length === 0) {
-      return { content: "You're all clear — no open tasks." };
-    }
-    const lines = todos.slice(0, 10).map((t) => `- ${t.content}${t.project ? ` _(${t.project.name})_` : ''}`);
-    const more = todos.length > 10 ? `\n\n+ ${todos.length - 10} more at /admin/tasks` : '';
-    return {
-      content: `**Your open tasks (${todos.length})**\n\n${lines.join('\n')}${more}`,
-    };
-  },
-});
-
-registerCommand({
-  name: 'pipeline',
-  description: 'Show posts in the content pipeline — grouped by stage',
-  type: 'direct',
-  example: '/pipeline',
-  handler: async () => {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || ''}/api/pipeline/summary`);
-    if (!res.ok) {
-      return { content: "Couldn't load the pipeline right now — try /admin/edits directly." };
-    }
-    const data = await res.json();
-    const stages = (data.stages ?? []) as Array<{ stage: string; count: number }>;
-    if (stages.length === 0) {
-      return { content: 'No posts in the pipeline right now.' };
-    }
-    const lines = stages.map((s) => `- **${s.stage}** — ${s.count}`);
-    return {
-      content: `**Pipeline summary**\n\n${lines.join('\n')}\n\nOpen the full board: /admin/edits`,
-    };
-  },
-});
-
-registerCommand({
   name: 'clients',
   description: 'List clients — with link to each workspace',
   type: 'direct',

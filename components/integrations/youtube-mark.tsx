@@ -10,8 +10,24 @@ export function YouTubeMark({
 }: {
   size?: number;
   className?: string;
-  variant?: 'full' | 'onBrand';
+  variant?: 'full' | 'onBrand' | 'mono';
 }) {
+  if (variant === 'mono') {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        className={cn('shrink-0', className)}
+        aria-hidden
+      >
+        <rect x="2" y="6" width="20" height="12" rx="3" stroke="currentColor" strokeWidth="1.75" />
+        <path d={PLAY_PATH} fill="currentColor" />
+      </svg>
+    );
+  }
+
   if (variant === 'onBrand') {
     return (
       <svg

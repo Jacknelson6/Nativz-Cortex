@@ -15,7 +15,7 @@ import {
   Globe,
   Check,
 } from 'lucide-react';
-import { PlatformBadge } from '@/components/reporting/platform-badge';
+import { PlatformGlyph } from '@/components/integrations/platform-glyph';
 import type { SocialPlatform } from '@/lib/types/reporting';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Button } from '@/components/ui/button';
@@ -489,10 +489,10 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
                             <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-surface" />
                           ) : (
                             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface">
-                              <PlatformBadge
+                              <PlatformGlyph
                                 platform={s.platform as SocialPlatform}
-                                size="sm"
-                                showLabel={false}
+                                size={16}
+                                colorClass="text-text-secondary"
                               />
                             </div>
                           )}
@@ -502,10 +502,10 @@ export function BenchmarkingDashboard({ clientId }: BenchmarkingDashboardProps) 
                             className="flex-1 min-w-0 cursor-pointer text-left"
                           >
                             <div className="flex items-center gap-1.5">
-                              <PlatformBadge
+                              <PlatformGlyph
                                 platform={s.platform as SocialPlatform}
-                                size="sm"
-                                showLabel={false}
+                                size={12}
+                                colorClass="text-text-muted"
                               />
                               <span className="truncate text-sm font-medium text-text-primary">
                                 {s.display_name ?? `@${s.username}`}
@@ -696,10 +696,10 @@ const CompetitorCard = memo(function CompetitorCard({
           <div>
             <p className="text-sm font-medium text-text-primary flex items-center gap-2">
               {competitor.display_name ?? competitor.username}
-              <PlatformBadge
+              <PlatformGlyph
                 platform={(competitor.platform ?? 'tiktok') as SocialPlatform}
-                size="sm"
-                showLabel={false}
+                size={12}
+                colorClass="text-text-muted"
               />
             </p>
             <a

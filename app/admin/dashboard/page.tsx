@@ -3,10 +3,8 @@ import {
   Search,
   Calendar,
   ArrowUpRight,
-  Workflow,
 } from 'lucide-react';
 import { PageError } from '@/components/shared/page-error';
-import { TodoWidget } from '@/components/dashboard/todo-widget';
 import { NotificationsWidget } from '@/components/dashboard/notifications-widget';
 import { NerdTile } from '@/components/dashboard/nerd-tile';
 
@@ -74,14 +72,8 @@ export default async function AdminDashboardPage() {
         </div>
 
         {/* Quick actions — responsive: 1 col phone, 2 col tablet,
-            4-col (Nerd slightly wider) from lg up. */}
-        <div className="grid grid-cols-1 gap-3 auto-rows-[140px] sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_minmax(220px,1.25fr)]">
-          <BentoTile
-            href="/admin/edits"
-            icon={<Workflow size={20} className="text-accent-text" />}
-            label="Monthly pipeline"
-            description="Stages, shoots, and delivery"
-          />
+            3-col (Nerd slightly wider) from lg up. */}
+        <div className="grid grid-cols-1 gap-3 auto-rows-[140px] sm:grid-cols-2 lg:grid-cols-[1fr_1fr_minmax(220px,1.25fr)]">
           <BentoTile
             href="/admin/scheduling"
             icon={<Calendar size={20} className="text-accent-text" />}
@@ -98,14 +90,8 @@ export default async function AdminDashboardPage() {
           <NerdTile />
         </div>
 
-        {/* Tasks + notifications — stacks on phone, side-by-side on tablet+ */}
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 items-stretch min-h-0">
-          <div className="flex h-full min-h-0 flex-col">
-            <TodoWidget />
-          </div>
-          <div className="flex h-full min-h-0 flex-col">
-            <NotificationsWidget />
-          </div>
+        <div className="flex min-h-0 flex-col">
+          <NotificationsWidget />
         </div>
       </div>
     );

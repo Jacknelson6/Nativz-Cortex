@@ -8,7 +8,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
  * Returns a comprehensive dashboard overview in a single call:
  * - Active client count
  * - Pipeline status distribution for current month
- * - Task summary (open, overdue, completed today)
  * - Upcoming shoots (next 7 days)
  * - Recent notifications (last 5 unread)
  * - Recent research searches (last 5)
@@ -33,9 +32,6 @@ export async function GET(request: NextRequest) {
     const [
       clientsResult,
       pipelineResult,
-      tasksResult,
-      overdueResult,
-      completedTodayResult,
       shootsResult,
       notificationsResult,
       searchesResult,
@@ -44,12 +40,6 @@ export async function GET(request: NextRequest) {
       admin.from('clients').select('id', { count: 'exact', head: true }).eq('is_active', true),
       // Pipeline status distribution
       admin.from('content_pipeline').select('editing_status').eq('month_date', currentMonth),
-      // Open tasks
-      admin.from('tasks').select('id', { count: 'exact', head: true }).is('archived_at', null).neq('status', 'done'),
-      // Overdue tasks
-      admin.from('tasks').select('id', { count: 'exact', head: true }).is('archived_at', null).neq('status', 'done').lt('due_date', todayStr).not('due_date', 'is', null),
-      // Completed today
-      admin.from('tasks').select('id', { count: 'exact', head: true }).eq('status', 'done').gte('updated_at', `${todayStr}T00:00:00`),
       // Upcoming shoots
       admin.from('calendar_events').select('id, title, start_time, client_id, clients(name)').gte('start_time', todayStr).lte('start_time', weekFromNow).order('start_time', { ascending: true }).limit(5),
       // Unread notifications
@@ -71,11 +61,6 @@ export async function GET(request: NextRequest) {
       pipeline: {
         total: pipelineItems.length,
         distribution: pipelineDistribution,
-      },
-      tasks: {
-        open: tasksResult.count ?? 0,
-        overdue: overdueResult.count ?? 0,
-        completedToday: completedTodayResult.count ?? 0,
       },
       upcomingShoots: shootsResult.data ?? [],
       unreadNotifications: notificationsResult.data ?? [],
