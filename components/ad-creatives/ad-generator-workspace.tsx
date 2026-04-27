@@ -1,27 +1,12 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import Image from 'next/image';
-import { Sparkles, ShieldAlert } from 'lucide-react';
+import { ShieldAlert, FolderOpen, LayoutTemplate, X } from 'lucide-react';
 import { AdAssetLibrary, type AdAsset } from './ad-asset-library';
 import { AdTemplateLibrary, type AdPromptTemplate } from './ad-template-library';
 import { AdGeneratorChat } from './ad-generator-chat';
 import { AdConceptGallery, type AdConcept } from './ad-concept-gallery';
-
-type TabId = 'chat' | 'gallery' | 'assets' | 'templates';
-
-interface TabDef {
-  id: TabId;
-  label: string;
-  hint: string;
-}
-
-const TABS: readonly TabDef[] = [
-  { id: 'chat',      label: 'Brief',     hint: 'Tell Cortex what to make' },
-  { id: 'gallery',   label: 'Proofs',    hint: 'Approve the concepts it returned' },
-  { id: 'assets',    label: 'Library',   hint: 'Reference photos for the brand' },
-  { id: 'templates', label: 'Patterns',  hint: 'Winning ad structures, distilled' },
-] as const;
 
 interface Props {
   clientId: string;
@@ -35,6 +20,7 @@ interface Props {
 }
 
 type DnaTone = 'ready' | 'pending' | 'missing';
+type Drawer = 'assets' | 'templates' | null;
 
 function classifyDna(status: string): DnaTone {
   if (status === 'ready' || status === 'complete' || status === 'complete_ready') return 'ready';
@@ -42,6 +28,12 @@ function classifyDna(status: string): DnaTone {
   return 'missing';
 }
 
+/**
+ * Workspace shell. The full-page transcript + tab nav is gone — what's left
+ * is a thin brand strip header, a scrollable masonry gallery, and the
+ * floating composer pinned to the bottom. Library and Patterns slide in as
+ * right-side drawers so they don't crowd the gallery.
+ */
 export function AdGeneratorWorkspace({
   clientId,
   clientName,
@@ -51,10 +43,8 @@ export function AdGeneratorWorkspace({
   initialTemplates,
   initialConcepts,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<TabId>(
-    initialConcepts.length > 0 ? 'gallery' : 'chat',
-  );
   const [concepts, setConcepts] = useState<AdConcept[]>(initialConcepts);
+  const [drawer, setDrawer] = useState<Drawer>(null);
 
   const handleBatchComplete = useCallback((fresh: AdConcept[]) => {
     setConcepts((prev) => [...fresh, ...prev]);
@@ -83,201 +73,106 @@ export function AdGeneratorWorkspace({
   );
 
   const dnaTone = classifyDna(brandDnaStatus);
-
-  const tabCounts = useMemo<Record<TabId, number | null>>(
-    () => ({
-      chat: null,
-      gallery: concepts.length,
-      assets: initialAssets.length,
-      templates: initialTemplates.length,
-    }),
-    [concepts.length, initialAssets.length, initialTemplates.length],
-  );
-
-  const brandDisplayName = clientName.trim() || 'this client';
+  const brandDisplayName = clientName.trim() || 'this brand';
 
   return (
-    <div className="cortex-page-gutter py-6 space-y-8">
-      {/* ── Hero header ────────────────────────────────────────────────────── */}
-      <header className="space-y-5">
-        <div
-          className="flex flex-wrap items-end justify-between gap-4 animate-stagger-in"
-          style={{ animationDelay: '40ms' }}
-        >
-          <div className="space-y-2 min-w-0">
-            <p className="nz-eyebrow">Ad generator · {brandDisplayName}</p>
-            <h1
-              className="nz-highlight text-3xl sm:text-[2.5rem] font-semibold leading-[1.05] text-text-primary"
-              style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
-            >
-              Generate ads for <u>{brandDisplayName}</u>
-            </h1>
-            <p
-              className="max-w-2xl text-sm text-text-muted"
-              style={{ fontFamily: 'Poppins, system-ui, sans-serif', fontWeight: 300 }}
-            >
-              Monthly gift-ad generation grounded in Brand DNA, Cortex memory, and the
-              proven ad reference library. Cortex matches the brand to winning patterns,
-              writes the batch, renders with ChatGPT Image, and keeps every variation
-              auditable in the gallery.
+    <div className="flex h-[calc(100vh-4rem)] flex-col">
+      {/* Brand strip — replaces the hero. Logo + name on the left, DNA dot in
+          the middle, library/patterns triggers on the right. Slim and quiet
+          so the masonry below carries the visual weight. */}
+      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-nativz-border/60 px-6 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          {clientLogoUrl ? (
+            <Image
+              src={clientLogoUrl}
+              alt={brandDisplayName}
+              width={28}
+              height={28}
+              className="h-7 w-7 shrink-0 rounded-full object-cover"
+            />
+          ) : (
+            <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/15 text-[10px] font-semibold uppercase tracking-wider text-accent-text">
+              {brandDisplayName.slice(0, 2)}
+            </span>
+          )}
+          <div className="min-w-0 leading-tight">
+            <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted/80">
+              Ad generator
+            </p>
+            <p className="truncate text-[14px] font-medium text-text-primary">
+              {brandDisplayName}
             </p>
           </div>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('chat')}
-            className="inline-flex h-11 shrink-0 cursor-pointer items-center gap-2 rounded-full bg-accent px-6 text-sm font-semibold text-white transition-colors hover:bg-accent/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"
-          >
-            <Sparkles size={15} />
-            New batch
-          </button>
-        </div>
-
-        {/* Single-line typographic readout. Replaces the old pill cluster
-            with editorial separators — feels like the masthead strip on a
-            magazine front page rather than a row of admin badges. */}
-        <div
-          className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs animate-stagger-in"
-          style={{ animationDelay: '120ms' }}
-        >
-          <div className="flex items-center gap-2">
-            {clientLogoUrl ? (
-              <Image
-                src={clientLogoUrl}
-                alt={brandDisplayName}
-                width={24}
-                height={24}
-                className="h-6 w-6 rounded-full object-cover"
-              />
-            ) : (
-              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-accent/15 text-[10px] font-semibold uppercase tracking-wider text-accent-text">
-                {brandDisplayName.slice(0, 2)}
-              </span>
-            )}
-            <span className="text-text-primary font-medium">{brandDisplayName}</span>
-          </div>
-
           <Separator />
-
           <DnaBadge tone={dnaTone} />
-
-          <Separator />
-
-          <Readout value={concepts.length} label="concepts" />
-          <Readout value={initialTemplates.length} label="templates" />
-          <Readout value={initialAssets.length} label="assets" />
         </div>
 
-        {/* Brand DNA callout — elevated when missing, quiet when ready */}
-        {dnaTone === 'missing' && (
-          <div
-            className="animate-stagger-in flex items-start gap-3 rounded-xl border border-nz-coral/35 bg-nz-coral/[0.06] p-4"
-            style={{ animationDelay: '200ms' }}
+        <div className="flex shrink-0 items-center gap-1">
+          <HeaderButton
+            label="Asset library"
+            count={initialAssets.length}
+            onClick={() => setDrawer('assets')}
           >
-            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-nz-coral/15 text-nz-coral">
-              <ShieldAlert size={17} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <h2 className="text-sm font-semibold text-text-primary">
-                Brand DNA hasn&apos;t been generated yet
-              </h2>
-              <p className="mt-1 text-xs text-text-muted">
-                Without it, generations run on surface-level prompts and lose the
-                brand&apos;s actual voice. Head to the brand profile to run a DNA pass
-                — it takes about a minute and upgrades every future batch.
-              </p>
-            </div>
-          </div>
-        )}
+            <FolderOpen size={14} />
+          </HeaderButton>
+          <HeaderButton
+            label="Pattern library"
+            count={initialTemplates.length}
+            onClick={() => setDrawer('templates')}
+          >
+            <LayoutTemplate size={14} />
+          </HeaderButton>
+        </div>
       </header>
 
-      {/* ── Section nav ────────────────────────────────────────────────────
-          Editorial row sharing a baseline rule. Active tab anchors a 2px
-          cyan bar that overlaps the rule — no boxed cards, no icons, no
-          rounded chrome. Reads like a magazine table-of-contents strip. */}
-      <nav
-        aria-label="Ad generator sections"
-        className="relative flex flex-wrap items-end gap-x-8 gap-y-4 border-b border-nativz-border/60 animate-stagger-in"
-        style={{ animationDelay: '240ms' }}
-      >
-        {TABS.map((tab) => {
-          const isActive = activeTab === tab.id;
-          const count = tabCounts[tab.id];
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className="group relative flex flex-col items-start gap-1 pb-3 text-left cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-400/60"
-              aria-current={isActive ? 'page' : undefined}
-            >
-              <span className="flex items-baseline gap-2">
-                <span
-                  className={`text-[15px] font-medium leading-none transition-colors ${
-                    isActive
-                      ? 'text-text-primary'
-                      : 'text-text-secondary group-hover:text-text-primary'
-                  }`}
-                  style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
-                >
-                  {tab.label}
-                </span>
-                {count !== null && (
-                  <span
-                    className={`font-mono text-[10px] tabular-nums leading-none ${
-                      isActive ? 'text-accent-text' : 'text-text-muted/80'
-                    }`}
-                  >
-                    {String(count).padStart(2, '0')}
-                  </span>
-                )}
-              </span>
-              <span
-                className={`text-[11px] leading-none transition-colors ${
-                  isActive ? 'text-text-muted' : 'text-text-muted/70'
-                }`}
-              >
-                {tab.hint}
-              </span>
-              {isActive && (
-                <span
-                  aria-hidden
-                  className="absolute -bottom-px left-0 right-0 h-[2px] bg-accent"
-                />
-              )}
-            </button>
-          );
-        })}
-      </nav>
+      {/* DNA missing nudge — slim banner under the header. Hidden once DNA
+          is ready or generating so it doesn't crowd the gallery. */}
+      {dnaTone === 'missing' && (
+        <div className="flex shrink-0 items-center gap-3 border-b border-nz-coral/30 bg-nz-coral/[0.05] px-6 py-2.5">
+          <ShieldAlert size={14} className="shrink-0 text-nz-coral" />
+          <p className="text-[12px] text-text-secondary">
+            <span className="font-medium text-text-primary">Brand DNA missing.</span>{' '}
+            Generations will run on surface-level prompts. Run a DNA pass on the
+            brand profile for stronger results.
+          </p>
+        </div>
+      )}
 
-      {/* ── Active tab content ─────────────────────────────────────────────── */}
-      <div className="animate-stagger-in" style={{ animationDelay: '320ms' }}>
-        {activeTab === 'chat' && (
+      {/* Gallery — scrollable middle region. Carries the masonry of approved/
+          pending/rejected concepts plus the filter strip and share dialog. */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+        <AdConceptGallery
+          clientId={clientId}
+          concepts={concepts}
+          onUpdate={handleUpdate}
+          onDelete={handleDelete}
+        />
+      </div>
+
+      {/* Composer — pinned at the bottom, centered, max-w-3xl so it reads
+          like a creative-tool generate bar instead of a stretched-edge form. */}
+      <div className="shrink-0 border-t border-nativz-border/40 bg-background/40 px-4 py-4">
+        <div className="mx-auto w-full max-w-3xl">
           <AdGeneratorChat
             clientId={clientId}
+            clientName={brandDisplayName}
+            clientLogoUrl={clientLogoUrl}
             onBatchComplete={handleBatchComplete}
             onConceptsChanged={handleConceptsChanged}
-            onSwitchToGallery={() => setActiveTab('gallery')}
           />
-        )}
-
-        {activeTab === 'gallery' && (
-          <AdConceptGallery
-            clientId={clientId}
-            concepts={concepts}
-            onUpdate={handleUpdate}
-            onDelete={handleDelete}
-          />
-        )}
-
-        {activeTab === 'assets' && (
-          <AdAssetLibrary clientId={clientId} initialAssets={initialAssets} />
-        )}
-
-        {activeTab === 'templates' && (
-          <AdTemplateLibrary clientId={clientId} initialTemplates={initialTemplates} />
-        )}
+        </div>
       </div>
+
+      {/* Drawers */}
+      {drawer && (
+        <Drawer onClose={() => setDrawer(null)} title={drawer === 'assets' ? 'Asset library' : 'Pattern library'}>
+          {drawer === 'assets' ? (
+            <AdAssetLibrary clientId={clientId} initialAssets={initialAssets} />
+          ) : (
+            <AdTemplateLibrary clientId={clientId} initialTemplates={initialTemplates} />
+          )}
+        </Drawer>
+      )}
     </div>
   );
 }
@@ -290,22 +185,35 @@ function Separator() {
   );
 }
 
-function Readout({ value, label }: { value: number; label: string }) {
+function HeaderButton({
+  label,
+  count,
+  onClick,
+  children,
+}: {
+  label: string;
+  count: number;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
-    <span className="inline-flex items-baseline gap-1.5">
-      <span className="font-mono text-[11px] font-medium tabular-nums text-text-primary">
-        {String(value).padStart(2, '0')}
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-full border border-transparent px-3 text-[12px] text-text-secondary transition-colors hover:border-nativz-border hover:bg-surface hover:text-text-primary"
+    >
+      {children}
+      <span className="hidden sm:inline">{label}</span>
+      <span className="font-mono text-[10px] tabular-nums text-text-muted">
+        {String(count).padStart(2, '0')}
       </span>
-      <span className="text-[11px] text-text-muted">{label}</span>
-    </span>
+    </button>
   );
 }
 
-const DNA_CONFIG: Record<
-  DnaTone,
-  { dot: string; text: string; label: string }
-> = {
-  ready:   { dot: 'bg-accent',                 text: 'text-text-primary',   label: 'Brand DNA loaded' },
+const DNA_CONFIG: Record<DnaTone, { dot: string; text: string; label: string }> = {
+  ready:   { dot: 'bg-accent',                  text: 'text-text-primary',   label: 'Brand DNA loaded' },
   pending: { dot: 'bg-amber-400 animate-pulse', text: 'text-text-secondary', label: 'Brand DNA generating' },
   missing: { dot: 'bg-nz-coral',                text: 'text-nz-coral',       label: 'Brand DNA missing' },
 };
@@ -314,13 +222,50 @@ function DnaBadge({ tone }: { tone: DnaTone }) {
   const config = DNA_CONFIG[tone];
   return (
     <span className="inline-flex items-center gap-2">
-      <span
-        aria-hidden
-        className={`h-1.5 w-1.5 shrink-0 rounded-full ${config.dot}`}
-      />
-      <span className={`text-[11px] font-medium ${config.text}`}>
-        {config.label}
-      </span>
+      <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${config.dot}`} />
+      <span className={`text-[11px] font-medium ${config.text}`}>{config.label}</span>
     </span>
+  );
+}
+
+function Drawer({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-40 flex justify-end bg-black/50"
+      onClick={onClose}
+    >
+      <aside
+        className="flex h-full w-full max-w-3xl flex-col border-l border-nativz-border bg-background shadow-elevated"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-nativz-border/60 px-6 py-4">
+          <h2
+            className="text-[16px] font-semibold text-text-primary"
+            style={{ fontFamily: 'var(--font-nz-display), system-ui, sans-serif' }}
+          >
+            {title}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close drawer"
+            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
+          >
+            <X size={16} />
+          </button>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+          {children}
+        </div>
+      </aside>
+    </div>
   );
 }

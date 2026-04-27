@@ -194,8 +194,10 @@ export function AdConceptGallery({ clientId, concepts, onUpdate, onDelete }: Pro
         </button>
       </div>
 
-      {/* Contact sheet — each card is a stack, no enclosing chrome */}
-      <div className="grid grid-cols-1 gap-x-5 gap-y-9 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {/* Masonry — CSS columns let varying-aspect cards pack like a moodboard.
+          `break-inside-avoid` keeps each card together; `mb-4` provides the
+          vertical rhythm between them since column-gap doesn't apply downward. */}
+      <div className="columns-2 gap-4 md:columns-3 lg:columns-4">
         {filtered.map((concept) => (
           <ConceptCard
             key={concept.id}
@@ -240,9 +242,9 @@ function EmptyGallery() {
     <div className="mx-auto max-w-md space-y-3 py-20 text-center">
       <p className="nz-eyebrow">No concepts yet</p>
       <p className="text-[13px] leading-relaxed text-text-muted">
-        Head to the Brief tab and describe the batch you want. Cortex matches
-        the brand to proven reference ads, writes the copy, and renders each
-        concept here.
+        Describe the drop in the composer below. Cortex matches the brand to
+        proven reference ads, writes the copy, and renders each concept right
+        here.
       </p>
     </div>
   );
@@ -351,12 +353,13 @@ function ConceptCard({
   const imageUrl = concept.image_storage_path ? publicImageUrl(concept.image_storage_path) : null;
 
   return (
-    <article className="group flex flex-col gap-3">
-      {/* Image — thin ring, no floating overlays except the rendering shade */}
+    <article className="group relative mb-4 break-inside-avoid">
+      {/* Image — primary surface; clicking opens detail. Border + radius match
+          the rest of the workspace; hover lifts the ring + scales subtly. */}
       <button
         type="button"
         onClick={onOpen}
-        className="relative block aspect-[4/5] w-full cursor-pointer overflow-hidden rounded-lg bg-surface-hover/60 text-left ring-1 ring-nativz-border/60 transition-shadow duration-300 hover:ring-accent/50"
+        className="relative block w-full cursor-pointer overflow-hidden rounded-xl bg-surface-hover/60 text-left ring-1 ring-nativz-border/60 transition-all duration-300 hover:ring-accent/50"
         aria-label={`Open ${concept.headline}`}
       >
         {imageUrl ? (
@@ -365,14 +368,15 @@ function ConceptCard({
             alt={concept.headline}
             width={400}
             height={500}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+            className="h-auto w-full object-cover transition-transform duration-500 group-hover:scale-[1.015]"
           />
         ) : (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center text-xs text-text-muted">
+          <div className="flex aspect-[4/5] w-full flex-col items-center justify-center gap-2 px-4 text-center text-xs text-text-muted">
             <Wand2 size={20} />
-            <span>No image yet · click render to fire Gemini</span>
+            <span>No image yet</span>
           </div>
         )}
+
         {isRendering && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/55 backdrop-blur-sm">
             <span
@@ -384,78 +388,76 @@ function ConceptCard({
             </span>
           </div>
         )}
-      </button>
 
-      {/* Caption strip — slug + status, headline, template + grounding */}
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between gap-3">
-          <span className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
+        {/* Top-left status pill — only visible when not pending, since pending
+            is the implicit default and a dot adds visual noise on every card. */}
+        {concept.status !== 'pending' && (
+          <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+            <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${STATUS_CONFIG[concept.status].dot}`} />
+            {STATUS_CONFIG[concept.status].label}
+          </span>
+        )}
+
+        {/* Top-right comment count — also hidden when zero */}
+        {commentCount > 0 && (
+          <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 font-mono text-[10px] tabular-nums text-white backdrop-blur-sm">
+            <MessageSquare size={10} />
+            {String(commentCount).padStart(2, '0')}
+          </span>
+        )}
+
+        {/* Hover overlay — gradient strip across the bottom carrying slug +
+            headline + actions. Stays out of the way until pointer hover so the
+            grid reads as a contact sheet, not an admin table. */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-gradient-to-t from-black/85 via-black/55 to-transparent px-3 pb-3 pt-8 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          <span className="font-mono text-[10px] uppercase tracking-wider text-white/60">
             {concept.slug}
           </span>
-          <StatusDot status={concept.status} />
+          <h3 className="line-clamp-2 text-[12px] font-medium leading-snug text-white">
+            {concept.headline}
+          </h3>
         </div>
-        <h3 className="line-clamp-2 text-[14px] font-medium leading-snug text-text-primary">
-          {concept.headline}
-        </h3>
-        <p className="text-[11px] text-text-muted/80">
-          {concept.template_name}
-        </p>
-        {concept.source_grounding && (
-          <p className="line-clamp-2 text-[11px] italic text-text-muted">
-            {concept.source_grounding}
-          </p>
-        )}
-      </div>
+      </button>
 
-      {/* Actions — full-circle icon buttons, mono comment count if any */}
-      <div className="flex items-center gap-1.5 pt-1">
-        <CircleButton
+      {/* Hover action rail — anchored to bottom-right of the card so it
+          floats above the gradient. Pointer-events scoped here so the rest of
+          the gradient stays click-through to the open trigger. */}
+      <div className="absolute bottom-2 right-2 flex items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+        <FloatingAction
           label="Approve"
           onClick={onApprove}
           active={concept.status === 'approved'}
           tone="accent"
         >
           <Check size={13} />
-        </CircleButton>
-        <CircleButton
+        </FloatingAction>
+        <FloatingAction
           label="Reject"
           onClick={onReject}
           active={concept.status === 'rejected'}
           tone="coral"
         >
           <XIcon size={13} />
-        </CircleButton>
-        <CircleButton
+        </FloatingAction>
+        <FloatingAction
           label={imageUrl ? 'Re-render image' : 'Render image'}
           onClick={onRender}
           disabled={isRendering}
         >
           <Wand2 size={13} />
-        </CircleButton>
-        <CircleButton label="View detail" onClick={onOpen}>
+        </FloatingAction>
+        <FloatingAction label="View detail" onClick={onOpen}>
           <Eye size={13} />
-        </CircleButton>
-        {commentCount > 0 && (
-          <button
-            type="button"
-            onClick={onOpen}
-            title={`${commentCount} comment${commentCount === 1 ? '' : 's'}`}
-            className="ml-1 inline-flex cursor-pointer items-center gap-1 font-mono text-[10px] tabular-nums text-accent-text transition-colors hover:text-accent"
-          >
-            <MessageSquare size={11} />
-            {String(commentCount).padStart(2, '0')}
-          </button>
-        )}
-        <div className="flex-1" />
-        <CircleButton label="Delete" onClick={onDelete} tone="coral-ghost">
+        </FloatingAction>
+        <FloatingAction label="Delete" onClick={onDelete} tone="coral-ghost">
           <Trash2 size={13} />
-        </CircleButton>
+        </FloatingAction>
       </div>
     </article>
   );
 }
 
-function CircleButton({
+function FloatingAction({
   label,
   onClick,
   children,
@@ -475,16 +477,19 @@ function CircleButton({
       ? 'bg-nz-coral text-white'
       : 'bg-accent text-white'
     : tone === 'coral-ghost'
-      ? 'text-text-muted hover:bg-nz-coral/10 hover:text-nz-coral'
-      : 'text-text-muted hover:bg-surface-hover hover:text-text-primary';
+      ? 'bg-black/70 text-white/80 hover:bg-nz-coral hover:text-white'
+      : 'bg-black/70 text-white/85 hover:bg-white hover:text-black';
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
       disabled={disabled}
       title={label}
       aria-label={label}
-      className={`flex h-7 w-7 cursor-pointer items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${classes}`}
+      className={`pointer-events-auto flex h-7 w-7 cursor-pointer items-center justify-center rounded-full backdrop-blur-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${classes}`}
     >
       {children}
     </button>

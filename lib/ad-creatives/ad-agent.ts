@@ -413,15 +413,8 @@ interface ComposeAndPersistOutput {
   concepts: GeneratedConceptRow[];
 }
 
-interface RawConcept {
-  reference_ad_id?: unknown;
-  template_name?: unknown;
-  headline?: unknown;
-  body_copy?: unknown;
-  visual_description?: unknown;
-  source_grounding?: unknown;
-  image_prompt?: unknown;
-}
+import { parseConcepts, type RawConcept } from './parse-concepts';
+export { parseConcepts };
 
 /**
  * Composes the concept copy via OpenRouter (Claude / GPT) and inserts the
@@ -666,26 +659,6 @@ Return only JSON:
 }`;
 }
 
-export function parseConcepts(raw: string): RawConcept[] {
-  const stripped = raw
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/```\s*$/i, '')
-    .trim();
-  try {
-    const parsed = JSON.parse(stripped) as unknown;
-    if (Array.isArray(parsed)) return parsed as RawConcept[];
-    if (
-      parsed &&
-      typeof parsed === 'object' &&
-      Array.isArray((parsed as { concepts?: unknown }).concepts)
-    ) {
-      return (parsed as { concepts: RawConcept[] }).concepts;
-    }
-  } catch {
-    return [];
-  }
-  return [];
-}
 
 function strOr(v: unknown, fallback: string): string {
   return typeof v === 'string' && v.trim().length > 0 ? v.trim() : fallback;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseConcepts } from './ad-agent';
+import { parseConcepts } from './parse-concepts';
 
 describe('parseConcepts', () => {
   it('parses a top-level concepts array', () => {
