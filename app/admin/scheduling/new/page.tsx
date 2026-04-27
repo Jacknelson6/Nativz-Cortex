@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -7,16 +9,16 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * Admin form to create a new team_scheduling_event. Lists every internal
- * teammate (users in nativz.io / andersoncollaborative.com) — calendar reads
- * happen via service-account / domain-wide delegation, so no per-user OAuth
- * is required to pick someone.
+ * Admin form to create a new team_scheduling_event. The "who can attend"
+ * roster comes from `scheduling_people` — the canonical configured-people
+ * list managed at /admin/scheduling/people. Each configured person is
+ * resolved to a real `users.id` via their workspace email aliases so the
+ * event-create POST has a valid user_id for team_scheduling_event_members.
  *
  * Optional ?item_id= prepopulates the linked schedule_meeting onboarding
  * item, threading from the onboarding builder when an admin clicks "Set up
  * team availability" on an item.
  */
-const TEAM_DOMAINS = ['nativz.io', 'andersoncollaborative.com'] as const;
 export default async function NewSchedulingEventPage({
   searchParams,
 }: {
@@ -41,29 +43,74 @@ export default async function NewSchedulingEventPage({
   const rawItemId = typeof sp.item_id === 'string' ? sp.item_id : null;
   const rawClientId = typeof sp.client_id === 'string' ? sp.client_id : null;
 
-  // Internal teammates from authorized workspace domains — DWD lets us read
-  // their calendars without per-user OAuth.
-  type ConnectedUser = {
-    id: string;
+  // Configured scheduling people = canonical "who's schedulable" list.
+  // Pull active rows in priority-tier order, then resolve to real users.id
+  // values via their workspace email aliases. Anyone we can't resolve is
+  // silently dropped — the POST schema requires a valid user_id.
+  type ConfiguredPerson = {
+    id: string; // resolved users.id
     email: string;
-    name: string | null;
+    name: string;
+    color: string;
+    priorityTier: 1 | 2 | 3;
   };
-  const domainFilter = TEAM_DOMAINS.map((d) => `email.ilike.%@${d}`).join(',');
-  const { data: userRows } = await admin
-    .from('users')
-    .select('id, email, full_name')
-    .or(domainFilter)
-    .order('full_name', { ascending: true });
-  const connectedUsers: ConnectedUser[] = (userRows ?? [])
-    .filter((u) => !!u.email)
-    .map((u) => ({
-      id: u.id as string,
-      email: u.email as string,
-      name: (u.full_name as string | null) ?? null,
-    }));
 
-  // If linked to a schedule_meeting item, hydrate its task name + linked
-  // flow/client so we can prepopulate the event name.
+  const [{ data: peopleRows }, { data: emailRows }] = await Promise.all([
+    admin
+      .from('scheduling_people')
+      .select('id, display_name, color, priority_tier, sort_order')
+      .eq('is_active', true)
+      .order('priority_tier', { ascending: true })
+      .order('sort_order', { ascending: true }),
+    admin.from('scheduling_person_emails').select('person_id, email'),
+  ]);
+
+  const emailsByPerson = new Map<string, string[]>();
+  for (const row of emailRows ?? []) {
+    const personId = row.person_id as string;
+    const email = (row.email as string).toLowerCase();
+    const list = emailsByPerson.get(personId) ?? [];
+    list.push(email);
+    emailsByPerson.set(personId, list);
+  }
+
+  const allEmails = Array.from(new Set(Array.from(emailsByPerson.values()).flat()));
+  const userIdByEmail = new Map<string, string>();
+  if (allEmails.length > 0) {
+    const { data: userRows } = await admin
+      .from('users')
+      .select('id, email')
+      .in('email', allEmails);
+    for (const u of userRows ?? []) {
+      const email = (u.email as string | null)?.toLowerCase();
+      if (email && u.id) userIdByEmail.set(email, u.id as string);
+    }
+  }
+
+  const configuredPeople: ConfiguredPerson[] = (peopleRows ?? [])
+    .map((p) => {
+      const emails = emailsByPerson.get(p.id as string) ?? [];
+      let resolved: { user_id: string; email: string } | null = null;
+      for (const email of emails) {
+        const userId = userIdByEmail.get(email);
+        if (userId) {
+          resolved = { user_id: userId, email };
+          break;
+        }
+      }
+      if (!resolved) return null;
+      return {
+        id: resolved.user_id,
+        email: resolved.email,
+        name: p.display_name as string,
+        color: (p.color as string) ?? '#94a3b8',
+        priorityTier: (p.priority_tier as 1 | 2 | 3) ?? 2,
+      };
+    })
+    .filter((p): p is ConfiguredPerson => p !== null);
+
+  // Hydrate any onboarding-checklist link so we can prepopulate the event
+  // name + connect the resulting event back to the originating flow.
   let linkedItem: {
     id: string;
     task: string;
@@ -122,16 +169,19 @@ export default async function NewSchedulingEventPage({
   }
 
   return (
-    <div className="cortex-page-gutter max-w-2xl space-y-8">
-      <header>
+    <div className="cortex-page-gutter max-w-2xl space-y-6">
+      <header className="space-y-2">
+        <Link
+          href="/admin/scheduling"
+          className="inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-text-secondary transition-colors"
+        >
+          <ArrowLeft size={12} />
+          Back to scheduling
+        </Link>
         <h1 className="ui-page-title-md">New scheduling event</h1>
-        <p className="text-sm text-text-muted">
-          Pick teammates who need to be in the meeting. We&apos;ll show the client every slot
-          where everyone&apos;s free.
-        </p>
       </header>
       <NewSchedulingEventForm
-        connectedUsers={connectedUsers}
+        configuredPeople={configuredPeople}
         linkedItem={linkedItem}
         prefilledClientId={rawClientId}
       />

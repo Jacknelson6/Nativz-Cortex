@@ -1,10 +1,12 @@
 /**
- * Google Calendar freeBusy fetcher (service-account / DWD path).
+ * Google Calendar busy-range fetcher (service-account / DWD path).
  *
- * Wraps the freebusy.query endpoint
- * (https://developers.google.com/workspace/calendar/api/v3/reference/freebusy/query)
- * using domain-wide delegation: we impersonate the workspace user by email and
- * query their primary calendar. No per-user OAuth required.
+ * Wraps events.list (https://developers.google.com/workspace/calendar/api/v3/reference/events/list)
+ * rather than freebusy.query so we can read titles. We need titles to honor the
+ * project's soft-block rules — events whose summary matches a pattern in
+ * `soft-block-rules.ts` (e.g. "shoot") are visible in the calendar but do NOT
+ * gate slot availability. freebusy.query strips summaries entirely so the rule
+ * couldn't be enforced from there.
  *
  * Only nativz.io and andersoncollaborative.com workspaces are authorized for
  * impersonation — `isImpersonateAllowed()` enforces this in front of the API
@@ -15,6 +17,7 @@ import {
   isImpersonateAllowed,
   ALLOWED_IMPERSONATE_DOMAINS,
 } from '@/lib/google/service-account';
+import { isSoftBlockedTitle } from './soft-block-rules';
 
 export interface BusyRange {
   start: Date;
@@ -25,6 +28,15 @@ export interface FetchBusyResult {
   busy: BusyRange[];
   ok: boolean;
   error?: string;
+}
+
+interface GoogleEventItem {
+  status?: string;
+  transparency?: string;
+  summary?: string;
+  start?: { dateTime?: string; date?: string };
+  end?: { dateTime?: string; date?: string };
+  attendees?: { email?: string; responseStatus?: string; self?: boolean }[];
 }
 
 /**
@@ -60,25 +72,30 @@ export async function fetchBusyForEmail({
     };
   }
 
+  const params = new URLSearchParams({
+    timeMin: timeMin.toISOString(),
+    timeMax: timeMax.toISOString(),
+    singleEvents: 'true',
+    showDeleted: 'false',
+    orderBy: 'startTime',
+    maxResults: '2500',
+    fields: 'items(status,transparency,summary,start,end,attendees(email,responseStatus,self))',
+  });
+
   let res: Response;
   try {
-    res = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
+    res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`,
+      {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
       },
-      body: JSON.stringify({
-        timeMin: timeMin.toISOString(),
-        timeMax: timeMax.toISOString(),
-        items: [{ id: email }],
-      }),
-    });
+    );
   } catch (err) {
     return {
       busy: [],
       ok: false,
-      error: err instanceof Error ? err.message : 'Network error calling freeBusy',
+      error: err instanceof Error ? err.message : 'Network error calling events.list',
     };
   }
 
@@ -87,27 +104,27 @@ export async function fetchBusyForEmail({
     return {
       busy: [],
       ok: false,
-      error: `freeBusy ${res.status}: ${body.slice(0, 240)}`,
+      error: `events.list ${res.status}: ${body.slice(0, 240)}`,
     };
   }
 
-  const json = (await res.json()) as {
-    calendars?: Record<string, { busy?: { start: string; end: string }[]; errors?: { reason: string }[] }>;
-  };
+  const json = (await res.json()) as { items?: GoogleEventItem[] };
+  const items = json.items ?? [];
 
-  const calendar = json.calendars?.[email];
-  if (calendar?.errors?.length) {
-    return {
-      busy: [],
-      ok: false,
-      error: `Calendar errors: ${calendar.errors.map((e) => e.reason).join(', ')}`,
-    };
+  const busy: BusyRange[] = [];
+  for (const ev of items) {
+    if (ev.status === 'cancelled') continue;
+    if (ev.transparency === 'transparent') continue;
+    if (isSoftBlockedTitle(ev.summary)) continue;
+    const self = ev.attendees?.find((a) => a.self === true);
+    if (self?.responseStatus === 'declined') continue;
+
+    const startStr = ev.start?.dateTime ?? ev.start?.date;
+    const endStr = ev.end?.dateTime ?? ev.end?.date;
+    if (!startStr || !endStr) continue;
+
+    busy.push({ start: new Date(startStr), end: new Date(endStr) });
   }
-
-  const busy: BusyRange[] = (calendar?.busy ?? []).map((b) => ({
-    start: new Date(b.start),
-    end: new Date(b.end),
-  }));
 
   return { busy, ok: true };
 }

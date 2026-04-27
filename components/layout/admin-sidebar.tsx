@@ -21,6 +21,7 @@ import {
   ShoppingBag,
   Bell,
   Calendar,
+  CalendarDays,
   Cpu,
   Gauge,
   Telescope,
@@ -90,6 +91,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: '/finder/new', label: 'Trend Finder', icon: TrendingUp },
       { href: '/lab', label: 'Strategy Lab', icon: MessagesSquare },
+      { href: '/admin/calendar', label: 'Calendar', icon: CalendarDays },
       {
         // NAT-62 (2026-04-22): unified landing page. Renamed back to
         // "Competitor spying" 2026-04-22 evening per Jack — feels more
@@ -198,6 +200,7 @@ const ADMIN_ONLY_HREFS = new Set([
   // — RLS scopes them to the viewer's user_client_access.
   '/ads',
   '/spying',
+  '/admin/calendar',
   // Settings is reachable from the avatar popover — it doesn't need its
   // own nav row on the portal. Keeping it on the admin side where the gear
   // is the primary entry point to the agency settings secondary rail.
