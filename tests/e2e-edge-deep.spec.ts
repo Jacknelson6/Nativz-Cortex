@@ -10,7 +10,6 @@ const UNAUTHORIZED_GET_PATHS: { path: string; note?: string }[] = [
   { path: '/api/clients' },
   { path: '/api/research/history?limit=5' },
   { path: '/api/presentations' },
-  { path: '/api/tasks' },
   { path: '/api/team' },
   { path: '/api/settings/openrouter-models' },
   { path: '/api/pipeline/summary' },
@@ -47,15 +46,6 @@ test.describe('Deep — API without session', () => {
     expect(json).toMatchObject({ error: 'Unauthorized' });
   });
 
-  test('POST /api/tasks with invalid JSON body → 401 (auth runs before body parse)', async ({ request }) => {
-    const res = await request.post('/api/tasks', {
-      data: 'not-json{',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    expect(res.status()).toBe(401);
-    const json = await res.json().catch(() => ({}));
-    expect(json).toMatchObject({ error: 'Unauthorized' });
-  });
 });
 
 test.describe('Deep — unauthenticated browser edge cases', () => {

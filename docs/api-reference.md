@@ -2,7 +2,7 @@
 
 > **For AI agents:** This document describes every API endpoint that exists on disk. Auto-generated from `app/api/**/route.ts` by `scripts/generate-api-docs.ts` — do not edit by hand. Re-run the script after adding/removing routes or tweaking a JSDoc block.
 
-**679 endpoints across 33 sections.**
+**665 endpoints across 32 sections.**
 
 ## Authentication
 
@@ -507,7 +507,7 @@ website_url - Client website URL
 
 ### `DELETE /api/clients/:id`
 
-Permanently delete a client and related rows (moodboards, todos, tasks, searches, ideas, strategies, invites, shoot events when present, then client). Also removes the client folder from the Obsidian vault (non-blocking).
+Permanently delete a client and related rows (moodboards, todos, searches, ideas, strategies, invites, shoot events when present, then client). Also removes the client folder from the Obsidian vault (non-blocking).
 
 **Auth:** Required (admin)
 
@@ -1516,7 +1516,7 @@ id - Client UUID
 
 ### `GET /api/clients/:id/summary`
 
-Returns an aggregated summary of a client's current state: - Basic info (name, industry, agency, services) - Team assignments (who's working on this client) - Pipeline status for the current month - Upcoming shoots - Recent task counts (open, overdue, done) - Latest research searches - Idea generation count Use when: You need a full picture of a client in one call — dashboards, AI agent context building, or client profile pages.
+Returns an aggregated summary of a client's current state: - Basic info (name, industry, agency, services) - Team assignments (who's working on this client) - Pipeline status for the current month - Upcoming shoots - Latest research searches - Idea generation count Use when: You need a full picture of a client in one call — dashboards, AI agent context building, or client profile pages.
 
 ### `DELETE /api/clients/:id/uppromote`
 
@@ -2087,186 +2087,9 @@ id - Reference video UUID
 
 ---
 
-## Tasks & Todos
+## Todos
 
-_Task management, search, natural-language parsing._
-
-### `GET /api/tasks`
-
-List all non-archived tasks for the authenticated admin user. Owners see all tasks; non-owners see only tasks assigned to them or created by them.
-
-**Auth:** Required (admin)
-
-**Query params:**
-
-```
-client_id - Filter by client UUID
-assignee_id - Filter by team member UUID
-status - Filter by status (backlog | in_progress | review | done)
-task_type - Filter by type (content | shoot | edit | paid_media | strategy | other)
-due_date_from - Filter tasks with due date on or after this date (YYYY-MM-DD)
-due_date_to - Filter tasks with due date on or before this date (YYYY-MM-DD)
-```
-
-**Returns:**
-
-```
-{{ tasks: Task[], is_owner: boolean, my_team_member_id: string | null, todoist_connected: boolean }}
-```
-
-### `POST /api/tasks`
-
-Create a new task. If no assignee is specified, the task is auto-assigned to the creator's team member record. Newly created tasks are pushed to Todoist for all connected users involved.
-
-**Auth:** Required (admin)
-
-**Body:**
-
-```
-title - Task title (required)
-description - Task description
-status - Initial status (backlog | in_progress | review | done), defaults to backlog
-priority - Priority level (low | medium | high | urgent), defaults to low
-client_id - Associated client UUID
-assignee_id - Team member UUID to assign to; defaults to creator
-due_date - Due date (YYYY-MM-DD)
-task_type - Type (content | shoot | edit | paid_media | strategy | other), defaults to other
-shoot_date - Shoot date (YYYY-MM-DD)
-tags - Array of tag strings
-monday_item_id - Monday.com item ID for sync
-monday_board_id - Monday.com board ID for sync
-recurrence - Recurrence rule string (e.g. "every week")
-recurrence_from_completion - If true, next recurrence is calculated from completion date
-```
-
-**Returns:**
-
-```
-{Task} Created task with client and assignee relations (201)
-```
-
-### `DELETE /api/tasks/:id`
-
-Soft-delete (archive) a task by setting archived_at. Non-owners can only delete tasks they created. If the task has a linked Todoist task, it is also deleted from Todoist.
-
-**Auth:** Required (admin)
-
-**Query params:**
-
-```
-id - Task UUID
-```
-
-**Returns:**
-
-```
-{{ success: true }}
-```
-
-### `GET /api/tasks/:id`
-
-Fetch a single non-archived task by ID, including associated client and assignee details.
-
-**Auth:** Required (admin)
-
-**Query params:**
-
-```
-id - Task UUID
-```
-
-**Returns:**
-
-```
-{Task} Task with client and team_member relations
-```
-
-### `PATCH /api/tasks/:id`
-
-Update a task. Non-owners can only update tasks they created or are assigned to. Completing a recurring task advances the due date instead of marking it done. Field changes are recorded in task activity, new assignees are notified, and changes are synced to Todoist for connected users.
-
-**Auth:** Required (admin)
-
-**Body:**
-
-```
-title - Updated title
-description - Updated description
-status - New status (backlog | in_progress | review | done)
-priority - New priority (low | medium | high | urgent)
-client_id - Updated client UUID
-assignee_id - Updated assignee team member UUID
-due_date - Updated due date (YYYY-MM-DD)
-task_type - Updated type (content | shoot | edit | paid_media | strategy | other)
-shoot_date - Updated shoot date (YYYY-MM-DD)
-tags - Updated array of tags
-monday_item_id - Updated Monday.com item ID
-monday_board_id - Updated Monday.com board ID
-```
-
-**Query params:**
-
-```
-id - Task UUID
-```
-
-**Returns:**
-
-```
-{Task} Updated task with client and team_member relations
-```
-
-### `GET /api/tasks/:id/activity`
-
-Fetch the activity log for a specific task — field changes, status updates, assignments, etc. Returns up to 50 entries ordered by most recent.
-
-**Auth:** Required (admin)
-
-**Query params:**
-
-```
-id - Task UUID
-```
-
-**Returns:**
-
-```
-{TaskActivity[]} Array of task activity records
-```
-
-### `POST /api/tasks/parse`
-
-Parse a natural language task description using Claude AI and return structured task fields. Resolves relative dates ("tomorrow", "next Monday"), fuzzy-matches client names and assignee names against the database, and infers priority and task type from context.
-
-**Auth:** Required (admin)
-
-**Body:**
-
-```
-text - Natural language task description (required)
-```
-
-**Returns:**
-
-```
-{{ title: string, due_date: string | null, client_id: string | null, client_name: string | null, assignee_id: string | null, assignee_name: string | null, priority: string | null, task_type: string | null }}
-```
-
-### `GET /api/tasks/search`
-
-Full-text search across tasks by title and description. Supports filtering by status, priority, assignee, client, task_type, and date range. Query params: q - Search query (searches title and description, case-insensitive) status - Filter by status (backlog, in_progress, review, done) priority - Filter by priority (low, medium, high, urgent) assignee - Filter by assignee team_member ID client - Filter by client ID task_type - Filter by type (content, shoot, edit, paid_media, strategy, other) due_before - Filter tasks due on or before this date (YYYY-MM-DD) due_after - Filter tasks due on or after this date (YYYY-MM-DD) limit - Max results (default 50, max 200) Use when: Finding tasks matching specific criteria, building filtered views, or AI agents searching for relevant tasks.
-
-### `GET /api/tasks/suggestions`
-
-Fetch task import suggestions from Monday.com (Content Calendars, Content Requests, and Blog Pipeline boards). Filters out items that are already done. Marks items that have already been imported to Cortex via their monday_item_id. Returns a warning if Monday.com is not configured or if any board fetch fails.
-
-**Auth:** Required (admin)
-
-**Returns:**
-
-```
-{{ suggestions: TaskSuggestion[], warnings?: string[] }}
-```
+_Personal todo management._
 
 ### `GET /api/todos`
 
@@ -2727,6 +2550,10 @@ ConceptSpec — see lib/ad-creatives-v2/types.ts
 ```
 PNG binary (image/png)
 ```
+
+### `POST /api/ad-creatives/agent-stream`
+
+SSE endpoint that runs the ad generator agent and forwards every `AdAgentEvent` the run emits as `data: <json>\n\n` chunks. The browser consumes this stream via `fetch` + `ReadableStream` (not `EventSource`, because we need to send a POST body) and parses each SSE frame back into an `AdAgentEvent` to drive the live transcript. Persistence model: - The user brief lands in `ad_generator_messages` before the run starts. - The final agent narration lands as one assistant message after `batch_complete`. Tool boundaries and per-render progress are intentionally NOT persisted — they're ephemeral activity, not a permanent chat record.
 
 ### `POST /api/ad-creatives/command`
 
@@ -5003,7 +4830,7 @@ id - Team member UUID to link
 
 ### `GET /api/team/:id/workload`
 
-Returns a team member's current workload: - Their client assignments (with roles) - Open task count (total + overdue) - Pipeline items they're assigned to this month (by role) - Upcoming shoots they're involved in Use when: Checking capacity before assigning new work, building team dashboards, or balancing workload across the team.
+Returns a team member's current workload: - Their client assignments (with roles) - Pipeline items they're assigned to this month (by role) Use when: Checking capacity before assigning new work, building team dashboards, or balancing workload across the team.
 
 ### `POST /api/team/invite/accept`
 
@@ -5255,7 +5082,7 @@ limit - Maximum number of records to return (default: 50, max: 100)
 
 ### `GET /api/dashboard/overview`
 
-Returns a comprehensive dashboard overview in a single call: - Active client count - Pipeline status distribution for current month - Task summary (open, overdue, completed today) - Upcoming shoots (next 7 days) - Recent notifications (last 5 unread) - Recent research searches (last 5) Use when: Building dashboard views, AI agent status checks, or getting a quick pulse on agency operations.
+Returns a comprehensive dashboard overview in a single call: - Active client count - Pipeline status distribution for current month - Upcoming shoots (next 7 days) - Recent notifications (last 5 unread) - Recent research searches (last 5) Use when: Building dashboard views, AI agent status checks, or getting a quick pulse on agency operations.
 
 ### `GET /api/dashboard/stats`
 
@@ -5842,73 +5669,6 @@ abbreviation - Optional client abbreviation
 
 ---
 
-## Todoist
-
-_Todoist connection and bidirectional task sync._
-
-### `DELETE /api/todoist/connect`
-
-Disconnect Todoist by clearing the API key, project ID, and sync timestamp.
-
-**Auth:** Required (any authenticated user)
-
-**Returns:**
-
-```
-{{ disconnected: true }}
-```
-
-### `GET /api/todoist/connect`
-
-Check the Todoist connection status for the authenticated user. Fetches available projects from the Todoist API to validate the stored key. Returns key_invalid=true if the stored key is no longer valid.
-
-**Auth:** Required (any authenticated user)
-
-**Returns:**
-
-```
-{{ connected: boolean, key_invalid?: boolean, project_id: string | null, synced_at: string | null, projects: { id: string, name: string }[] }}
-```
-
-### `POST /api/todoist/connect`
-
-Connect Todoist by saving and validating an API key. Pass api_key='_keep' to update only the project_id without changing the key. Returns available Todoist projects on success.
-
-**Auth:** Required (any authenticated user)
-
-**Body:**
-
-```
-api_key - Todoist API key to validate and save, or '_keep' to only update project
-project_id - Optional Todoist project ID to sync tasks into
-```
-
-**Returns:**
-
-```
-{{ connected: true, projects: { id: string, name: string }[] }}
-```
-
-### `POST /api/todoist/sync`
-
-Trigger a full bidirectional sync between Todoist and Cortex tasks for the authenticated user. Auto-sync mode (auto=true) skips the sync if the user was synced within the last 60 seconds. Sends a notification if the sync encounters errors.
-
-**Auth:** Required (any authenticated user; must have Todoist connected)
-
-**Query params:**
-
-```
-auto - If 'true', skip sync if last sync was less than 60 seconds ago (default: false)
-```
-
-**Returns:**
-
-```
-{{ pulled: number, pushed: number, errors: string[], skipped?: boolean }}
-```
-
----
-
 ## External API (v1)
 
 _API key-authenticated endpoints for external agents and scripts._
@@ -6286,122 +6046,6 @@ id - Shoot event UUID
 {{ shoot: ShootEvent & { clients: { id, name, slug } } }}
 ```
 
-### `GET /api/v1/tasks`
-
-List non-archived tasks. Supports filtering by client, assignee, status, and due date range. Returns tasks with client and team_member join data.
-
-**Auth:** API key (Bearer token via Authorization header)
-
-**Query params:**
-
-```
-client_id - Filter by client UUID (optional)
-assignee_id - Filter by team_member UUID (optional)
-status - Filter by status: 'backlog' | 'in_progress' | 'review' | 'done' (optional)
-due_date_from - ISO date lower bound inclusive (optional)
-due_date_to - ISO date upper bound inclusive (optional)
-```
-
-**Returns:**
-
-```
-{{ tasks: Task[] }}
-```
-
-### `POST /api/v1/tasks`
-
-Create a task. If no assignee_id is provided, auto-assigns to the API key owner's team_member record.
-
-**Auth:** API key (Bearer token via Authorization header)
-
-**Body:**
-
-```
-title - Task title (required)
-description - Task description (optional)
-status - 'backlog' | 'in_progress' | 'review' | 'done' (default 'backlog')
-priority - 'low' | 'medium' | 'high' | 'urgent' (default 'low')
-client_id - Client UUID (optional)
-assignee_id - Team member UUID (optional, auto-assigned to API key owner if omitted)
-due_date - ISO date string (optional)
-task_type - 'content' | 'shoot' | 'edit' | 'paid_media' | 'strategy' | 'other' (default 'other')
-tags - Array of tag strings (optional)
-```
-
-**Returns:**
-
-```
-{{ task: Task }}
-```
-
-### `DELETE /api/v1/tasks/:id`
-
-Soft-delete a task by setting archived_at. Returns 404 if already archived.
-
-**Auth:** API key (Bearer token via Authorization header)
-
-**Query params:**
-
-```
-id - Task UUID
-```
-
-**Returns:**
-
-```
-{{ success: true }}
-```
-
-### `GET /api/v1/tasks/:id`
-
-Fetch a single non-archived task by UUID with client and assignee join data.
-
-**Auth:** API key (Bearer token via Authorization header)
-
-**Query params:**
-
-```
-id - Task UUID
-```
-
-**Returns:**
-
-```
-{{ task: Task }}
-```
-
-### `PATCH /api/v1/tasks/:id`
-
-Update a task's fields. Applies only the provided fields. Only non-archived tasks can be updated.
-
-**Auth:** API key (Bearer token via Authorization header)
-
-**Body:**
-
-```
-title - Task title (optional)
-description - Task description (optional, nullable)
-status - 'backlog' | 'in_progress' | 'review' | 'done' (optional)
-priority - 'low' | 'medium' | 'high' | 'urgent' (optional)
-client_id - Client UUID (optional, nullable)
-assignee_id - Team member UUID (optional, nullable)
-due_date - ISO date string (optional, nullable)
-task_type - Task type enum (optional)
-tags - Array of tag strings (optional)
-```
-
-**Query params:**
-
-```
-id - Task UUID
-```
-
-**Returns:**
-
-```
-{{ task: Task }}
-```
-
 ### `GET /api/v1/team`
 
 List all active team members, ordered alphabetically by name.
@@ -6471,6 +6115,14 @@ Delete a single ad asset. Removes the storage object first, then the row. Order 
 ### `POST /api/banners/:id/dismiss`
 
 ### `GET /api/banners/active`
+
+### `POST /api/brand-audits`
+
+POST /api/brand-audits — create a new audit row, run all model × prompt combos in parallel, persist the rollup. Returns the finished row id so the caller can navigate straight to /spying/self-audit/[id].
+
+### `GET /api/brand-audits/:id`
+
+GET /api/brand-audits/[id] — read a single audit row. Used by the detail page and by the "still running" poll once we move execution off-thread.
 
 ### `GET /api/client-groups`
 
@@ -6683,6 +6335,10 @@ brand-new prospect AND immediately creates a `needs_proposal` flow so the admin 
 ### `GET /api/scheduling/events`
 
 ### `POST /api/scheduling/events`
+
+### `GET /api/spying/watch/:id/history`
+
+GET /api/spying/watch/[id]/history — full snapshot history for a single client_benchmarks row. Powers the watch-history drawer on /spying. Returns the rows in chronological order so the chart code can map them straight onto an x-axis without resorting.
 
 ### `GET /api/webhooks/openrouter/generation`
 

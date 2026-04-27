@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ConnectCalendar } from '@/components/calendar/connect-calendar';
-import { ShootEventsList } from '@/components/calendar/shoot-events-list';
 
 export default function CalendarSettingsPage() {
   return (
@@ -16,18 +15,14 @@ export default function CalendarSettingsPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="ui-page-title">Calendar & shoots</h1>
+          <h1 className="ui-page-title">Calendar</h1>
           <p className="text-sm text-text-muted mt-0.5">
-            Connect your calendar to auto-detect shoots and generate content plans
+            Connect a Google account so the team-availability grid and scheduling picker can read your free/busy.
           </p>
         </div>
       </div>
 
-      {/* Calendar connection */}
       <ConnectCalendar />
-
-      {/* Upcoming shoots */}
-      <ShootEventsList />
     </div>
   );
 }

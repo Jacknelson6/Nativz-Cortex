@@ -66,10 +66,10 @@ export const API_SECTIONS: ApiSection[] = [
     "description": "Reference video uploads + processing for AI analysis."
   },
   {
-    "slug": "tasks",
-    "title": "Tasks & Todos",
+    "slug": "todos",
+    "title": "Todos",
     "icon": "CheckSquare",
-    "description": "Task management, search, natural-language parsing."
+    "description": "Personal todo management."
   },
   {
     "slug": "pipeline",
@@ -198,12 +198,6 @@ export const API_SECTIONS: ApiSection[] = [
     "description": "Monday.com webhooks, sync, board updates."
   },
   {
-    "slug": "todoist",
-    "title": "Todoist",
-    "icon": "ListTodo",
-    "description": "Todoist connection and bidirectional task sync."
-  },
-  {
     "slug": "v1",
     "title": "External API (v1)",
     "icon": "Plug",
@@ -231,7 +225,7 @@ export const SECTIONS = [
   "Knowledge Base",
   "Ideas & Content",
   "Reference Videos",
-  "Tasks & Todos",
+  "Todos",
   "Pipeline",
   "Shoots & Calendar",
   "Ad Creatives",
@@ -253,7 +247,6 @@ export const SECTIONS = [
   "Shared Links",
   "Presentations",
   "Monday.com",
-  "Todoist",
   "External API (v1)",
   "Cron Jobs",
   "Other",
@@ -301,6 +294,14 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     "sectionSlug": "ad-creatives",
     "body": "ConceptSpec — see lib/ad-creatives-v2/types.ts",
     "response": "PNG binary (image/png)"
+  },
+  {
+    "method": "POST",
+    "path": "/api/ad-creatives/agent-stream",
+    "description": "SSE endpoint that runs the ad generator agent and forwards every `AdAgentEvent` the run emits as `data: <json>\\n\\n` chunks. The browser consumes this stream via `fetch` + `ReadableStream` (not `EventSource`, because we need to send a POST body) and parses each SSE frame back into an `AdAgentEvent` to drive the live transcript. Persistence model: - The user brief lands in `ad_generator_messages` before the run starts. - The final agent narration lands as one assistant message after `batch_complete`. Tool boundaries and per-render progress are intentionally NOT persisted — they're ephemeral activity, not a permanent chat record.",
+    "auth": "",
+    "section": "Ad Creatives",
+    "sectionSlug": "ad-creatives"
   },
   {
     "method": "POST",
@@ -2064,7 +2065,7 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   {
     "method": "DELETE",
     "path": "/api/clients/:id",
-    "description": "Permanently delete a client and related rows (moodboards, todos, tasks, searches, ideas, strategies, invites, shoot events when present, then client). Also removes the client folder from the Obsidian vault (non-blocking).",
+    "description": "Permanently delete a client and related rows (moodboards, todos, searches, ideas, strategies, invites, shoot events when present, then client). Also removes the client folder from the Obsidian vault (non-blocking).",
     "auth": "Required (admin)",
     "section": "Clients & Onboarding",
     "sectionSlug": "clients",
@@ -2720,7 +2721,7 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   {
     "method": "GET",
     "path": "/api/clients/:id/summary",
-    "description": "Returns an aggregated summary of a client's current state: - Basic info (name, industry, agency, services) - Team assignments (who's working on this client) - Pipeline status for the current month - Upcoming shoots - Recent task counts (open, overdue, done) - Latest research searches - Idea generation count Use when: You need a full picture of a client in one call — dashboards, AI agent context building, or client profile pages.",
+    "description": "Returns an aggregated summary of a client's current state: - Basic info (name, industry, agency, services) - Team assignments (who's working on this client) - Pipeline status for the current month - Upcoming shoots - Latest research searches - Idea generation count Use when: You need a full picture of a client in one call — dashboards, AI agent context building, or client profile pages.",
     "auth": "",
     "section": "Clients & Onboarding",
     "sectionSlug": "clients"
@@ -2890,7 +2891,7 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   {
     "method": "GET",
     "path": "/api/dashboard/overview",
-    "description": "Returns a comprehensive dashboard overview in a single call: - Active client count - Pipeline status distribution for current month - Task summary (open, overdue, completed today) - Upcoming shoots (next 7 days) - Recent notifications (last 5 unread) - Recent research searches (last 5) Use when: Building dashboard views, AI agent status checks, or getting a quick pulse on agency operations.",
+    "description": "Returns a comprehensive dashboard overview in a single call: - Active client count - Pipeline status distribution for current month - Upcoming shoots (next 7 days) - Recent notifications (last 5 unread) - Recent research searches (last 5) Use when: Building dashboard views, AI agent status checks, or getting a quick pulse on agency operations.",
     "auth": "",
     "section": "Dashboard",
     "sectionSlug": "dashboard"
@@ -3636,6 +3637,22 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     "sectionSlug": "other"
   },
   {
+    "method": "POST",
+    "path": "/api/brand-audits",
+    "description": "POST /api/brand-audits — create a new audit row, run all model × prompt combos in parallel, persist the rollup. Returns the finished row id so the caller can navigate straight to /spying/self-audit/[id].",
+    "auth": "",
+    "section": "Other",
+    "sectionSlug": "other"
+  },
+  {
+    "method": "GET",
+    "path": "/api/brand-audits/:id",
+    "description": "GET /api/brand-audits/[id] — read a single audit row. Used by the detail page and by the \"still running\" poll once we move execution off-thread.",
+    "auth": "",
+    "section": "Other",
+    "sectionSlug": "other"
+  },
+  {
     "method": "GET",
     "path": "/api/client-groups",
     "description": "Admin-only list of client pipeline groups, ordered by sort_order.",
@@ -4263,6 +4280,14 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     "method": "POST",
     "path": "/api/scheduling/events",
     "description": "",
+    "auth": "",
+    "section": "Other",
+    "sectionSlug": "other"
+  },
+  {
+    "method": "GET",
+    "path": "/api/spying/watch/:id/history",
+    "description": "GET /api/spying/watch/[id]/history — full snapshot history for a single client_benchmarks row. Powers the watch-history drawer on /spying. Returns the rows in chronological order so the chart code can map them straight onto an x-axis without resorting.",
     "auth": "",
     "section": "Other",
     "sectionSlug": "other"
@@ -5594,135 +5619,6 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   },
   {
     "method": "GET",
-    "path": "/api/tasks",
-    "description": "List all non-archived tasks for the authenticated admin user. Owners see all tasks; non-owners see only tasks assigned to them or created by them.",
-    "auth": "Required (admin)",
-    "section": "Tasks & Todos",
-    "sectionSlug": "tasks",
-    "query": "client_id - Filter by client UUID\nassignee_id - Filter by team member UUID\nstatus - Filter by status (backlog | in_progress | review | done)\ntask_type - Filter by type (content | shoot | edit | paid_media | strategy | other)\ndue_date_from - Filter tasks with due date on or after this date (YYYY-MM-DD)\ndue_date_to - Filter tasks with due date on or before this date (YYYY-MM-DD)",
-    "response": "{{ tasks: Task[], is_owner: boolean, my_team_member_id: string | null, todoist_connected: boolean }}"
-  },
-  {
-    "method": "POST",
-    "path": "/api/tasks",
-    "description": "Create a new task. If no assignee is specified, the task is auto-assigned to the creator's team member record. Newly created tasks are pushed to Todoist for all connected users involved.",
-    "auth": "Required (admin)",
-    "section": "Tasks & Todos",
-    "sectionSlug": "tasks",
-    "body": "title - Task title (required)\ndescription - Task description\nstatus - Initial status (backlog | in_progress | review | done), defaults to backlog\npriority - Priority level (low | medium | high | urgent), defaults to low\nclient_id - Associated client UUID\nassignee_id - Team member UUID to assign to; defaults to creator\ndue_date - Due date (YYYY-MM-DD)\ntask_type - Type (content | shoot | edit | paid_media | strategy | other), defaults to other\nshoot_date - Shoot date (YYYY-MM-DD)\ntags - Array of tag strings\nmonday_item_id - Monday.com item ID for sync\nmonday_board_id - Monday.com board ID for sync\nrecurrence - Recurrence rule string (e.g. \"every week\")\nrecurrence_from_completion - If true, next recurrence is calculated from completion date",
-    "response": "{Task} Created task with client and assignee relations (201)"
-  },
-  {
-    "method": "DELETE",
-    "path": "/api/tasks/:id",
-    "description": "Soft-delete (archive) a task by setting archived_at. Non-owners can only delete tasks they created. If the task has a linked Todoist task, it is also deleted from Todoist.",
-    "auth": "Required (admin)",
-    "section": "Tasks & Todos",
-    "sectionSlug": "tasks",
-    "query": "id - Task UUID",
-    "response": "{{ success: true }}"
-  },
-  {
-    "method": "GET",
-    "path": "/api/tasks/:id",
-    "description": "Fetch a single non-archived task by ID, including associated client and assignee details.",
-    "auth": "Required (admin)",
-    "section": "Tasks & Todos",
-    "sectionSlug": "tasks",
-    "query": "id - Task UUID",
-    "response": "{Task} Task with client and team_member relations"
-  },
-  {
-    "method": "PATCH",
-    "path": "/api/tasks/:id",
-    "description": "Update a task. Non-owners can only update tasks they created or are assigned to. Completing a recurring task advances the due date instead of marking it done. Field changes are recorded in task activity, new assignees are notified, and changes are synced to Todoist for connected users.",
-    "auth": "Required (admin)",
-    "section": "Tasks & Todos",
-    "sectionSlug": "tasks",
-    "body": "title - Updated title\ndescription - Updated description\nstatus - New status (backlog | in_progress | review | done)\npriority - New priority (low | medium | high | urgent)\nclient_id - Updated client UUID\nassignee_id - Updated assignee team member UUID\ndue_date - Updated due date (YYYY-MM-DD)\ntask_type - Updated type (content | shoot | edit | paid_media | strategy | other)\nshoot_date - Updated shoot date (YYYY-MM-DD)\ntags - Updated array of tags\nmonday_item_id - Updated Monday.com item ID\nmonday_board_id - Updated Monday.com board ID",
-    "query": "id - Task UUID",
-    "response": "{Task} Updated task with client and team_member relations"
-  },
-  {
-    "method": "GET",
-    "path": "/api/tasks/:id/activity",
-    "description": "Fetch the activity log for a specific task — field changes, status updates, assignments, etc. Returns up to 50 entries ordered by most recent.",
-    "auth": "Required (admin)",
-    "section": "Tasks & Todos",
-    "sectionSlug": "tasks",
-    "query": "id - Task UUID",
-    "response": "{TaskActivity[]} Array of task activity records"
-  },
-  {
-    "method": "POST",
-    "path": "/api/tasks/parse",
-    "description": "Parse a natural language task description using Claude AI and return structured task fields. Resolves relative dates (\"tomorrow\", \"next Monday\"), fuzzy-matches client names and assignee names against the database, and infers priority and task type from context.",
-    "auth": "Required (admin)",
-    "section": "Tasks & Todos",
-    "sectionSlug": "tasks",
-    "body": "text - Natural language task description (required)",
-    "response": "{{ title: string, due_date: string | null, client_id: string | null, client_name: string | null, assignee_id: string | null, assignee_name: string | null, priority: string | null, task_type: string | null }}"
-  },
-  {
-    "method": "GET",
-    "path": "/api/tasks/search",
-    "description": "Full-text search across tasks by title and description. Supports filtering by status, priority, assignee, client, task_type, and date range. Query params: q - Search query (searches title and description, case-insensitive) status - Filter by status (backlog, in_progress, review, done) priority - Filter by priority (low, medium, high, urgent) assignee - Filter by assignee team_member ID client - Filter by client ID task_type - Filter by type (content, shoot, edit, paid_media, strategy, other) due_before - Filter tasks due on or before this date (YYYY-MM-DD) due_after - Filter tasks due on or after this date (YYYY-MM-DD) limit - Max results (default 50, max 200) Use when: Finding tasks matching specific criteria, building filtered views, or AI agents searching for relevant tasks.",
-    "auth": "",
-    "section": "Tasks & Todos",
-    "sectionSlug": "tasks"
-  },
-  {
-    "method": "GET",
-    "path": "/api/tasks/suggestions",
-    "description": "Fetch task import suggestions from Monday.com (Content Calendars, Content Requests, and Blog Pipeline boards). Filters out items that are already done. Marks items that have already been imported to Cortex via their monday_item_id. Returns a warning if Monday.com is not configured or if any board fetch fails.",
-    "auth": "Required (admin)",
-    "section": "Tasks & Todos",
-    "sectionSlug": "tasks",
-    "response": "{{ suggestions: TaskSuggestion[], warnings?: string[] }}"
-  },
-  {
-    "method": "GET",
-    "path": "/api/todos",
-    "description": "List personal todos for the authenticated user. Supports optional filters for completion status and due-today. Results are always scoped to the authenticated user.",
-    "auth": "Required (any authenticated user)",
-    "section": "Tasks & Todos",
-    "sectionSlug": "tasks",
-    "query": "completed - Filter by completion state: 'true' | 'false' (omit for all)\ndue_today - If 'true', return only todos due today",
-    "response": "{Todo[]} Array of todo records ordered by creation date descending"
-  },
-  {
-    "method": "POST",
-    "path": "/api/todos",
-    "description": "Create a new todo. Admins may assign a todo to any user via the user_id field; non-admins are restricted to creating todos for themselves only.",
-    "auth": "Required (any authenticated user; admin required to assign to another user)",
-    "section": "Tasks & Todos",
-    "sectionSlug": "tasks",
-    "body": "title - Todo title (required)\ndescription - Optional notes\ndue_date - Optional due date (ISO date string)\nclient_id - Optional client UUID to associate the todo with\npriority - Optional priority level: 'low' | 'medium' | 'high'\nuser_id - Admin-only: UUID of the user to assign the todo to",
-    "response": "{Todo} Created todo record (201)"
-  },
-  {
-    "method": "DELETE",
-    "path": "/api/todos/:id",
-    "description": "Permanently delete a personal todo. RLS ensures users can only delete their own todos.",
-    "auth": "Required (any authenticated user; RLS-enforced ownership)",
-    "section": "Tasks & Todos",
-    "sectionSlug": "tasks",
-    "query": "id - Todo UUID",
-    "response": "{{ success: true }}"
-  },
-  {
-    "method": "PATCH",
-    "path": "/api/todos/:id",
-    "description": "Update a personal todo. RLS ensures users can only modify their own todos. Automatically sets completed_at when toggling is_completed.",
-    "auth": "Required (any authenticated user; RLS-enforced ownership)",
-    "section": "Tasks & Todos",
-    "sectionSlug": "tasks",
-    "body": "title - Optional new title\ndescription - Optional notes (nullable)\nis_completed - Optional completion toggle\ndue_date - Optional new due date (nullable)\nclient_id - Optional client association (nullable)\npriority - Optional priority: 'low' | 'medium' | 'high' (nullable)",
-    "query": "id - Todo UUID",
-    "response": "{Todo} Updated todo record"
-  },
-  {
-    "method": "GET",
     "path": "/api/meetings",
     "description": "",
     "auth": "",
@@ -5843,7 +5739,7 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   {
     "method": "GET",
     "path": "/api/team/:id/workload",
-    "description": "Returns a team member's current workload: - Their client assignments (with roles) - Open task count (total + overdue) - Pipeline items they're assigned to this month (by role) - Upcoming shoots they're involved in Use when: Checking capacity before assigning new work, building team dashboards, or balancing workload across the team.",
+    "description": "Returns a team member's current workload: - Their client assignments (with roles) - Pipeline items they're assigned to this month (by role) Use when: Checking capacity before assigning new work, building team dashboards, or balancing workload across the team.",
     "auth": "",
     "section": "Team & Meetings",
     "sectionSlug": "team"
@@ -5878,42 +5774,45 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     "response": "{{ id: string, full_name: string, email: string }[]} Sorted by name"
   },
   {
-    "method": "DELETE",
-    "path": "/api/todoist/connect",
-    "description": "Disconnect Todoist by clearing the API key, project ID, and sync timestamp.",
-    "auth": "Required (any authenticated user)",
-    "section": "Todoist",
-    "sectionSlug": "todoist",
-    "response": "{{ disconnected: true }}"
-  },
-  {
     "method": "GET",
-    "path": "/api/todoist/connect",
-    "description": "Check the Todoist connection status for the authenticated user. Fetches available projects from the Todoist API to validate the stored key. Returns key_invalid=true if the stored key is no longer valid.",
+    "path": "/api/todos",
+    "description": "List personal todos for the authenticated user. Supports optional filters for completion status and due-today. Results are always scoped to the authenticated user.",
     "auth": "Required (any authenticated user)",
-    "section": "Todoist",
-    "sectionSlug": "todoist",
-    "response": "{{ connected: boolean, key_invalid?: boolean, project_id: string | null, synced_at: string | null, projects: { id: string, name: string }[] }}"
+    "section": "Todos",
+    "sectionSlug": "todos",
+    "query": "completed - Filter by completion state: 'true' | 'false' (omit for all)\ndue_today - If 'true', return only todos due today",
+    "response": "{Todo[]} Array of todo records ordered by creation date descending"
   },
   {
     "method": "POST",
-    "path": "/api/todoist/connect",
-    "description": "Connect Todoist by saving and validating an API key. Pass api_key='_keep' to update only the project_id without changing the key. Returns available Todoist projects on success.",
-    "auth": "Required (any authenticated user)",
-    "section": "Todoist",
-    "sectionSlug": "todoist",
-    "body": "api_key - Todoist API key to validate and save, or '_keep' to only update project\nproject_id - Optional Todoist project ID to sync tasks into",
-    "response": "{{ connected: true, projects: { id: string, name: string }[] }}"
+    "path": "/api/todos",
+    "description": "Create a new todo. Admins may assign a todo to any user via the user_id field; non-admins are restricted to creating todos for themselves only.",
+    "auth": "Required (any authenticated user; admin required to assign to another user)",
+    "section": "Todos",
+    "sectionSlug": "todos",
+    "body": "title - Todo title (required)\ndescription - Optional notes\ndue_date - Optional due date (ISO date string)\nclient_id - Optional client UUID to associate the todo with\npriority - Optional priority level: 'low' | 'medium' | 'high'\nuser_id - Admin-only: UUID of the user to assign the todo to",
+    "response": "{Todo} Created todo record (201)"
   },
   {
-    "method": "POST",
-    "path": "/api/todoist/sync",
-    "description": "Trigger a full bidirectional sync between Todoist and Cortex tasks for the authenticated user. Auto-sync mode (auto=true) skips the sync if the user was synced within the last 60 seconds. Sends a notification if the sync encounters errors.",
-    "auth": "Required (any authenticated user; must have Todoist connected)",
-    "section": "Todoist",
-    "sectionSlug": "todoist",
-    "query": "auto - If 'true', skip sync if last sync was less than 60 seconds ago (default: false)",
-    "response": "{{ pulled: number, pushed: number, errors: string[], skipped?: boolean }}"
+    "method": "DELETE",
+    "path": "/api/todos/:id",
+    "description": "Permanently delete a personal todo. RLS ensures users can only delete their own todos.",
+    "auth": "Required (any authenticated user; RLS-enforced ownership)",
+    "section": "Todos",
+    "sectionSlug": "todos",
+    "query": "id - Todo UUID",
+    "response": "{{ success: true }}"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/todos/:id",
+    "description": "Update a personal todo. RLS ensures users can only modify their own todos. Automatically sets completed_at when toggling is_completed.",
+    "auth": "Required (any authenticated user; RLS-enforced ownership)",
+    "section": "Todos",
+    "sectionSlug": "todos",
+    "body": "title - Optional new title\ndescription - Optional notes (nullable)\nis_completed - Optional completion toggle\ndue_date - Optional new due date (nullable)\nclient_id - Optional client association (nullable)\npriority - Optional priority: 'low' | 'medium' | 'high' (nullable)",
+    "query": "id - Todo UUID",
+    "response": "{Todo} Updated todo record"
   },
   {
     "method": "GET",
@@ -6095,57 +5994,6 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     "sectionSlug": "v1",
     "query": "id - Shoot event UUID",
     "response": "{{ shoot: ShootEvent & { clients: { id, name, slug } } }}"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v1/tasks",
-    "description": "List non-archived tasks. Supports filtering by client, assignee, status, and due date range. Returns tasks with client and team_member join data.",
-    "auth": "API key (Bearer token via Authorization header)",
-    "section": "External API (v1)",
-    "sectionSlug": "v1",
-    "query": "client_id - Filter by client UUID (optional)\nassignee_id - Filter by team_member UUID (optional)\nstatus - Filter by status: 'backlog' | 'in_progress' | 'review' | 'done' (optional)\ndue_date_from - ISO date lower bound inclusive (optional)\ndue_date_to - ISO date upper bound inclusive (optional)",
-    "response": "{{ tasks: Task[] }}"
-  },
-  {
-    "method": "POST",
-    "path": "/api/v1/tasks",
-    "description": "Create a task. If no assignee_id is provided, auto-assigns to the API key owner's team_member record.",
-    "auth": "API key (Bearer token via Authorization header)",
-    "section": "External API (v1)",
-    "sectionSlug": "v1",
-    "body": "title - Task title (required)\ndescription - Task description (optional)\nstatus - 'backlog' | 'in_progress' | 'review' | 'done' (default 'backlog')\npriority - 'low' | 'medium' | 'high' | 'urgent' (default 'low')\nclient_id - Client UUID (optional)\nassignee_id - Team member UUID (optional, auto-assigned to API key owner if omitted)\ndue_date - ISO date string (optional)\ntask_type - 'content' | 'shoot' | 'edit' | 'paid_media' | 'strategy' | 'other' (default 'other')\ntags - Array of tag strings (optional)",
-    "response": "{{ task: Task }}"
-  },
-  {
-    "method": "DELETE",
-    "path": "/api/v1/tasks/:id",
-    "description": "Soft-delete a task by setting archived_at. Returns 404 if already archived.",
-    "auth": "API key (Bearer token via Authorization header)",
-    "section": "External API (v1)",
-    "sectionSlug": "v1",
-    "query": "id - Task UUID",
-    "response": "{{ success: true }}"
-  },
-  {
-    "method": "GET",
-    "path": "/api/v1/tasks/:id",
-    "description": "Fetch a single non-archived task by UUID with client and assignee join data.",
-    "auth": "API key (Bearer token via Authorization header)",
-    "section": "External API (v1)",
-    "sectionSlug": "v1",
-    "query": "id - Task UUID",
-    "response": "{{ task: Task }}"
-  },
-  {
-    "method": "PATCH",
-    "path": "/api/v1/tasks/:id",
-    "description": "Update a task's fields. Applies only the provided fields. Only non-archived tasks can be updated.",
-    "auth": "API key (Bearer token via Authorization header)",
-    "section": "External API (v1)",
-    "sectionSlug": "v1",
-    "body": "title - Task title (optional)\ndescription - Task description (optional, nullable)\nstatus - 'backlog' | 'in_progress' | 'review' | 'done' (optional)\npriority - 'low' | 'medium' | 'high' | 'urgent' (optional)\nclient_id - Client UUID (optional, nullable)\nassignee_id - Team member UUID (optional, nullable)\ndue_date - ISO date string (optional, nullable)\ntask_type - Task type enum (optional)\ntags - Array of tag strings (optional)",
-    "query": "id - Task UUID",
-    "response": "{{ task: Task }}"
   },
   {
     "method": "GET",
