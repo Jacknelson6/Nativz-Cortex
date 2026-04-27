@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchBusyForEmail } from '@/lib/scheduling/google-busy';
+import { createSchedulingCalendarEvent } from '@/lib/scheduling/google-event-create';
+import { isImpersonateAllowed } from '@/lib/google/service-account';
 import { checkAndFlipFlowCompletion } from '@/lib/onboarding/check-completion';
 import { logLifecycleEvent } from '@/lib/lifecycle/state-machine';
 
@@ -19,16 +21,16 @@ export const dynamic = 'force-dynamic';
  *   1. Insert team_scheduling_event_picks (UNIQUE index ensures one active
  *      pick per event — concurrent racers get a 409).
  *   2. Flip team_scheduling_events.status = 'scheduled'.
- *   3. If event.item_id is set, patch the linked schedule_meeting onboarding
+ *   3. Best-effort: create a Google Calendar event on the organizer's
+ *      calendar (first required workspace member) with Meet conference and
+ *      `sendUpdates=all` so every member + the picker gets a real invite.
+ *      Failures (e.g. scope not allowlisted) don't block the pick — the
+ *      slot is already locked in our DB and we surface the error so the
+ *      team can fall back to a manual invite.
+ *   4. If event.item_id is set, patch the linked schedule_meeting onboarding
  *      item: data.scheduled_for, data.scheduling_event_id, status='done'.
- *   4. Trigger flow completion check.
- *   5. Log a lifecycle event so it shows up in the client's activity feed.
- *
- * NOTE: Creating Google Calendar events on team members' calendars is a
- * later iteration — the calendar.readonly scope this scheduler ships with
- * doesn't include event-creation. For now, the team_scheduling_event_picks
- * row is the source of truth and admins manually create the calendar event
- * (or copy the picked time into wherever they need it).
+ *   5. Trigger flow completion check.
+ *   6. Log a lifecycle event so it shows up in the client's activity feed.
  */
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -63,7 +65,7 @@ export async function POST(
     const admin = createAdminClient();
     const { data: event } = await admin
       .from('team_scheduling_events')
-      .select('id, duration_minutes, status, client_id, flow_id, item_id, name, lookahead_days')
+      .select('id, duration_minutes, status, client_id, flow_id, item_id, name, lookahead_days, timezone')
       .eq('share_token', token)
       .maybeSingle();
     if (!event) {
@@ -91,13 +93,15 @@ export async function POST(
       return NextResponse.json({ error: 'Slot outside scheduling window' }, { status: 400 });
     }
 
-    // Revalidate against required members' busy windows so we don't double-book.
+    // Fetch every member once — required ones gate the conflict check; the
+    // full set goes on the calendar invite (optional ones flagged so Google
+    // shows them as not-required to the picker).
     const { data: memberRows } = await admin
       .from('team_scheduling_event_members')
       .select('user_id, attendance, email, display_name')
-      .eq('event_id', event.id)
-      .eq('attendance', 'required');
-    const requiredMembers = memberRows ?? [];
+      .eq('event_id', event.id);
+    const allMembers = memberRows ?? [];
+    const requiredMembers = allMembers.filter((m) => m.attendance === 'required');
 
     const conflict = await Promise.all(
       requiredMembers.map(async (m) => {
@@ -162,6 +166,75 @@ export async function POST(
       .update({ status: 'scheduled' })
       .eq('id', event.id);
 
+    // Best-effort: create a real Google Calendar event with a Meet link on
+    // the organizer's calendar. Google sends the invites + RSVPs to every
+    // attendee thanks to `sendUpdates=all`. If the SA scope isn't
+    // allowlisted (or anything else fails), we surface the error in the
+    // response and fall back to "the team will follow up manually" — the
+    // pick is already locked above so the picker still sees a confirmation.
+    const organizer = requiredMembers.find((m) =>
+      isImpersonateAllowed((m.email ?? '') as string),
+    );
+    const description = [notes?.trim(), `Booked by ${picked_by_name ?? picked_by_email}`]
+      .filter(Boolean)
+      .join('\n\n');
+    let meetLink: string | null = null;
+    let calendarEventId: string | null = null;
+    let calendarEventError: string | null = null;
+    if (!organizer) {
+      calendarEventError =
+        'No team member in an authorized workspace — calendar invite must be created manually.';
+    } else {
+      const result = await createSchedulingCalendarEvent({
+        organizerEmail: organizer.email as string,
+        summary: event.name,
+        description: description.length > 0 ? description : undefined,
+        startAt: new Date(startMs),
+        endAt: new Date(endMs),
+        timezone: event.timezone as string,
+        attendees: [
+          ...allMembers
+            .filter((m) => m.email && m.email !== organizer.email)
+            .map((m) => ({
+              email: m.email as string,
+              displayName: m.display_name,
+              optional: m.attendance === 'optional',
+            })),
+          { email: picked_by_email, displayName: picked_by_name ?? null },
+        ],
+      }).catch((err) => ({
+        ok: false as const,
+        error: err instanceof Error ? err.message : 'Calendar create threw',
+      }));
+      if (result.ok) {
+        meetLink = result.meetLink ?? null;
+        calendarEventId = result.eventId ?? null;
+        await admin
+          .from('team_scheduling_event_picks')
+          .update({
+            google_event_ids: {
+              organizer_email: organizer.email,
+              event_id: result.eventId ?? null,
+              meet_link: meetLink,
+              html_link: result.htmlLink ?? null,
+            },
+          })
+          .eq('id', pickRow.id);
+      } else {
+        calendarEventError = result.error ?? 'Unknown calendar error';
+        console.error('[scheduling:pick] calendar event create failed', result.error);
+        await admin
+          .from('team_scheduling_event_picks')
+          .update({
+            google_event_ids: {
+              organizer_email: organizer.email,
+              error: calendarEventError,
+            },
+          })
+          .eq('id', pickRow.id);
+      }
+    }
+
     // Flip the linked schedule_meeting onboarding item if there is one.
     if (event.item_id) {
       const { data: existingItem } = await admin
@@ -176,9 +249,12 @@ export async function POST(
         scheduled_for: new Date(startMs).toISOString(),
         scheduling_event_id: event.id,
         scheduling_pick_id: pickRow.id,
-        attendees: requiredMembers.map((m) => ({
+        meet_link: meetLink,
+        calendar_event_id: calendarEventId,
+        attendees: allMembers.map((m) => ({
           email: m.email,
           name: m.display_name,
+          attendance: m.attendance,
         })),
       };
       await admin
@@ -188,7 +264,12 @@ export async function POST(
     }
 
     if (event.flow_id) {
-      await checkAndFlipFlowCompletion(admin, event.flow_id as string);
+      // Best-effort — the pick is already locked in DB, don't make the picker
+      // retry (and hit the unique index 409) just because completion-flip
+      // hiccuped downstream.
+      await checkAndFlipFlowCompletion(admin, event.flow_id as string).catch((err) =>
+        console.error('[scheduling:pick] flow completion check failed', err),
+      );
     }
 
     if (event.client_id) {
@@ -204,6 +285,8 @@ export async function POST(
             start_at: startLocal,
             picked_by_email,
             picked_by_name,
+            meet_link: meetLink,
+            calendar_event_id: calendarEventId,
           },
           admin,
         },
@@ -214,6 +297,8 @@ export async function POST(
       ok: true,
       pick: pickRow,
       event_name: event.name,
+      meet_link: meetLink,
+      calendar_event_error: calendarEventError,
     });
   } catch (err) {
     console.error('[scheduling:pick] uncaught', err);

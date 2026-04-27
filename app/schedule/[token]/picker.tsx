@@ -1,8 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Calendar, Check, Clock, Loader2, Users } from 'lucide-react';
+import { Calendar, Check, ChevronLeft, ChevronRight, Clock, Loader2, Users, Video } from 'lucide-react';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+
+const DAYS_PER_PAGE = 4;
 
 interface SlotJson {
   start: string;
@@ -22,7 +25,7 @@ interface MemberRow {
 }
 
 interface MemberError {
-  user_id: string;
+  email: string;
   display_name: string;
   error: string;
 }
@@ -43,6 +46,15 @@ interface FetchResponse {
   error?: string;
 }
 
+interface PickResponse {
+  ok?: true;
+  pick?: { id: string; start_at: string; end_at: string };
+  event_name?: string;
+  meet_link?: string | null;
+  calendar_event_error?: string | null;
+  error?: string;
+}
+
 export function SchedulePicker({
   token,
   initialName,
@@ -60,6 +72,8 @@ export function SchedulePicker({
   const [email, setEmail] = useState('');
   const [notes, setNotes] = useState('');
   const [confirmedAt, setConfirmedAt] = useState<string | null>(null);
+  const [meetLink, setMeetLink] = useState<string | null>(null);
+  const [dayPage, setDayPage] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,6 +104,13 @@ export function SchedulePicker({
 
   const totalSlots = useMemo(() => groups.reduce((acc, g) => acc + g.slots.length, 0), [groups]);
 
+  const totalPages = Math.max(1, Math.ceil(groups.length / DAYS_PER_PAGE));
+  const safeDayPage = Math.min(dayPage, totalPages - 1);
+  const visibleGroups = useMemo(
+    () => groups.slice(safeDayPage * DAYS_PER_PAGE, (safeDayPage + 1) * DAYS_PER_PAGE),
+    [groups, safeDayPage],
+  );
+
   async function submitPick() {
     if (!pickingSlot) return;
     if (!email.trim()) {
@@ -108,7 +129,7 @@ export function SchedulePicker({
           notes: notes.trim() || null,
         }),
       });
-      const json = await res.json();
+      const json: PickResponse = await res.json();
       if (!res.ok || !json.ok) {
         toast.error(json.error ?? `Booking failed (${res.status})`);
         if (res.status === 409) {
@@ -126,6 +147,7 @@ export function SchedulePicker({
         return;
       }
       setConfirmedAt(pickingSlot.start);
+      setMeetLink(json.meet_link ?? null);
       toast.success('Time confirmed — the team will reach out.');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Network error');
@@ -139,7 +161,7 @@ export function SchedulePicker({
       ? formatLocal(confirmedAt, event?.timezone ?? 'America/New_York')
       : null;
     return (
-      <div className="rounded-2xl border border-nativz-border bg-surface p-8 text-center space-y-3">
+      <div className="rounded-2xl border border-nativz-border bg-surface p-8 text-center space-y-4">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-300">
           <Check size={20} />
         </div>
@@ -151,19 +173,30 @@ export function SchedulePicker({
             ? `You're set for ${formatted}. We sent a confirmation to ${email || 'your email'} — reply if anything changes.`
             : 'This time has already been booked. Reach out to the team if you need to reschedule.'}
         </p>
+        {confirmedAt && meetLink ? (
+          <a
+            href={meetLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mx-auto inline-flex items-center gap-2 rounded-md border border-nativz-border bg-background px-3 py-2 text-sm font-medium text-text-primary transition hover:border-accent-text hover:bg-accent-text/10"
+          >
+            <Video size={14} className="text-accent-text" />
+            Join Google Meet
+          </a>
+        ) : null}
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
+      <header className="space-y-2 text-center">
         <p className="text-xs uppercase tracking-wider text-text-muted">
           {event?.client_name ?? 'Schedule'}
         </p>
         <h1 className="text-3xl font-semibold text-text-primary">{event?.name ?? initialName}</h1>
         {event ? (
-          <p className="text-sm text-text-secondary leading-relaxed inline-flex items-center gap-2 flex-wrap">
+          <p className="text-sm text-text-secondary leading-relaxed flex items-center justify-center gap-2 flex-wrap">
             <Clock size={14} className="text-text-muted" />
             <span>{event.duration_minutes} minutes</span>
             <span className="text-text-muted">·</span>
@@ -191,8 +224,8 @@ export function SchedulePicker({
         </div>
       ) : groups.length === 0 || totalSlots === 0 ? (
         <div className="rounded-xl border border-nativz-border bg-surface p-8 text-center text-sm text-text-secondary">
-          No overlap-free times in the next {data?.event ? '' : ''}window. Email the team and
-          we&apos;ll find a time manually.
+          No overlap-free times in the upcoming window. Email the team and we&apos;ll find a time
+          manually.
         </div>
       ) : pickingSlot ? (
         <PickConfirmation
@@ -210,9 +243,13 @@ export function SchedulePicker({
         />
       ) : (
         <DayList
-          groups={groups}
+          groups={visibleGroups}
           timezone={event?.timezone ?? 'America/New_York'}
           onPick={setPickingSlot}
+          page={safeDayPage}
+          totalPages={totalPages}
+          onPrev={() => setDayPage((p) => Math.max(0, p - 1))}
+          onNext={() => setDayPage((p) => Math.min(totalPages - 1, p + 1))}
         />
       )}
     </div>
@@ -223,16 +260,56 @@ function DayList({
   groups,
   timezone,
   onPick,
+  page,
+  totalPages,
+  onPrev,
+  onNext,
 }: {
   groups: DayGroup[];
   timezone: string;
   onPick: (slot: SlotJson) => void;
+  page: number;
+  totalPages: number;
+  onPrev: () => void;
+  onNext: () => void;
 }) {
+  const rangeLabel = (() => {
+    if (groups.length === 0) return '';
+    const first = formatDayShort(groups[0].day_iso, timezone);
+    const last = formatDayShort(groups[groups.length - 1].day_iso, timezone);
+    return groups.length === 1 ? first : `${first} – ${last}`;
+  })();
+
   return (
     <div className="space-y-5">
+      {totalPages > 1 ? (
+        <div className="flex items-center justify-between gap-2 text-xs text-text-muted">
+          <button
+            type="button"
+            onClick={onPrev}
+            disabled={page === 0}
+            className="inline-flex items-center gap-1 rounded-md border border-nativz-border px-2 py-1 text-text-secondary transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+            aria-label="Earlier days"
+          >
+            <ChevronLeft size={12} />
+            Earlier
+          </button>
+          <span className="tabular-nums">{rangeLabel}</span>
+          <button
+            type="button"
+            onClick={onNext}
+            disabled={page >= totalPages - 1}
+            className="inline-flex items-center gap-1 rounded-md border border-nativz-border px-2 py-1 text-text-secondary transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+            aria-label="Later days"
+          >
+            Later
+            <ChevronRight size={12} />
+          </button>
+        </div>
+      ) : null}
       {groups.map((group) => (
         <div key={group.day_iso} className="space-y-2">
-          <div className="flex items-center gap-2 text-sm font-medium text-text-primary">
+          <div className="flex items-center justify-center gap-2 text-sm font-medium text-text-primary">
             <Calendar size={14} className="text-text-muted" />
             {formatDayHeader(group.day_iso, timezone)}
           </div>
@@ -308,23 +385,23 @@ function PickConfirmation({
         </div>
       </div>
       <div className="flex items-center justify-end gap-2">
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={onCancel}
           disabled={submitting}
-          className="rounded-md px-3 py-2 text-sm text-text-secondary hover:text-text-primary"
         >
           Pick a different time
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
           onClick={onConfirm}
           disabled={submitting}
-          className="inline-flex items-center gap-2 rounded-md bg-accent-text px-4 py-2 text-sm font-semibold text-background transition hover:opacity-90 disabled:opacity-50"
         >
           {submitting ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
           Confirm
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -371,6 +448,16 @@ function formatDayHeader(dayIso: string, timezone: string): string {
     timeZone: timezone,
     weekday: 'long',
     month: 'long',
+    day: 'numeric',
+  }).format(anchor);
+}
+
+function formatDayShort(dayIso: string, timezone: string): string {
+  const [y, m, d] = dayIso.split('-').map(Number);
+  const anchor = new Date(Date.UTC(y, m - 1, d, 12, 0));
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    month: 'short',
     day: 'numeric',
   }).format(anchor);
 }

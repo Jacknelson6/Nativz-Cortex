@@ -36,6 +36,7 @@ interface TokenCache {
 
 const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 const CALENDAR_READONLY_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+const CALENDAR_EVENTS_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 
 const DEFAULT_GMAIL_IMPERSONATE =
   process.env.GOOGLE_SERVICE_ACCOUNT_IMPERSONATE_EMAIL ??
@@ -140,6 +141,18 @@ export function getServiceAccountGmailToken(impersonate: string = DEFAULT_GMAIL_
 /** Calendar readonly token for a workspace user (team-availability path). */
 export function getServiceAccountCalendarToken(impersonate: string): Promise<string> {
   return getServiceAccountToken({ scope: CALENDAR_READONLY_SCOPE, impersonate });
+}
+
+/**
+ * Calendar read+write token for a workspace user — needed to insert events on
+ * their calendar (e.g. the scheduling-pick → Google Meet flow). Workspace admin
+ * must allowlist the SA Client ID with `calendar.events` scope (or full
+ * `calendar`) for this to succeed; on failure the caller should fall back to
+ * surfacing the pick row alone and let the team create the calendar entry
+ * manually.
+ */
+export function getServiceAccountCalendarEventsToken(impersonate: string): Promise<string> {
+  return getServiceAccountToken({ scope: CALENDAR_EVENTS_SCOPE, impersonate });
 }
 
 export function isServiceAccountConfigured(): boolean {
