@@ -69,8 +69,6 @@ const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
   { value: 'oldest', label: 'Oldest first' },
 ];
 
-const VERTICAL_PLATFORMS: SocialPlatform[] = ['tiktok', 'instagram', 'youtube'];
-
 export function PostDetailsGrid({ clientId, start, end }: PostDetailsGridProps) {
   const [posts, setPosts] = useState<PostRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -233,7 +231,6 @@ export function PostDetailsGrid({ clientId, start, end }: PostDetailsGridProps) 
 }
 
 const PostCard = memo(function PostCard({ post }: { post: PostRow }) {
-  const isVertical = VERTICAL_PLATFORMS.includes(post.platform);
   // CDN thumbnails from Zernio occasionally 404 (expired links, deleted
   // posts). Track that per-card so we can swap to the platform-glyph fallback
   // instead of leaving a broken-image icon in the grid.
@@ -304,10 +301,7 @@ const PostCard = memo(function PostCard({ post }: { post: PostRow }) {
 
       <div
         className={cn(
-          'relative w-full shrink-0 overflow-hidden outline-none',
-          isVertical
-            ? 'aspect-[9/16] min-h-0 w-full max-h-[min(15rem,45vw)] sm:max-h-[min(16rem,24vw)] lg:max-h-[min(17rem,20vw)]'
-            : 'aspect-video min-h-0 w-full max-h-[min(15rem,45vw)] sm:max-h-[min(16rem,24vw)] lg:max-h-[min(17rem,20vw)]',
+          'relative aspect-[9/16] min-h-0 w-full shrink-0 overflow-hidden outline-none max-h-[min(15rem,45vw)] sm:max-h-[min(16rem,24vw)] lg:max-h-[min(17rem,20vw)]',
           showThumb ? 'group/thumb bg-black/30' : 'bg-background/40',
         )}
       >
