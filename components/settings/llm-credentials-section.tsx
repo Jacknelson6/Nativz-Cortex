@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, Check, ExternalLink } from 'lucide-react';
+import { Loader2, Check, ExternalLink, KeyRound } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import { IconCard } from '@/components/ui/icon-card';
 import type { LlmProviderKeyBucket } from '@/lib/ai/provider-keys';
 
 type Masked = { configured: boolean; masked: string | null };
@@ -13,6 +14,7 @@ type Provider = 'openrouter' | 'openai';
 interface ProviderConfig {
   id: Provider;
   title: string;
+  description: string;
   manageHref: string;
   manageLabel: string;
   inputPlaceholder: string;
@@ -22,15 +24,17 @@ const PROVIDERS: Record<Provider, ProviderConfig> = {
   openrouter: {
     id: 'openrouter',
     title: 'OpenRouter API key',
+    description: 'Powers the model picker above and every text-based AI feature in Cortex.',
     manageHref: 'https://openrouter.ai/settings/keys',
-    manageLabel: 'Manage keys on OpenRouter',
+    manageLabel: 'Manage on OpenRouter',
     inputPlaceholder: 'sk-or-v1-…',
   },
   openai: {
     id: 'openai',
     title: 'OpenAI API key',
+    description: 'Used for ChatGPT Image generation in the ad creator.',
     manageHref: 'https://platform.openai.com/api-keys',
-    manageLabel: 'Manage keys on OpenAI',
+    manageLabel: 'Manage on OpenAI',
     inputPlaceholder: 'sk-…',
   },
 };
@@ -62,7 +66,7 @@ interface SharedState {
 }
 
 /**
- * Provider credentials UI — one card per provider with a key-or-no-key
+ * Provider credentials UI — one IconCard per provider with a key-or-no-key
  * indicator + an input. The Vercel mirror still happens server-side on save
  * (so production runtime keeps working), but is intentionally hidden from
  * this view to keep the surface minimal.
@@ -193,20 +197,22 @@ function ProviderKeyPanel({
   }
 
   return (
-    <Card>
+    <IconCard
+      icon={<KeyRound size={18} />}
+      title={config.title}
+      description={config.description}
+      action={
+        <a
+          href={config.manageHref}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 text-xs text-text-muted transition-colors hover:text-accent-text"
+        >
+          <ExternalLink size={12} /> {config.manageLabel}
+        </a>
+      }
+    >
       <div className="space-y-4">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <h2 className="text-[15px] font-semibold text-text-primary">{config.title}</h2>
-          <a
-            href={config.manageHref}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex shrink-0 items-center gap-1.5 text-[12px] text-text-muted transition-colors hover:text-accent-text"
-          >
-            <ExternalLink size={12} /> {config.manageLabel}
-          </a>
-        </div>
-
         <div className="rounded-lg border border-nativz-border/70 bg-surface-hover/25 p-4">
           {current.configured && (
             <div className="mb-3 flex items-center justify-between gap-3">
@@ -233,7 +239,7 @@ function ProviderKeyPanel({
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 border-t border-nativz-border pt-4">
+        <div className="flex flex-wrap items-center gap-3 border-t border-nativz-border/60 pt-4">
           <button
             type="button"
             onClick={() => {
@@ -250,6 +256,6 @@ function ProviderKeyPanel({
           {success && <p className="text-[12px] text-emerald-400">{success}</p>}
         </div>
       </div>
-    </Card>
+    </IconCard>
   );
 }

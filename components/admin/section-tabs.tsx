@@ -1,21 +1,19 @@
 'use client';
 
 /**
- * Shared Infrastructure-style pill-tab navigation for admin pages.
- * Used by Infrastructure, AI settings, Notifications, Accounting, Users,
- * Onboarding, and Clients — anywhere a top-level page wants to split content
- * into drill-in tabs. The active tab is stored in the URL (`?tab=slug`) so
- * every tab is deep-linkable and back-navigable.
+ * Shared admin sub-page navigation. Delegates to the canonical `SubNavLinks`
+ * primitive (`components/ui/sub-nav.tsx`) so every admin surface that splits
+ * into tabs — Infrastructure, AI settings, Notifications, Accounting, Users,
+ * Revenue — picks up the same underlined strip with one source of truth.
  *
- * `useSearchParams` requires a Suspense boundary — we wrap the inner
- * implementation so callers don't have to remember that.
+ * The strip is URL-driven (`?tab=slug`) so each tab is deep-linkable and
+ * back-navigable; `memoryKey` opts in to localStorage "last tab" recall.
  */
 
-import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect } from 'react';
 import { HelpCircle } from 'lucide-react';
+import Link from 'next/link';
 import { TooltipCard } from '@/components/ui/tooltip-card';
+import { SubNavLinks } from '@/components/ui/sub-nav';
 
 export interface SectionTabDef {
   slug: string;
@@ -36,75 +34,19 @@ interface SectionTabsProps<T extends readonly SectionTabDef[]> {
   memoryKey?: string;
 }
 
-export function SectionTabs<T extends readonly SectionTabDef[]>(props: SectionTabsProps<T>) {
-  return (
-    <Suspense fallback={<SectionTabsSkeleton count={props.tabs.length} />}>
-      <SectionTabsInner {...props} />
-    </Suspense>
-  );
-}
-
-function SectionTabsSkeleton({ count }: { count: number }) {
-  return (
-    <nav
-      aria-label="Section tabs"
-      className="flex flex-wrap items-center gap-1 rounded-full border border-nativz-border bg-surface/70 p-1 backdrop-blur"
-    >
-      {Array.from({ length: count }).map((_, i) => (
-        <span
-          key={i}
-          className="inline-flex h-7 w-20 items-center gap-2 rounded-full bg-surface-hover/30 px-3"
-        />
-      ))}
-    </nav>
-  );
-}
-
-function SectionTabsInner<T extends readonly SectionTabDef[]>({
+export function SectionTabs<T extends readonly SectionTabDef[]>({
   tabs,
   active,
   memoryKey,
 }: SectionTabsProps<T>) {
-  const pathname = usePathname();
-  const params = useSearchParams();
-
-  useEffect(() => {
-    if (!memoryKey) return;
-    try {
-      window.localStorage.setItem(memoryKey, active);
-    } catch {
-      /* ignore */
-    }
-  }, [active, memoryKey]);
-
   return (
-    <nav
-      aria-label="Section tabs"
-      className="flex flex-wrap items-center gap-1 rounded-full border border-nativz-border bg-surface/70 p-1 backdrop-blur"
-    >
-      {tabs.map((t) => {
-        const isActive = t.slug === active;
-        const qs = new URLSearchParams(params);
-        qs.set('tab', t.slug);
-        return (
-          <Link
-            key={t.slug}
-            href={`${pathname}?${qs.toString()}`}
-            scroll={false}
-            className={
-              'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ' +
-              (isActive
-                ? 'bg-accent/15 text-accent-text ring-1 ring-inset ring-accent/40'
-                : 'text-text-secondary hover:bg-surface-hover/60 hover:text-text-primary')
-            }
-            aria-current={isActive ? 'page' : undefined}
-          >
-            {t.icon}
-            {t.label}
-          </Link>
-        );
-      })}
-    </nav>
+    <SubNavLinks
+      items={tabs}
+      active={active}
+      memoryKey={memoryKey}
+      optimistic={false}
+      ariaLabel="Section tabs"
+    />
   );
 }
 
@@ -140,6 +82,12 @@ interface SectionPanelProps {
   title?: string;
   description?: string;
   /**
+   * Optional icon swatch rendered before the title (matches the IconCard
+   * pattern). Use when the section's body is itself a list of cards, so the
+   * heading reads as "owned" by an icon without nesting cards.
+   */
+  icon?: React.ReactNode;
+  /**
    * Long-form explainer surfaced via a `?` tooltip next to the title — keeps
    * the page visually quiet while still answering "what is this?" on demand.
    */
@@ -151,28 +99,43 @@ interface SectionPanelProps {
   children: React.ReactNode;
 }
 
-export function SectionPanel({ title, description, helpText, helpTitle, action, children }: SectionPanelProps) {
-  const hasHeader = !!title || !!description || !!helpText || !!action;
+export function SectionPanel({
+  title,
+  description,
+  icon,
+  helpText,
+  helpTitle,
+  action,
+  children,
+}: SectionPanelProps) {
+  const hasHeader = !!title || !!description || !!helpText || !!action || !!icon;
   if (!hasHeader) return <>{children}</>;
   return (
     <section className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            {title ? <h2 className="text-base font-semibold text-text-primary">{title}</h2> : null}
-            {helpText ? (
-              <TooltipCard title={helpTitle ?? title ?? ''} description={helpText} iconTrigger>
-                <button
-                  type="button"
-                  aria-label={`Learn more about ${title ?? 'this section'}`}
-                  className="inline-flex h-5 w-5 items-center justify-center rounded-full text-text-muted/60 transition-colors hover:bg-surface-hover hover:text-text-secondary cursor-help"
-                >
-                  <HelpCircle size={13} />
-                </button>
-              </TooltipCard>
-            ) : null}
+        <div className="flex min-w-0 items-start gap-3">
+          {icon ? (
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent-text">
+              {icon}
+            </div>
+          ) : null}
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              {title ? <h2 className="text-base font-semibold text-text-primary">{title}</h2> : null}
+              {helpText ? (
+                <TooltipCard title={helpTitle ?? title ?? ''} description={helpText} iconTrigger>
+                  <button
+                    type="button"
+                    aria-label={`Learn more about ${title ?? 'this section'}`}
+                    className="inline-flex h-5 w-5 items-center justify-center rounded-full text-text-muted/60 transition-colors hover:bg-surface-hover hover:text-text-secondary cursor-help"
+                  >
+                    <HelpCircle size={13} />
+                  </button>
+                </TooltipCard>
+              ) : null}
+            </div>
+            {description ? <p className="mt-1 max-w-2xl text-xs text-text-muted">{description}</p> : null}
           </div>
-          {description ? <p className="mt-1 max-w-2xl text-xs text-text-muted">{description}</p> : null}
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}
       </div>

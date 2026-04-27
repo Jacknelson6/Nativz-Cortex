@@ -97,18 +97,8 @@ function renderTab(
     case 'ai':
       return (
         <div className="space-y-10">
-          <SectionPanel
-            title="Model"
-            helpText="One OpenRouter slug runs every Cortex feature — the Nerd, topic search, ad concepting, brand DNA, everything. Change it here and the whole app picks up the new model on the next request."
-          >
-            <AiRoutingSection />
-          </SectionPanel>
-          <SectionPanel
-            title="API keys"
-            helpText="OpenRouter powers the model above. OpenAI powers ChatGPT Image generation in the ad creator. Saving a key here writes it to the database and mirrors it to Vercel so production runtime keeps working."
-          >
-            <LlmCredentialsSection />
-          </SectionPanel>
+          <AiRoutingSection />
+          <LlmCredentialsSection />
           <AISettingsSkillsPanel clients={clients} />
         </div>
       );

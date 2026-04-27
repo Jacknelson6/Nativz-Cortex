@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Check, ExternalLink, Loader2 } from 'lucide-react';
-import { Card } from '@/components/ui/card';
+import { Check, Cpu, ExternalLink, Loader2 } from 'lucide-react';
+import { IconCard } from '@/components/ui/icon-card';
 import { ModelSelector, type OpenRouterModel } from '@/components/settings/model-config';
 
 /**
@@ -128,51 +128,39 @@ export function AiRoutingSection() {
 
   if (loading) {
     return (
-      <Card>
-        <div className="flex animate-pulse items-center gap-3 py-6">
+      <IconCard
+        icon={<Cpu size={18} />}
+        title="Model"
+        description="One OpenRouter slug runs every Cortex feature — topic search, the Nerd, content ideas, everything."
+      >
+        <div className="flex animate-pulse items-center gap-3 py-2">
           <div className="h-10 w-10 rounded-xl bg-surface-hover" />
           <div className="flex-1 space-y-2">
             <div className="h-4 w-48 rounded bg-surface-hover" />
             <div className="h-3 w-full rounded bg-surface-hover" />
           </div>
         </div>
-      </Card>
+      </IconCard>
     );
   }
 
   return (
-    <Card className="p-0">
-      <div className="border-b border-nativz-border/60 px-5 py-4">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <h2 className="text-sm font-semibold text-text-primary">Model</h2>
-            <p className="mt-0.5 text-xs text-text-muted">
-              One OpenRouter slug runs every Cortex feature — topic search, the Nerd, content ideas, everything.
-            </p>
-          </div>
-          <a
-            href="https://openrouter.ai/models"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs text-text-muted transition-colors hover:text-accent-text"
-          >
-            <ExternalLink size={12} /> Browse OpenRouter
-          </a>
-        </div>
-        {updatedAt ? (
-          <p className="mt-1.5 text-xs text-text-muted">
-            Last saved{' '}
-            {new Date(updatedAt).toLocaleString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </p>
-        ) : null}
-      </div>
-
-      <div className="space-y-4 px-5 py-5">
+    <IconCard
+      icon={<Cpu size={18} />}
+      title="Model"
+      description="One OpenRouter slug runs every Cortex feature — topic search, the Nerd, content ideas, everything."
+      action={
+        <a
+          href="https://openrouter.ai/models"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 text-xs text-text-muted transition-colors hover:text-accent-text"
+        >
+          <ExternalLink size={12} /> Browse OpenRouter
+        </a>
+      }
+    >
+      <div className="space-y-4">
         <div>
           <label className="block text-xs font-medium text-text-secondary mb-1.5">
             Pick from the OpenRouter catalog
@@ -230,23 +218,34 @@ export function AiRoutingSection() {
             . Useful for newly-released models that haven&apos;t synced yet.
           </p>
         </div>
-      </div>
 
-      <div className="flex flex-wrap items-center gap-3 border-t border-nativz-border/60 bg-surface-hover/10 px-5 py-4">
-        <button
-          type="button"
-          onClick={() => void handleSave()}
-          disabled={saving || !dirty}
-          className="flex items-center gap-2 rounded-lg bg-accent-surface px-4 py-2 text-sm font-medium text-accent-text transition-colors hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {saving ? <Loader2 size={14} className="animate-spin" /> : success ? <Check size={14} /> : null}
-          {saving ? 'Saving…' : success ? 'Saved' : 'Save model'}
-        </button>
-        {error && (
-          <p className="max-w-xl whitespace-normal break-words text-xs text-red-400">{error}</p>
-        )}
-        {success && <p className="text-xs text-emerald-400">Saved.</p>}
+        <div className="flex flex-wrap items-center gap-3 border-t border-nativz-border/60 pt-4">
+          <button
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={saving || !dirty}
+            className="flex items-center gap-2 rounded-lg bg-accent-surface px-4 py-2 text-sm font-medium text-accent-text transition-colors hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {saving ? <Loader2 size={14} className="animate-spin" /> : success ? <Check size={14} /> : null}
+            {saving ? 'Saving…' : success ? 'Saved' : 'Save model'}
+          </button>
+          {updatedAt && !error && !success ? (
+            <p className="text-xs text-text-muted">
+              Last saved{' '}
+              {new Date(updatedAt).toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </p>
+          ) : null}
+          {error && (
+            <p className="max-w-xl whitespace-normal break-words text-xs text-red-400">{error}</p>
+          )}
+          {success && <p className="text-xs text-emerald-400">Saved.</p>}
+        </div>
       </div>
-    </Card>
+    </IconCard>
   );
 }
