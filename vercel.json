@@ -63,10 +63,6 @@
       "schedule": "0 5 * * *"
     },
     {
-      "path": "/api/cron/competitor-snapshots",
-      "schedule": "30 5 * * *"
-    },
-    {
       "path": "/api/cron/ecom-snapshots",
       "schedule": "0 7 * * *"
     },
@@ -77,14 +73,6 @@
     {
       "path": "/api/cron/cleanup-contract-drafts",
       "schedule": "0 4 * * *"
-    },
-    {
-      "path": "/api/cron/competitor-reports",
-      "schedule": "0 14 * * *"
-    },
-    {
-      "path": "/api/cron/trend-reports",
-      "schedule": "30 14 * * *"
     },
     {
       "path": "/api/cron/revenue-reconcile",

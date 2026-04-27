@@ -3,7 +3,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { BrandSettingsForm } from '@/components/clients/settings/brand-settings-form';
 import { BrandDNAView } from '@/components/brand-dna/brand-dna-view';
 import { LinkedSocialsSection } from '@/components/clients/linked-socials-section';
-import { CompetitorsSection } from '@/components/clients/competitors-section';
 import { BrandEssenceSection } from '@/components/clients/brand-essence-section';
 import { SettingsSectionHeader } from '@/components/clients/settings/settings-primitives';
 
@@ -86,16 +85,14 @@ export default async function ClientSettingsBrandPage({
         <BrandEssenceSection clientId={client.id} />
       </section>
 
-      {/* 4. Social presence. Two-column grid on lg+; stacks on smaller. */}
+      {/* 4. Social presence. Tracked competitors live on /spying now —
+          add them via the audit detail "Add to competitor list" CTA. */}
       <section className="space-y-4">
         <SettingsSectionHeader
           title="Social presence"
-          description="One linked account per platform unlocks analytics; tracked competitors auto-suggest in spying tools."
+          description="One linked account per platform unlocks analytics."
         />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <LinkedSocialsSection clientId={client.id} />
-          <CompetitorsSection clientId={client.id} />
-        </div>
+        <LinkedSocialsSection clientId={client.id} />
       </section>
 
       {/* 5. Brand DNA — the AI-distilled visual + verbal identity. */}

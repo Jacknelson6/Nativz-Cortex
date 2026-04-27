@@ -23,6 +23,9 @@ interface BrandDNAViewProps {
     created_at: string;
     updated_at: string;
   } | null;
+  /** Viewer mode — same layout/tokens, no per-section pencils, no
+   *  Generate-Brand-DNA wizard, friendlier empty state. */
+  editable?: boolean;
 }
 
 export function BrandDNAView({
@@ -32,6 +35,7 @@ export function BrandDNAView({
   websiteUrl,
   brandDnaStatus,
   guideline,
+  editable = true,
 }: BrandDNAViewProps) {
   const router = useRouter();
   const [generateOpen, setGenerateOpen] = useState(false);
@@ -81,8 +85,8 @@ export function BrandDNAView({
         <BrandDNACards
           metadata={metadata}
           clientId={clientId}
-          editable
-          onEditSection={setEditingSection}
+          editable={editable}
+          onEditSection={editable ? setEditingSection : undefined}
         />
       ) : (
         <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -90,42 +94,53 @@ export function BrandDNAView({
             <Sparkles size={28} className="text-accent-text" />
           </div>
           <h2 className="text-lg font-semibold text-text-primary mb-2">No Brand DNA yet</h2>
-          <p className="text-sm text-text-muted mb-6 max-w-md">
-            Generate a comprehensive brand guideline from {clientName}&apos;s website.
-            This becomes the source of truth for all AI-powered content generation.
-          </p>
-          {!websiteUrl.trim() && (
-            <p className="text-xs text-text-muted mb-4 max-w-md">
-              Add a website URL on the client profile before generating Brand DNA.
+          {editable ? (
+            <>
+              <p className="text-sm text-text-muted mb-6 max-w-md">
+                Generate a comprehensive brand guideline from {clientName}&apos;s website.
+                This becomes the source of truth for all AI-powered content generation.
+              </p>
+              {!websiteUrl.trim() && (
+                <p className="text-xs text-text-muted mb-4 max-w-md">
+                  Add a website URL on the client profile before generating Brand DNA.
+                </p>
+              )}
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <Button onClick={() => setGenerateOpen(true)}>
+                  <Globe size={14} />
+                  Generate Brand DNA
+                </Button>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-text-muted max-w-md">
+              Your Nativz team will distill this from the brand&apos;s website
+              and publish it here once it&apos;s ready.
             </p>
           )}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Button onClick={() => setGenerateOpen(true)}>
-              <Globe size={14} />
-              Generate Brand DNA
-            </Button>
-          </div>
         </div>
       )}
 
-      {/* Generate wizard for existing clients */}
-      <OnboardWizard
-        open={generateOpen}
-        onClose={() => { setGenerateOpen(false); router.refresh(); }}
-        existingClientId={clientId}
-        existingClientName={clientName}
-      />
-
-      {/* Section editor */}
-      {editingSection && metadata && (
-        <BrandDNASectionEditor
-          section={editingSection}
-          clientId={clientId}
-          metadata={metadata as unknown as BrandGuidelineMetadata}
-          open={!!editingSection}
-          onClose={() => setEditingSection(null)}
-          onSaved={handleSectionSaved}
-        />
+      {/* Generate wizard + section editor — admin-only. */}
+      {editable && (
+        <>
+          <OnboardWizard
+            open={generateOpen}
+            onClose={() => { setGenerateOpen(false); router.refresh(); }}
+            existingClientId={clientId}
+            existingClientName={clientName}
+          />
+          {editingSection && metadata && (
+            <BrandDNASectionEditor
+              section={editingSection}
+              clientId={clientId}
+              metadata={metadata as unknown as BrandGuidelineMetadata}
+              open={!!editingSection}
+              onClose={() => setEditingSection(null)}
+              onSaved={handleSectionSaved}
+            />
+          )}
+        </>
       )}
     </div>
   );

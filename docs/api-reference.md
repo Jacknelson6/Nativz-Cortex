@@ -2,7 +2,7 @@
 
 > **For AI agents:** This document describes every API endpoint that exists on disk. Auto-generated from `app/api/**/route.ts` by `scripts/generate-api-docs.ts` — do not edit by hand. Re-run the script after adding/removing routes or tweaking a JSDoc block.
 
-**661 endpoints across 32 sections.**
+**639 endpoints across 32 sections.**
 
 ## Authentication
 
@@ -800,32 +800,6 @@ Return all the brand-profile fields in one shot. Readable by admins and viewers 
 ### `PATCH /api/clients/:id/brand-profile`
 
 Update one or many brand-profile fields. Only fields included in the body get updated — omit to leave untouched, pass null to clear.
-
-**Auth:** Admin only.
-
-### `GET /api/clients/:id/competitors`
-
-List all competitor brands for a client. Each row groups the per- platform handles under one brand entity so the UI can render a single card per competitor instead of four rows.
-
-**Auth:** Admin OR a viewer scoped to this client (portal read-only).
-
-### `POST /api/clients/:id/competitors`
-
-Create a new competitor brand + optionally its per-platform handles.
-
-**Auth:** Admin only.
-
-### `DELETE /api/clients/:id/competitors/:competitorId`
-
-Hard-delete the competitor brand. ON DELETE CASCADE on client_competitors.competitor_id removes the per-platform rows too.
-
-### `PATCH /api/clients/:id/competitors/:competitorId`
-
-Update a competitor brand and/or its per-platform handles. For each platform in the `handles` payload: - non-empty string → upsert the platform row (update handle) - null / empty string → delete the platform row (clear that handle) - key absent → leave that platform's row untouched
-
-### `POST /api/clients/:id/competitors/scrape`
-
-Fast path: paste a URL, get back a saved competitor row. Heuristic scrape only (no LLM) — we want this to feel instant. If extraction fails partially, we save what we got; the admin can edit missing fields afterward via the per-row PATCH endpoint.
 
 **Auth:** Admin only.
 
@@ -1754,33 +1728,6 @@ When true, sync every entry in KNOWLEDGE_GRAPH_SYNC_SOURCES (legacy default coun
 ## Ideas & Content
 
 _Video idea generation, scripts, concepts, moodboards._
-
-### `POST /api/concepts/react`
-
-Save a client reaction (approve, star, or request revision) to an AI-generated content idea. Upserts the reaction into content_ideas — updates the existing row if the idea title matches, otherwise inserts a new record.
-
-**Auth:** Required (any authenticated user)
-
-**Body:**
-
-```
-title - Idea title used to match/create the content_ideas record (required)
-reaction - Reaction type: 'approved' | 'starred' | 'revision_requested' | null (required)
-hook - Optional hook text
-format - Optional video format label
-virality - Optional virality estimate: 'low' | 'medium' | 'high' | 'viral_potential'
-why_it_works - Optional explanation text
-topic_name - Optional topic name label
-client_id - Optional client UUID (null for generic ideas)
-search_id - Optional source search UUID
-feedback - Optional free-text feedback (nullable)
-```
-
-**Returns:**
-
-```
-{{ id: string, reaction: string }} Created (201) or updated record ID + reaction
-```
 
 ### `GET /api/ideas`
 
@@ -3664,22 +3611,6 @@ _Social analytics, benchmarking, competitors, ecom tracking._
 
 ### `GET /api/analytics/client-series`
 
-### `DELETE /api/analytics/competitors`
-
-### `GET /api/analytics/competitors`
-
-### `POST /api/analytics/competitors`
-
-### `POST /api/analytics/competitors/:id/refresh`
-
-### `POST /api/analytics/competitors/discover`
-
-NAT-57 follow-up (2026-04-21) killed the AI-competitor-discovery flow. LLMs hallucinated brand names (and worse, social handles), producing bad competitor scrapes that polluted the analytics. The new contract: competitor brands come from (a) the client's saved competitor list on the brand profile or (b) an explicit admin paste. No AI guessing. Route kept so any stray client code fails loud (410) instead of silent. Remove once we're confident nothing still pokes at it.
-
-### `POST /api/analytics/competitors/hydrate-social`
-
-### `POST /api/analytics/competitors/resolve`
-
 ### `GET /api/analytics/meta`
 
 ### `GET /api/benchmarks`
@@ -3688,7 +3619,7 @@ Phase 3 — powers the audit-derived benchmarking section on /admin/analytics. R
 
 ### `POST /api/benchmarks/track-competitor`
 
-Adds a single competitor (from an audit's competitor card) to the client's benchmark snapshot for that audit. Creates the `client_benchmarks` row if one doesn't exist yet — otherwise appends to its `competitors_snapshot` array. Idempotent: re-tracking a competitor already in the snapshot is a no-op + returns `already_tracked`. Admin-only — benchmark rows belong to the agency view, never the portal.
+Appends a competitor profile (from an audit) to the brand's single active baseline benchmark — the row created by /api/spying/baseline with `audit_id: null`. Idempotent: re-tracking a competitor already in the snapshot is a no-op + returns `already_tracked`. If the brand has no baseline benchmark yet, returns 412 with `needs_baseline: true` so the UI can route to the Spy hub for that brand to run the onboarding gate. Admin-only — benchmark rows belong to the agency view, never the portal.
 
 ### `POST /api/benchmarks/watch`
 
@@ -6121,24 +6052,6 @@ Delete a group. ON DELETE SET NULL on clients.group_id means members fall back t
 ### `PATCH /api/client-groups/:id`
 
 Rename, recolor, or reorder a group.
-
-### `GET /api/competitor-reports`
-
-### `GET /api/competitor-reports/:id`
-
-### `GET /api/competitor-reports/:id/pdf`
-
-### `POST /api/competitor-reports/:id/resend`
-
-### `GET /api/competitor-reports/subscriptions`
-
-### `POST /api/competitor-reports/subscriptions`
-
-### `DELETE /api/competitor-reports/subscriptions/:id`
-
-### `PATCH /api/competitor-reports/subscriptions/:id`
-
-### `POST /api/competitor-reports/subscriptions/:id/run-now`
 
 ### `POST /api/email/preview`
 

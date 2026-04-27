@@ -13,9 +13,6 @@ const AnalyticsDashboard = dynamic(
 const AffiliatesDashboard = dynamic(
   () => import('@/components/affiliates/affiliates-dashboard').then(m => ({ default: m.AffiliatesDashboard })),
 );
-const BenchmarkingDashboard = dynamic(
-  () => import('@/components/analytics/benchmarking-dashboard').then(m => ({ default: m.BenchmarkingDashboard })),
-);
 const AuditBenchmarksPanel = dynamic(
   () => import('@/components/analytics/audit-benchmarks-panel').then(m => ({ default: m.AuditBenchmarksPanel })),
 );
@@ -168,36 +165,16 @@ function SocialBenchmarkingPanel({
   clientName: string;
 }) {
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <header>
         <h2 className="ui-section-title">Benchmarking</h2>
         <p className="mt-0.5 text-sm text-text-secondary">
-          How {clientName} stacks up against tracked social competitors and audit-driven peers.
-          Add new competitors from Competitor Spying.
+          How {clientName} stacks up against tracked competitors. Manage the
+          watchlist from the Spy hub.
         </p>
       </header>
 
-      <section>
-        <div className="mb-3 flex items-baseline justify-between">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-text-muted">
-            Tracked competitors
-          </h3>
-          <p className="text-xs text-text-muted/70">Added manually — refreshable on demand.</p>
-        </div>
-        <BenchmarkingDashboard clientId={clientId} clientName={clientName} />
-      </section>
-
-      <section>
-        <div className="mb-3 flex items-baseline justify-between">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-text-muted">
-            Audit-driven benchmarks
-          </h3>
-          <p className="text-xs text-text-muted/70">
-            Updated on the configured cadence per attached audit.
-          </p>
-        </div>
-        <AuditBenchmarksPanel clientId={clientId} clientName={clientName} />
-      </section>
+      <AuditBenchmarksPanel clientId={clientId} clientName={clientName} />
     </div>
   );
 }

@@ -122,7 +122,14 @@ function normalizeInput(raw: string, platform: Platform): string | null {
   return cleaned;
 }
 
-export function LinkedSocialsSection({ clientId }: { clientId: string }) {
+export function LinkedSocialsSection({
+  clientId,
+  readOnly = false,
+}: {
+  clientId: string;
+  /** Viewer mode — inputs replaced with static link rows; no save flow. */
+  readOnly?: boolean;
+}) {
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [, startTransition] = useTransition();
 
@@ -185,6 +192,7 @@ export function LinkedSocialsSection({ clientId }: { clientId: string }) {
               key={platform}
               platform={platform}
               slot={slot ?? null}
+              readOnly={readOnly}
               onSave={(input) => void save(platform, input)}
             />
           );
@@ -203,11 +211,12 @@ function Header() {
 }
 
 function SlotRow({
-  platform, slot, onSave,
+  platform, slot, onSave, readOnly,
 }: {
   platform: Platform;
   slot: Slot | null;
   onSave: (input: string) => void;
+  readOnly: boolean;
 }) {
   const meta = PLATFORM_META[platform];
   const Icon = meta.icon;
@@ -224,6 +233,40 @@ function SlotRow({
   function commit() {
     if (!dirty) return;
     onSave(draft);
+  }
+
+  // Viewer mode — render a static link row regardless of Zernio status.
+  // Same row anatomy as the Zernio admin row so the layout reads
+  // identically across admin/viewer; only the editing affordance is
+  // gone. Empty slots show "Not linked" muted text.
+  if (readOnly) {
+    return (
+      <div className="flex items-center gap-3 px-5 py-3">
+        <Icon size={18} className="shrink-0 text-text-secondary" />
+        <div className="w-20 shrink-0">
+          <span className="text-sm font-medium text-text-primary">{meta.label}</span>
+        </div>
+        <div className="flex-1 flex items-center gap-2 min-w-0">
+          {currentUrl ? (
+            <a
+              href={currentUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="flex-1 min-w-0 truncate text-sm text-accent-text hover:underline"
+            >
+              {currentUrl}
+            </a>
+          ) : (
+            <span className="flex-1 text-sm text-text-muted italic">Not linked</span>
+          )}
+          {zernioManaged && (
+            <span className="shrink-0 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold">
+              <Zap size={10} /> Connected
+            </span>
+          )}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -247,7 +290,7 @@ function SlotRow({
             {currentUrl}
           </a>
           <span className="shrink-0 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold">
-            <Zap size={10} /> Zernio
+            <Zap size={10} /> Connected
           </span>
         </div>
       ) : (

@@ -1168,62 +1168,6 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     "sectionSlug": "analytics"
   },
   {
-    "method": "DELETE",
-    "path": "/api/analytics/competitors",
-    "description": "",
-    "auth": "",
-    "section": "Analytics",
-    "sectionSlug": "analytics"
-  },
-  {
-    "method": "GET",
-    "path": "/api/analytics/competitors",
-    "description": "",
-    "auth": "",
-    "section": "Analytics",
-    "sectionSlug": "analytics"
-  },
-  {
-    "method": "POST",
-    "path": "/api/analytics/competitors",
-    "description": "",
-    "auth": "",
-    "section": "Analytics",
-    "sectionSlug": "analytics"
-  },
-  {
-    "method": "POST",
-    "path": "/api/analytics/competitors/:id/refresh",
-    "description": "",
-    "auth": "",
-    "section": "Analytics",
-    "sectionSlug": "analytics"
-  },
-  {
-    "method": "POST",
-    "path": "/api/analytics/competitors/discover",
-    "description": "NAT-57 follow-up (2026-04-21) killed the AI-competitor-discovery flow. LLMs hallucinated brand names (and worse, social handles), producing bad competitor scrapes that polluted the analytics. The new contract: competitor brands come from (a) the client's saved competitor list on the brand profile or (b) an explicit admin paste. No AI guessing. Route kept so any stray client code fails loud (410) instead of silent. Remove once we're confident nothing still pokes at it.",
-    "auth": "",
-    "section": "Analytics",
-    "sectionSlug": "analytics"
-  },
-  {
-    "method": "POST",
-    "path": "/api/analytics/competitors/hydrate-social",
-    "description": "",
-    "auth": "",
-    "section": "Analytics",
-    "sectionSlug": "analytics"
-  },
-  {
-    "method": "POST",
-    "path": "/api/analytics/competitors/resolve",
-    "description": "",
-    "auth": "",
-    "section": "Analytics",
-    "sectionSlug": "analytics"
-  },
-  {
     "method": "GET",
     "path": "/api/analytics/meta",
     "description": "",
@@ -1242,7 +1186,7 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   {
     "method": "POST",
     "path": "/api/benchmarks/track-competitor",
-    "description": "Adds a single competitor (from an audit's competitor card) to the client's benchmark snapshot for that audit. Creates the `client_benchmarks` row if one doesn't exist yet — otherwise appends to its `competitors_snapshot` array. Idempotent: re-tracking a competitor already in the snapshot is a no-op + returns `already_tracked`. Admin-only — benchmark rows belong to the agency view, never the portal.",
+    "description": "Appends a competitor profile (from an audit) to the brand's single active baseline benchmark — the row created by /api/spying/baseline with `audit_id: null`. Idempotent: re-tracking a competitor already in the snapshot is a no-op + returns `already_tracked`. If the brand has no baseline benchmark yet, returns 412 with `needs_baseline: true` so the UI can route to the Spy hub for that brand to run the onboarding gate. Admin-only — benchmark rows belong to the agency view, never the portal.",
     "auth": "",
     "section": "Analytics",
     "sectionSlug": "analytics"
@@ -2258,46 +2202,6 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   },
   {
     "method": "GET",
-    "path": "/api/clients/:id/competitors",
-    "description": "List all competitor brands for a client. Each row groups the per- platform handles under one brand entity so the UI can render a single card per competitor instead of four rows.",
-    "auth": "Admin OR a viewer scoped to this client (portal read-only).",
-    "section": "Clients & Onboarding",
-    "sectionSlug": "clients"
-  },
-  {
-    "method": "POST",
-    "path": "/api/clients/:id/competitors",
-    "description": "Create a new competitor brand + optionally its per-platform handles.",
-    "auth": "Admin only.",
-    "section": "Clients & Onboarding",
-    "sectionSlug": "clients"
-  },
-  {
-    "method": "DELETE",
-    "path": "/api/clients/:id/competitors/:competitorId",
-    "description": "Hard-delete the competitor brand. ON DELETE CASCADE on client_competitors.competitor_id removes the per-platform rows too.",
-    "auth": "",
-    "section": "Clients & Onboarding",
-    "sectionSlug": "clients"
-  },
-  {
-    "method": "PATCH",
-    "path": "/api/clients/:id/competitors/:competitorId",
-    "description": "Update a competitor brand and/or its per-platform handles. For each platform in the `handles` payload: - non-empty string → upsert the platform row (update handle) - null / empty string → delete the platform row (clear that handle) - key absent → leave that platform's row untouched",
-    "auth": "",
-    "section": "Clients & Onboarding",
-    "sectionSlug": "clients"
-  },
-  {
-    "method": "POST",
-    "path": "/api/clients/:id/competitors/scrape",
-    "description": "Fast path: paste a URL, get back a saved competitor row. Heuristic scrape only (no LLM) — we want this to feel instant. If extraction fails partially, we save what we got; the admin can edit missing fields afterward via the per-row PATCH endpoint.",
-    "auth": "Admin only.",
-    "section": "Clients & Onboarding",
-    "sectionSlug": "clients"
-  },
-  {
-    "method": "GET",
     "path": "/api/clients/:id/contacts",
     "description": "List all contacts for a client, ordered by primary status (primary first) then name.",
     "auth": "Required (admin)",
@@ -2979,16 +2883,6 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     "auth": "",
     "section": "Google Workspace",
     "sectionSlug": "google"
-  },
-  {
-    "method": "POST",
-    "path": "/api/concepts/react",
-    "description": "Save a client reaction (approve, star, or request revision) to an AI-generated content idea. Upserts the reaction into content_ideas — updates the existing row if the idea title matches, otherwise inserts a new record.",
-    "auth": "Required (any authenticated user)",
-    "section": "Ideas & Content",
-    "sectionSlug": "ideas",
-    "body": "title - Idea title used to match/create the content_ideas record (required)\nreaction - Reaction type: 'approved' | 'starred' | 'revision_requested' | null (required)\nhook - Optional hook text\nformat - Optional video format label\nvirality - Optional virality estimate: 'low' | 'medium' | 'high' | 'viral_potential'\nwhy_it_works - Optional explanation text\ntopic_name - Optional topic name label\nclient_id - Optional client UUID (null for generic ideas)\nsearch_id - Optional source search UUID\nfeedback - Optional free-text feedback (nullable)",
-    "response": "{{ id: string, reaction: string }} Created (201) or updated record ID + reaction"
   },
   {
     "method": "GET",
@@ -3680,78 +3574,6 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     "method": "PATCH",
     "path": "/api/client-groups/:id",
     "description": "Rename, recolor, or reorder a group.",
-    "auth": "",
-    "section": "Other",
-    "sectionSlug": "other"
-  },
-  {
-    "method": "GET",
-    "path": "/api/competitor-reports",
-    "description": "",
-    "auth": "",
-    "section": "Other",
-    "sectionSlug": "other"
-  },
-  {
-    "method": "GET",
-    "path": "/api/competitor-reports/:id",
-    "description": "",
-    "auth": "",
-    "section": "Other",
-    "sectionSlug": "other"
-  },
-  {
-    "method": "GET",
-    "path": "/api/competitor-reports/:id/pdf",
-    "description": "",
-    "auth": "",
-    "section": "Other",
-    "sectionSlug": "other"
-  },
-  {
-    "method": "POST",
-    "path": "/api/competitor-reports/:id/resend",
-    "description": "",
-    "auth": "",
-    "section": "Other",
-    "sectionSlug": "other"
-  },
-  {
-    "method": "GET",
-    "path": "/api/competitor-reports/subscriptions",
-    "description": "",
-    "auth": "",
-    "section": "Other",
-    "sectionSlug": "other"
-  },
-  {
-    "method": "POST",
-    "path": "/api/competitor-reports/subscriptions",
-    "description": "",
-    "auth": "",
-    "section": "Other",
-    "sectionSlug": "other"
-  },
-  {
-    "method": "DELETE",
-    "path": "/api/competitor-reports/subscriptions/:id",
-    "description": "",
-    "auth": "",
-    "section": "Other",
-    "sectionSlug": "other"
-  },
-  {
-    "method": "PATCH",
-    "path": "/api/competitor-reports/subscriptions/:id",
-    "description": "",
-    "auth": "",
-    "section": "Other",
-    "sectionSlug": "other"
-  },
-  {
-    "method": "POST",
-    "path": "/api/competitor-reports/subscriptions/:id/run-now",
-    "description": "",
     "auth": "",
     "section": "Other",
     "sectionSlug": "other"

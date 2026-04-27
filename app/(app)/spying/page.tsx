@@ -7,7 +7,6 @@ import { AuditQuickStart } from '@/components/spying/audit-quick-start';
 import { SpyStatStrip } from '@/components/spying/spy-stat-strip';
 import { LatestAuditsList } from '@/components/spying/latest-audits-list';
 import { WatchedCompetitorsList } from '@/components/spying/watched-competitors-list';
-import { RecurringReportsPreview } from '@/components/spying/recurring-reports-preview';
 import { SpyToolRail } from '@/components/spying/spy-tool-rail';
 import { SpyBaselineGate } from '@/components/spying/spy-baseline-gate';
 import { SpyLeaderboard } from '@/components/spying/spy-leaderboard';
@@ -187,21 +186,12 @@ export default async function CompetitorIntelligencePage() {
     .eq('is_active', true);
   if (brand) activeWatchQuery = activeWatchQuery.eq('client_id', brand.id);
 
-  let subscriptionsQuery = admin
-    .from('competitor_report_subscriptions')
-    .select(
-      'id, client_id, cadence, recipients, include_portal_users, enabled, last_run_at, next_run_at, client:clients(name, agency)',
-    )
-    .order('next_run_at', { ascending: true });
-  if (brand) subscriptionsQuery = subscriptionsQuery.eq('client_id', brand.id);
-
   const [
     auditsResult,
     benchmarksResult,
     auditCount7dResult,
     snapshotCount7dResult,
     activeWatchCountResult,
-    subscriptionsResult,
     leaderboardResult,
   ] = await Promise.all([
     auditsQuery,
@@ -209,7 +199,6 @@ export default async function CompetitorIntelligencePage() {
     auditCountQuery,
     snapshotCountPromise,
     activeWatchQuery,
-    subscriptionsQuery,
     leaderboardPromise,
   ]);
 
@@ -281,26 +270,9 @@ export default async function CompetitorIntelligencePage() {
     };
   });
 
-  const subscriptions = (subscriptionsResult.data ?? []).map((s) => {
-    const client = Array.isArray(s.client) ? s.client[0] : s.client;
-    return {
-      id: s.id,
-      client_id: s.client_id,
-      cadence: s.cadence as 'weekly' | 'biweekly' | 'monthly',
-      recipients: s.recipients ?? [],
-      include_portal_users: s.include_portal_users,
-      enabled: s.enabled,
-      last_run_at: s.last_run_at,
-      next_run_at: s.next_run_at,
-      client_name: client?.name ?? 'Untitled client',
-      client_agency: client?.agency ?? null,
-    };
-  });
-
   const auditCount7d = auditCount7dResult.count ?? 0;
   const snapshotCount7d = snapshotCount7dResult.count ?? 0;
   const activeWatchCount = activeWatchCountResult.count ?? 0;
-  const subscriptionTotal = subscriptions.length;
 
   // Build the leaderboard rows: dedup by (platform, username) keeping the latest
   // snapshot, mark the brand's own handles as `is_brand`, sort by composite desc.
@@ -352,10 +324,7 @@ export default async function CompetitorIntelligencePage() {
   const lastCapturedAt = leaderboardRows[0]?.captured_at ?? null;
 
   const allStatsZero =
-    auditCount7d === 0 &&
-    snapshotCount7d === 0 &&
-    activeWatchCount === 0 &&
-    subscriptionTotal === 0;
+    auditCount7d === 0 && snapshotCount7d === 0 && activeWatchCount === 0;
 
   const stats = [
     {
@@ -373,11 +342,6 @@ export default async function CompetitorIntelligencePage() {
       value: compactNumber(snapshotCount7d),
       hint: 'Across all platforms',
     },
-    {
-      label: 'Recurring reports',
-      value: compactNumber(subscriptionTotal),
-      hint: 'On a cadence',
-    },
   ];
 
   // Brand-scoped: leaderboard-first layout. No stat strip, no portfolio
@@ -394,7 +358,6 @@ export default async function CompetitorIntelligencePage() {
         />
         <AuditQuickStart />
         <LatestAuditsList audits={audits} />
-        <RecurringReportsPreview subscriptions={subscriptions} totalCount={subscriptionTotal} />
       </div>
     );
   }
@@ -406,7 +369,6 @@ export default async function CompetitorIntelligencePage() {
       {allStatsZero ? null : <SpyStatStrip stats={stats} />}
       <LatestAuditsList audits={audits} />
       <WatchedCompetitorsList watches={watches} />
-      <RecurringReportsPreview subscriptions={subscriptions} totalCount={subscriptionTotal} />
       <SpyToolRail />
     </div>
   );

@@ -22,8 +22,10 @@ import { toast } from 'sonner';
 // preferred the explicit Edit button so the page reads as information
 // until you deliberately say "I want to change this."
 //
-// Portal's /portal/brand-profile keeps the BrandProfileView read-only
-// component — this editor is admin-only.
+// Both admin and viewer share /brand-profile; viewer mode passes
+// `readOnly` so the same component tree renders without Edit / Save /
+// Generate affordances. Layout, tokens, and section shells stay
+// identical across roles.
 
 interface BrandProfileData {
   id: string;
@@ -42,9 +44,11 @@ interface BrandProfileData {
 interface Props {
   profile: BrandProfileData;
   onSaved?: () => void;
+  /** Viewer mode — same layout/tokens, no Edit / Save / Generate affordances. */
+  readOnly?: boolean;
 }
 
-export function BrandProfileInlineEditor({ profile: initialProfile, onSaved }: Props) {
+export function BrandProfileInlineEditor({ profile: initialProfile, onSaved, readOnly = false }: Props) {
   const [profile, setProfile] = useState<BrandProfileData>(initialProfile);
 
   useEffect(() => {
@@ -74,8 +78,8 @@ export function BrandProfileInlineEditor({ profile: initialProfile, onSaved }: P
 
   return (
     <div className="space-y-4">
-      <HeaderCard profile={profile} onSave={patch} />
-      <EssenceCard profile={profile} onSave={patch} />
+      <HeaderCard profile={profile} onSave={patch} readOnly={readOnly} />
+      <EssenceCard profile={profile} onSave={patch} readOnly={readOnly} />
     </div>
   );
 }
@@ -83,10 +87,11 @@ export function BrandProfileInlineEditor({ profile: initialProfile, onSaved }: P
 // ─── Header card ───────────────────────────────────────────────────────
 
 function HeaderCard({
-  profile, onSave,
+  profile, onSave, readOnly,
 }: {
   profile: BrandProfileData;
   onSave: (fields: Partial<BrandProfileData>) => Promise<boolean>;
+  readOnly: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -140,13 +145,15 @@ function HeaderCard({
 
   return (
     <section className="rounded-xl border border-nativz-border bg-surface p-6 relative">
-      <EditButtonRow
-        editing={editing}
-        saving={saving}
-        onEdit={() => setEditing(true)}
-        onSave={save}
-        onCancel={cancel}
-      />
+      {!readOnly && (
+        <EditButtonRow
+          editing={editing}
+          saving={saving}
+          onEdit={() => setEditing(true)}
+          onSave={save}
+          onCancel={cancel}
+        />
+      )}
 
       <div className="flex items-start gap-4">
         {profile.logo_url ? (
@@ -267,10 +274,11 @@ function HeaderCard({
 // ─── Essence card ──────────────────────────────────────────────────────
 
 function EssenceCard({
-  profile, onSave,
+  profile, onSave, readOnly,
 }: {
   profile: BrandProfileData;
   onSave: (fields: Partial<BrandProfileData>) => Promise<boolean>;
+  readOnly: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -354,13 +362,15 @@ function EssenceCard({
 
   return (
     <section className="rounded-xl border border-nativz-border bg-surface p-6 relative">
-      <EditButtonRow
-        editing={editing}
-        saving={saving}
-        onEdit={() => setEditing(true)}
-        onSave={save}
-        onCancel={cancel}
-      />
+      {!readOnly && (
+        <EditButtonRow
+          editing={editing}
+          saving={saving}
+          onEdit={() => setEditing(true)}
+          onSave={save}
+          onCancel={cancel}
+        />
+      )}
 
       <header className="flex items-start gap-3 pr-24">
         <div className="shrink-0 flex h-9 w-9 items-center justify-center rounded-lg bg-accent-text/10 text-accent-text">

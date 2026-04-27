@@ -1,10 +1,10 @@
 import { Skeleton } from '@/components/ui/skeleton';
 
 /**
- * Brand Profile skeleton — mirrors the section stack from
- * <BrandProfileView/>. Shape: header card (logo/name/description/facts)
- * + essence cards + structure tags 2-col + social presence 2-col +
- * content gen card + location card + DNA bento (3-col).
+ * Brand Profile skeleton — mirrors the unified /brand-profile tree
+ * (admin + viewer share the same shape). Header card (logo / name /
+ * description / facts) + essence card + social-presence card + DNA
+ * bento.
  */
 export default function BrandProfileLoading() {
   return (

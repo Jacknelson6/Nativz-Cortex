@@ -30,6 +30,8 @@ const BodySchema = z.object({
     .default(['tagline', 'value_proposition', 'mission_statement']),
 });
 
+const ADMIN_ROLES = ['admin', 'super_admin'];
+
 async function requireAdmin() {
   const supabase = await createServerSupabaseClient();
   const {
@@ -44,7 +46,7 @@ async function requireAdmin() {
     .select('role')
     .eq('id', user.id)
     .single();
-  if (!userData || userData.role !== 'admin') return null;
+  if (!userData || !ADMIN_ROLES.includes(userData.role)) return null;
   return user;
 }
 
@@ -187,6 +189,11 @@ Return ONLY valid JSON — no prose around it — with exactly the requested key
     return NextResponse.json({ suggestions: out });
   } catch (err) {
     console.error('brand-essence/generate fatal', err);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    // Surface the real failure (OpenRouter credits, budget, missing key,
+    // timeout) instead of "Internal server error" — the inline editor
+    // toasts whatever string we return here.
+    const message =
+      err instanceof Error && err.message ? err.message : 'Internal server error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
