@@ -6,18 +6,19 @@ import { ChevronLeft, ChevronRight, Loader2, Settings } from 'lucide-react';
 import type { CalendarPerson, ExternalCalendarEvent } from './types';
 
 /**
- * Team availability — 4-day rolling view of every teammate's busy time.
+ * Team availability — 4-day rolling view of every teammate's calendar.
  *
- * Pulls busy blocks for each configured `scheduling_people` row from
+ * Pulls events for each configured `scheduling_people` row from
  * `/api/calendar/events` (Google Calendar via service account / domain-wide
  * delegation, daily-cached server-side). Renders only the visible working-hour
  * window (7am–10pm) so the grid fits the viewport without internal or page
  * scrolling — overnight events get clipped at the edges, which is fine for a
  * scheduling-decision view (slot finder still has full-day data on the server).
- * When multiple people are busy at overlapping times the blocks are merged into
- * a single band labeled with everyone's initials (e.g. "C T J") so a glance
- * tells you "this slot is blocked" rather than forcing your eye to zigzag
- * between adjacent lanes.
+ *
+ * Each event renders as its own block colored by person and labeled with the
+ * event title, so you can see *who* is busy and *what* they're in. Overlapping
+ * events within a day pack into side-by-side lanes (interval-graph coloring) so
+ * the visible width stays as wide as possible for non-overlapping events.
  *
  * People are managed at /admin/scheduling/people.
  */
@@ -97,10 +98,6 @@ function toVisibleOffset(min: number): number {
   return Math.max(0, Math.min(VISIBLE_RANGE_MIN, min - VISIBLE_START_MIN));
 }
 
-function initial(name: string): string {
-  return name.trim().charAt(0).toUpperCase() || '?';
-}
-
 interface PeopleResponse {
   people?: Array<{
     id: string;
@@ -125,12 +122,20 @@ interface EventsResponse {
   >;
 }
 
-interface MergedBand {
+interface PositionedEvent {
   key: string;
+  person: CalendarPerson;
+  title: string;
+  /** Visible-window offset minutes — used for top/height. */
   startMin: number;
   endMin: number;
-  /** Persons stable-ordered by first appearance in this cluster. */
-  persons: CalendarPerson[];
+  /** Raw minutes-from-midnight — used for the time label/tooltip. */
+  rawStartMin: number;
+  rawEndMin: number;
+  /** Lane index within this event's overlap cluster (0-based). */
+  lane: number;
+  /** Total lanes the cluster occupies — width = 1 / lanesTotal. */
+  lanesTotal: number;
 }
 
 // Fetch a wide window once and paginate locally — prev/next inside the window
@@ -384,14 +389,19 @@ function ScreenReaderSummary({ dates, people, rangeLabel }: ScreenReaderSummaryP
             month: 'long',
             day: 'numeric',
           });
-          const items: Array<{ name: string; start: number; end: number }> = [];
+          const items: Array<{ name: string; title: string; start: number; end: number }> = [];
           for (const person of people) {
             for (const ev of person.events) {
               if (!isSameDay(ev.start, date) || ev.isAllDay) continue;
               const start = clampToDay(getMinutesFromMidnight(ev.start));
               const end = clampToDay(getMinutesFromMidnight(ev.end));
               if (end <= start) continue;
-              items.push({ name: person.name, start, end });
+              items.push({
+                name: person.name,
+                title: ev.title?.trim() || 'Busy',
+                start,
+                end,
+              });
             }
           }
           items.sort((a, b) => a.start - b.start);
@@ -403,7 +413,7 @@ function ScreenReaderSummary({ dates, people, rangeLabel }: ScreenReaderSummaryP
               ) : (
                 items.map((item, i) => (
                   <dd key={`${item.name}-${i}`}>
-                    {item.name} busy {formatTimeShort(item.start)} to{' '}
+                    {item.name}: {item.title}, {formatTimeShort(item.start)} to{' '}
                     {formatTimeShort(item.end)}
                   </dd>
                 ))
@@ -444,36 +454,55 @@ interface AvailabilityGridProps {
   now: Date;
 }
 
+type RawEvent = Omit<PositionedEvent, 'key' | 'lane' | 'lanesTotal'>;
+
 /**
- * Walk a day's per-person blocks and merge any that overlap in time into
- * a single band. Each band tracks the unique set of persons whose busy
- * window contributed (preserved by first-appearance order so the legend
- * chips and band labels stay in sync).
+ * Pack a day's events into side-by-side lanes so overlapping events stay
+ * visible. Events are first grouped into "clusters" (transitive overlap
+ * groups), then within each cluster placed greedily into the leftmost lane
+ * with no collision. Cluster-local lane counts mean a single 4-way overlap
+ * doesn't squeeze unrelated events elsewhere in the day.
  */
-function mergeOverlapping(
-  rawBlocks: Array<{ person: CalendarPerson; startMin: number; endMin: number }>,
-): MergedBand[] {
-  if (rawBlocks.length === 0) return [];
-  const sorted = [...rawBlocks].sort((a, b) => a.startMin - b.startMin);
-  const bands: MergedBand[] = [];
-  let bandIdx = 0;
-  for (const b of sorted) {
-    const last = bands[bands.length - 1];
-    if (last && b.startMin < last.endMin) {
-      last.endMin = Math.max(last.endMin, b.endMin);
-      if (!last.persons.some((p) => p.connectionId === b.person.connectionId)) {
-        last.persons.push(b.person);
-      }
-    } else {
-      bands.push({
-        key: `band-${bandIdx++}-${b.startMin}`,
-        startMin: b.startMin,
-        endMin: b.endMin,
-        persons: [b.person],
+function packEventsIntoLanes(rawEvents: RawEvent[]): PositionedEvent[] {
+  if (rawEvents.length === 0) return [];
+  const sorted = [...rawEvents].sort(
+    (a, b) => a.startMin - b.startMin || a.endMin - b.endMin,
+  );
+
+  const result: PositionedEvent[] = [];
+  let cluster: Array<RawEvent & { lane: number }> = [];
+  let clusterEnd = -Infinity;
+  let clusterIdx = 0;
+
+  function flush() {
+    if (cluster.length === 0) return;
+    const lanesTotal = cluster.reduce((m, e) => Math.max(m, e.lane + 1), 0);
+    for (const e of cluster) {
+      result.push({
+        ...e,
+        key: `ev-${clusterIdx}-${e.person.connectionId}-${e.startMin}-${e.endMin}-${e.lane}`,
+        lanesTotal,
       });
     }
+    cluster = [];
+    clusterEnd = -Infinity;
+    clusterIdx++;
   }
-  return bands;
+
+  for (const ev of sorted) {
+    if (ev.startMin >= clusterEnd) flush();
+    // Greedy: place in the leftmost lane whose last event ended at or before this one starts.
+    const laneEnds: number[] = [];
+    for (const e of cluster) {
+      laneEnds[e.lane] = Math.max(laneEnds[e.lane] ?? -Infinity, e.endMin);
+    }
+    let lane = laneEnds.findIndex((end) => end <= ev.startMin);
+    if (lane === -1) lane = laneEnds.length;
+    cluster.push({ ...ev, lane });
+    clusterEnd = Math.max(clusterEnd, ev.endMin);
+  }
+  flush();
+  return result;
 }
 
 function AvailabilityGrid({ dates, people, now }: AvailabilityGridProps) {
@@ -507,9 +536,9 @@ function AvailabilityGrid({ dates, people, now }: AvailabilityGridProps) {
     [],
   );
 
-  const dayBands = useMemo(() => {
+  const dayEvents = useMemo(() => {
     return dates.map((date) => {
-      const raw: Array<{ person: CalendarPerson; startMin: number; endMin: number }> = [];
+      const raw: RawEvent[] = [];
       for (const person of people) {
         for (const ev of person.events) {
           if (!isSameDay(ev.start, date)) continue;
@@ -523,12 +552,15 @@ function AvailabilityGrid({ dates, people, now }: AvailabilityGridProps) {
           if (rawStart >= VISIBLE_END_MIN) continue;
           raw.push({
             person,
+            title: ev.title?.trim() || 'Busy',
             startMin: toVisibleOffset(rawStart),
             endMin: toVisibleOffset(rawEnd),
+            rawStartMin: rawStart,
+            rawEndMin: rawEnd,
           });
         }
       }
-      return { date, bands: mergeOverlapping(raw) };
+      return { date, events: packEventsIntoLanes(raw) };
     });
   }, [dates, people]);
 
@@ -603,7 +635,7 @@ function AvailabilityGrid({ dates, people, now }: AvailabilityGridProps) {
               />
             ))}
 
-            {dayBands.map(({ date, bands }) => {
+            {dayEvents.map(({ date, events }) => {
               const today = isToday(date);
               return (
                 <div
@@ -616,8 +648,8 @@ function AvailabilityGrid({ dates, people, now }: AvailabilityGridProps) {
                       : undefined,
                   }}
                 >
-                  {bands.map((band) => (
-                    <BusyBand key={band.key} band={band} hourHeight={HOUR_HEIGHT} />
+                  {events.map((event) => (
+                    <EventBlock key={event.key} event={event} hourHeight={HOUR_HEIGHT} />
                   ))}
 
                   {today && nowVisible && (
@@ -649,59 +681,51 @@ function AvailabilityGrid({ dates, people, now }: AvailabilityGridProps) {
   );
 }
 
-interface BusyBandProps {
-  band: MergedBand;
+interface EventBlockProps {
+  event: PositionedEvent;
   hourHeight: number;
 }
 
 /**
- * A single merged busy band — full column width, with the contributing
- * person initials stacked horizontally inside. Solo bands keep their
- * person's color so quick scans stay coded; multi-person bands shift to
- * a neutral muted fill so "blocked" reads at a glance.
+ * A single calendar event — colored by person, labeled with title and time.
+ * Width is `1 / lanesTotal` of the column so overlapping events stay visible
+ * side-by-side rather than collapsing into an opaque band.
  */
-function BusyBand({ band, hourHeight }: BusyBandProps) {
-  const top = (band.startMin / 60) * hourHeight;
-  const height = Math.max(((band.endMin - band.startMin) / 60) * hourHeight, 12);
-  const isSolo = band.persons.length === 1;
-  const tooltip = `${band.persons.map((p) => p.name).join(', ')} · ${formatTimeShort(band.startMin)}–${formatTimeShort(band.endMin)}`;
+function EventBlock({ event, hourHeight }: EventBlockProps) {
+  const top = (event.startMin / 60) * hourHeight;
+  const height = Math.max(((event.endMin - event.startMin) / 60) * hourHeight, 14);
+  const widthPct = 100 / event.lanesTotal;
+  const leftPct = event.lane * widthPct;
 
-  const fill = isSolo
-    ? `${band.persons[0].color}33`
-    : 'color-mix(in srgb, var(--text-muted) 22%, transparent)';
-  const border = isSolo
-    ? `${band.persons[0].color}80`
-    : 'color-mix(in srgb, var(--text-muted) 45%, transparent)';
+  const fill = `${event.person.color}26`;
+  const border = `${event.person.color}99`;
+  const tooltip = `${event.person.name} · ${event.title} · ${formatTimeShort(event.rawStartMin)}–${formatTimeShort(event.rawEndMin)}`;
 
   return (
     <div
       title={tooltip}
-      className="absolute mx-1 rounded-md overflow-hidden"
+      className="absolute rounded-md overflow-hidden px-1.5 py-0.5"
       style={{
         top,
         height,
-        left: 0,
-        right: 0,
+        left: `calc(${leftPct}% + 1px)`,
+        width: `calc(${widthPct}% - 2px)`,
         backgroundColor: fill,
         boxShadow: `inset 0 0 0 1px ${border}`,
       }}
       aria-hidden="true"
     >
-      {height >= 24 && (
-        <div className="absolute top-1 left-1.5 right-1.5 flex items-center gap-1 flex-wrap">
-          {band.persons.map((p) => (
-            <span
-              key={p.connectionId}
-              className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-sm px-1 text-[10px] font-semibold leading-none tabular-nums"
-              style={{
-                backgroundColor: `${p.color}40`,
-                color: p.color,
-                boxShadow: `inset 0 0 0 1px ${p.color}66`,
-              }}
-            >
-              {initial(p.name)}
-            </span>
-          ))}
+      {height >= 18 && (
+        <div
+          className="text-[10px] font-medium leading-tight truncate"
+          style={{ color: event.person.color }}
+        >
+          {event.title}
+        </div>
+      )}
+      {height >= 30 && (
+        <div className="text-[9px] text-text-muted leading-tight tabular-nums truncate mt-0.5">
+          {formatTimeShort(event.rawStartMin)}
         </div>
       )}
     </div>
