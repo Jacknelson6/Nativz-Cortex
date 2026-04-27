@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { formatCents, dollarsToCents } from '@/lib/format/money';
 
 type Platform = 'meta' | 'google' | 'tiktok' | 'youtube' | 'other';
@@ -100,13 +101,15 @@ export function AdSpendTab({ clients }: { clients: ClientOption[] }) {
         <p className="text-xs text-text-muted">
           Manual ad-spend ledger per client / platform / month. A future task wires Meta/Google auto-sync.
         </p>
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={() => setShowForm((v) => !v)}
-          className="inline-flex items-center gap-1 rounded-full border border-nativz-border bg-surface px-3 py-1 text-xs text-text-primary hover:bg-white/5"
         >
-          <Plus size={12} /> Add entry
-        </button>
+          <Plus size={12} />
+          Add entry
+        </Button>
       </div>
 
       {showForm ? (
@@ -173,13 +176,9 @@ export function AdSpendTab({ clients }: { clients: ClientOption[] }) {
             />
           </label>
           <div className="sm:col-span-6 flex justify-end">
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-full bg-nz-cyan px-4 py-1.5 text-xs font-medium text-background hover:bg-nz-cyan/90 disabled:opacity-50"
-            >
+            <Button type="submit" size="sm" disabled={saving}>
               {saving ? 'Saving…' : 'Save entry'}
-            </button>
+            </Button>
           </div>
         </form>
       ) : null}

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/shared/empty-state';
 import { toast } from 'sonner';
 import { useConfirm } from '@/components/ui/confirm-dialog';
@@ -248,44 +249,38 @@ export default function PresentationsPage() {
       </div>
 
       {/* Create modal */}
-      {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setShowCreate(false)} />
-          <div className="relative w-full max-w-xl rounded-2xl border border-nativz-border bg-surface shadow-2xl animate-modal-pop-in p-6 space-y-5">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-text-primary">Create new note</h2>
-              <button onClick={() => setShowCreate(false)} className="cursor-pointer rounded-lg p-1.5 text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors">
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-            <p className="text-sm text-text-muted -mt-2">Choose a note type to get started</p>
-            <div className="grid grid-cols-1 gap-2">
-              {[
-                { type: 'slides' as const, label: 'Slide deck', desc: 'Create a note with slides, images, and speaker notes', icon: FileText, color: 'rgba(4, 107, 210, 0.15)', iconColor: 'text-accent-text', bgColor: 'bg-accent-surface' },
-                { type: 'tier_list' as const, label: 'Tier list', desc: 'Rank content with drag-and-drop tiers for visual demos on calls', icon: ListOrdered, color: 'rgba(168, 85, 247, 0.15)', iconColor: 'text-accent2-text', bgColor: 'bg-accent2-surface' },
-                { type: 'social_audit' as const, label: 'Social audit', desc: 'Before & after analysis with real social data and growth projections', icon: BarChart3, color: 'rgba(16, 185, 129, 0.15)', iconColor: 'text-emerald-400', bgColor: 'bg-emerald-500/10' },
-                { type: 'benchmarks' as const, label: 'Creative benchmarks', desc: 'Interactive charts and tables from $1.3B in ad spend data', icon: BarChart2, color: 'rgba(249, 115, 22, 0.15)', iconColor: 'text-orange-400', bgColor: 'bg-orange-500/15' },
-              ].map(({ type, label, desc, icon: Icon, iconColor, bgColor }) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => { setShowCreate(false); handleCreate(type); }}
-                  className="cursor-pointer flex items-center gap-4 rounded-xl border border-nativz-border bg-surface px-4 py-4 text-left hover:bg-surface-hover hover:border-nativz-border/80 transition-all hover:scale-[1.01] active:scale-[0.99]"
-                >
-                  <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${bgColor} shrink-0`}>
-                    <Icon size={20} className={iconColor} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="text-sm font-semibold text-text-primary">{label}</h3>
-                    <p className="text-xs text-text-muted mt-0.5">{desc}</p>
-                  </div>
-                  <ChevronRight size={16} className="text-text-muted shrink-0" />
-                </button>
-              ))}
-            </div>
-          </div>
+      <Dialog
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        title="Create new note"
+        maxWidth="xl"
+      >
+        <p className="text-sm text-text-muted -mt-2 mb-4">Choose a note type to get started</p>
+        <div className="grid grid-cols-1 gap-2">
+          {[
+            { type: 'slides' as const, label: 'Slide deck', desc: 'Create a note with slides, images, and speaker notes', icon: FileText, iconColor: 'text-accent-text', bgColor: 'bg-accent-surface' },
+            { type: 'tier_list' as const, label: 'Tier list', desc: 'Rank content with drag-and-drop tiers for visual demos on calls', icon: ListOrdered, iconColor: 'text-accent2-text', bgColor: 'bg-accent2-surface' },
+            { type: 'social_audit' as const, label: 'Social audit', desc: 'Before & after analysis with real social data and growth projections', icon: BarChart3, iconColor: 'text-emerald-400', bgColor: 'bg-emerald-500/10' },
+            { type: 'benchmarks' as const, label: 'Creative benchmarks', desc: 'Interactive charts and tables from $1.3B in ad spend data', icon: BarChart2, iconColor: 'text-orange-400', bgColor: 'bg-orange-500/15' },
+          ].map(({ type, label, desc, icon: Icon, iconColor, bgColor }) => (
+            <button
+              key={type}
+              type="button"
+              onClick={() => { setShowCreate(false); handleCreate(type); }}
+              className="cursor-pointer flex items-center gap-4 rounded-xl border border-nativz-border bg-surface px-4 py-4 text-left hover:bg-surface-hover hover:border-nativz-border/80 transition-colors"
+            >
+              <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${bgColor} shrink-0`}>
+                <Icon size={20} className={iconColor} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-semibold text-text-primary">{label}</h3>
+                <p className="text-xs text-text-muted mt-0.5">{desc}</p>
+              </div>
+              <ChevronRight size={16} className="text-text-muted shrink-0" />
+            </button>
+          ))}
         </div>
-      )}
+      </Dialog>
 
       {/* Loading */}
       {loading && (

@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { ShieldAlert, ArrowRight, LayoutDashboard, X } from 'lucide-react';
+import { ShieldAlert, ArrowRight, LayoutDashboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
 import { useAgencyBrand } from '@/lib/agency/use-agency-brand';
 
 const SESSION_ACK_KEY = 'cortex:admin-in-portal-acknowledged';
@@ -72,54 +73,43 @@ export function AdminInPortalGuard({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <>
-      {showModal && (
-        <div
-          className="fixed inset-0 z-[90] flex items-center justify-center bg-[color:var(--nz-ink)]/70 backdrop-blur-sm px-4"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="relative w-full max-w-md rounded-2xl border border-nativz-border bg-surface px-6 py-7 shadow-elevated">
+      <Dialog
+        open={showModal}
+        onClose={dismiss}
+        title=""
+        maxWidth="md"
+        bodyClassName="px-6 py-7"
+      >
+        <div className="flex flex-col items-center text-center">
+          <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--status-warning)]/15 text-[color:var(--status-warning)]">
+            <ShieldAlert size={20} />
+          </div>
+          <h2 className="text-base font-semibold text-text-primary">
+            You&apos;re signed in as an admin
+          </h2>
+          <p className="mt-1.5 text-sm text-text-muted">
+            This is the client portal view. Head back to the admin
+            dashboard unless you&apos;re intentionally testing what a
+            client sees.
+          </p>
+
+          <div className="mt-6 flex w-full flex-col items-center gap-3">
+            <Link href="/admin/dashboard" className="w-full max-w-xs">
+              <Button className="w-full">
+                Back to admin dashboard
+                <ArrowRight size={14} aria-hidden />
+              </Button>
+            </Link>
             <button
               type="button"
               onClick={dismiss}
-              aria-label="Dismiss"
-              className="absolute right-3 top-3 cursor-pointer rounded-md p-1 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
+              className="cursor-pointer text-xs text-text-muted transition-colors hover:text-text-secondary"
             >
-              <X size={16} />
+              I&apos;m just testing
             </button>
-
-            <div className="flex flex-col items-center text-center">
-              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--status-warning)]/15 text-[color:var(--status-warning)]">
-                <ShieldAlert size={20} />
-              </div>
-              <h2 className="text-base font-semibold text-text-primary">
-                You&apos;re signed in as an admin
-              </h2>
-              <p className="mt-1.5 text-sm text-text-muted">
-                This is the client portal view. Head back to the admin
-                dashboard unless you&apos;re intentionally testing what a
-                client sees.
-              </p>
-
-              <div className="mt-6 flex w-full flex-col items-center gap-3">
-                <Link href="/admin/dashboard" className="w-full max-w-xs">
-                  <Button className="w-full">
-                    Back to admin dashboard
-                    <ArrowRight size={14} aria-hidden />
-                  </Button>
-                </Link>
-                <button
-                  type="button"
-                  onClick={dismiss}
-                  className="cursor-pointer text-xs text-text-muted transition-colors hover:text-text-secondary"
-                >
-                  I&apos;m just testing
-                </button>
-              </div>
-            </div>
           </div>
         </div>
-      )}
+      </Dialog>
 
       {/* Persistent floating pill — centered at the top for admins who
           navigate directly to /portal without impersonating. During

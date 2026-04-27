@@ -6,6 +6,7 @@ import { Loader2, Link as LinkIcon, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 import { WizardShell } from './wizard-shell';
 import { GlassButton } from '@/components/ui/glass-button';
+import { Button } from '@/components/ui/button';
 import { ClientPickerButton, type ClientOption } from '@/components/ui/client-picker';
 
 interface IdeasWizardProps {
@@ -271,14 +272,15 @@ export function IdeasWizard({ open, onClose, clients, onStarted }: IdeasWizardPr
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addReference(); } }}
                 />
               </div>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
                 onClick={addReference}
                 disabled={!referenceUrl.trim()}
-                className="rounded-lg bg-white/[0.06] px-3 py-2 text-xs text-text-muted hover:bg-white/[0.1] transition-colors disabled:opacity-40"
               >
                 Add
-              </button>
+              </Button>
             </div>
             {referenceIds.length > 0 && (
               <p className="text-xs text-text-muted mb-4">{referenceIds.length} reference{referenceIds.length !== 1 ? 's' : ''} added</p>
@@ -304,14 +306,16 @@ export function IdeasWizard({ open, onClose, clients, onStarted }: IdeasWizardPr
             &larr; Back
           </button>
           <div className="flex gap-2">
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="md"
               onClick={() => handleGenerate({ concept: '', count: 10, referenceIds: [] })}
               disabled={loading}
-              className="rounded-xl border border-accent2/30 px-5 py-2.5 text-sm font-medium text-accent2-text hover:bg-accent2-surface transition-colors disabled:opacity-40"
+              className="border-accent2/30 text-accent2-text hover:bg-accent2-surface"
             >
               Skip &amp; generate
-            </button>
+            </Button>
             <GlassButton onClick={() => handleGenerate()} loading={loading} disabled={loading} className="!bg-[var(--accent2-surface)] !border-[var(--accent2-ring)] !text-accent2-text hover:!bg-[var(--accent2-ring)]">
               {loading ? <><Loader2 size={16} className="animate-spin" /> Generating...</> : error ? 'Retry' : 'Generate'}
             </GlassButton>

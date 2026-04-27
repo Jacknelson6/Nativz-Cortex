@@ -7,6 +7,7 @@ import {
   Minus, Plus, X, Check, Search,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
 import { ComboSelect } from '@/components/ui/combo-select';
 import { Badge } from '@/components/ui/badge';
 
@@ -274,13 +275,14 @@ export function IdeaGenerator({ clients, onIdeasSaved, initialSearchId, initialS
                 className="w-full bg-transparent text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none"
               />
             </div>
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={addReferenceUrl}
               disabled={!urlInput.trim()}
-              className="px-3 py-2 rounded-lg border border-nativz-border bg-surface text-xs font-medium text-text-secondary hover:bg-surface-hover disabled:opacity-40 cursor-pointer transition-colors"
             >
               Add
-            </button>
+            </Button>
           </div>
 
           {/* File upload */}
@@ -323,10 +325,11 @@ export function IdeaGenerator({ clients, onIdeasSaved, initialSearchId, initialS
 
         {/* Generate button */}
         <div className="flex items-center justify-center pt-2">
-          <button
+          <Button
+            size="lg"
             onClick={handleGenerate}
             disabled={generating || processingRefs || !clientId}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent2 px-8 py-3 text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-40 cursor-pointer"
+            className="bg-accent2 text-white hover:bg-accent2/90"
           >
             {generating || processingRefs ? (
               <>
@@ -339,7 +342,7 @@ export function IdeaGenerator({ clients, onIdeasSaved, initialSearchId, initialS
                 Generate ideas
               </>
             )}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
