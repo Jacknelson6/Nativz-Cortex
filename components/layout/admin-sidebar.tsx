@@ -200,7 +200,6 @@ const ADMIN_ONLY_HREFS = new Set([
   // — RLS scopes them to the viewer's user_client_access.
   '/ads',
   '/spying',
-  '/admin/calendar',
   // Settings is reachable from the avatar popover — it doesn't need its
   // own nav row on the portal. Keeping it on the admin side where the gear
   // is the primary entry point to the agency settings secondary rail.
@@ -229,6 +228,16 @@ const PORTAL_HREF_REWRITES: Record<string, string> = {
   '/notes': '/portal/notes',
 };
 
+/**
+ * Unified-shell href rewrites for viewers. When a NAV_SECTIONS item lives
+ * under /admin/* but the viewer mirror lives at root (no /admin/ prefix),
+ * we can't naively keep the admin href. Calendar is the first case: admins
+ * use /admin/calendar (rich edit surface), viewers use /calendar (read-only).
+ */
+const VIEWER_UNIFIED_HREFS: Record<string, string> = {
+  '/admin/calendar': '/calendar',
+};
+
 function getNavSectionsForRole(role: 'admin' | 'viewer', prefix: string): NavSection[] {
   if (role === 'admin') return NAV_SECTIONS;
 
@@ -248,7 +257,7 @@ function getNavSectionsForRole(role: 'admin' | 'viewer', prefix: string): NavSec
 
       const remappedHref = (() => {
         if (isComingSoon) return '#';
-        if (isUnifiedShell) return item.href;
+        if (isUnifiedShell) return VIEWER_UNIFIED_HREFS[item.href] ?? item.href;
         return PORTAL_HREF_REWRITES[item.href] ?? item.href.replace('/admin/', `${prefix}/`);
       })();
 
@@ -259,7 +268,7 @@ function getNavSectionsForRole(role: 'admin' | 'viewer', prefix: string): NavSec
             .map((c) => ({
               ...c,
               href: isUnifiedShell
-                ? c.href
+                ? VIEWER_UNIFIED_HREFS[c.href] ?? c.href
                 : PORTAL_HREF_REWRITES[c.href] ?? c.href.replace('/admin/', `${prefix}/`),
             }));
 
