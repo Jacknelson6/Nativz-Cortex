@@ -106,7 +106,7 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-6xl px-6 py-8">
+      <div className="cortex-page-gutter max-w-6xl mx-auto">
         <div className="rounded-xl border border-nativz-border bg-surface p-12 text-center text-sm text-text-secondary">
           Loading drop…
         </div>
@@ -116,7 +116,7 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
 
   if (!data) {
     return (
-      <div className="mx-auto max-w-6xl px-6 py-8">
+      <div className="cortex-page-gutter max-w-6xl mx-auto">
         <div className="rounded-xl border border-nativz-border bg-surface p-12 text-center">
           <XCircle className="mx-auto mb-3 h-8 w-8 text-text-tertiary" />
           <p className="text-sm text-text-secondary">Drop not found.</p>
@@ -138,15 +138,15 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
   const inFlight = IN_FLIGHT_DROP.includes(drop.status);
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
+    <div className="cortex-page-gutter max-w-6xl mx-auto space-y-6">
       <Link
         href="/admin/calendar"
-        className="mb-4 inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary"
+        className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary"
       >
         <ArrowLeft size={14} /> Calendar
       </Link>
 
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
+      <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="flex items-center gap-2 text-2xl font-semibold text-text-primary">
             <CalendarDays className="h-6 w-6 text-text-tertiary" />
@@ -235,7 +235,7 @@ function ProgressBar({ drop, videos }: { drop: ContentDrop; videos: ContentDropV
   ).length;
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
   return (
-    <div className="mb-6 rounded-xl border border-nativz-border bg-surface p-4">
+    <div className="rounded-xl border border-nativz-border bg-surface p-4">
       <div className="mb-2 flex items-center justify-between text-xs text-text-secondary">
         <span className="font-medium text-text-primary capitalize">{stage}</span>
         <span>

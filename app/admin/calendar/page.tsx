@@ -40,8 +40,8 @@ export default function CalendarPage() {
   }, [brand?.id]);
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
-      <header className="mb-6 flex items-center justify-between gap-4">
+    <div className="cortex-page-gutter max-w-6xl mx-auto space-y-6">
+      <header className="flex items-center justify-between gap-4">
         <div className="min-w-0 shrink">
           <h1 className="text-2xl font-semibold text-text-primary">Content calendar</h1>
           <p className="mt-1 text-sm text-text-secondary">
