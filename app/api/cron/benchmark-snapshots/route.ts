@@ -7,6 +7,14 @@ import { scrapeYouTubeProfile } from '@/lib/audit/scrape-youtube-profile';
 import { calculateEngagementRate, calculateAvgViews, estimatePostingFrequency } from '@/lib/audit/analyze';
 import type { AuditPlatform, ProspectVideo, ProspectProfile } from '@/lib/audit/types';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
+import { scoreSnapshot } from '@/lib/spying/score-snapshot';
+import type { ScoringPlatform } from '@/lib/spying/scoring';
+
+const SCORED_PLATFORMS: readonly AuditPlatform[] = ['instagram', 'tiktok'];
+
+function isScoredPlatform(p: AuditPlatform): p is ScoringPlatform {
+  return SCORED_PLATFORMS.includes(p);
+}
 
 export const maxDuration = 300;
 
@@ -146,6 +154,14 @@ async function handleGet(request: NextRequest) {
         const er = calculateEngagementRate(videos, followers);
         const freq = estimatePostingFrequency(videos);
 
+        // Spy benchmarking score — IG + TikTok only. We persist the snapshot
+        // even if the LLM rubrics fail (deltas still matter); score columns
+        // stay null and the row is hidden from the leaderboard until the
+        // next successful run replaces it.
+        const scored = isScoredPlatform(c.platform)
+          ? await runScoreSnapshot(c.platform, profile, videos)
+          : null;
+
         const row = {
           benchmark_id: benchmark.id,
           platform: c.platform,
@@ -165,6 +181,17 @@ async function handleGet(request: NextRequest) {
             prior?.engagement_rate != null ? er - prior.engagement_rate : null,
           new_posts: summarizeNewPosts(videos, prior?.captured_at ?? null),
           scrape_error: null as string | null,
+          velocity_score: scored?.score.components.velocity ?? null,
+          engagement_score: scored?.score.components.engagement ?? null,
+          reach_score: scored?.score.components.reach ?? null,
+          bio_score: scored?.score.components.bio ?? null,
+          caption_score: scored?.score.components.caption ?? null,
+          composite_score: scored?.score.composite ?? null,
+          posts_last_30d: scored?.inputs.postsLast30d ?? null,
+          median_engagement: scored?.inputs.medianEngagement ?? null,
+          median_views: scored?.inputs.medianViews ?? null,
+          bio_breakdown: scored?.bio.breakdown ?? null,
+          caption_breakdown: scored?.captions.breakdown ?? null,
         };
 
         const { error: insertErr } = await admin.from('benchmark_snapshots').insert(row);
@@ -205,6 +232,20 @@ async function handleGet(request: NextRequest) {
     snapshots: snapshotsWritten,
     failures: scrapeFailures,
   });
+}
+
+async function runScoreSnapshot(
+  platform: ScoringPlatform,
+  profile: ProspectProfile,
+  videos: ProspectVideo[],
+) {
+  try {
+    return await scoreSnapshot({ platform, profile, videos });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[cron:benchmark-snapshots] scoring failed (${platform}): ${msg}`);
+    return null;
+  }
 }
 
 async function markProcessed(

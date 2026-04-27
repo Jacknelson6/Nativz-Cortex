@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { logLifecycleEvent } from '@/lib/lifecycle/state-machine';
+import { autoCreateKickoffEvent } from '@/lib/onboarding/auto-create-kickoff';
 
 /**
  * Recompute whether all required client-owned intake items in a flow are
@@ -90,6 +91,13 @@ export async function checkAndFlipFlowCompletion(
         metadata: { flow_id: flowId, total_required: totalRequired },
         admin,
       },
+    );
+
+    // Best-effort: spin up a kickoff scheduling picker now that the client
+    // is done. Failure here doesn't unwind the completion — the team can
+    // still create one manually from /admin/scheduling.
+    await autoCreateKickoffEvent(admin, flowId, flow.client_id as string).catch((err) =>
+      console.error('[check-completion] kickoff auto-create failed', err),
     );
   }
 

@@ -69,18 +69,18 @@ export default async function SchedulingListPage() {
   }
 
   return (
-    <div className="cortex-page-gutter max-w-5xl space-y-8">
+    <div className="cortex-page-gutter space-y-8">
       <header className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="ui-page-title-md">Team scheduling</h1>
           <p className="text-sm text-text-muted">
-            Spin up a cal.diy-style picker for any group of teammates. Clients pick a slot when
+            Spin up a cal.com-style picker for any group of teammates. Clients pick a slot when
             everyone&apos;s free.
           </p>
         </div>
         <Link
           href="/admin/scheduling/new"
-          className="inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[var(--nz-btn-radius)] bg-accent px-4 py-2 text-sm font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all duration-[var(--duration-fast)] ease-out hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98]"
+          className="inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[var(--nz-btn-radius)] bg-accent px-4 py-2 text-sm font-medium text-white shadow-[var(--shadow-card)] transition-all duration-[var(--duration-fast)] ease-out hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98]"
         >
           <Plus size={14} />
           New event
@@ -89,55 +89,54 @@ export default async function SchedulingListPage() {
 
       <TeamAvailability />
 
-      <div className="max-w-3xl">
-
-      {eventList.length === 0 ? (
-        <div className="rounded-xl border border-nativz-border bg-surface p-10 text-center">
-          <p className="text-sm font-medium text-text-primary">No events yet</p>
-          <p className="mx-auto mt-1 max-w-sm text-xs text-text-muted">
-            Spin up a picker, share the link, and the client books a slot when everyone&apos;s free.
-          </p>
-          <Link
-            href="/admin/scheduling/new"
-            className="mt-4 inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[var(--nz-btn-radius)] bg-accent px-4 py-2 text-sm font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all duration-[var(--duration-fast)] ease-out hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98]"
-          >
-            <Plus size={14} />
-            New event
-          </Link>
-        </div>
-      ) : (
-        <ul className="space-y-3">
-          {eventList.map((e) => {
-            const client = e.client_id ? clientById.get(e.client_id) : null;
-            return (
-              <li key={e.id} className="rounded-md border border-nativz-border bg-surface p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-wider text-text-muted">
-                      {client?.name ?? 'Ad-hoc'}
-                    </p>
-                    <p className="text-sm font-medium text-text-primary">{e.name}</p>
-                    <p className="text-[11px] text-text-muted">
-                      {e.duration_minutes} min · {e.status}
-                    </p>
+      <div>
+        {eventList.length === 0 ? (
+          <div className="rounded-xl border border-nativz-border bg-surface p-10 text-center">
+            <p className="text-sm font-medium text-text-primary">No events yet</p>
+            <p className="mx-auto mt-1 max-w-sm text-xs text-text-muted">
+              Spin up a picker, share the link, and the client books a slot when everyone&apos;s free.
+            </p>
+            <Link
+              href="/admin/scheduling/new"
+              className="mt-4 inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[var(--nz-btn-radius)] bg-accent px-4 py-2 text-sm font-medium text-white shadow-[var(--shadow-card)] transition-all duration-[var(--duration-fast)] ease-out hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98]"
+            >
+              <Plus size={14} />
+              New event
+            </Link>
+          </div>
+        ) : (
+          <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {eventList.map((e) => {
+              const client = e.client_id ? clientById.get(e.client_id) : null;
+              return (
+                <li key={e.id} className="rounded-md border border-nativz-border bg-surface p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs uppercase tracking-wider text-text-muted">
+                        {client?.name ?? 'Ad-hoc'}
+                      </p>
+                      <p className="text-sm font-medium text-text-primary truncate">{e.name}</p>
+                      <p className="text-[11px] text-text-muted">
+                        {e.duration_minutes} min · {e.status}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Link
+                        href={`/schedule/${e.share_token}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md border border-nativz-border px-3 py-1.5 text-xs text-text-primary transition hover:bg-surface-hover"
+                      >
+                        <Calendar size={12} />
+                        Picker URL
+                      </Link>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Link
-                      href={`/schedule/${e.share_token}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md border border-nativz-border px-3 py-1.5 text-xs text-text-primary transition hover:bg-surface-hover"
-                    >
-                      <Calendar size={12} />
-                      Picker URL
-                    </Link>
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     </div>
   );

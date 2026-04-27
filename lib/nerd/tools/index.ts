@@ -17,7 +17,6 @@ import { topicSignalTools } from './topic-signals';
 // import { agencyKnowledgeTools } from './agency-knowledge';
 import { fyxerTools } from './fyxer';
 import { analysisTools } from './analyses';
-import { tiktokShopMarketTools } from './tiktok-shop-market';
 import { proposalTools } from './proposals';
 
 /** Register all tool domains. Call once at startup. */
@@ -39,9 +38,6 @@ export function registerAllTools() {
   registerTools(fyxerTools);
   // Progressive-context tools for Strategy Lab + per-analysis drawer.
   registerTools(analysisTools);
-  // Live TikTok Shop market-data tools (FastMoss / Cruva-style): let
-  // the agent pull fresh industry data on demand.
-  registerTools(tiktokShopMarketTools);
   // Proposal generation, lookup, resend, deletion. Lets admins build a
   // proposal end-to-end from chat — pick template, fill signer, send.
   registerTools(proposalTools);

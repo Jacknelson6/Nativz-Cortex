@@ -100,6 +100,10 @@ export function StartSalesFlow({ clients }: { clients: ClientOption[] }) {
         return;
       }
       const flowId = (json as { flowId: string }).flowId;
+      if (!flowId) {
+        toast.error("Couldn't start onboarding", { description: 'Server response missing flow id' });
+        return;
+      }
       const existing = (json as { existing?: boolean }).existing ?? false;
       toast.success(
         existing ? `Opening existing flow for ${client.name}` : `Started onboarding for ${client.name}`,
@@ -108,6 +112,11 @@ export function StartSalesFlow({ clients }: { clients: ClientOption[] }) {
       startTransition(() => {
         router.push(`/admin/onboarding/${flowId}`);
         router.refresh();
+      });
+    } catch (err) {
+      console.error('[start-sales-flow] pickExisting failed', err);
+      toast.error("Couldn't start onboarding", {
+        description: err instanceof Error ? err.message : 'Network error — please retry',
       });
     } finally {
       setBusy(false);
@@ -143,6 +152,10 @@ export function StartSalesFlow({ clients }: { clients: ClientOption[] }) {
         toast.error("Couldn't create prospect", { description: err });
         return;
       }
+      if (!json.flowId) {
+        toast.error("Couldn't create prospect", { description: 'Server response missing flow id' });
+        return;
+      }
       toast.success(`Welcomed ${name}`);
       setOpen(false);
       setProspectName('');
@@ -151,6 +164,11 @@ export function StartSalesFlow({ clients }: { clients: ClientOption[] }) {
       startTransition(() => {
         router.push(`/admin/onboarding/${json.flowId}`);
         router.refresh();
+      });
+    } catch (err) {
+      console.error('[start-sales-flow] createProspect failed', err);
+      toast.error("Couldn't create prospect", {
+        description: err instanceof Error ? err.message : 'Network error — please retry',
       });
     } finally {
       setBusy(false);

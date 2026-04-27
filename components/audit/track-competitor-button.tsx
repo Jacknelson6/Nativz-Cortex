@@ -99,16 +99,30 @@ export function TrackCompetitorButton({
           },
         }),
       });
-      const data = await res.json().catch(() => ({}));
+      const data: {
+        error?: string;
+        needs_baseline?: boolean;
+        message?: string;
+        action?: string;
+      } = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(data.error ?? 'Failed to track competitor');
+        if (data.needs_baseline) {
+          toast.error(
+            data.message ?? 'Run the Spy baseline for this brand before tracking competitors.',
+            {
+              action: { label: 'Open Spy', onClick: () => { window.location.href = '/spying'; } },
+            },
+          );
+        } else {
+          toast.error(data.error ?? 'Failed to track competitor');
+        }
         return;
       }
       const clientName = clients.find((c) => c.id === clientId)?.name ?? 'client';
       if (data.action === 'already_tracked') {
         toast.info(`@${competitor.username} already tracked for ${clientName}`);
       } else {
-        toast.success(`Tracking @${competitor.username} for ${clientName}`);
+        toast.success(`Added @${competitor.username} to ${clientName}'s competitor list`);
       }
       setTracked(true);
       setOpen(false);
@@ -125,13 +139,13 @@ export function TrackCompetitorButton({
         <button
           type="button"
           disabled={disabled}
-          aria-label={tracked ? 'Tracked in benchmarks' : 'Track in benchmarks'}
+          aria-label={tracked ? 'Added to competitor list' : 'Add to competitor list'}
           title={
             disabled
-              ? "Can't track — scrape data unavailable"
+              ? "Can't add — scrape data unavailable"
               : tracked
-                ? 'Tracked'
-                : 'Track in benchmarks'
+                ? 'Added'
+                : 'Add to competitor list'
           }
           className={cn(
             'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors',
@@ -152,7 +166,7 @@ export function TrackCompetitorButton({
       >
         <div className="border-b border-nativz-border p-3">
           <p className="text-xs font-medium text-text-muted">
-            Track @{String(competitor.username).replace(/^@+/, '')} for…
+            Add @{String(competitor.username).replace(/^@+/, '')} to…
           </p>
           <div className="relative mt-2">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
@@ -215,7 +229,7 @@ export function TrackCompetitorButton({
         </div>
         <div className="border-t border-nativz-border px-3 py-2">
           <p className="text-[11px] text-text-muted">
-            Adds to the client&apos;s benchmark snapshot. Cron re-scrapes weekly.
+            Appends to the brand&apos;s competitor list. Cron snapshots weekly.
           </p>
         </div>
       </PopoverContent>

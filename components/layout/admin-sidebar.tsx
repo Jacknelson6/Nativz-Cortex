@@ -174,7 +174,7 @@ function isActivePath(pathname: string, href: string, searchParams?: URLSearchPa
   // "Settings → /admin/settings" broad-match blocks were removed. They
   // previously made the first sub-item (which shared an href with its parent
   // group) light up for every sibling route, so "Organic Social" appeared
-  // selected when the user was actually on Meta Ads / Ecom / TikTok Shop.
+  // selected when the user was actually on Meta Ads / Ecom.
   // The parent row is still highlighted via `childActive` in the render loop
   // (any child match promotes the parent), so no behaviour is lost.
 
@@ -224,7 +224,6 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/account',
   // Competitor Tracking secondary rail — all children are admin-only.
   '/admin/competitor-tracking',
-  '/admin/competitor-tracking/tiktok-shop',
 ]);
 
 /** Items shown but grayed out with "Coming soon" tooltip for viewers */

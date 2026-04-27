@@ -70,9 +70,9 @@ const chatSchema = z.object({
    * `searchContext` (which dumps full topic-search blocks into the
    * system prompt), `scopeContext` injects only a compact index of
    * what's available and lets the agent pull detail on demand via
-   * tools like `get_audit_summary`, `get_tiktok_shop_search_summary`,
-   * `get_topic_search_summary`. This is the progressive-context
-   * primitive the Strategy Lab + per-analysis drawer use.
+   * tools like `get_audit_summary` and `get_topic_search_summary`.
+   * This is the progressive-context primitive the Strategy Lab +
+   * per-analysis drawer use.
    *
    * Portal users currently have no drawer / Strategy Lab surface that
    * populates this field, so the server ignores it for them as
@@ -81,7 +81,7 @@ const chatSchema = z.object({
   scopeContext: z
     .array(
       z.object({
-        type: z.enum(['topic_search', 'audit', 'tiktok_shop_search', 'social_analytics']),
+        type: z.enum(['topic_search', 'audit', 'social_analytics']),
         id: z.string().uuid(),
       }),
     )
@@ -762,16 +762,16 @@ export async function POST(req: NextRequest) {
     // --- Progressive scope index ---
     // Unlike `searchContext` above (which inlines full topic-search
     // blocks), `scopeContext` injects only a compact "what's attached"
-    // index. The agent calls `get_audit_summary`, `get_topic_search_summary`,
-    // `get_tiktok_shop_search_summary`, and related tools to pull
-    // detail on demand. Keeps the base context lean and lets one chat
-    // span many analyses without blowing past the token budget.
+    // index. The agent calls `get_audit_summary`,
+    // `get_topic_search_summary`, and related tools to pull detail on
+    // demand. Keeps the base context lean and lets one chat span many
+    // analyses without blowing past the token budget.
     //
     // Portal scoping: portal users CAN attach a `topic_search` they own
-    // (org-verified below); audit + tiktok_shop_search types are admin-
-    // only and filtered out. The spy tools are already blocked from
-    // portal via PORTAL_ALLOWED_TOOLS, but filtering here gives the
-    // model a clean picture of what's actually attached.
+    // (org-verified below); audit type is admin-only and filtered out.
+    // The spy tools are already blocked from portal via
+    // PORTAL_ALLOWED_TOOLS, but filtering here gives the model a clean
+    // picture of what's actually attached.
     let effectiveScope: typeof scopeContext = scopeContext;
     if (isPortalUser && effectiveScope) {
       effectiveScope = effectiveScope.filter((s) => s.type === 'topic_search');
@@ -810,12 +810,11 @@ export async function POST(req: NextRequest) {
     if (effectiveScope && effectiveScope.length > 0) {
       const topicIds = effectiveScope.filter((s) => s.type === 'topic_search').map((s) => s.id);
       const auditIds = effectiveScope.filter((s) => s.type === 'audit').map((s) => s.id);
-      const tiktokIds = effectiveScope.filter((s) => s.type === 'tiktok_shop_search').map((s) => s.id);
       const analyticsClientIds = effectiveScope
         .filter((s) => s.type === 'social_analytics')
         .map((s) => s.id);
 
-      const [topicRows, auditRows, tiktokRows, analyticsClientRows] = await Promise.all([
+      const [topicRows, auditRows, analyticsClientRows] = await Promise.all([
         topicIds.length > 0
           ? admin.from('topic_searches').select('id, query, status').in('id', topicIds)
           : Promise.resolve({ data: [] as { id: string; query: string; status: string }[] }),
@@ -825,12 +824,6 @@ export async function POST(req: NextRequest) {
               .select('id, website_url, status, prospect_data')
               .in('id', auditIds)
           : Promise.resolve({ data: [] as { id: string; website_url: string | null; status: string; prospect_data: Record<string, unknown> | null }[] }),
-        tiktokIds.length > 0
-          ? admin
-              .from('tiktok_shop_searches')
-              .select('id, query, status')
-              .in('id', tiktokIds)
-          : Promise.resolve({ data: [] as { id: string; query: string; status: string }[] }),
         analyticsClientIds.length > 0
           ? admin.from('clients').select('id, name').in('id', analyticsClientIds)
           : Promise.resolve({ data: [] as { id: string; name: string }[] }),
@@ -847,15 +840,12 @@ export async function POST(req: NextRequest) {
           (row.website_url ? new URL(row.website_url.startsWith('http') ? row.website_url : `https://${row.website_url}`).hostname.replace(/^www\./, '') : 'unknown');
         indexLines.push(`- **Organic Social audit** · ${label} · id \`${row.id}\` · status: ${row.status}`);
       }
-      for (const row of tiktokRows.data ?? []) {
-        indexLines.push(`- **TikTok Shop search** · "${row.query}" · id \`${row.id}\` · status: ${row.status}`);
-      }
       for (const row of analyticsClientRows.data ?? []) {
         indexLines.push(`- **Social analytics dashboard** · ${row.name} · client id \`${row.id}\` · use social/post tools to pull details`);
       }
 
       if (indexLines.length > 0) {
-        portfolioContext += `\n\n# Attached analyses (${indexLines.length})\n\nThe user attached these analyses to the current chat. Don't assume details — call the matching tool when you need content: \`get_topic_search_summary\`, \`get_audit_summary\`, or \`get_tiktok_shop_search_summary\` with the id. Drill deeper with \`search_audit_findings\`, \`get_tiktok_shop_creator_details\`, etc. when the user asks about specifics. For the Social analytics dashboard scope, use the social-posts / client tools to pull metrics and posts.\n\n${indexLines.join('\n')}`;
+        portfolioContext += `\n\n# Attached analyses (${indexLines.length})\n\nThe user attached these analyses to the current chat. Don't assume details — call the matching tool when you need content: \`get_topic_search_summary\` or \`get_audit_summary\` with the id. Drill deeper with \`search_audit_findings\` when the user asks about specifics. For the Social analytics dashboard scope, use the social-posts / client tools to pull metrics and posts.\n\n${indexLines.join('\n')}`;
       }
     }
 

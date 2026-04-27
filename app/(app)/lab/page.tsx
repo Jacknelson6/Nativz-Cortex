@@ -20,7 +20,7 @@ type ClientRow = {
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
-type AttachedScopeType = 'audit' | 'tiktok_shop_search' | 'topic_search';
+type AttachedScopeType = 'audit' | 'topic_search';
 
 interface InitialScope {
   type: AttachedScopeType;
@@ -40,14 +40,9 @@ async function resolveAttach(
 ): Promise<InitialScope | null> {
   if (!raw) return null;
   const [type, id] = raw.split(':');
-  if (!id || !['audit', 'tiktok_shop_search', 'topic_search'].includes(type)) return null;
+  if (!id || !['audit', 'topic_search'].includes(type)) return null;
 
   try {
-    if (type === 'tiktok_shop_search') {
-      const { data } = await adminClient.from('tiktok_shop_searches').select('query').eq('id', id).maybeSingle();
-      if (!data) return null;
-      return { type: 'tiktok_shop_search', id, label: data.query || 'TikTok Shop search' };
-    }
     if (type === 'topic_search') {
       const { data } = await adminClient.from('topic_searches').select('query').eq('id', id).maybeSingle();
       if (!data) return null;

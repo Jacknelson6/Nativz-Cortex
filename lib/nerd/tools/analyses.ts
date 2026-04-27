@@ -3,16 +3,15 @@
  *
  * These are the "hands" the brain (Nerd) calls when it needs detail on
  * an analysis the user attached to the chat session via scopeContext.
- * Instead of dumping every audit / TikTok-Shop search / topic search
- * blob into the system prompt, the route injects only a compact index;
- * the agent reaches for these tools when the user's question calls for
- * specifics. Keeps one session lean even with 5+ analyses attached.
+ * Instead of dumping every audit / topic search blob into the system
+ * prompt, the route injects only a compact index; the agent reaches
+ * for these tools when the user's question calls for specifics. Keeps
+ * one session lean even with 5+ analyses attached.
  */
 
 import { z } from 'zod';
 import { ToolDefinition } from '../types';
 import { createAdminClient } from '@/lib/supabase/admin';
-import type { CreatorEnrichment, RankedCreator, SearchResults } from '@/lib/tiktok-shop/types';
 
 // ---------------------------------------------------------------------------
 // Organic Social audits (prospect_audits)
@@ -252,166 +251,6 @@ const searchAuditFindings: ToolDefinition = {
 };
 
 // ---------------------------------------------------------------------------
-// TikTok Shop searches
-// ---------------------------------------------------------------------------
-
-interface TtShopSearchRow {
-  id: string;
-  query: string;
-  status: string;
-  products_found: number;
-  creators_found: number;
-  creators_enriched: number;
-  market_country_code: string;
-  results: SearchResults | null;
-  created_at: string;
-  completed_at: string | null;
-}
-
-const getTiktokShopSearchSummary: ToolDefinition = {
-  name: 'get_tiktok_shop_search_summary',
-  description:
-    'Fetch a compact digest of a TikTok Shop category search: top products, top-10 creators by composite score with account-type + traffic/e-com indices, plus regional GMV benchmark context. Use this when the user asks about an attached TikTok Shop search in general terms. For a specific creator\'s full stats, call get_tiktok_shop_creator_details with their username.',
-  parameters: z.object({
-    search_id: z.string().uuid(),
-    top_creators: z.number().int().min(1).max(30).default(10),
-  }),
-  riskLevel: 'read',
-  handler: async (params) => {
-    const supabase = createAdminClient();
-    const searchId = params.search_id as string;
-    const topN = (params.top_creators as number) ?? 10;
-
-    const { data, error } = await supabase
-      .from('tiktok_shop_searches')
-      .select('id, query, status, products_found, creators_found, creators_enriched, market_country_code, results, created_at, completed_at')
-      .eq('id', searchId)
-      .maybeSingle();
-
-    if (error) return { success: false, error: error.message };
-    if (!data) return { success: false, error: 'TikTok Shop search not found' };
-
-    const row = data as TtShopSearchRow;
-    const results = row.results;
-    const creators = (results?.creators ?? []).slice(0, topN);
-    const products = (results?.products ?? []).slice(0, 10);
-
-    const creatorLines = creators.map((c: RankedCreator, i: number) => {
-      const follow = formatCompact(c.followers);
-      const gmv = c.stats?.gmv.total ? `$${formatCompact(c.stats.gmv.total)} GMV` : 'GMV n/a';
-      const cat = c.categories[0] ? ` · ${c.categories[0]}` : '';
-      return `${i + 1}. @${c.username}${cat} · ${follow} followers · ${gmv} · Traffic ${c.trafficIndex}/100 · E-com ${c.ecommercePotentialIndex}/100 · [${c.accountType}]`;
-    });
-
-    const productLines = products.map((p, i: number) => {
-      return `${i + 1}. ${p.name} · ${p.priceDisplay ?? (p.price != null ? `$${p.price}` : '—')} · ${p.salesCount ?? 0} sales · ${p.affiliates.length} affiliates`;
-    });
-
-    const benchmark = results?.primaryBenchmark;
-    const benchmarkLine = benchmark
-      ? `**${benchmark.category} drives ${Math.round(benchmark.gmvShare * 100)}% of ${benchmark.countryCode} TikTok Shop GMV${benchmark.note ? ` — ${benchmark.note}` : ''}.**`
-      : null;
-
-    return {
-      success: true,
-      data: {
-        id: row.id,
-        query: row.query,
-        status: row.status,
-        country: row.market_country_code,
-        products_found: row.products_found,
-        creators_found: row.creators_found,
-        summary_markdown: [
-          `## TikTok Shop search: "${row.query}" (${row.market_country_code})`,
-          benchmarkLine,
-          productLines.length > 0 ? `\n### Top products\n${productLines.join('\n')}` : null,
-          creatorLines.length > 0 ? `\n### Top ${creatorLines.length} creators (ranked)\n${creatorLines.join('\n')}` : null,
-        ]
-          .filter(Boolean)
-          .join('\n'),
-      },
-      link: {
-        href: `/admin/competitor-tracking/tiktok-shop/${row.id}`,
-        label: 'Open search',
-      },
-    };
-  },
-};
-
-const getTiktokShopCreatorDetails: ToolDefinition = {
-  name: 'get_tiktok_shop_creator_details',
-  description:
-    'Fetch the full cached enrichment for a TikTok Shop creator by username (lemur snapshot): profile, GMV breakdown by video/live, engagement rates, demographics, category IDs, brand collabs. Use when the user wants to dig into one specific creator. If no cached snapshot exists, returns not_found — suggest the user open the creator page to fetch fresh.',
-  parameters: z.object({
-    username: z.string().min(1),
-  }),
-  riskLevel: 'read',
-  handler: async (params) => {
-    const supabase = createAdminClient();
-    const handle = (params.username as string).replace(/^@/, '').trim().toLowerCase();
-    const { data, error } = await supabase
-      .from('tiktok_shop_creator_snapshots')
-      .select('username, data, fetched_at')
-      .eq('username', handle)
-      .maybeSingle();
-
-    if (error) return { success: false, error: error.message };
-    if (!data) {
-      return {
-        success: true,
-        data: { not_found: true, username: handle },
-      };
-    }
-
-    const creator = data.data as CreatorEnrichment;
-    const s = creator.stats;
-    const summary = [
-      `## @${creator.username}${creator.nickname ? ` (${creator.nickname})` : ''}`,
-      creator.region ? `Region: ${creator.region}` : null,
-      creator.bio ? `Bio: ${creator.bio}` : null,
-      '',
-      `**GMV** · Total $${formatCompact(s.gmv.total)} · Video $${formatCompact(s.gmv.video)} · Live $${formatCompact(s.gmv.live)}`,
-      `**Units sold (30d)** · ${formatCompact(s.unitsSold30d)}`,
-      `**GPM** · $${s.gpm.toFixed(2)}`,
-      `**Performance score** · ${s.performanceScore}/100`,
-      `**Brand collabs** · ${s.brandCollabs}`,
-      `**Promoted products** · ${s.promotedProducts}`,
-      '',
-      `**Engagement · video** · ${(s.engagementRate.video * (s.engagementRate.video > 1 ? 1 : 100)).toFixed(2)}%`,
-      `**Engagement · live** · ${(s.engagementRate.live * (s.engagementRate.live > 1 ? 1 : 100)).toFixed(2)}%`,
-      `**Avg views · video** · ${formatCompact(s.avgViews.video)}`,
-      `**Posts (30d)** · ${s.contentFrequency.video} videos, ${s.contentFrequency.live} lives`,
-      '',
-      s.demographics.age.length > 0
-        ? `Top age groups: ${s.demographics.age.slice(0, 3).map((d) => `${d.label} (${d.pct > 1 ? d.pct : (d.pct * 100).toFixed(0)}%)`).join(', ')}`
-        : null,
-      s.demographics.gender.length > 0
-        ? `Gender: ${s.demographics.gender.map((d) => `${d.label} ${d.pct > 1 ? d.pct : (d.pct * 100).toFixed(0)}%`).join(' / ')}`
-        : null,
-      s.demographics.location.length > 0
-        ? `Top locations: ${s.demographics.location.slice(0, 3).map((d) => d.label).join(', ')}`
-        : null,
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-    return {
-      success: true,
-      data: {
-        username: handle,
-        fetched_at: data.fetched_at,
-        summary_markdown: summary,
-        raw: creator,
-      },
-      link: {
-        href: `/admin/competitor-tracking/tiktok-shop/creator/${encodeURIComponent(handle)}`,
-        label: 'Open creator',
-      },
-    };
-  },
-};
-
-// ---------------------------------------------------------------------------
 // Topic search summary — compact counterpart to the existing
 // `get_search_results` tool (which returns the raw row). This one
 // produces a model-friendly markdown digest for Strategy Lab chats.
@@ -495,7 +334,5 @@ const getTopicSearchSummary: ToolDefinition = {
 export const analysisTools: ToolDefinition[] = [
   getAuditSummary,
   searchAuditFindings,
-  getTiktokShopSearchSummary,
-  getTiktokShopCreatorDetails,
   getTopicSearchSummary,
 ];

@@ -20,8 +20,10 @@ const nextConfig: NextConfig = {
       // from the legacy directory.
       { source: '/admin/pipeline', destination: '/admin/edits', permanent: false },
       { source: '/admin/pipeline/:path*', destination: '/admin/edits/:path*', permanent: false },
-      { source: '/admin/scheduler', destination: '/admin/scheduling', permanent: false },
-      { source: '/admin/scheduler/:path*', destination: '/admin/scheduling/:path*', permanent: false },
+      // /admin/scheduler is the Zernio social-post scheduler (content
+      // calendar). /admin/scheduling is the cal.com-style team availability
+      // picker added 2026-04-26. They are now distinct directories with
+      // distinct pages — no redirect/rewrite between them.
 
       // Phase 2 — unified auth surface at the root. /login,
       // /forgot-password, /reset-password are the canonical entry points;
@@ -151,10 +153,12 @@ const nextConfig: NextConfig = {
       // the directory name still differs from the label. API routes
       // (`/api/scheduler/**`) are intentionally left alone — scheduler
       // provider webhooks hit them by exact URL.
+      //
+      // /admin/scheduling now has its own directory (team availability picker
+      // added 2026-04-26) — no rewrite. /admin/scheduler is the Zernio
+      // social-post calendar; the two are distinct surfaces.
       { source: '/admin/edits', destination: '/admin/pipeline' },
       { source: '/admin/edits/:path*', destination: '/admin/pipeline/:path*' },
-      { source: '/admin/scheduling', destination: '/admin/scheduler' },
-      { source: '/admin/scheduling/:path*', destination: '/admin/scheduler/:path*' },
     ];
   },
   compiler: {

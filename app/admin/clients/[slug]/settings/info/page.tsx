@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { FileUser, Users, Plug } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ClientContactsCard } from '@/components/clients/client-contacts-card';
+import { ClientFlowStateCard } from '@/components/clients/client-flow-state-card';
 import { IntegrationsTable } from '@/components/clients/settings/integrations-table';
 import { InfoCard } from '@/components/clients/settings/info-card';
 import { InfoIdentityCard } from '@/components/clients/settings/info-identity-card';
@@ -98,6 +99,12 @@ export default async function ClientSettingsInfoPage({
         icon={FileUser}
         title="Info"
         subtitle="Everything about this client — identity, brand, contacts, integrations."
+      />
+
+      <ClientFlowStateCard
+        admin={admin}
+        clientId={client.id}
+        clientName={client.name ?? 'this brand'}
       />
 
       <InfoIdentityCard

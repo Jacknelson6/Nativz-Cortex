@@ -1,4 +1,4 @@
-import { History, LineChart, ScanEye, Store, Swords } from 'lucide-react';
+import { History, LineChart, ScanEye, Swords } from 'lucide-react';
 import { SectionTile } from '@/components/admin/section-tabs';
 
 export function SpyToolRail() {
@@ -27,13 +27,6 @@ export function SpyToolRail() {
           title="Versus"
           primary="Head-to-head benchmark"
           secondary="Pick two audits, compare side-by-side"
-        />
-        <SectionTile
-          href="/admin/competitor-tracking/tiktok-shop"
-          icon={<Store size={16} />}
-          title="TikTok Shop tracker"
-          primary="Top sellers, GMV, breakouts"
-          secondary="Legacy view — still wired live"
         />
         <SectionTile
           href="/admin/analytics?tab=benchmarking"

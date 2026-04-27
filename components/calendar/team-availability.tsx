@@ -4,66 +4,54 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, Loader2, Settings } from 'lucide-react';
 import type { CalendarPerson, ExternalCalendarEvent } from './types';
-import { HOURS } from './types';
 
 /**
- * Team availability — DWD-only week / 4-week view.
+ * Team availability — 4-day rolling view of every teammate's busy time.
  *
  * Pulls busy blocks for each configured `scheduling_people` row from
  * `/api/calendar/events` (Google Calendar via service account / domain-wide
- * delegation). No internal events, no tasks, no event creation. The point
- * is a glanceable read of "who is free when" before sending a client a
- * scheduling link for a kickoff call.
+ * delegation). The grid renders the full 24h day with no internal scroll —
+ * the page itself scrolls if the day is taller than the viewport. When
+ * multiple people are busy at overlapping times the blocks are merged into
+ * a single band labeled with everyone's initials (e.g. "C T J") so a glance
+ * tells you "this slot is blocked" rather than forcing your eye to zigzag
+ * between adjacent lanes.
  *
  * People are managed at /admin/scheduling/people.
  */
 
-const HOUR_HEIGHT_FULL = 56;
-const HOUR_HEIGHT_COMPACT = 28;
-const START_HOUR = HOURS[0];
-const END_HOUR = HOURS[HOURS.length - 1];
+const DAYS_PER_PAGE = 4;
+const HOUR_HEIGHT = 56;
+const HOURS_24 = Array.from({ length: 24 }, (_, i) => i); // 0..23
 
-type ViewMode = 'week' | '4-week';
-
-function getWeekStart(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  return new Date(d.getFullYear(), d.getMonth(), diff);
+function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-function getWeekDates(date: Date): Date[] {
-  const monday = getWeekStart(date);
-  return Array.from({ length: 7 }, (_, i) => {
-    const dt = new Date(monday);
-    dt.setDate(monday.getDate() + i);
-    return dt;
+function getRangeDates(anchor: Date, days: number): Date[] {
+  const start = startOfDay(anchor);
+  return Array.from({ length: days }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    return d;
   });
-}
-
-function getRangeDates(date: Date, weeks: number): Date[] {
-  const monday = getWeekStart(date);
-  return Array.from({ length: weeks * 7 }, (_, i) => {
-    const dt = new Date(monday);
-    dt.setDate(monday.getDate() + i);
-    return dt;
-  });
-}
-
-function formatWeekRange(date: Date): string {
-  const start = getWeekStart(date);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 6);
-  if (start.getMonth() === end.getMonth()) {
-    return `${start.toLocaleDateString('en-US', { month: 'long' })} ${start.getDate()}–${end.getDate()}`;
-  }
-  return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
 }
 
 function formatRange(start: Date, end: Date): string {
+  const sameMonth = start.getMonth() === end.getMonth();
+  const sameYear = start.getFullYear() === end.getFullYear();
+  if (sameMonth && sameYear) {
+    return `${start.toLocaleDateString('en-US', { month: 'long' })} ${start.getDate()}–${end.getDate()}`;
+  }
   const s = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const e = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   return `${s} – ${e}`;
+}
+
+function formatHourLabel(hour: number): string {
+  if (hour === 0) return '12 AM';
+  if (hour === 12) return '12 PM';
+  return hour < 12 ? `${hour} AM` : `${hour - 12} PM`;
 }
 
 function formatTimeShort(min: number): string {
@@ -90,8 +78,12 @@ function getMinutesFromMidnight(iso: string): number {
   return d.getHours() * 60 + d.getMinutes();
 }
 
-function clampToWorkingHours(min: number): number {
-  return Math.max(START_HOUR * 60, Math.min(END_HOUR * 60, min));
+function clampToDay(min: number): number {
+  return Math.max(0, Math.min(24 * 60, min));
+}
+
+function initial(name: string): string {
+  return name.trim().charAt(0).toUpperCase() || '?';
 }
 
 interface PeopleResponse {
@@ -118,27 +110,24 @@ interface EventsResponse {
   >;
 }
 
+interface MergedBand {
+  key: string;
+  startMin: number;
+  endMin: number;
+  /** Persons stable-ordered by first appearance in this cluster. */
+  persons: CalendarPerson[];
+}
+
 export function TeamAvailability() {
-  const [currentDate, setCurrentDate] = useState(() => new Date());
-  const [viewMode, setViewMode] = useState<ViewMode>('week');
+  const [anchor, setAnchor] = useState(() => startOfDay(new Date()));
   const [people, setPeople] = useState<CalendarPerson[]>([]);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState<Date>(() => new Date());
 
-  const weeks = viewMode === 'week' ? 1 : 4;
-
   const gridDates = useMemo(
-    () => (viewMode === 'week' ? getWeekDates(currentDate) : getRangeDates(currentDate, weeks)),
-    [currentDate, viewMode, weeks],
+    () => getRangeDates(anchor, DAYS_PER_PAGE),
+    [anchor],
   );
-
-  const weekChunks = useMemo(() => {
-    const chunks: Date[][] = [];
-    for (let i = 0; i < gridDates.length; i += 7) {
-      chunks.push(gridDates.slice(i, i + 7));
-    }
-    return chunks;
-  }, [gridDates]);
 
   const rangeStart = useMemo(() => gridDates[0], [gridDates]);
   const rangeEnd = useMemo(() => {
@@ -203,13 +192,12 @@ export function TeamAvailability() {
 
   function navigate(direction: 'prev' | 'next' | 'today') {
     if (direction === 'today') {
-      setCurrentDate(new Date());
+      setAnchor(startOfDay(new Date()));
       return;
     }
-    const step = weeks * 7;
-    setCurrentDate((prev) => {
+    setAnchor((prev) => {
       const next = new Date(prev);
-      next.setDate(next.getDate() + (direction === 'prev' ? -step : step));
+      next.setDate(next.getDate() + (direction === 'prev' ? -DAYS_PER_PAGE : DAYS_PER_PAGE));
       return next;
     });
   }
@@ -227,13 +215,7 @@ export function TeamAvailability() {
     [people, gridDates],
   );
 
-  const rangeLabel =
-    viewMode === 'week'
-      ? formatWeekRange(currentDate)
-      : formatRange(gridDates[0], gridDates[gridDates.length - 1]);
-
-  const todayLabel = viewMode === 'week' ? 'This week' : 'This month';
-  const navStep = viewMode === 'week' ? 'week' : '4 weeks';
+  const rangeLabel = formatRange(gridDates[0], gridDates[gridDates.length - 1]);
 
   return (
     <section className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
@@ -252,43 +234,11 @@ export function TeamAvailability() {
         </div>
 
         <div className="flex items-center gap-1">
-          <div
-            className="mr-2 inline-flex rounded-md border border-nativz-border bg-background overflow-hidden text-[11px]"
-            role="tablist"
-            aria-label="Range"
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={viewMode === 'week'}
-              onClick={() => setViewMode('week')}
-              className={`px-2.5 py-1 transition-colors ${
-                viewMode === 'week'
-                  ? 'bg-accent-text text-background font-medium'
-                  : 'text-text-muted hover:text-text-secondary'
-              }`}
-            >
-              Week
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={viewMode === '4-week'}
-              onClick={() => setViewMode('4-week')}
-              className={`px-2.5 py-1 transition-colors ${
-                viewMode === '4-week'
-                  ? 'bg-accent-text text-background font-medium'
-                  : 'text-text-muted hover:text-text-secondary'
-              }`}
-            >
-              4 weeks
-            </button>
-          </div>
           <button
             type="button"
             onClick={() => navigate('prev')}
             className="rounded-md p-2 text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors"
-            aria-label={`Previous ${navStep}`}
+            aria-label="Previous 4 days"
           >
             <ChevronLeft size={16} />
           </button>
@@ -297,13 +247,13 @@ export function TeamAvailability() {
             onClick={() => navigate('today')}
             className="rounded-md px-2.5 py-1.5 text-xs font-medium text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors"
           >
-            {todayLabel}
+            Today
           </button>
           <button
             type="button"
             onClick={() => navigate('next')}
             className="rounded-md p-2 text-text-muted hover:bg-surface-hover hover:text-text-secondary transition-colors"
-            aria-label={`Next ${navStep}`}
+            aria-label="Next 4 days"
           >
             <ChevronRight size={16} />
           </button>
@@ -321,7 +271,7 @@ export function TeamAvailability() {
       {personSummary.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 border-b border-nativz-border/60 px-4 py-2 bg-background/40">
           <span className="text-[10px] font-medium uppercase tracking-wider text-text-muted">
-            {viewMode === 'week' ? 'On this week' : 'On these 4 weeks'}
+            On screen
           </span>
           {personSummary.map((p) => (
             <span
@@ -347,7 +297,7 @@ export function TeamAvailability() {
         <div
           role="status"
           aria-live="polite"
-          className="h-[calc(100dvh-16rem)] min-h-[520px] flex items-center justify-center"
+          className="flex items-center justify-center py-24"
         >
           <span className="sr-only">Loading team availability…</span>
           <Loader2
@@ -358,43 +308,14 @@ export function TeamAvailability() {
         </div>
       ) : people.length === 0 ? (
         <EmptyState />
-      ) : viewMode === 'week' ? (
-        <div className="h-[calc(100dvh-16rem)] min-h-[520px] flex flex-col">
-          <ScreenReaderSummary
-            dates={gridDates}
-            people={people}
-            rangeLabel={rangeLabel}
-          />
-          <AvailabilityGrid
-            dates={gridDates}
-            people={people}
-            now={now}
-            hourHeight={HOUR_HEIGHT_FULL}
-          />
-        </div>
       ) : (
-        <div className="flex flex-col">
+        <div>
           <ScreenReaderSummary
             dates={gridDates}
             people={people}
             rangeLabel={rangeLabel}
           />
-          <div className="divide-y divide-nativz-border/60">
-            {weekChunks.map((chunk, idx) => (
-              <div key={idx}>
-                <div className="px-4 py-1.5 text-[10px] font-medium uppercase tracking-wider text-text-muted bg-background/40">
-                  Week of {chunk[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                </div>
-                <AvailabilityGrid
-                  dates={chunk}
-                  people={people}
-                  now={now}
-                  hourHeight={HOUR_HEIGHT_COMPACT}
-                  noInternalScroll
-                />
-              </div>
-            ))}
-          </div>
+          <AvailabilityGrid dates={gridDates} people={people} now={now} />
         </div>
       )}
     </section>
@@ -424,8 +345,8 @@ function ScreenReaderSummary({ dates, people, rangeLabel }: ScreenReaderSummaryP
           for (const person of people) {
             for (const ev of person.events) {
               if (!isSameDay(ev.start, date) || ev.isAllDay) continue;
-              const start = clampToWorkingHours(getMinutesFromMidnight(ev.start));
-              const end = clampToWorkingHours(getMinutesFromMidnight(ev.end));
+              const start = clampToDay(getMinutesFromMidnight(ev.start));
+              const end = clampToDay(getMinutesFromMidnight(ev.end));
               if (end <= start) continue;
               items.push({ name: person.name, start, end });
             }
@@ -456,14 +377,14 @@ function ScreenReaderSummary({ dates, people, rangeLabel }: ScreenReaderSummaryP
 
 function EmptyState() {
   return (
-    <div className="h-[calc(100dvh-16rem)] min-h-[520px] flex flex-col items-center justify-center gap-3 px-6 py-10 text-center">
+    <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
       <p className="text-sm text-text-secondary max-w-sm">
         No teammates configured yet. Add who should appear on the availability
         view to start overlaying calendars.
       </p>
       <Link
         href="/admin/scheduling/people"
-        className="inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[var(--nz-btn-radius)] bg-accent px-3 py-1.5 text-sm font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all duration-[var(--duration-fast)] ease-out hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98]"
+        className="inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[var(--nz-btn-radius)] bg-accent px-3 py-1.5 text-sm font-medium text-white shadow-[var(--shadow-card)] transition-all duration-[var(--duration-fast)] ease-out hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98]"
       >
         <Settings size={12} />
         Configure people
@@ -478,19 +399,43 @@ interface AvailabilityGridProps {
   dates: Date[];
   people: CalendarPerson[];
   now: Date;
-  hourHeight?: number;
-  noInternalScroll?: boolean;
 }
 
-function AvailabilityGrid({
-  dates,
-  people,
-  now,
-  hourHeight = HOUR_HEIGHT_FULL,
-  noInternalScroll = false,
-}: AvailabilityGridProps) {
+/**
+ * Walk a day's per-person blocks and merge any that overlap in time into
+ * a single band. Each band tracks the unique set of persons whose busy
+ * window contributed (preserved by first-appearance order so the legend
+ * chips and band labels stay in sync).
+ */
+function mergeOverlapping(
+  rawBlocks: Array<{ person: CalendarPerson; startMin: number; endMin: number }>,
+): MergedBand[] {
+  if (rawBlocks.length === 0) return [];
+  const sorted = [...rawBlocks].sort((a, b) => a.startMin - b.startMin);
+  const bands: MergedBand[] = [];
+  let bandIdx = 0;
+  for (const b of sorted) {
+    const last = bands[bands.length - 1];
+    if (last && b.startMin < last.endMin) {
+      last.endMin = Math.max(last.endMin, b.endMin);
+      if (!last.persons.some((p) => p.connectionId === b.person.connectionId)) {
+        last.persons.push(b.person);
+      }
+    } else {
+      bands.push({
+        key: `band-${bandIdx++}-${b.startMin}`,
+        startMin: b.startMin,
+        endMin: b.endMin,
+        persons: [b.person],
+      });
+    }
+  }
+  return bands;
+}
+
+function AvailabilityGrid({ dates, people, now }: AvailabilityGridProps) {
   const colCount = dates.length;
-  const totalHeight = (END_HOUR - START_HOUR) * hourHeight;
+  const totalHeight = 24 * HOUR_HEIGHT;
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
   const isToday = (date: Date) =>
@@ -500,92 +445,75 @@ function AvailabilityGrid({
 
   const hourTicks = useMemo(
     () =>
-      HOURS.map((hour) => ({
+      HOURS_24.map((hour) => ({
         hour,
-        top: (hour - START_HOUR) * hourHeight,
-        label: formatTimeShort(hour * 60),
+        top: hour * HOUR_HEIGHT,
+        label: formatHourLabel(hour),
       })),
-    [hourHeight],
+    [],
   );
 
   const halfHourTops = useMemo(
-    () =>
-      HOURS.slice(0, -1).map(
-        (hour) => (hour - START_HOUR) * hourHeight + hourHeight / 2,
-      ),
-    [hourHeight],
+    () => HOURS_24.slice(0, -1).map((hour) => hour * HOUR_HEIGHT + HOUR_HEIGHT / 2),
+    [],
   );
 
-  // Per-day, per-person busy blocks (clamped to working hours).
-  const dayBlocks = useMemo(() => {
+  const dayBands = useMemo(() => {
     return dates.map((date) => {
-      const blocks: Array<{
-        key: string;
-        person: CalendarPerson;
-        startMin: number;
-        endMin: number;
-      }> = [];
+      const raw: Array<{ person: CalendarPerson; startMin: number; endMin: number }> = [];
       for (const person of people) {
         for (const ev of person.events) {
           if (!isSameDay(ev.start, date)) continue;
           if (ev.isAllDay) continue;
-          const rawStart = getMinutesFromMidnight(ev.start);
-          const rawEnd = getMinutesFromMidnight(ev.end);
-          const startMin = clampToWorkingHours(rawStart);
-          const endMin = clampToWorkingHours(rawEnd);
+          const startMin = clampToDay(getMinutesFromMidnight(ev.start));
+          const endMin = clampToDay(getMinutesFromMidnight(ev.end));
           if (endMin <= startMin) continue;
-          blocks.push({
-            key: `${person.connectionId}-${ev.id}`,
-            person,
-            startMin,
-            endMin,
-          });
+          raw.push({ person, startMin, endMin });
         }
       }
-      return { date, blocks };
+      return { date, bands: mergeOverlapping(raw) };
     });
   }, [dates, people]);
 
   return (
-    <div className="flex flex-1 overflow-x-auto overflow-y-hidden sm:overflow-x-hidden">
-      <div className="flex flex-col flex-1 min-w-[760px] sm:min-w-0">
+    <div className="flex">
       {/* Day headers */}
-      <div className="flex border-b border-nativz-border bg-surface">
-        <div className="w-14 shrink-0" />
-        <div
-          className="flex-1 grid"
-          style={{ gridTemplateColumns: `repeat(${colCount}, 1fr)` }}
-        >
-          {dates.map((date) => {
-            const today = isToday(date);
-            return (
-              <div
-                key={date.toISOString()}
-                className="border-l border-nativz-border/50 px-2 py-2 text-center"
-              >
-                <div className="text-[10px] font-medium text-text-muted uppercase tracking-wider">
-                  {date.toLocaleDateString('en-US', { weekday: 'short' })}
-                </div>
+      <div className="flex flex-1 flex-col">
+        <div className="flex border-b border-nativz-border bg-surface">
+          <div className="w-16 shrink-0" />
+          <div
+            className="flex-1 grid"
+            style={{ gridTemplateColumns: `repeat(${colCount}, 1fr)` }}
+          >
+            {dates.map((date) => {
+              const today = isToday(date);
+              return (
                 <div
-                  className={`text-lg font-semibold leading-tight tabular-nums ${
-                    today
-                      ? 'inline-flex h-8 w-8 items-center justify-center rounded-full bg-accent-text text-background mx-auto'
-                      : 'text-text-primary'
-                  }`}
+                  key={date.toISOString()}
+                  className="border-l border-nativz-border/50 px-2 py-2 text-center"
                 >
-                  {date.getDate()}
+                  <div className="text-[10px] font-medium text-text-muted uppercase tracking-wider">
+                    {date.toLocaleDateString('en-US', { weekday: 'short' })}
+                  </div>
+                  <div
+                    className={`text-lg font-semibold leading-tight tabular-nums ${
+                      today
+                        ? 'inline-flex h-8 w-8 items-center justify-center rounded-full bg-accent-text text-background mx-auto'
+                        : 'text-text-primary'
+                    }`}
+                  >
+                    {date.getDate()}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      </div>
 
-      {/* Grid (scrollable in week mode, natural-height in 4-week mode) */}
-      <div className={noInternalScroll ? '' : 'flex-1 overflow-y-auto'}>
+        {/* Day grid — full 24 hours, no internal scroll */}
         <div className="flex relative" style={{ height: totalHeight }}>
           {/* Hour gutter */}
-          <div className="w-14 shrink-0 relative">
+          <div className="w-16 shrink-0 relative">
             {hourTicks.map(({ hour, top, label }) => (
               <div
                 key={hour}
@@ -602,7 +530,7 @@ function AvailabilityGrid({
             className="flex-1 grid relative"
             style={{ gridTemplateColumns: `repeat(${colCount}, 1fr)` }}
           >
-            {/* Hour grid lines (full width) */}
+            {/* Hour grid lines */}
             {hourTicks.map(({ hour, top }) => (
               <div
                 key={`h-${hour}`}
@@ -618,15 +546,8 @@ function AvailabilityGrid({
               />
             ))}
 
-            {dayBlocks.map(({ date, blocks }) => {
+            {dayBands.map(({ date, bands }) => {
               const today = isToday(date);
-              const slotsByPerson: Record<string, typeof blocks> = {};
-              for (const b of blocks) {
-                (slotsByPerson[b.person.connectionId] ??= []).push(b);
-              }
-              const lanes = Object.entries(slotsByPerson);
-              const laneCount = Math.max(lanes.length, 1);
-
               return (
                 <div
                   key={date.toISOString()}
@@ -638,91 +559,94 @@ function AvailabilityGrid({
                       : undefined,
                   }}
                 >
-                  {lanes.map(([personId, lane], laneIdx) => {
-                    const widthPct = 100 / laneCount;
-                    const leftPct = laneIdx * widthPct;
-                    return (
-                      <div
-                        key={personId}
-                        className="absolute top-0 bottom-0"
-                        style={{
-                          left: `${leftPct}%`,
-                          width: `${widthPct}%`,
-                        }}
-                      >
-                        {lane.map((b) => {
-                          const top =
-                            ((b.startMin - START_HOUR * 60) / 60) * hourHeight;
-                          const height = Math.max(
-                            ((b.endMin - b.startMin) / 60) * hourHeight,
-                            10,
-                          );
-                          const initial = b.person.name
-                            .trim()
-                            .charAt(0)
-                            .toUpperCase();
-                          const tooltip = `${b.person.name} · ${formatTimeShort(b.startMin)}–${formatTimeShort(b.endMin)}`;
-                          return (
-                            <div
-                              key={b.key}
-                              title={tooltip}
-                              className="absolute mx-0.5 rounded-sm overflow-hidden"
-                              style={{
-                                top,
-                                height,
-                                left: 0,
-                                right: 0,
-                                backgroundColor: `${b.person.color}40`,
-                                boxShadow: `inset 0 0 0 1px ${b.person.color}80`,
-                              }}
-                              aria-hidden="true"
-                            >
-                              {height >= 40 && (
-                                <span
-                                  className="absolute top-1 left-1 text-[10px] font-semibold leading-none tabular-nums"
-                                  style={{ color: b.person.color }}
-                                >
-                                  {initial}
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
+                  {bands.map((band) => (
+                    <BusyBand key={band.key} band={band} hourHeight={HOUR_HEIGHT} />
+                  ))}
 
-                  {today &&
-                    nowMinutes >= START_HOUR * 60 &&
-                    nowMinutes <= END_HOUR * 60 && (
-                      <div
-                        role="presentation"
-                        aria-hidden="true"
-                        className="absolute left-0 right-0 z-20 pointer-events-none"
-                        style={{
-                          top:
-                            ((nowMinutes - START_HOUR * 60) / 60) * hourHeight,
-                        }}
-                      >
-                        <div className="flex items-center">
-                          <div
-                            className="h-2 w-2 rounded-full -ml-1"
-                            style={{ backgroundColor: 'var(--nz-coral)' }}
-                          />
-                          <div
-                            className="flex-1 h-px"
-                            style={{ backgroundColor: 'var(--nz-coral)' }}
-                          />
-                        </div>
+                  {today && nowMinutes >= 0 && nowMinutes <= 24 * 60 && (
+                    <div
+                      role="presentation"
+                      aria-hidden="true"
+                      className="absolute left-0 right-0 z-20 pointer-events-none"
+                      style={{ top: (nowMinutes / 60) * HOUR_HEIGHT }}
+                    >
+                      <div className="flex items-center">
+                        <div
+                          className="h-2 w-2 rounded-full -ml-1"
+                          style={{ backgroundColor: 'var(--nz-coral)' }}
+                        />
+                        <div
+                          className="flex-1 h-px"
+                          style={{ backgroundColor: 'var(--nz-coral)' }}
+                        />
                       </div>
-                    )}
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
         </div>
       </div>
-      </div>
+    </div>
+  );
+}
+
+interface BusyBandProps {
+  band: MergedBand;
+  hourHeight: number;
+}
+
+/**
+ * A single merged busy band — full column width, with the contributing
+ * person initials stacked horizontally inside. Solo bands keep their
+ * person's color so quick scans stay coded; multi-person bands shift to
+ * a neutral muted fill so "blocked" reads at a glance.
+ */
+function BusyBand({ band, hourHeight }: BusyBandProps) {
+  const top = (band.startMin / 60) * hourHeight;
+  const height = Math.max(((band.endMin - band.startMin) / 60) * hourHeight, 12);
+  const isSolo = band.persons.length === 1;
+  const tooltip = `${band.persons.map((p) => p.name).join(', ')} · ${formatTimeShort(band.startMin)}–${formatTimeShort(band.endMin)}`;
+
+  const fill = isSolo
+    ? `${band.persons[0].color}33`
+    : 'color-mix(in srgb, var(--text-muted) 22%, transparent)';
+  const border = isSolo
+    ? `${band.persons[0].color}80`
+    : 'color-mix(in srgb, var(--text-muted) 45%, transparent)';
+
+  return (
+    <div
+      title={tooltip}
+      className="absolute mx-1 rounded-md overflow-hidden"
+      style={{
+        top,
+        height,
+        left: 0,
+        right: 0,
+        backgroundColor: fill,
+        boxShadow: `inset 0 0 0 1px ${border}`,
+      }}
+      aria-hidden="true"
+    >
+      {height >= 24 && (
+        <div className="absolute top-1 left-1.5 right-1.5 flex items-center gap-1 flex-wrap">
+          {band.persons.map((p) => (
+            <span
+              key={p.connectionId}
+              className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-sm px-1 text-[10px] font-semibold leading-none tabular-nums"
+              style={{
+                backgroundColor: `${p.color}40`,
+                color: p.color,
+                boxShadow: `inset 0 0 0 1px ${p.color}66`,
+              }}
+            >
+              {initial(p.name)}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

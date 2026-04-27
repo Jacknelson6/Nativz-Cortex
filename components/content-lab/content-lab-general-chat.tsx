@@ -13,7 +13,7 @@ interface RoutableClient extends ClientOption {
 }
 import { useAgencyBrand } from '@/lib/agency/use-agency-brand';
 
-type AttachedScopeType = 'audit' | 'tiktok_shop_search' | 'topic_search';
+type AttachedScopeType = 'audit' | 'topic_search';
 
 interface AttachedScope {
   type: AttachedScopeType;
@@ -23,7 +23,6 @@ interface AttachedScope {
 
 const SCOPE_TYPE_LABEL: Record<AttachedScopeType, string> = {
   audit: 'Audit',
-  tiktok_shop_search: 'TikTok Shop',
   topic_search: 'Topic',
 };
 import {
@@ -37,7 +36,7 @@ interface ContentLabGeneralChatProps {
   clients: RoutableClient[];
   /**
    * Pre-pinned analysis from a drawer handoff (e.g. user clicked
-   * "Continue in Strategy Lab" on a TikTok Shop results page). The
+   * "Continue in Strategy Lab" on a topic search results page). The
    * parent page resolves the label server-side from `?attach=` so the
    * chip can render without a roundtrip.
    */

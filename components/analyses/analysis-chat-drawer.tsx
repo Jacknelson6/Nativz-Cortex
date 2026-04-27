@@ -23,7 +23,6 @@ interface ToolResultEntry {
 
 export type AnalysisScopeType =
   | 'audit'
-  | 'tiktok_shop_search'
   | 'topic_search'
   | 'social_analytics';
 
@@ -56,7 +55,6 @@ interface ChatMessage {
 
 const SCOPE_LABEL: Record<AnalysisScopeType, string> = {
   audit: 'Audit',
-  tiktok_shop_search: 'TikTok Shop',
   topic_search: 'Topic',
   social_analytics: 'Analytics',
 };
@@ -66,11 +64,6 @@ const SUGGESTED: Record<AnalysisScopeType, string[]> = {
     'Summarize this brand\'s biggest content gaps.',
     'What are the top 3 opportunities their competitors are missing?',
     'Draft 5 video ideas that would plug the biggest gap.',
-  ],
-  tiktok_shop_search: [
-    'Which creators have the best conversion signal (high E-com, reasonable traffic)?',
-    'What do the top 3 creators have in common?',
-    'Draft an outreach plan for the top 5 creators.',
   ],
   topic_search: [
     'What are the hottest trending topics here?',

@@ -28,11 +28,14 @@ type SnapshotCompetitor = z.infer<typeof CompetitorSchema>;
 /**
  * POST /api/benchmarks/track-competitor
  *
- * Adds a single competitor (from an audit's competitor card) to the client's
- * benchmark snapshot for that audit. Creates the `client_benchmarks` row if
- * one doesn't exist yet — otherwise appends to its `competitors_snapshot`
- * array. Idempotent: re-tracking a competitor already in the snapshot is a
- * no-op + returns `already_tracked`.
+ * Appends a competitor profile (from an audit) to the brand's single active
+ * baseline benchmark — the row created by /api/spying/baseline with
+ * `audit_id: null`. Idempotent: re-tracking a competitor already in the
+ * snapshot is a no-op + returns `already_tracked`.
+ *
+ * If the brand has no baseline benchmark yet, returns 412 with
+ * `needs_baseline: true` so the UI can route to the Spy hub for that brand
+ * to run the onboarding gate.
  *
  * Admin-only — benchmark rows belong to the agency view, never the portal.
  */
@@ -69,7 +72,7 @@ export async function POST(request: NextRequest) {
 
   const { data: client } = await admin
     .from('clients')
-    .select('id, is_active')
+    .select('id, name, is_active')
     .eq('id', client_id)
     .maybeSingle();
   if (!client || !client.is_active) {
@@ -85,15 +88,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Audit not found' }, { status: 404 });
   }
 
-  // Find an existing active benchmark for this (client, audit). The cron
-  // gates on is_active so a soft-deleted row shouldn't be re-used.
-  const { data: existing } = await admin
+  // Find the brand's single baseline benchmark (audit_id IS NULL). The
+  // baseline is the only place new competitors get appended in the new
+  // model — per-audit benchmarks are gone. If multiple legacy baselines
+  // exist (shouldn't happen), pick the most recent.
+  const { data: baseline } = await admin
     .from('client_benchmarks')
     .select('id, competitors_snapshot')
     .eq('client_id', client_id)
-    .eq('audit_id', audit_id)
     .eq('is_active', true)
+    .is('audit_id', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
+
+  if (!baseline) {
+    return NextResponse.json(
+      {
+        error: 'Baseline missing',
+        needs_baseline: true,
+        message: `Run the Spy baseline for ${client.name} before tracking competitors.`,
+      },
+      { status: 412 },
+    );
+  }
 
   // Match on (platform, username) — same identity the cron uses when
   // looking up prior snapshots.
@@ -101,56 +119,25 @@ export async function POST(request: NextRequest) {
     a.platform === b.platform &&
     a.username.toLowerCase() === b.username.toLowerCase();
 
-  if (existing) {
-    const snapshot = (existing.competitors_snapshot ?? []) as SnapshotCompetitor[];
-    if (snapshot.some((c) => isSameCompetitor(c, competitor))) {
-      return NextResponse.json({
-        benchmark_id: existing.id,
-        action: 'already_tracked',
-      });
-    }
-    const next = [...snapshot, competitor];
-    const { error: updErr } = await admin
-      .from('client_benchmarks')
-      .update({ competitors_snapshot: next })
-      .eq('id', existing.id);
-    if (updErr) {
-      console.error('[track-competitor] update failed:', updErr);
-      return NextResponse.json({ error: 'Failed to track competitor' }, { status: 500 });
-    }
+  const snapshot = (baseline.competitors_snapshot ?? []) as SnapshotCompetitor[];
+  if (snapshot.some((c) => isSameCompetitor(c, competitor))) {
     return NextResponse.json({
-      benchmark_id: existing.id,
-      action: 'appended',
-      competitorsCount: next.length,
+      benchmark_id: baseline.id,
+      action: 'already_tracked',
     });
   }
-
-  // No benchmark yet — create one with this single competitor. Mirrors the
-  // shape used by the post-completion auto-benchmark in process/route.ts.
-  const nextDue = new Date();
-  nextDue.setDate(nextDue.getDate() + 7);
-  const { data: inserted, error: insErr } = await admin
+  const next = [...snapshot, competitor];
+  const { error: updErr } = await admin
     .from('client_benchmarks')
-    .insert({
-      client_id,
-      audit_id,
-      competitors_snapshot: [competitor],
-      cadence: 'weekly',
-      analytics_source: 'auto',
-      next_snapshot_due_at: nextDue.toISOString(),
-      created_by: user.id,
-    })
-    .select('id')
-    .single();
-
-  if (insErr || !inserted) {
-    console.error('[track-competitor] insert failed:', insErr);
-    return NextResponse.json({ error: 'Failed to create benchmark' }, { status: 500 });
+    .update({ competitors_snapshot: next })
+    .eq('id', baseline.id);
+  if (updErr) {
+    console.error('[track-competitor] update failed:', updErr);
+    return NextResponse.json({ error: 'Failed to track competitor' }, { status: 500 });
   }
-
   return NextResponse.json({
-    benchmark_id: inserted.id,
-    action: 'created',
-    competitorsCount: 1,
+    benchmark_id: baseline.id,
+    action: 'appended',
+    competitorsCount: next.length,
   });
 }

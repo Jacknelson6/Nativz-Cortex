@@ -97,6 +97,7 @@ export function TrackBrandButton({
     setSubmitting(true);
     try {
       const clientName = clients.find((c) => c.id === clientId)?.name ?? 'client';
+      type TrackResponse = { ok: boolean; body: { needs_baseline?: boolean; message?: string; error?: string } };
       const results = await Promise.allSettled(
         trackable.map((p) =>
           fetch('/api/benchmarks/track-competitor', {
@@ -117,31 +118,45 @@ export function TrackBrandButton({
                 baselinePostingFrequency: p.postingFrequency ?? null,
               },
             }),
-          }).then(async (r) => ({ ok: r.ok, body: await r.json().catch(() => ({})) })),
+          }).then(async (r): Promise<TrackResponse> => ({ ok: r.ok, body: await r.json().catch(() => ({})) })),
         ),
       );
 
-      const successes = results.filter(
-        (r): r is PromiseFulfilledResult<{ ok: boolean; body: unknown }> =>
-          r.status === 'fulfilled' && r.value.ok,
+      const fulfilled = results.filter(
+        (r): r is PromiseFulfilledResult<TrackResponse> => r.status === 'fulfilled',
       );
 
+      // The baseline check is per-client, not per-platform — so if any
+      // response flags missing baseline, every response will. Treat the
+      // first one we see as authoritative for routing the user.
+      const needsBaseline = fulfilled.find((r) => r.value.body.needs_baseline);
+      if (needsBaseline) {
+        toast.error(
+          needsBaseline.value.body.message ?? `Run the Spy baseline for ${clientName} before tracking competitors.`,
+          {
+            action: { label: 'Open Spy', onClick: () => { window.location.href = '/spying'; } },
+          },
+        );
+        return;
+      }
+
+      const successes = fulfilled.filter((r) => r.value.ok);
       if (successes.length === trackable.length) {
         const platformsLabel = trackable.length === 1 ? 'platform' : 'platforms';
-        toast.success(`Watching ${brandName} on ${trackable.length} ${platformsLabel} for ${clientName}`);
+        toast.success(`Added ${brandName} to ${clientName}'s competitor list (${trackable.length} ${platformsLabel})`);
         setTracked(true);
         setOpen(false);
       } else if (successes.length === 0) {
-        toast.error(`Failed to add ${brandName} to weekly watch`);
+        toast.error(`Failed to add ${brandName} to ${clientName}'s competitor list`);
       } else {
         toast.success(
-          `Watching ${brandName} on ${successes.length}/${trackable.length} platforms for ${clientName}`,
+          `Added ${brandName} on ${successes.length}/${trackable.length} platforms to ${clientName}'s competitor list`,
         );
         setTracked(true);
         setOpen(false);
       }
     } catch {
-      toast.error(`Failed to add ${brandName} to weekly watch`);
+      toast.error(`Failed to add ${brandName} to competitor list`);
     } finally {
       setSubmitting(false);
     }
@@ -158,15 +173,15 @@ export function TrackBrandButton({
             disabled
               ? 'No trackable platforms scraped'
               : tracked
-                ? 'Watching weekly'
-                : 'Add to weekly watch'
+                ? 'Added to competitor list'
+                : 'Add to a brand’s competitor list'
           }
           className={cn(
             tracked && 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300',
           )}
         >
           {tracked ? <Check size={14} /> : <Eye size={14} />}
-          {tracked ? 'Watching' : 'Watch this brand'}
+          {tracked ? 'Added' : 'Add to competitor list'}
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -177,7 +192,7 @@ export function TrackBrandButton({
       >
         <div className="border-b border-nativz-border p-3">
           <p className="text-xs font-medium text-text-muted">
-            Watch {brandName} on {trackable.length} platform{trackable.length === 1 ? '' : 's'} for…
+            Add {brandName} on {trackable.length} platform{trackable.length === 1 ? '' : 's'} to…
           </p>
           <div className="relative mt-2">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />

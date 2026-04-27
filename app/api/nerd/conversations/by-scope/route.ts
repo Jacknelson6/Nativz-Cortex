@@ -4,7 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 const BodySchema = z.object({
-  scopeType: z.enum(['audit', 'tiktok_shop_search', 'topic_search', 'social_analytics']),
+  scopeType: z.enum(['audit', 'topic_search', 'social_analytics']),
   scopeId: z.string().uuid(),
 });
 
@@ -53,8 +53,8 @@ export async function POST(request: NextRequest) {
     const { scopeType, scopeId } = parsed.data;
 
     // Portal users: only allowed to open drawer chats on their own
-    // topic searches. Audits + TikTok Shop searches stay admin-only
-    // per product decision ("no spying in the portal").
+    // topic searches. Audits stay admin-only per product decision
+    // ("no spying in the portal").
     if (isPortalViewer) {
       if (scopeType !== 'topic_search') {
         return NextResponse.json(
@@ -127,17 +127,13 @@ type AdminClient = ReturnType<typeof createAdminClient>;
 
 async function deriveScopeTitle(
   admin: AdminClient,
-  scopeType: 'audit' | 'tiktok_shop_search' | 'topic_search' | 'social_analytics',
+  scopeType: 'audit' | 'topic_search' | 'social_analytics',
   scopeId: string,
 ): Promise<string> {
   try {
     if (scopeType === 'topic_search') {
       const { data } = await admin.from('topic_searches').select('query').eq('id', scopeId).maybeSingle();
       if (data?.query) return `Topic · ${data.query}`;
-    }
-    if (scopeType === 'tiktok_shop_search') {
-      const { data } = await admin.from('tiktok_shop_searches').select('query').eq('id', scopeId).maybeSingle();
-      if (data?.query) return `TikTok Shop · ${data.query}`;
     }
     if (scopeType === 'audit') {
       const { data } = await admin

@@ -15,8 +15,6 @@ export interface FeatureFlags {
   can_use_nerd: boolean;
   /** When false, portal users for this client cannot create or use REST API keys (Bearer /api/v1). */
   can_use_api: boolean;
-  /** TikTok Shop creator insights — admin-gated per client (default false). */
-  can_view_tiktok_shop: boolean;
 }
 
 export const PORTAL_FEATURE_FLAG_DEFAULTS: FeatureFlags = {
@@ -30,7 +28,6 @@ export const PORTAL_FEATURE_FLAG_DEFAULTS: FeatureFlags = {
   can_view_knowledge: true,
   can_use_nerd: true,
   can_use_api: true,
-  can_view_tiktok_shop: false,
 };
 
 /**
@@ -49,14 +46,7 @@ export interface PortalTool {
   tooltip: 'coming_soon' | 'ask_team';
 }
 
-export const PORTAL_TOOLS: PortalTool[] = [
-  {
-    key: 'can_view_tiktok_shop',
-    label: 'TikTok Shop',
-    href: '/portal/competitor-tracking/tiktok-shop',
-    tooltip: 'ask_team',
-  },
-];
+export const PORTAL_TOOLS: PortalTool[] = [];
 
 export function portalToolTooltipText(variant: PortalTool['tooltip']): string {
   return variant === 'coming_soon'
