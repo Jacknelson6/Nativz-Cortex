@@ -59,6 +59,9 @@ export interface ContentDropVideo {
   gemini_context: GeminiContext | null;
   caption_score: number | null;
   caption_iterations: number;
+  draft_caption: string | null;
+  draft_hashtags: string[];
+  draft_scheduled_at: string | null;
   order_index: number;
   status: DropVideoStatus;
   error_detail: string | null;

@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ingestDrop } from '@/lib/calendar/ingest-drop';
 import { analyzeDropVideos } from '@/lib/calendar/analyze-video';
+import { generateDropCaptions } from '@/lib/calendar/generate-caption';
 
 export const maxDuration = 300;
 
@@ -20,7 +21,7 @@ export async function POST(
   const admin = createAdminClient();
   const { data: drop } = await admin
     .from('content_drops')
-    .select('id, created_by, status')
+    .select('id, client_id, created_by, status')
     .eq('id', id)
     .single();
   if (!drop) return NextResponse.json({ error: 'not found' }, { status: 404 });
@@ -45,16 +46,43 @@ export async function POST(
       .eq('id', id);
 
     const analysis = await analyzeDropVideos(admin, { dropId: id, userId: drop.created_by });
+    if (analysis.analyzed === 0) {
+      await admin
+        .from('content_drops')
+        .update({
+          status: 'failed',
+          updated_at: new Date().toISOString(),
+          error_detail: 'All videos failed during analysis',
+        })
+        .eq('id', id);
+      return NextResponse.json({ error: 'analysis produced no results', ingest, analysis }, { status: 500 });
+    }
     await admin
       .from('content_drops')
       .update({
-        status: analysis.analyzed > 0 ? 'generating' : 'failed',
+        status: 'generating',
         updated_at: new Date().toISOString(),
         error_detail: analysis.failed > 0 ? `${analysis.failed} video(s) failed during analysis` : null,
       })
       .eq('id', id);
 
-    return NextResponse.json({ ok: true, ingest, analysis });
+    const captions = await generateDropCaptions(admin, {
+      dropId: id,
+      clientId: drop.client_id,
+      userId: drop.created_by,
+      userEmail: user.email ?? undefined,
+    });
+    await admin
+      .from('content_drops')
+      .update({
+        status: captions.generated > 0 ? 'ready' : 'failed',
+        updated_at: new Date().toISOString(),
+        error_detail:
+          captions.failed > 0 ? `${captions.failed} caption(s) failed to generate` : null,
+      })
+      .eq('id', id);
+
+    return NextResponse.json({ ok: true, ingest, analysis, captions });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Processing failed';
     await admin.from('content_drops').update({ status: 'failed', error_detail: message }).eq('id', id);
