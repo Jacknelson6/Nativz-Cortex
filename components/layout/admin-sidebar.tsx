@@ -103,7 +103,6 @@ const NAV_SECTIONS: NavSection[] = [
         label: 'Spying',
         icon: Telescope,
       },
-      { href: '/ads', label: 'Ad Generator', icon: ImagePlus },
       { href: '/brain', label: 'Brain', icon: Brain },
       // NAT-57 follow-up: single entry point for the pinned brand's
       // profile. Sits between Brain (AI knowledge) and Notes (manual
@@ -132,6 +131,10 @@ const NAV_SECTIONS: NavSection[] = [
           // Ordered per Jack 2026-04-23: client-facing surfaces up top,
           // internal ops in the middle, platform admin at the bottom.
           { href: '/admin/clients', label: 'Clients', icon: Contact },
+          // Ad Generator lives in Admin (not Brand tools) because every run
+          // burns Gemini 2.5 Flash Image credits — keep it behind the
+          // operator menu rather than next to free brand-research surfaces.
+          { href: '/ads', label: 'Ad Generator', icon: ImagePlus },
           // Sales = unified pipeline (replaces standalone Proposals +
           // Onboarding entries). Spec:
           // docs/superpowers/specs/2026-04-25-sales-pipeline-unification.md.
