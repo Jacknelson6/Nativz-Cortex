@@ -19,6 +19,10 @@ const BodySchema = z.object({
   attachments: z.array(AttachmentSchema).max(10).optional(),
 });
 
+const DeleteSchema = z.object({
+  commentId: z.string().uuid(),
+});
+
 const TITLE_BY_STATUS: Record<'approved' | 'changes_requested' | 'comment', (a: string, c: string) => string> = {
   approved: (a, c) => `${a} approved a post in ${c}`,
   changes_requested: (a, c) => `${a} requested changes in ${c}`,
@@ -76,6 +80,55 @@ export async function POST(
   }).catch((err) => console.error('Comment notification failed:', err));
 
   return NextResponse.json({ comment: data });
+}
+
+export async function DELETE(
+  req: Request,
+  ctx: { params: Promise<{ token: string }> },
+) {
+  const { token } = await ctx.params;
+  const body = await req.json().catch(() => null);
+  const parsed = DeleteSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  const admin = createAdminClient();
+  const { data: link } = await admin
+    .from('content_drop_share_links')
+    .select('post_review_link_map, expires_at')
+    .eq('token', token)
+    .single<{ post_review_link_map: Record<string, string>; expires_at: string }>();
+  if (!link) return NextResponse.json({ error: 'not found' }, { status: 404 });
+  if (new Date(link.expires_at) < new Date()) {
+    return NextResponse.json({ error: 'link expired' }, { status: 410 });
+  }
+
+  const { data: comment } = await admin
+    .from('post_review_comments')
+    .select('id, review_link_id, status')
+    .eq('id', parsed.data.commentId)
+    .single<{ id: string; review_link_id: string; status: string }>();
+  if (!comment) return NextResponse.json({ error: 'not found' }, { status: 404 });
+
+  const allowedReviewIds = new Set(Object.values(link.post_review_link_map ?? {}));
+  if (!allowedReviewIds.has(comment.review_link_id)) {
+    return NextResponse.json({ error: 'comment is not part of this share link' }, { status: 400 });
+  }
+
+  if (comment.status !== 'approved') {
+    return NextResponse.json({ error: 'only approvals can be removed via this endpoint' }, { status: 400 });
+  }
+
+  const { error: delErr } = await admin
+    .from('post_review_comments')
+    .delete()
+    .eq('id', comment.id);
+  if (delErr) {
+    return NextResponse.json({ error: delErr.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, commentId: comment.id });
 }
 
 async function notifyAdminsOfComment(

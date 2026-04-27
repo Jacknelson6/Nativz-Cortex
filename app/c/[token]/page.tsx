@@ -3,7 +3,7 @@
 import { use, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle, AlertTriangle, CalendarDays, CheckCircle, Clock, File as FileIcon,
-  Film, List, Loader2, MessageSquare, Paperclip, Pencil, Play, Type, X,
+  Film, List, Loader2, MessageSquare, Paperclip, Pencil, Play, Type, Undo2, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog } from '@/components/ui/dialog';
@@ -178,6 +178,21 @@ function SharedDropView({
     );
   }
 
+  function removeComment(postId: string, commentId: string) {
+    setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            posts: prev.posts.map((p) =>
+              p.id === postId
+                ? { ...p, comments: p.comments.filter((c) => c.id !== commentId) }
+                : p,
+            ),
+          }
+        : prev,
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-nativz-border bg-surface px-4 py-4 sm:px-6 sm:py-5">
@@ -258,6 +273,7 @@ function SharedDropView({
                 token={token}
                 authorName={authorName}
                 onCommentAdded={(c) => appendComment(post.id, c)}
+                onCommentRemoved={(commentId) => removeComment(post.id, commentId)}
                 onCaptionUpdated={(caption, c) => updatePostCaption(post.id, caption, c)}
                 onPlay={() => setPlayingPost(post)}
                 requireName={() => {
@@ -322,6 +338,7 @@ function SharedDropView({
         token={token}
         authorName={authorName}
         onCommentAdded={appendComment}
+        onCommentRemoved={removeComment}
         onCaptionUpdated={updatePostCaption}
         onClose={() => setDetailPostId(null)}
         requireName={() => {
@@ -337,6 +354,13 @@ function latestReview(comments: SharedComment[]): ReviewStatus | null {
   for (let i = comments.length - 1; i >= 0; i--) {
     const c = comments[i];
     if (c.status === 'approved' || c.status === 'changes_requested') return c.status;
+  }
+  return null;
+}
+
+function findLatestApprovedId(comments: SharedComment[]): string | null {
+  for (let i = comments.length - 1; i >= 0; i--) {
+    if (comments[i].status === 'approved') return comments[i].id;
   }
   return null;
 }
@@ -383,6 +407,7 @@ function PostDetailModal({
   token,
   authorName,
   onCommentAdded,
+  onCommentRemoved,
   onCaptionUpdated,
   onClose,
   requireName,
@@ -392,6 +417,7 @@ function PostDetailModal({
   token: string;
   authorName: string;
   onCommentAdded: (postId: string, c: SharedComment) => void;
+  onCommentRemoved: (postId: string, commentId: string) => void;
   onCaptionUpdated: (postId: string, caption: string, c: SharedComment) => void;
   onClose: () => void;
   requireName: () => void;
@@ -406,6 +432,7 @@ function PostDetailModal({
           token={token}
           authorName={authorName}
           onCommentAdded={(c) => onCommentAdded(post.id, c)}
+          onCommentRemoved={(commentId) => onCommentRemoved(post.id, commentId)}
           onCaptionUpdated={(caption, c) => onCaptionUpdated(post.id, caption, c)}
           requireName={requireName}
           withVideoHeader
@@ -584,6 +611,7 @@ function PostCard({
   token,
   authorName,
   onCommentAdded,
+  onCommentRemoved,
   onCaptionUpdated,
   onPlay,
   requireName,
@@ -594,6 +622,7 @@ function PostCard({
   token: string;
   authorName: string;
   onCommentAdded: (c: SharedComment) => void;
+  onCommentRemoved: (commentId: string) => void;
   onCaptionUpdated: (caption: string, c: SharedComment) => void;
   onPlay?: () => void;
   requireName: () => void;
@@ -601,6 +630,7 @@ function PostCard({
 }) {
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [removingApproval, setRemovingApproval] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<CommentAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -609,6 +639,7 @@ function PostCard({
   const [savingCaption, setSavingCaption] = useState(false);
 
   const review = latestReview(post.comments);
+  const latestApprovedId = review === 'approved' ? findLatestApprovedId(post.comments) : null;
   const scheduledLabel = post.scheduled_at
     ? new Date(post.scheduled_at).toLocaleString(undefined, {
         weekday: 'short',
@@ -720,6 +751,26 @@ function PostCard({
       toast.error(err instanceof Error ? err.message : 'Failed to submit');
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function removeApproval() {
+    if (!latestApprovedId) return;
+    setRemovingApproval(true);
+    try {
+      const res = await fetch(`/api/calendar/share/${token}/comment`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ commentId: latestApprovedId }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Failed to remove approval');
+      onCommentRemoved(latestApprovedId);
+      toast.success('Approval removed');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to remove approval');
+    } finally {
+      setRemovingApproval(false);
     }
   }
 
@@ -884,16 +935,13 @@ function PostCard({
       )}
 
       <div className="border-t border-nativz-border px-3 py-3 sm:px-4">
-        <h3 className="text-xs font-medium text-text-muted">Leave feedback</h3>
-        <p className="mb-2 mt-0.5 text-[11px] leading-relaxed text-text-muted">
-          Add a revision for video changes. To change the caption, edit it directly above.
-        </p>
+        <h3 className="mb-2 text-xs font-medium text-text-muted">Leave feedback</h3>
         <textarea
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
           placeholder="Notes on the video (cuts, music, hook, etc.)"
           rows={2}
-          className="mb-2 w-full resize-none rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-base text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text sm:text-sm"
+          className="mb-2 w-full resize-none rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text"
           disabled={submitting}
         />
 
@@ -928,14 +976,26 @@ function PostCard({
         </div>
 
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-          <button
-            type="button"
-            onClick={() => submit('approved')}
-            disabled={submitting || uploading}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50 sm:py-1.5"
-          >
-            <CheckCircle size={12} /> Approve
-          </button>
+          {review === 'approved' && latestApprovedId ? (
+            <button
+              type="button"
+              onClick={removeApproval}
+              disabled={removingApproval || submitting || uploading}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50 sm:py-1.5"
+            >
+              {removingApproval ? <Loader2 size={12} className="animate-spin" /> : <Undo2 size={12} />}
+              Remove approval
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => submit('approved')}
+              disabled={submitting || uploading}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50 sm:py-1.5"
+            >
+              <CheckCircle size={12} /> Approve
+            </button>
+          )}
           <button
             type="button"
             onClick={() => submit('changes_requested')}
