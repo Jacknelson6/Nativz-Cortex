@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { sendClientInviteEmail } from '@/lib/email/resend';
-import { getBrandFromAgency } from '@/lib/agency/use-agency-brand';
+import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 /**

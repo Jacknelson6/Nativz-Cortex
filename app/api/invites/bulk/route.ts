@@ -16,7 +16,7 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendClientInviteEmail } from '@/lib/email/resend';
-import { getBrandFromAgency } from '@/lib/agency/use-agency-brand';
+import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 export const maxDuration = 60;

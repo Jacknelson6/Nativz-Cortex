@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getBrandFromAgency } from '@/lib/agency/use-agency-brand';
+import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 const schema = z.object({

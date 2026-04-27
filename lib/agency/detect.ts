@@ -30,6 +30,17 @@ export function detectAgencyFromHostname(hostname: string): AgencyBrand {
 }
 
 /**
+ * Detect brand from an agency string (e.g. `clients.agency` column).
+ * Falls back to 'nativz' if null/empty. Pure function — safe on server.
+ */
+export function getBrandFromAgency(agency: string | null | undefined): AgencyBrand {
+  if (!agency) return 'nativz';
+  const lower = agency.toLowerCase();
+  if (lower.includes('anderson') || lower === 'ac') return 'anderson';
+  return 'nativz';
+}
+
+/**
  * Dev-mode override for local-only brand testing.
  * Reads `?brand=anderson|nativz` from the URL or `cortex_dev_brand` cookie,
  * applied ONLY when NODE_ENV !== 'production'. Production requests always

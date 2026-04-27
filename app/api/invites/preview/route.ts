@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { buildClientInviteEmailHtml } from '@/lib/email/resend';
-import { getBrandFromAgency } from '@/lib/agency/use-agency-brand';
+import { getBrandFromAgency } from '@/lib/agency/detect';
 
 export async function GET(request: NextRequest) {
   const supabase = await createServerSupabaseClient();

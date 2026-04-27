@@ -7,6 +7,10 @@ import { AGENCY_CONFIG, type AgencyBrand } from './detect';
  * Client-side brand detection from hostname.
  * Use in 'use client' pages that don't have access to the BrandModeProvider
  * (e.g. shared public pages).
+ *
+ * For server-side code, import `getBrandFromAgency` from `./detect` directly —
+ * this file is `'use client'` so any export gets RSC-wrapped and can't be
+ * invoked from the server.
  */
 export function useAgencyBrand(): {
   brand: AgencyBrand;
@@ -23,15 +27,4 @@ export function useAgencyBrand(): {
       config: AGENCY_CONFIG[brand],
     };
   }, []);
-}
-
-/**
- * Detect brand from an agency string (e.g. client.agency field).
- * Falls back to 'nativz' if null/empty.
- */
-export function getBrandFromAgency(agency: string | null | undefined): AgencyBrand {
-  if (!agency) return 'nativz';
-  const lower = agency.toLowerCase();
-  if (lower.includes('anderson') || lower === 'ac') return 'anderson';
-  return 'nativz';
 }

@@ -27,7 +27,7 @@ if (fs.existsSync(envPath)) {
 async function main() {
   const { createAdminClient } = await import('@/lib/supabase/admin');
   const { sendClientInviteEmail } = await import('@/lib/email/resend');
-  const { getBrandFromAgency } = await import('@/lib/agency/use-agency-brand');
+  const { getBrandFromAgency } = await import('@/lib/agency/detect');
 
   const toEmail = process.argv[3] ?? 'jack@nativz.io';
   const admin = createAdminClient();

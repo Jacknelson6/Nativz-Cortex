@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { logLifecycleEvent } from '@/lib/lifecycle/state-machine';
-import { getBrandFromAgency } from '@/lib/agency/use-agency-brand';
+import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 /**

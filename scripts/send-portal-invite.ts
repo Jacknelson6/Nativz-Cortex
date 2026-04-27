@@ -31,7 +31,7 @@ async function main() {
 
   const { createAdminClient } = await import('@/lib/supabase/admin');
   const { sendClientInviteEmail } = await import('@/lib/email/resend');
-  const { getBrandFromAgency } = await import('@/lib/agency/use-agency-brand');
+  const { getBrandFromAgency } = await import('@/lib/agency/detect');
   const { getCortexAppUrl } = await import('@/lib/agency/cortex-url');
 
   const admin = createAdminClient();
