@@ -223,6 +223,8 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
+      <RevisionsPanel videos={videos} commentsByPostId={data.commentsByPostId} />
+
       {videos.length > 0 && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {videos.map((v) => (
@@ -248,7 +250,7 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
       >
         <div className="space-y-3">
           <p className="text-sm text-text-secondary">
-            Send this link to your client. They can comment, approve, or request changes per post.
+            Send this link to your client. They can approve or request revisions per post.
           </p>
           <div className="flex items-center gap-2 rounded-lg border border-nativz-border bg-background px-3 py-2">
             <Link2 size={14} className="shrink-0 text-text-muted" />
@@ -425,7 +427,10 @@ function VideoCard({ dropId, video, comments, variantPlatforms, onUpdated }: Vid
   const review = latestReview(comments);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-nativz-border bg-surface">
+    <div
+      id={video.scheduled_post_id ? `post-${video.scheduled_post_id}` : undefined}
+      className="overflow-hidden rounded-xl border border-nativz-border bg-surface scroll-mt-20 transition-shadow"
+    >
       <div className="relative aspect-[9/16] w-full bg-background">
         {video.thumbnail_url ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -628,7 +633,7 @@ function VideoCard({ dropId, video, comments, variantPlatforms, onUpdated }: Vid
         <div className="border-t border-nativz-border bg-background/40 px-4 py-3">
           <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-text-muted">
             <MessageSquare size={11} />
-            {comments.length} comment{comments.length === 1 ? '' : 's'}
+            {comments.length} revision{comments.length === 1 ? '' : 's'}
           </div>
           <div className="space-y-2">
             {comments.map((c) => (
@@ -780,4 +785,129 @@ function formatScheduled(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toUTCString().replace(' GMT', ' UTC');
+}
+
+interface RevisionEntry {
+  comment: DropComment;
+  postIndex: number;
+  postId: string;
+  fileName: string;
+}
+
+function RevisionsPanel({
+  videos,
+  commentsByPostId,
+}: {
+  videos: ContentDropVideo[];
+  commentsByPostId: Record<string, DropComment[]>;
+}) {
+  const entries: RevisionEntry[] = [];
+  videos.forEach((v, idx) => {
+    if (!v.scheduled_post_id) return;
+    const list = commentsByPostId[v.scheduled_post_id] ?? [];
+    for (const comment of list) {
+      entries.push({
+        comment,
+        postIndex: idx + 1,
+        postId: v.scheduled_post_id,
+        fileName: v.drive_file_name,
+      });
+    }
+  });
+  entries.sort((a, b) => b.comment.created_at.localeCompare(a.comment.created_at));
+
+  if (entries.length === 0) return null;
+
+  function scrollToPost(postId: string) {
+    const el = document.getElementById(`post-${postId}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.classList.add('ring-2', 'ring-accent');
+    window.setTimeout(() => el.classList.remove('ring-2', 'ring-accent'), 1500);
+  }
+
+  return (
+    <section className="rounded-xl border border-nativz-border bg-surface">
+      <header className="flex items-center justify-between border-b border-nativz-border px-4 py-3">
+        <h2 className="text-sm font-semibold text-text-primary">Revisions</h2>
+        <span className="text-xs text-text-muted">
+          {entries.length} {entries.length === 1 ? 'item' : 'items'} from reviewers
+        </span>
+      </header>
+      <ul className="max-h-96 divide-y divide-nativz-border overflow-y-auto">
+        {entries.map((e) => (
+          <li key={e.comment.id}>
+            <button
+              type="button"
+              onClick={() => scrollToPost(e.postId)}
+              className="block w-full cursor-pointer px-4 py-3 text-left transition-colors hover:bg-surface-hover"
+            >
+              <RevisionRow entry={e} />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function RevisionRow({ entry }: { entry: RevisionEntry }) {
+  const { comment: c, postIndex } = entry;
+  const tone =
+    c.status === 'approved'
+      ? 'text-emerald-300'
+      : c.status === 'changes_requested'
+        ? 'text-amber-300'
+        : c.status === 'caption_edit'
+          ? 'text-accent-text'
+          : 'text-text-secondary';
+  const Icon =
+    c.status === 'approved'
+      ? CheckCircle
+      : c.status === 'changes_requested'
+        ? AlertTriangle
+        : c.status === 'caption_edit'
+          ? Type
+          : MessageSquare;
+  const label =
+    c.status === 'approved'
+      ? 'Approved'
+      : c.status === 'changes_requested'
+        ? 'Revision'
+        : c.status === 'caption_edit'
+          ? 'Edited caption'
+          : 'Comment';
+  const time = new Date(c.created_at).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+  return (
+    <div className="flex items-start gap-3">
+      <Icon size={14} className={`mt-0.5 shrink-0 ${tone}`} />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="font-medium text-text-primary">{c.author_name}</span>
+          <span className={tone}>{label}</span>
+          <span className="text-text-muted">on Post {postIndex}</span>
+          <span className="text-text-muted">·</span>
+          <span className="text-text-muted">{time}</span>
+        </div>
+        {c.status === 'caption_edit'
+          ? c.caption_after && (
+              <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-xs text-text-secondary">
+                <span className="text-text-muted">Now: </span>
+                {c.caption_after}
+              </p>
+            )
+          : c.content && (
+              <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-text-secondary">
+                {c.content}
+              </p>
+            )}
+      </div>
+    </div>
+  );
 }

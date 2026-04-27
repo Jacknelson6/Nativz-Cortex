@@ -279,7 +279,7 @@ function PostCard({
       {comments.length > 0 && (
         <div className="border-t border-nativz-border bg-background/40 px-4 py-3">
           <h3 className="mb-2 text-xs font-medium text-text-muted">
-            {comments.length} comment{comments.length !== 1 ? 's' : ''}
+            {comments.length} revision{comments.length !== 1 ? 's' : ''}
           </h3>
           <div className="space-y-2">
             {comments.map((c) => (

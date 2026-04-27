@@ -689,7 +689,7 @@ function PostCard({
       return;
     }
     if (status === 'changes_requested' && !commentText.trim() && pendingAttachments.length === 0) {
-      toast.error('Please enter a comment or attach a file');
+      toast.error('Please enter revision notes or attach a file');
       return;
     }
 
@@ -713,7 +713,7 @@ function PostCard({
       onCommentAdded(json.comment as SharedComment);
       setCommentText('');
       setPendingAttachments([]);
-      toast.success(status === 'approved' ? 'Post approved' : 'Comment posted');
+      toast.success(status === 'approved' ? 'Post approved' : 'Revision added');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to submit');
     } finally {
@@ -872,7 +872,7 @@ function PostCard({
 
       {post.comments.length > 0 && (
         <div className="border-t border-nativz-border bg-background/40 px-3 py-3 sm:px-4">
-          <h3 className="mb-2 text-xs font-medium text-text-muted">Comments</h3>
+          <h3 className="mb-2 text-xs font-medium text-text-muted">Revisions</h3>
           <div className="space-y-2">
             {post.comments.map((c) => (
               <CommentRow key={c.id} comment={c} />
@@ -884,7 +884,7 @@ function PostCard({
       <div className="border-t border-nativz-border px-3 py-3 sm:px-4">
         <h3 className="text-xs font-medium text-text-muted">Leave feedback</h3>
         <p className="mb-2 mt-0.5 text-[11px] leading-relaxed text-text-muted">
-          Use comments for video revisions. To change the caption, edit it directly above.
+          Add a revision for video changes. To change the caption, edit it directly above.
         </p>
         <textarea
           value={commentText}
@@ -940,7 +940,7 @@ function PostCard({
             disabled={submitting || uploading || (!commentText.trim() && pendingAttachments.length === 0)}
             className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50 sm:py-1.5"
           >
-            <MessageSquare size={12} /> Comment
+            <MessageSquare size={12} /> Add revision
           </button>
         </div>
       </div>
