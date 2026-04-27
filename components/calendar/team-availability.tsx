@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, Loader2, Settings } from 'lucide-react';
 import type { CalendarPerson, ExternalCalendarEvent } from './types';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 /**
  * Team availability — 4-day rolling view of every teammate's calendar.
@@ -689,7 +690,9 @@ interface EventBlockProps {
 /**
  * A single calendar event — colored by person, labeled with title and time.
  * Width is `1 / lanesTotal` of the column so overlapping events stay visible
- * side-by-side rather than collapsing into an opaque band.
+ * side-by-side rather than collapsing into an opaque band. Click opens a
+ * popover with the un-truncated title + full time range, which matters most
+ * when 3+ way overlaps squeeze the lane width below comfortable reading.
  */
 function EventBlock({ event, hourHeight }: EventBlockProps) {
   const top = (event.startMin / 60) * hourHeight;
@@ -699,35 +702,63 @@ function EventBlock({ event, hourHeight }: EventBlockProps) {
 
   const fill = `${event.person.color}26`;
   const border = `${event.person.color}99`;
-  const tooltip = `${event.person.name} · ${event.title} · ${formatTimeShort(event.rawStartMin)}–${formatTimeShort(event.rawEndMin)}`;
+  const timeRange = `${formatTimeShort(event.rawStartMin)}–${formatTimeShort(event.rawEndMin)}`;
+  const tooltip = `${event.person.name} · ${event.title} · ${timeRange}`;
+  const ariaLabel = `${event.person.name}: ${event.title}, ${timeRange}. Click for details.`;
 
   return (
-    <div
-      title={tooltip}
-      className="absolute rounded-md overflow-hidden px-1.5 py-0.5"
-      style={{
-        top,
-        height,
-        left: `calc(${leftPct}% + 1px)`,
-        width: `calc(${widthPct}% - 2px)`,
-        backgroundColor: fill,
-        boxShadow: `inset 0 0 0 1px ${border}`,
-      }}
-      aria-hidden="true"
-    >
-      {height >= 18 && (
-        <div
-          className="text-[10px] font-medium leading-tight truncate"
-          style={{ color: event.person.color }}
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          title={tooltip}
+          aria-label={ariaLabel}
+          className="absolute rounded-md overflow-hidden px-1.5 py-0.5 text-left transition-shadow duration-[var(--duration-fast)] ease-out hover:shadow-[var(--shadow-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-text"
+          style={{
+            top,
+            height,
+            left: `calc(${leftPct}% + 1px)`,
+            width: `calc(${widthPct}% - 2px)`,
+            backgroundColor: fill,
+            boxShadow: `inset 0 0 0 1px ${border}`,
+          }}
         >
+          {height >= 18 && (
+            <div
+              className="text-[10px] font-medium leading-tight truncate"
+              style={{ color: event.person.color }}
+            >
+              {event.title}
+            </div>
+          )}
+          {height >= 30 && (
+            <div className="text-[9px] text-text-muted leading-tight tabular-nums truncate mt-0.5">
+              {formatTimeShort(event.rawStartMin)}
+            </div>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="center"
+        side="top"
+        sideOffset={6}
+        matchAnchorWidth={false}
+        className="w-64 p-3"
+      >
+        <div className="flex items-center gap-2 mb-1.5">
+          <span
+            className="h-2 w-2 rounded-full shrink-0"
+            style={{ backgroundColor: event.person.color }}
+          />
+          <span className="text-[11px] font-medium text-text-secondary truncate">
+            {event.person.name}
+          </span>
+        </div>
+        <p className="text-sm font-medium text-text-primary leading-snug break-words">
           {event.title}
-        </div>
-      )}
-      {height >= 30 && (
-        <div className="text-[9px] text-text-muted leading-tight tabular-nums truncate mt-0.5">
-          {formatTimeShort(event.rawStartMin)}
-        </div>
-      )}
-    </div>
+        </p>
+        <p className="text-xs text-text-muted tabular-nums mt-1.5">{timeRange}</p>
+      </PopoverContent>
+    </Popover>
   );
 }

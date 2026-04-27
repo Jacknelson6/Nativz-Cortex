@@ -11,7 +11,7 @@ interface CalendarEvent {
   title: string;
   start: string;
   end: string;
-  is_all_day: boolean;
+  isAllDay: boolean;
 }
 
 interface PersonCalendarResult {
@@ -125,7 +125,7 @@ export async function GET(request: NextRequest) {
               title: e.title,
               start: e.start,
               end: e.end,
-              is_all_day: e.isAllDay,
+              isAllDay: e.isAllDay,
             })),
             errors: fetched.errors.length ? fetched.errors : undefined,
           };
