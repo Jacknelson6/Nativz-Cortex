@@ -1,10 +1,47 @@
 /**
  * Google Drive API client — read-only operations.
+ *
+ * Token source: prefers per-user OAuth (`google_tokens` row) when present, and
+ * falls back to service-account domain-wide delegation impersonating the user's
+ * workspace email. This lets internal users (nativz.io / andersoncollaborative.com)
+ * use the Drive flows without each connecting Google individually.
  */
 
 import { getValidToken } from './auth';
+import { createAdminClient } from '@/lib/supabase/admin';
+import {
+  getServiceAccountDriveToken,
+  isImpersonateAllowed,
+  isServiceAccountConfigured,
+} from './service-account';
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
+
+async function getDriveToken(userId: string): Promise<string> {
+  const oauth = await getValidToken(userId);
+  if (oauth) return oauth;
+
+  if (!isServiceAccountConfigured()) {
+    throw new Error('Google account not connected');
+  }
+
+  const admin = createAdminClient();
+  const { data: user } = await admin
+    .from('users')
+    .select('email')
+    .eq('id', userId)
+    .single<{ email: string | null }>();
+  const email = user?.email?.toLowerCase();
+  if (!email) {
+    throw new Error('Cannot impersonate via service account: user email missing');
+  }
+  if (!isImpersonateAllowed(email)) {
+    throw new Error(
+      `Cannot impersonate ${email} via service account — domain not allowlisted`,
+    );
+  }
+  return getServiceAccountDriveToken(email);
+}
 
 interface DriveFile {
   id: string;
@@ -24,8 +61,7 @@ interface DriveListResponse {
 }
 
 async function driveRequest(userId: string, path: string, params?: Record<string, string>) {
-  const token = await getValidToken(userId);
-  if (!token) throw new Error('Google account not connected');
+  const token = await getDriveToken(userId);
 
   const url = new URL(`${DRIVE_API}${path}`);
   if (params) {
@@ -93,8 +129,7 @@ export async function downloadFile(
   userId: string,
   fileId: string,
 ): Promise<{ buffer: Buffer; mimeType: string; size: number }> {
-  const token = await getValidToken(userId);
-  if (!token) throw new Error('Google account not connected');
+  const token = await getDriveToken(userId);
 
   const res = await fetch(`${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media`, {
     headers: { Authorization: `Bearer ${token}` },

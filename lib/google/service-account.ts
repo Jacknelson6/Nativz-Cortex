@@ -37,6 +37,7 @@ interface TokenCache {
 const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 const CALENDAR_READONLY_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
 const CALENDAR_EVENTS_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+const DRIVE_READONLY_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
 
 const DEFAULT_GMAIL_IMPERSONATE =
   process.env.GOOGLE_SERVICE_ACCOUNT_IMPERSONATE_EMAIL ??
@@ -153,6 +154,12 @@ export function getServiceAccountCalendarToken(impersonate: string): Promise<str
  */
 export function getServiceAccountCalendarEventsToken(impersonate: string): Promise<string> {
   return getServiceAccountToken({ scope: CALENDAR_EVENTS_SCOPE, impersonate });
+}
+
+/** Drive readonly token for a workspace user — used by the content-calendar
+ *  ingest path to read shared Drive folders without per-user OAuth. */
+export function getServiceAccountDriveToken(impersonate: string): Promise<string> {
+  return getServiceAccountToken({ scope: DRIVE_READONLY_SCOPE, impersonate });
 }
 
 export function isServiceAccountConfigured(): boolean {

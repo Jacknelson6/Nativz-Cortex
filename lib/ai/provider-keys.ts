@@ -17,6 +17,23 @@ export type OpenRouterKeyBucket = LlmProviderKeyBucket;
 
 const DEFAULT_NERD_MODEL = 'openai/gpt-5.4-mini';
 
+/**
+ * Some rows in agency_settings.llm_provider_keys.openrouter were written by an
+ * older code path as base64-wrapped `{v:"v2",c,k}` envelopes that nothing in
+ * the current codebase can decrypt. The current write path stores plaintext.
+ * Treat any stale envelope as "not configured" so resolution falls through to
+ * env vars instead of sending the encrypted blob as a Bearer token.
+ */
+function isStaleEnvelope(value: string): boolean {
+  if (!value.startsWith('eyJ')) return false;
+  try {
+    const decoded = JSON.parse(Buffer.from(value, 'base64').toString('utf8'));
+    return decoded && typeof decoded === 'object' && decoded.v === 'v2' && 'c' in decoded;
+  } catch {
+    return false;
+  }
+}
+
 /** Legacy JSON used `ideas`; treat as `default` when resolving keys. */
 function keyForBucket(
   stored: Partial<Record<string, string | undefined>> | undefined,
@@ -24,10 +41,10 @@ function keyForBucket(
 ): string | undefined {
   const s = stored ?? {};
   const direct = s[bucket]?.trim();
-  if (direct) return direct;
+  if (direct && !isStaleEnvelope(direct)) return direct;
   if (bucket === 'default') {
     const legacy = (s as Record<string, string | undefined>).ideas?.trim();
-    if (legacy) return legacy;
+    if (legacy && !isStaleEnvelope(legacy)) return legacy;
   }
   return undefined;
 }
