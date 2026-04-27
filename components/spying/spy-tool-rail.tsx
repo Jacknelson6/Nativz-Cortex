@@ -13,7 +13,7 @@ export function SpyToolRail() {
           More spying tools
         </h2>
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
         <SectionTile
           href="/spying/self-audit"
           icon={<ScanEye size={16} />}

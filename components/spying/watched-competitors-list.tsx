@@ -99,6 +99,8 @@ export function WatchedCompetitorsList({ watches }: { watches: WatchRow[] }) {
     .sort((a, b) => Math.abs(b.delta_pct ?? 0) - Math.abs(a.delta_pct ?? 0))
     .slice(0, 6);
 
+  if (sorted.length === 0) return null;
+
   return (
     <section
       className="animate-ci-rise space-y-3"
@@ -119,88 +121,77 @@ export function WatchedCompetitorsList({ watches }: { watches: WatchRow[] }) {
         </Link>
       </div>
 
-      {sorted.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-nativz-border bg-surface/40 p-8 text-center text-sm text-text-muted">
-          No competitors enrolled. Run an audit and click{' '}
-          <span className="text-accent-text">Watch this competitor</span> on any result, or{' '}
-          <Link href="/spying/watch" className="text-accent-text underline decoration-dotted">
-            set up watch
-          </Link>
-          .
-        </div>
-      ) : (
-        <ul className="divide-y divide-nativz-border/60 overflow-hidden rounded-xl border border-nativz-border bg-surface">
-          {sorted.map((w) => {
-            const platform = w.platform ? PLATFORM_MARK[w.platform] : null;
-            const deltaTone =
-              w.delta_pct == null || w.delta_pct === 0
-                ? 'text-text-muted'
-                : w.delta_pct > 0
-                  ? 'text-emerald-300'
-                  : 'text-coral-300';
-            const deltaLabel =
-              w.delta_pct == null
-                ? '—'
-                : `${w.delta_pct > 0 ? '+' : ''}${(w.delta_pct * 100).toFixed(1)}%`;
-            const positiveDirection =
-              w.delta_pct == null ? null : w.delta_pct >= 0;
-            return (
-              <li key={w.id}>
-                <button
-                  type="button"
-                  onClick={() => setActiveWatch(w)}
-                  className="group flex w-full items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-surface-hover/40 focus-visible:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
-                >
-                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent/10 text-accent-text">
-                    {w.client_logo ? (
-                      <Image
-                        src={w.client_logo}
-                        alt=""
-                        width={36}
-                        height={36}
-                        sizes="36px"
-                        className="h-9 w-9 object-cover"
-                      />
-                    ) : (
-                      <Radar size={14} />
-                    )}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate font-display text-sm font-semibold text-text-primary">
-                        {w.handle ? `@${w.handle}` : w.client_name}
+      <ul className="divide-y divide-nativz-border/60 overflow-hidden rounded-xl border border-nativz-border bg-surface">
+        {sorted.map((w) => {
+          const platform = w.platform ? PLATFORM_MARK[w.platform] : null;
+          const deltaTone =
+            w.delta_pct == null || w.delta_pct === 0
+              ? 'text-text-muted'
+              : w.delta_pct > 0
+                ? 'text-emerald-300'
+                : 'text-coral-300';
+          const deltaLabel =
+            w.delta_pct == null
+              ? '—'
+              : `${w.delta_pct > 0 ? '+' : ''}${(w.delta_pct * 100).toFixed(1)}%`;
+          const positiveDirection =
+            w.delta_pct == null ? null : w.delta_pct >= 0;
+          return (
+            <li key={w.id}>
+              <button
+                type="button"
+                onClick={() => setActiveWatch(w)}
+                className="group flex w-full items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-surface-hover/40 focus-visible:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
+              >
+                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent/10 text-accent-text">
+                  {w.client_logo ? (
+                    <Image
+                      src={w.client_logo}
+                      alt=""
+                      width={36}
+                      height={36}
+                      sizes="36px"
+                      className="h-9 w-9 object-cover"
+                    />
+                  ) : (
+                    <Radar size={14} />
+                  )}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate font-display text-sm font-semibold text-text-primary">
+                      {w.handle ? `@${w.handle}` : w.client_name}
+                    </span>
+                    {platform ? (
+                      <span
+                        className={`shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[9px] font-bold ${platform.bg}`}
+                      >
+                        {platform.label}
                       </span>
-                      {platform ? (
-                        <span
-                          className={`shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[9px] font-bold ${platform.bg}`}
-                        >
-                          {platform.label}
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="truncate text-[11px] text-text-muted">
-                      {w.client_name} · {w.cadence} · {timeAgo(w.last_snapshot_at)}
-                    </div>
+                    ) : null}
                   </div>
-                  <MiniChart
-                    values={w.series.length ? w.series : [0, 0]}
-                    positive={positiveDirection}
-                    className="hidden sm:block"
-                  />
-                  <div className="hidden shrink-0 text-right font-mono text-[11px] tabular-nums sm:block">
-                    <div className="text-text-primary">{compactNumber(w.followers)}</div>
-                    <div className={deltaTone}>{deltaLabel}</div>
+                  <div className="truncate text-[11px] text-text-muted">
+                    {w.client_name} · {w.cadence} · {timeAgo(w.last_snapshot_at)}
                   </div>
-                  <ArrowRight
-                    size={13}
-                    className="shrink-0 text-text-muted/40 transition-all group-hover:translate-x-0.5 group-hover:text-accent-text"
-                  />
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                </div>
+                <MiniChart
+                  values={w.series.length ? w.series : [0, 0]}
+                  positive={positiveDirection}
+                  className="hidden sm:block"
+                />
+                <div className="hidden shrink-0 text-right font-mono text-[11px] tabular-nums sm:block">
+                  <div className="text-text-primary">{compactNumber(w.followers)}</div>
+                  <div className={deltaTone}>{deltaLabel}</div>
+                </div>
+                <ArrowRight
+                  size={13}
+                  className="shrink-0 text-text-muted/40 transition-all group-hover:translate-x-0.5 group-hover:text-accent-text"
+                />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
 
       <WatchHistoryDrawer
         open={activeWatch !== null}

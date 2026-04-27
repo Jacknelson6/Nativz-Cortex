@@ -32,6 +32,7 @@ function statusTone(status: string): string {
 }
 
 export function LatestAuditsList({ audits }: { audits: AuditRow[] }) {
+  if (audits.length === 0) return null;
   return (
     <section
       className="animate-ci-rise space-y-3"
@@ -52,57 +53,51 @@ export function LatestAuditsList({ audits }: { audits: AuditRow[] }) {
         </Link>
       </div>
 
-      {audits.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-nativz-border bg-surface/40 p-8 text-center text-sm text-text-muted">
-          No audits yet — paste a URL above to run your first one.
-        </div>
-      ) : (
-        <ul className="divide-y divide-nativz-border/60 overflow-hidden rounded-xl border border-nativz-border bg-surface">
-          {audits.slice(0, 6).map((a) => (
-            <li key={a.id}>
-              <Link
-                href={`/admin/analyze-social/${a.id}`}
-                className="group flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-hover/40 focus-visible:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
-              >
-                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-accent/10 text-accent-text">
-                  {a.favicon ? (
-                    <Image
-                      src={a.favicon}
-                      alt=""
-                      width={36}
-                      height={36}
-                      sizes="36px"
-                      className="h-9 w-9 object-cover"
-                    />
-                  ) : (
-                    <Globe size={15} />
-                  )}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-display text-sm font-semibold text-text-primary">
-                    {a.brand_name}
-                  </div>
-                  {a.website ? (
-                    <div className="truncate font-mono text-[10px] text-text-muted">{a.website}</div>
-                  ) : null}
+      <ul className="divide-y divide-nativz-border/60 overflow-hidden rounded-xl border border-nativz-border bg-surface">
+        {audits.slice(0, 6).map((a) => (
+          <li key={a.id}>
+            <Link
+              href={`/admin/analyze-social/${a.id}`}
+              className="group flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-hover/40 focus-visible:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
+            >
+              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-accent/10 text-accent-text">
+                {a.favicon ? (
+                  <Image
+                    src={a.favicon}
+                    alt=""
+                    width={36}
+                    height={36}
+                    sizes="36px"
+                    className="h-9 w-9 object-cover"
+                  />
+                ) : (
+                  <Globe size={15} />
+                )}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-display text-sm font-semibold text-text-primary">
+                  {a.brand_name}
                 </div>
-                <span
-                  className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${statusTone(a.status)}`}
-                >
-                  {a.status}
-                </span>
-                <span className="hidden shrink-0 font-mono text-[10px] text-text-muted/80 sm:inline">
-                  {timeAgo(a.created_at)}
-                </span>
-                <ArrowRight
-                  size={13}
-                  className="shrink-0 text-text-muted/40 transition-all group-hover:translate-x-0.5 group-hover:text-accent-text"
-                />
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+                {a.website ? (
+                  <div className="truncate font-mono text-[10px] text-text-muted">{a.website}</div>
+                ) : null}
+              </div>
+              <span
+                className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${statusTone(a.status)}`}
+              >
+                {a.status}
+              </span>
+              <span className="hidden shrink-0 font-mono text-[10px] text-text-muted/80 sm:inline">
+                {timeAgo(a.created_at)}
+              </span>
+              <ArrowRight
+                size={13}
+                className="shrink-0 text-text-muted/40 transition-all group-hover:translate-x-0.5 group-hover:text-accent-text"
+              />
+            </Link>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

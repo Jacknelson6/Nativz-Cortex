@@ -220,16 +220,22 @@ export default async function CompetitorIntelligencePage() {
   const activeWatchCount = activeWatchCountResult.count ?? 0;
   const subscriptionTotal = subscriptions.length;
 
+  const allStatsZero =
+    auditCount7d === 0 &&
+    snapshotCount7d === 0 &&
+    activeWatchCount === 0 &&
+    subscriptionTotal === 0;
+
   const stats = [
     {
       label: 'Audits · 7d',
       value: compactNumber(auditCount7d),
-      hint: auditCount7d === 0 ? 'Run one above' : 'Brand scorecards',
+      hint: 'Brand scorecards',
     },
     {
       label: 'Active watches',
       value: compactNumber(activeWatchCount),
-      hint: activeWatchCount === 0 ? 'No competitors enrolled' : 'Tracked competitors',
+      hint: 'Tracked competitors',
     },
     {
       label: 'Snapshots · 7d',
@@ -239,7 +245,7 @@ export default async function CompetitorIntelligencePage() {
     {
       label: 'Recurring reports',
       value: compactNumber(subscriptionTotal),
-      hint: subscriptionTotal === 0 ? 'None scheduled' : 'On a cadence',
+      hint: 'On a cadence',
     },
   ];
 
@@ -247,7 +253,7 @@ export default async function CompetitorIntelligencePage() {
     <div className="cortex-page-gutter mx-auto max-w-6xl space-y-8">
       <SpyingPageHeader />
       <AuditQuickStart />
-      <SpyStatStrip stats={stats} />
+      {allStatsZero ? null : <SpyStatStrip stats={stats} />}
       <LatestAuditsList audits={audits} />
       <WatchedCompetitorsList watches={watches} />
       <RecurringReportsPreview subscriptions={subscriptions} totalCount={subscriptionTotal} />

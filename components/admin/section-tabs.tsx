@@ -187,7 +187,7 @@ export function SectionTile({ href, icon, title, status = 'ok', primary, seconda
           <h3 className="text-sm font-semibold text-text-primary">{title}</h3>
           <span className={`h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden />
         </div>
-        <p className="mt-1 truncate text-sm text-text-secondary">{primary}</p>
+        <p className="mt-1 text-sm text-text-secondary">{primary}</p>
         {secondary ? <p className="mt-1 text-xs text-text-muted">{secondary}</p> : null}
       </div>
     </Link>
