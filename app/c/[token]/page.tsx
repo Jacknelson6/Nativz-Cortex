@@ -360,6 +360,8 @@ function VideoPlayerModal({ post, onClose }: { post: SharedPost | null; onClose:
             controls
             autoPlay
             playsInline
+            preload="auto"
+            poster={post.cover_image_url ?? undefined}
             className="mx-auto block max-h-[80vh] w-auto"
           />
         ) : (
