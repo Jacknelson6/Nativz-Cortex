@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ingestDrop } from '@/lib/calendar/ingest-drop';
+import { analyzeDropVideos } from '@/lib/calendar/analyze-video';
 
 export const maxDuration = 300;
 
@@ -25,19 +26,37 @@ export async function POST(
   if (!drop) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
   try {
-    const { processed, failed } = await ingestDrop(admin, { dropId: id, userId: drop.created_by });
+    const ingest = await ingestDrop(admin, { dropId: id, userId: drop.created_by });
+    if (ingest.processed === 0) {
+      await admin
+        .from('content_drops')
+        .update({ status: 'failed', error_detail: 'All videos failed to ingest' })
+        .eq('id', id);
+      return NextResponse.json({ error: 'all videos failed to ingest' }, { status: 500 });
+    }
     await admin
       .from('content_drops')
       .update({
-        status: failed === 0 && processed > 0 ? 'analyzing' : failed > 0 && processed === 0 ? 'failed' : 'analyzing',
-        processed_videos: processed,
+        status: 'analyzing',
+        processed_videos: ingest.processed,
         updated_at: new Date().toISOString(),
-        error_detail: failed > 0 ? `${failed} video(s) failed during ingestion` : null,
+        error_detail: ingest.failed > 0 ? `${ingest.failed} video(s) failed during ingestion` : null,
       })
       .eq('id', id);
-    return NextResponse.json({ ok: true, processed, failed });
+
+    const analysis = await analyzeDropVideos(admin, { dropId: id, userId: drop.created_by });
+    await admin
+      .from('content_drops')
+      .update({
+        status: analysis.analyzed > 0 ? 'generating' : 'failed',
+        updated_at: new Date().toISOString(),
+        error_detail: analysis.failed > 0 ? `${analysis.failed} video(s) failed during analysis` : null,
+      })
+      .eq('id', id);
+
+    return NextResponse.json({ ok: true, ingest, analysis });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Ingestion failed';
+    const message = err instanceof Error ? err.message : 'Processing failed';
     await admin.from('content_drops').update({ status: 'failed', error_detail: message }).eq('id', id);
     return NextResponse.json({ error: message }, { status: 500 });
   }
