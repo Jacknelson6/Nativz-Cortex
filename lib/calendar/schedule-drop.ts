@@ -7,6 +7,12 @@ interface ScheduleInput {
   dropId: string;
   includedVideoIds?: string[];
   overrides?: Record<string, string>;
+  // Restrict scheduling to a subset of the brand's connected platforms.
+  // When omitted, every connected platform with a Zernio account ID gets
+  // scheduled (legacy behaviour). Passing e.g. ['facebook'] confines the
+  // post to FB even if IG/TT are connected — used when a brand only wants
+  // a portion of their stack pushed live.
+  platforms?: SocialPlatform[];
 }
 
 interface VideoRow {
@@ -78,11 +84,21 @@ export async function scheduleDrop(
     .eq('client_id', (drop as DropRow).client_id)
     .eq('is_active', true);
 
-  const lateProfiles = (profiles ?? []).filter(
+  const allLateProfiles = (profiles ?? []).filter(
     (p) => typeof p.late_account_id === 'string' && p.late_account_id.length > 0,
   ) as { id: string; platform: SocialPlatform; late_account_id: string }[];
 
+  const platformFilter = input.platforms?.length ? new Set(input.platforms) : null;
+  const lateProfiles = platformFilter
+    ? allLateProfiles.filter((p) => platformFilter.has(p.platform))
+    : allLateProfiles;
+
   if (lateProfiles.length === 0) {
+    if (platformFilter && allLateProfiles.length > 0) {
+      throw new Error(
+        `None of the requested platforms (${[...platformFilter].join(', ')}) are connected to Zernio for this brand.`,
+      );
+    }
     throw new Error('No connected social profiles for this brand. Connect Zernio profiles first.');
   }
 

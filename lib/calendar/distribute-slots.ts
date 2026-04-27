@@ -1,5 +1,5 @@
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 interface DistributeInput {
@@ -35,7 +35,8 @@ export function distributeSlots(input: DistributeInput): string[] {
     const yyyy = date.getUTCFullYear();
     const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
     const dd = String(date.getUTCDate()).padStart(2, '0');
-    slots.push(`${yyyy}-${mm}-${dd}T${input.defaultTime}:00Z`);
+    const hhmm = input.defaultTime.slice(0, 5);
+    slots.push(`${yyyy}-${mm}-${dd}T${hhmm}:00Z`);
   }
 
   return slots;

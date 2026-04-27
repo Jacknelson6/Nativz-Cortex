@@ -6,9 +6,12 @@ import { scheduleDrop } from '@/lib/calendar/schedule-drop';
 
 export const maxDuration = 300;
 
+const PlatformSchema = z.enum(['instagram', 'tiktok', 'facebook', 'youtube', 'linkedin']);
+
 const BodySchema = z.object({
   includedVideoIds: z.array(z.string().uuid()).optional(),
   overrides: z.record(z.string(), z.string()).optional(),
+  platforms: z.array(PlatformSchema).optional(),
 });
 
 export async function POST(
@@ -38,6 +41,7 @@ export async function POST(
       dropId: id,
       includedVideoIds: body.includedVideoIds,
       overrides: body.overrides,
+      platforms: body.platforms,
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {

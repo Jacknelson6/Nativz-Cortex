@@ -9,7 +9,9 @@ import {
   CheckCircle,
   CheckCircle2,
   Copy,
+  Eye,
   Hash,
+  History,
   Link2,
   Loader2,
   MessageSquare,
@@ -17,6 +19,7 @@ import {
   RefreshCw,
   Save,
   Send,
+  Trash2,
   Type,
   XCircle,
 } from 'lucide-react';
@@ -64,6 +67,16 @@ interface DropResponse {
   variantPlatforms: CaptionVariantPlatform[];
 }
 
+interface ShareLinkRow {
+  id: string;
+  url: string;
+  post_count: number;
+  created_at: string;
+  last_viewed_at: string | null;
+  expires_at: string;
+  revoked: boolean;
+}
+
 function latestReview(comments: DropComment[]): 'approved' | 'changes_requested' | null {
   for (let i = comments.length - 1; i >= 0; i--) {
     const c = comments[i];
@@ -80,6 +93,7 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [showShare, setShowShare] = useState(false);
   const [generatingShare, setGeneratingShare] = useState(false);
+  const [shareLinks, setShareLinks] = useState<ShareLinkRow[]>([]);
   const aliveRef = useRef(true);
 
   const refresh = useCallback(async () => {
@@ -89,13 +103,20 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
     if (aliveRef.current) setData(json);
   }, [id]);
 
+  const refreshShareLinks = useCallback(async () => {
+    const res = await fetch(`/api/calendar/drops/${id}/share`);
+    if (!res.ok) return;
+    const json: { links: ShareLinkRow[] } = await res.json();
+    if (aliveRef.current) setShareLinks(json.links ?? []);
+  }, [id]);
+
   useEffect(() => {
     aliveRef.current = true;
-    refresh().finally(() => setLoading(false));
+    Promise.all([refresh(), refreshShareLinks()]).finally(() => setLoading(false));
     return () => {
       aliveRef.current = false;
     };
-  }, [refresh]);
+  }, [refresh, refreshShareLinks]);
 
   useEffect(() => {
     if (!data) return;
@@ -135,10 +156,25 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
       if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Share failed');
       setShareUrl(json.url);
       setShowShare(true);
+      await refreshShareLinks();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Share failed');
     } finally {
       setGeneratingShare(false);
+    }
+  }
+
+  async function handleRevoke(linkId: string) {
+    const ok = window.confirm('Revoke this link? Anyone with the URL will get a "link expired" page.');
+    if (!ok) return;
+    try {
+      const res = await fetch(`/api/calendar/drops/${id}/share/${linkId}/revoke`, { method: 'POST' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Revoke failed');
+      toast.success('Link revoked');
+      await refreshShareLinks();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Revoke failed');
     }
   }
 
@@ -224,6 +260,8 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
       )}
 
       <RevisionsPanel videos={videos} commentsByPostId={data.commentsByPostId} />
+
+      <ShareHistoryPanel links={shareLinks} onRevoke={handleRevoke} />
 
       {videos.length > 0 && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -849,6 +887,129 @@ function RevisionsPanel({
       </ul>
     </section>
   );
+}
+
+function ShareHistoryPanel({
+  links,
+  onRevoke,
+}: {
+  links: ShareLinkRow[];
+  onRevoke: (linkId: string) => void;
+}) {
+  return (
+    <section className="rounded-xl border border-nativz-border bg-surface">
+      <header className="flex items-center justify-between border-b border-nativz-border px-4 py-3">
+        <div className="flex items-center gap-2">
+          <History size={14} className="text-text-tertiary" />
+          <h2 className="text-sm font-semibold text-text-primary">Share links sent</h2>
+        </div>
+        <span className="text-xs text-text-muted">
+          {links.length} {links.length === 1 ? 'link' : 'links'}
+        </span>
+      </header>
+      {links.length === 0 ? (
+        <p className="px-4 py-6 text-center text-xs text-text-muted">
+          No share links yet — generate one with the Share button above.
+        </p>
+      ) : (
+        <ul className="divide-y divide-nativz-border">
+          {links.map((link) => (
+            <li key={link.id}>
+              <ShareHistoryRow link={link} onRevoke={onRevoke} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function ShareHistoryRow({
+  link,
+  onRevoke,
+}: {
+  link: ShareLinkRow;
+  onRevoke: (linkId: string) => void;
+}) {
+  const created = formatRelative(link.created_at);
+  const lastViewed = link.last_viewed_at ? formatRelative(link.last_viewed_at) : null;
+
+  function copy() {
+    navigator.clipboard
+      .writeText(link.url)
+      .then(() => toast.success('Copied'))
+      .catch(() => toast.error('Copy failed'));
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 text-xs">
+          {link.revoked ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-medium text-red-300">
+              Inactive
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
+              Active
+            </span>
+          )}
+          <span className="text-text-secondary">
+            {link.post_count} post{link.post_count === 1 ? '' : 's'}
+          </span>
+          <span className="text-text-muted">· sent {created}</span>
+          {lastViewed && (
+            <span className="inline-flex items-center gap-1 text-text-muted">
+              <Eye size={11} /> last viewed {lastViewed}
+            </span>
+          )}
+        </div>
+        <p
+          className="mt-1 truncate font-mono text-[11px] text-text-muted"
+          title={link.url}
+        >
+          {link.url}
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        <button
+          type="button"
+          onClick={copy}
+          className="cursor-pointer inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+        >
+          <Copy size={12} /> Copy
+        </button>
+        {!link.revoked && (
+          <button
+            type="button"
+            onClick={() => onRevoke(link.id)}
+            className="cursor-pointer inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-red-300 hover:bg-red-500/10"
+          >
+            <Trash2 size={12} /> Revoke
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function formatRelative(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return iso;
+  const diffMs = Date.now() - then;
+  const sec = Math.floor(diffMs / 1000);
+  if (sec < 60) return 'just now';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const days = Math.floor(hr / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 function RevisionRow({ entry }: { entry: RevisionEntry }) {
