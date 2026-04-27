@@ -20,13 +20,28 @@ interface ScheduledPostRow {
   late_post_id: string | null;
 }
 
+interface DropVideoRow {
+  scheduled_post_id: string | null;
+  video_url: string | null;
+}
+
+interface CommentAttachment {
+  url: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+}
+
 interface CommentRow {
   id: string;
   review_link_id: string;
   author_name: string;
   content: string;
-  status: 'approved' | 'changes_requested' | 'comment';
+  status: 'approved' | 'changes_requested' | 'comment' | 'caption_edit';
   created_at: string;
+  attachments: CommentAttachment[] | null;
+  caption_before: string | null;
+  caption_after: string | null;
 }
 
 export async function GET(
@@ -46,7 +61,7 @@ export async function GET(
     return NextResponse.json({ error: 'link expired' }, { status: 410 });
   }
 
-  const [{ data: drop }, { data: posts }] = await Promise.all([
+  const [{ data: drop }, { data: posts }, { data: videos }] = await Promise.all([
     admin
       .from('content_drops')
       .select('id, client_id, start_date, end_date, default_post_time')
@@ -56,8 +71,17 @@ export async function GET(
       .from('scheduled_posts')
       .select('id, client_id, caption, hashtags, scheduled_at, status, cover_image_url, late_post_id')
       .in('id', link.included_post_ids),
+    admin
+      .from('content_drop_videos')
+      .select('scheduled_post_id, video_url')
+      .in('scheduled_post_id', link.included_post_ids),
   ]);
   if (!drop) return NextResponse.json({ error: 'content calendar missing' }, { status: 404 });
+
+  const videoByPost: Record<string, string> = {};
+  for (const v of (videos ?? []) as DropVideoRow[]) {
+    if (v.scheduled_post_id && v.video_url) videoByPost[v.scheduled_post_id] = v.video_url;
+  }
 
   const { data: client } = await admin
     .from('clients')
@@ -69,7 +93,7 @@ export async function GET(
   const { data: comments } = reviewLinkIds.length
     ? await admin
         .from('post_review_comments')
-        .select('id, review_link_id, author_name, content, status, created_at')
+        .select('id, review_link_id, author_name, content, status, created_at, attachments, caption_before, caption_after')
         .in('review_link_id', reviewLinkIds)
         .order('created_at', { ascending: true })
     : { data: [] as CommentRow[] };
@@ -106,7 +130,18 @@ export async function GET(
       scheduled_at: p.scheduled_at,
       status: p.status,
       cover_image_url: p.cover_image_url,
-      comments: commentsByPost[p.id] ?? [],
+      video_url: videoByPost[p.id] ?? null,
+      comments: (commentsByPost[p.id] ?? []).map((c) => ({
+        id: c.id,
+        review_link_id: c.review_link_id,
+        author_name: c.author_name,
+        content: c.content,
+        status: c.status,
+        created_at: c.created_at,
+        attachments: c.attachments ?? [],
+        caption_before: c.caption_before,
+        caption_after: c.caption_after,
+      })),
     })),
     expiresAt: link.expires_at,
   });

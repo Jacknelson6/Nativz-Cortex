@@ -42,7 +42,9 @@ const FOLDER_URL =
   'https://drive.google.com/drive/folders/1NmKrZoqFjrJo4WLQFuYih0nWxx8bBvoU?usp=drive_link';
 const USER_EMAIL = (process.env.E2E_USER_EMAIL ?? 'jack@nativz.io').toLowerCase();
 const CLIENT_ID = process.env.E2E_CLIENT_ID ?? 'e1b61d86-8c55-4c5b-b19c-a1542b41492d'; // All Shutters and Blinds
-const VIDEO_LIMIT = Number(process.env.E2E_VIDEO_LIMIT ?? '2');
+const VIDEO_LIMIT_RAW = process.env.E2E_VIDEO_LIMIT ?? '2';
+const VIDEO_LIMIT = VIDEO_LIMIT_RAW === 'all' ? Number.POSITIVE_INFINITY : Number(VIDEO_LIMIT_RAW);
+const SPREAD_DAYS = Number(process.env.E2E_SPREAD_DAYS ?? '0'); // >0 = distribute across N days starting tomorrow
 const TEST_COMMENT = process.env.E2E_TEST_COMMENT !== 'false';
 // Cortex runs on 3001 locally. NEXT_PUBLIC_APP_URL is sometimes set to 3000
 // for the sibling app on Jack's machine; force 3001 so the printed share URL
@@ -66,20 +68,25 @@ async function main() {
   const userId = userRow.id;
   console.log(`  ${userRow.email} → ${userId}`);
 
-  step('List Drive videos + pick smallest');
+  step('List Drive videos');
   const { folderId, videos } = await listVideosInFolder(userId, FOLDER_URL);
   if (videos.length === 0) throw new Error('Folder has no videos');
-  const sorted = [...videos].filter((v) => v.size > 0).sort((a, b) => a.size - b.size);
-  const picked = sorted.slice(0, VIDEO_LIMIT);
+  const valid = videos.filter((v) => v.size > 0);
+  const picked = Number.isFinite(VIDEO_LIMIT)
+    ? [...valid].sort((a, b) => a.size - b.size).slice(0, VIDEO_LIMIT)
+    : [...valid].sort((a, b) => a.name.localeCompare(b.name));
   console.log(`  Folder ${folderId} has ${videos.length} videos; using ${picked.length}:`);
   for (const v of picked) console.log(`    • ${v.name} (${(v.size / 1024 / 1024).toFixed(1)} MiB)`);
 
   step('Create content_drops + content_drop_videos');
   const today = new Date();
   const start = new Date(today);
-  start.setDate(start.getDate() + 30);
+  // SPREAD_DAYS > 0: distribute across that window starting tomorrow.
+  // SPREAD_DAYS = 0: legacy smoke-test behavior (consecutive days starting +30).
+  start.setDate(start.getDate() + (SPREAD_DAYS > 0 ? 1 : 30));
+  const totalDays = SPREAD_DAYS > 0 ? SPREAD_DAYS : Math.max(picked.length, 1);
   const end = new Date(start);
-  end.setDate(end.getDate() + Math.max(picked.length - 1, 0));
+  end.setDate(end.getDate() + (totalDays - 1));
   const startDate = start.toISOString().slice(0, 10);
   const endDate = end.toISOString().slice(0, 10);
 
@@ -170,7 +177,11 @@ async function main() {
 
   const postRows = ready.map((v, idx) => {
     const slot = new Date(start);
-    slot.setDate(slot.getDate() + idx);
+    const dayOffset =
+      SPREAD_DAYS > 0 && ready.length > 0
+        ? Math.floor((idx * SPREAD_DAYS) / ready.length)
+        : idx;
+    slot.setDate(slot.getDate() + dayOffset);
     slot.setHours(10, 0, 0, 0);
     return {
       client_id: CLIENT_ID,

@@ -156,6 +156,208 @@ async function ensureAgentRuntime(): Promise<void> {
   }
 }
 
+// === Phases ==================================================================
+//
+// Each phase reads/writes ctx.state and emits events through ctx.onEvent.
+// Tools below are thin wrappers around these phases so the agent can call
+// them as named tools, while `runAdGenerator` can also call them directly
+// to backfill anything the LLM orchestrator skips. Phases guard on state so
+// re-entry is a no-op (defense-in-depth — callers should still gate on state
+// before invoking).
+
+async function runLoadContextPhase(ctx: AdAgentContext): Promise<string> {
+  ctx.onEvent({
+    type: 'tool_started',
+    tool: 'load_creative_context',
+    label: 'Loading brand DNA + matched reference ads…',
+  });
+  const admin = createAdminClient();
+  const [brandContext, assetsResult] = await Promise.all([
+    getBrandContext(ctx.clientId, { bypassCache: true }),
+    admin.from('ad_assets').select('id').eq('client_id', ctx.clientId),
+  ]);
+  const referenceAds = await selectReferenceAdsForBrand(
+    brandContext,
+    Math.max(ctx.count, 20),
+  );
+  ctx.state.brandContext = brandContext;
+  ctx.state.referenceAds = referenceAds;
+  const brandName = brandContext.clientName || 'this client';
+  const assetCount = assetsResult.data?.length ?? 0;
+  const referenceAdCount = referenceAds.length;
+  ctx.onEvent({
+    type: 'context_loaded',
+    brandName,
+    assetCount,
+    referenceAdCount,
+  });
+  const summary = `${brandName}: ${assetCount} brand asset${
+    assetCount === 1 ? '' : 's'
+  }, ${referenceAdCount} reference ad${
+    referenceAdCount === 1 ? '' : 's'
+  } matched.`;
+  ctx.onEvent({
+    type: 'tool_finished',
+    tool: 'load_creative_context',
+    summary,
+  });
+  return summary;
+}
+
+async function runComposePhase(ctx: AdAgentContext): Promise<string> {
+  if (!ctx.state.referenceAds) {
+    throw new Error(
+      'compose phase called before load_creative_context — load_creative_context first.',
+    );
+  }
+  ctx.onEvent({
+    type: 'tool_started',
+    tool: 'compose_concept_batch',
+    label: `Composing ${ctx.count} concept${ctx.count === 1 ? '' : 's'}…`,
+  });
+  const result = await composeAndPersistConcepts({
+    clientId: ctx.clientId,
+    prompt: ctx.prompt,
+    count: ctx.count,
+    referenceAds: ctx.state.referenceAds,
+    userId: ctx.userId,
+    brandContext: ctx.state.brandContext,
+  });
+  ctx.state.batchId = result.batchId;
+  ctx.state.concepts = result.concepts;
+  ctx.onEvent({
+    type: 'concepts_composed',
+    batchId: result.batchId,
+    concepts: result.concepts,
+    referenceAdsUsed: ctx.state.referenceAds.length,
+  });
+  const summary = `Composed ${result.concepts.length} concept${
+    result.concepts.length === 1 ? '' : 's'
+  } (batch ${result.batchId.slice(0, 8)}).`;
+  ctx.onEvent({
+    type: 'tool_finished',
+    tool: 'compose_concept_batch',
+    summary,
+  });
+  return summary;
+}
+
+async function runRenderPhase(ctx: AdAgentContext): Promise<string> {
+  const concepts = ctx.state.concepts;
+  if (!concepts || !ctx.state.batchId) {
+    throw new Error(
+      'render phase called before compose_concept_batch — compose_concept_batch first.',
+    );
+  }
+  ctx.onEvent({
+    type: 'tool_started',
+    tool: 'render_batch_images',
+    label: `Rendering ${concepts.length} image${
+      concepts.length === 1 ? '' : 's'
+    }…`,
+  });
+  const rendered: GeneratedConceptRow[] = [];
+  let failed = 0;
+  let terminalError: OpenAiImageError | undefined;
+  const queue = concepts.map((c, idx) => ({ concept: c, index: idx }));
+  const total = queue.length;
+
+  // Same 2-up concurrency as the legacy renderer. Each worker pulls from
+  // the shared queue and emits per-image events through the context.
+  async function worker() {
+    while (queue.length > 0) {
+      if (terminalError) {
+        // Drain remaining queue without retrying — the upstream is wedged
+        // (key/auth/quota), every retry would just burn another error.
+        for (const item of queue) {
+          failed += 1;
+          ctx.onEvent({
+            type: 'concept_render_failed',
+            index: item.index + 1,
+            total,
+            conceptId: item.concept.id,
+            slug: item.concept.slug,
+            code: terminalError.code,
+            message: terminalError.message,
+          });
+        }
+        queue.length = 0;
+        return;
+      }
+      const next = queue.shift();
+      if (!next) return;
+      const indexOneBased = next.index + 1;
+      ctx.onEvent({
+        type: 'concept_rendering',
+        index: indexOneBased,
+        total,
+        slug: next.concept.slug,
+      });
+      try {
+        const updated = await renderConceptImageWithOpenAI(next.concept.id, {
+          userId: ctx.userId,
+          userEmail: ctx.userEmail,
+        });
+        rendered.push(updated);
+        ctx.onEvent({
+          type: 'concept_rendered',
+          index: indexOneBased,
+          total,
+          concept: updated,
+        });
+      } catch (err) {
+        failed += 1;
+        if (err instanceof OpenAiImageError) {
+          ctx.onEvent({
+            type: 'concept_render_failed',
+            index: indexOneBased,
+            total,
+            conceptId: next.concept.id,
+            slug: next.concept.slug,
+            code: err.code,
+            message: err.message,
+          });
+          if (isTerminalForBatch(err.code)) {
+            terminalError = err;
+          }
+        } else {
+          ctx.onEvent({
+            type: 'concept_render_failed',
+            index: indexOneBased,
+            total,
+            conceptId: next.concept.id,
+            slug: next.concept.slug,
+            code: 'unknown_error',
+            message: err instanceof Error ? err.message : 'Unknown error',
+          });
+        }
+      }
+    }
+  }
+
+  const concurrency = Math.min(2, queue.length);
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
+
+  ctx.state.renderedConcepts = rendered;
+  ctx.state.renderFailures = failed;
+  ctx.state.terminalRenderError = terminalError;
+
+  const summary = `Rendered ${rendered.length}/${total} image${
+    total === 1 ? '' : 's'
+  }${failed > 0 ? ` (${failed} failed)` : ''}.`;
+  ctx.onEvent({
+    type: 'tool_finished',
+    tool: 'render_batch_images',
+    summary,
+  });
+  if (terminalError) {
+    // Terminate the run via thrown error so the agent surfaces a final
+    // user-facing message that explains the wall (key missing, quota, etc.).
+    throw terminalError;
+  }
+  return summary;
+}
+
 // === Tools ===================================================================
 
 const emptyParams = z.object({});
@@ -166,43 +368,7 @@ const loadCreativeContextTool = tool<typeof emptyParams, AdAgentContext>({
     'Load brand DNA, brand asset count, and matched reference ads for the current client. ALWAYS call this FIRST before composing concepts.',
   parameters: emptyParams,
   async execute(_args, runContext) {
-    const ctx = requireContext(runContext);
-    ctx.onEvent({
-      type: 'tool_started',
-      tool: 'load_creative_context',
-      label: 'Loading brand DNA + matched reference ads…',
-    });
-    const admin = createAdminClient();
-    const [brandContext, assetsResult] = await Promise.all([
-      getBrandContext(ctx.clientId, { bypassCache: true }),
-      admin.from('ad_assets').select('id').eq('client_id', ctx.clientId),
-    ]);
-    const referenceAds = await selectReferenceAdsForBrand(
-      brandContext,
-      Math.max(ctx.count, 20),
-    );
-    ctx.state.brandContext = brandContext;
-    ctx.state.referenceAds = referenceAds;
-    const brandName = brandContext.clientName || 'this client';
-    const assetCount = assetsResult.data?.length ?? 0;
-    const referenceAdCount = referenceAds.length;
-    ctx.onEvent({
-      type: 'context_loaded',
-      brandName,
-      assetCount,
-      referenceAdCount,
-    });
-    const summary = `${brandName}: ${assetCount} brand asset${
-      assetCount === 1 ? '' : 's'
-    }, ${referenceAdCount} reference ad${
-      referenceAdCount === 1 ? '' : 's'
-    } matched.`;
-    ctx.onEvent({
-      type: 'tool_finished',
-      tool: 'load_creative_context',
-      summary,
-    });
-    return summary;
+    return runLoadContextPhase(requireContext(runContext));
   },
 });
 
@@ -212,42 +378,7 @@ const composeConceptBatchTool = tool<typeof emptyParams, AdAgentContext>({
     'Compose the ad concept copy + image prompts using the user brief, brand DNA, and the reference ads loaded in the previous step. Persists the batch and returns a summary. Call this AFTER load_creative_context and BEFORE render_batch_images.',
   parameters: emptyParams,
   async execute(_args, runContext) {
-    const ctx = requireContext(runContext);
-    if (!ctx.state.referenceAds) {
-      throw new Error(
-        'compose_concept_batch called before load_creative_context — call load_creative_context first.',
-      );
-    }
-    ctx.onEvent({
-      type: 'tool_started',
-      tool: 'compose_concept_batch',
-      label: `Composing ${ctx.count} concept${ctx.count === 1 ? '' : 's'}…`,
-    });
-    const result = await composeAndPersistConcepts({
-      clientId: ctx.clientId,
-      prompt: ctx.prompt,
-      count: ctx.count,
-      referenceAds: ctx.state.referenceAds,
-      userId: ctx.userId,
-      brandContext: ctx.state.brandContext,
-    });
-    ctx.state.batchId = result.batchId;
-    ctx.state.concepts = result.concepts;
-    ctx.onEvent({
-      type: 'concepts_composed',
-      batchId: result.batchId,
-      concepts: result.concepts,
-      referenceAdsUsed: ctx.state.referenceAds.length,
-    });
-    const summary = `Composed ${result.concepts.length} concept${
-      result.concepts.length === 1 ? '' : 's'
-    } (batch ${result.batchId.slice(0, 8)}).`;
-    ctx.onEvent({
-      type: 'tool_finished',
-      tool: 'compose_concept_batch',
-      summary,
-    });
-    return summary;
+    return runComposePhase(requireContext(runContext));
   },
 });
 
@@ -257,120 +388,7 @@ const renderBatchImagesTool = tool<typeof emptyParams, AdAgentContext>({
     'Render images for every concept in the current batch via gpt-image-2. Streams per-image progress to the user. Call this AFTER compose_concept_batch.',
   parameters: emptyParams,
   async execute(_args, runContext) {
-    const ctx = requireContext(runContext);
-    const concepts = ctx.state.concepts;
-    if (!concepts || !ctx.state.batchId) {
-      throw new Error(
-        'render_batch_images called before compose_concept_batch — call compose_concept_batch first.',
-      );
-    }
-    ctx.onEvent({
-      type: 'tool_started',
-      tool: 'render_batch_images',
-      label: `Rendering ${concepts.length} image${
-        concepts.length === 1 ? '' : 's'
-      }…`,
-    });
-    const rendered: GeneratedConceptRow[] = [];
-    let failed = 0;
-    let terminalError: OpenAiImageError | undefined;
-    const queue = concepts.map((c, idx) => ({ concept: c, index: idx }));
-    const total = queue.length;
-
-    // Same 2-up concurrency as the legacy renderer. Each worker pulls from
-    // the shared queue and emits per-image events through the context.
-    async function worker() {
-      while (queue.length > 0) {
-        if (terminalError) {
-          // Drain remaining queue without retrying — the upstream is wedged
-          // (key/auth/quota), every retry would just burn another error.
-          for (const item of queue) {
-            failed += 1;
-            ctx.onEvent({
-              type: 'concept_render_failed',
-              index: item.index + 1,
-              total,
-              conceptId: item.concept.id,
-              slug: item.concept.slug,
-              code: terminalError.code,
-              message: terminalError.message,
-            });
-          }
-          queue.length = 0;
-          return;
-        }
-        const next = queue.shift();
-        if (!next) return;
-        const indexOneBased = next.index + 1;
-        ctx.onEvent({
-          type: 'concept_rendering',
-          index: indexOneBased,
-          total,
-          slug: next.concept.slug,
-        });
-        try {
-          const updated = await renderConceptImageWithOpenAI(next.concept.id, {
-            userId: ctx.userId,
-            userEmail: ctx.userEmail,
-          });
-          rendered.push(updated);
-          ctx.onEvent({
-            type: 'concept_rendered',
-            index: indexOneBased,
-            total,
-            concept: updated,
-          });
-        } catch (err) {
-          failed += 1;
-          if (err instanceof OpenAiImageError) {
-            ctx.onEvent({
-              type: 'concept_render_failed',
-              index: indexOneBased,
-              total,
-              conceptId: next.concept.id,
-              slug: next.concept.slug,
-              code: err.code,
-              message: err.message,
-            });
-            if (isTerminalForBatch(err.code)) {
-              terminalError = err;
-            }
-          } else {
-            ctx.onEvent({
-              type: 'concept_render_failed',
-              index: indexOneBased,
-              total,
-              conceptId: next.concept.id,
-              slug: next.concept.slug,
-              code: 'unknown_error',
-              message: err instanceof Error ? err.message : 'Unknown error',
-            });
-          }
-        }
-      }
-    }
-
-    const concurrency = Math.min(2, queue.length);
-    await Promise.all(Array.from({ length: concurrency }, () => worker()));
-
-    ctx.state.renderedConcepts = rendered;
-    ctx.state.renderFailures = failed;
-    ctx.state.terminalRenderError = terminalError;
-
-    const summary = `Rendered ${rendered.length}/${total} image${
-      total === 1 ? '' : 's'
-    }${failed > 0 ? ` (${failed} failed)` : ''}.`;
-    ctx.onEvent({
-      type: 'tool_finished',
-      tool: 'render_batch_images',
-      summary,
-    });
-    if (terminalError) {
-      // Terminate the run via thrown error so the agent surfaces a final
-      // user-facing message that explains the wall (key missing, quota, etc.).
-      throw terminalError;
-    }
-    return summary;
+    return runRenderPhase(requireContext(runContext));
   },
 });
 
@@ -628,17 +646,19 @@ ${formatReferenceAdsForPrompt(referenceAds)}
 
 # image_prompt rules (gpt-image-2)
 
-Each image_prompt must read like a creative brief for a real photographer, not concept-art language. Follow this structure in order:
+Each image_prompt is a creative brief in plain prose. Write it like you're directing a photographer or designer — a paragraph or two, not a numbered list and not JSON. gpt-image-2 reads natural direction better than rigid structure.
 
-1. Scene & background — physical setting, surface, environment.
-2. Subject — what is featured (product, person, object, abstract composition). Name camera framing (close-up, medium, wide), viewpoint (eye-level, low-angle, top-down), and lighting (soft diffuse, golden hour, studio key + fill).
-3. On-image text — write the EXACT copy in quotes, e.g. headline "Sleep deeper tonight" rendered verbatim. Specify font character (sans / serif / display), size relative to the ad, color, and placement (top-left, lower third, etc.). For tricky words, spell out letter-by-letter.
-4. Brand identity — describe brand personality and palette in plain English (warm earth tones, energetic neon accent on charcoal, premium muted neutrals). Avoid hex codes; let the model interpret tasteful color direction. Place the logo only if Brand DNA confirms a clean lockup, and name its location ("logo bottom-right, small").
-5. Composition & layout — name the visual hierarchy ("subject centered, headline lower third, CTA pill bottom-right"). Reference the borrowed reference-ad mechanic by feel, not by name.
-6. Constraints — list what must NOT appear: "no watermarks, no extra logos, no clip-art icons, no stock-photo feeling, no decorative gradients, no unrelated text".
-7. Render mode — for photoreal ads include "photorealistic, professional campaign photography"; for graphic ads include "flat editorial illustration" or "clean magazine layout".
+Cover, in whatever order reads naturally:
 
-Quality is set to medium by default. Only the BAD_REQUEST hint "small dense type" warrants the high tier — keep prompts tight enough that medium reads cleanly.
+- The scene and subject — what we're looking at, framing, lighting.
+- On-image text — write the exact copy in double quotes, e.g. headline "Sleep deeper tonight". For tricky words, spell them letter-by-letter so the render keeps them legible. Note rough placement (top, lower third, centered) and the feel of the type (clean sans, bold display, friendly script). Don't specify hex colors for type.
+- Brand feel — palette and personality in plain English (warm earth tones, premium muted neutrals, energetic neon on charcoal). No hex codes. Place the logo only if Brand DNA confirms a clean lockup, and say where.
+- Composition cues — what's the focal point, what reads next, where any CTA sits.
+- What to avoid — no watermarks, no extra logos, no clip-art icons, no stock-photo feel, no decorative gradients, no unrelated text.
+
+For photoreal ads add "photorealistic, professional campaign photography." For graphic ads add "clean editorial layout" or "flat magazine illustration."
+
+Keep prompts tight enough that medium quality reads cleanly — only flag dense small type as needing high quality.
 
 # Output JSON
 
@@ -734,6 +754,22 @@ export async function runAdGenerator(
     }
   }
 
+  // Backfill any phases the orchestrator skipped. gpt-5-mini sometimes stops
+  // after compose_concept_batch and never calls render_batch_images, leaving
+  // the user with a fake "completed" batch and an empty gallery. Each phase
+  // guards on state, so re-entry is safe; runRenderPhase still throws terminal
+  // errors directly, which propagate to the route as a real batch_error.
+  if (!context.state.brandContext) {
+    await runLoadContextPhase(context);
+  }
+  if (!context.state.concepts || !context.state.batchId) {
+    await runComposePhase(context);
+  }
+  if (!context.state.renderedConcepts) {
+    options.onEvent({ type: 'agent_message', text: 'Rendering images now…' });
+    await runRenderPhase(context);
+  }
+
   // The render tool throws terminal errors (KEY_MISSING / AUTH_FAILED /
   // QUOTA_EXHAUSTED) so the SDK surfaces them — but the SDK catches tool
   // throws and feeds them back to the model rather than re-throwing. If the
@@ -745,9 +781,12 @@ export async function runAdGenerator(
     throw terminal;
   }
 
-  // Agent finished — assemble the final result from context state.
-  const concepts =
-    context.state.renderedConcepts ?? context.state.concepts ?? [];
+  // Agent finished — assemble the final result from context state. A concept
+  // without a rendered image is not a deliverable, so don't fall back to
+  // composed concepts here: an empty `renderedConcepts` means render never
+  // ran or every render failed, and the status logic below will mark the
+  // batch failed/partial accordingly.
+  const concepts = context.state.renderedConcepts ?? [];
   const batchId = context.state.batchId ?? null;
   const referenceAdsUsed = context.state.referenceAds?.length ?? 0;
   const failures = context.state.renderFailures ?? 0;

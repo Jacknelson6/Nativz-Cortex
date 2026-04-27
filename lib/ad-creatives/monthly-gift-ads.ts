@@ -482,13 +482,6 @@ interface PromptInputs {
   renderImages: boolean;
 }
 
-/**
- * System prompt for the concept-generation step. The image_prompt rules are
- * pulled from OpenAI's gpt-image-2 prompting guide (background → subject →
- * details → constraints; on-image text in quotes; explicit framing/lighting;
- * exclude watermarks/clip-art) so the prompts we emit are immediately
- * render-ready instead of needing a second pass.
- */
 function buildSystemPrompt({ count, brandBlock, assets, referenceAds, renderImages }: PromptInputs): string {
   const assetManifest =
     assets.length === 0
@@ -530,17 +523,19 @@ ${formatReferenceAdsForPrompt(referenceAds)}
 
 # image_prompt rules (gpt-image-2)
 
-Each image_prompt must read like a creative brief for a real photographer, not concept-art language. Follow this structure in order:
+Each image_prompt is a creative brief in plain prose. Write it like you're directing a photographer or designer — a paragraph or two, not a numbered list and not JSON. gpt-image-2 reads natural direction better than rigid structure.
 
-1. Scene & background — physical setting, surface, environment.
-2. Subject — what is featured (product, person, object, abstract composition). Name camera framing (close-up, medium, wide), viewpoint (eye-level, low-angle, top-down), and lighting (soft diffuse, golden hour, studio key + fill).
-3. On-image text — write the EXACT copy in quotes, e.g. headline "Sleep deeper tonight" rendered verbatim. Specify font character (sans / serif / display), size relative to the ad, color, and placement (top-left, lower third, etc.). For tricky words, spell out letter-by-letter.
-4. Brand identity — describe brand personality and palette in plain English (warm earth tones, energetic neon accent on charcoal, premium muted neutrals). Avoid hex codes; let the model interpret tasteful color direction. Place the logo only if Brand DNA confirms a clean lockup, and name its location ("logo bottom-right, small").
-5. Composition & layout — name the visual hierarchy ("subject centered, headline lower third, CTA pill bottom-right"). Reference the borrowed reference-ad mechanic by feel, not by name.
-6. Constraints — list what must NOT appear: "no watermarks, no extra logos, no clip-art icons, no stock-photo feeling, no decorative gradients, no unrelated text".
-7. Render mode — for photoreal ads include "photorealistic, professional campaign photography"; for graphic ads include "flat editorial illustration" or "clean magazine layout".
+Cover, in whatever order reads naturally:
 
-Quality is set to medium by default. Only the BAD_REQUEST hint "small dense type" warrants the high tier — keep prompts tight enough that medium reads cleanly.
+- The scene and subject — what we're looking at, framing, lighting.
+- On-image text — write the exact copy in double quotes, e.g. headline "Sleep deeper tonight". For tricky words, spell them letter-by-letter so the render keeps them legible. Note rough placement (top, lower third, centered) and the feel of the type (clean sans, bold display, friendly script). Don't specify hex colors for type.
+- Brand feel — palette and personality in plain English (warm earth tones, premium muted neutrals, energetic neon on charcoal). No hex codes. Place the logo only if Brand DNA confirms a clean lockup, and say where.
+- Composition cues — what's the focal point, what reads next, where any CTA sits.
+- What to avoid — no watermarks, no extra logos, no clip-art icons, no stock-photo feel, no decorative gradients, no unrelated text.
+
+For photoreal ads add "photorealistic, professional campaign photography." For graphic ads add "clean editorial layout" or "flat magazine illustration."
+
+Keep prompts tight enough that medium quality reads cleanly — only flag dense small type as needing high quality.
 
 # Output JSON
 

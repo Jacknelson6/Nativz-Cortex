@@ -4,26 +4,11 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createNotification } from '@/lib/notifications/create';
 import { sendDropCommentEmail } from '@/lib/email/resend';
 
-const AttachmentSchema = z.object({
-  url: z.string().url(),
-  filename: z.string().min(1).max(200),
-  mime_type: z.string().min(1).max(120),
-  size_bytes: z.number().int().nonnegative(),
-});
-
 const BodySchema = z.object({
   postId: z.string().uuid(),
   authorName: z.string().min(1).max(80),
-  content: z.string().min(1).max(2000),
-  status: z.enum(['approved', 'changes_requested', 'comment']),
-  attachments: z.array(AttachmentSchema).max(10).optional(),
+  caption: z.string().max(5000),
 });
-
-const TITLE_BY_STATUS: Record<'approved' | 'changes_requested' | 'comment', (a: string, c: string) => string> = {
-  approved: (a, c) => `${a} approved a post in ${c}`,
-  changes_requested: (a, c) => `${a} requested changes in ${c}`,
-  comment: (a, c) => `${a} left a comment on ${c}`,
-};
 
 export async function POST(
   req: Request,
@@ -39,49 +24,82 @@ export async function POST(
   const admin = createAdminClient();
   const { data: link } = await admin
     .from('content_drop_share_links')
-    .select('drop_id, post_review_link_map, expires_at')
+    .select('drop_id, post_review_link_map, expires_at, included_post_ids')
     .eq('token', token)
-    .single<{ drop_id: string; post_review_link_map: Record<string, string>; expires_at: string }>();
+    .single<{
+      drop_id: string;
+      post_review_link_map: Record<string, string>;
+      expires_at: string;
+      included_post_ids: string[];
+    }>();
   if (!link) return NextResponse.json({ error: 'not found' }, { status: 404 });
   if (new Date(link.expires_at) < new Date()) {
     return NextResponse.json({ error: 'link expired' }, { status: 410 });
   }
 
+  if (!link.included_post_ids?.includes(parsed.data.postId)) {
+    return NextResponse.json({ error: 'post is not part of this share link' }, { status: 400 });
+  }
   const reviewLinkId = link.post_review_link_map?.[parsed.data.postId];
   if (!reviewLinkId) {
     return NextResponse.json({ error: 'post is not part of this share link' }, { status: 400 });
   }
 
-  const { data, error } = await admin
+  const newCaption = parsed.data.caption.trim();
+
+  const { data: post } = await admin
+    .from('scheduled_posts')
+    .select('id, caption')
+    .eq('id', parsed.data.postId)
+    .single<{ id: string; caption: string | null }>();
+  if (!post) return NextResponse.json({ error: 'post not found' }, { status: 404 });
+
+  const previousCaption = post.caption ?? '';
+  if (previousCaption.trim() === newCaption) {
+    return NextResponse.json({ error: 'caption unchanged' }, { status: 400 });
+  }
+
+  const { error: updErr } = await admin
+    .from('scheduled_posts')
+    .update({ caption: newCaption })
+    .eq('id', parsed.data.postId);
+  if (updErr) {
+    return NextResponse.json({ error: updErr.message }, { status: 500 });
+  }
+
+  const { data: commentRow, error: insErr } = await admin
     .from('post_review_comments')
     .insert({
       review_link_id: reviewLinkId,
       author_name: parsed.data.authorName.trim(),
-      content: parsed.data.content.trim(),
-      status: parsed.data.status,
-      attachments: parsed.data.attachments ?? [],
+      content: 'Updated the caption',
+      status: 'caption_edit',
+      caption_before: previousCaption,
+      caption_after: newCaption,
+      attachments: [],
     })
-    .select('id, review_link_id, author_name, content, status, created_at, attachments')
+    .select('id, review_link_id, author_name, content, status, created_at, attachments, caption_before, caption_after')
     .single();
-  if (error || !data) {
-    return NextResponse.json({ error: error?.message ?? 'failed' }, { status: 500 });
+  if (insErr || !commentRow) {
+    return NextResponse.json({ error: insErr?.message ?? 'failed to record edit' }, { status: 500 });
   }
 
-  // Fire-and-forget notifications. Don't block the comment response — admins
-  // see the toast/badge on next nav, and the email is best-effort.
-  notifyAdminsOfComment(admin, link.drop_id, {
+  notifyAdminsOfCaptionEdit(admin, link.drop_id, {
     authorName: parsed.data.authorName.trim(),
-    content: parsed.data.content.trim(),
-    status: parsed.data.status,
-  }).catch((err) => console.error('Comment notification failed:', err));
+    previousCaption,
+    newCaption,
+  }).catch((err) => console.error('Caption-edit notification failed:', err));
 
-  return NextResponse.json({ comment: data });
+  return NextResponse.json({
+    caption: newCaption,
+    comment: commentRow,
+  });
 }
 
-async function notifyAdminsOfComment(
+async function notifyAdminsOfCaptionEdit(
   admin: ReturnType<typeof createAdminClient>,
   dropId: string,
-  comment: { authorName: string; content: string; status: 'approved' | 'changes_requested' | 'comment' },
+  edit: { authorName: string; previousCaption: string; newCaption: string },
 ) {
   const { data: drop } = await admin
     .from('content_drops')
@@ -91,8 +109,8 @@ async function notifyAdminsOfComment(
   if (!drop) return;
 
   const clientName = drop.clients?.name ?? 'Client';
-  const title = TITLE_BY_STATUS[comment.status](comment.authorName, clientName);
-  const preview = comment.content.slice(0, 140) + (comment.content.length > 140 ? '…' : '');
+  const title = `${edit.authorName} edited a caption in ${clientName}`;
+  const preview = `"${edit.newCaption.slice(0, 140)}${edit.newCaption.length > 140 ? '…' : ''}"`;
   const linkPath = `/admin/calendar/${drop.id}`;
 
   const [{ data: admins }, { data: owner }] = await Promise.all([
@@ -114,11 +132,11 @@ async function notifyAdminsOfComment(
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
     sendDropCommentEmail({
       to: owner.email,
-      authorName: comment.authorName,
+      authorName: edit.authorName,
       clientName,
-      status: comment.status,
-      contentPreview: preview,
+      status: 'comment',
+      contentPreview: `Edited caption: ${preview}`,
       dropUrl: `${appUrl}${linkPath}`,
-    }).catch((err) => console.error('Content calendar comment email send failed:', err));
+    }).catch((err) => console.error('Caption-edit email send failed:', err));
   }
 }

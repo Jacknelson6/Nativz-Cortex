@@ -14,6 +14,8 @@ interface DialogProps {
   className?: string;
   /** Override padding wrapper around children (default `p-6`). */
   bodyClassName?: string;
+  /** Fires when user attempts to ESC. Call `e.preventDefault()` to keep open. */
+  onCancel?: (e: React.SyntheticEvent<HTMLDialogElement>) => void;
 }
 
 const maxWidthStyles = {
@@ -34,6 +36,7 @@ export function Dialog({
   maxWidth = 'md',
   className = '',
   bodyClassName,
+  onCancel,
 }: DialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -58,6 +61,7 @@ export function Dialog({
     <dialog
       ref={dialogRef}
       onClose={onClose}
+      onCancel={onCancel}
       onClick={handleBackdropClick}
       className={`${maxWidthStyles[maxWidth]} w-full m-auto rounded-xl border border-nativz-border bg-surface p-0 shadow-elevated backdrop:bg-[color:var(--nz-ink)]/70 backdrop:backdrop-blur-sm relative ${className}`.trim()}
     >

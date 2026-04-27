@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Save,
   Send,
+  Type,
   XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -43,14 +44,17 @@ const IN_FLIGHT_DROP: DropStatus[] = ['ingesting', 'analyzing', 'generating'];
 const IN_FLIGHT_VIDEO: DropVideoStatus[] = ['pending', 'downloading', 'analyzing', 'caption_pending'];
 
 type ReviewStatus = 'approved' | 'changes_requested' | 'comment';
+type CommentStatus = ReviewStatus | 'caption_edit';
 
 interface DropComment {
   id: string;
   review_link_id: string;
   author_name: string;
   content: string;
-  status: ReviewStatus;
+  status: CommentStatus;
   created_at: string;
+  caption_before: string | null;
+  caption_after: string | null;
 }
 
 interface DropResponse {
@@ -675,19 +679,50 @@ function CommentRow({ comment }: { comment: DropComment }) {
       ? 'text-emerald-300'
       : comment.status === 'changes_requested'
         ? 'text-amber-300'
-        : 'text-text-secondary';
+        : comment.status === 'caption_edit'
+          ? 'text-accent-text'
+          : 'text-text-secondary';
   const Icon =
     comment.status === 'approved'
       ? CheckCircle
       : comment.status === 'changes_requested'
         ? AlertTriangle
-        : MessageSquare;
+        : comment.status === 'caption_edit'
+          ? Type
+          : MessageSquare;
   const time = new Date(comment.created_at).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
   });
+
+  if (comment.status === 'caption_edit') {
+    return (
+      <div className="rounded-lg border border-accent-text/25 bg-accent-text/5 px-3 py-2">
+        <div className="mb-1 flex items-center gap-1.5 text-[11px]">
+          <Icon size={11} className={tone} />
+          <span className="font-medium text-text-primary">{comment.author_name}</span>
+          <span className="text-text-muted">edited the caption · {time}</span>
+        </div>
+        {comment.caption_before && (
+          <details className="mb-1.5 text-[11px] text-text-muted">
+            <summary className="cursor-pointer hover:text-text-secondary">Show previous caption</summary>
+            <p className="mt-1 whitespace-pre-wrap rounded border border-nativz-border bg-background/40 px-2 py-1.5 text-text-muted">
+              {comment.caption_before || <span className="italic">(empty)</span>}
+            </p>
+          </details>
+        )}
+        {comment.caption_after && (
+          <p className="whitespace-pre-wrap text-xs text-text-secondary">
+            <span className="text-[10px] uppercase tracking-wide text-text-muted">Now: </span>
+            {comment.caption_after}
+          </p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-lg border border-nativz-border bg-surface px-3 py-2">
       <div className="mb-0.5 flex items-center gap-1.5 text-[11px]">

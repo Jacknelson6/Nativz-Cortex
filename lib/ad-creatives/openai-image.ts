@@ -144,7 +144,6 @@ export async function generateOpenAiAdImage(
           prompt: params.prompt,
           size,
           quality,
-          response_format: 'b64_json',
           output_format: 'png',
           n: 1,
         }),

@@ -6,9 +6,9 @@ import { Monitor } from 'lucide-react';
 
 // Public client-facing surfaces that must work on mobile. The admin +
 // portal are desktop-only (by design), but client-shared links like
-// onboarding timelines are viewed on phones. Add any future public
-// client surfaces here.
-const MOBILE_ALLOWED_PREFIXES = ['/onboarding/'];
+// onboarding timelines and content-calendar review links are viewed on
+// phones. Add any future public client surfaces here.
+const MOBILE_ALLOWED_PREFIXES = ['/onboarding/', '/c/'];
 
 /**
  * Detects mobile viewport and shows a full-screen overlay telling the user

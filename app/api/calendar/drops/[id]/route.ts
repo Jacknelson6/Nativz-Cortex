@@ -19,8 +19,10 @@ interface CommentRow {
   review_link_id: string;
   author_name: string;
   content: string;
-  status: 'approved' | 'changes_requested' | 'comment';
+  status: 'approved' | 'changes_requested' | 'comment' | 'caption_edit';
   created_at: string;
+  caption_before: string | null;
+  caption_after: string | null;
 }
 
 export async function GET(
@@ -87,7 +89,7 @@ export async function GET(
   const { data: comments } = reviewLinkIds.length
     ? await admin
         .from('post_review_comments')
-        .select('id, review_link_id, author_name, content, status, created_at')
+        .select('id, review_link_id, author_name, content, status, created_at, caption_before, caption_after')
         .in('review_link_id', reviewLinkIds)
         .order('created_at', { ascending: true })
     : { data: [] as CommentRow[] };
