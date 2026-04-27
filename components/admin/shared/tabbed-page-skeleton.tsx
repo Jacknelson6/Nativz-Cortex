@@ -28,16 +28,16 @@ export function TabbedPageSkeleton({ tileCount = 6, tabCount = 6 }: TabbedPageSk
         </div>
       </header>
 
-      {/* Tab nav */}
+      {/* Tab nav — matches the underlined strip from `components/ui/sub-nav.tsx`
+          so the skeleton doesn't snap into a different shape on hydration. */}
       <nav
         aria-label="Loading section tabs"
-        className="flex flex-wrap items-center gap-1 rounded-full border border-nativz-border bg-surface/70 p-1 backdrop-blur"
+        className="flex items-center gap-1 border-b border-nativz-border"
       >
         {Array.from({ length: tabCount }).map((_, i) => (
-          <span
-            key={i}
-            className="inline-flex h-7 w-24 items-center gap-2 rounded-full bg-surface-hover/30 px-3"
-          />
+          <span key={i} className="px-3 py-2">
+            <span className="inline-block h-3 w-16 rounded bg-surface-hover/40" />
+          </span>
         ))}
       </nav>
 

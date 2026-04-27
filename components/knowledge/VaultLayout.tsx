@@ -10,8 +10,15 @@ import { EntryEditor } from './EntryEditor';
 import { KnowledgeGraph } from './KnowledgeGraph';
 import { KnowledgeFeed } from './KnowledgeFeed';
 import { KnowledgeHealthDashboard } from './KnowledgeHealthDashboard';
+import { SubNav, type SubNavItem } from '@/components/ui/sub-nav';
 
 type VaultMainTab = 'graph' | 'feed' | 'health';
+
+const VAULT_TABS: SubNavItem<VaultMainTab>[] = [
+  { slug: 'graph', label: 'Graph', icon: <Network size={13} /> },
+  { slug: 'feed', label: 'Activity', icon: <Activity size={13} /> },
+  { slug: 'health', label: 'Health', icon: <BarChart3 size={13} /> },
+];
 
 interface ContextMenuState {
   x: number;
@@ -210,28 +217,13 @@ export function VaultLayout({
         />
 
         <div className="flex-1 min-w-0 flex flex-col min-h-0">
-          <div className="flex shrink-0 border-b border-nativz-border bg-background">
-            {(
-              [
-                { id: 'graph' as const, label: 'Graph', Icon: Network },
-                { id: 'feed' as const, label: 'Activity', Icon: Activity },
-                { id: 'health' as const, label: 'Health', Icon: BarChart3 },
-              ] as const
-            ).map(({ id, label, Icon }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setMainTab(id)}
-                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px ${
-                  mainTab === id
-                    ? 'border-accent-text text-accent-text bg-surface/40'
-                    : 'border-transparent text-text-secondary hover:text-text-primary hover:bg-surface/20'
-                }`}
-              >
-                <Icon size={14} aria-hidden />
-                {label}
-              </button>
-            ))}
+          <div className="shrink-0 bg-background">
+            <SubNav
+              items={VAULT_TABS}
+              active={mainTab}
+              onChange={setMainTab}
+              ariaLabel="Vault views"
+            />
           </div>
           <div className="flex-1 min-h-0 relative">
             {mainTab === 'graph' && (

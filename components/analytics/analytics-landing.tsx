@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { Share2, Handshake } from 'lucide-react';
 import type { PortfolioClient } from '@/components/ui/client-portfolio-selector';
+import { SubNav, type SubNavItem } from '@/components/ui/sub-nav';
 
 const AnalyticsDashboard = dynamic(
   () => import('@/components/reporting/analytics-dashboard').then(m => ({ default: m.AnalyticsDashboard })),
@@ -32,9 +33,9 @@ const ALL_TABS: { id: TabId; label: string; icon: typeof Share2 }[] = [
 
 const TABS_WITH_SUBS: TabId[] = ['social'];
 
-const SUB_TABS: { id: SubTabId; label: string }[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'benchmarking', label: 'Benchmarking' },
+const SUB_TABS: SubNavItem<SubTabId>[] = [
+  { slug: 'overview', label: 'Overview' },
+  { slug: 'benchmarking', label: 'Benchmarking' },
 ];
 
 interface AnalyticsLandingProps {
@@ -135,21 +136,12 @@ export function AnalyticsLanding({
       </div>
 
       {showSubTabs && (
-        <div className="flex items-center gap-1 border-b border-nativz-border">
-          {SUB_TABS.map(sub => (
-            <button
-              key={sub.id}
-              onClick={() => handleChangeSub(sub.id)}
-              className={`px-3 py-2 text-xs font-medium transition-colors cursor-pointer border-b-2 -mb-px ${
-                activeSub === sub.id
-                  ? 'border-accent-text text-text-primary'
-                  : 'border-transparent text-text-muted hover:text-text-secondary'
-              }`}
-            >
-              {sub.label}
-            </button>
-          ))}
-        </div>
+        <SubNav
+          items={SUB_TABS}
+          active={activeSub}
+          onChange={handleChangeSub}
+          ariaLabel="Analytics sub-sections"
+        />
       )}
 
       {activeTab === 'social' && activeSub === 'overview' && (
