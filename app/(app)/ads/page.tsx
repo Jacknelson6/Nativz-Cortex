@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getActiveBrand } from '@/lib/active-brand';
 import { AdGeneratorWorkspace } from '@/components/ad-creatives/ad-generator-workspace';
 import type { AdPromptTemplate } from '@/components/ad-creatives/ad-template-library';
+import type { ReferenceAdRow } from '@/components/ad-creatives/ad-reference-library';
 import type { AdConcept } from '@/components/ad-creatives/ad-concept-gallery';
 
 /**
@@ -53,7 +54,13 @@ export default async function AdCreativesPage() {
   // Parallel: every read the workspace needs on first paint. Concept list
   // is the most expensive (up to hundreds of rows), but even at 500 it's a
   // sub-100ms query with the (client_id, created_at DESC) index.
-  const [clientResult, assetResult, templateResult, conceptResult] = await Promise.all([
+  const [
+    clientResult,
+    assetResult,
+    templateResult,
+    referenceAdResult,
+    conceptResult,
+  ] = await Promise.all([
     admin
       .from('clients')
       .select('id, name, slug, logo_url, brand_dna_status')
@@ -70,6 +77,13 @@ export default async function AdCreativesPage() {
       .select('id, name, reference_image_url, prompt_schema, aspect_ratio, ad_category, tags, created_at, updated_at')
       .eq('client_id', clientId)
       .order('created_at', { ascending: false })
+      .limit(500),
+    admin
+      .from('ad_reference_ads')
+      .select('id, source_file_name, source_folder_name, source_url, image_url, category, tags')
+      .eq('is_active', true)
+      .order('source_folder_name', { ascending: true })
+      .order('source_file_name', { ascending: true })
       .limit(500),
     admin
       .from('ad_concepts')
@@ -104,6 +118,7 @@ export default async function AdCreativesPage() {
       brandDnaStatus={client.brand_dna_status ?? 'none'}
       initialAssets={assetResult.data ?? []}
       initialTemplates={(templateResult.data ?? []) as AdPromptTemplate[]}
+      initialReferenceAds={(referenceAdResult.data ?? []) as ReferenceAdRow[]}
       initialConcepts={(conceptResult.data ?? []) as AdConcept[]}
     />
   );

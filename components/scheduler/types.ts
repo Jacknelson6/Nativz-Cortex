@@ -67,5 +67,26 @@ export const PLATFORM_ICONS: Record<SocialPlatform, string> = {
   googlebusiness: 'Google Business',
 };
 
+// Per-platform thumbnail border colors. Picked so each chip is identifiable at
+// a glance in the calendar grid — no platform icons needed for the dominant
+// brands. Hex values keep the dark/light theme behaviour consistent.
+export const PLATFORM_BORDER_COLOR: Record<SocialPlatform, string> = {
+  facebook: '#3b82f6',     // blue-500
+  instagram: '#ec4899',    // pink-500
+  tiktok: '#22d3ee',       // cyan-400
+  youtube: '#ef4444',      // red-500
+  linkedin: '#0a66c2',     // linkedin brand
+  googlebusiness: '#10b981', // emerald-500
+};
+
+export const CHIP_STATUS_LABEL: Record<PostStatus, string> = {
+  draft: 'Draft',
+  scheduled: 'Auto',
+  publishing: 'Posting',
+  published: 'Posted',
+  partially_failed: 'Partial',
+  failed: 'Error',
+};
+
 export const DEFAULT_POSTING_TIME = '12:00';
 export const DEFAULT_POSTING_TIMEZONE = 'America/Chicago';

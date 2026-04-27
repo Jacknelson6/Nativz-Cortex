@@ -2,9 +2,13 @@
 
 import { useCallback, useState } from 'react';
 import Image from 'next/image';
-import { ShieldAlert, FolderOpen, LayoutTemplate, X } from 'lucide-react';
+import { Library, X } from 'lucide-react';
 import { AdAssetLibrary, type AdAsset } from './ad-asset-library';
 import { AdTemplateLibrary, type AdPromptTemplate } from './ad-template-library';
+import {
+  AdReferenceLibrary,
+  type ReferenceAdRow,
+} from './ad-reference-library';
 import { AdGeneratorChat } from './ad-generator-chat';
 import { AdConceptGallery, type AdConcept } from './ad-concept-gallery';
 
@@ -16,11 +20,12 @@ interface Props {
   brandDnaStatus: string;
   initialAssets: AdAsset[];
   initialTemplates: AdPromptTemplate[];
+  initialReferenceAds: ReferenceAdRow[];
   initialConcepts: AdConcept[];
 }
 
 type DnaTone = 'ready' | 'pending' | 'missing';
-type Drawer = 'assets' | 'templates' | null;
+type LibraryTab = 'references' | 'assets' | 'patterns';
 
 function classifyDna(status: string): DnaTone {
   if (status === 'ready' || status === 'complete' || status === 'complete_ready') return 'ready';
@@ -29,10 +34,10 @@ function classifyDna(status: string): DnaTone {
 }
 
 /**
- * Workspace shell. The full-page transcript + tab nav is gone — what's left
- * is a thin brand strip header, a scrollable masonry gallery, and the
- * floating composer pinned to the bottom. Library and Patterns slide in as
- * right-side drawers so they don't crowd the gallery.
+ * Workspace shell. Thin brand strip header, scrollable masonry gallery, and
+ * a floating composer at the bottom. The Library button on the right opens
+ * a tabbed drawer (References / Brand assets / Patterns) so the three input
+ * libraries live behind one trigger.
  */
 export function AdGeneratorWorkspace({
   clientId,
@@ -41,10 +46,11 @@ export function AdGeneratorWorkspace({
   brandDnaStatus,
   initialAssets,
   initialTemplates,
+  initialReferenceAds,
   initialConcepts,
 }: Props) {
   const [concepts, setConcepts] = useState<AdConcept[]>(initialConcepts);
-  const [drawer, setDrawer] = useState<Drawer>(null);
+  const [libraryTab, setLibraryTab] = useState<LibraryTab | null>(null);
 
   const handleBatchComplete = useCallback((fresh: AdConcept[]) => {
     setConcepts((prev) => [...fresh, ...prev]);
@@ -109,34 +115,18 @@ export function AdGeneratorWorkspace({
 
         <div className="flex shrink-0 items-center gap-1">
           <HeaderButton
-            label="Asset library"
-            count={initialAssets.length}
-            onClick={() => setDrawer('assets')}
+            label="Library"
+            count={
+              initialReferenceAds.length +
+              initialAssets.length +
+              initialTemplates.length
+            }
+            onClick={() => setLibraryTab('references')}
           >
-            <FolderOpen size={14} />
-          </HeaderButton>
-          <HeaderButton
-            label="Pattern library"
-            count={initialTemplates.length}
-            onClick={() => setDrawer('templates')}
-          >
-            <LayoutTemplate size={14} />
+            <Library size={14} />
           </HeaderButton>
         </div>
       </header>
-
-      {/* DNA missing nudge — slim banner under the header. Hidden once DNA
-          is ready or generating so it doesn't crowd the gallery. */}
-      {dnaTone === 'missing' && (
-        <div className="flex shrink-0 items-center gap-3 border-b border-nz-coral/30 bg-nz-coral/[0.05] px-6 py-2.5">
-          <ShieldAlert size={14} className="shrink-0 text-nz-coral" />
-          <p className="text-[12px] text-text-secondary">
-            <span className="font-medium text-text-primary">Brand DNA missing.</span>{' '}
-            Generations will run on surface-level prompts. Run a DNA pass on the
-            brand profile for stronger results.
-          </p>
-        </div>
-      )}
 
       {/* Gallery — scrollable middle region. Carries the masonry of approved/
           pending/rejected concepts plus the filter strip and share dialog. */}
@@ -163,16 +153,79 @@ export function AdGeneratorWorkspace({
         </div>
       </div>
 
-      {/* Drawers */}
-      {drawer && (
-        <Drawer onClose={() => setDrawer(null)} title={drawer === 'assets' ? 'Asset library' : 'Pattern library'}>
-          {drawer === 'assets' ? (
-            <AdAssetLibrary clientId={clientId} initialAssets={initialAssets} />
-          ) : (
-            <AdTemplateLibrary clientId={clientId} initialTemplates={initialTemplates} />
-          )}
+      {/* Library drawer — three tabs: reference ads pulled in from Drive,
+          per-client uploaded brand assets, and saved prompt patterns. The
+          drawer stays mounted while the user switches between tabs. */}
+      {libraryTab && (
+        <Drawer onClose={() => setLibraryTab(null)} title="Library">
+          <LibraryTabs
+            tab={libraryTab}
+            onChange={setLibraryTab}
+            counts={{
+              references: initialReferenceAds.length,
+              assets: initialAssets.length,
+              patterns: initialTemplates.length,
+            }}
+          />
+          <div className="mt-5">
+            {libraryTab === 'references' && (
+              <AdReferenceLibrary initialReferenceAds={initialReferenceAds} />
+            )}
+            {libraryTab === 'assets' && (
+              <AdAssetLibrary clientId={clientId} initialAssets={initialAssets} />
+            )}
+            {libraryTab === 'patterns' && (
+              <AdTemplateLibrary
+                clientId={clientId}
+                initialTemplates={initialTemplates}
+              />
+            )}
+          </div>
         </Drawer>
       )}
+    </div>
+  );
+}
+
+const LIBRARY_TAB_LABELS: Record<LibraryTab, string> = {
+  references: 'Reference ads',
+  assets: 'Brand assets',
+  patterns: 'Patterns',
+};
+
+function LibraryTabs({
+  tab,
+  onChange,
+  counts,
+}: {
+  tab: LibraryTab;
+  onChange: (next: LibraryTab) => void;
+  counts: Record<LibraryTab, number>;
+}) {
+  return (
+    <div role="tablist" className="flex shrink-0 items-center gap-1 border-b border-nativz-border/60">
+      {(['references', 'assets', 'patterns'] as LibraryTab[]).map((key) => {
+        const active = key === tab;
+        return (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(key)}
+            className={`-mb-px inline-flex h-9 cursor-pointer items-center gap-2 border-b-2 px-3 text-[12px] transition-colors ${
+              active
+                ? 'border-accent text-text-primary'
+                : 'border-transparent text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            <span>{LIBRARY_TAB_LABELS[key]}</span>
+            <span className="font-mono text-[10px] tabular-nums text-text-muted">
+              {String(counts[key]).padStart(2, '0')}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }

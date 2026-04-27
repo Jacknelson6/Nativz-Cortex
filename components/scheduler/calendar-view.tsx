@@ -1,11 +1,31 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, FileText, Loader2, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { CalendarPost, CalendarViewMode, MediaItem } from './types';
-import { STATUS_CONFIG } from './types';
+import { CHIP_STATUS_LABEL, PLATFORM_BORDER_COLOR, PLATFORM_ICONS, STATUS_CONFIG } from './types';
+import type { PostStatus, SocialPlatform } from '@/lib/types/scheduler';
+
+interface ChipPost {
+  post: CalendarPost;
+  platform: SocialPlatform | null;
+}
+
+function flattenPosts(posts: CalendarPost[]): ChipPost[] {
+  const chips: ChipPost[] = [];
+  for (const p of posts) {
+    if (p.platforms.length === 0) {
+      chips.push({ post: p, platform: null });
+    } else {
+      for (const pl of p.platforms) {
+        chips.push({ post: p, platform: pl.platform });
+      }
+    }
+  }
+  return chips;
+}
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -162,11 +182,16 @@ export function CalendarView({
                 {date.getDate()}
               </span>
               <div className="mt-0.5 space-y-0.5">
-                {dayPosts.slice(0, 3).map(post => (
-                  <PostChip key={post.id} post={post} onClick={() => onPostClick(post)} />
+                {flattenPosts(dayPosts).slice(0, 4).map((chip, i) => (
+                  <PostChip
+                    key={`${chip.post.id}-${chip.platform ?? 'none'}-${i}`}
+                    post={chip.post}
+                    platform={chip.platform}
+                    onClick={() => onPostClick(chip.post)}
+                  />
                 ))}
-                {dayPosts.length > 3 && (
-                  <span className="text-[10px] text-text-muted">+{dayPosts.length - 3} more</span>
+                {flattenPosts(dayPosts).length > 4 && (
+                  <span className="text-[10px] text-text-muted">+{flattenPosts(dayPosts).length - 4} more</span>
                 )}
               </div>
             </div>
@@ -177,31 +202,82 @@ export function CalendarView({
   );
 }
 
-function PostChip({ post, onClick }: { post: CalendarPost; onClick: () => void }) {
-  const config = STATUS_CONFIG[post.status];
+function PostChip({
+  post,
+  platform,
+  onClick,
+}: {
+  post: CalendarPost;
+  platform: SocialPlatform | null;
+  onClick: () => void;
+}) {
   const time = post.scheduled_at
     ? new Date(post.scheduled_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
     : '';
+  const borderColor = platform ? PLATFORM_BORDER_COLOR[platform] : 'rgb(var(--nativz-border))';
+  const platformLabel = platform ? PLATFORM_ICONS[platform] : 'No platform';
+  const captionPreview = post.caption?.trim() || 'No caption';
+  const tooltip = `${platformLabel} · ${captionPreview.slice(0, 200)}${captionPreview.length > 200 ? '…' : ''}`;
+  const thumb = post.thumbnail_url ?? post.cover_image_url;
 
   return (
     <button
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-      className="w-full flex items-center gap-1 rounded px-1 py-0.5 text-left hover:bg-surface-hover transition-colors cursor-pointer"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      title={tooltip}
+      className="w-full flex items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-surface-hover transition-colors cursor-pointer"
     >
-      {post.thumbnail_url || post.cover_image_url ? (
+      {thumb ? (
         <img
-          src={post.thumbnail_url ?? post.cover_image_url ?? ''}
+          src={thumb}
           alt=""
-          className="w-5 h-5 rounded object-cover flex-shrink-0"
+          className="w-7 h-7 rounded object-cover flex-shrink-0"
+          style={{ borderWidth: 2, borderStyle: 'solid', borderColor }}
         />
       ) : (
-        <div className="w-5 h-5 rounded bg-surface-hover flex-shrink-0" />
+        <div
+          className="w-7 h-7 rounded bg-surface-hover flex-shrink-0"
+          style={{ borderWidth: 2, borderStyle: 'solid', borderColor }}
+        />
       )}
-      <span className="text-[10px] text-text-secondary truncate">{time}</span>
-      <Badge variant={config.variant} className="text-[10px] px-1 py-0 ml-auto flex-shrink-0">
-        {config.label}
-      </Badge>
+      <div className="flex flex-col min-w-0 leading-tight">
+        <span className="text-[11px] font-medium text-text-primary truncate">{time}</span>
+        <ChipStatus status={post.status} />
+      </div>
     </button>
+  );
+}
+
+function ChipStatus({ status }: { status: PostStatus }) {
+  const label = CHIP_STATUS_LABEL[status];
+  const tone =
+    status === 'failed' || status === 'partially_failed'
+      ? 'text-red-400'
+      : status === 'published'
+        ? 'text-emerald-400'
+        : status === 'publishing'
+          ? 'text-amber-400'
+          : status === 'draft'
+            ? 'text-text-muted'
+            : 'text-text-secondary';
+  const Icon =
+    status === 'failed' || status === 'partially_failed'
+      ? AlertTriangle
+      : status === 'published'
+        ? CheckCircle2
+        : status === 'publishing'
+          ? Loader2
+          : status === 'draft'
+            ? FileText
+            : Zap;
+  const spin = status === 'publishing' ? 'animate-spin' : '';
+  return (
+    <span className={`inline-flex items-center gap-0.5 text-[10px] ${tone}`}>
+      <Icon size={9} className={spin} />
+      <span className="truncate">{label}</span>
+    </span>
   );
 }
 
@@ -272,8 +348,13 @@ function WeekView({
               </div>
             </div>
             <div className="flex-1 overflow-y-auto p-1 space-y-1">
-              {dayPosts.map(post => (
-                <PostChip key={post.id} post={post} onClick={() => onPostClick(post)} />
+              {flattenPosts(dayPosts).map((chip, i) => (
+                <PostChip
+                  key={`${chip.post.id}-${chip.platform ?? 'none'}-${i}`}
+                  post={chip.post}
+                  platform={chip.platform}
+                  onClick={() => onPostClick(chip.post)}
+                />
               ))}
             </div>
           </div>
