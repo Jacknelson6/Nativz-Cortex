@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import type { EmailTemplate, EmailTemplateCategory } from '@/lib/email/types';
 import { EmailTemplateRail } from './email-template-rail';
 import { EmailBodyPreview } from './email-body-preview';
-import { cn } from '@/lib/utils/cn';
+import { Dialog } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 export interface Recipient {
   id: string;
@@ -243,11 +244,14 @@ export function EmailComposerModal({
     }
   }
 
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="flex h-[85vh] w-full max-w-5xl overflow-hidden rounded-xl border border-nativz-border bg-background shadow-2xl">
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title=""
+      maxWidth="5xl"
+      bodyClassName="p-0 flex h-[85vh] bg-background overflow-hidden"
+    >
         <EmailTemplateRail
           templates={templates}
           activeId={activeTemplateId}
@@ -291,9 +295,6 @@ export function EmailComposerModal({
                 </select>
               </div>
             )}
-            <button type="button" onClick={onClose} className="rounded p-1 text-text-muted hover:bg-surface-hover">
-              <X size={18} />
-            </button>
           </header>
 
           <div className="flex-1 space-y-4 overflow-y-auto p-5">
@@ -335,90 +336,58 @@ export function EmailComposerModal({
                 onChange={(e) => setScheduleAt(e.target.value)}
                 className="rounded-md border border-nativz-border bg-transparent px-3 py-1.5 text-sm text-text-primary focus:border-accent/40 focus:outline-none"
               />
-              <button
-                type="button"
-                onClick={handleSchedule}
-                disabled={sending}
-                className="rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50"
-              >
+              <Button size="sm" onClick={handleSchedule} disabled={sending}>
                 {sending ? 'Scheduling…' : 'Schedule send'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setScheduleOpen(false)}
-                className="text-sm text-text-muted hover:text-text-primary"
-              >
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setScheduleOpen(false)}>
                 Cancel
-              </button>
+              </Button>
             </div>
           )}
 
           <footer className="flex items-center justify-between gap-2 border-t border-nativz-border px-5 py-3">
             {mode === 'edit-template' ? (
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => {
                   setMode('send');
                   setEditTemplate(null);
                 }}
-                className="rounded-lg px-4 py-2 text-sm text-text-muted hover:bg-surface-hover hover:text-text-primary"
               >
                 Back to send
-              </button>
+              </Button>
             ) : (
               <div />
             )}
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-lg px-4 py-2 text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary"
-              >
+              <Button variant="ghost" size="sm" onClick={onClose}>
                 Cancel
-              </button>
+              </Button>
               {mode === 'send' ? (
-                <div className="flex items-center overflow-hidden rounded-lg">
-                  <button
-                    type="button"
+                <div className="flex items-center gap-px">
+                  <Button
                     onClick={handleSend}
                     disabled={sending || !subject.trim() || !body.trim()}
-                    className={cn(
-                      'px-6 py-2.5 text-sm font-medium text-white transition-colors',
-                      sending || !subject.trim() || !body.trim()
-                        ? 'cursor-not-allowed bg-accent/50'
-                        : 'bg-accent hover:bg-accent/90',
-                    )}
+                    className="rounded-r-none"
                   >
                     {sending ? 'Sending…' : 'Send now'}
-                  </button>
-                  <button
-                    type="button"
+                  </Button>
+                  <Button
                     onClick={() => setScheduleOpen((v) => !v)}
                     disabled={sending || !subject.trim() || !body.trim()}
-                    className={cn(
-                      'border-l border-white/20 px-3 py-2.5 text-sm text-white transition-colors',
-                      sending || !subject.trim() || !body.trim()
-                        ? 'cursor-not-allowed bg-accent/50'
-                        : 'bg-accent hover:bg-accent/90',
-                    )}
                     title="Schedule for later"
+                    className="rounded-l-none px-3"
                   >
                     ▾
-                  </button>
+                  </Button>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={saveTemplate}
-                  className="rounded-lg bg-accent px-6 py-2.5 text-sm font-medium text-white hover:bg-accent/90"
-                >
-                  Save template
-                </button>
+                <Button onClick={saveTemplate}>Save template</Button>
               )}
             </div>
           </footer>
         </main>
-      </div>
-    </div>
+    </Dialog>
   );
 }

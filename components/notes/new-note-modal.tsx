@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, User as UserIcon, Building2, Users, Loader2 } from 'lucide-react';
+import { User as UserIcon, Building2, Users, Loader2 } from 'lucide-react';
+import { Dialog } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 type Scope = 'personal' | 'client' | 'team';
 
@@ -34,7 +36,6 @@ export function NewNoteModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Reset on open.
   useEffect(() => {
     if (open) {
       setName('');
@@ -44,17 +45,6 @@ export function NewNoteModal({
       setSubmitting(false);
     }
   }, [open, forcedClientId]);
-
-  useEffect(() => {
-    if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
 
   async function submit() {
     if (!name.trim()) {
@@ -98,38 +88,23 @@ export function NewNoteModal({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-      <div
-        className="w-full max-w-md rounded-xl border border-nativz-border bg-surface shadow-elevated"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-nativz-border">
-          <h2 className="text-base font-semibold text-text-primary">New note</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded p-1 text-text-muted hover:bg-surface-hover hover:text-text-secondary cursor-pointer"
-          >
-            <X size={16} />
-          </button>
+    <Dialog open={open} onClose={onClose} title="New note" maxWidth="md">
+      <div className="space-y-5">
+        <div>
+          <label className="block text-xs font-medium uppercase tracking-wide text-text-muted mb-1.5">
+            Name
+          </label>
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !submitting) void submit(); }}
+            placeholder="e.g. Reels I want to copy"
+            className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/60 focus:outline-none focus:border-accent/40"
+          />
         </div>
 
-        <div className="px-5 py-4 space-y-5">
-          <div>
-            <label className="block text-xs font-medium uppercase tracking-wide text-text-muted mb-1.5">
-              Name
-            </label>
-            <input
-              autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !submitting) void submit(); }}
-              placeholder="e.g. Reels I want to copy"
-              className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/60 focus:outline-none focus:border-accent/40"
-            />
-          </div>
-
-          {!forcedClientId && (
+        {!forcedClientId && (
           <div>
             <label className="block text-xs font-medium uppercase tracking-wide text-text-muted mb-2">
               Who can see it
@@ -160,48 +135,38 @@ export function NewNoteModal({
               })}
             </div>
           </div>
-          )}
+        )}
 
-          {!forcedClientId && scope === 'client' && (
-            <div>
-              <label className="block text-xs font-medium uppercase tracking-wide text-text-muted mb-1.5">
-                Client
-              </label>
-              <select
-                value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-                className="w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent/40 cursor-pointer"
-              >
-                <option value="">Pick a client...</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
+        {!forcedClientId && scope === 'client' && (
+          <div>
+            <label className="block text-xs font-medium uppercase tracking-wide text-text-muted mb-1.5">
+              Client
+            </label>
+            <select
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+              className="w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent/40 cursor-pointer"
+            >
+              <option value="">Pick a client...</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
-          {error && <p className="text-sm text-red-400">{error}</p>}
-        </div>
+        {error && <p className="text-sm text-red-400">{error}</p>}
 
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-nativz-border">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg px-3 py-1.5 text-sm font-medium text-text-muted hover:bg-surface-hover hover:text-text-secondary cursor-pointer"
-          >
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-nativz-border">
+          <Button variant="ghost" size="sm" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => void submit()}
-            disabled={submitting || !name.trim()}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-1.5 text-sm font-medium text-white hover:bg-accent/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+          </Button>
+          <Button size="sm" onClick={() => void submit()} disabled={submitting || !name.trim()}>
             {submitting && <Loader2 size={13} className="animate-spin" />}
             Create note
-          </button>
+          </Button>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

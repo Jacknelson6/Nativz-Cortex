@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { X, Copy, Link as LinkIcon, Loader2, RefreshCw } from 'lucide-react';
+import { Copy, Link as LinkIcon, Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
 
 type EntryType = 'editing' | 'smm' | 'affiliate' | 'blogging';
 
@@ -65,15 +65,6 @@ export function SubmitTokensDialog({
     };
   }, [open, periodId]);
 
-  useEffect(() => {
-    if (!open) return;
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [open, onClose]);
-
   async function mint(memberId: string, defaultType?: EntryType) {
     setMintingId(memberId);
     try {
@@ -104,39 +95,27 @@ export function SubmitTokensDialog({
     toast.success('Link copied');
   }
 
-  if (!open) return null;
-
   const rowsByMemberId = new Map((rows ?? []).map((r) => [r.team_member?.id ?? '', r]));
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 px-4 py-8"
-      onClick={onClose}
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title=""
+      maxWidth="2xl"
+      bodyClassName="p-0 flex flex-col max-h-[85vh]"
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-3xl max-h-[90vh] rounded-xl border border-nativz-border bg-surface shadow-2xl flex flex-col overflow-hidden"
-      >
-        <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-nativz-border">
-          <div>
-            <div className="flex items-center gap-2">
-              <LinkIcon size={14} className="text-accent-text" />
-              <p className="text-xs uppercase tracking-wide text-text-secondary font-medium">
-                Submit links · {periodLabel}
-              </p>
-            </div>
-            <h2 className="text-xl font-bold text-text-primary mt-1">Share a link per team member</h2>
-            <p className="text-sm text-text-secondary mt-1">
-              Each link lets that person paste and submit their own numbers. Expires in 21 days.
+        <div className="px-6 py-4 border-b border-nativz-border">
+          <div className="flex items-center gap-2">
+            <LinkIcon size={14} className="text-accent-text" />
+            <p className="text-xs uppercase tracking-wide text-text-secondary font-medium">
+              Submit links · {periodLabel}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-text-secondary hover:text-text-primary cursor-pointer"
-          >
-            <X size={18} />
-          </button>
+          <h2 className="text-xl font-bold text-text-primary mt-1">Share a link per team member</h2>
+          <p className="text-sm text-text-secondary mt-1">
+            Each link lets that person paste and submit their own numbers. Expires in 21 days.
+          </p>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
@@ -206,8 +185,6 @@ export function SubmitTokensDialog({
             </table>
           )}
         </div>
-      </div>
-    </div>,
-    document.body,
+    </Dialog>
   );
 }

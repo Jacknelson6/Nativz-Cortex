@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { X, Sparkles, Loader2, Check, Trash2, AlertCircle } from 'lucide-react';
+import { Sparkles, Loader2, Check, Trash2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
 import { centsToDollars } from '@/lib/accounting/periods';
 
 type EntryType = 'editing' | 'smm' | 'affiliate' | 'blogging';
@@ -79,15 +79,6 @@ export function ImportDialog({
       setParsing(false);
     }
   }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [open, onClose]);
 
   const memberOptions = useMemo(
     () => teamMembers.filter((m) => m.full_name).map((m) => ({ id: m.id, label: m.full_name! })),
@@ -183,46 +174,34 @@ export function ImportDialog({
     }
   }
 
-  if (!open) return null;
-
   const grandTotal = proposals.reduce((s, p) => s + (p.amount_cents ?? 0), 0);
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 px-4 py-8"
-      onClick={onClose}
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title=""
+      maxWidth="5xl"
+      className="!max-w-4xl"
+      bodyClassName="p-0 flex flex-col max-h-[85vh]"
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-4xl max-h-[90vh] rounded-xl border border-nativz-border bg-surface shadow-2xl flex flex-col overflow-hidden"
-      >
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-nativz-border">
-          <div>
-            <div className="flex items-center gap-2">
-              <Sparkles size={14} className="text-accent-text" />
-              <p className="text-xs uppercase tracking-wide text-text-secondary font-medium">
-                Import · {periodLabel}
-              </p>
-            </div>
-            <h2 className="text-xl font-bold text-text-primary mt-1">
-              {stage === 'paste' ? 'Paste your numbers' : 'Does this look right?'}
-            </h2>
-            {stage === 'preview' && (
-              <p className="text-sm text-text-secondary mt-1">
-                {proposals.length} proposed entries · {centsToDollars(grandTotal)} total.
-                Edit or remove any row below before confirming.
-              </p>
-            )}
+        <div className="px-6 py-4 border-b border-nativz-border">
+          <div className="flex items-center gap-2">
+            <Sparkles size={14} className="text-accent-text" />
+            <p className="text-xs uppercase tracking-wide text-text-secondary font-medium">
+              Import · {periodLabel}
+            </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-text-secondary hover:text-text-primary cursor-pointer"
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
+          <h2 className="text-xl font-bold text-text-primary mt-1">
+            {stage === 'paste' ? 'Paste your numbers' : 'Does this look right?'}
+          </h2>
+          {stage === 'preview' && (
+            <p className="text-sm text-text-secondary mt-1">
+              {proposals.length} proposed entries · {centsToDollars(grandTotal)} total.
+              Edit or remove any row below before confirming.
+            </p>
+          )}
         </div>
 
         {/* Body */}
@@ -463,8 +442,6 @@ Affiliate payout: Cole @ Rockpower, $1200
             </>
           )}
         </div>
-      </div>
-    </div>,
-    document.body,
+    </Dialog>
   );
 }

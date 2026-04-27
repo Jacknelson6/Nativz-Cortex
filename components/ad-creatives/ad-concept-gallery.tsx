@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getSupabaseUrl } from '@/lib/supabase/public-env';
+import { Dialog } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 export interface AdConcept {
   id: string;
@@ -184,14 +186,10 @@ export function AdConceptGallery({ clientId, concepts, onUpdate, onDelete }: Pro
       {/* Filter strip — editorial labels with dot separators, share CTA on the right */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-nativz-border/60 pb-4">
         <FilterRow filter={filter} counts={counts} onChange={setFilter} />
-        <button
-          type="button"
-          onClick={() => setShareOpen(true)}
-          className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-full border border-nativz-border bg-surface px-4 text-[12px] font-medium text-text-primary transition-colors hover:border-accent/40 hover:bg-surface-hover"
-        >
+        <Button variant="outline" size="sm" onClick={() => setShareOpen(true)}>
           <Share2 size={13} />
           Share with client
-        </button>
+        </Button>
       </div>
 
       {/* Masonry — CSS columns let varying-aspect cards pack like a moodboard.
@@ -518,172 +516,149 @@ function ConceptDetailDialog({
   const imageUrl = concept.image_storage_path ? publicImageUrl(concept.image_storage_path) : null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-4 py-8"
-      onClick={onClose}
+    <Dialog
+      open
+      onClose={onClose}
+      title=""
+      maxWidth="2xl"
+      className="!max-w-4xl"
+      bodyClassName="p-0 flex flex-col max-h-[calc(100vh-4rem)] overflow-hidden"
     >
-      <div
-        className="flex max-h-full w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-nativz-border bg-surface shadow-elevated"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header — eyebrow with slug + template, headline as Jost display */}
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-nativz-border/50 px-6 py-5">
-          <div className="min-w-0 space-y-1.5">
-            <div className="flex items-center gap-3">
-              <span className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
-                {concept.slug}
-              </span>
-              <span aria-hidden className="text-text-muted/30">·</span>
-              <span className="text-[11px] text-text-muted">
-                {concept.template_name}
-              </span>
-              <span aria-hidden className="text-text-muted/30">·</span>
-              <StatusDot status={concept.status} />
-            </div>
-            <h2
-              className="text-[20px] font-semibold leading-tight text-text-primary"
-              style={{ fontFamily: DISPLAY_FONT }}
-              title={concept.headline}
-            >
-              {concept.headline}
-            </h2>
+      {/* Header — eyebrow with slug + template, headline as Jost display */}
+      <div className="flex shrink-0 items-start gap-3 border-b border-nativz-border/50 px-6 py-5 pr-14">
+        <div className="min-w-0 space-y-1.5">
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
+              {concept.slug}
+            </span>
+            <span aria-hidden className="text-text-muted/30">·</span>
+            <span className="text-[11px] text-text-muted">
+              {concept.template_name}
+            </span>
+            <span aria-hidden className="text-text-muted/30">·</span>
+            <StatusDot status={concept.status} />
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
-            aria-label="Close"
+          <h2
+            className="text-[20px] font-semibold leading-tight text-text-primary"
+            style={{ fontFamily: DISPLAY_FONT }}
+            title={concept.headline}
           >
-            <XIcon size={16} />
-          </button>
-        </div>
-
-        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-2">
-          {/* Image pane */}
-          <div className="flex min-h-0 items-center justify-center bg-background p-5 md:border-r md:border-nativz-border/50">
-            {imageUrl ? (
-              <Image
-                src={imageUrl}
-                alt={concept.headline}
-                width={600}
-                height={750}
-                className="max-h-[520px] w-auto object-contain"
-              />
-            ) : (
-              <div className="flex flex-col items-center gap-3 text-text-muted">
-                <Wand2 size={28} />
-                <p className="text-sm">No image rendered yet.</p>
-                <button
-                  type="button"
-                  onClick={onRender}
-                  disabled={isRendering}
-                  className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-full bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isRendering ? (
-                    <Loader2 size={13} className="animate-spin" />
-                  ) : (
-                    <Wand2 size={13} />
-                  )}
-                  {isRendering ? 'Rendering…' : 'Render with Gemini'}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Detail pane */}
-          <div className="flex min-h-0 flex-col gap-5 overflow-y-auto px-6 py-5">
-            {concept.body_copy && (
-              <Section label="Body copy">
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-secondary">
-                  {concept.body_copy}
-                </p>
-              </Section>
-            )}
-            {concept.visual_description && (
-              <Section label="Visual description">
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-secondary">
-                  {concept.visual_description}
-                </p>
-              </Section>
-            )}
-            <Section label="Source grounding">
-              <p className="text-sm italic leading-relaxed text-text-secondary">
-                {concept.source_grounding}
-              </p>
-            </Section>
-            <Section label="Image prompt">
-              <pre className="whitespace-pre-wrap break-words rounded-md border border-nativz-border/60 bg-background/80 px-3 py-2 font-mono text-[11px] leading-snug text-text-secondary">
-                {concept.image_prompt}
-              </pre>
-            </Section>
-            <Section label={`Client comments · ${String(comments.length).padStart(2, '0')}`}>
-              {comments.length === 0 ? (
-                <p className="text-[12px] text-text-muted">
-                  No feedback yet. Share the gallery with the client and their
-                  replies land here.
-                </p>
-              ) : (
-                <ul className="space-y-3">
-                  {comments.map((c) => (
-                    <li key={c.id} className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="flex items-center gap-2">
-                          <CommentDot kind={c.kind} />
-                          <span className="text-[12px] font-medium text-text-primary">
-                            {c.author_name}
-                          </span>
-                        </span>
-                        <span className="font-mono text-[10px] tabular-nums text-text-muted">
-                          {new Date(c.created_at).toLocaleString()}
-                        </span>
-                      </div>
-                      <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-text-secondary">
-                        {c.body}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Section>
-          </div>
-        </div>
-
-        {/* Footer — Delete on the far left, Reject + Approve on the right */}
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-nativz-border/50 bg-surface/60 px-6 py-4">
-          <button
-            type="button"
-            onClick={onDelete}
-            className="inline-flex cursor-pointer items-center gap-2 rounded-full px-3 py-1.5 text-[12px] text-text-muted transition-colors hover:bg-nz-coral/10 hover:text-nz-coral"
-          >
-            <Trash2 size={13} /> Delete concept
-          </button>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onReject}
-              className={`inline-flex h-9 cursor-pointer items-center gap-2 rounded-full px-4 text-[13px] transition-colors ${
-                concept.status === 'rejected'
-                  ? 'bg-nz-coral text-white'
-                  : 'border border-nativz-border text-text-secondary hover:border-nz-coral/40 hover:bg-nz-coral/10 hover:text-nz-coral'
-              }`}
-            >
-              <XIcon size={13} /> Reject
-            </button>
-            <button
-              type="button"
-              onClick={onApprove}
-              className={`inline-flex h-9 cursor-pointer items-center gap-2 rounded-full px-4 text-[13px] font-semibold transition-colors ${
-                concept.status === 'approved'
-                  ? 'bg-accent text-white'
-                  : 'border border-accent/40 bg-accent/10 text-accent-text hover:bg-accent/20'
-              }`}
-            >
-              <Check size={13} /> Approve
-            </button>
-          </div>
+            {concept.headline}
+          </h2>
         </div>
       </div>
-    </div>
+
+      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-2">
+        {/* Image pane */}
+        <div className="flex min-h-0 items-center justify-center bg-background p-5 md:border-r md:border-nativz-border/50">
+          {imageUrl ? (
+            <Image
+              src={imageUrl}
+              alt={concept.headline}
+              width={600}
+              height={750}
+              className="max-h-[520px] w-auto object-contain"
+            />
+          ) : (
+            <div className="flex flex-col items-center gap-3 text-text-muted">
+              <Wand2 size={28} />
+              <p className="text-sm">No image rendered yet.</p>
+              <Button size="sm" onClick={onRender} disabled={isRendering}>
+                {isRendering ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <Wand2 size={13} />
+                )}
+                {isRendering ? 'Rendering…' : 'Render with Gemini'}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Detail pane */}
+        <div className="flex min-h-0 flex-col gap-5 overflow-y-auto px-6 py-5">
+          {concept.body_copy && (
+            <Section label="Body copy">
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-secondary">
+                {concept.body_copy}
+              </p>
+            </Section>
+          )}
+          {concept.visual_description && (
+            <Section label="Visual description">
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-secondary">
+                {concept.visual_description}
+              </p>
+            </Section>
+          )}
+          <Section label="Source grounding">
+            <p className="text-sm italic leading-relaxed text-text-secondary">
+              {concept.source_grounding}
+            </p>
+          </Section>
+          <Section label="Image prompt">
+            <pre className="whitespace-pre-wrap break-words rounded-md border border-nativz-border/60 bg-background/80 px-3 py-2 font-mono text-[11px] leading-snug text-text-secondary">
+              {concept.image_prompt}
+            </pre>
+          </Section>
+          <Section label={`Client comments · ${String(comments.length).padStart(2, '0')}`}>
+            {comments.length === 0 ? (
+              <p className="text-[12px] text-text-muted">
+                No feedback yet. Share the gallery with the client and their
+                replies land here.
+              </p>
+            ) : (
+              <ul className="space-y-3">
+                {comments.map((c) => (
+                  <li key={c.id} className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-2">
+                        <CommentDot kind={c.kind} />
+                        <span className="text-[12px] font-medium text-text-primary">
+                          {c.author_name}
+                        </span>
+                      </span>
+                      <span className="font-mono text-[10px] tabular-nums text-text-muted">
+                        {new Date(c.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-text-secondary">
+                      {c.body}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
+        </div>
+      </div>
+
+      {/* Footer — Delete on the far left, Reject + Approve on the right */}
+      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-nativz-border/50 bg-surface/60 px-6 py-4">
+        <Button variant="ghost" size="sm" onClick={onDelete}>
+          <Trash2 size={13} />
+          Delete concept
+        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant={concept.status === 'rejected' ? 'danger' : 'outline'}
+            size="sm"
+            onClick={onReject}
+          >
+            <XIcon size={13} />
+            Reject
+          </Button>
+          <Button
+            variant={concept.status === 'approved' ? 'primary' : 'outline'}
+            size="sm"
+            onClick={onApprove}
+          >
+            <Check size={13} />
+            Approve
+          </Button>
+        </div>
+      </div>
+    </Dialog>
   );
 }
 
@@ -802,95 +777,80 @@ function ShareDialog({ clientId, onClose }: { clientId: string; onClose: () => v
   }, []);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-4 py-8"
-      onClick={onClose}
+    <Dialog
+      open
+      onClose={onClose}
+      title=""
+      maxWidth="2xl"
+      bodyClassName="p-0 flex flex-col max-h-[calc(100vh-4rem)] overflow-hidden"
     >
-      <div
-        className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-nativz-border bg-surface shadow-elevated"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-nativz-border/50 px-6 py-5">
-          <div className="space-y-1">
-            <p className="nz-eyebrow">Share with client</p>
-            <h2
-              className="text-[18px] font-semibold leading-tight text-text-primary"
-              style={{ fontFamily: DISPLAY_FONT }}
-            >
-              Public review links
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
-            aria-label="Close"
+      <div className="flex shrink-0 items-start gap-3 border-b border-nativz-border/50 px-6 py-5 pr-14">
+        <div className="space-y-1">
+          <p className="nz-eyebrow">Share with client</p>
+          <h2
+            className="text-[18px] font-semibold leading-tight text-text-primary"
+            style={{ fontFamily: DISPLAY_FONT }}
           >
-            <XIcon size={16} />
-          </button>
-        </div>
-
-        <div className="shrink-0 space-y-3 border-b border-nativz-border/50 bg-surface/60 px-6 py-5">
-          <p className="text-[12px] leading-relaxed text-text-muted">
-            Creates a public URL for the whole concept gallery (pending +
-            approved only — rejected stays internal). Anyone with the link can
-            leave comments; they come back on each card.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <input
-              type="text"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="Label (optional — e.g. Q2 testimonial drop)"
-              className="min-w-0 flex-1 rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/20"
-            />
-            <input
-              type="number"
-              min={1}
-              max={365}
-              value={expiresInDays}
-              onChange={(e) => setExpiresInDays(e.target.value)}
-              placeholder="Expires in days"
-              className="w-44 rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/20"
-            />
-            <button
-              type="button"
-              onClick={() => void handleCreate()}
-              disabled={creating}
-              className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-accent px-5 text-sm font-semibold text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {creating ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <Share2 size={14} />
-              )}
-              Create link
-            </button>
-          </div>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-          {loading ? (
-            <div className="flex items-center gap-2 py-8 text-sm text-text-muted">
-              <Loader2 size={14} className="animate-spin" />
-              <span style={{ fontFamily: DISPLAY_FONT, fontStyle: 'italic' }}>
-                Loading share links…
-              </span>
-            </div>
-          ) : tokens.length === 0 ? (
-            <p className="py-12 text-center text-sm text-text-muted">
-              No share links yet. Create one above.
-            </p>
-          ) : (
-            <ul className="space-y-3">
-              {tokens.map((t) => (
-                <ShareTokenRowCard key={t.id} token={t} onRevoke={() => void handleRevoke(t.id)} />
-              ))}
-            </ul>
-          )}
+            Public review links
+          </h2>
         </div>
       </div>
-    </div>
+
+      <div className="shrink-0 space-y-3 border-b border-nativz-border/50 bg-surface/60 px-6 py-5">
+        <p className="text-[12px] leading-relaxed text-text-muted">
+          Creates a public URL for the whole concept gallery (pending +
+          approved only — rejected stays internal). Anyone with the link can
+          leave comments; they come back on each card.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <input
+            type="text"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="Label (optional — e.g. Q2 testimonial drop)"
+            className="min-w-0 flex-1 rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/20"
+          />
+          <input
+            type="number"
+            min={1}
+            max={365}
+            value={expiresInDays}
+            onChange={(e) => setExpiresInDays(e.target.value)}
+            placeholder="Expires in days"
+            className="w-44 rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/20"
+          />
+          <Button onClick={() => void handleCreate()} disabled={creating}>
+            {creating ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Share2 size={14} />
+            )}
+            Create link
+          </Button>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+        {loading ? (
+          <div className="flex items-center gap-2 py-8 text-sm text-text-muted">
+            <Loader2 size={14} className="animate-spin" />
+            <span style={{ fontFamily: DISPLAY_FONT, fontStyle: 'italic' }}>
+              Loading share links…
+            </span>
+          </div>
+        ) : tokens.length === 0 ? (
+          <p className="py-12 text-center text-sm text-text-muted">
+            No share links yet. Create one above.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {tokens.map((t) => (
+              <ShareTokenRowCard key={t.id} token={t} onRevoke={() => void handleRevoke(t.id)} />
+            ))}
+          </ul>
+        )}
+      </div>
+    </Dialog>
   );
 }
 

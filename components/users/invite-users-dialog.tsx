@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { SubNav, type SubNavItem } from '@/components/ui/sub-nav';
 import { ClientPickerButton, type ClientOption as PickerClientOption } from '@/components/ui/client-picker';
 import { parseContactList, type ParsedContact } from '@/lib/invites/parse-contacts';
 
@@ -31,6 +33,11 @@ interface InviteUsersDialogProps {
 }
 
 type Tab = 'portal' | 'admin';
+
+const SCOPE_TABS: SubNavItem<Tab>[] = [
+  { slug: 'portal', label: 'Portal user', icon: <Building2 size={13} /> },
+  { slug: 'admin', label: 'Admin / team', icon: <Shield size={13} /> },
+];
 
 export function InviteUsersDialog({ open, onClose, onInvited, lockedClient = null }: InviteUsersDialogProps) {
   const [tab, setTab] = useState<Tab>('portal');
@@ -62,32 +69,12 @@ export function InviteUsersDialog({ open, onClose, onInvited, lockedClient = nul
         {/* Per-client trigger mode: hide the tab switcher; we only ever invite
             portal users for that one client. */}
         {!lockedClient && (
-          <div className="flex justify-center">
-            <div className="flex gap-1 rounded-lg border border-nativz-border p-1">
-              <button
-                onClick={() => { setTab('portal'); setGenerated([]); }}
-                className={`flex items-center gap-2 px-4 py-2 text-sm rounded-md transition-colors cursor-pointer ${
-                  tab === 'portal'
-                    ? 'bg-accent text-white'
-                    : 'text-text-muted hover:text-text-secondary'
-                }`}
-              >
-                <Building2 size={14} />
-                Portal user
-              </button>
-              <button
-                onClick={() => { setTab('admin'); setGenerated([]); }}
-                className={`flex items-center gap-2 px-4 py-2 text-sm rounded-md transition-colors cursor-pointer ${
-                  tab === 'admin'
-                    ? 'bg-accent text-white'
-                    : 'text-text-muted hover:text-text-secondary'
-                }`}
-              >
-                <Shield size={14} />
-                Admin / team
-              </button>
-            </div>
-          </div>
+          <SubNav
+            items={SCOPE_TABS}
+            active={tab}
+            onChange={(slug) => { setTab(slug); setGenerated([]); }}
+            ariaLabel="Invite scope"
+          />
         )}
 
         {tab === 'portal' || lockedClient ? (
@@ -109,6 +96,11 @@ export function InviteUsersDialog({ open, onClose, onInvited, lockedClient = nul
  * ─────────────────────────────────────────────────────────────── */
 
 type PortalMode = 'single' | 'bulk';
+
+const MODE_TABS: SubNavItem<PortalMode>[] = [
+  { slug: 'single', label: 'One at a time', icon: <Mail size={13} /> },
+  { slug: 'bulk', label: 'Paste / upload list', icon: <ClipboardList size={13} /> },
+];
 
 function PortalInviteForm({
   onInvitesCreated,
@@ -255,28 +247,12 @@ function PortalInviteForm({
       )}
 
       {/* Mode switcher — single vs paste/upload list */}
-      <div className="flex gap-1 rounded-lg border border-nativz-border p-1 text-xs">
-        <button
-          type="button"
-          onClick={() => setMode('single')}
-          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
-            mode === 'single' ? 'bg-accent text-white' : 'text-text-muted hover:text-text-secondary'
-          }`}
-        >
-          <Mail size={12} />
-          One at a time
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode('bulk')}
-          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
-            mode === 'bulk' ? 'bg-accent text-white' : 'text-text-muted hover:text-text-secondary'
-          }`}
-        >
-          <ClipboardList size={12} />
-          Paste / upload list
-        </button>
-      </div>
+      <SubNav
+        items={MODE_TABS}
+        active={mode}
+        onChange={setMode}
+        ariaLabel="Invite input mode"
+      />
 
       {/* Email preview — always available so admins can see exactly what
           the recipient gets (agency branding auto-picked from client). */}
@@ -358,11 +334,7 @@ function PortalInviteForm({
       </div>
 
       <div className="flex justify-end">
-        <button
-          onClick={handleGenerate}
-          disabled={submitting || !clientId}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-white hover:bg-accent/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-        >
+        <Button onClick={handleGenerate} disabled={submitting || !clientId}>
           {submitting ? (
             <><Loader2 size={13} className="animate-spin" /> {email.trim() ? 'Sending…' : 'Generating…'}</>
           ) : email.trim() ? (
@@ -370,7 +342,7 @@ function PortalInviteForm({
           ) : (
             <><UserPlus size={13} /> Generate {count > 1 ? `${count} invites` : 'invite'}</>
           )}
-        </button>
+        </Button>
       </div>
       </>
       )}
@@ -564,17 +536,16 @@ function BulkEmailInviteForm({
       )}
 
       <div className="flex justify-end">
-        <button
+        <Button
           onClick={handleSend}
           disabled={submitting || !clientId || liveContacts.length === 0}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-white hover:bg-accent/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {submitting ? (
             <><Loader2 size={13} className="animate-spin" /> Sending…</>
           ) : (
             <><Send size={13} /> Send {liveContacts.length || ''} branded invite{liveContacts.length === 1 ? '' : 's'}</>
           )}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -770,17 +741,13 @@ function AdminInviteForm({
       </div>
 
       <div className="flex justify-end">
-        <button
-          onClick={handleSendInvite}
-          disabled={submitting}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-white hover:bg-accent/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-        >
+        <Button onClick={handleSendInvite} disabled={submitting}>
           {submitting ? (
             <><Loader2 size={13} className="animate-spin" /> Sending…</>
           ) : (
             <><Send size={13} /> Send invite</>
           )}
-        </button>
+        </Button>
       </div>
     </div>
   );
