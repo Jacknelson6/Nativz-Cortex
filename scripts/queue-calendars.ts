@@ -49,6 +49,9 @@ interface QueueEntry {
   startDate: string;
   endDate: string;
   platforms?: SocialPlatform[];
+  // Set true to schedule + post but skip the public /c/{token} share link.
+  // Used when backfilling missed posts the client shouldn't see in review.
+  noShareLink?: boolean;
 }
 
 interface RunResult {
@@ -270,7 +273,11 @@ async function runOne(
   result.scheduled = sched.scheduled;
   result.failed = sched.failed;
 
-  if (sched.scheduled > 0) {
+  if (sched.scheduled > 0 && entry.noShareLink) {
+    console.log('    skipping share link (noShareLink=true)');
+  }
+
+  if (sched.scheduled > 0 && !entry.noShareLink) {
     step('Mint share link', '  ');
     const { data: scheduledVideos } = await admin
       .from('content_drop_videos')

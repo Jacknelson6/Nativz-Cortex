@@ -1,17 +1,15 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { createCompletion } from '@/lib/ai/client';
-import { gradeCaption } from './grade-caption';
-import type { CaptionGrade, GeminiContext } from '@/lib/types/calendar';
+import { createOpenRouterRichCompletion } from '@/lib/ai/openrouter-rich';
+import type { VideoContext } from '@/lib/types/calendar';
 
-const SCORE_THRESHOLD = 80;
-const MAX_ITERATIONS = 3;
 const GENERATION_CONCURRENCY = 2;
 
 interface VideoRow {
   id: string;
   drop_id: string;
   drive_file_name: string;
-  gemini_context: GeminiContext | null;
+  thumbnail_url: string | null;
+  gemini_context: VideoContext | null;
 }
 
 interface ClientContext {
@@ -24,6 +22,8 @@ interface ClientContext {
   services: string[] | null;
   caption_cta: string | null;
   caption_hashtags: string[] | null;
+  caption_cta_es: string | null;
+  caption_hashtags_es: string[] | null;
 }
 
 interface SavedCaption {
@@ -39,13 +39,13 @@ export async function generateDropCaptions(
   const [{ data: rows }, { data: client }, { data: saved }] = await Promise.all([
     admin
       .from('content_drop_videos')
-      .select('id, drop_id, drive_file_name, gemini_context')
+      .select('id, drop_id, drive_file_name, thumbnail_url, gemini_context')
       .eq('drop_id', opts.dropId)
       .eq('status', 'caption_pending')
       .order('order_index'),
     admin
       .from('clients')
-      .select('name, industry, brand_voice, target_audience, topic_keywords, description, services, caption_cta, caption_hashtags')
+      .select('name, industry, brand_voice, target_audience, topic_keywords, description, services, caption_cta, caption_hashtags, caption_cta_es, caption_hashtags_es')
       .eq('id', opts.clientId)
       .single(),
     admin
@@ -70,79 +70,39 @@ export async function generateDropCaptions(
       return;
     }
 
-    let bestCaption: { caption: string; hashtags: string[] } | null = null;
-    let bestRaw: { caption: string; hashtags: string[] } | null = null;
-    let bestGrade: CaptionGrade | null = null;
-    let lastReasons: string[] = [];
-    let iterations = 0;
-    let lastError: string | null = null;
+    try {
+      const generatedBody = await generateOneCaption({
+        context: row.gemini_context,
+        thumbnailUrl: row.thumbnail_url,
+        client: client as ClientContext | null,
+        saved: (saved ?? []) as SavedCaption[],
+        userId: opts.userId,
+        userEmail: opts.userEmail,
+      });
+      const result = applyBoilerplate(
+        generatedBody,
+        client as ClientContext | null,
+        row.gemini_context.language,
+      );
 
-    for (let i = 0; i < MAX_ITERATIONS; i++) {
-      iterations = i + 1;
-      try {
-        const generated = await generateOneCaption({
-          context: row.gemini_context,
-          client: client as ClientContext | null,
-          saved: (saved ?? []) as SavedCaption[],
-          previousAttempt: bestRaw,
-          previousReasons: lastReasons,
-          previousScore: bestGrade?.total ?? null,
-          userId: opts.userId,
-          userEmail: opts.userEmail,
-        });
-        const result = applyBoilerplate(generated, client as ClientContext | null);
-
-        const grade = gradeCaption({
-          caption: result.caption,
-          hashtags: result.hashtags,
-          context: row.gemini_context,
-          brandVoice: client?.brand_voice ?? '',
-          brandKeywords: collectBrandKeywords(client as ClientContext | null),
-          savedCaptions: (saved ?? []).map((s) => ({
-            caption_text: s.caption_text,
-            hashtags: s.hashtags,
-          })),
-        });
-
-        if (!bestGrade || grade.total > bestGrade.total) {
-          bestCaption = result;
-          bestRaw = generated;
-          bestGrade = grade;
-        }
-        lastReasons = grade.reasons;
-
-        if (grade.total >= SCORE_THRESHOLD) break;
-      } catch (err) {
-        lastError = err instanceof Error ? err.message : 'Caption generation failed';
-        break;
-      }
-    }
-
-    if (!bestCaption || !bestGrade) {
       await admin
         .from('content_drop_videos')
         .update({
-          status: 'failed',
-          error_detail: lastError ?? 'Caption generation produced no result',
-          caption_iterations: iterations,
+          draft_caption: result.caption,
+          draft_hashtags: result.hashtags,
+          status: 'ready',
+          error_detail: null,
         })
         .eq('id', row.id);
+      generated += 1;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Caption generation failed';
       failed += 1;
-      return;
+      await admin
+        .from('content_drop_videos')
+        .update({ status: 'failed', error_detail: message })
+        .eq('id', row.id);
     }
-
-    await admin
-      .from('content_drop_videos')
-      .update({
-        draft_caption: bestCaption.caption,
-        draft_hashtags: bestCaption.hashtags,
-        caption_score: bestGrade.total,
-        caption_iterations: iterations,
-        status: 'ready',
-        error_detail: null,
-      })
-      .eq('id', row.id);
-    generated += 1;
   }
 
   const workers = Array.from(
@@ -160,12 +120,10 @@ export async function generateDropCaptions(
 }
 
 interface GenerateOptions {
-  context: GeminiContext;
+  context: VideoContext;
+  thumbnailUrl: string | null;
   client: ClientContext | null;
   saved: SavedCaption[];
-  previousAttempt: { caption: string; hashtags: string[] } | null;
-  previousReasons: string[];
-  previousScore: number | null;
   userId: string;
   userEmail?: string;
 }
@@ -175,42 +133,48 @@ async function generateOneCaption(
 ): Promise<{ caption: string; hashtags: string[] }> {
   const brandBlock = renderBrandBlock(opts.client);
   const savedBlock = renderSavedBlock(opts.saved);
-  const videoBlock = renderVideoBlock(opts.context);
-  const feedbackBlock =
-    opts.previousAttempt && opts.previousScore !== null
-      ? renderFeedbackBlock(opts.previousAttempt, opts.previousReasons, opts.previousScore)
-      : '';
+  const ctaInfo = renderCtaBoilerplateBlock(opts.client, opts.context.language);
+  const transcriptBlock = renderTranscriptBlock(opts.context);
 
-  const ctaInfo = renderCtaBoilerplateBlock(opts.client);
+  const langLine =
+    opts.context.language === 'es'
+      ? 'Write the caption in Spanish — the video is in Spanish.'
+      : 'Write the caption in English.';
+
   const system = `You are a senior short-form video copywriter for Instagram Reels, TikTok, and YouTube Shorts. You write captions that drive comments, saves, and shares.
+
+You are looking at the video's first-frame thumbnail and (if present) its spoken transcript. Read both, then write a caption that lands the hook the viewer just saw.
 
 Output rules:
 - Return ONLY valid JSON: { "caption": string, "hashtags": string[] }
-- Caption: 60-220 characters — write ONLY the hook line plus a 1-2 sentence body that delivers the angle. Do NOT write a CTA, do NOT write hashtags, do NOT write "follow" or "save" lines. Those are appended automatically downstream.
+- Caption: 60-220 characters — write ONLY the hook line plus a 1-2 sentence body. Do NOT write a CTA, do NOT write hashtags, do NOT write "follow" or "save" lines. Those are appended automatically downstream.
 - Sentence-case, no markdown (no asterisks, headers, backticks), no leading hashtags, no emoji spam
 - Hashtags: 3-8 entries that match the video's specific themes (not the brand boilerplate — those are appended automatically). Lowercase, no leading "#".
 - Match the brand voice and align with saved-caption examples for tone
+- ${langLine}
+${brandBlock}${savedBlock}${ctaInfo}${transcriptBlock}`;
 
-${brandBlock}${savedBlock}${ctaInfo}${videoBlock}${feedbackBlock}`;
+  const userContent: Record<string, unknown>[] = [];
+  if (opts.thumbnailUrl) {
+    userContent.push({ type: 'image_url', image_url: { url: opts.thumbnailUrl } });
+  }
+  userContent.push({
+    type: 'text',
+    text: 'Write the caption + hashtags for this video.',
+  });
 
-  const result = await createCompletion({
+  const result = await createOpenRouterRichCompletion({
     messages: [
       { role: 'system', content: system },
-      {
-        role: 'user',
-        content:
-          'Write the caption + hashtags for this video. Lead with the recommended caption angle.',
-      },
+      { role: 'user', content: userContent },
     ],
     maxTokens: 600,
     feature: 'calendar_caption_generate',
     userId: opts.userId,
     userEmail: opts.userEmail,
-    jsonMode: true,
   });
 
-  const parsed = parseCaptionJson(result.text);
-  return parsed;
+  return parseCaptionJson(result.text);
 }
 
 function parseCaptionJson(raw: string): { caption: string; hashtags: string[] } {
@@ -245,7 +209,7 @@ function renderBrandBlock(client: ClientContext | null): string {
   if (client.topic_keywords?.length) lines.push(`Keywords: ${client.topic_keywords.join(', ')}`);
   if (client.description) lines.push(`About: ${client.description}`);
   if (client.services?.length) lines.push(`Services: ${client.services.join(', ')}`);
-  return `\nClient context:\n${lines.join('\n')}\n`;
+  return `\n\nClient context:\n${lines.join('\n')}`;
 }
 
 function renderSavedBlock(saved: SavedCaption[]): string {
@@ -257,59 +221,42 @@ function renderSavedBlock(saved: SavedCaption[]): string {
       return parts.join('\n');
     })
     .join('\n');
-  return `\nSaved CTAs & hashtag sets (use as reference for tone, CTAs, and hashtags):\n${examples}\n`;
+  return `\n\nSaved caption examples (reference for tone only):\n${examples}`;
 }
 
-function renderVideoBlock(context: GeminiContext): string {
-  const moments = context.key_moments
-    .slice(0, 5)
-    .map((m) => `  - t=${m.t}s: ${m.description}`)
-    .join('\n');
-  return `\nVideo context:
-- One-liner: ${context.one_liner}
-- Hook (0-3s): ${context.hook_seconds_0_3}
-- Recommended caption angle: ${context.recommended_caption_angle}
-- Visual themes: ${context.visual_themes.join(', ')}
-- Mood: ${context.mood} | Pacing: ${context.pacing}
-- Audio: ${context.audio_summary}
-${context.spoken_text_summary ? `- Spoken text: ${context.spoken_text_summary}` : ''}
-- Key moments:\n${moments}\n`;
-}
-
-function renderFeedbackBlock(
-  previous: { caption: string; hashtags: string[] },
-  reasons: string[],
-  score: number,
-): string {
-  return `\nPrevious attempt scored ${score}/100. Issues to fix:
-${reasons.map((r) => `- ${r}`).join('\n')}
-
-Previous caption:
-${previous.caption}
-
-Previous hashtags: ${previous.hashtags.map((t) => `#${t}`).join(' ')}\n`;
-}
-
-function renderCtaBoilerplateBlock(client: ClientContext | null): string {
-  if (!client) return '';
-  const parts: string[] = [];
-  if (client.caption_cta?.trim()) {
-    parts.push(`The following CTA is appended verbatim after every caption — DO NOT repeat it or write your own CTA:\n"${client.caption_cta.trim()}"`);
+function renderTranscriptBlock(context: VideoContext): string {
+  if (!context.has_audio || !context.transcript) {
+    return '\n\nVideo has no spoken audio — write the caption from the thumbnail alone.';
   }
-  if (client.caption_hashtags?.length) {
+  const truncated = context.transcript.length > 1500
+    ? context.transcript.slice(0, 1500) + '…'
+    : context.transcript;
+  return `\n\nSpoken transcript (language=${context.language}):\n${truncated}`;
+}
+
+function renderCtaBoilerplateBlock(client: ClientContext | null, language: string): string {
+  if (!client) return '';
+  const cta = pickLocalisedCta(client, language);
+  const tags = pickLocalisedHashtags(client, language);
+  const parts: string[] = [];
+  if (cta) {
+    parts.push(`The following CTA is appended verbatim after every caption — DO NOT repeat it or write your own CTA:\n"${cta}"`);
+  }
+  if (tags.length) {
     parts.push(
-      `These hashtags are appended automatically after every caption — DO NOT repeat them in your hashtag list:\n${client.caption_hashtags.map((h) => `#${h}`).join(' ')}`,
+      `These hashtags are appended automatically after every caption — DO NOT repeat them in your hashtag list:\n${tags.map((h) => `#${h}`).join(' ')}`,
     );
   }
-  return parts.length ? `\n${parts.join('\n\n')}\n` : '';
+  return parts.length ? `\n\n${parts.join('\n\n')}` : '';
 }
 
 function applyBoilerplate(
   generated: { caption: string; hashtags: string[] },
   client: ClientContext | null,
+  language: string,
 ): { caption: string; hashtags: string[] } {
-  const cta = client?.caption_cta?.trim();
-  const boilerplateTags = (client?.caption_hashtags ?? [])
+  const cta = pickLocalisedCta(client, language);
+  const boilerplateTags = pickLocalisedHashtags(client, language)
     .map((t) => t.replace(/^#/, '').trim().toLowerCase())
     .filter(Boolean);
 
@@ -329,11 +276,19 @@ function applyBoilerplate(
   return { caption, hashtags: merged };
 }
 
-function collectBrandKeywords(client: ClientContext | null): string[] {
+// Spanish → use _es columns when populated, otherwise fall back to default.
+function pickLocalisedCta(client: ClientContext | null, language: string): string | null {
+  if (!client) return null;
+  if (language === 'es' && client.caption_cta_es?.trim()) {
+    return client.caption_cta_es.trim();
+  }
+  return client.caption_cta?.trim() || null;
+}
+
+function pickLocalisedHashtags(client: ClientContext | null, language: string): string[] {
   if (!client) return [];
-  const out: string[] = [];
-  if (client.topic_keywords?.length) out.push(...client.topic_keywords);
-  if (client.services?.length) out.push(...client.services);
-  if (client.name) out.push(client.name);
-  return out;
+  if (language === 'es' && client.caption_hashtags_es?.length) {
+    return client.caption_hashtags_es;
+  }
+  return client.caption_hashtags ?? [];
 }

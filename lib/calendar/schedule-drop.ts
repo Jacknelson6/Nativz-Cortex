@@ -8,11 +8,12 @@ interface ScheduleInput {
   includedVideoIds?: string[];
   overrides?: Record<string, string>;
   // Restrict scheduling to a subset of the brand's connected platforms.
-  // When omitted, every connected platform with a Zernio account ID gets
-  // scheduled (legacy behaviour). Passing e.g. ['facebook'] confines the
-  // post to FB even if IG/TT are connected — used when a brand only wants
-  // a portion of their stack pushed live.
   platforms?: SocialPlatform[];
+  // When true, posts are inserted with status='draft' and NOT queued in Zernio.
+  // Used by the share-link approval flow — the client must approve each video
+  // before we hand the post to Zernio. Call `publishScheduledPost` per-post on
+  // approval to flip draft → scheduled.
+  draftMode?: boolean;
 }
 
 interface VideoRow {
@@ -114,7 +115,6 @@ export async function scheduleDrop(
     scheduledAt: input.overrides?.[v.id] ?? computed[idx],
   }));
 
-  const service = getPostingService();
   const result: ScheduleResult = { scheduled: 0, failed: 0, errors: [] };
 
   for (const slot of slots) {
@@ -149,7 +149,7 @@ export async function scheduleDrop(
           caption: video.draft_caption,
           hashtags: video.draft_hashtags ?? [],
           scheduled_at: slot.scheduledAt,
-          status: 'scheduled',
+          status: input.draftMode ? 'draft' : 'scheduled',
           cover_image_url: video.thumbnail_url,
           post_type: 'reel',
         })
@@ -172,24 +172,6 @@ export async function scheduleDrop(
         .insert({ post_id: post.id, media_id: media.id, sort_order: 0 });
       if (linkErr) throw new Error(linkErr.message);
 
-      const captionByPlatform = pickActiveVariants(video.caption_variants, lateProfiles);
-
-      const publish = await service.publishPost({
-        videoUrl: video.video_url,
-        caption: video.draft_caption,
-        hashtags: video.draft_hashtags ?? [],
-        coverImageUrl: video.thumbnail_url ?? undefined,
-        platformProfileIds: lateProfiles.map((p) => p.late_account_id),
-        platformHints: Object.fromEntries(lateProfiles.map((p) => [p.late_account_id, p.platform])),
-        captionByPlatform,
-        scheduledAt: slot.scheduledAt,
-      });
-
-      await admin
-        .from('scheduled_posts')
-        .update({ late_post_id: publish.externalPostId })
-        .eq('id', post.id);
-
       await admin
         .from('content_drop_videos')
         .update({
@@ -197,6 +179,12 @@ export async function scheduleDrop(
           draft_scheduled_at: slot.scheduledAt,
         })
         .eq('id', video.id);
+
+      // Skip Zernio publish in draft mode — `publishScheduledPost` runs later
+      // when the client approves the video on the share link.
+      if (!input.draftMode) {
+        await publishScheduledPost(admin, post.id);
+      }
 
       result.scheduled += 1;
     } catch (err) {
@@ -223,6 +211,100 @@ export async function scheduleDrop(
   }
 
   return result;
+}
+
+/**
+ * Hand a draft scheduled_posts row to Zernio. Idempotent — if already
+ * scheduled (status != 'draft' or late_post_id is set), this is a no-op.
+ *
+ * Triggered by the share-link approval flow when the client marks a video
+ * 'approved'. Re-uses everything the draft already has (caption, hashtags,
+ * scheduled_at, platforms, media) — just makes the external Zernio call and
+ * flips status to 'scheduled'.
+ */
+export async function publishScheduledPost(
+  admin: SupabaseClient,
+  postId: string,
+): Promise<{ alreadyPublished: boolean; externalPostId?: string }> {
+  const { data: post, error: postErr } = await admin
+    .from('scheduled_posts')
+    .select('id, client_id, caption, hashtags, scheduled_at, status, late_post_id, cover_image_url')
+    .eq('id', postId)
+    .single<{
+      id: string;
+      client_id: string;
+      caption: string;
+      hashtags: string[] | null;
+      scheduled_at: string;
+      status: string;
+      late_post_id: string | null;
+      cover_image_url: string | null;
+    }>();
+  if (postErr || !post) throw new Error(`Post ${postId} not found`);
+
+  if (post.late_post_id || post.status !== 'draft') {
+    return { alreadyPublished: true, externalPostId: post.late_post_id ?? undefined };
+  }
+
+  // Pull the linked media row to get the late_media_url for the actual file.
+  const { data: mediaLink } = await admin
+    .from('scheduled_post_media')
+    .select('media_id, scheduler_media:media_id (late_media_url)')
+    .eq('post_id', postId)
+    .order('sort_order')
+    .limit(1)
+    .single<{ media_id: string; scheduler_media: { late_media_url: string | null } | null }>();
+  const videoUrl = mediaLink?.scheduler_media?.late_media_url ?? null;
+  if (!videoUrl) throw new Error('Draft post is missing a media URL');
+
+  // Pull the platforms this post is targeting + the brand's caption variants.
+  const { data: platforms } = await admin
+    .from('scheduled_post_platforms')
+    .select('social_profiles:social_profile_id (platform, late_account_id)')
+    .eq('post_id', postId);
+  // Supabase types embedded joins as arrays; the FK is 1-to-1, so flatten.
+  const lateProfiles = (platforms ?? [])
+    .flatMap((p) => {
+      const sp = (p as unknown as { social_profiles: unknown }).social_profiles;
+      return Array.isArray(sp) ? sp : sp ? [sp] : [];
+    })
+    .filter(
+      (p): p is { platform: SocialPlatform; late_account_id: string } =>
+        !!p && typeof p === 'object' && 'late_account_id' in p && !!(p as { late_account_id: string }).late_account_id,
+    );
+  if (lateProfiles.length === 0) throw new Error('Draft post has no platforms');
+
+  // Look up caption variants on the originating drop video so per-platform
+  // overrides survive the draft → publish handoff.
+  const { data: video } = await admin
+    .from('content_drop_videos')
+    .select('caption_variants')
+    .eq('scheduled_post_id', postId)
+    .maybeSingle<{ caption_variants: CaptionVariants | null }>();
+
+  const captionByPlatform = pickActiveVariants(
+    video?.caption_variants ?? null,
+    lateProfiles,
+  );
+
+  const service = getPostingService();
+  const publish = await service.publishPost({
+    videoUrl,
+    caption: post.caption,
+    hashtags: post.hashtags ?? [],
+    coverImageUrl: post.cover_image_url ?? undefined,
+    platformProfileIds: lateProfiles.map((p) => p.late_account_id),
+    platformHints: Object.fromEntries(lateProfiles.map((p) => [p.late_account_id, p.platform])),
+    captionByPlatform,
+    scheduledAt: post.scheduled_at,
+  });
+
+  await admin
+    .from('scheduled_posts')
+    .update({ status: 'scheduled', late_post_id: publish.externalPostId })
+    .eq('id', postId);
+
+  return { alreadyPublished: false, externalPostId: publish.externalPostId };
 }
 
 function pickActiveVariants(

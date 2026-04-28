@@ -31,18 +31,25 @@ export interface ContentDrop {
   updated_at: string;
 }
 
-export interface GeminiContext {
-  one_liner: string;
-  hook_seconds_0_3: string;
-  visual_themes: string[];
-  audio_summary: string;
-  spoken_text_summary: string;
-  mood: string;
-  pacing: 'slow' | 'medium' | 'fast';
-  recommended_caption_angle: string;
-  key_moments: { t: number; description: string }[];
+// Lightweight per-video context: transcript + thumbnail are enough for caption
+// generation. We don't ask a multimodal model to "understand" the whole video
+// — Whisper transcribes audio, the thumbnail is read by the caption model
+// directly, and the brand's CTA + hashtag boilerplate handles the rest.
+//
+// Stored in `content_drop_videos.gemini_context` (JSONB column kept for
+// backwards compatibility with older drops; the column name is a legacy of
+// the previous Gemini-multimodal pipeline).
+export interface VideoContext {
+  transcript: string;
+  // BCP-47 lowercase, e.g. "en" | "es". Defaults to "en" for muted videos.
+  language: string;
+  has_audio: boolean;
   degraded?: boolean;
 }
+
+/** @deprecated Use VideoContext. Older drops written before the rewrite still
+ *  carry this richer shape; the generator only reads the new fields. */
+export type GeminiContext = VideoContext;
 
 /**
  * Per-platform caption overrides. Keys correspond to SocialPlatform values

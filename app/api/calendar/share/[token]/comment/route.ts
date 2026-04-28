@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createNotification } from '@/lib/notifications/create';
 import { sendDropCommentEmail } from '@/lib/email/resend';
+import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
 
 const AttachmentSchema = z.object({
   url: z.string().url(),
@@ -78,6 +79,16 @@ export async function POST(
     content: parsed.data.content.trim(),
     status: parsed.data.status,
   }).catch((err) => console.error('Comment notification failed:', err));
+
+  // Approval = "ship it". Hand the draft post to Zernio. publishScheduledPost
+  // is idempotent (returns alreadyPublished=true if already scheduled), so
+  // re-approval / multiple approvers won't double-post. Fire-and-forget so the
+  // viewer's UI doesn't wait on the Zernio call.
+  if (parsed.data.status === 'approved') {
+    publishScheduledPost(admin, parsed.data.postId).catch((err) => {
+      console.error(`Approval → Zernio publish failed for post ${parsed.data.postId}:`, err);
+    });
+  }
 
   return NextResponse.json({ comment: data });
 }
