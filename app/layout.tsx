@@ -62,10 +62,19 @@ const roboto = Roboto({
   display: 'swap',
 });
 
-// Dynamic metadata — title and favicon switch based on domain
+// Dynamic metadata — title and favicon switch based on domain.
+// Mirrors RootLayout's hostname fallback because `generateMetadata` runs on
+// every route — including ones the middleware matcher skips (e.g. /c/:token
+// public share links). Without the fallback, AC visitors on those routes
+// receive the Nativz favicon link tag.
 export async function generateMetadata(): Promise<Metadata> {
   const headersList = await headers();
-  const agency = headersList.get('x-agency') as 'anderson' | 'nativz' | null;
+  const headerAgency = headersList.get('x-agency') as 'anderson' | 'nativz' | null;
+  const hostname =
+    headersList.get('x-forwarded-host')
+    ?? headersList.get('host')
+    ?? '';
+  const agency = headerAgency ?? detectAgencyFromHostname(hostname);
   const isAC = agency === 'anderson';
 
   const title = 'Cortex';

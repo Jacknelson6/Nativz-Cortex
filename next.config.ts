@@ -4,8 +4,12 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   async redirects() {
     return [
-      // Browsers still request /favicon.ico; Cortex uses file-based `app/icon.png`.
-      { source: '/favicon.ico', destination: '/icon.png', permanent: false },
+      // Browsers still ping /favicon.ico for legacy RSS readers / old
+      // chromes. Per-host icons live in `metadata.icons` (see app/layout.tsx)
+      // — those win on every modern browser. This redirect is just the
+      // fallback; point it at the Nativz favicon since AC visitors will get
+      // the AC link tag from metadata.icons before this URL is requested.
+      { source: '/favicon.ico', destination: '/favicon.png', permanent: false },
       // Legacy "audit" → renamed to "analyze-social". Keep bookmarks and any
       // previously-generated share links working.
       { source: '/admin/audit', destination: '/admin/analyze-social', permanent: false },
