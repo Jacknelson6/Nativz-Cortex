@@ -500,8 +500,8 @@ function PlatformCard({
       <header className="flex items-start justify-between gap-3">
         <TooltipCard title={section.title} description={section.tooltip} iconTrigger>
           <div className="flex items-center gap-2.5">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-nativz-border bg-surface-hover/70">
-              <BrandIcon size={18} className="text-text-primary" />
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent-text">
+              <BrandIcon size={18} />
             </span>
             <h3 className="cursor-help text-base font-semibold text-text-primary">
               {section.title}
