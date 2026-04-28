@@ -138,7 +138,7 @@ async function generateOneCaption(
 
   const langLine =
     opts.context.language === 'es'
-      ? 'Write the caption in Spanish — the video is in Spanish.'
+      ? 'Write the caption in Spanish, the video is in Spanish.'
       : 'Write the caption in English.';
 
   const system = `You are a senior short-form video copywriter for Instagram Reels, TikTok, and YouTube Shorts. You write captions that drive comments, saves, and shares.
@@ -147,8 +147,10 @@ You are looking at the video's first-frame thumbnail and (if present) its spoken
 
 Output rules:
 - Return ONLY valid JSON: { "caption": string, "hashtags": string[] }
-- Caption: 60-220 characters — write ONLY the hook line plus a 1-2 sentence body. Do NOT write a CTA, do NOT write hashtags, do NOT write "follow" or "save" lines. Those are appended automatically downstream.
+- Caption: 60-220 characters. Write ONLY the hook line plus a 1-2 sentence body. Do NOT write a CTA, do NOT write hashtags, do NOT write "follow" or "save" lines. Those are appended automatically downstream.
 - Sentence-case, no markdown (no asterisks, headers, backticks), no leading hashtags, no emoji spam
+- Never use em-dashes (—) or en-dashes (–). Use commas, periods, or new sentences instead.
+- Include exactly one topical emoji in the body (no more, no less). Place it where it lands naturally, not just at the end.
 - Hashtags: 3-8 entries that match the video's specific themes (not the brand boilerplate — those are appended automatically). Lowercase, no leading "#".
 - Match the brand voice and align with saved-caption examples for tone
 - ${langLine}
