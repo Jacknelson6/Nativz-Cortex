@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { downloadDriveVideo } from './drive-folder';
 import { uploadVideoBytes, uploadThumbnail } from './storage-upload';
 import { extractFirstFrame } from './thumbnail';
+import { compressVideoIfOversize } from './compress-video';
 
 const CONCURRENCY = 3;
 
@@ -33,17 +34,18 @@ export async function ingestDrop(
       try {
         await admin.from('content_drop_videos').update({ status: 'downloading' }).eq('id', row.id);
         const dl = await downloadDriveVideo(opts.userId, row.drive_file_id);
-        const ext = (row.drive_file_name.split('.').pop() ?? 'mp4').toLowerCase();
+        const sourceExt = (row.drive_file_name.split('.').pop() ?? 'mp4').toLowerCase();
+        const c = await compressVideoIfOversize(dl.buffer, sourceExt);
         const videoUrl = await uploadVideoBytes(admin, {
           dropId: opts.dropId,
           videoId: row.id,
-          buffer: dl.buffer,
-          mimeType: dl.mimeType,
-          ext,
+          buffer: c.buffer,
+          mimeType: c.mimeType,
+          ext: c.ext,
         });
         let thumbUrl: string | null = null;
         try {
-          const frame = await extractFirstFrame(dl.buffer, ext);
+          const frame = await extractFirstFrame(c.buffer, c.ext);
           thumbUrl = await uploadThumbnail(admin, {
             dropId: opts.dropId,
             videoId: row.id,
@@ -58,8 +60,8 @@ export async function ingestDrop(
             status: 'analyzing',
             video_url: videoUrl,
             thumbnail_url: thumbUrl,
-            mime_type: dl.mimeType,
-            size_bytes: dl.size,
+            mime_type: c.mimeType,
+            size_bytes: c.finalSize,
           })
           .eq('id', row.id);
         processed += 1;
