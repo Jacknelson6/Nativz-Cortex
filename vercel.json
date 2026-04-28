@@ -97,6 +97,10 @@
     {
       "path": "/api/cron/sweep-stuck-brand-audits",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/calendar-comment-digest",
+      "schedule": "0 13 * * *"
     }
   ]
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
-import { Link2, Unlink, Loader2, Check, Search, MoreHorizontal } from 'lucide-react';
+import { Link2, Unlink, Loader2, Check, Search, MoreHorizontal, MessageSquare } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +21,7 @@ interface SocialProfile {
   avatar_url: string | null;
 }
 
-type IntegrationKind = SocialPlatform | 'uppromote';
+type IntegrationKind = SocialPlatform | 'uppromote' | 'google_chat';
 
 type IntegrationRow = {
   key: IntegrationKind;
@@ -103,13 +103,94 @@ function UpPromoteModal({
   );
 }
 
+function GoogleChatModal({
+  clientId,
+  initialUrl,
+  onClose,
+  onSaved,
+}: {
+  clientId: string;
+  initialUrl: string | null;
+  onClose: () => void;
+  onSaved: (url: string) => void;
+}) {
+  const [url, setUrl] = useState(initialUrl ?? '');
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = url.trim();
+    if (!trimmed.startsWith('https://chat.googleapis.com/')) {
+      toast.error('Must be a Google Chat webhook URL (https://chat.googleapis.com/...)');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/chat-webhook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webhook_url: trimmed }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error ?? 'Failed to save webhook');
+        return;
+      }
+      toast.success('Webhook connected — test message sent to the Chat space');
+      onSaved(trimmed);
+      onClose();
+    } catch {
+      toast.error('Failed to save webhook');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open onClose={onClose} title="" maxWidth="sm" bodyClassName="p-5">
+      <div className="flex items-center gap-2 mb-4 pr-10">
+        <span className="flex h-7 w-7 items-center justify-center rounded-md bg-blue-500/10 text-blue-400">
+          <MessageSquare size={16} />
+        </span>
+        <h3 className="text-sm font-semibold text-text-primary">
+          {initialUrl ? 'Update Google Chat webhook' : 'Connect Google Chat'}
+        </h3>
+      </div>
+      <p className="text-xs text-text-muted mb-3">
+        In your client&apos;s team Chat space, add an incoming webhook (avatar URL: cortex.nativz.io/avatar-nativz.png), then paste the URL below. Cortex sends a test message to verify.
+      </p>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <input
+          type="url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://chat.googleapis.com/v1/spaces/.../messages?key=...&token=..."
+          autoFocus
+          className="w-full rounded-lg border border-nativz-border bg-surface-hover px-3 py-2 text-xs font-mono text-text-primary placeholder:text-text-muted focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/20"
+        />
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" size="sm" disabled={saving || !url.trim()}>
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />}
+            {saving ? 'Connecting...' : initialUrl ? 'Save' : 'Connect'}
+          </Button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+
 export function IntegrationsTable({
   clientId,
   hasAffiliateIntegration,
+  chatWebhookUrl: initialChatWebhookUrl = null,
   bare = false,
 }: {
   clientId: string;
   hasAffiliateIntegration?: boolean;
+  chatWebhookUrl?: string | null;
   /** When true, drops the outer Card chrome so the table embeds inside an
    *  InfoCard / equivalent surface without nested cards. */
   bare?: boolean;
@@ -121,11 +202,18 @@ export function IntegrationsTable({
   const [upPromoteConnected, setUpPromoteConnected] = useState(hasAffiliateIntegration ?? false);
   const [upPromoteDisconnecting, setUpPromoteDisconnecting] = useState(false);
   const [showUpPromoteModal, setShowUpPromoteModal] = useState(false);
+  const [chatWebhookUrl, setChatWebhookUrl] = useState<string | null>(initialChatWebhookUrl);
+  const [chatDisconnecting, setChatDisconnecting] = useState(false);
+  const [showChatModal, setShowChatModal] = useState(false);
   const [query, setQuery] = useState('');
 
   useEffect(() => {
     setUpPromoteConnected(hasAffiliateIntegration ?? false);
   }, [hasAffiliateIntegration]);
+
+  useEffect(() => {
+    setChatWebhookUrl(initialChatWebhookUrl);
+  }, [initialChatWebhookUrl]);
 
   const fetchProfiles = useCallback(async () => {
     try {
@@ -198,6 +286,23 @@ export function IntegrationsTable({
     }
   }
 
+  async function handleChatDisconnect() {
+    setChatDisconnecting(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/chat-webhook`, { method: 'DELETE' });
+      if (!res.ok) {
+        toast.error('Failed to disconnect');
+        return;
+      }
+      setChatWebhookUrl(null);
+      toast.success('Google Chat webhook disconnected');
+    } catch {
+      toast.error('Failed to disconnect');
+    } finally {
+      setChatDisconnecting(false);
+    }
+  }
+
   async function handleUpPromoteDisconnect() {
     setUpPromoteDisconnecting(true);
     try {
@@ -250,6 +355,20 @@ export function IntegrationsTable({
         connected: upPromoteConnected,
         profileId: null,
       },
+      {
+        key: 'google_chat',
+        label: 'Google Chat',
+        icon: (
+          <span className="flex h-[20px] w-[20px] items-center justify-center rounded-sm bg-blue-500/10 text-blue-400">
+            <MessageSquare size={12} />
+          </span>
+        ),
+        integrationLabel: chatWebhookUrl ? 'Team notifications' : null,
+        identifier: chatWebhookUrl ? extractSpaceId(chatWebhookUrl) : null,
+        account: null,
+        connected: Boolean(chatWebhookUrl),
+        profileId: null,
+      },
     ];
 
     if (!query.trim()) return all;
@@ -260,7 +379,7 @@ export function IntegrationsTable({
         (r.account ?? '').toLowerCase().includes(q) ||
         (r.integrationLabel ?? '').toLowerCase().includes(q),
     );
-  }, [profiles, upPromoteConnected, query]);
+  }, [profiles, upPromoteConnected, chatWebhookUrl, query]);
 
   const connectedCount = rows.filter((r) => r.connected).length;
 
@@ -366,18 +485,24 @@ export function IntegrationsTable({
                         disconnecting={
                           row.key === 'uppromote'
                             ? upPromoteDisconnecting
+                            : row.key === 'google_chat'
+                            ? chatDisconnecting
                             : disconnecting === row.profileId
                         }
                         onConnect={() => {
                           if (row.key === 'uppromote') {
                             setShowUpPromoteModal(true);
+                          } else if (row.key === 'google_chat') {
+                            setShowChatModal(true);
                           } else {
-                            handleConnectSocial(row.key);
+                            handleConnectSocial(row.key as SocialPlatform);
                           }
                         }}
                         onDisconnect={() => {
                           if (row.key === 'uppromote') {
                             handleUpPromoteDisconnect();
+                          } else if (row.key === 'google_chat') {
+                            handleChatDisconnect();
                           } else if (row.profileId) {
                             handleDisconnect(row.profileId, row.label);
                           }
@@ -399,8 +524,22 @@ export function IntegrationsTable({
           onConnected={() => setUpPromoteConnected(true)}
         />
       )}
+
+      {showChatModal && (
+        <GoogleChatModal
+          clientId={clientId}
+          initialUrl={chatWebhookUrl}
+          onClose={() => setShowChatModal(false)}
+          onSaved={(url) => setChatWebhookUrl(url)}
+        />
+      )}
     </>
   );
+}
+
+function extractSpaceId(webhookUrl: string): string | null {
+  const m = webhookUrl.match(/\/spaces\/([A-Za-z0-9_-]+)\//);
+  return m ? m[1] : null;
 }
 
 function Th({ children, className }: { children: React.ReactNode; className?: string }) {

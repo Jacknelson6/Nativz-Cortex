@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createNotification } from '@/lib/notifications/create';
-import { sendDropCommentEmail } from '@/lib/email/resend';
 import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
+import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
 
 const AttachmentSchema = z.object({
   url: z.string().url(),
@@ -52,7 +52,8 @@ export async function POST(
     return NextResponse.json({ error: 'link expired' }, { status: 410 });
   }
 
-  const reviewLinkId = link.post_review_link_map?.[parsed.data.postId];
+  const reviewLinkMap = link.post_review_link_map ?? {};
+  const reviewLinkId = reviewLinkMap[parsed.data.postId];
   if (!reviewLinkId) {
     return NextResponse.json({ error: 'post is not part of this share link' }, { status: 400 });
   }
@@ -72,12 +73,12 @@ export async function POST(
     return NextResponse.json({ error: error?.message ?? 'failed' }, { status: 500 });
   }
 
-  // Fire-and-forget notifications. Don't block the comment response — admins
-  // see the toast/badge on next nav, and the email is best-effort.
-  notifyAdminsOfComment(admin, link.drop_id, {
+  // Fire-and-forget notifications. Don't block the comment response.
+  notifyAdminsOfComment(admin, link.drop_id, reviewLinkMap, {
     authorName: parsed.data.authorName.trim(),
     content: parsed.data.content.trim(),
     status: parsed.data.status,
+    attachments: parsed.data.attachments ?? [],
   }).catch((err) => console.error('Comment notification failed:', err));
 
   // Approval = "ship it". Hand the draft post to Zernio. publishScheduledPost
@@ -145,28 +146,39 @@ export async function DELETE(
 async function notifyAdminsOfComment(
   admin: ReturnType<typeof createAdminClient>,
   dropId: string,
-  comment: { authorName: string; content: string; status: 'approved' | 'changes_requested' | 'comment' },
+  reviewLinkMap: Record<string, string>,
+  comment: {
+    authorName: string;
+    content: string;
+    status: 'approved' | 'changes_requested' | 'comment';
+    attachments: Array<{ url: string; filename: string; mime_type: string; size_bytes: number }>;
+  },
 ) {
   const { data: drop } = await admin
     .from('content_drops')
-    .select('id, created_by, clients(name)')
+    .select('id, clients(name, chat_webhook_url)')
     .eq('id', dropId)
-    .single<{ id: string; created_by: string; clients: { name: string } | null }>();
+    .single<{ id: string; clients: { name: string; chat_webhook_url: string | null } | null }>();
   if (!drop) return;
 
   const clientName = drop.clients?.name ?? 'Client';
+  const chatWebhookUrl = drop.clients?.chat_webhook_url ?? null;
   const title = TITLE_BY_STATUS[comment.status](comment.authorName, clientName);
+  // Truncate only the in-app notification body — chat gets full content.
   const preview = comment.content.slice(0, 140) + (comment.content.length > 140 ? '…' : '');
   const linkPath = `/admin/calendar/${drop.id}`;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
+  const dropUrl = `${appUrl}${linkPath}`;
 
-  const [{ data: admins }, { data: owner }] = await Promise.all([
-    admin.from('users').select('id').eq('role', 'admin'),
-    admin.from('users').select('email').eq('id', drop.created_by).single<{ email: string | null }>(),
-  ]);
-
-  for (const a of admins ?? []) {
+  // In-app: Jack only. Future: per-share-link recipient list.
+  const { data: jack } = await admin
+    .from('users')
+    .select('id')
+    .eq('email', 'jack@nativz.io')
+    .maybeSingle<{ id: string }>();
+  if (jack?.id) {
     createNotification({
-      recipientUserId: a.id,
+      recipientUserId: jack.id,
       type: 'general',
       title,
       body: preview,
@@ -174,15 +186,43 @@ async function notifyAdminsOfComment(
     }).catch(() => {});
   }
 
-  if (owner?.email) {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
-    sendDropCommentEmail({
-      to: owner.email,
-      authorName: comment.authorName,
-      clientName,
-      status: comment.status,
-      contentPreview: preview,
-      dropUrl: `${appUrl}${linkPath}`,
-    }).catch((err) => console.error('Content calendar comment email send failed:', err));
+  // Google Chat:
+  // - comment / changes_requested → post immediately with full content + attachments
+  // - approved → post only when every post in this share link is approved
+  if (!chatWebhookUrl) return;
+
+  if (comment.status === 'comment' || comment.status === 'changes_requested') {
+    const verb = comment.status === 'changes_requested' ? 'requested changes' : 'commented';
+    const quoted = comment.content
+      .split('\n')
+      .map((line) => `> ${line}`)
+      .join('\n');
+    const attachmentBlock =
+      comment.attachments.length > 0
+        ? '\n\n' +
+          comment.attachments.map((a) => `📎 ${a.filename}\n${a.url}`).join('\n\n')
+        : '';
+    const text = `*${comment.authorName}* ${verb} on ${clientName}:\n${quoted}${attachmentBlock}\n\n${dropUrl}`;
+    postToGoogleChatSafe(chatWebhookUrl, { text }, `comment ${dropId}`);
+    return;
   }
+
+  // status === 'approved' → check all-approved
+  const reviewLinkIds = Object.values(reviewLinkMap);
+  if (reviewLinkIds.length === 0) return;
+
+  const { data: approvals } = await admin
+    .from('post_review_comments')
+    .select('review_link_id')
+    .in('review_link_id', reviewLinkIds)
+    .eq('status', 'approved');
+
+  const approvedSet = new Set((approvals ?? []).map((a) => a.review_link_id));
+  const allApproved = reviewLinkIds.every((id) => approvedSet.has(id));
+  if (!allApproved) return;
+
+  // Race: concurrent approvers may both observe "all approved" and post twice.
+  // Accepted for now; revisit with a unique-message-key gate if it bites.
+  const text = `🎉 All ${reviewLinkIds.length} posts in ${clientName}'s calendar are approved.\n${dropUrl}`;
+  postToGoogleChatSafe(chatWebhookUrl, { text }, `all-approved ${dropId}`);
 }

@@ -13,21 +13,24 @@ export default async function ClientSettingsIntegrationsPage({
   const admin = createAdminClient();
   const { data: client } = await admin
     .from('clients')
-    .select('id, name, uppromote_api_key')
+    .select('id, name, uppromote_api_key, chat_webhook_url')
     .eq('slug', slug)
     .single();
   if (!client) notFound();
+
+  const c = client as { id: string; name: string; uppromote_api_key?: string | null; chat_webhook_url?: string | null };
 
   return (
     <div className="space-y-6">
       <SettingsPageHeader
         icon={Plug}
         title="Integrations"
-        subtitle="Connected accounts for reporting, analytics, and affiliate tracking."
+        subtitle="Connected accounts for reporting, analytics, affiliate tracking, and team notifications."
       />
       <IntegrationsTable
-        clientId={client.id}
-        hasAffiliateIntegration={Boolean((client as { uppromote_api_key?: string | null }).uppromote_api_key)}
+        clientId={c.id}
+        hasAffiliateIntegration={Boolean(c.uppromote_api_key)}
+        chatWebhookUrl={c.chat_webhook_url ?? null}
       />
     </div>
   );

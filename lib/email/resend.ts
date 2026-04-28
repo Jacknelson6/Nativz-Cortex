@@ -618,3 +618,85 @@ export async function sendDropCommentEmail(opts: {
 
   return result;
 }
+
+// ── Calendar comment daily digest ────────────────────────────────────────────
+
+export interface CalendarDigestComment {
+  authorName: string;
+  status: 'approved' | 'changes_requested' | 'comment';
+  contentPreview: string;
+  captionPreview: string;
+  createdAt: string;
+}
+
+export interface CalendarDigestClientGroup {
+  clientName: string;
+  dropUrl: string;
+  comments: CalendarDigestComment[];
+}
+
+export async function sendCalendarCommentDigestEmail(opts: {
+  to: string;
+  groups: CalendarDigestClientGroup[];
+  windowLabel: string;
+  agency?: AgencyBrand;
+}) {
+  const agency = opts.agency ?? 'nativz';
+  const totalComments = opts.groups.reduce((sum, g) => sum + g.comments.length, 0);
+  const subject = `${totalComments} content calendar ${totalComments === 1 ? 'comment' : 'comments'} — ${opts.windowLabel}`;
+
+  const verbByStatus = {
+    approved: 'approved',
+    changes_requested: 'requested changes',
+    comment: 'commented',
+  } as const;
+
+  const sections = opts.groups
+    .map((g) => {
+      const rows = g.comments
+        .map((c) => `
+          <tr>
+            <td style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+              <div style="font-size:13px;color:#fff;"><strong>${c.authorName}</strong> ${verbByStatus[c.status]}</div>
+              <div style="font-size:12px;color:#9aa3b2;margin-top:2px;">on &ldquo;${c.captionPreview}&rdquo;</div>
+              ${c.contentPreview ? `<div style="font-size:12px;color:#cbd2dd;margin-top:6px;font-style:italic;">&ldquo;${c.contentPreview}&rdquo;</div>` : ''}
+            </td>
+          </tr>`)
+        .join('');
+      return `
+        <div style="margin-bottom:24px;">
+          <h2 style="font-size:15px;font-weight:600;color:#fff;margin:0 0 8px;">${g.clientName}</h2>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows}</table>
+          <div style="margin-top:12px;"><a href="${g.dropUrl}" style="font-size:12px;color:#5eb6ff;text-decoration:none;">Open ${g.clientName}'s calendar &rarr;</a></div>
+        </div>`;
+    })
+    .join('');
+
+  const result = await (await getResend()).emails.send({
+    from: getFromAddress(agency),
+    replyTo: getReplyTo(agency),
+    to: opts.to,
+    subject,
+    html: layout(`
+      <div class="card">
+        <h1 class="heading">Yesterday's calendar activity</h1>
+        <p class="subtext">
+          ${totalComments} ${totalComments === 1 ? 'comment' : 'comments'} across ${opts.groups.length} ${opts.groups.length === 1 ? 'client' : 'clients'} — ${opts.windowLabel}.
+        </p>
+        ${sections}
+      </div>
+    `, agency),
+  });
+
+  trackUsage({
+    service: 'resend',
+    model: 'email-api',
+    feature: 'email_delivery',
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    costUsd: 0,
+  });
+
+  return result;
+}
