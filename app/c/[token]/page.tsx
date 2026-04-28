@@ -96,7 +96,7 @@ export default function PublicCalendarSharePage({
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-6">
         <div className="text-center">
-          <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-400" />
+          <AlertCircle className="mx-auto mb-4 h-12 w-12 text-status-danger" />
           <h1 className="text-lg font-semibold text-text-primary">{error ?? 'Link not found'}</h1>
           <p className="mt-1 text-sm text-text-muted">
             This share link may have expired or been deactivated.
@@ -202,17 +202,17 @@ function SharedDropView({
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-nativz-border bg-surface px-4 py-4 sm:px-6 sm:py-5">
+      <header className="border-b border-nativz-border bg-surface px-4 py-5 sm:px-6 sm:py-7">
         <div className="mx-auto max-w-5xl">
-          <div className="mb-3 flex items-center">
+          <div className="mb-4 flex items-center sm:mb-5">
             <ShareHeaderLogo />
           </div>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <h1 className="text-base font-semibold text-text-primary sm:text-xl">
+              <h1 className="font-display text-lg font-semibold tracking-tight text-text-primary sm:text-2xl">
                 {data.clientName} — Content calendar
               </h1>
-              <p className="mt-1 text-xs text-text-secondary sm:text-sm">
+              <p className="mt-1.5 text-xs text-text-secondary sm:text-sm">
                 {total} post{total !== 1 ? 's' : ''} to review · scheduled {data.drop.start_date} → {data.drop.end_date}
               </p>
             </div>
@@ -258,11 +258,11 @@ function SharedDropView({
               </div>
             </div>
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+            <span className="inline-flex items-center gap-1 rounded-full bg-status-success/12 px-2 py-0.5 text-status-success">
               <CheckCircle size={12} /> {approvedCount} approved
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-amber-300">
+            <span className="inline-flex items-center gap-1 rounded-full bg-status-warning/12 px-2 py-0.5 text-status-warning">
               <AlertTriangle size={12} /> {changesCount} changes requested
             </span>
             <span className="inline-flex items-center gap-1 rounded-full bg-surface-hover px-2 py-0.5 text-text-muted">
@@ -314,7 +314,7 @@ function SharedDropView({
         maxWidth="sm"
       >
         <div className="space-y-3">
-          <h2 className="text-lg font-semibold text-text-primary">Welcome</h2>
+          <h2 className="font-display text-lg font-semibold tracking-tight text-text-primary">Welcome</h2>
           <p className="text-sm text-text-secondary">
             Tell us who&apos;s reviewing so your feedback is attributed correctly.
           </p>
@@ -326,13 +326,13 @@ function SharedDropView({
             }}
             placeholder="Your name"
             autoFocus
-            className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-base text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text sm:text-sm"
+            className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-base text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent sm:text-sm"
           />
           <div className="flex justify-end">
             <button
               type="button"
               onClick={() => saveName(pendingName)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-accent-text px-3 py-1.5 text-xs font-medium text-white transition-colors hover:opacity-90"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-contrast transition-opacity hover:opacity-90"
             >
               Continue
             </button>
@@ -533,7 +533,7 @@ function CalendarCell({
         <span
           className={`text-[11px] ${
             isToday
-              ? 'inline-flex h-5 w-5 items-center justify-center rounded-full bg-accent-text font-semibold text-white'
+              ? 'inline-flex h-5 w-5 items-center justify-center rounded-full bg-accent font-semibold text-accent-contrast'
               : cell.inMonth
                 ? 'text-text-secondary'
                 : 'text-text-muted/40'
@@ -574,13 +574,13 @@ function CalendarCell({
               </div>
             )}
             {review === 'approved' && (
-              <span className="absolute right-0.5 top-0.5 rounded-full bg-emerald-600 p-0.5">
-                <CheckCircle size={9} className="text-white" />
+              <span className="absolute right-0.5 top-0.5 rounded-full bg-status-success p-0.5">
+                <CheckCircle size={9} className="text-accent-contrast" />
               </span>
             )}
             {review === 'changes_requested' && (
-              <span className="absolute right-0.5 top-0.5 rounded-full bg-amber-500 p-0.5">
-                <AlertTriangle size={9} className="text-white" />
+              <span className="absolute right-0.5 top-0.5 rounded-full bg-status-warning p-0.5">
+                <AlertTriangle size={9} className="text-accent-contrast" />
               </span>
             )}
           </button>
@@ -815,16 +815,16 @@ function PostCard({
     <div className="min-w-0 flex-1 space-y-2 sm:space-y-3">
       <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
         <span className="text-xs font-medium text-text-muted">Post {index}</span>
-        <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-xs text-blue-300">
+        <span className="inline-flex items-center gap-1 rounded-full bg-accent-surface px-2 py-0.5 text-xs text-accent-text">
           <Clock size={11} /> {scheduledLabel}
         </span>
         {review === 'approved' && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-300">
+          <span className="inline-flex items-center gap-1 rounded-full bg-status-success/12 px-2 py-0.5 text-xs font-medium text-status-success">
             <CheckCircle size={11} /> Approved
           </span>
         )}
         {review === 'changes_requested' && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-300">
+          <span className="inline-flex items-center gap-1 rounded-full bg-status-warning/12 px-2 py-0.5 text-xs font-medium text-status-warning">
             <AlertTriangle size={11} /> Changes requested
           </span>
         )}
@@ -838,7 +838,7 @@ function PostCard({
             rows={Math.max(3, Math.min(10, draftCaption.split('\n').length + 1))}
             disabled={savingCaption}
             autoFocus
-            className="w-full resize-none rounded-lg border border-accent-text/40 bg-background/60 px-3 py-2 text-base leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text sm:text-sm"
+            className="w-full resize-none rounded-lg border border-accent/40 bg-background/60 px-3 py-2 text-base leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent sm:text-sm"
           />
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
@@ -856,7 +856,7 @@ function PostCard({
               type="button"
               onClick={saveCaption}
               disabled={savingCaption || !draftCaption.trim()}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-accent-text px-3 py-1.5 text-xs font-medium text-white transition-colors hover:opacity-90 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-contrast transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {savingCaption ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
               Save caption
@@ -978,7 +978,7 @@ function PostCard({
           onChange={(e) => setCommentText(e.target.value)}
           placeholder="Notes on the video (cuts, music, hook, etc.)"
           rows={2}
-          className="mb-2 w-full resize-none rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text"
+          className="mb-2 w-full resize-none rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent"
           disabled={submitting}
         />
 
@@ -1028,7 +1028,7 @@ function PostCard({
               type="button"
               onClick={() => submit('approved')}
               disabled={submitting || uploading}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50 sm:py-1.5"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-status-success px-3 py-2 text-xs font-medium text-accent-contrast transition-opacity hover:opacity-90 disabled:opacity-50 sm:py-1.5"
             >
               <CheckCircle size={12} /> Approve
             </button>
@@ -1050,9 +1050,9 @@ function PostCard({
 function CommentRow({ comment }: { comment: SharedComment }) {
   const tone =
     comment.status === 'approved'
-      ? 'text-emerald-300'
+      ? 'text-status-success'
       : comment.status === 'changes_requested'
-        ? 'text-amber-300'
+        ? 'text-status-warning'
         : comment.status === 'caption_edit'
           ? 'text-accent-text'
           : 'text-text-secondary';
@@ -1073,7 +1073,7 @@ function CommentRow({ comment }: { comment: SharedComment }) {
 
   if (comment.status === 'caption_edit') {
     return (
-      <div className="rounded-lg border border-accent-text/25 bg-accent-text/5 px-3 py-2">
+      <div className="rounded-lg border border-accent/25 bg-accent/5 px-3 py-2">
         <div className="mb-1 flex items-center gap-2 text-xs">
           <Icon size={11} className={tone} />
           <span className="font-medium text-text-primary">{comment.author_name}</span>
