@@ -8,10 +8,7 @@ import { Monitor } from 'lucide-react';
 // portal are desktop-only (by design), but client-shared links like
 // onboarding timelines and content-calendar review links are viewed on
 // phones. Add any future public client surfaces here.
-//
-// `/admin/calendar` is also allowed because Google Chat notifications
-// deep-link to the admin calendar from team members' phones.
-const MOBILE_ALLOWED_PREFIXES = ['/onboarding/', '/c/', '/admin/calendar'];
+const MOBILE_ALLOWED_PREFIXES = ['/onboarding/', '/c/'];
 
 /**
  * Detects mobile viewport and shows a full-screen overlay telling the user

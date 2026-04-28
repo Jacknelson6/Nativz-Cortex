@@ -74,7 +74,7 @@ export async function POST(
   }
 
   // Fire-and-forget notifications. Don't block the comment response.
-  notifyAdminsOfComment(admin, link.drop_id, reviewLinkMap, {
+  notifyAdminsOfComment(admin, link.drop_id, token, reviewLinkMap, {
     authorName: parsed.data.authorName.trim(),
     content: parsed.data.content.trim(),
     status: parsed.data.status,
@@ -146,6 +146,7 @@ export async function DELETE(
 async function notifyAdminsOfComment(
   admin: ReturnType<typeof createAdminClient>,
   dropId: string,
+  shareToken: string,
   reviewLinkMap: Record<string, string>,
   comment: {
     authorName: string;
@@ -166,9 +167,11 @@ async function notifyAdminsOfComment(
   const title = TITLE_BY_STATUS[comment.status](comment.authorName, clientName);
   // Truncate only the in-app notification body — chat gets full content.
   const preview = comment.content.slice(0, 140) + (comment.content.length > 140 ? '…' : '');
+  // In-app links go to the admin view; chat links go to the public share view
+  // so phones (mobile-blocked from /admin/*) can open them.
   const linkPath = `/admin/calendar/${drop.id}`;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
-  const dropUrl = `${appUrl}${linkPath}`;
+  const shareUrl = `${appUrl}/c/${shareToken}`;
 
   // In-app: Jack only. Future: per-share-link recipient list.
   const { data: jack } = await admin
@@ -202,7 +205,7 @@ async function notifyAdminsOfComment(
         ? '\n\n' +
           comment.attachments.map((a) => `📎 ${a.filename}\n${a.url}`).join('\n\n')
         : '';
-    const text = `*${comment.authorName}* ${verb} on ${clientName}:\n${quoted}${attachmentBlock}\n\n${dropUrl}`;
+    const text = `*${comment.authorName}* ${verb} on ${clientName}:\n${quoted}${attachmentBlock}\n\n${shareUrl}`;
     postToGoogleChatSafe(chatWebhookUrl, { text }, `comment ${dropId}`);
     return;
   }
@@ -223,6 +226,6 @@ async function notifyAdminsOfComment(
 
   // Race: concurrent approvers may both observe "all approved" and post twice.
   // Accepted for now; revisit with a unique-message-key gate if it bites.
-  const text = `🎉 All ${reviewLinkIds.length} posts in ${clientName}'s calendar are approved.\n${dropUrl}`;
+  const text = `🎉 All ${reviewLinkIds.length} posts in ${clientName}'s calendar are approved.\n${shareUrl}`;
   postToGoogleChatSafe(chatWebhookUrl, { text }, `all-approved ${dropId}`);
 }

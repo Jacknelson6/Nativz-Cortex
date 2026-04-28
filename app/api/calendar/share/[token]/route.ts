@@ -45,11 +45,14 @@ interface CommentRow {
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   ctx: { params: Promise<{ token: string }> },
 ) {
   const { token } = await ctx.params;
   const admin = createAdminClient();
+  const url = new URL(req.url);
+  const viewerName = url.searchParams.get('as')?.trim().slice(0, 80) || null;
+  const userAgent = req.headers.get('user-agent')?.slice(0, 500) ?? null;
 
   const { data: link } = await admin
     .from('content_drop_share_links')
@@ -109,11 +112,19 @@ export async function GET(
     (commentsByPost[postId] ||= []).push(c);
   }
 
-  // Update last_viewed_at (fire and forget — not required for the response).
+  // Log the open — both the rolling pointer and an immutable history row.
+  // Fire-and-forget; failures here must not block the viewer's response.
   void admin
     .from('content_drop_share_links')
     .update({ last_viewed_at: new Date().toISOString() })
     .eq('id', link.id);
+  void admin
+    .from('content_drop_share_link_views')
+    .insert({
+      share_link_id: link.id,
+      viewer_name: viewerName,
+      user_agent: userAgent,
+    });
 
   return NextResponse.json({
     clientName: client?.name ?? 'Brand',

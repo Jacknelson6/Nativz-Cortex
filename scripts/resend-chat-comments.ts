@@ -90,18 +90,20 @@ async function main() {
     return;
   }
 
-  // Find the most recent share link for this client (for dropUrl).
+  // Find the most recent share link for this client (for the share URL).
   const { data: shareLink } = await admin
     .from('content_drop_share_links')
-    .select('drop_id, included_post_ids')
+    .select('drop_id, token, included_post_ids')
     .order('created_at', { ascending: false })
     .limit(1)
-    .single<{ drop_id: string; included_post_ids: string[] }>();
+    .single<{ drop_id: string; token: string; included_post_ids: string[] }>();
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://cortex.nativz.io';
-  const dropUrl = shareLink?.drop_id
-    ? `${appUrl}/admin/calendar/${shareLink.drop_id}`
-    : `${appUrl}/admin/calendar`;
+  const dropUrl = shareLink?.token
+    ? `${appUrl}/c/${shareLink.token}`
+    : shareLink?.drop_id
+      ? `${appUrl}/admin/calendar/${shareLink.drop_id}`
+      : `${appUrl}/admin/calendar`;
 
   // Per-comment messages — only comment + changes_requested, mirroring live route.
   const realtime = filtered.filter((c) => c.status === 'comment' || c.status === 'changes_requested');

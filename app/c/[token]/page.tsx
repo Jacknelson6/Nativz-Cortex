@@ -64,7 +64,12 @@ export default function PublicCalendarSharePage({
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/calendar/share/${token}`);
+        const storedName =
+          typeof window !== 'undefined'
+            ? window.localStorage.getItem(`cortex_share_name_${token}`)?.trim() ?? ''
+            : '';
+        const qs = storedName ? `?as=${encodeURIComponent(storedName)}` : '';
+        const res = await fetch(`/api/calendar/share/${token}${qs}`);
         const json = await res.json();
         if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Failed to load');
         if (!cancelled) setData(json as SharedDrop);

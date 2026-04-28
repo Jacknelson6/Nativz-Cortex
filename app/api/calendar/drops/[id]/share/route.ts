@@ -98,12 +98,30 @@ export async function GET(
     .eq('drop_id', id)
     .order('created_at', { ascending: false });
 
+  const linkIds = (links ?? []).map((l) => l.id as string);
+  type ViewRow = { share_link_id: string; viewed_at: string; viewer_name: string | null; user_agent: string | null };
+  const { data: viewRows } = linkIds.length
+    ? await admin
+        .from('content_drop_share_link_views')
+        .select('share_link_id, viewed_at, viewer_name, user_agent')
+        .in('share_link_id', linkIds)
+        .order('viewed_at', { ascending: false })
+        .limit(500)
+        .returns<ViewRow[]>()
+    : { data: [] as ViewRow[] };
+
+  const viewsByLink: Record<string, ViewRow[]> = {};
+  for (const v of viewRows ?? []) {
+    (viewsByLink[v.share_link_id] ||= []).push(v);
+  }
+
   const appUrl = resolveAppUrl(drop.clients?.agency);
   const now = Date.now();
 
   const history = (links ?? []).map((row) => {
     const expires = new Date(row.expires_at as string).getTime();
     const isExpired = Number.isFinite(expires) && expires < now;
+    const allViews = viewsByLink[row.id as string] ?? [];
     return {
       id: row.id,
       url: `${appUrl}/c/${row.token}`,
@@ -112,6 +130,12 @@ export async function GET(
       last_viewed_at: row.last_viewed_at,
       expires_at: row.expires_at,
       revoked: isExpired,
+      view_count: allViews.length,
+      views: allViews.slice(0, 50).map((v) => ({
+        viewed_at: v.viewed_at,
+        viewer_name: v.viewer_name,
+        user_agent: v.user_agent,
+      })),
     };
   });
 

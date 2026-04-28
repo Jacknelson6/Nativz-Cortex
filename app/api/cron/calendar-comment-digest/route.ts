@@ -91,23 +91,27 @@ async function handleGet(request: NextRequest) {
     ),
   );
 
+  const postIdToShareToken: Record<string, string> = {};
   const postIdToDropId: Record<string, string> = {};
   if (postIds.length > 0) {
     const { data: shareLinks } = await admin
       .from('content_drop_share_links')
-      .select('drop_id, included_post_ids, created_at')
+      .select('drop_id, token, included_post_ids, created_at')
       .overlaps('included_post_ids', postIds)
       .order('created_at', { ascending: false })
-      .returns<{ drop_id: string; included_post_ids: string[]; created_at: string }[]>();
+      .returns<{ drop_id: string; token: string; included_post_ids: string[]; created_at: string }[]>();
     for (const sl of shareLinks ?? []) {
       for (const pid of sl.included_post_ids ?? []) {
-        if (postIds.includes(pid) && !postIdToDropId[pid]) postIdToDropId[pid] = sl.drop_id;
+        if (postIds.includes(pid) && !postIdToShareToken[pid]) {
+          postIdToShareToken[pid] = sl.token;
+          postIdToDropId[pid] = sl.drop_id;
+        }
       }
     }
   }
 
   // Group by client_id.
-  const byClient = new Map<string, { clientName: string; dropId: string | null; comments: CalendarDigestComment[] }>();
+  const byClient = new Map<string, { clientName: string; shareToken: string | null; dropId: string | null; comments: CalendarDigestComment[] }>();
   for (const c of comments) {
     const sp = c.post_review_links?.scheduled_posts;
     const client = sp?.clients;
@@ -116,9 +120,11 @@ async function handleGet(request: NextRequest) {
     const contentPreview = c.content.slice(0, 200) + (c.content.length > 200 ? '…' : '');
     const entry = byClient.get(client.id) ?? {
       clientName: client.name,
+      shareToken: postIdToShareToken[sp.id] ?? null,
       dropId: postIdToDropId[sp.id] ?? null,
       comments: [],
     };
+    if (!entry.shareToken && postIdToShareToken[sp.id]) entry.shareToken = postIdToShareToken[sp.id];
     if (!entry.dropId && postIdToDropId[sp.id]) entry.dropId = postIdToDropId[sp.id];
     entry.comments.push({
       authorName: c.author_name,
@@ -131,9 +137,15 @@ async function handleGet(request: NextRequest) {
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://cortex.nativz.io';
+  // Prefer the share-link URL so the digest works on phones (admin routes are
+  // mobile-blocked). Fall back to the admin calendar if no share link exists.
   const groups: CalendarDigestClientGroup[] = Array.from(byClient.values()).map((g) => ({
     clientName: g.clientName,
-    dropUrl: g.dropId ? `${appUrl}/admin/calendar/${g.dropId}` : `${appUrl}/admin/calendar`,
+    dropUrl: g.shareToken
+      ? `${appUrl}/c/${g.shareToken}`
+      : g.dropId
+        ? `${appUrl}/admin/calendar/${g.dropId}`
+        : `${appUrl}/admin/calendar`,
     comments: g.comments,
   }));
 

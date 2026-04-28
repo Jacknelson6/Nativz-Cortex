@@ -8,6 +8,8 @@ import {
   CalendarDays,
   CheckCircle,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Copy,
   Eye,
   Hash,
@@ -67,6 +69,12 @@ interface DropResponse {
   variantPlatforms: CaptionVariantPlatform[];
 }
 
+interface ShareLinkView {
+  viewed_at: string;
+  viewer_name: string | null;
+  user_agent: string | null;
+}
+
 interface ShareLinkRow {
   id: string;
   url: string;
@@ -75,6 +83,8 @@ interface ShareLinkRow {
   last_viewed_at: string | null;
   expires_at: string;
   revoked: boolean;
+  view_count: number;
+  views: ShareLinkView[];
 }
 
 function latestReview(comments: DropComment[]): 'approved' | 'changes_requested' | null {
@@ -931,8 +941,10 @@ function ShareHistoryRow({
   link: ShareLinkRow;
   onRevoke: (linkId: string) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const created = formatRelative(link.created_at);
   const lastViewed = link.last_viewed_at ? formatRelative(link.last_viewed_at) : null;
+  const viewCount = link.view_count ?? 0;
 
   function copy() {
     navigator.clipboard
@@ -942,55 +954,97 @@ function ShareHistoryRow({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-3 px-4 py-3">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 text-xs">
-          {link.revoked ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-medium text-red-300">
-              Inactive
+    <div className="px-4 py-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            {link.revoked ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-medium text-red-300">
+                Inactive
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
+                Active
+              </span>
+            )}
+            <span className="text-text-secondary">
+              {link.post_count} post{link.post_count === 1 ? '' : 's'}
             </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
-              Active
-            </span>
-          )}
-          <span className="text-text-secondary">
-            {link.post_count} post{link.post_count === 1 ? '' : 's'}
-          </span>
-          <span className="text-text-muted">· sent {created}</span>
-          {lastViewed && (
-            <span className="inline-flex items-center gap-1 text-text-muted">
-              <Eye size={11} /> last viewed {lastViewed}
-            </span>
-          )}
+            <span className="text-text-muted">· sent {created}</span>
+            {viewCount === 0 ? (
+              <span className="inline-flex items-center gap-1 text-text-muted">
+                <Eye size={11} /> not opened yet
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+                className="inline-flex items-center gap-1 cursor-pointer rounded-md px-1.5 py-0.5 text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+              >
+                <Eye size={11} /> opened {viewCount}× · last {lastViewed}
+                {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+              </button>
+            )}
+          </div>
+          <p
+            className="mt-1 truncate font-mono text-[11px] text-text-muted"
+            title={link.url}
+          >
+            {link.url}
+          </p>
         </div>
-        <p
-          className="mt-1 truncate font-mono text-[11px] text-text-muted"
-          title={link.url}
-        >
-          {link.url}
-        </p>
-      </div>
-      <div className="flex shrink-0 items-center gap-1">
-        <button
-          type="button"
-          onClick={copy}
-          className="cursor-pointer inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover hover:text-text-primary"
-        >
-          <Copy size={12} /> Copy
-        </button>
-        {!link.revoked && (
+        <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
-            onClick={() => onRevoke(link.id)}
-            className="cursor-pointer inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-red-300 hover:bg-red-500/10"
+            onClick={copy}
+            className="cursor-pointer inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-text-secondary hover:bg-surface-hover hover:text-text-primary"
           >
-            <Trash2 size={12} /> Revoke
+            <Copy size={12} /> Copy
           </button>
-        )}
+          {!link.revoked && (
+            <button
+              type="button"
+              onClick={() => onRevoke(link.id)}
+              className="cursor-pointer inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-red-300 hover:bg-red-500/10"
+            >
+              <Trash2 size={12} /> Revoke
+            </button>
+          )}
+        </div>
       </div>
+      {expanded && link.views.length > 0 && (
+        <ul className="mt-3 space-y-1.5 rounded-md border border-nativz-border bg-background/40 p-2.5">
+          {link.views.map((v, i) => (
+            <li
+              key={`${v.viewed_at}-${i}`}
+              className="flex items-center justify-between gap-3 text-[11px]"
+            >
+              <span className="text-text-secondary">
+                {v.viewer_name ? <span className="font-medium text-text-primary">{v.viewer_name}</span> : <span className="italic text-text-muted">Anonymous</span>}
+                {v.user_agent && (
+                  <span className="ml-2 text-text-muted">{deviceLabel(v.user_agent)}</span>
+                )}
+              </span>
+              <span className="text-text-muted whitespace-nowrap" title={new Date(v.viewed_at).toLocaleString()}>
+                {formatRelative(v.viewed_at)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
+}
+
+function deviceLabel(ua: string): string {
+  const lower = ua.toLowerCase();
+  if (/iphone|ipod/.test(lower)) return 'iPhone';
+  if (/ipad/.test(lower)) return 'iPad';
+  if (/android/.test(lower)) return 'Android';
+  if (/mac os x/.test(lower)) return 'Mac';
+  if (/windows/.test(lower)) return 'Windows';
+  if (/linux/.test(lower)) return 'Linux';
+  return 'Browser';
 }
 
 function formatRelative(iso: string): string {
