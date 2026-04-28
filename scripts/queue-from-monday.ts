@@ -26,9 +26,10 @@ import {
   type MondayRow,
 } from '@/lib/monday/calendars-board';
 import type { SocialPlatform } from '@/lib/posting';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
+import { getBrandFromAgency } from '@/lib/agency/detect';
 
 const USER_EMAIL = (process.env.QUEUE_USER_EMAIL ?? 'jack@nativz.io').toLowerCase();
-const APP_URL = process.env.QUEUE_APP_URL ?? 'http://localhost:3001';
 
 const MONTH_START = '2026-05-01';
 const MONTH_END = '2026-05-31';
@@ -57,6 +58,7 @@ const NAME_TO_SLUG: Record<string, string> = {
   'Goldback': 'goldback',
   'Safe Stop': 'safe-stop',
   'National Lenders': 'national-lenders',
+  'Rank Prompt': 'rank-prompt',
 };
 
 interface ClientPlan {
@@ -64,6 +66,7 @@ interface ClientPlan {
   slug: string;
   clientId: string;
   clientName: string;
+  agency: string | null;
   platforms: SocialPlatform[];
   videoCount: number;
   skipReason?: string;
@@ -79,27 +82,27 @@ async function buildPlan(
   for (const row of rows) {
     const slug = NAME_TO_SLUG[row.name];
     if (!slug) {
-      plans.push({ row, slug: '', clientId: '', clientName: row.name, platforms: [], videoCount: 0, skipReason: `no Cortex slug mapping for "${row.name}"` });
+      plans.push({ row, slug: '', clientId: '', clientName: row.name, agency: null, platforms: [], videoCount: 0, skipReason: `no Cortex slug mapping for "${row.name}"` });
       continue;
     }
     if (onlyFilter && slug !== onlyFilter) continue;
 
     if (!row.folderUrl) {
-      plans.push({ row, slug, clientId: '', clientName: row.name, platforms: [], videoCount: 0, skipReason: 'Edited Videos Folder column empty' });
+      plans.push({ row, slug, clientId: '', clientName: row.name, agency: null, platforms: [], videoCount: 0, skipReason: 'Edited Videos Folder column empty' });
       continue;
     }
 
     const { data: client } = await admin
       .from('clients')
-      .select('id, name, services, is_active')
+      .select('id, name, agency, services, is_active')
       .eq('slug', slug)
-      .maybeSingle<{ id: string; name: string; services: string[] | null; is_active: boolean | null }>();
+      .maybeSingle<{ id: string; name: string; agency: string | null; services: string[] | null; is_active: boolean | null }>();
     if (!client) {
-      plans.push({ row, slug, clientId: '', clientName: row.name, platforms: [], videoCount: 0, skipReason: `Cortex client not found for slug ${slug}` });
+      plans.push({ row, slug, clientId: '', clientName: row.name, agency: null, platforms: [], videoCount: 0, skipReason: `Cortex client not found for slug ${slug}` });
       continue;
     }
     if (!client.is_active) {
-      plans.push({ row, slug, clientId: client.id, clientName: client.name, platforms: [], videoCount: 0, skipReason: 'Cortex client inactive' });
+      plans.push({ row, slug, clientId: client.id, clientName: client.name, agency: client.agency, platforms: [], videoCount: 0, skipReason: 'Cortex client inactive' });
       continue;
     }
 
@@ -113,7 +116,7 @@ async function buildPlan(
       .map((p) => p.platform as SocialPlatform);
 
     if (platforms.length === 0) {
-      plans.push({ row, slug, clientId: client.id, clientName: client.name, platforms: [], videoCount: 0, skipReason: 'no Zernio-connected social profiles' });
+      plans.push({ row, slug, clientId: client.id, clientName: client.name, agency: client.agency, platforms: [], videoCount: 0, skipReason: 'no Zernio-connected social profiles' });
       continue;
     }
 
@@ -123,16 +126,16 @@ async function buildPlan(
       videoCount = videos.filter((v) => v.size > 0).length;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      plans.push({ row, slug, clientId: client.id, clientName: client.name, platforms, videoCount: 0, skipReason: `Drive list failed: ${msg}` });
+      plans.push({ row, slug, clientId: client.id, clientName: client.name, agency: client.agency, platforms, videoCount: 0, skipReason: `Drive list failed: ${msg}` });
       continue;
     }
 
     if (videoCount === 0) {
-      plans.push({ row, slug, clientId: client.id, clientName: client.name, platforms, videoCount: 0, skipReason: 'folder has 0 videos' });
+      plans.push({ row, slug, clientId: client.id, clientName: client.name, agency: client.agency, platforms, videoCount: 0, skipReason: 'folder has 0 videos' });
       continue;
     }
 
-    plans.push({ row, slug, clientId: client.id, clientName: client.name, platforms, videoCount });
+    plans.push({ row, slug, clientId: client.id, clientName: client.name, agency: client.agency, platforms, videoCount });
   }
   return plans;
 }
@@ -147,6 +150,10 @@ async function runOne(
   const usable = videos.filter((v) => v.size > 0).sort((a, b) => a.name.localeCompare(b.name));
   const dates = pickEven(eachDay(MONTH_START, MONTH_END), usable.length);
 
+  const brand = getBrandFromAgency(plan.agency);
+  const appUrl = getCortexAppUrl(brand);
+  console.log(`  brand=${brand}  appUrl=${appUrl}`);
+
   const result = await runCalendarPipeline(admin, {
     label: `${plan.clientName} (May 2026 calendar)`,
     folderUrl: plan.row.folderUrl!,
@@ -158,7 +165,7 @@ async function runOne(
     platforms: plan.platforms,
     mintShareLink: true,
     draftMode: true,
-    appUrl: APP_URL,
+    appUrl,
     clientId: plan.clientId,
     userId,
     userEmail,

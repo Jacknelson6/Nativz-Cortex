@@ -6,17 +6,50 @@ import * as tus from 'tus-js-client';
 // per-request cap. Threshold leaves margin under that limit.
 const SINGLE_PUT_LIMIT = 40 * 1024 * 1024;
 
+const RETRY_DELAYS_MS = [0, 1500, 3000];
+
+// Transient upstream failures from Supabase Storage we should retry on.
+// Matches "Bad Gateway", "Service Unavailable", "Gateway Timeout",
+// network resets, and generic 5xx error bodies.
+const TRANSIENT_RE = /(bad gateway|gateway timeout|service unavailable|internal server error|temporarily unavailable|ECONNRESET|ETIMEDOUT|fetch failed|socket hang up|5\d\d)/i;
+
+function isTransient(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? '');
+  return TRANSIENT_RE.test(msg);
+}
+
+async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < RETRY_DELAYS_MS.length; attempt += 1) {
+    if (RETRY_DELAYS_MS[attempt] > 0) {
+      await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
+    }
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (!isTransient(err) || attempt === RETRY_DELAYS_MS.length - 1) throw err;
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[storage-upload] ${label} attempt ${attempt + 1} failed (transient): ${msg} — retrying`);
+    }
+  }
+  throw lastErr ?? new Error(`${label} failed`);
+}
+
 export async function uploadVideoBytes(
   admin: SupabaseClient,
   opts: { dropId: string; videoId: string; buffer: Buffer; mimeType: string; ext: string },
 ): Promise<string> {
   const path = `drops/${opts.dropId}/${opts.videoId}.${opts.ext}`;
   if (opts.buffer.byteLength <= SINGLE_PUT_LIMIT) {
-    const { error } = await admin.storage
-      .from('scheduler-media')
-      .upload(path, opts.buffer, { contentType: opts.mimeType, upsert: true });
-    if (error) throw new Error(`Storage upload failed: ${error.message}`);
+    await withRetry(`video upload ${path}`, async () => {
+      const { error } = await admin.storage
+        .from('scheduler-media')
+        .upload(path, opts.buffer, { contentType: opts.mimeType, upsert: true });
+      if (error) throw new Error(`Storage upload failed: ${error.message}`);
+    });
   } else {
+    // TUS already retries internally via retryDelays.
     await tusUpload({
       bucket: 'scheduler-media',
       path,
@@ -33,10 +66,12 @@ export async function uploadThumbnail(
   opts: { dropId: string; videoId: string; buffer: Buffer },
 ): Promise<string> {
   const path = `drops/${opts.dropId}/${opts.videoId}.jpg`;
-  const { error } = await admin.storage
-    .from('scheduler-thumbnails')
-    .upload(path, opts.buffer, { contentType: 'image/jpeg', upsert: true });
-  if (error) throw new Error(`Thumbnail upload failed: ${error.message}`);
+  await withRetry(`thumbnail upload ${path}`, async () => {
+    const { error } = await admin.storage
+      .from('scheduler-thumbnails')
+      .upload(path, opts.buffer, { contentType: 'image/jpeg', upsert: true });
+    if (error) throw new Error(`Thumbnail upload failed: ${error.message}`);
+  });
 
   const { data } = admin.storage.from('scheduler-thumbnails').getPublicUrl(path);
   return data.publicUrl;
