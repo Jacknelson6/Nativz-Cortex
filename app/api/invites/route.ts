@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
 
     const { data: invites, error } = await adminClient
       .from('invite_tokens')
-      .select('id, token, expires_at, used_at, used_by, created_at, created_by')
+      .select('id, token, email, expires_at, used_at, used_by, created_at, created_by')
       .eq('client_id', clientId)
       .order('created_at', { ascending: false });
 
@@ -94,6 +94,7 @@ export async function GET(request: NextRequest) {
       return {
         id: inv.id,
         token: inv.token,
+        email: inv.email ?? null,
         invite_url: `${baseUrl}/join/${inv.token}`,
         status,
         expires_at: inv.expires_at,
@@ -151,13 +152,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Client not found or missing organization' }, { status: 404 });
     }
 
-    // Create invite token
+    // Create invite token. We persist `email` when supplied so the contacts UI
+    // can correlate "invited - pending" state back to a specific contact row.
     const { data: invite, error } = await adminClient
       .from('invite_tokens')
       .insert({
         client_id: client.id,
         organization_id: client.organization_id,
         created_by: user.id,
+        email: email ?? null,
       })
       .select('token, expires_at')
       .single();

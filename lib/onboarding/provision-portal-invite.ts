@@ -54,6 +54,7 @@ export async function provisionPortalInviteForEmail(
       client_id: client.id,
       organization_id: client.organization_id,
       created_by: null,
+      email,
     })
     .select('token, expires_at')
     .single();

@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react';
 import { Loader2, Users } from 'lucide-react';
 import { ClientContactsCard } from '@/components/clients/client-contacts-card';
-import { PortalAccessCard } from '@/components/clients/client-settings-section';
-import { SettingsPageHeader, SettingsSectionHeader } from '@/components/clients/settings/settings-primitives';
+import { SettingsPageHeader } from '@/components/clients/settings/settings-primitives';
 
 /**
- * `companyOnly` hides the Portal invites & users subsection. The info page
- * uses this — portal access lives under Access & services, not Info. The
- * standalone /settings/contacts page keeps both for backwards compat.
+ * Contacts and portal users are unified in `<ClientContactsCard>` — each row
+ * shows a single person with a state pill (Cortex user / Invited / no invite)
+ * and inline invite/resend actions. The `companyOnly` flag is kept for the
+ * Info page caller; the card itself handles hiding portal data when no portal
+ * users exist.
  */
 
 type ContactsPayload = {
@@ -102,16 +103,6 @@ export function ContactsSettingsView({
         clientName={client.name}
         portalContacts={companyOnly ? [] : portalContacts}
       />
-
-      {!companyOnly && (
-        <section className="space-y-3 pt-2">
-          <SettingsSectionHeader
-            title="Portal invites & users"
-            description="People from this client who can sign in to the portal."
-          />
-          <PortalAccessCard clientId={client.id} />
-        </section>
-      )}
     </div>
   );
 }
