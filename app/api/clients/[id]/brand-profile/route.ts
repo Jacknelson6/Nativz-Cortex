@@ -46,6 +46,10 @@ const patchSchema = z.object({
   primary_country: z.string().trim().max(100).nullable().optional(),
   primary_state: z.string().trim().max(100).nullable().optional(),
   primary_city: z.string().trim().max(100).nullable().optional(),
+
+  // Caption boilerplate appended to every generated content-calendar caption.
+  caption_cta: z.string().trim().max(500).nullable().optional(),
+  caption_hashtags: z.array(z.string().trim().min(1).max(60)).max(50).optional(),
 });
 
 async function requireAdmin() {
@@ -124,6 +128,9 @@ export async function GET(
           'primary_country',
           'primary_state',
           'primary_city',
+          // Caption boilerplate.
+          'caption_cta',
+          'caption_hashtags',
           // Metadata.
           'id',
           'created_at',

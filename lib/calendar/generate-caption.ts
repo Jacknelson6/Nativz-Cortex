@@ -22,6 +22,8 @@ interface ClientContext {
   topic_keywords: string[] | null;
   description: string | null;
   services: string[] | null;
+  caption_cta: string | null;
+  caption_hashtags: string[] | null;
 }
 
 interface SavedCaption {
@@ -43,7 +45,7 @@ export async function generateDropCaptions(
       .order('order_index'),
     admin
       .from('clients')
-      .select('name, industry, brand_voice, target_audience, topic_keywords, description, services')
+      .select('name, industry, brand_voice, target_audience, topic_keywords, description, services, caption_cta, caption_hashtags')
       .eq('id', opts.clientId)
       .single(),
     admin
@@ -69,6 +71,7 @@ export async function generateDropCaptions(
     }
 
     let bestCaption: { caption: string; hashtags: string[] } | null = null;
+    let bestRaw: { caption: string; hashtags: string[] } | null = null;
     let bestGrade: CaptionGrade | null = null;
     let lastReasons: string[] = [];
     let iterations = 0;
@@ -77,16 +80,17 @@ export async function generateDropCaptions(
     for (let i = 0; i < MAX_ITERATIONS; i++) {
       iterations = i + 1;
       try {
-        const result = await generateOneCaption({
+        const generated = await generateOneCaption({
           context: row.gemini_context,
           client: client as ClientContext | null,
           saved: (saved ?? []) as SavedCaption[],
-          previousAttempt: bestCaption,
+          previousAttempt: bestRaw,
           previousReasons: lastReasons,
           previousScore: bestGrade?.total ?? null,
           userId: opts.userId,
           userEmail: opts.userEmail,
         });
+        const result = applyBoilerplate(generated, client as ClientContext | null);
 
         const grade = gradeCaption({
           caption: result.caption,
@@ -102,6 +106,7 @@ export async function generateDropCaptions(
 
         if (!bestGrade || grade.total > bestGrade.total) {
           bestCaption = result;
+          bestRaw = generated;
           bestGrade = grade;
         }
         lastReasons = grade.reasons;
@@ -176,17 +181,17 @@ async function generateOneCaption(
       ? renderFeedbackBlock(opts.previousAttempt, opts.previousReasons, opts.previousScore)
       : '';
 
+  const ctaInfo = renderCtaBoilerplateBlock(opts.client);
   const system = `You are a senior short-form video copywriter for Instagram Reels, TikTok, and YouTube Shorts. You write captions that drive comments, saves, and shares.
 
 Output rules:
 - Return ONLY valid JSON: { "caption": string, "hashtags": string[] }
-- Caption: 80-280 characters, sentence-case, no markdown, no leading hashtags
-- Caption opens with a hook line, then a blank line, then a CTA-flavoured closing block
-- Hashtags: 3-12 entries, lowercase, no leading "#" — match video themes and brand keywords
-- Match the brand voice and align with saved CTAs
-- Never use markdown formatting (no asterisks, headers, horizontal rules, backticks)
+- Caption: 60-220 characters — write ONLY the hook line plus a 1-2 sentence body that delivers the angle. Do NOT write a CTA, do NOT write hashtags, do NOT write "follow" or "save" lines. Those are appended automatically downstream.
+- Sentence-case, no markdown (no asterisks, headers, backticks), no leading hashtags, no emoji spam
+- Hashtags: 3-8 entries that match the video's specific themes (not the brand boilerplate — those are appended automatically). Lowercase, no leading "#".
+- Match the brand voice and align with saved-caption examples for tone
 
-${brandBlock}${savedBlock}${videoBlock}${feedbackBlock}`;
+${brandBlock}${savedBlock}${ctaInfo}${videoBlock}${feedbackBlock}`;
 
   const result = await createCompletion({
     messages: [
@@ -283,6 +288,45 @@ Previous caption:
 ${previous.caption}
 
 Previous hashtags: ${previous.hashtags.map((t) => `#${t}`).join(' ')}\n`;
+}
+
+function renderCtaBoilerplateBlock(client: ClientContext | null): string {
+  if (!client) return '';
+  const parts: string[] = [];
+  if (client.caption_cta?.trim()) {
+    parts.push(`The following CTA is appended verbatim after every caption — DO NOT repeat it or write your own CTA:\n"${client.caption_cta.trim()}"`);
+  }
+  if (client.caption_hashtags?.length) {
+    parts.push(
+      `These hashtags are appended automatically after every caption — DO NOT repeat them in your hashtag list:\n${client.caption_hashtags.map((h) => `#${h}`).join(' ')}`,
+    );
+  }
+  return parts.length ? `\n${parts.join('\n\n')}\n` : '';
+}
+
+function applyBoilerplate(
+  generated: { caption: string; hashtags: string[] },
+  client: ClientContext | null,
+): { caption: string; hashtags: string[] } {
+  const cta = client?.caption_cta?.trim();
+  const boilerplateTags = (client?.caption_hashtags ?? [])
+    .map((t) => t.replace(/^#/, '').trim().toLowerCase())
+    .filter(Boolean);
+
+  const caption = cta
+    ? `${generated.caption.trim()}\n\n${cta}`
+    : generated.caption.trim();
+
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  for (const tag of [...boilerplateTags, ...generated.hashtags]) {
+    const key = tag.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(tag);
+  }
+
+  return { caption, hashtags: merged };
 }
 
 function collectBrandKeywords(client: ClientContext | null): string[] {

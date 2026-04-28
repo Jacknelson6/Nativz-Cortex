@@ -6,7 +6,8 @@ interface DistributeInput {
   count: number;
   startDate: string;
   endDate: string;
-  defaultTime: string;
+  // Retained for legacy callers but ignored — every slot is 12:00 America/Chicago.
+  defaultTime?: string;
 }
 
 export function distributeSlots(input: DistributeInput): string[] {
@@ -14,7 +15,7 @@ export function distributeSlots(input: DistributeInput): string[] {
   if (!DATE_RE.test(input.startDate) || !DATE_RE.test(input.endDate)) {
     throw new Error('Dates must be YYYY-MM-DD');
   }
-  if (!TIME_RE.test(input.defaultTime)) {
+  if (input.defaultTime !== undefined && !TIME_RE.test(input.defaultTime)) {
     throw new Error('defaultTime must be HH:MM');
   }
 
@@ -35,9 +36,24 @@ export function distributeSlots(input: DistributeInput): string[] {
     const yyyy = date.getUTCFullYear();
     const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
     const dd = String(date.getUTCDate()).padStart(2, '0');
-    const hhmm = input.defaultTime.slice(0, 5);
-    slots.push(`${yyyy}-${mm}-${dd}T${hhmm}:00Z`);
+    slots.push(chicagoNoonUtc(`${yyyy}-${mm}-${dd}`));
   }
 
   return slots;
+}
+
+// Returns the UTC ISO string for 12:00 wall-clock America/Chicago on the given
+// date. Handles CST/CDT automatically via Intl — no hardcoded offset.
+function chicagoNoonUtc(yyyyMmDd: string): string {
+  const utcNoon = new Date(`${yyyyMmDd}T12:00:00Z`);
+  const chicagoHour = parseInt(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Chicago',
+      hour: 'numeric',
+      hour12: false,
+    }).format(utcNoon),
+    10,
+  );
+  const hoursToAdd = 12 - chicagoHour;
+  return new Date(utcNoon.getTime() + hoursToAdd * 60 * 60 * 1000).toISOString();
 }
