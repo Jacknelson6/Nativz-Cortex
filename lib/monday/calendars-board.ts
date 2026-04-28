@@ -61,22 +61,21 @@ export async function fetchAprilRows(token: string): Promise<MondayRow[]> {
   const items = data.boards[0]?.groups[0]?.items_page.items ?? [];
   return items.map((row) => {
     const get = (id: string) => row.column_values.find((c) => c.id === id);
-    const folderRaw = get(COL_EDITED_FOLDER)?.value;
-    let folderUrl: string | null = null;
-    if (folderRaw) {
+    const parseLinkValue = (raw: string | null | undefined): string | null => {
+      if (!raw) return null;
       try {
-        const parsed = JSON.parse(folderRaw) as { url?: string };
-        folderUrl = parsed.url ?? null;
+        const parsed = JSON.parse(raw) as { url?: string };
+        return parsed.url ?? null;
       } catch {
-        folderUrl = null;
+        return null;
       }
-    }
+    };
     return {
       id: row.id,
       name: row.name,
       status: get(COL_EDITING_STATUS)?.text ?? '',
-      folderUrl,
-      shareLink: get(COL_LATER_LINK)?.text ?? null,
+      folderUrl: parseLinkValue(get(COL_EDITED_FOLDER)?.value),
+      shareLink: parseLinkValue(get(COL_LATER_LINK)?.value),
     };
   });
 }
