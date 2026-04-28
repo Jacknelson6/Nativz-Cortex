@@ -700,3 +700,157 @@ export async function sendCalendarCommentDigestEmail(opts: {
 
   return result;
 }
+
+// ── Calendar reminder cadence (no-open / no-action / final-call) ────────────
+
+export async function sendCalendarNoOpenReminderEmail(opts: {
+  to: string;
+  clientName: string;
+  shareUrl: string;
+  hours: number;
+  agency?: AgencyBrand;
+}) {
+  const agency = opts.agency ?? 'nativz';
+  const subject = `Friendly nudge — your content calendar is ready to review`;
+  const result = await (await getResend()).emails.send({
+    from: getFromAddress(agency),
+    replyTo: getReplyTo(agency),
+    to: opts.to,
+    subject,
+    html: layout(`
+      <div class="card">
+        <h1 class="heading">Your content calendar is waiting</h1>
+        <p class="subtext">Hey ${opts.clientName} — we sent over your latest content calendar about ${opts.hours} hours ago and it hasn't been opened yet. Take a quick look and let us know if anything needs tweaking.</p>
+        <div style="margin-top:18px;">
+          <a href="${opts.shareUrl}" class="btn">Open your calendar</a>
+        </div>
+      </div>
+    `, agency),
+  });
+
+  trackUsage({
+    service: 'resend',
+    model: 'email-api',
+    feature: 'email_delivery',
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    costUsd: 0,
+  });
+
+  return result;
+}
+
+export async function sendCalendarNoActionReminderEmail(opts: {
+  to: string;
+  clientName: string;
+  shareUrl: string;
+  hours: number;
+  agency?: AgencyBrand;
+}) {
+  const agency = opts.agency ?? 'nativz';
+  const subject = `Quick check-in on your content calendar`;
+  const result = await (await getResend()).emails.send({
+    from: getFromAddress(agency),
+    replyTo: getReplyTo(agency),
+    to: opts.to,
+    subject,
+    html: layout(`
+      <div class="card">
+        <h1 class="heading">How's the calendar looking?</h1>
+        <p class="subtext">Hey ${opts.clientName} — you opened the calendar but haven't approved or requested changes on any posts yet. We just want to make sure nothing's blocking you. Hit reply or drop comments directly on the posts.</p>
+        <div style="margin-top:18px;">
+          <a href="${opts.shareUrl}" class="btn">Review the posts</a>
+        </div>
+      </div>
+    `, agency),
+  });
+
+  trackUsage({
+    service: 'resend',
+    model: 'email-api',
+    feature: 'email_delivery',
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    costUsd: 0,
+  });
+
+  return result;
+}
+
+export async function sendCalendarFinalCallEmail(opts: {
+  to: string;
+  clientName: string;
+  shareUrl: string;
+  firstPostAt: string;
+  agency?: AgencyBrand;
+}) {
+  const agency = opts.agency ?? 'nativz';
+  const subject = `Heads up — first post goes live ${opts.firstPostAt}`;
+  const result = await (await getResend()).emails.send({
+    from: getFromAddress(agency),
+    replyTo: getReplyTo(agency),
+    to: opts.to,
+    subject,
+    html: layout(`
+      <div class="card">
+        <h1 class="heading">Final call before we publish</h1>
+        <p class="subtext">Hey ${opts.clientName} — your first scheduled post goes live ${opts.firstPostAt}. We haven't heard back yet, so unless you flag something we'll publish on the dates you saw in the calendar.</p>
+        <p class="subtext" style="margin-top:10px;">If anything needs to change, drop a comment on the post or hit reply now.</p>
+        <div style="margin-top:18px;">
+          <a href="${opts.shareUrl}" class="btn">Open the calendar</a>
+        </div>
+      </div>
+    `, agency),
+  });
+
+  trackUsage({
+    service: 'resend',
+    model: 'email-api',
+    feature: 'email_delivery',
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    costUsd: 0,
+  });
+
+  return result;
+}
+
+export async function sendCalendarRevisionsCompleteEmail(opts: {
+  to: string;
+  clientName: string;
+  shareUrl: string;
+  agency?: AgencyBrand;
+}) {
+  const agency = opts.agency ?? 'nativz';
+  const subject = 'Your revisions are ready to review';
+  const result = await (await getResend()).emails.send({
+    from: getFromAddress(agency),
+    replyTo: getReplyTo(agency),
+    to: opts.to,
+    subject,
+    html: layout(`
+      <div class="card">
+        <h1 class="heading">Revisions complete</h1>
+        <p class="subtext">Hey ${opts.clientName} — we've worked through every change you flagged. Hop back in to take a final look and approve the posts you're happy with.</p>
+        <div style="margin-top:18px;">
+          <a href="${opts.shareUrl}" class="btn">Review the updated posts</a>
+        </div>
+      </div>
+    `, agency),
+  });
+
+  trackUsage({
+    service: 'resend',
+    model: 'email-api',
+    feature: 'email_delivery',
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    costUsd: 0,
+  });
+
+  return result;
+}

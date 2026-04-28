@@ -1,0 +1,100 @@
+import { NextResponse } from 'next/server';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { isAdmin } from '@/lib/auth/permissions';
+import { uploadVideoBytes } from '@/lib/calendar/storage-upload';
+
+export const maxDuration = 300;
+
+const MAX_BYTES = 500 * 1024 * 1024; // 500 MB
+
+/**
+ * POST /api/calendar/drops/[id]/posts/[postId]/revision/upload
+ *
+ * Admin-only. Accepts a re-cut video for a single scheduled post inside a
+ * content drop. Stores the new file under
+ * `scheduler-media/drops/{dropId}/{videoId}-rev-{n}.{ext}` and stamps
+ * `revised_video_url` / `revised_video_uploaded_at` / `revised_video_uploaded_by`
+ * on the matching `content_drop_videos` row.
+ */
+export async function POST(
+  req: Request,
+  ctx: { params: Promise<{ id: string; postId: string }> },
+) {
+  const { id: dropId, postId } = await ctx.params;
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (!(await isAdmin(user.id))) {
+    return NextResponse.json({ error: 'admin only' }, { status: 403 });
+  }
+
+  const admin = createAdminClient();
+
+  const { data: video } = await admin
+    .from('content_drop_videos')
+    .select('id, drop_id, scheduled_post_id, drive_file_name')
+    .eq('drop_id', dropId)
+    .eq('scheduled_post_id', postId)
+    .single();
+  if (!video) return NextResponse.json({ error: 'video not found' }, { status: 404 });
+
+  const form = await req.formData().catch(() => null);
+  const file = form?.get('file');
+  if (!(file instanceof File)) {
+    return NextResponse.json({ error: 'file missing' }, { status: 400 });
+  }
+  if (file.size === 0) {
+    return NextResponse.json({ error: 'file is empty' }, { status: 400 });
+  }
+  if (file.size > MAX_BYTES) {
+    return NextResponse.json({ error: 'file too large (max 500MB)' }, { status: 413 });
+  }
+  const mime = file.type || 'video/mp4';
+  if (!mime.startsWith('video/')) {
+    return NextResponse.json({ error: 'must be a video file' }, { status: 415 });
+  }
+  const ext = mimeToExt(mime, file.name);
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const url = await uploadVideoBytes(admin, {
+    dropId,
+    videoId: `${video.id}-revision`,
+    buffer,
+    mimeType: mime,
+    ext,
+  });
+
+  const nowIso = new Date().toISOString();
+  const { error: updateErr } = await admin
+    .from('content_drop_videos')
+    .update({
+      revised_video_url: url,
+      revised_video_uploaded_at: nowIso,
+      revised_video_uploaded_by: user.id,
+    })
+    .eq('id', video.id);
+  if (updateErr) {
+    return NextResponse.json({ error: updateErr.message }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    url,
+    uploaded_at: nowIso,
+    size_bytes: file.size,
+  });
+}
+
+function mimeToExt(mime: string, fallbackName: string): string {
+  const map: Record<string, string> = {
+    'video/mp4': 'mp4',
+    'video/quicktime': 'mov',
+    'video/webm': 'webm',
+    'video/x-matroska': 'mkv',
+  };
+  if (map[mime]) return map[mime];
+  const m = fallbackName.match(/\.([a-zA-Z0-9]+)$/);
+  return (m?.[1] ?? 'mp4').toLowerCase();
+}

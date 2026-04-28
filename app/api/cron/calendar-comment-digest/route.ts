@@ -6,6 +6,7 @@ import {
   type CalendarDigestComment,
 } from '@/lib/email/resend';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
+import { getNotificationSetting } from '@/lib/notifications/get-setting';
 
 export const maxDuration = 60;
 
@@ -44,6 +45,11 @@ async function handleGet(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const setting = await getNotificationSetting('calendar_comment_digest');
+  if (!setting.enabled) {
+    return NextResponse.json({ message: 'notification disabled', sent: 0 });
   }
 
   const admin = createAdminClient();

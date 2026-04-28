@@ -82,6 +82,9 @@ export interface ContentDropVideo {
   status: DropVideoStatus;
   error_detail: string | null;
   created_at: string;
+  revised_video_url: string | null;
+  revised_video_uploaded_at: string | null;
+  revised_video_uploaded_by: string | null;
 }
 
 export interface ContentDropShareLink {

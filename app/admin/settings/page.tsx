@@ -16,7 +16,9 @@ import { refreshAiSettings } from './actions';
 import { AiRoutingSection } from '@/components/settings/ai-routing-section';
 import { LlmCredentialsSection } from '@/components/settings/llm-credentials-section';
 import { ScraperVolumesSection } from '@/components/settings/scraper-volumes-section';
+import { NotificationsSection } from '@/components/settings/notifications-section';
 import { AISettingsSkillsPanel } from './skills-panel';
+import { NOTIFICATION_REGISTRY } from '@/lib/notifications/registry';
 
 export const dynamic = 'force-dynamic';
 
@@ -101,6 +103,27 @@ function renderTab(
           <LlmCredentialsSection />
           <AISettingsSkillsPanel clients={clients} />
         </div>
+      );
+    case 'notifications':
+      return (
+        <SectionPanel
+          title="Notifications"
+          description="Every automated email and chat ping Cortex sends. Toggle off, tune trigger windows, and preview each one for both brand modes."
+        >
+          <NotificationsSection
+            notifications={NOTIFICATION_REGISTRY.map((n) => ({
+              key: n.key,
+              label: n.label,
+              description: n.description,
+              kind: n.kind,
+              trigger: n.trigger,
+              cronSchedule: n.cronSchedule,
+              recipientLabel: n.recipientLabel,
+              params: n.params ?? null,
+              previewable: Boolean(n.preview),
+            }))}
+          />
+        </SectionPanel>
       );
     case 'trend-finder':
       return (

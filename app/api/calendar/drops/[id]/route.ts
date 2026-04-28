@@ -86,13 +86,19 @@ export async function GET(
   }
 
   const reviewLinkIds = Object.keys(reviewLinkToPostId);
-  const { data: comments } = reviewLinkIds.length
-    ? await admin
-        .from('post_review_comments')
-        .select('id, review_link_id, author_name, content, status, created_at, caption_before, caption_after')
-        .in('review_link_id', reviewLinkIds)
-        .order('created_at', { ascending: true })
-    : { data: [] as CommentRow[] };
+  const [{ data: comments }, { data: reviewLinkRows }] = reviewLinkIds.length
+    ? await Promise.all([
+        admin
+          .from('post_review_comments')
+          .select('id, review_link_id, author_name, content, status, created_at, caption_before, caption_after')
+          .in('review_link_id', reviewLinkIds)
+          .order('created_at', { ascending: true }),
+        admin
+          .from('post_review_links')
+          .select('id, revisions_completed_at')
+          .in('id', reviewLinkIds),
+      ])
+    : [{ data: [] as CommentRow[] }, { data: [] as { id: string; revisions_completed_at: string | null }[] }];
 
   const commentsByPostId: Record<string, CommentRow[]> = {};
   for (const c of (comments ?? []) as CommentRow[]) {
@@ -101,10 +107,23 @@ export async function GET(
     (commentsByPostId[postId] ||= []).push(c);
   }
 
+  // For each post, take the latest revisions_completed_at across its review links.
+  const revisionsCompletedByPostId: Record<string, string> = {};
+  for (const row of reviewLinkRows ?? []) {
+    if (!row.revisions_completed_at) continue;
+    const postId = reviewLinkToPostId[row.id];
+    if (!postId) continue;
+    const existing = revisionsCompletedByPostId[postId];
+    if (!existing || new Date(row.revisions_completed_at) > new Date(existing)) {
+      revisionsCompletedByPostId[postId] = row.revisions_completed_at;
+    }
+  }
+
   return NextResponse.json({
     drop,
     videos: videos ?? [],
     commentsByPostId,
+    revisionsCompletedByPostId,
     variantPlatforms,
   });
 }

@@ -23,6 +23,7 @@ interface ScheduledPostRow {
 interface DropVideoRow {
   scheduled_post_id: string | null;
   video_url: string | null;
+  revised_video_url: string | null;
 }
 
 interface CommentAttachment {
@@ -76,14 +77,16 @@ export async function GET(
       .in('id', link.included_post_ids),
     admin
       .from('content_drop_videos')
-      .select('scheduled_post_id, video_url')
+      .select('scheduled_post_id, video_url, revised_video_url')
       .in('scheduled_post_id', link.included_post_ids),
   ]);
   if (!drop) return NextResponse.json({ error: 'content calendar missing' }, { status: 404 });
 
   const videoByPost: Record<string, string> = {};
   for (const v of (videos ?? []) as DropVideoRow[]) {
-    if (v.scheduled_post_id && v.video_url) videoByPost[v.scheduled_post_id] = v.video_url;
+    if (!v.scheduled_post_id) continue;
+    const url = v.revised_video_url ?? v.video_url;
+    if (url) videoByPost[v.scheduled_post_id] = url;
   }
 
   const { data: client } = await admin

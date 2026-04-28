@@ -23,6 +23,7 @@ import {
   Send,
   Trash2,
   Type,
+  Upload,
   XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -66,6 +67,7 @@ interface DropResponse {
   drop: ContentDrop;
   videos: ContentDropVideo[];
   commentsByPostId: Record<string, DropComment[]>;
+  revisionsCompletedByPostId: Record<string, string>;
   variantPlatforms: CaptionVariantPlatform[];
 }
 
@@ -93,6 +95,25 @@ function latestReview(comments: DropComment[]): 'approved' | 'changes_requested'
     if (c.status === 'approved' || c.status === 'changes_requested') return c.status;
   }
   return null;
+}
+
+function newestChangesRequestedAt(comments: DropComment[]): string | null {
+  let newest: string | null = null;
+  for (const c of comments) {
+    if (c.status !== 'changes_requested') continue;
+    if (!newest || c.created_at > newest) newest = c.created_at;
+  }
+  return newest;
+}
+
+function hasOutstandingRevision(
+  comments: DropComment[],
+  revisionsCompletedAt: string | null,
+): boolean {
+  const newest = newestChangesRequestedAt(comments);
+  if (!newest) return false;
+  if (!revisionsCompletedAt) return true;
+  return new Date(newest) > new Date(revisionsCompletedAt);
 }
 
 export default function DropDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -283,6 +304,11 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
               comments={
                 v.scheduled_post_id ? data.commentsByPostId[v.scheduled_post_id] ?? [] : []
               }
+              revisionsCompletedAt={
+                v.scheduled_post_id
+                  ? data.revisionsCompletedByPostId?.[v.scheduled_post_id] ?? null
+                  : null
+              }
               variantPlatforms={data.variantPlatforms ?? []}
               onUpdated={refresh}
             />
@@ -383,13 +409,21 @@ interface VideoCardProps {
   dropId: string;
   video: ContentDropVideo;
   comments: DropComment[];
+  revisionsCompletedAt: string | null;
   variantPlatforms: CaptionVariantPlatform[];
   onUpdated: () => void;
 }
 
 type CaptionTab = 'master' | CaptionVariantPlatform;
 
-function VideoCard({ dropId, video, comments, variantPlatforms, onUpdated }: VideoCardProps) {
+function VideoCard({
+  dropId,
+  video,
+  comments,
+  revisionsCompletedAt,
+  variantPlatforms,
+  onUpdated,
+}: VideoCardProps) {
   const [editing, setEditing] = useState(false);
   const [caption, setCaption] = useState(video.draft_caption ?? '');
   const [hashtags, setHashtags] = useState((video.draft_hashtags ?? []).join(' '));
@@ -398,6 +432,56 @@ function VideoCard({ dropId, video, comments, variantPlatforms, onUpdated }: Vid
   const [activeTab, setActiveTab] = useState<CaptionTab>('master');
   const [saving, setSaving] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [uploadingRevision, setUploadingRevision] = useState(false);
+  const [completingRevision, setCompletingRevision] = useState(false);
+  const revisionInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleRevisionUpload(file: File) {
+    if (!video.scheduled_post_id) return;
+    setUploadingRevision(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(
+        `/api/calendar/drops/${dropId}/posts/${video.scheduled_post_id}/revision/upload`,
+        { method: 'POST', body: fd },
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Upload failed');
+      toast.success('Revised cut uploaded');
+      onUpdated();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploadingRevision(false);
+      if (revisionInputRef.current) revisionInputRef.current.value = '';
+    }
+  }
+
+  async function handleMarkRevisionComplete() {
+    if (!video.scheduled_post_id) return;
+    setCompletingRevision(true);
+    try {
+      const res = await fetch(
+        `/api/calendar/drops/${dropId}/posts/${video.scheduled_post_id}/revision/complete`,
+        { method: 'POST' },
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Failed');
+      if (json.emailed) {
+        toast.success('Marked complete · client emailed');
+      } else if (json.drop_clean) {
+        toast.success('Marked complete · all revisions resolved');
+      } else {
+        toast.success('Marked complete');
+      }
+      onUpdated();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed');
+    } finally {
+      setCompletingRevision(false);
+    }
+  }
 
   async function handleRetry() {
     setRetrying(true);
@@ -473,6 +557,9 @@ function VideoCard({ dropId, video, comments, variantPlatforms, onUpdated }: Vid
   }
 
   const review = latestReview(comments);
+  const outstandingRevision = hasOutstandingRevision(comments, revisionsCompletedAt);
+  const hasRevisedCut = !!video.revised_video_url;
+  const showRevisionTools = scheduled && (review === 'changes_requested' || hasRevisedCut);
 
   return (
     <div
@@ -500,9 +587,14 @@ function VideoCard({ dropId, video, comments, variantPlatforms, onUpdated }: Vid
               <CheckCircle size={10} /> Approved
             </span>
           )}
-          {review === 'changes_requested' && (
+          {review === 'changes_requested' && outstandingRevision && (
             <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/90 px-2 py-0.5 text-[11px] font-medium text-amber-950">
               <AlertTriangle size={10} /> Changes
+            </span>
+          )}
+          {review === 'changes_requested' && !outstandingRevision && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/90 px-2 py-0.5 text-[11px] font-medium text-blue-50">
+              <CheckCircle size={10} /> Revised
             </span>
           )}
         </div>
@@ -687,6 +779,69 @@ function VideoCard({ dropId, video, comments, variantPlatforms, onUpdated }: Vid
             {comments.map((c) => (
               <CommentRow key={c.id} comment={c} />
             ))}
+          </div>
+        </div>
+      )}
+
+      {showRevisionTools && (
+        <div className="border-t border-nativz-border bg-background/40 px-4 py-3 space-y-2">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-text-muted">
+            <Upload size={11} />
+            Editor tools
+          </div>
+          {hasRevisedCut && video.revised_video_uploaded_at && (
+            <p className="text-[11px] text-text-muted">
+              Latest cut uploaded {new Date(video.revised_video_uploaded_at).toLocaleString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+              })}
+            </p>
+          )}
+          <input
+            ref={revisionInputRef}
+            type="file"
+            accept="video/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleRevisionUpload(f);
+            }}
+          />
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => revisionInputRef.current?.click()}
+              disabled={uploadingRevision}
+              className="cursor-pointer inline-flex items-center gap-1 rounded-md border border-nativz-border bg-surface px-2 py-1 text-[11px] font-medium text-text-secondary hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+            >
+              {uploadingRevision ? (
+                <Loader2 size={11} className="animate-spin" />
+              ) : (
+                <Upload size={11} />
+              )}
+              {uploadingRevision
+                ? 'Uploading…'
+                : hasRevisedCut
+                  ? 'Replace revised cut'
+                  : 'Upload revised cut'}
+            </button>
+            {outstandingRevision && (
+              <button
+                type="button"
+                onClick={handleMarkRevisionComplete}
+                disabled={completingRevision}
+                className="cursor-pointer inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50"
+              >
+                {completingRevision ? (
+                  <Loader2 size={11} className="animate-spin" />
+                ) : (
+                  <CheckCircle size={11} />
+                )}
+                {completingRevision ? 'Marking…' : 'Mark revisions complete'}
+              </button>
+            )}
           </div>
         </div>
       )}
