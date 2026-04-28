@@ -7,6 +7,7 @@ import './globals.css';
 import { BrandModeProvider } from '@/components/layout/brand-mode-provider';
 import { MobileBlocker } from '@/components/shared/mobile-blocker';
 import { getSupabaseUrl } from '@/lib/supabase/public-env';
+import { detectAgencyFromHostname } from '@/lib/agency/detect';
 
 // Nativz brand typography — Jost (display), Poppins (body), Rubik (UI sans).
 // Anderson Collaborative typography — Sora (display), Roboto (body), Rubik shared.
@@ -99,7 +100,16 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const headersList = await headers();
-  const agency = headersList.get('x-agency') as 'anderson' | 'nativz' | null;
+  // Prefer the middleware-set header, but fall back to hostname detection
+  // for routes the middleware matcher doesn't cover (e.g. `/c/:token`
+  // public share links). Without this fallback, AC clients hitting
+  // cortex.andersoncollaborative.com on a non-matched route render Nativz.
+  const headerAgency = headersList.get('x-agency') as 'anderson' | 'nativz' | null;
+  const hostname =
+    headersList.get('x-forwarded-host')
+    ?? headersList.get('host')
+    ?? '';
+  const agency = headerAgency ?? detectAgencyFromHostname(hostname);
   // Force brand mode on BOTH domains — prevents localStorage from loading wrong theme
   const forcedMode = agency === 'anderson' ? 'anderson' as const : 'nativz' as const;
 
