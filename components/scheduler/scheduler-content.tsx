@@ -20,7 +20,13 @@ const AutoScheduleDialog = dynamic(() => import('@/components/scheduler/auto-sch
 const NewDropDialog = dynamic(() => import('@/components/scheduler/new-drop-dialog').then(m => ({ default: m.NewDropDialog })));
 import { toast } from 'sonner';
 
-function SchedulerInner({ initialClients }: { initialClients: ClientOption[] }) {
+function SchedulerInner({
+  initialClients,
+  initialClientId,
+}: {
+  initialClients: ClientOption[];
+  initialClientId: string | null;
+}) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const {
@@ -37,7 +43,7 @@ function SchedulerInner({ initialClients }: { initialClients: ClientOption[] }) 
     fetchMedia,
     fetchProfiles,
     refresh,
-  } = useSchedulerData(initialClients);
+  } = useSchedulerData(initialClients, initialClientId);
 
   // Show toast and clean URL after OAuth callback redirect
   useEffect(() => {
@@ -411,12 +417,18 @@ function SchedulerInner({ initialClients }: { initialClients: ClientOption[] }) 
   );
 }
 
-export function SchedulerContent({ initialClients }: { initialClients: ClientOption[] }) {
+export function SchedulerContent({
+  initialClients,
+  initialClientId = null,
+}: {
+  initialClients: ClientOption[];
+  initialClientId?: string | null;
+}) {
   // fallback={null} so a CSR bailout on useSearchParams doesn't paint a
   // second spinner after the route-level loading.tsx skeleton.
   return (
     <Suspense fallback={null}>
-      <SchedulerInner initialClients={initialClients} />
+      <SchedulerInner initialClients={initialClients} initialClientId={initialClientId} />
     </Suspense>
   );
 }

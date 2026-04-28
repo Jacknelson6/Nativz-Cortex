@@ -419,9 +419,10 @@ export function OnboardAnalyze({ name, websiteUrl, onNext, onBack }: OnboardAnal
                 className="w-full cursor-pointer rounded-xl border border-nativz-border bg-surface-hover px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-colors"
               >
                 <option value="">Select agency...</option>
-                <option value="Anderson Collaborative">Anderson Collaborative</option>
                 <option value="Nativz">Nativz</option>
-                <option value="Other">Other</option>
+                <option value="Anderson Collaborative">Anderson Collaborative</option>
+                <option value="Prospect">Prospect</option>
+                <option value="Internal">Internal</option>
               </select>
             </div>
           </div>

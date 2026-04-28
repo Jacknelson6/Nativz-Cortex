@@ -5,20 +5,41 @@ import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import type { CalendarPost, MediaItem, ClientOption, ConnectedProfile } from '../types';
 
-export function useSchedulerData(initialClients?: ClientOption[]) {
+export function useSchedulerData(
+  initialClients?: ClientOption[],
+  initialClientId?: string | null,
+) {
   const searchParams = useSearchParams();
   const urlClientId = searchParams.get('client_id');
 
   const hasInitial = !!initialClients?.length;
   const [clients, setClients] = useState<ClientOption[]>(initialClients ?? []);
+  // Precedence: explicit URL param > server-resolved active brand >
+  // first client in the list. Binding to the active brand lets the calendar
+  // mirror whatever the top-bar pill shows on first paint.
   const [selectedClientId, setSelectedClientId] = useState<string | null>(
-    urlClientId ?? (initialClients?.[0]?.id ?? null),
+    urlClientId ?? initialClientId ?? (initialClients?.[0]?.id ?? null),
   );
   const [posts, setPosts] = useState<CalendarPost[]>([]);
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [profiles, setProfiles] = useState<ConnectedProfile[]>([]);
   const [loading, setLoading] = useState(!hasInitial);
   const [mediaLoading, setMediaLoading] = useState(false);
+
+  // Brand-pill → calendar one-way sync. When the top-bar brand pill changes,
+  // it triggers `router.refresh()`, which re-runs the calendar server
+  // component with a new `initialClientId`. The state set above only fires
+  // once, so we mirror later changes here. Calendar dropdown picks set
+  // `selectedClientId` directly and aren't affected by this effect because
+  // a pill change is what moves `initialClientId`, not the dropdown.
+  useEffect(() => {
+    if (initialClientId && initialClientId !== selectedClientId) {
+      setSelectedClientId(initialClientId);
+    }
+    // selectedClientId intentionally omitted — we only want to sync when the
+    // server-provided active brand changes, not on every dropdown pick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialClientId]);
 
   // Fetch clients on mount (skip if server-provided)
   useEffect(() => {
