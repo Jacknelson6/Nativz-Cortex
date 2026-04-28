@@ -33,9 +33,15 @@ export default async function AdminSearchResultsPage({
 
   const adminClient = createAdminClient();
 
-  // Client info + scraped-video count are both keyed off `search` but
+  // Client info + scraped video rows are both keyed off `search` but
   // independent of each other — parallel saves a round-trip.
-  const [clientRes, countRes] = await Promise.all([
+  //
+  // We fetch the FULL video rows (not just count) so the SourceBrowser can
+  // fall back to this canonical store when `platform_data.sources` is
+  // missing — which happens whenever the bulky platform_data UPDATE
+  // exceeded PostgREST's row-size budget (typically 250+ scraped sources)
+  // and got dropped by the persistence fallback.
+  const [clientRes, videoRowsRes] = await Promise.all([
     search.client_id
       ? adminClient
           .from('clients')
@@ -51,11 +57,13 @@ export default async function AdminSearchResultsPage({
         } | null }),
     adminClient
       .from('topic_search_videos')
-      .select('id', { count: 'exact', head: true })
-      .eq('search_id', id),
+      .select('platform, platform_id, url, title, author_username, thumbnail_url, views, likes, comments, publish_date')
+      .eq('search_id', id)
+      .order('views', { ascending: false }),
   ]);
   const clientInfo = clientRes.data ?? null;
-  const scrapedVideoCount = countRes.count ?? 0;
+  const videoRows = videoRowsRes.data ?? [];
+  const scrapedVideoCount = videoRows.length;
 
   return (
     <>
@@ -63,6 +71,7 @@ export default async function AdminSearchResultsPage({
         search={search as TopicSearch}
         clientInfo={clientInfo}
         scrapedVideoCount={scrapedVideoCount}
+        videoRows={videoRows}
       />
       {search.status === 'completed' && (
         <AnalysisChatDrawer

@@ -32,6 +32,22 @@ import { TopicSyntheticAudiences } from '@/components/results/topic-synthetic-au
 import { getClientAbbreviationLabel } from '@/lib/clients/client-abbreviations';
 import { formatRelativeTime } from '@/lib/utils/format';
 
+/** Slim row from `topic_search_videos`. Used as the SourceBrowser fallback
+ *  when the in-row `platform_data.sources` array got dropped because the
+ *  payload exceeded PostgREST's row-size limit. */
+export interface TopicSearchVideoRow {
+  platform: 'tiktok' | 'youtube' | 'instagram';
+  platform_id: string;
+  url: string;
+  title: string | null;
+  author_username: string | null;
+  thumbnail_url: string | null;
+  views: number | null;
+  likes: number | null;
+  comments: number | null;
+  publish_date: string | null;
+}
+
 interface AdminResultsClientProps {
   search: TopicSearch;
   clientInfo?: {
@@ -42,12 +58,14 @@ interface AdminResultsClientProps {
     topic_keywords?: string[] | null;
   } | null;
   scrapedVideoCount?: number;
+  videoRows?: TopicSearchVideoRow[];
 }
 
 export function AdminResultsClient({
   search,
   clientInfo,
   scrapedVideoCount = 0,
+  videoRows = [],
 }: AdminResultsClientProps) {
   const router = useRouter();
   const { brand: agencyBrand } = useAgencyBrand();
@@ -333,15 +351,40 @@ export function AdminResultsClient({
           </div>
         ) : null}
 
-        {/* Sources — short-form video card grid (TikTok + YouTube). Web /
-            Reddit / domain link list were retired in the prior trim pass;
-            only the video card layout is restored here per Jack's ask. */}
+        {/* Sources — short-form video card grid (TikTok + YouTube).
+            Primary source: `platform_data.sources`. Fallback: rows from the
+            `topic_search_videos` table, which the /process route persists
+            BEFORE the bulky platform_data UPDATE. The fallback kicks in
+            whenever a search scraped enough sources (~250+) to push the
+            row over PostgREST's size limit and the platform_data write was
+            dropped. */}
         {(() => {
           const platformSources = ((search.platform_data as Record<string, unknown> | null)?.sources ?? []) as PlatformSource[];
-          if (platformSources.length === 0) return null;
+          const sources: PlatformSource[] =
+            platformSources.length > 0
+              ? platformSources
+              : videoRows.map((v) => ({
+                  platform: v.platform === 'instagram' ? 'tiktok' : v.platform,
+                  id: v.platform_id,
+                  url: v.url,
+                  title: v.title ?? '',
+                  content: '',
+                  author: v.author_username ?? '',
+                  thumbnailUrl: v.thumbnail_url,
+                  videoFormat: 'short',
+                  engagement: {
+                    views: v.views ?? 0,
+                    likes: v.likes ?? 0,
+                    comments: v.comments ?? 0,
+                  },
+                  createdAt: v.publish_date ?? '',
+                  comments: [],
+                  transcript: null,
+                }));
+          if (sources.length === 0) return null;
           return (
             <SourceBrowser
-              sources={platformSources}
+              sources={sources}
               searchId={search.id}
               searchQuery={search.query}
               clientContext={

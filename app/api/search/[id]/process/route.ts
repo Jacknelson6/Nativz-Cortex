@@ -288,19 +288,26 @@ export async function POST(
       const safeJson = (v: any, fallback: any): any =>
         v !== null && v !== undefined ? v : fallback;
 
-      // Build prioritized platform sources (TikTok first)
+      // Build prioritized platform sources (TikTok first).
+      //
+      // `transcript` is intentionally excluded — it added 200-300 chars per
+      // TikTok source and pushed 250+ source payloads over the PostgREST /
+      // Supabase row-size limit, causing the bulk write below to fail and
+      // wipe `platform_data.sources` entirely. Transcripts are still
+      // computed in the pipeline (and stored on `topic_search_videos` when
+      // we transcribe per-source on demand); they don't need to round-trip
+      // through `platform_data` to render the SourceBrowser grid.
       const mapSource = (s: import('@/lib/types/search').PlatformSource) => ({
         platform: s.platform,
         id: s.id,
         url: s.url,
         title: (s.title ?? '').slice(0, 300),
-        content: (s.content ?? '').slice(0, 300),
+        content: (s.content ?? '').slice(0, 200),
         author: s.author,
         thumbnailUrl: s.thumbnailUrl ?? null,
         videoFormat: s.videoFormat ?? null,
         engagement: s.engagement,
         createdAt: s.createdAt,
-        transcript: s.transcript ? s.transcript.slice(0, 300) : null,
         comments: [],
       });
 
@@ -308,15 +315,40 @@ export async function POST(
       const tiktokSources = allPlatformSources.filter((s) => s.platform === 'tiktok');
       const nonTikTokSources = allPlatformSources.filter((s) => s.platform !== 'tiktok');
 
-      // Batch 1: all non-TikTok sources (Reddit/YouTube — no transcripts
-      // so they're small) + top 8 TikTok videos + essentials. Previously this
-      // filtered to TikTok-only, which meant the 3m+ we just spent scraping
-      // Reddit/YouTube was silently discarded — those platforms were
-      // collected into allPlatformSources but never persisted.
-      // Batch 2: next 42 TikTok videos (50 TikTok cap — keeps payload under
-      // PostgREST limits because TikTok rows carry transcripts + comments).
+      // Batch 1: all non-TikTok sources (Reddit/YouTube/Web) + top 8 TikTok.
+      // Batch 2: next 42 TikTok videos (50 TikTok cap).
       const batch1Sources = [...nonTikTokSources.map(mapSource), ...tiktokSources.slice(0, 8).map(mapSource)];
       const batch2Sources = tiktokSources.slice(8, 50).map(mapSource);
+
+      // Persist video sources to `topic_search_videos` FIRST. This is the
+      // canonical store for the SourceBrowser grid, so persisting here
+      // before the bulky platform_data UPDATE means we keep the grid even
+      // if the row-level write fails or the function times out before
+      // reaching the secondary write at the bottom of this handler.
+      const videoRowsForCanonicalStore = (result.platformSources ?? [])
+        .filter((s) => s.platform === 'tiktok' || s.platform === 'youtube')
+        .map((s) => ({
+          search_id: id,
+          platform: s.platform,
+          platform_id: s.id,
+          url: s.url,
+          title: (s.title ?? '').slice(0, 500),
+          author_username: s.author || null,
+          thumbnail_url: s.thumbnailUrl ?? null,
+          views: s.engagement?.views ?? 0,
+          likes: s.engagement?.likes ?? 0,
+          comments: s.engagement?.comments ?? 0,
+          publish_date: s.createdAt || null,
+        }));
+      if (videoRowsForCanonicalStore.length > 0) {
+        const BATCH = 100;
+        for (let i = 0; i < videoRowsForCanonicalStore.length; i += BATCH) {
+          const { error: vidErr } = await adminClient
+            .from('topic_search_videos')
+            .upsert(videoRowsForCanonicalStore.slice(i, i + BATCH), { onConflict: 'search_id,platform,platform_id' });
+          if (vidErr) console.error('[process] early video persist batch error:', vidErr.message);
+        }
+      }
 
       // Persistence strategy — split by payload size + criticality so a
       // failure on the bulky platform_data write doesn't strand the LLM
@@ -425,36 +457,9 @@ export async function POST(
         }
       }
 
-      // Persist platform video sources to topic_search_videos for the Sources grid
-      if (result.platformSources && result.platformSources.length > 0) {
-        const videoRows = result.platformSources
-          .filter((s) => s.platform === 'tiktok' || s.platform === 'youtube')
-          .map((s) => ({
-            search_id: id,
-            platform: s.platform,
-            platform_id: s.id,
-            url: s.url,
-            title: (s.title ?? '').slice(0, 500),
-            author_username: s.author || null,
-            thumbnail_url: s.thumbnailUrl ?? null,
-            views: s.engagement?.views ?? 0,
-            likes: s.engagement?.likes ?? 0,
-            comments: s.engagement?.comments ?? 0,
-            publish_date: s.createdAt || null,
-          }));
-
-        if (videoRows.length > 0) {
-          const BATCH = 100;
-          for (let i = 0; i < videoRows.length; i += BATCH) {
-            await adminClient
-              .from('topic_search_videos')
-              .upsert(videoRows.slice(i, i + BATCH), { onConflict: 'search_id,platform,platform_id' })
-              .then(({ error: vidErr }) => {
-                if (vidErr) console.error('[process] video persist batch error:', vidErr.message);
-              });
-          }
-        }
-      }
+      // (topic_search_videos was already written above — before the bulky
+      // platform_data UPDATE — so the SourceBrowser grid survives even if
+      // that write fails or the function times out.)
 
       syncSearchToVault(
         {
