@@ -127,7 +127,8 @@ export async function createMondayItem(
 // Fetch items from the Content Calendars board (shoots)
 // ---------------------------------------------------------------------------
 
-const CONTENT_CALENDARS_BOARD_ID = process.env.MONDAY_CONTENT_CALENDARS_BOARD_ID || '';
+const CONTENT_CALENDARS_BOARD_ID =
+  process.env.MONDAY_CONTENT_CALENDARS_BOARD_ID || '9232769015';
 
 export interface MondayGroup {
   id: string;

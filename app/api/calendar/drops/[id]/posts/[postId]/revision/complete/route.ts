@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/auth/permissions';
@@ -6,6 +6,7 @@ import { sendCalendarRevisionsCompleteEmail } from '@/lib/email/resend';
 import { getNotificationSetting } from '@/lib/notifications/get-setting';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
+import { syncMondayApprovalForDrop } from '@/lib/monday/calendar-approval';
 
 /**
  * POST /api/calendar/drops/[id]/posts/[postId]/revision/complete
@@ -78,6 +79,14 @@ export async function POST(
       shareLinks: shareLinks ?? [],
     });
   }
+
+  after(async () => {
+    try {
+      await syncMondayApprovalForDrop(admin, dropId);
+    } catch (err) {
+      console.error('Monday calendar approval sync failed (revision complete):', err);
+    }
+  });
 
   return NextResponse.json({
     completed_at: nowIso,
