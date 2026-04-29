@@ -74,7 +74,6 @@ export function ReviewBoard({ isAdmin, createHref = '/admin/calendar' }: ReviewB
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const grouped = useMemo(() => {
@@ -253,13 +252,13 @@ function ReviewCard({
           {link.post_count === 1 ? '' : 's'}
         </span>
         {link.approved_count > 0 && (
-          <span className="inline-flex items-center gap-1 text-emerald-300">
+          <span className="inline-flex items-center gap-1 text-status-success">
             <CheckCircle2 size={12} />
             {link.approved_count} approved
           </span>
         )}
         {link.changes_count > 0 && (
-          <span className="inline-flex items-center gap-1 text-amber-300">
+          <span className="inline-flex items-center gap-1 text-status-warning">
             <MessagesSquare size={12} />
             {link.changes_count} revising
           </span>
@@ -321,11 +320,11 @@ function StatusPill({ status }: { status: ReviewLinkRow['status'] }) {
   > = {
     approved: {
       label: 'Approved',
-      className: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
+      className: 'bg-status-success/10 text-status-success border-status-success/20',
     },
     revising: {
       label: 'Revising',
-      className: 'bg-amber-500/10 text-amber-300 border-amber-500/20',
+      className: 'bg-status-warning/10 text-status-warning border-status-warning/20',
     },
     ready_for_review: {
       label: 'Ready for review',
