@@ -1099,6 +1099,110 @@ export async function sendCalendarRevisionsCompleteEmail(opts: {
   });
 }
 
+// ── Revised videos ready (manual "Notify client" from share link) ─────────
+//
+// Fires when an editor uploads new cuts in response to changes_requested
+// rows and clicks the "Notify client" toast on /c/[token]. The body
+// summarizes what was asked + (implicitly) addressed, so reviewers can
+// open the link knowing exactly which posts to re-watch.
+//
+// Per-post `changes` is the raw text of every `changes_requested` comment
+// on that post's review_link, ordered oldest → newest. We render them as
+// blockquoted bullets — quoting (rather than paraphrasing) keeps the email
+// truthful: the reviewer sees their own words, so there's no "did you
+// actually fix this?" ambiguity.
+
+export async function sendCalendarRevisedVideosEmail(opts: {
+  to: string | string[];
+  cc?: string | string[];
+  pocFirstNames: string[];
+  clientName: string;
+  shareUrl: string;
+  /** Past-tense action bullets describing what the editing team did this
+   *  round, already AI-rephrased upstream (see lib/calendar/summarize-
+   *  revisions.ts). Pass [] when there were no recorded change requests —
+   *  the email then ships without the "what we did" section. */
+  summaryBullets: string[];
+  /** How many videos were re-uploaded this round; drives subject + lead. */
+  revisedCount: number;
+  agency?: AgencyBrand;
+  clientId?: string;
+  dropId?: string;
+  /** Test-mode flag prepends "[Test]" to the subject so the recipient knows
+   *  this isn't the real notification fired by their button click. */
+  isTestOverride?: boolean;
+}) {
+  const agency = opts.agency ?? 'nativz';
+  const isAC = agency === 'anderson';
+  const teamLabel = isAC ? 'AC editing team' : 'Nativz editing team';
+  const replyTo = isAC ? 'jack@andersoncollaborative.com' : 'jack@nativz.io';
+  const greeting = opts.pocFirstNames.length > 0
+    ? `Hey ${humanizeNameList(opts.pocFirstNames)}`
+    : `Hey ${opts.clientName}`;
+  const count = opts.revisedCount;
+  const word = count === 1 ? 'video' : 'videos';
+  const subjectPrefix = opts.isTestOverride ? '[Test] ' : '';
+  const subject = `${subjectPrefix}Revised ${word} ready for review — ${opts.clientName}`;
+
+  const summarySection = opts.summaryBullets.length > 0
+    ? `
+        <p class="subtext" style="margin-top:18px;">Here's what we did:</p>
+        <ul style="margin:8px 0 0;padding-left:20px;">
+          ${opts.summaryBullets
+            .map(
+              (b) =>
+                `<li style="color:#cbd2dd;font-size:14px;line-height:1.55;margin:0 0 6px;">${escapeAlertHtml(b)}</li>`,
+            )
+            .join('')}
+        </ul>
+      `
+    : '';
+
+  const html = layout(`
+    <div class="card">
+      <h1 class="heading">Revised ${word} ready for review</h1>
+      <p class="subtext">
+        ${greeting},
+      </p>
+      <p class="subtext">
+        The ${teamLabel} has implemented the requested changes and the revised
+        calendar is ready for review!
+      </p>
+      ${summarySection}
+      <div class="button-wrap" style="margin-top:24px;">
+        <a href="${opts.shareUrl}" class="button">Re-review the calendar &rarr;</a>
+      </div>
+      <p class="subtext" style="margin-top:24px;">
+        If there's any more feedback please let us know — or mark each post as
+        approved if it matches what you were looking for.
+      </p>
+      <p class="small" style="text-align:center; margin-top:24px;">
+        Questions or want to chat about a post? Just reply to this email and it'll come straight to ${replyTo}.
+      </p>
+    </div>
+  `, agency);
+
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: 'calendar_revised_videos',
+    agency,
+    to: opts.to,
+    cc: opts.cc,
+    subject,
+    html,
+    replyToOverride: replyTo,
+    clientId: opts.clientId,
+    dropId: opts.dropId,
+    metadata: {
+      clientName: opts.clientName,
+      revisedCount: count,
+      summaryBulletsCount: opts.summaryBullets.length,
+      pocFirstNames: opts.pocFirstNames,
+      isTestOverride: !!opts.isTestOverride,
+    },
+  });
+}
+
 // ── Post-health alert (ops digest) ────────────────────────────────────────────
 //
 // Sent by /api/cron/post-health when posts fail or social profiles disconnect.

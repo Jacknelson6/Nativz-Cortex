@@ -9,8 +9,13 @@
  * State derivation (`computeApprovalLabel` below):
  *   • any open changes-requested newer than its revision marker → "Needs revision"
  *   • every post approved (and no open changes outstanding)     → "Client approved"
- *   • some posts have been revised, awaiting client re-review   → "Revised"
- *   • otherwise (link sent, nothing acted on yet)               → "Waiting on approval"
+ *   • some posts revised AND notify still pending               → "Revised"
+ *   • otherwise (link sent / notify cleared / nothing acted on) → "Waiting on approval"
+ *
+ * "Revised" is a transient state: it's only true between the editor uploading
+ * the new cut and the editor clicking Notify Client / Skip. After notify, the
+ * client knows about it, so the label flips back to "Waiting on approval" —
+ * the ball is back in the client's court for re-review.
  *
  * Monday item lookup is by client name + month group. The group naming
  * convention is *creation month*: the "April 2026" group holds the May
@@ -127,7 +132,7 @@ export async function computeApprovalLabel(
 
   const ids = Array.from(reviewLinkIds);
 
-  const [{ data: comments }, { data: revRows }] = await Promise.all([
+  const [{ data: comments }, { data: revRows }, { data: notifyRows }] = await Promise.all([
     admin
       .from('post_review_comments')
       .select('review_link_id, status, created_at')
@@ -139,7 +144,19 @@ export async function computeApprovalLabel(
       .select('id, revisions_completed_at')
       .in('id', ids)
       .returns<{ id: string; revisions_completed_at: string | null }[]>(),
+    // "Revised" only stays sticky while at least one revised video is still
+    // pending an outbound notify. Once the editor clicks Notify Client (or
+    // Skip), `revised_video_notify_pending` flips false on every row in the
+    // drop, and the label falls through to "Waiting on approval" — i.e.,
+    // the ball is back in the client's court for re-review.
+    admin
+      .from('content_drop_videos')
+      .select('revised_video_notify_pending')
+      .eq('drop_id', dropId)
+      .eq('revised_video_notify_pending', true)
+      .returns<{ revised_video_notify_pending: boolean | null }[]>(),
   ]);
+  const anyNotifyPending = (notifyRows ?? []).length > 0;
 
   // For each review link, capture the newest approval and newest changes-requested
   // comment, plus the revisions_completed_at marker.
@@ -183,7 +200,7 @@ export async function computeApprovalLabel(
 
   if (anyOpenChanges) return APPROVAL_NEEDS_REVISION;
   if (allApproved) return APPROVAL_CLIENT_APPROVED;
-  if (anyRevised) return APPROVAL_REVISED;
+  if (anyRevised && anyNotifyPending) return APPROVAL_REVISED;
   return APPROVAL_WAITING_ON_APPROVAL;
 }
 
