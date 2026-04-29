@@ -135,6 +135,11 @@ const NAV_SECTIONS: NavSection[] = [
           // Ordered per Jack 2026-04-23: client-facing surfaces up top,
           // internal ops in the middle, platform admin at the bottom.
           { href: '/admin/clients', label: 'Clients', icon: Contact },
+          // Cross-brand share-link oversight. The brand-scoped Review subpage
+          // (Content → Review) follows the active pill; this surface ignores
+          // it and shows every brand at once — the agency-wide "what's
+          // waiting on a client right now" view.
+          { href: '/admin/share-links', label: 'Share Links', icon: ClipboardCheck },
           // Ad Generator lives in Admin (not Brand tools) because every run
           // burns Gemini 2.5 Flash Image credits — keep it behind the
           // operator menu rather than next to free brand-research surfaces.
@@ -205,6 +210,9 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/analyze-social',
   '/admin/notifications',
   '/admin/usage',
+  // Cross-brand share-link oversight is operator-only — viewers see only
+  // their own brand's links via the unified-shell `/calendar/review` route.
+  '/admin/share-links',
   // Cost-driving brand tools stay admin-only. Spying triggers Apify scrapes
   // on every audit; the Ad Generator triggers Gemini 2.5 Flash Image
   // generations. Each page also redirects non-admins server-side (defence

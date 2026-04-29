@@ -49,18 +49,46 @@ interface ReviewBoardProps {
   /** Where the "Create new share link" CTA should send admins. Falls
    *  back to the calendar entry if not provided. */
   createHref?: string;
+  /** When set, the API call appends `?clientId=` so the board renders
+   *  only that brand's share links. Used by `/admin/calendar/review`
+   *  (scoped to the active brand pill) and the viewer route. Leave null
+   *  for the cross-brand admin oversight page (`/admin/share-links`). */
+  clientId?: string | null;
+  /** Optional title override. Defaults to "Review". Cross-brand admin
+   *  tool uses "Share links" to make the scope clear. */
+  title?: string;
+  /** Optional description override under the title. */
+  description?: string;
+  /** When false, hide the brand label on each card (the page is already
+   *  brand-scoped so the chip is redundant). Defaults to following
+   *  `clientId` — null = show, set = hide. */
+  showBrandOnCards?: boolean;
 }
 
-export function ReviewBoard({ isAdmin, createHref = '/admin/calendar' }: ReviewBoardProps) {
+export function ReviewBoard({
+  isAdmin,
+  createHref = '/admin/calendar',
+  clientId = null,
+  title,
+  description,
+  showBrandOnCards,
+}: ReviewBoardProps) {
   const [links, setLinks] = useState<ReviewLinkRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Cards drop the brand label by default whenever the page is already
+  // scoped to a single brand (the active pill makes the chip redundant).
+  const showBrand = showBrandOnCards ?? clientId === null;
 
   async function load(silent = false) {
     if (!silent) setLoading(true);
     else setRefreshing(true);
     try {
-      const res = await fetch('/api/calendar/review', { cache: 'no-store' });
+      const url = clientId
+        ? `/api/calendar/review?clientId=${encodeURIComponent(clientId)}`
+        : '/api/calendar/review';
+      const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to load share links');
       const data = (await res.json()) as { links: ReviewLinkRow[] };
       setLinks(data.links ?? []);
@@ -74,7 +102,8 @@ export function ReviewBoard({ isAdmin, createHref = '/admin/calendar' }: ReviewB
 
   useEffect(() => {
     void load();
-  }, []);
+    // Re-fetch whenever the active brand changes (admin flips the pill).
+  }, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const grouped = useMemo(() => {
     const active = links.filter((l) => l.status !== 'expired');
@@ -86,11 +115,12 @@ export function ReviewBoard({ isAdmin, createHref = '/admin/calendar' }: ReviewB
     <div className="cortex-page-gutter mx-auto max-w-6xl space-y-6">
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold text-text-primary">Review</h1>
+          <h1 className="text-2xl font-semibold text-text-primary">{title ?? 'Review'}</h1>
           <p className="mt-1 text-sm text-text-secondary">
-            {isAdmin
-              ? 'Share links you’ve sent for client review. Open one to see comments, approvals, and revision status.'
-              : 'Calendars you’ve received from your team. Open one to leave feedback or approve posts.'}
+            {description ??
+              (isAdmin
+                ? 'Share links you’ve sent for client review. Open one to see comments, approvals, and revision status.'
+                : 'Calendars you’ve received from your team. Open one to leave feedback or approve posts.')}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -130,7 +160,13 @@ export function ReviewBoard({ isAdmin, createHref = '/admin/calendar' }: ReviewB
           {grouped.active.length > 0 && (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
               {grouped.active.map((l) => (
-                <ReviewCard key={l.id} link={l} isAdmin={isAdmin} onChange={() => void load(true)} />
+                <ReviewCard
+                  key={l.id}
+                  link={l}
+                  isAdmin={isAdmin}
+                  showBrand={showBrand}
+                  onChange={() => void load(true)}
+                />
               ))}
             </div>
           )}
@@ -146,6 +182,7 @@ export function ReviewBoard({ isAdmin, createHref = '/admin/calendar' }: ReviewB
                     key={l.id}
                     link={l}
                     isAdmin={isAdmin}
+                    showBrand={showBrand}
                     onChange={() => void load(true)}
                   />
                 ))}
@@ -185,10 +222,12 @@ function EmptyState({ isAdmin, createHref }: { isAdmin: boolean; createHref: str
 function ReviewCard({
   link,
   isAdmin,
+  showBrand,
   onChange,
 }: {
   link: ReviewLinkRow;
   isAdmin: boolean;
+  showBrand: boolean;
   onChange: () => void;
 }) {
   const [busy, setBusy] = useState(false);
@@ -239,7 +278,7 @@ function ReviewCard({
             <CalendarDays size={13} className="text-text-tertiary" />
             <span className="truncate">{dateRange}</span>
           </p>
-          {isAdmin && link.client_name && (
+          {isAdmin && showBrand && link.client_name && (
             <p className="truncate text-xs text-text-muted">{link.client_name}</p>
           )}
         </div>
