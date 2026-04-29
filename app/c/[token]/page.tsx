@@ -1141,13 +1141,13 @@ function PostCard({
           onSave={saveSchedule}
         />
         {review === 'approved' && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-status-success/12 px-2 py-0.5 text-xs font-medium text-status-success">
-            <CheckCircle size={11} /> Approved
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-status-success/12 px-3 py-1.5 text-sm font-medium text-status-success ring-1 ring-status-success/30">
+            <CheckCircle size={13} /> Approved
           </span>
         )}
         {review === 'changes_requested' && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-status-warning/12 px-2 py-0.5 text-xs font-medium text-status-warning">
-            <AlertTriangle size={11} /> Changes requested
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-status-warning/12 px-3 py-1.5 text-sm font-medium text-status-warning ring-1 ring-status-warning/30">
+            <AlertTriangle size={13} /> Changes requested
           </span>
         )}
       </div>
