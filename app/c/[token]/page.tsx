@@ -337,7 +337,7 @@ function SharedDropView({
               <h1 className="font-display text-lg font-semibold tracking-tight text-text-primary sm:text-2xl">
                 {data.clientName} — Content calendar
               </h1>
-              <p className="mt-1.5 text-xs text-text-secondary sm:text-sm">
+              <p className="mt-1.5 text-[13px] text-text-secondary sm:text-sm">
                 {total} post{total !== 1 ? 's' : ''} to review · scheduled {data.drop.start_date} → {data.drop.end_date}
               </p>
             </div>
@@ -1124,7 +1124,7 @@ function PostCard({
   const captionBlock = (
     <div className="min-w-0 flex-1 space-y-2 sm:space-y-3">
       <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-        <span className="text-xs font-medium text-text-muted">Post {index}</span>
+        <span className="text-[13px] font-medium text-text-muted">Post {index}</span>
         <SchedulePill
           scheduledAt={post.scheduled_at}
           scheduledLabel={scheduledLabel}
@@ -1188,7 +1188,7 @@ function PostCard({
         </div>
       ) : (
         <div className="group relative">
-          <p className="whitespace-pre-wrap pr-10 text-sm leading-relaxed text-text-primary">
+          <p className="whitespace-pre-wrap pr-10 text-[15px] leading-relaxed text-text-primary">
             {post.caption || (
               <span className="italic text-text-muted">No caption yet</span>
             )}
@@ -1214,7 +1214,7 @@ function PostCard({
       {!editingCaption && post.hashtags.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {post.hashtags.map((h) => (
-            <span key={h} className="text-xs text-accent-text">
+            <span key={h} className="text-sm text-accent-text">
               #{h}
             </span>
           ))}
@@ -1349,7 +1349,7 @@ function PostCard({
 
       {post.comments.length > 0 && (
         <div className="border-t border-nativz-border bg-background/40 px-3 py-3 sm:px-4">
-          <h3 className="mb-2 text-xs font-medium text-text-muted">History</h3>
+          <h3 className="mb-2 text-[13px] font-medium text-text-muted">History</h3>
           <div className="space-y-2">
             {post.comments.map((c) => (
               <CommentRow
@@ -1364,13 +1364,13 @@ function PostCard({
       )}
 
       <div className="border-t border-nativz-border px-3 py-3 sm:px-4">
-        <h3 className="mb-2 text-xs font-medium text-text-muted">Leave feedback</h3>
+        <h3 className="mb-2 text-[13px] font-medium text-text-muted">Leave feedback</h3>
         <textarea
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
           placeholder="Notes on the video (cuts, music, hook, etc.)"
           rows={2}
-          className="mb-2 w-full resize-none rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent"
+          className="mb-2 w-full resize-none rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent"
           disabled={submitting}
         />
 
@@ -1501,8 +1501,8 @@ function CommentRow({
         className="rounded-lg border border-nativz-border bg-surface px-3 py-2"
       >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-          <div className="flex items-center gap-2 text-xs">
-            <AlertTriangle size={11} className="text-[color:var(--status-danger)]" />
+          <div className="flex items-center gap-2 text-[13px]">
+            <AlertTriangle size={12} className="text-[color:var(--status-danger)]" />
             <span className="text-text-primary">Remove from history?</span>
             <span className="text-text-muted">Can’t be undone.</span>
           </div>
@@ -1585,14 +1585,14 @@ function CommentRow({
   if (comment.status === 'caption_edit') {
     return (
       <div className="group rounded-lg border border-accent/25 bg-accent/5 px-3 py-2">
-        <div className="mb-1 flex items-center gap-2 text-xs">
-          <Icon size={11} className={tone} />
+        <div className="mb-1 flex items-center gap-2 text-[13px]">
+          <Icon size={12} className={tone} />
           <span className="font-medium text-text-primary">{comment.author_name}</span>
           <span className="text-text-muted">edited the caption · {time}</span>
           {deleteButton}
         </div>
         {comment.caption_before && (
-          <details className="mb-1.5 text-[11px] text-text-muted">
+          <details className="mb-1.5 text-[12px] text-text-muted">
             <summary className="cursor-pointer hover:text-text-secondary">Show previous caption</summary>
             <p className="mt-1 whitespace-pre-wrap rounded border border-nativz-border bg-background/40 px-2 py-1.5 text-text-muted">
               {comment.caption_before || <span className="italic">(empty)</span>}
@@ -1600,8 +1600,8 @@ function CommentRow({
           </details>
         )}
         {comment.caption_after && (
-          <p className="whitespace-pre-wrap text-sm text-text-secondary">
-            <span className="text-[10px] uppercase tracking-wide text-text-muted">Now: </span>
+          <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-text-secondary">
+            <span className="text-[11px] uppercase tracking-wide text-text-muted">Now: </span>
             {comment.caption_after}
           </p>
         )}
@@ -1616,8 +1616,8 @@ function CommentRow({
   ) {
     return (
       <div className="group rounded-lg border border-accent/20 bg-accent/5 px-3 py-2">
-        <div className="flex items-center gap-2 text-xs">
-          <Icon size={11} className={tone} />
+        <div className="flex items-center gap-2 text-[13px]">
+          <Icon size={12} className={tone} />
           <span className="font-medium text-text-primary">{comment.author_name}</span>
           <span className="text-text-muted">{comment.content || activityVerb(comment.status)} · {time}</span>
           {deleteButton}
@@ -1628,14 +1628,14 @@ function CommentRow({
 
   return (
     <div className="group rounded-lg border border-nativz-border bg-surface px-3 py-2">
-      <div className="mb-0.5 flex items-center gap-2 text-xs">
-        <Icon size={11} className={tone} />
+      <div className="mb-1 flex items-center gap-2 text-[13px]">
+        <Icon size={12} className={tone} />
         <span className="font-medium text-text-primary">{comment.author_name}</span>
         <span className="text-text-muted">· {time}</span>
         {deleteButton}
       </div>
       {comment.content && (
-        <p className="whitespace-pre-wrap text-sm text-text-secondary">{comment.content}</p>
+        <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-text-secondary">{comment.content}</p>
       )}
       {comment.attachments.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-2">
