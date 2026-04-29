@@ -1633,7 +1633,7 @@ function CommentRow({
         onClick={toggleResolved}
         disabled={resolving}
         aria-label={isResolved ? 'Reopen revision' : 'Mark as revised'}
-        className={`ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
+        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
           isResolved
             ? 'bg-status-success/12 text-status-success ring-1 ring-status-success/30 hover:bg-status-success/20'
             : 'bg-surface text-text-secondary ring-1 ring-nativz-border hover:bg-status-success/10 hover:text-status-success hover:ring-status-success/40'
@@ -1649,15 +1649,32 @@ function CommentRow({
       </button>
     ) : null;
 
-  const deleteButton = (
+  // Two flavors of the delete button: the inline header version (hover-only,
+  // for low-stakes comment/approved rows) and the footer version (always
+  // visible, paired with Mark revised on changes_requested rows so editors
+  // never have to hover to find the controls on the row that matters).
+  const headerDeleteButton = (
     <button
       type="button"
       onClick={requestDelete}
       disabled={deleting}
       aria-label="Remove from history"
-      className={`${resolveButton ? 'ml-1' : 'ml-auto'} inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-text-muted opacity-0 transition hover:bg-status-danger/15 hover:text-status-danger focus-visible:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50`}
+      className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-text-muted opacity-0 transition hover:bg-status-danger/15 hover:text-status-danger focus-visible:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
     >
       {deleting ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}
+    </button>
+  );
+  const footerDeleteButton = (
+    <button
+      type="button"
+      onClick={requestDelete}
+      disabled={deleting}
+      aria-label="Remove from history"
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-text-secondary ring-1 ring-nativz-border transition hover:bg-status-danger/10 hover:text-status-danger hover:ring-status-danger/40 disabled:cursor-not-allowed disabled:opacity-50"
+      title="Remove this comment from history"
+    >
+      {deleting ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}
+      Remove
     </button>
   );
 
@@ -1701,7 +1718,7 @@ function CommentRow({
           <Icon size={12} className={tone} />
           <span className="font-medium text-text-primary">{comment.author_name}</span>
           <span className="text-text-muted">edited the caption · {time}</span>
-          {deleteButton}
+          {headerDeleteButton}
         </div>
         {comment.caption_before && (
           <details className="mb-1.5 text-[12px] text-text-muted">
@@ -1732,7 +1749,7 @@ function CommentRow({
           <Icon size={12} className={tone} />
           <span className="font-medium text-text-primary">{comment.author_name}</span>
           <span className="text-text-muted">{comment.content || activityVerb(comment.status)} · {time}</span>
-          {deleteButton}
+          {headerDeleteButton}
         </div>
       </div>
     );
@@ -1754,14 +1771,18 @@ function CommentRow({
       : isResolved
         ? 'marked revised · '
         : '';
+  // changes_requested rows get a persistent footer with Mark revised + Remove
+  // pinned to the bottom — editors don't have to hover to act on the row that
+  // matters most. Other rows (comment / approved) keep the lighter
+  // hover-revealed delete button in the header.
+  const isChangesRequestedRow = comment.status === 'changes_requested';
   return (
     <div className={containerClass}>
       <div className="mb-1 flex items-center gap-2 text-[13px]">
         <Icon size={12} className={tone} />
         <span className="font-medium text-text-primary">{comment.author_name}</span>
         <span className="text-text-muted">· {trailingMeta}{time}</span>
-        {resolveButton}
-        {deleteButton}
+        {!isChangesRequestedRow && headerDeleteButton}
       </div>
       {comment.content && (
         <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-text-secondary">{comment.content}</p>
@@ -1771,6 +1792,12 @@ function CommentRow({
           {comment.attachments.map((a) => (
             <CommentAttachmentTile key={a.url} attachment={a} />
           ))}
+        </div>
+      )}
+      {isChangesRequestedRow && (
+        <div className="mt-2 flex items-center justify-end gap-2 border-t border-nativz-border/60 pt-2">
+          {resolveButton}
+          {footerDeleteButton}
         </div>
       )}
     </div>
