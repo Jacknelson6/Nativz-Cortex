@@ -156,7 +156,6 @@ function SharedDropView({
   const [nameModalOpen, setNameModalOpen] = useState(false);
   const [pendingName, setPendingName] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [playingPost, setPlayingPost] = useState<SharedPost | null>(null);
   const [detailPostId, setDetailPostId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -382,7 +381,7 @@ function SharedDropView({
                 {data.clientName} — Content calendar
               </h1>
               <p className="mt-2 text-sm text-text-secondary sm:text-base">
-                {total} post{total !== 1 ? 's' : ''} to review · scheduled {data.drop.start_date} → {data.drop.end_date}
+                {total} post{total !== 1 ? 's' : ''} to review · scheduled {formatDropDateRange(data.drop.start_date, data.drop.end_date)}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -460,7 +459,6 @@ function SharedDropView({
                 onHandlesUpdated={(field, next, c) => updatePostHandles(post.id, field, next, c)}
                 onScheduleUpdated={(at, c) => updatePostScheduledAt(post.id, at, c)}
                 onRevisionUploaded={(rev) => updatePostRevision(post.id, rev)}
-                onPlay={() => setPlayingPost(post)}
                 requireName={() => {
                   setPendingName(authorName);
                   setNameModalOpen(true);
@@ -541,8 +539,6 @@ function SharedDropView({
           </div>
         </div>
       </Dialog>
-
-      <VideoPlayerModal post={playingPost} onClose={() => setPlayingPost(null)} />
 
       <PostDetailModal
         post={detailPostId ? sortedPosts.find((p) => p.id === detailPostId) ?? null : null}
@@ -673,6 +669,26 @@ function formatSeconds(total: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+/**
+ * Render a "May 1 to May 31" string from two YYYY-MM-DD date-only inputs.
+ * We construct the Date in local time (not UTC) so a "2026-05-01" input
+ * doesn't get pulled back to April in negative-UTC zones. Year is appended
+ * only when the range crosses a year boundary.
+ */
+function formatDropDateRange(start: string, end: string): string {
+  const parse = (yyyymmdd: string) => {
+    const [y, m, d] = yyyymmdd.split('-').map(Number);
+    return new Date(y, (m ?? 1) - 1, d ?? 1);
+  };
+  const a = parse(start);
+  const b = parse(end);
+  const sameYear = a.getFullYear() === b.getFullYear();
+  const dayMonth = (d: Date) => d.toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
+  const withYear = (d: Date) =>
+    d.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+  return sameYear ? `${dayMonth(a)} to ${dayMonth(b)}` : `${withYear(a)} to ${withYear(b)}`;
+}
+
 function VideoSurface({
   post,
   controls = true,
@@ -757,32 +773,6 @@ function VideoSurface({
   );
 }
 
-function VideoPlayerModal({ post, onClose }: { post: SharedPost | null; onClose: () => void }) {
-  if (!post) return null;
-  return (
-    <Dialog open={!!post} onClose={onClose} title="" maxWidth="lg" bodyClassName="p-0">
-      <div className="relative bg-black">
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute right-3 top-3 z-10 rounded-full bg-black/60 p-1.5 text-white transition-colors hover:bg-black/80"
-          aria-label="Close"
-        >
-          <X size={16} />
-        </button>
-        {/* autoPlay="any" lets MuxPlayer (and our legacy <video> branch via
-            VideoSurface) try unmuted then fall back to muted on mobile
-            Safari — same behavior the previous useEffect was doing manually. */}
-        <VideoSurface
-          post={post}
-          autoPlay="any"
-          className="mx-auto block max-h-[80vh] w-auto"
-        />
-      </div>
-    </Dialog>
-  );
-}
-
 function PostDetailModal({
   post,
   index,
@@ -832,26 +822,24 @@ function PostDetailModal({
 }) {
   if (!post) return null;
   return (
-    <Dialog open={!!post} onClose={onClose} title="" maxWidth="2xl" bodyClassName="p-0" className="max-h-[92vh]">
-      <div className="max-h-[92vh] overflow-y-auto">
-        <PostCard
-          index={index}
-          post={post}
-          isEditor={isEditor}
-          defaultPostTime={defaultPostTime}
-          token={token}
-          authorName={authorName}
-          onCommentAdded={(c) => onCommentAdded(post.id, c)}
-          onCommentRemoved={(commentId) => onCommentRemoved(post.id, commentId)}
-          onCommentUpdated={(c) => onCommentUpdated(post.id, c)}
-          onCaptionUpdated={(caption, c) => onCaptionUpdated(post.id, caption, c)}
-          onHandlesUpdated={(field, next, c) => onHandlesUpdated(post.id, field, next, c)}
-          onScheduleUpdated={(at, c) => onScheduleUpdated(post.id, at, c)}
-          onRevisionUploaded={(rev) => onRevisionUploaded(post.id, rev)}
-          requireName={requireName}
-          withVideoHeader
-        />
-      </div>
+    <Dialog open={!!post} onClose={onClose} title="" maxWidth="5xl" bodyClassName="p-0" className="max-h-[92vh]">
+      <PostCard
+        index={index}
+        post={post}
+        isEditor={isEditor}
+        defaultPostTime={defaultPostTime}
+        token={token}
+        authorName={authorName}
+        onCommentAdded={(c) => onCommentAdded(post.id, c)}
+        onCommentRemoved={(commentId) => onCommentRemoved(post.id, commentId)}
+        onCommentUpdated={(c) => onCommentUpdated(post.id, c)}
+        onCaptionUpdated={(caption, c) => onCaptionUpdated(post.id, caption, c)}
+        onHandlesUpdated={(field, next, c) => onHandlesUpdated(post.id, field, next, c)}
+        onScheduleUpdated={(at, c) => onScheduleUpdated(post.id, at, c)}
+        onRevisionUploaded={(rev) => onRevisionUploaded(post.id, rev)}
+        requireName={requireName}
+        layoutMode="modal"
+      />
     </Dialog>
   );
 }
@@ -1209,9 +1197,8 @@ function PostCard({
   onHandlesUpdated,
   onScheduleUpdated,
   onRevisionUploaded,
-  onPlay,
   requireName,
-  withVideoHeader = false,
+  layoutMode = 'inline',
 }: {
   index: number;
   post: SharedPost;
@@ -1236,9 +1223,13 @@ function PostCard({
     mux_playback_id?: string | null;
     mux_status?: string | null;
   }) => void;
-  onPlay?: () => void;
   requireName: () => void;
-  withVideoHeader?: boolean;
+  /**
+   * `inline` (default, list view): video stacked on top, captionBlock + history + composer below.
+   * `modal`: 2-column horizontal layout — video pinned left, scrollable body right. The post-detail
+   *   dialog uses this so the video stays in view while the comments column scrolls independently.
+   */
+  layoutMode?: 'inline' | 'modal';
 }) {
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -1264,6 +1255,10 @@ function PostCard({
   const videoSectionRef = useRef<HTMLDivElement | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
   const [anchorSeconds, setAnchorSeconds] = useState<number | null>(null);
+  // Frame.io-style auto-pin: focusing the comment box auto-captures the
+  // current playhead. If the reviewer dismisses (×) we remember that for the
+  // current draft — re-focusing won't silently re-pin. Cleared on submit.
+  const [pinDismissed, setPinDismissed] = useState(false);
 
   function captureAnchor() {
     const t = playerHandleRef.current?.getCurrentTime() ?? 0;
@@ -1272,6 +1267,14 @@ function PostCard({
 
   function clearAnchor() {
     setAnchorSeconds(null);
+    setPinDismissed(true);
+  }
+
+  function maybeAutoPin() {
+    if (!playerReady) return;
+    if (anchorSeconds !== null) return;
+    if (pinDismissed) return;
+    captureAnchor();
   }
 
   function seekTo(seconds: number) {
@@ -1399,6 +1402,7 @@ function PostCard({
       setCommentText('');
       setPendingAttachments([]);
       setAnchorSeconds(null);
+      setPinDismissed(false);
       // Server may auto-upgrade a "changes_requested" submission to "approved"
       // when the body reads like an approval ("approved", "love this", etc.).
       // Reflect the actual recorded status in the toast so the user isn't
@@ -1719,127 +1723,90 @@ function PostCard({
     </div>
   );
 
-  return (
-    <article
+  // Video panel — same content for both layouts; the wrapper around it
+  // handles the geometry difference (full-bleed-on-top in inline mode vs
+  // pinned-left in modal mode). The Mux player has its own fullscreen
+  // control built in, so "make it full size" doesn't need an explicit
+  // button here.
+  const videoPanel = (
+    <div
+      ref={videoSectionRef}
       className={
-        withVideoHeader
-          ? 'overflow-hidden bg-surface'
-          : 'overflow-hidden rounded-xl border border-nativz-border bg-surface'
+        layoutMode === 'modal'
+          ? 'relative flex w-full items-center justify-center bg-black md:h-full md:max-h-[88vh] md:min-h-[60vh]'
+          : 'relative bg-black'
       }
     >
+      <VideoSurface
+        post={post}
+        className={
+          layoutMode === 'modal'
+            ? 'block max-h-[88vh] w-full md:w-auto md:max-w-full'
+            : 'mx-auto block max-h-[55vh] w-auto'
+        }
+        onPlayerReady={(handle) => {
+          playerHandleRef.current = handle;
+          setPlayerReady(!!handle);
+        }}
+      />
       {isEditor && (
-        <input
-          ref={revisionInputRef}
-          type="file"
-          accept="video/*"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) uploadRevisionFile(f);
-          }}
-        />
+        <button
+          type="button"
+          onClick={() => revisionInputRef.current?.click()}
+          disabled={uploadingRevision}
+          className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-black/70 px-3.5 py-2 text-sm font-medium text-white ring-1 ring-white/15 backdrop-blur transition-opacity hover:bg-black/85 disabled:opacity-60"
+        >
+          {uploadingRevision ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+          {uploadingRevision
+            ? uploadProgress !== null
+              ? `Uploading… ${uploadProgress}%`
+              : 'Uploading…'
+            : 'Replace media'}
+        </button>
       )}
-      {withVideoHeader ? (
-        <>
-          <div ref={videoSectionRef} className="relative bg-black">
-            <VideoSurface
-              post={post}
-              className="mx-auto block max-h-[55vh] w-auto"
-              onPlayerReady={(handle) => {
-                playerHandleRef.current = handle;
-                setPlayerReady(!!handle);
-              }}
+    </div>
+  );
+
+  const revisionInput = isEditor ? (
+    <input
+      ref={revisionInputRef}
+      type="file"
+      accept="video/*"
+      className="hidden"
+      onChange={(e) => {
+        const f = e.target.files?.[0];
+        if (f) uploadRevisionFile(f);
+      }}
+    />
+  ) : null;
+
+  const historyBlock =
+    post.comments.length > 0 ? (
+      <div className="border-t border-nativz-border bg-background/40 px-3 py-3 sm:px-4">
+        <h3 className="mb-2 text-[13px] font-medium text-text-muted">History</h3>
+        <div className="space-y-2">
+          {post.comments.map((c) => (
+            <CommentRow
+              key={c.id}
+              comment={c}
+              token={token}
+              isEditor={isEditor}
+              onDeleted={() => onCommentRemoved(c.id)}
+              onUpdated={onCommentUpdated}
+              onSeek={playerReady ? seekTo : undefined}
             />
-            {isEditor && (
-              <button
-                type="button"
-                onClick={() => revisionInputRef.current?.click()}
-                disabled={uploadingRevision}
-                className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-black/70 px-3.5 py-2 text-sm font-medium text-white ring-1 ring-white/15 backdrop-blur transition-opacity hover:bg-black/85 disabled:opacity-60"
-              >
-                {uploadingRevision ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                {uploadingRevision
-                  ? uploadProgress !== null
-                    ? `Uploading… ${uploadProgress}%`
-                    : 'Uploading…'
-                  : 'Replace media'}
-              </button>
-            )}
-          </div>
-          <div className="p-3 sm:p-4">{captionBlock}</div>
-        </>
-      ) : (
-        <div className="flex gap-3 p-3 sm:gap-4 sm:p-4">
-          <div className="flex shrink-0 flex-col gap-1.5">
-            <button
-              type="button"
-              onClick={onPlay}
-              className="relative aspect-[9/16] w-32 overflow-hidden rounded-lg bg-surface-hover sm:w-44 md:w-52"
-            >
-              {post.cover_image_url ? (
-                <img
-                  src={post.cover_image_url}
-                  alt=""
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <Film size={32} className="text-text-muted" />
-                </div>
-              )}
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/55 shadow-lg ring-1 ring-white/20 backdrop-blur-sm">
-                  <Play size={22} fill="white" className="ml-0.5 text-white" />
-                </div>
-              </div>
-            </button>
-            {isEditor && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  revisionInputRef.current?.click();
-                }}
-                disabled={uploadingRevision}
-                className="inline-flex self-center items-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3.5 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
-              >
-                {uploadingRevision ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                {uploadingRevision
-                  ? uploadProgress !== null
-                    ? `Uploading… ${uploadProgress}%`
-                    : 'Uploading…'
-                  : 'Replace media'}
-              </button>
-            )}
-          </div>
-          {captionBlock}
+          ))}
         </div>
-      )}
+      </div>
+    ) : null;
 
-      {post.comments.length > 0 && (
-        <div className="border-t border-nativz-border bg-background/40 px-3 py-3 sm:px-4">
-          <h3 className="mb-2 text-[13px] font-medium text-text-muted">History</h3>
-          <div className="space-y-2">
-            {post.comments.map((c) => (
-              <CommentRow
-                key={c.id}
-                comment={c}
-                token={token}
-                isEditor={isEditor}
-                onDeleted={() => onCommentRemoved(c.id)}
-                onUpdated={onCommentUpdated}
-                onSeek={playerReady ? seekTo : undefined}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="border-t border-nativz-border px-3 py-3 sm:px-4">
-        <h3 className="mb-2 text-[13px] font-medium text-text-muted">Leave feedback</h3>
-        <textarea
+  const composerBlock = (
+    <div className="border-t border-nativz-border px-3 py-3 sm:px-4">
+      <h3 className="mb-2 text-[13px] font-medium text-text-muted">Leave feedback</h3>
+      <textarea
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
+          onFocus={maybeAutoPin}
           placeholder="Notes on the video (cuts, music, hook, etc.)"
           rows={2}
           className="mb-2 w-full resize-none rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent"
@@ -1873,22 +1840,13 @@ function PostCard({
             {uploading ? <Loader2 size={14} className="animate-spin" /> : <Paperclip size={14} />}
             {uploading ? 'Uploading…' : 'Attach files'}
           </button>
-          {/* Anchor toggle — only meaningful when an inline player is mounted
-              (modal/withVideoHeader view). When `anchorSeconds` is null we
-              show a "Pin to current time" affordance; once set, the chip
-              displays the time + a clear button. */}
+          {/* Frame.io-style timestamp chip. Pin is auto-captured when the
+              reviewer focuses the textarea (see `maybeAutoPin`). Showing the
+              chip up front (with × to dismiss) keeps the action obvious; the
+              fallback "Pin to current time" only renders if they dismissed it
+              and want to opt back in for the same draft. */}
           {playerReady && (
-            anchorSeconds === null ? (
-              <button
-                type="button"
-                onClick={captureAnchor}
-                disabled={submitting}
-                className="inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3.5 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
-                title="Anchor this comment to the current moment in the video"
-              >
-                <MapPin size={14} /> Pin to current time
-              </button>
-            ) : (
+            anchorSeconds !== null ? (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-surface px-3 py-1.5 text-sm font-medium text-accent-text ring-1 ring-accent/40">
                 <MapPin size={13} />
                 Pinned at {formatSeconds(anchorSeconds)}
@@ -1902,7 +1860,20 @@ function PostCard({
                   <X size={11} />
                 </button>
               </span>
-            )
+            ) : pinDismissed ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setPinDismissed(false);
+                  captureAnchor();
+                }}
+                disabled={submitting}
+                className="inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3.5 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+                title="Pin to current time"
+              >
+                <MapPin size={14} /> Pin to current time
+              </button>
+            ) : null
           )}
           <span className="text-xs text-text-muted">up to 25 MB</span>
         </div>
@@ -1938,6 +1909,36 @@ function PostCard({
           </button>
         </div>
       </div>
+  );
+
+  if (layoutMode === 'modal') {
+    // Two-column horizontal layout — video pinned left, scrollable column
+    // on the right. Left column never scrolls; the right column owns the
+    // overflow so the video stays in view as the conversation grows.
+    return (
+      <article className="flex max-h-[92vh] flex-col overflow-hidden bg-surface md:flex-row">
+        {revisionInput}
+        <div className="bg-black md:max-h-[92vh] md:w-[55%] md:flex-shrink-0">
+          {videoPanel}
+        </div>
+        <div className="flex flex-1 flex-col overflow-y-auto md:max-h-[92vh] md:min-w-0">
+          <div className="p-3 sm:p-4">{captionBlock}</div>
+          {historyBlock}
+          {composerBlock}
+        </div>
+      </article>
+    );
+  }
+
+  // Inline (list view): video stacked on top, then captionBlock, history,
+  // composer in a single vertical card.
+  return (
+    <article className="overflow-hidden rounded-xl border border-nativz-border bg-surface">
+      {revisionInput}
+      {videoPanel}
+      <div className="p-3 sm:p-4">{captionBlock}</div>
+      {historyBlock}
+      {composerBlock}
     </article>
   );
 }
