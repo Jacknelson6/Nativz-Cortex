@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { isAdmin } from '@/lib/auth/permissions';
 import { syncMondayApprovalForDrop } from '@/lib/monday/calendar-approval';
+import { reconcileMuxRow } from '@/lib/mux/reconcile';
 
 interface ShareLinkRow {
   id: string;
@@ -26,11 +27,14 @@ interface ScheduledPostRow {
 }
 
 interface DropVideoRow {
+  id: string;
   scheduled_post_id: string | null;
   video_url: string | null;
   revised_video_url: string | null;
   revised_video_uploaded_at: string | null;
   revised_video_notify_pending: boolean | null;
+  mux_upload_id: string | null;
+  mux_asset_id: string | null;
   mux_playback_id: string | null;
   mux_status: string | null;
 }
@@ -105,10 +109,38 @@ export async function GET(
       .in('id', link.included_post_ids),
     admin
       .from('content_drop_videos')
-      .select('scheduled_post_id, video_url, revised_video_url, revised_video_uploaded_at, revised_video_notify_pending, mux_playback_id, mux_status')
+      .select('id, scheduled_post_id, video_url, revised_video_url, revised_video_uploaded_at, revised_video_notify_pending, mux_upload_id, mux_asset_id, mux_playback_id, mux_status')
       .in('scheduled_post_id', link.included_post_ids),
   ]);
   if (!drop) return NextResponse.json({ error: 'content calendar missing' }, { status: 404 });
+
+  // Pull-mode self-heal: any video row mid-Mux-pipeline gets reconciled
+  // against the Mux API before we build the response. This makes the share
+  // page independent of webhook delivery — if the webhook landed, the
+  // status is already 'ready' and reconcile is a no-op; if it didn't land
+  // (misconfigured, dropped, race), we converge to truth here. Auto-poll
+  // on the client side then picks up the new state within ~5s. The
+  // reconciler patches the row object in place so the response reflects
+  // the up-to-date status without a second DB round-trip.
+  const videoRows = (videos ?? []) as DropVideoRow[];
+  const inFlight = videoRows.filter(
+    (v) =>
+      (v.mux_status === 'processing' || v.mux_status === 'uploading') &&
+      v.mux_upload_id != null,
+  );
+  if (inFlight.length > 0) {
+    const patches = await Promise.all(
+      inFlight.map((row) => reconcileMuxRow(admin, row)),
+    );
+    inFlight.forEach((row, i) => {
+      const patch = patches[i];
+      if (!patch) return;
+      if (patch.mux_status !== undefined) row.mux_status = patch.mux_status;
+      if (patch.mux_asset_id !== undefined) row.mux_asset_id = patch.mux_asset_id;
+      if (patch.mux_playback_id !== undefined) row.mux_playback_id = patch.mux_playback_id;
+      if (patch.revised_video_url !== undefined) row.revised_video_url = patch.revised_video_url;
+    });
+  }
 
   const videoByPost: Record<string, string> = {};
   const revisionByPost: Record<
@@ -121,7 +153,7 @@ export async function GET(
       mux_status: string | null;
     }
   > = {};
-  for (const v of (videos ?? []) as DropVideoRow[]) {
+  for (const v of videoRows) {
     if (!v.scheduled_post_id) continue;
     const url = v.revised_video_url ?? v.video_url;
     if (url) videoByPost[v.scheduled_post_id] = url;
