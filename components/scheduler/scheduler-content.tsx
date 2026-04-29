@@ -19,6 +19,35 @@ const AutoScheduleDialog = dynamic(() => import('@/components/scheduler/auto-sch
 const NewDropDialog = dynamic(() => import('@/components/scheduler/new-drop-dialog').then(m => ({ default: m.NewDropDialog })));
 import { toast } from 'sonner';
 
+/**
+ * Returns the inclusive YYYY-MM-DD bounds of the visible Monday-start
+ * month grid for a given date. Mirrors the cell math in
+ * `calendar-view.tsx` so the fetch window covers spillover days from the
+ * previous and next month — otherwise a post on (e.g.) May 1 disappears
+ * from the cell that's still visible while April is selected.
+ */
+function getMonthGridRange(currentDate: Date): { start: string; end: string } {
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+
+  // Monday-start offset: Sunday (0) → 6, Mon (1) → 0, etc.
+  let startOffset = firstDay.getDay() - 1;
+  if (startOffset < 0) startOffset = 6;
+
+  const totalCells = startOffset + lastDay.getDate();
+  const rows = Math.ceil(totalCells / 7);
+
+  const gridStart = new Date(year, month, 1 - startOffset);
+  const gridEnd = new Date(year, month, 1 - startOffset + rows * 7 - 1);
+
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  return { start: fmt(gridStart), end: fmt(gridEnd) };
+}
+
 function SchedulerInner({
   initialClients,
   initialClientId,
@@ -74,11 +103,7 @@ function SchedulerInner({
   // Fetch data when client or date range changes
   useEffect(() => {
     if (!selectedClientId) return;
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    const start = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    const end = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const { start, end } = getMonthGridRange(currentDate);
     fetchPosts(selectedClientId, start, end);
     fetchMedia(selectedClientId, showUnusedOnly);
     fetchProfiles(selectedClientId);
@@ -124,11 +149,7 @@ function SchedulerInner({
     }
 
     toast.success(data.id ? 'Post updated' : 'Post created');
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    const start = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    const end = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const { start, end } = getMonthGridRange(currentDate);
     fetchPosts(selectedClientId, start, end);
   }
 
@@ -163,11 +184,7 @@ function SchedulerInner({
 
   function handleAutoScheduleComplete() {
     if (!selectedClientId) return;
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    const start = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    const end = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const { start, end } = getMonthGridRange(currentDate);
     fetchPosts(selectedClientId, start, end);
     fetchMedia(selectedClientId, showUnusedOnly);
   }
@@ -203,11 +220,7 @@ function SchedulerInner({
       }
       const data = await res.json();
       toast.success(data.message);
-      const year = currentDate.getFullYear();
-      const month = currentDate.getMonth();
-      const start = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-      const lastDay = new Date(year, month + 1, 0).getDate();
-      const end = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      const { start, end } = getMonthGridRange(currentDate);
       refresh(start, end);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to publish drafts');
