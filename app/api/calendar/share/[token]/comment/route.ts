@@ -262,9 +262,15 @@ export async function PATCH(
   const admin = createAdminClient();
   const { data: link } = await admin
     .from('content_drop_share_links')
-    .select('drop_id, post_review_link_map, expires_at')
+    .select('id, drop_id, post_review_link_map, expires_at, revisions_complete_notified_at')
     .eq('token', token)
-    .single<{ drop_id: string; post_review_link_map: Record<string, string>; expires_at: string }>();
+    .single<{
+      id: string;
+      drop_id: string;
+      post_review_link_map: Record<string, string>;
+      expires_at: string;
+      revisions_complete_notified_at: string | null;
+    }>();
   if (!link) return NextResponse.json({ error: 'not found' }, { status: 404 });
   if (new Date(link.expires_at) < new Date()) {
     return NextResponse.json({ error: 'link expired' }, { status: 410 });
@@ -303,7 +309,118 @@ export async function PATCH(
     return NextResponse.json({ error: error?.message ?? 'failed' }, { status: 500 });
   }
 
+  // After the toggle: figure out whether this transition completed the
+  // revision pass for the entire share link. We only fire the "all
+  // revisions ready — please re-review" notification when the unresolved
+  // count goes from N>0 to 0, and we dedup via
+  // `revisions_complete_notified_at` so toggling doesn't spam the client.
+  // If the editor un-marks one (unresolved goes from 0 → 1), we clear the
+  // dedup stamp so a future completion fires again.
+  after(async () => {
+    try {
+      await maybeFireRevisionsCompleteNotification(admin, {
+        linkId: link.id,
+        dropId: link.drop_id,
+        token,
+        reviewIds: Array.from(allowedReviewIds),
+        previouslyNotifiedAt: link.revisions_complete_notified_at,
+      });
+    } catch (err) {
+      console.error('revisions-complete notify check failed:', err);
+    }
+  });
+
   return NextResponse.json({ comment: updated });
+}
+
+/**
+ * Server-side detector + notifier for the "all revisions ready" event.
+ *
+ * Fires after the editor toggles a `changes_requested` comment's resolved
+ * flag. Counts unresolved revision requests across every post in this share
+ * link's `post_review_link_map` and:
+ *
+ *   - If unresolved === 0 and the link wasn't already notified, posts the
+ *     wrap-up chat ping ("All revisions complete on <client> — please
+ *     re-review") to the client's Google Chat webhook and stamps
+ *     `revisions_complete_notified_at` so we don't double-fire.
+ *   - If unresolved > 0 and the link WAS previously notified, clears the
+ *     stamp so the next completion fires again.
+ *
+ * Total >= 1 guard prevents firing on a share link that never had any
+ * revision requests in the first place — we only want this for actually-
+ * worked-through revisions.
+ */
+async function maybeFireRevisionsCompleteNotification(
+  admin: ReturnType<typeof createAdminClient>,
+  args: {
+    linkId: string;
+    dropId: string;
+    token: string;
+    reviewIds: string[];
+    previouslyNotifiedAt: string | null;
+  },
+) {
+  if (args.reviewIds.length === 0) return;
+
+  const { data: changeRows } = await admin
+    .from('post_review_comments')
+    .select('id, metadata')
+    .in('review_link_id', args.reviewIds)
+    .eq('status', 'changes_requested');
+
+  const total = changeRows?.length ?? 0;
+  if (total === 0) return; // Never had revisions — nothing to wrap up.
+
+  const unresolved = (changeRows ?? []).filter((c) => {
+    const m = (c.metadata ?? {}) as Record<string, unknown>;
+    return m.resolved !== true;
+  }).length;
+
+  if (unresolved > 0) {
+    // Editor un-marked something — reset dedup so a future completion fires.
+    if (args.previouslyNotifiedAt) {
+      await admin
+        .from('content_drop_share_links')
+        .update({ revisions_complete_notified_at: null })
+        .eq('id', args.linkId);
+    }
+    return;
+  }
+
+  // unresolved === 0 — but skip if we've already pinged for this link.
+  if (args.previouslyNotifiedAt) return;
+
+  // Look up the client + chat webhook so we can route the ping.
+  const { data: drop } = await admin
+    .from('content_drops')
+    .select('id, clients(name, chat_webhook_url)')
+    .eq('id', args.dropId)
+    .single<{
+      id: string;
+      clients: { name: string; chat_webhook_url: string | null } | null;
+    }>();
+
+  const clientName = drop?.clients?.name ?? 'Client';
+  const chatWebhookUrl = drop?.clients?.chat_webhook_url ?? null;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
+  const shareUrl = `${appUrl}/c/${args.token}`;
+
+  if (chatWebhookUrl) {
+    const text =
+      `✅ All revisions are ready for *${clientName}*.\n` +
+      `Take another look at the calendar and approve the ones that are good to go:\n${shareUrl}`;
+    postToGoogleChatSafe(
+      chatWebhookUrl,
+      { text },
+      `revisions-complete ${args.linkId}`,
+    );
+  }
+
+  await admin
+    .from('content_drop_share_links')
+    .update({ revisions_complete_notified_at: new Date().toISOString() })
+    .eq('id', args.linkId);
 }
 
 async function notifyAdminsOfComment(
