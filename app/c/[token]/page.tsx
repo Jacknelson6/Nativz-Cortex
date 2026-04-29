@@ -1616,27 +1616,6 @@ function PostCard({
             <AlertTriangle size={13} /> Changes requested
           </span>
         )}
-        {/* Replace media — a quiet pill that joins the status-chip row.
-            Editor-only, intentionally lower-contrast than Schedule and the
-            review pills so it reads as a power action rather than a
-            primary control. Pushed to the right via ml-auto so the
-            decision pills stay anchored to the post's identity. */}
-        {isEditor && (
-          <button
-            type="button"
-            onClick={() => revisionInputRef.current?.click()}
-            disabled={uploadingRevision || submitting || uploading}
-            className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-nativz-border bg-transparent px-3 py-1.5 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-60"
-            title="Replace the current cut with a new upload"
-          >
-            {uploadingRevision ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
-            {uploadingRevision
-              ? uploadProgress !== null
-                ? `${uploadProgress}%`
-                : 'Uploading…'
-              : 'Replace media'}
-          </button>
-        )}
       </div>
 
       {editingCaption ? (
@@ -1763,6 +1742,28 @@ function PostCard({
           setPlayerReady(!!handle);
         }}
       />
+      {/* Editor-only Replace media — overlays the top-right of the video
+          itself. The action acts on the video, so it lives on the video.
+          Same affordance pattern as the "Edit" pencil that overlays the
+          caption: small, contextual, doesn't compete with primary content.
+          Backdrop blur keeps it readable over any frame; while uploading
+          the button widens to show progress in-place. */}
+      {isEditor && (
+        <button
+          type="button"
+          onClick={() => revisionInputRef.current?.click()}
+          disabled={uploadingRevision || submitting || uploading}
+          className="absolute right-2 top-2 inline-flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1.5 text-[11px] font-medium text-white backdrop-blur-md ring-1 ring-white/15 transition-all hover:bg-black/75 hover:ring-white/30 disabled:opacity-60"
+          title="Replace the current cut with a new upload"
+        >
+          {uploadingRevision ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+          {uploadingRevision
+            ? uploadProgress !== null
+              ? `${uploadProgress}%`
+              : 'Uploading…'
+            : 'Replace'}
+        </button>
+      )}
     </div>
   );
 

@@ -20,17 +20,25 @@ const AttachmentSchema = z.object({
   size_bytes: z.number().int().nonnegative(),
 });
 
-const BodySchema = z.object({
-  postId: z.string().uuid(),
-  authorName: z.string().min(1).max(80),
-  content: z.string().min(1).max(2000),
-  status: z.enum(['approved', 'changes_requested', 'comment']),
-  attachments: z.array(AttachmentSchema).max(10).optional(),
-  // Optional anchor — when present, the player will seek here on click.
-  // Capped at 24h to keep the column NUMERIC(10,3) safe and stay within
-  // sane short-form video bounds. Negative values rejected.
-  timestampSeconds: z.number().min(0).max(86400).nullable().optional(),
-});
+const BodySchema = z
+  .object({
+    postId: z.string().uuid(),
+    authorName: z.string().min(1).max(80),
+    // Content can be empty when the user is submitting attachment-only
+    // feedback ("here's a reference image, no notes needed"). The refine
+    // below enforces that *something* is present — either text or files.
+    content: z.string().max(2000).default(''),
+    status: z.enum(['approved', 'changes_requested', 'comment']),
+    attachments: z.array(AttachmentSchema).max(10).optional(),
+    // Optional anchor — when present, the player will seek here on click.
+    // Capped at 24h to keep the column NUMERIC(10,3) safe and stay within
+    // sane short-form video bounds. Negative values rejected.
+    timestampSeconds: z.number().min(0).max(86400).nullable().optional(),
+  })
+  .refine(
+    (v) => v.content.trim().length > 0 || (v.attachments?.length ?? 0) > 0,
+    { message: 'comment must have text or at least one attachment', path: ['content'] },
+  );
 
 const DeleteSchema = z.object({
   commentId: z.string().uuid(),
@@ -450,7 +458,12 @@ async function notifyAdminsOfComment(
   const chatWebhookUrl = drop.clients?.chat_webhook_url ?? null;
   const title = TITLE_BY_STATUS[comment.status](comment.authorName, clientName);
   // Truncate only the in-app notification body — chat gets full content.
-  const preview = comment.content.slice(0, 140) + (comment.content.length > 140 ? '…' : '');
+  // Attachment-only comments have no text, so fall back to a file summary.
+  const preview = comment.content.trim()
+    ? comment.content.slice(0, 140) + (comment.content.length > 140 ? '…' : '')
+    : comment.attachments.length === 1
+      ? `📎 ${comment.attachments[0].filename}`
+      : `📎 ${comment.attachments.length} files attached`;
   // In-app links go to the admin view; chat links go to the public share view
   // so phones (mobile-blocked from /admin/*) can open them.
   const linkPath = `/admin/calendar/${drop.id}`;
@@ -484,16 +497,19 @@ async function notifyAdminsOfComment(
   if (chatWebhookUrl) {
     if (comment.status === 'comment' || comment.status === 'changes_requested') {
       const verb = comment.status === 'changes_requested' ? 'requested changes' : 'commented';
-      const quoted = comment.content
-        .split('\n')
-        .map((line) => `> ${line}`)
-        .join('\n');
+      const trimmed = comment.content.trim();
+      // When the reviewer attaches files without typing anything, skip the
+      // empty `> ` quote block so the message doesn't lead with a stray
+      // dangling quote line.
+      const quotedBlock = trimmed
+        ? '\n' + trimmed.split('\n').map((line) => `> ${line}`).join('\n')
+        : '';
       const attachmentBlock =
         comment.attachments.length > 0
           ? '\n\n' +
             comment.attachments.map((a) => `📎 ${a.filename}\n${a.url}`).join('\n\n')
           : '';
-      const text = `*${comment.authorName}* ${verb} on ${clientName}:\n${quoted}${attachmentBlock}\n\n${shareUrl}`;
+      const text = `*${comment.authorName}* ${verb} on ${clientName}:${quotedBlock}${attachmentBlock}\n\n${shareUrl}`;
       postToGoogleChatSafe(chatWebhookUrl, { text }, `comment ${dropId}`);
     } else if (comment.status === 'approved' && allApproved) {
       const reviewLinkIds = Object.values(reviewLinkMap);
