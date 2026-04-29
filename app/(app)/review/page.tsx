@@ -1,6 +1,5 @@
 import { CalendarDays } from 'lucide-react';
 import { getActiveBrand } from '@/lib/active-brand';
-import { ReviewBoard } from '@/components/scheduler/review-board';
 import { ReviewTable } from '@/components/scheduler/review-table';
 
 export const dynamic = 'force-dynamic';
@@ -8,14 +7,12 @@ export const dynamic = 'force-dynamic';
 /**
  * Brand-scoped Review page. Lives at root `/review` (no /admin/ prefix —
  * Content is a brand-scoped section so its children match). Same URL
- * serves both roles; the body branches on `isAdmin`:
+ * serves both roles with the **identical** table layout; the only
+ * difference is the data the API returns based on the caller's role.
  *
- *   - admin  → bento grid via <ReviewBoard> with create / revoke / copy
- *              affordances. Cross-brand oversight stays on /admin/share-links.
- *   - viewer → table via <ReviewTable> with the 4-stage progress track
- *              tuned for client comprehension.
- *
- * Both surfaces are filtered by the active brand pill.
+ * Cross-brand admin oversight (every brand at once) lives on
+ * `/admin/share-links` — same component, `clientId={null}`, brand
+ * column on.
  */
 export default async function ReviewPage() {
   const active = await getActiveBrand().catch(() => null);
@@ -33,17 +30,6 @@ export default async function ReviewPage() {
           </p>
         </div>
       </div>
-    );
-  }
-
-  if (active.isAdmin) {
-    return (
-      <ReviewBoard
-        isAdmin
-        clientId={active.brand.id}
-        createHref="/admin/calendar"
-        description={`Share links you’ve sent for ${active.brand.name}. Open one to see comments, approvals, and revision status.`}
-      />
     );
   }
 

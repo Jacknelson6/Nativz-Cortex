@@ -80,14 +80,31 @@ function currentStage(link: ReviewLinkRow): ReviewStage {
 type SortKey = 'newest' | 'oldest' | 'progress';
 
 interface ReviewTableProps {
-  /** Active brand id from the top-bar pill. Required — this surface is
-   *  always brand-scoped. */
-  clientId: string;
+  /** Active brand id. Pass `null` to render unscoped (cross-brand
+   *  admin oversight at `/admin/share-links`). */
+  clientId: string | null;
   /** Optional brand name for header copy. */
   brandName?: string;
+  /** Optional title override (e.g. "Share links" for cross-brand). */
+  title?: string;
+  /** Optional description override. Falls back to a brand-scoped
+   *  default. */
+  description?: string;
+  /** When true, prepend a Brand column so cross-brand views can
+   *  distinguish rows. Defaults to `true` when `clientId === null`,
+   *  off otherwise. The visual layout is otherwise identical for
+   *  every caller. */
+  showBrand?: boolean;
 }
 
-export function ReviewTable({ clientId, brandName }: ReviewTableProps) {
+export function ReviewTable({
+  clientId,
+  brandName,
+  title,
+  description,
+  showBrand,
+}: ReviewTableProps) {
+  const showBrandColumn = showBrand ?? clientId === null;
   const [links, setLinks] = useState<ReviewLinkRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -98,10 +115,10 @@ export function ReviewTable({ clientId, brandName }: ReviewTableProps) {
     if (!silent) setLoading(true);
     else setRefreshing(true);
     try {
-      const res = await fetch(
-        `/api/calendar/review?clientId=${encodeURIComponent(clientId)}`,
-        { cache: 'no-store' },
-      );
+      const url = clientId
+        ? `/api/calendar/review?clientId=${encodeURIComponent(clientId)}`
+        : '/api/calendar/review';
+      const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to load share links');
       const data = (await res.json()) as { links: ReviewLinkRow[] };
       setLinks(data.links ?? []);
@@ -163,11 +180,12 @@ export function ReviewTable({ clientId, brandName }: ReviewTableProps) {
     <div className="cortex-page-gutter mx-auto max-w-6xl space-y-5">
       <header className="flex items-end justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold text-text-primary">Review</h1>
+          <h1 className="text-2xl font-semibold text-text-primary">{title ?? 'Review'}</h1>
           <p className="mt-1 text-sm text-text-secondary">
-            {brandName
-              ? `Calendars and content sent to ${brandName} for review.`
-              : 'Calendars and content sent for review.'}
+            {description ??
+              (brandName
+                ? `Calendars and content sent to ${brandName} for review.`
+                : 'Calendars and content sent for review.')}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -195,6 +213,7 @@ export function ReviewTable({ clientId, brandName }: ReviewTableProps) {
             selected={selected}
             onToggleRow={toggleRow}
             onToggleAll={(on) => toggleAll(grouped.active, on)}
+            showBrand={showBrandColumn}
             bulkBar={
               <BulkActionBar
                 count={selected.size}
@@ -214,6 +233,7 @@ export function ReviewTable({ clientId, brandName }: ReviewTableProps) {
                 selected={selected}
                 onToggleRow={toggleRow}
                 onToggleAll={(on) => toggleAll(grouped.expired, on)}
+                showBrand={showBrandColumn}
                 dim
               />
             </section>
@@ -229,6 +249,7 @@ interface ReviewTableCardProps {
   selected: Set<string>;
   onToggleRow: (id: string, on: boolean) => void;
   onToggleAll: (on: boolean) => void;
+  showBrand?: boolean;
   dim?: boolean;
   bulkBar?: React.ReactNode;
 }
@@ -243,6 +264,7 @@ function ReviewTableCard({
   selected,
   onToggleRow,
   onToggleAll,
+  showBrand = false,
   dim = false,
   bulkBar,
 }: ReviewTableCardProps) {
@@ -267,6 +289,7 @@ function ReviewTableCard({
                 onCheckedChange={(v) => onToggleAll(v === true)}
               />
             </TableHead>
+            {showBrand && <TableHead>Brand</TableHead>}
             <TableHead>Project</TableHead>
             <TableHead>Items</TableHead>
             <TableHead>Status</TableHead>
@@ -281,6 +304,7 @@ function ReviewTableCard({
               link={link}
               checked={selected.has(link.id)}
               onCheckedChange={(on) => onToggleRow(link.id, on)}
+              showBrand={showBrand}
             />
           ))}
         </TableBody>
@@ -293,9 +317,10 @@ interface ReviewTableRowProps {
   link: ReviewLinkRow;
   checked: boolean;
   onCheckedChange: (on: boolean) => void;
+  showBrand?: boolean;
 }
 
-function ReviewTableRow({ link, checked, onCheckedChange }: ReviewTableRowProps) {
+function ReviewTableRow({ link, checked, onCheckedChange, showBrand = false }: ReviewTableRowProps) {
   const project = formatProject(link.drop_start, link.drop_end);
   const lastSeen = link.last_viewed_at ? formatRelative(link.last_viewed_at) : null;
   const stage = currentStage(link);
@@ -309,6 +334,11 @@ function ReviewTableRow({ link, checked, onCheckedChange }: ReviewTableRowProps)
           onCheckedChange={(v) => onCheckedChange(v === true)}
         />
       </TableCell>
+      {showBrand && (
+        <TableCell>
+          <span className="text-sm text-text-secondary">{link.client_name ?? '—'}</span>
+        </TableCell>
+      )}
       <TableCell>
         <div className="font-medium text-text-primary">{project}</div>
         <div className="text-xs text-text-muted tabular-nums">
