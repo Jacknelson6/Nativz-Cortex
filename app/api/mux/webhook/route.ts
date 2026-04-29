@@ -65,6 +65,12 @@ export async function POST(req: Request) {
     // and stamp it. We also patch revised_video_url so legacy code that
     // reads that field still works (kept as the canonical Mux playback URL).
     const assetId = typeof data.id === 'string' ? data.id : null;
+    // For direct uploads, Mux includes the originating upload_id on the
+    // asset payload — we use it as a fallback lookup when the row hasn't
+    // had its mux_asset_id stamped yet (Mux doesn't guarantee
+    // upload.asset_created fires before asset.ready, and that race used
+    // to leave us stuck on "Processing" forever because no row matched).
+    const uploadId = typeof data.upload_id === 'string' ? data.upload_id : null;
     if (!assetId) {
       console.warn('[mux-webhook] asset.ready missing asset id');
       return NextResponse.json({ ok: true });
@@ -75,7 +81,12 @@ export async function POST(req: Request) {
     const publicId = playbackIds.find((p) => p.policy === 'public');
     const playbackId = typeof publicId?.id === 'string' ? publicId.id : null;
 
-    const update: Record<string, unknown> = { mux_status: 'ready' };
+    const update: Record<string, unknown> = {
+      mux_status: 'ready',
+      // Always stamp asset_id on this path too — covers the race where
+      // upload.asset_created fires after asset.ready (or never fires).
+      mux_asset_id: assetId,
+    };
     if (playbackId) {
       update.mux_playback_id = playbackId;
       // HLS URL Mux exposes for public playback. Stamping it onto
@@ -83,10 +94,33 @@ export async function POST(req: Request) {
       // for any consumer that still reads it.
       update.revised_video_url = `https://stream.mux.com/${playbackId}.m3u8`;
     }
-    await admin
+    // Try asset_id first (the normal path once upload.asset_created has
+    // landed); fall back to upload_id if no row was updated. Supabase's
+    // update returns affected rows when count is requested, so we can
+    // detect a no-match cleanly without a separate select.
+    const byAsset = await admin
       .from('content_drop_videos')
       .update(update)
-      .eq('mux_asset_id', assetId);
+      .eq('mux_asset_id', assetId)
+      .select('id');
+    const matchedAsset = (byAsset.data ?? []).length > 0;
+    if (!matchedAsset && uploadId) {
+      const byUpload = await admin
+        .from('content_drop_videos')
+        .update(update)
+        .eq('mux_upload_id', uploadId)
+        .select('id');
+      if ((byUpload.data ?? []).length === 0) {
+        console.warn('[mux-webhook] asset.ready matched no row', {
+          assetId,
+          uploadId,
+        });
+      }
+    } else if (!matchedAsset) {
+      console.warn('[mux-webhook] asset.ready matched no row and no upload_id fallback', {
+        assetId,
+      });
+    }
     return NextResponse.json({ ok: true });
   }
 

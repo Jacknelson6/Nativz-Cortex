@@ -770,12 +770,37 @@ function VideoSurface({
     );
   }
   if (post.mux_status === 'processing' || post.mux_status === 'uploading') {
+    // Layer the "processing" overlay on top of whatever poster we have for
+    // the previous cut so the card never goes to a black void mid-replace.
+    // Preference order:
+    //   1. Previous Mux thumbnail (most accurate — same frame the player
+    //      would show when the previous cut loaded). Image.mux.com is a
+    //      public endpoint, no auth needed.
+    //   2. cover_image_url from the original post (Drive cover).
+    //   3. Plain black, with the loader still readable.
+    const muxThumb = post.mux_playback_id
+      ? `https://image.mux.com/${post.mux_playback_id}/thumbnail.jpg?width=720&fit_mode=preserve&time=1`
+      : null;
+    const posterUrl = muxThumb ?? post.cover_image_url ?? null;
     return (
-      <div className={`flex aspect-[9/16] w-full items-center justify-center ${className ?? ''}`}>
-        <div className="text-center text-text-muted">
-          <Loader2 className="mx-auto mb-2 animate-spin" size={32} />
-          <p className="text-sm">Processing the new cut…</p>
-          <p className="mt-1 text-[11px]">Usually takes about a minute. This will update on its own.</p>
+      <div className={`relative aspect-[9/16] w-full overflow-hidden bg-black ${className ?? ''}`}>
+        {posterUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={posterUrl}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover opacity-60"
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/30" />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="rounded-2xl bg-black/55 px-5 py-4 text-center text-white backdrop-blur-md ring-1 ring-white/10">
+            <Loader2 className="mx-auto mb-2 animate-spin" size={28} />
+            <p className="text-sm font-medium">Processing the new cut…</p>
+            <p className="mt-0.5 text-[11px] text-white/70">
+              Usually takes about a minute. This will update on its own.
+            </p>
+          </div>
         </div>
       </div>
     );

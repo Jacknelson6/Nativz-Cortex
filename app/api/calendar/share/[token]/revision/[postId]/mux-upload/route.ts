@@ -98,16 +98,18 @@ export async function POST(
   }
 
   // Persist the upload id so the webhook can find this row later.
-  // mux_status='uploading' lets the UI render a progress state.
+  // mux_status='uploading' lets the UI render a progress state. We
+  // intentionally leave mux_asset_id + mux_playback_id pointing at the
+  // PREVIOUS cut so the share-page placeholder can show its thumbnail
+  // while the new cut uploads + processes — the status field is what
+  // tells the UI to render the overlay vs the player, not whether the
+  // playback id exists. Both fields get overwritten by the webhook once
+  // the new asset is ready.
   const { error: updateErr } = await admin
     .from('content_drop_videos')
     .update({
       mux_upload_id: upload.id,
       mux_status: 'uploading',
-      // Reset asset/playback so the UI doesn't keep showing the previous cut
-      // while a new one is uploading.
-      mux_asset_id: null,
-      mux_playback_id: null,
     })
     .eq('id', video.id);
   if (updateErr) {
