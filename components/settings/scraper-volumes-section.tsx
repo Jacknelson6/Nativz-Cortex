@@ -373,7 +373,7 @@ export function ScraperVolumesSection() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
         {PLATFORM_SECTIONS.map((section) => (
           <PlatformCard
             key={section.platform}
@@ -383,9 +383,8 @@ export function ScraperVolumesSection() {
             onChange={handleFieldChange}
           />
         ))}
+        <AiCostCard llmCost={llmCost} />
       </div>
-
-      <AiCostCard llmCost={llmCost} />
 
       <CostSummaryBar
         perPlatformCost={perPlatformCost}
@@ -402,110 +401,115 @@ export function ScraperVolumesSection() {
 // ── AI cost card ────────────────────────────────────────────────────────
 
 /**
- * Read-only summary of the LLM portion of a topic search:
- *   - currently configured topic-search model id
- *   - that model's live per-1M-token pricing (OpenRouter)
- *   - empirical avg input/output tokens per search (last 30 days)
- *   - resulting per-search cost
- *
- * Sits between the per-platform sliders and the cost summary because LLM
- * cost isn't tied to slider values — it's a property of the model choice
- * (set in the AI tab). Sample-size hint surfaces when the empirical window
- * is thin so the user knows the number is a coarse default.
+ * 5th tile in the platform grid — same chrome as the Apify scrapers so
+ * "what does one topic search cost" reads as one thing. Body shows the
+ * model name + per-1M pricing + empirical tokens-per-search instead of
+ * sliders (the model is set on the AI tab, not here).
  */
 function AiCostCard({ llmCost }: { llmCost: LlmCostResp | null }) {
   if (!llmCost) {
     return (
-      <div className="rounded-xl border border-nativz-border bg-surface p-5">
+      <div className="flex h-full flex-col rounded-xl border border-nativz-border bg-surface p-5">
         <div className="flex animate-pulse items-center gap-3">
           <div className="h-9 w-9 rounded-xl bg-surface-hover" />
-          <div className="h-4 w-40 rounded bg-surface-hover" />
+          <div className="h-4 w-24 rounded bg-surface-hover" />
         </div>
       </div>
     );
   }
 
-  const { modelId, promptPricePerM, completionPricePerM, avgInputTokens, avgOutputTokens, costUsd, sampleSize, windowDays, pricingAvailable } =
-    llmCost;
+  const {
+    modelId,
+    promptPricePerM,
+    completionPricePerM,
+    avgInputTokens,
+    avgOutputTokens,
+    costUsd,
+    sampleSize,
+    windowDays,
+    pricingAvailable,
+  } = llmCost;
   const lowConfidence = sampleSize < 5;
+  const shortName = modelId.includes('/') ? modelId.split('/').slice(1).join('/') : modelId;
 
   return (
-    <section className="rounded-xl border border-nativz-border bg-surface p-5">
+    <section className="flex h-full flex-col rounded-xl border border-nativz-border bg-surface p-5 transition-colors hover:border-nativz-border-light">
       <header className="flex items-start justify-between gap-3">
         <TooltipCard
-          title="AI cost"
-          description={`Estimated LLM spend for one topic search. Tokens are averaged from the last ${windowDays} days of api_usage_logs (${sampleSize} search${sampleSize === 1 ? '' : 'es'}); pricing is live from OpenRouter for whichever model is configured in the AI tab.`}
+          title="AI"
+          description={`Estimated LLM spend for one topic search. Tokens are averaged from the last ${windowDays} days of api_usage_logs (${sampleSize} search${sampleSize === 1 ? '' : 'es'}); pricing comes from the cached OpenRouter catalog for whichever model is configured in the AI tab.`}
           iconTrigger
         >
           <div className="flex items-center gap-2.5">
             <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent-text">
               <Cpu size={18} />
             </span>
-            <div>
-              <h3 className="cursor-help text-base font-semibold text-text-primary">AI</h3>
-              <p className="text-[11px] text-text-muted">
-                {pricingAvailable ? formatUsd(costUsd ?? 0) : 'pricing unavailable'} per search
-              </p>
-            </div>
+            <h3 className="cursor-help text-base font-semibold text-text-primary">AI</h3>
           </div>
         </TooltipCard>
-        <code className="shrink-0 rounded-md bg-background/60 px-2 py-1 text-[11px] font-medium text-text-secondary">
-          {modelId}
-        </code>
+        <span className="shrink-0 rounded-md bg-background/60 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-text-muted">
+          {pricingAvailable ? formatUsd(costUsd ?? 0) : '—'}/search
+        </span>
       </header>
 
-      <dl className="mt-4 grid grid-cols-1 gap-3 text-[13px] sm:grid-cols-3">
-        <AiCostStat
-          label="Input price"
-          value={`${formatPricePerM(promptPricePerM)} / 1M`}
-          tooltip="Live OpenRouter price for prompt tokens on the configured model."
-        />
-        <AiCostStat
-          label="Output price"
-          value={`${formatPricePerM(completionPricePerM)} / 1M`}
-          tooltip="Live OpenRouter price for completion tokens on the configured model."
-        />
-        <AiCostStat
-          label="Tokens / search"
-          value={
-            <span className="tabular-nums">
-              {formatTokenCount(avgInputTokens)} in · {formatTokenCount(avgOutputTokens)} out
-            </span>
-          }
-          tooltip={`Empirical average across the last ${windowDays} days (${sampleSize} search${sampleSize === 1 ? '' : 'es'}).${lowConfidence ? ' Falling back to a coarse default until more searches log.' : ''}`}
-          warn={lowConfidence}
-        />
-      </dl>
-    </section>
-  );
-}
+      <div className="mt-4 space-y-4">
+        <div>
+          <TooltipCard
+            title="Model"
+            description="Set on the AI tab. The selected model drives both topic-search planning and merger calls."
+          >
+            <span className="cursor-help text-[13px] font-medium text-text-secondary">Model</span>
+          </TooltipCard>
+          <code
+            className="mt-1.5 block truncate rounded-md bg-background/60 px-2 py-1.5 text-[12px] font-medium text-text-primary"
+            title={modelId}
+          >
+            {shortName}
+          </code>
+        </div>
 
-function AiCostStat({
-  label,
-  value,
-  tooltip,
-  warn,
-}: {
-  label: string;
-  value: React.ReactNode;
-  tooltip: string;
-  warn?: boolean;
-}) {
-  return (
-    <div>
-      <TooltipCard title={label} description={tooltip}>
-        <dt className="cursor-help text-[11px] font-medium uppercase tracking-wider text-text-muted">
-          {label}
-        </dt>
-      </TooltipCard>
-      <dd
-        className={`mt-1 text-[14px] font-semibold tabular-nums ${
-          warn ? 'text-amber-300' : 'text-text-primary'
-        }`}
-      >
-        {value}
-      </dd>
-    </div>
+        <div>
+          <TooltipCard
+            title="Per-1M pricing"
+            description="Cached OpenRouter price for prompt + completion tokens on the configured model."
+          >
+            <span className="cursor-help text-[13px] font-medium text-text-secondary">Pricing</span>
+          </TooltipCard>
+          <div className="mt-1.5 flex items-baseline gap-x-4 gap-y-1 text-[13px] tabular-nums">
+            <span className="text-text-muted">
+              In{' '}
+              <span className="font-semibold text-text-primary">
+                {formatPricePerM(promptPricePerM)}/M
+              </span>
+            </span>
+            <span className="text-text-muted">
+              Out{' '}
+              <span className="font-semibold text-text-primary">
+                {formatPricePerM(completionPricePerM)}/M
+              </span>
+            </span>
+          </div>
+        </div>
+
+        <div>
+          <TooltipCard
+            title="Tokens / search"
+            description={`Empirical average across the last ${windowDays} days (${sampleSize} search${sampleSize === 1 ? '' : 'es'}).${lowConfidence ? ' Falling back to a coarse default until more searches log.' : ''}`}
+          >
+            <span className="cursor-help text-[13px] font-medium text-text-secondary">
+              Tokens / search
+            </span>
+          </TooltipCard>
+          <div
+            className={`mt-1.5 text-[13px] font-semibold tabular-nums ${
+              lowConfidence ? 'text-amber-300' : 'text-text-primary'
+            }`}
+          >
+            {formatTokenCount(avgInputTokens)} in · {formatTokenCount(avgOutputTokens)} out
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
