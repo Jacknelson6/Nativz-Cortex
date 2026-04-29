@@ -2,10 +2,9 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
-import { Link2, Unlink, Loader2, Check, Search, MoreHorizontal, MessageSquare } from 'lucide-react';
+import { Link2, Unlink, Loader2, MessageSquare } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Dialog } from '@/components/ui/dialog';
 import { UpPromoteLogo } from '@/components/integrations/uppromote-logo';
 import { TikTokMark } from '@/components/integrations/tiktok-mark';
@@ -27,9 +26,8 @@ type IntegrationRow = {
   key: IntegrationKind;
   label: string;
   icon: React.ReactNode;
-  integrationLabel: string | null;
-  identifier: string | null;
-  account: string | null;
+  /** One-liner shown under the name when connected (e.g. "@username", "Affiliate tracking"). */
+  subtitle: string | null;
   connected: boolean;
   profileId: string | null;
 };
@@ -205,7 +203,6 @@ export function IntegrationsTable({
   const [chatWebhookUrl, setChatWebhookUrl] = useState<string | null>(initialChatWebhookUrl);
   const [chatDisconnecting, setChatDisconnecting] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
-  const [query, setQuery] = useState('');
 
   useEffect(() => {
     setUpPromoteConnected(hasAffiliateIntegration ?? false);
@@ -332,26 +329,22 @@ export function IntegrationsTable({
         key,
         label,
         icon,
-        integrationLabel: profile ? `@${profile.username}` : null,
-        identifier: profile?.id ?? null,
-        account: profile?.username ?? null,
+        subtitle: profile ? `@${profile.username}` : null,
         connected: !!profile,
         profileId: profile?.id ?? null,
       };
     };
 
-    const all: IntegrationRow[] = [
-      socialRow('instagram', 'Instagram', <InstagramMark size={18} />),
-      socialRow('facebook', 'Facebook', <FacebookMark size={18} />),
-      socialRow('tiktok', 'TikTok', <TikTokMark size={18} />),
-      socialRow('youtube', 'YouTube', <YouTubeMark size={18} />),
+    return [
+      socialRow('instagram', 'Instagram', <InstagramMark size={20} />),
+      socialRow('facebook', 'Facebook', <FacebookMark size={20} />),
+      socialRow('tiktok', 'TikTok', <TikTokMark size={20} />),
+      socialRow('youtube', 'YouTube', <YouTubeMark size={20} />),
       {
         key: 'uppromote',
         label: 'UpPromote',
-        icon: <UpPromoteLogo size={20} className="h-[20px] w-[20px] rounded-sm object-contain" />,
-        integrationLabel: upPromoteConnected ? 'Affiliate tracking' : null,
-        identifier: null,
-        account: null,
+        icon: <UpPromoteLogo size={22} className="h-[22px] w-[22px] rounded-sm object-contain" />,
+        subtitle: upPromoteConnected ? 'Affiliate tracking enabled' : null,
         connected: upPromoteConnected,
         profileId: null,
       },
@@ -359,27 +352,18 @@ export function IntegrationsTable({
         key: 'google_chat',
         label: 'Google Chat',
         icon: (
-          <span className="flex h-[20px] w-[20px] items-center justify-center rounded-sm bg-blue-500/10 text-blue-400">
-            <MessageSquare size={12} />
+          <span className="flex h-[22px] w-[22px] items-center justify-center rounded-md bg-blue-500/10 text-blue-400">
+            <MessageSquare size={13} />
           </span>
         ),
-        integrationLabel: chatWebhookUrl ? 'Team notifications' : null,
-        identifier: chatWebhookUrl ? extractSpaceId(chatWebhookUrl) : null,
-        account: null,
+        subtitle: chatWebhookUrl
+          ? `Space ${extractSpaceId(chatWebhookUrl) ?? 'connected'}`
+          : null,
         connected: Boolean(chatWebhookUrl),
         profileId: null,
       },
     ];
-
-    if (!query.trim()) return all;
-    const q = query.trim().toLowerCase();
-    return all.filter(
-      (r) =>
-        r.label.toLowerCase().includes(q) ||
-        (r.account ?? '').toLowerCase().includes(q) ||
-        (r.integrationLabel ?? '').toLowerCase().includes(q),
-    );
-  }, [profiles, upPromoteConnected, chatWebhookUrl, query]);
+  }, [profiles, upPromoteConnected, chatWebhookUrl]);
 
   const connectedCount = rows.filter((r) => r.connected).length;
 
@@ -394,21 +378,10 @@ export function IntegrationsTable({
   return (
     <>
       <Shell>
-        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-nativz-border">
-          <div className="text-xs text-text-muted">
-            Showing {rows.length} of {rows.length} rows
-            {connectedCount > 0 && <span className="ml-2">· {connectedCount} connected</span>}
-          </div>
-          <div className="relative max-w-xs w-full">
-            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
-            <input
-              type="text"
-              placeholder="Search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="w-full rounded-md border border-nativz-border bg-surface-hover px-2 py-1.5 pl-7 text-xs text-text-primary placeholder:text-text-muted focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/20"
-            />
-          </div>
+        <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-nativz-border bg-surface-hover/20">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+            {connectedCount} of {rows.length} connected
+          </p>
         </div>
 
         {loading ? (
@@ -417,103 +390,58 @@ export function IntegrationsTable({
             Loading…
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-nativz-border bg-surface-hover/30">
-                  <Th className="w-[22%]">Integration</Th>
-                  <Th className="w-[22%]">Label</Th>
-                  <Th className="w-[20%]">Identifier</Th>
-                  <Th className="w-[18%]">Account</Th>
-                  <Th className="w-[12%]">Status</Th>
-                  <Th className="w-[6%] text-right pr-4">{''}</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr
-                    key={row.key}
-                    className="border-b border-nativz-border last:border-b-0 hover:bg-surface-hover/20 transition-colors"
-                  >
-                    <Td>
-                      <div className="flex items-center gap-2.5">
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center">
-                          {row.icon}
-                        </span>
-                        <span className="font-medium text-text-primary">{row.label}</span>
-                      </div>
-                    </Td>
-                    <Td>
-                      {row.integrationLabel ? (
-                        <span className="text-text-secondary">{row.integrationLabel}</span>
-                      ) : (
-                        <span className="text-text-muted italic">—</span>
-                      )}
-                    </Td>
-                    <Td>
-                      {row.identifier ? (
-                        <span className="font-mono text-xs text-text-muted truncate max-w-[180px] inline-block">
-                          {row.identifier}
-                        </span>
-                      ) : (
-                        <span className="text-text-muted italic">—</span>
-                      )}
-                    </Td>
-                    <Td>
-                      {row.account ? (
-                        <span className="text-text-secondary">{row.account}</span>
-                      ) : (
-                        <span className="text-text-muted italic">—</span>
-                      )}
-                    </Td>
-                    <Td>
-                      {row.connected ? (
-                        <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px] uppercase tracking-wider">
-                          <Check size={10} className="mr-0.5" />
-                          Connected
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-zinc-500/10 text-zinc-400 border-zinc-500/20 text-[10px] uppercase tracking-wider">
-                          Not connected
-                        </Badge>
-                      )}
-                    </Td>
-                    <Td className="text-right pr-4">
-                      <RowAction
-                        row={row}
-                        connecting={connecting === row.key}
-                        disconnecting={
-                          row.key === 'uppromote'
-                            ? upPromoteDisconnecting
-                            : row.key === 'google_chat'
-                            ? chatDisconnecting
-                            : disconnecting === row.profileId
-                        }
-                        onConnect={() => {
-                          if (row.key === 'uppromote') {
-                            setShowUpPromoteModal(true);
-                          } else if (row.key === 'google_chat') {
-                            setShowChatModal(true);
-                          } else {
-                            handleConnectSocial(row.key as SocialPlatform);
-                          }
-                        }}
-                        onDisconnect={() => {
-                          if (row.key === 'uppromote') {
-                            handleUpPromoteDisconnect();
-                          } else if (row.key === 'google_chat') {
-                            handleChatDisconnect();
-                          } else if (row.profileId) {
-                            handleDisconnect(row.profileId, row.label);
-                          }
-                        }}
-                      />
-                    </Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ul className="divide-y divide-nativz-border">
+            {rows.map((row) => (
+              <li
+                key={row.key}
+                className="flex items-center gap-3 px-4 py-3 hover:bg-surface-hover/20 transition-colors"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-nativz-border bg-surface">
+                  {row.icon}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-text-primary truncate">{row.label}</span>
+                    {row.connected && (
+                      <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden />
+                    )}
+                  </div>
+                  <p className="text-xs text-text-muted truncate">
+                    {row.subtitle ?? 'Not connected'}
+                  </p>
+                </div>
+                <RowAction
+                  row={row}
+                  connecting={connecting === row.key}
+                  disconnecting={
+                    row.key === 'uppromote'
+                      ? upPromoteDisconnecting
+                      : row.key === 'google_chat'
+                      ? chatDisconnecting
+                      : disconnecting === row.profileId
+                  }
+                  onConnect={() => {
+                    if (row.key === 'uppromote') {
+                      setShowUpPromoteModal(true);
+                    } else if (row.key === 'google_chat') {
+                      setShowChatModal(true);
+                    } else {
+                      handleConnectSocial(row.key as SocialPlatform);
+                    }
+                  }}
+                  onDisconnect={() => {
+                    if (row.key === 'uppromote') {
+                      handleUpPromoteDisconnect();
+                    } else if (row.key === 'google_chat') {
+                      handleChatDisconnect();
+                    } else if (row.profileId) {
+                      handleDisconnect(row.profileId, row.label);
+                    }
+                  }}
+                />
+              </li>
+            ))}
+          </ul>
         )}
       </Shell>
 
@@ -542,20 +470,6 @@ function extractSpaceId(webhookUrl: string): string | null {
   return m ? m[1] : null;
 }
 
-function Th({ children, className }: { children: React.ReactNode; className?: string }) {
-  return (
-    <th
-      className={`px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-text-muted ${className ?? ''}`}
-    >
-      {children}
-    </th>
-  );
-}
-
-function Td({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <td className={`px-4 py-3 align-middle ${className ?? ''}`}>{children}</td>;
-}
-
 function RowAction({
   row,
   connecting,
@@ -571,32 +485,22 @@ function RowAction({
 }) {
   if (!row.connected) {
     return (
-      <Button variant="outline" size="sm" onClick={onConnect} disabled={connecting}>
+      <Button variant="outline" size="sm" onClick={onConnect} disabled={connecting} className="shrink-0">
         {connecting ? <Loader2 size={12} className="animate-spin" /> : <Link2 size={12} />}
         Connect
       </Button>
     );
   }
   return (
-    <div className="inline-flex items-center gap-1">
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={onDisconnect}
-        disabled={disconnecting}
-        className="text-text-muted hover:text-red-400 hover:border-red-500/30"
-      >
-        {disconnecting ? <Loader2 size={12} className="animate-spin" /> : <Unlink size={12} />}
-        Disconnect
-      </Button>
-      <button
-        type="button"
-        className="rounded-md p-1.5 text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
-        title="More"
-        aria-label="More"
-      >
-        <MoreHorizontal size={14} />
-      </button>
-    </div>
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={onDisconnect}
+      disabled={disconnecting}
+      className="shrink-0 text-text-muted hover:text-red-400"
+    >
+      {disconnecting ? <Loader2 size={12} className="animate-spin" /> : <Unlink size={12} />}
+      Disconnect
+    </Button>
   );
 }

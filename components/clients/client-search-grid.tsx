@@ -11,7 +11,10 @@ import {
   Check,
   Link2,
   Trash2,
+  ArrowRight,
+  Rocket,
 } from 'lucide-react';
+import { Dialog } from '@/components/ui/dialog';
 // (SpotlightCard — the cursor-following cyan radial hover glow — was removed
 // 2026-04-24: looked stuck-blue on AC paper and wasn't needed to signal
 // hoverability. The border + bg transitions on the card itself carry that load.)
@@ -165,10 +168,13 @@ function ActionMenu({
   onMoveAgency: (bucket: AgencyBucket) => void;
   onDeleted: (dbId: string) => void;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [copying, setCopying] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [startingOnboarding, setStartingOnboarding] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -212,6 +218,38 @@ function ActionMenu({
     }
   }
 
+  async function handleStartOnboarding() {
+    if (startingOnboarding) return;
+    setStartingOnboarding(true);
+    try {
+      const res = await fetch('/api/onboarding/flows', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ clientId }),
+      });
+      const json = (await res.json().catch(() => null)) as
+        | { ok: true; flowId: string; existing: boolean }
+        | { ok: false; error: string }
+        | null;
+      if (!res.ok || !json || json.ok === false) {
+        const err = json && 'error' in json ? json.error : `failed (${res.status})`;
+        toast.error(`Couldn't start onboarding`, { description: err });
+        return;
+      }
+      toast.success(
+        json.existing
+          ? `${clientName} already has an onboarding flow.`
+          : `Started onboarding for ${clientName}.`,
+        { description: 'Opening it now.' },
+      );
+      router.push(`/admin/onboarding/${json.flowId}`);
+      router.refresh();
+    } finally {
+      setStartingOnboarding(false);
+      setOpen(false);
+    }
+  }
+
   async function handleDelete() {
     setDeleting(true);
     try {
@@ -250,58 +288,15 @@ function ActionMenu({
             className="absolute right-0 top-full mt-1 z-30 min-w-[220px] rounded-lg border border-nativz-border bg-surface shadow-xl animate-[popIn_150ms_ease-out] py-1"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-3 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-text-muted/70">
-              Move to
-            </div>
-            {mode === 'groups' ? (
-              <>
-                {groups.map((g) => {
-                  const s = colorStyles(g.color);
-                  const active = g.id === currentGroupId;
-                  return (
-                    <button
-                      key={g.id}
-                      type="button"
-                      role="menuitem"
-                      onClick={() => { setOpen(false); onMoveGroup(g.id); }}
-                      className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-primary hover:bg-surface-hover transition-colors text-left"
-                    >
-                      <span className={`h-2 w-2 rounded-full ${s.dot}`} />
-                      <span className="flex-1 truncate">{g.name}</span>
-                      {active && <Check size={12} className="text-accent-text" />}
-                    </button>
-                  );
-                })}
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => { setOpen(false); onMoveGroup(null); }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-muted hover:bg-surface-hover transition-colors text-left"
-                >
-                  <span className="h-2 w-2 rounded-full bg-slate-600" />
-                  <span className="flex-1">Unassigned</span>
-                  {!currentGroupId && <Check size={12} className="text-accent-text" />}
-                </button>
-              </>
-            ) : (
-              agencyChoices.map((b) => {
-                const active = b === currentBucket;
-                return (
-                  <button
-                    key={b}
-                    type="button"
-                    role="menuitem"
-                    onClick={() => { setOpen(false); if (!active) onMoveAgency(b); }}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-primary hover:bg-surface-hover transition-colors text-left"
-                  >
-                    <span className="flex-1 truncate">{BUCKET_LABEL[b]}</span>
-                    {active && <Check size={12} className="text-accent-text" />}
-                  </button>
-                );
-              })
-            )}
-
-            <div className="my-1 h-px bg-nativz-border/60" />
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => { setOpen(false); setMoveOpen(true); }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-primary hover:bg-surface-hover transition-colors text-left"
+            >
+              <ArrowRight size={13} className="text-text-muted" />
+              <span className="flex-1">Move</span>
+            </button>
 
             <button
               type="button"
@@ -317,6 +312,19 @@ function ActionMenu({
             <button
               type="button"
               role="menuitem"
+              disabled={startingOnboarding}
+              onClick={() => void handleStartOnboarding()}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-primary hover:bg-surface-hover transition-colors text-left disabled:opacity-60"
+            >
+              <Rocket size={13} className="text-text-muted" />
+              <span className="flex-1">{startingOnboarding ? 'Starting…' : 'Start onboarding'}</span>
+            </button>
+
+            <div className="my-1 h-px bg-nativz-border/60" />
+
+            <button
+              type="button"
+              role="menuitem"
               onClick={() => { setOpen(false); setConfirmDelete(true); }}
               className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors text-left"
             >
@@ -326,6 +334,66 @@ function ActionMenu({
           </div>
         )}
       </div>
+
+      <Dialog
+        open={moveOpen}
+        onClose={() => setMoveOpen(false)}
+        title={`Move ${clientName}`}
+        maxWidth="sm"
+      >
+        <div className="space-y-1">
+          <p className="text-xs text-text-muted mb-3">
+            Pick a destination — this client will move there immediately.
+          </p>
+          {mode === 'groups' ? (
+            <>
+              {groups.map((g) => {
+                const s = colorStyles(g.color);
+                const active = g.id === currentGroupId;
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => { setMoveOpen(false); if (!active) onMoveGroup(g.id); }}
+                    disabled={active}
+                    className="w-full flex items-center gap-3 rounded-lg border border-nativz-border bg-background px-3 py-2.5 text-sm text-text-primary hover:bg-surface-hover hover:border-accent-border/60 transition-colors text-left disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <span className={`h-2.5 w-2.5 rounded-full ${s.dot}`} />
+                    <span className="flex-1 truncate">{g.name}</span>
+                    {active && <Check size={14} className="text-accent-text" />}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => { setMoveOpen(false); if (currentGroupId) onMoveGroup(null); }}
+                disabled={!currentGroupId}
+                className="w-full flex items-center gap-3 rounded-lg border border-nativz-border bg-background px-3 py-2.5 text-sm text-text-muted hover:bg-surface-hover hover:border-accent-border/60 transition-colors text-left disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <span className="h-2.5 w-2.5 rounded-full bg-slate-600" />
+                <span className="flex-1">Unassigned</span>
+                {!currentGroupId && <Check size={14} className="text-accent-text" />}
+              </button>
+            </>
+          ) : (
+            agencyChoices.map((b) => {
+              const active = b === currentBucket;
+              return (
+                <button
+                  key={b}
+                  type="button"
+                  onClick={() => { setMoveOpen(false); if (!active) onMoveAgency(b); }}
+                  disabled={active}
+                  className="w-full flex items-center gap-3 rounded-lg border border-nativz-border bg-background px-3 py-2.5 text-sm text-text-primary hover:bg-surface-hover hover:border-accent-border/60 transition-colors text-left disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <span className="flex-1 truncate">{BUCKET_LABEL[b]}</span>
+                  {active && <Check size={14} className="text-accent-text" />}
+                </button>
+              );
+            })
+          )}
+        </div>
+      </Dialog>
 
       <ConfirmDialog
         open={confirmDelete}

@@ -16,7 +16,7 @@ interface ClientLogoProps {
   src?: string | null;
   name: string;
   abbreviation?: string | null;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
   /** When true, the chip border + dark fill behind a logo image is dropped so
    *  the logo floats directly on its parent surface. Initials fallback still
@@ -28,9 +28,10 @@ const SIZE_CLASSES = {
   sm: 'h-8 w-8 text-[10px]',
   md: 'h-10 w-10 text-xs',
   lg: 'h-14 w-14 text-sm',
+  xl: 'h-24 w-24 text-xl',
 };
 
-const ICON_SIZES = { sm: 14, md: 18, lg: 24 };
+const ICON_SIZES = { sm: 14, md: 18, lg: 24, xl: 40 };
 
 function getInitials(name: string, abbreviation?: string | null): string {
   if (abbreviation) return abbreviation.slice(0, 3);

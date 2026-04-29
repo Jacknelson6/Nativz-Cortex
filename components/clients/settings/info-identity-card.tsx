@@ -150,12 +150,9 @@ export function InfoIdentityCard({
   if (loading || !client) {
     return (
       <InfoCard icon={<Building2 size={16} />} title="Identity">
-        <div className="flex items-center gap-3">
-          <div className="h-14 w-14 rounded-2xl bg-surface-hover animate-pulse" />
-          <div className="flex-1 space-y-2">
-            <div className="h-4 w-40 bg-surface-hover rounded animate-pulse" />
-            <div className="h-3 w-24 bg-surface-hover rounded animate-pulse" />
-          </div>
+        <div className="flex flex-col items-center gap-4 py-2">
+          <div className="h-24 w-24 rounded-full bg-surface-hover animate-pulse" />
+          <div className="h-5 w-48 bg-surface-hover rounded animate-pulse" />
         </div>
       </InfoCard>
     );
@@ -185,7 +182,7 @@ export function InfoIdentityCard({
         dirty,
       }}
     >
-      <div className="flex items-start gap-4">
+      <div className="flex flex-col items-center gap-4 py-2">
         {editing ? (
           <div className="shrink-0">
             <ImageUpload value={logoUrl} onChange={setLogoUrl} size="lg" />
@@ -194,7 +191,7 @@ export function InfoIdentityCard({
           <button
             type="button"
             onClick={() => setEditing(true)}
-            className="group relative shrink-0 rounded-2xl transition-all hover:ring-2 hover:ring-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent cursor-pointer"
+            className="group relative shrink-0 rounded-full transition-all hover:ring-2 hover:ring-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent cursor-pointer"
             title="Edit logo"
             aria-label="Edit client logo and identity"
           >
@@ -202,26 +199,26 @@ export function InfoIdentityCard({
               src={client.logo_url}
               name={client.name}
               abbreviation={abbreviation}
-              size="lg"
+              size="xl"
               noBacking
             />
-            <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl">
-              <Pencil size={14} className="text-white" />
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
+              <Pencil size={16} className="text-white" />
             </div>
           </button>
         )}
 
-        <div className="min-w-0 flex-1">
+        <div className="w-full max-w-sm">
           {editing ? (
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Client name"
-              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-base font-semibold text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-colors"
+              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-center text-base font-semibold text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-colors"
             />
           ) : (
-            <p className="text-base font-semibold text-text-primary truncate">
+            <p className="text-center text-lg font-semibold text-text-primary truncate">
               {client.name}
             </p>
           )}

@@ -662,19 +662,19 @@ function ContactRow(props: ContactRowProps) {
   const portalBusy = busy === `portal:${row.key}`;
 
   return (
-    <div className="rounded-lg border border-nativz-border-light bg-transparent transition-colors hover:bg-surface-hover/30">
-      <div className="flex items-start gap-3 px-4 py-3">
+    <div className="group rounded-xl border border-nativz-border bg-surface/40 transition-colors hover:bg-surface-hover/40 hover:border-nativz-border/80">
+      <div className="flex items-center gap-3 px-4 py-3">
         {portalUser?.avatar_url ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
             src={portalUser.avatar_url}
             alt={portalUser.full_name}
-            className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-nativz-border mt-0.5"
+            className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-nativz-border"
           />
         ) : (
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-surface text-accent-text mt-0.5">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-surface text-accent-text">
             {row.displayName ? (
-              <span className="text-xs font-semibold">{getInitials(row.displayName)}</span>
+              <span className="text-sm font-semibold">{getInitials(row.displayName)}</span>
             ) : (
               <User2 size={16} />
             )}
@@ -683,7 +683,7 @@ function ContactRow(props: ContactRowProps) {
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-medium text-text-primary truncate">{row.displayName || row.displayEmail}</p>
+            <p className="text-sm font-semibold text-text-primary truncate">{row.displayName || row.displayEmail}</p>
             <StateBadge state={state} />
             {contact?.is_primary && (
               <Badge variant="emerald" className="text-[10px] px-1.5 py-0">Primary</Badge>
@@ -715,7 +715,7 @@ function ContactRow(props: ContactRowProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 pl-3 ml-1 border-l border-nativz-border/60">
           {state === 'no_invite' && (
             <Button
               size="sm"
@@ -730,68 +730,76 @@ function ContactRow(props: ContactRowProps) {
             </Button>
           )}
           {state === 'invited' && (
-            <>
-              <Button
-                size="sm"
-                variant="outline"
-                type="button"
-                onClick={onSendInvite}
-                disabled={inviteBusy}
-                title="Resend invite email"
-              >
-                {inviteBusy ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
-                Resend
-              </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              type="button"
+              onClick={onSendInvite}
+              disabled={inviteBusy}
+              title="Resend invite email"
+            >
+              {inviteBusy ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
+              Resend
+            </Button>
+          )}
+
+          {/* Secondary actions live in a quiet icon row that doesn't compete
+              with the primary CTA. Buttons fade in on row hover. */}
+          <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
+            {state === 'invited' && (
+              <>
+                <button
+                  type="button"
+                  onClick={onCopyInvite}
+                  disabled={!invite}
+                  className="rounded-md p-1.5 text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer disabled:cursor-default"
+                  title="Copy invite link"
+                >
+                  {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                </button>
+                <button
+                  type="button"
+                  onClick={onRevokeInvite}
+                  disabled={revokeBusy}
+                  className="rounded-md p-1.5 text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                  title="Revoke invite"
+                >
+                  {revokeBusy ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
+                </button>
+              </>
+            )}
+            {contact && !contact.is_primary && (
               <button
                 type="button"
-                onClick={onCopyInvite}
-                disabled={!invite}
-                className="rounded-md p-1.5 text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer disabled:cursor-default"
-                title="Copy invite link"
+                onClick={() => onSetPrimary(contact.id)}
+                className="rounded-md p-1.5 text-text-muted hover:text-yellow-400 hover:bg-yellow-400/10 transition-colors cursor-pointer"
+                title="Set as primary"
               >
-                {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                <Star size={14} />
               </button>
+            )}
+            {contact && (
               <button
                 type="button"
-                onClick={onRevokeInvite}
-                disabled={revokeBusy}
-                className="rounded-md p-1.5 text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
-                title="Revoke invite"
+                onClick={() => onEdit(contact)}
+                className="rounded-md p-1.5 text-text-muted hover:text-accent-text hover:bg-accent-surface transition-colors cursor-pointer"
+                title="Edit contact"
               >
-                {revokeBusy ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
+                <Pencil size={14} />
               </button>
-            </>
-          )}
-          {contact && !contact.is_primary && (
-            <button
-              type="button"
-              onClick={() => onSetPrimary(contact.id)}
-              className="rounded-md p-1.5 text-text-muted hover:text-yellow-400 hover:bg-yellow-400/10 transition-colors cursor-pointer"
-              title="Set as primary"
-            >
-              <Star size={14} />
-            </button>
-          )}
-          {contact && (
-            <button
-              type="button"
-              onClick={() => onEdit(contact)}
-              className="rounded-md p-1.5 text-text-muted hover:text-accent-text hover:bg-accent-surface transition-colors cursor-pointer"
-              title="Edit contact"
-            >
-              <Pencil size={14} />
-            </button>
-          )}
-          {contact && (
-            <button
-              type="button"
-              onClick={() => onDelete(contact.id)}
-              className="rounded-md p-1.5 text-text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer"
-              title="Remove contact"
-            >
-              <Trash2 size={14} />
-            </button>
-          )}
+            )}
+            {contact && (
+              <button
+                type="button"
+                onClick={() => onDelete(contact.id)}
+                className="rounded-md p-1.5 text-text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer"
+                title="Remove contact"
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
+          </div>
+
           {canExpand && (
             <button
               type="button"
