@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { isAdmin } from '@/lib/auth/permissions';
+import { syncMondayApprovalForDrop } from '@/lib/monday/calendar-approval';
 
 interface ShareLinkRow {
   id: string;
@@ -172,6 +173,22 @@ export async function GET(
       viewer_name: viewerName,
       user_agent: userAgent,
     });
+
+  // Self-heal the Monday "Client Approval" mirror on every page open. The
+  // primary write happens in the comment POST/DELETE handlers, but if that
+  // `after()` block ever gets cut short (Vercel function timeout, Monday
+  // API hiccup, etc.) the column drifts out of sync. Re-running the
+  // computed-state push on each share-link view makes the sync self-healing
+  // — every reviewer or editor who opens the link drags Monday back into
+  // truth. Idempotent (setting a column to its current label is a no-op),
+  // so the cost is bounded to one Monday call per page view at worst.
+  after(async () => {
+    try {
+      await syncMondayApprovalForDrop(admin, link.drop_id);
+    } catch (err) {
+      console.error('Monday calendar approval self-heal sync failed:', err);
+    }
+  });
 
   return NextResponse.json({
     clientName: client?.name ?? 'Brand',

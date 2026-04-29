@@ -1254,27 +1254,38 @@ function PostCard({
   const playerHandleRef = useRef<PlayerHandle | null>(null);
   const videoSectionRef = useRef<HTMLDivElement | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
-  const [anchorSeconds, setAnchorSeconds] = useState<number | null>(null);
-  // Frame.io-style auto-pin: focusing the comment box auto-captures the
-  // current playhead. If the reviewer dismisses (×) we remember that for the
-  // current draft — re-focusing won't silently re-pin. Cleared on submit.
-  const [pinDismissed, setPinDismissed] = useState(false);
+  // Live playhead — ticks once per second while the player is mounted so the
+  // pin chip shows the same time the user sees on the player. The actual
+  // value sent on submit is read fresh from the player handle (no rounding
+  // drift from the displayed-vs-real time).
+  const [livePlayheadSeconds, setLivePlayheadSeconds] = useState(0);
+  // Whether the reviewer wants the next comment pinned to the playhead. On
+  // by default — the chip is visible from the moment the player is ready,
+  // and dismissing it (×) hides it for the current draft. Reset on submit.
+  const [pinEnabled, setPinEnabled] = useState(true);
 
-  function captureAnchor() {
-    const t = playerHandleRef.current?.getCurrentTime() ?? 0;
-    setAnchorSeconds(Math.max(0, Math.floor(t)));
-  }
-
-  function clearAnchor() {
-    setAnchorSeconds(null);
-    setPinDismissed(true);
-  }
-
-  function maybeAutoPin() {
+  // Tick the displayed playhead once per second while the player is ready.
+  // Light touch — we just read the cached time from the handle; no event
+  // wiring on the underlying <mux-player> needed.
+  useEffect(() => {
     if (!playerReady) return;
-    if (anchorSeconds !== null) return;
-    if (pinDismissed) return;
-    captureAnchor();
+    const tick = () => {
+      const t = playerHandleRef.current?.getCurrentTime() ?? 0;
+      setLivePlayheadSeconds(Math.max(0, Math.floor(t)));
+    };
+    tick();
+    const id = window.setInterval(tick, 500);
+    return () => window.clearInterval(id);
+  }, [playerReady]);
+
+  // Read the current playhead at the moment a comment is submitted. This is
+  // the value the user *meant* — wherever the timeline was when they hit
+  // Approve / Request change — not the snapshot from when they first
+  // focused the textarea.
+  function readCurrentAnchorSeconds(): number | null {
+    if (!pinEnabled || !playerReady) return null;
+    const t = playerHandleRef.current?.getCurrentTime() ?? 0;
+    return Math.max(0, Math.floor(t));
   }
 
   function seekTo(seconds: number) {
@@ -1392,7 +1403,9 @@ function PostCard({
           // Server only honors this for `comment` / `changes_requested`; the
           // approval path strips it. Sending unconditionally keeps the
           // client free of duplicate "should I include this?" branching.
-          timestampSeconds: anchorSeconds,
+          // Read fresh from the player so the pin reflects wherever the
+          // timeline was at submit, not whenever the chip last rendered.
+          timestampSeconds: readCurrentAnchorSeconds(),
         }),
       });
       const json = await res.json();
@@ -1401,8 +1414,9 @@ function PostCard({
       onCommentAdded(savedComment);
       setCommentText('');
       setPendingAttachments([]);
-      setAnchorSeconds(null);
-      setPinDismissed(false);
+      // Re-enable the live pin for the next draft. If the user dismissed it
+      // earlier, they get a fresh chance with the new comment.
+      setPinEnabled(true);
       // Server may auto-upgrade a "changes_requested" submission to "approved"
       // when the body reads like an approval ("approved", "love this", etc.).
       // Reflect the actual recorded status in the toast so the user isn't
@@ -1811,7 +1825,6 @@ function PostCard({
         <textarea
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
-          onFocus={maybeAutoPin}
           placeholder="Notes on the video (cuts, music, hook, etc.)"
           rows={2}
           className="w-full resize-none rounded-t-lg bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
@@ -1845,40 +1858,37 @@ function PostCard({
             {uploading ? <Loader2 size={13} className="animate-spin" /> : <Paperclip size={13} />}
             {uploading ? 'Uploading…' : 'Attach files'}
           </button>
-          {/* Frame.io-style timestamp chip. Pin is auto-captured when the
-              reviewer focuses the textarea (see `maybeAutoPin`). Showing the
-              chip up front (with × to dismiss) keeps the action obvious; the
-              fallback "Pin to current time" only renders if they dismissed it
-              and want to opt back in for the same draft. */}
+          {/* Live timestamp chip — tracks the current playhead so the pinned
+              moment matches whatever the user is looking at when they hit
+              submit. Dismiss (×) opts out of pinning for the current draft;
+              the fallback button below lets them opt back in. The actual
+              value sent on submit is read fresh from the player handle. */}
           {playerReady && (
-            anchorSeconds !== null ? (
+            pinEnabled ? (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-surface px-2.5 py-1 text-xs font-medium text-accent-text ring-1 ring-accent/40">
                 <MapPin size={12} />
-                Pinned at {formatSeconds(anchorSeconds)}
+                At {formatSeconds(livePlayheadSeconds)}
                 <button
                   type="button"
-                  onClick={clearAnchor}
+                  onClick={() => setPinEnabled(false)}
                   className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-accent/20"
-                  aria-label="Remove pin"
-                  title="Remove pin"
+                  aria-label="Don't reference a timestamp"
+                  title="Don't reference a timestamp"
                 >
                   <X size={11} />
                 </button>
               </span>
-            ) : pinDismissed ? (
+            ) : (
               <button
                 type="button"
-                onClick={() => {
-                  setPinDismissed(false);
-                  captureAnchor();
-                }}
+                onClick={() => setPinEnabled(true)}
                 disabled={submitting}
                 className="inline-flex items-center gap-1.5 rounded-md bg-transparent px-2 py-1 text-xs font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
-                title="Pin to current time"
+                title="Reference current timestamp"
               >
-                <MapPin size={13} /> Pin to current time
+                <MapPin size={13} /> Reference timestamp
               </button>
-            ) : null
+            )
           )}
           <span className="ml-auto text-[11px] text-text-muted">up to 25 MB</span>
         </div>
