@@ -11,8 +11,9 @@ import { ImageUpload } from '@/components/ui/image-upload';
 /**
  * InfoIdentityCard — the "who is this" card on /admin/clients/[slug]/settings/info.
  * Read-first per the portal-brand-profile card pattern; pencil flips the whole
- * card into edit mode where the admin can adjust logo, website, industry, agency.
- * Name + slug are intentionally read-only here — renaming flows through Danger zone.
+ * card into edit mode where the admin can adjust name, logo, website, industry, agency.
+ * Slug stays stable (URL-bearing) so it isn't editable here — rename flows
+ * through Danger zone if a slug change is genuinely needed.
  */
 
 type IdentityPayload = {
@@ -45,6 +46,7 @@ export function InfoIdentityCard({
   const [saving, setSaving] = useState(false);
 
   // Edit-state drafts; reset on Cancel or on remount after a save.
+  const [name, setName] = useState(initialClient?.name ?? '');
   const [industry, setIndustry] = useState(initialClient?.industry ?? '');
   const [website, setWebsite] = useState(initialClient?.website_url ?? '');
   const [agency, setAgency] = useState(initialClient?.agency ?? '');
@@ -63,6 +65,7 @@ export function InfoIdentityCard({
         const d = (await res.json()) as { client: IdentityPayload };
         if (cancelled) return;
         setClient(d.client);
+        setName(d.client.name ?? '');
         setIndustry(d.client.industry ?? '');
         setWebsite(d.client.website_url ?? '');
         setAgency(d.client.agency ?? '');
@@ -77,6 +80,7 @@ export function InfoIdentityCard({
   }, [slug, initialClient]);
 
   function resetDrafts(from: IdentityPayload) {
+    setName(from.name ?? '');
     setIndustry(from.industry ?? '');
     setWebsite(from.website_url ?? '');
     setAgency(from.agency ?? '');
@@ -84,6 +88,7 @@ export function InfoIdentityCard({
   }
 
   const dirty = !!client && (
+    name.trim() !== (client.name ?? '') ||
     (industry.trim() || null) !== (client.industry ?? null) ||
     (website.trim() || null) !== (client.website_url ?? null) ||
     (agency.trim() || null) !== (client.agency ?? null) ||
@@ -94,10 +99,16 @@ export function InfoIdentityCard({
     if (!client) return;
     setSaving(true);
     try {
+      const trimmedName = name.trim();
+      if (!trimmedName) {
+        toast.error('Name cannot be empty');
+        return;
+      }
       const res = await fetch(`/api/clients/${client.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          name: trimmedName,
           industry: industry.trim() || null,
           website_url: website.trim() || null,
           agency: agency.trim() || null,
@@ -111,6 +122,7 @@ export function InfoIdentityCard({
       }
       const next: IdentityPayload = {
         ...client,
+        name: trimmedName,
         industry: industry.trim() || null,
         website_url: website.trim() || null,
         agency: agency.trim() || null,
@@ -200,12 +212,19 @@ export function InfoIdentityCard({
         )}
 
         <div className="min-w-0 flex-1">
-          <p className="text-base font-semibold text-text-primary truncate">
-            {client.name}
-          </p>
-          <p className="mt-0.5 text-xs text-text-muted">
-            Slug: <span className="font-mono text-text-secondary">{client.slug}</span>
-          </p>
+          {editing ? (
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Client name"
+              className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-base font-semibold text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-colors"
+            />
+          ) : (
+            <p className="text-base font-semibold text-text-primary truncate">
+              {client.name}
+            </p>
+          )}
         </div>
       </div>
 

@@ -107,6 +107,15 @@ export interface OnboardFormData {
   logo_url: string | null;
   services: string[];
   agency: string;
+  /** Brand essence + content prefs auto-filled from analyze-url; admins can
+   *  refine later in /admin/clients/[slug]/settings/info. Optional because
+   *  older onboard sessions / manual flows skip the analyze step. */
+  tagline?: string;
+  value_proposition?: string;
+  mission_statement?: string;
+  description?: string;
+  writing_style?: string;
+  content_language?: string;
   /** NAT-57: per-platform social slots captured during onboarding.
    *  Status is linked (handle set) or no_account (admin declared).
    *  Unset slots (not included here) default to unset in DB. */

@@ -7,10 +7,12 @@ import { Wand2, Plus, X } from 'lucide-react';
 import { InfoCard } from './info-card';
 
 /**
- * InfoBrandContentPrefsCard — writing style + AI image style + banned phrases
- * + content language. Read-first with one Cancel/Save pair covering all four
- * fields. Banned phrases is a draft-mode tag list — adds/removes are local
- * until Save commits, and Cancel reverts the lot.
+ * InfoBrandContentPrefsCard — writing style + banned phrases + content language.
+ * Read-first with one Cancel/Save pair covering all three fields. Banned phrases
+ * is a draft-mode tag list — adds/removes are local until Save commits, and
+ * Cancel reverts the lot. AI image style is intentionally absent: image
+ * generation is locked to "realistic 4k, real-world" so there's no per-brand
+ * choice to expose.
  */
 
 const LANGUAGE_OPTIONS: { value: string; label: string }[] = [
@@ -32,7 +34,6 @@ const LANGUAGE_OPTIONS: { value: string; label: string }[] = [
 
 type ContentPrefs = {
   writing_style: string | null;
-  ai_image_style: string | null;
   banned_phrases: string[];
   content_language: string | null;
 };
@@ -53,19 +54,16 @@ export function InfoBrandContentPrefsCard({
   const [saving, setSaving] = useState(false);
 
   const [writing, setWriting] = useState(initial.writing_style ?? '');
-  const [imageStyle, setImageStyle] = useState(initial.ai_image_style ?? '');
   const [banned, setBanned] = useState<string[]>(initial.banned_phrases);
   const [language, setLanguage] = useState(initial.content_language ?? 'en');
 
   const dirty =
     (writing.trim() || null) !== (saved.writing_style ?? null) ||
-    (imageStyle.trim() || null) !== (saved.ai_image_style ?? null) ||
     JSON.stringify(banned) !== JSON.stringify(saved.banned_phrases) ||
     language !== (saved.content_language ?? 'en');
 
   function reset() {
     setWriting(saved.writing_style ?? '');
-    setImageStyle(saved.ai_image_style ?? '');
     setBanned(saved.banned_phrases);
     setLanguage(saved.content_language ?? 'en');
   }
@@ -75,7 +73,6 @@ export function InfoBrandContentPrefsCard({
     try {
       const body = {
         writing_style: writing.trim() || null,
-        ai_image_style: imageStyle.trim() || null,
         banned_phrases: banned,
         content_language: language || null,
       };
@@ -122,13 +119,6 @@ export function InfoBrandContentPrefsCard({
             rows={3}
             placeholder="e.g. Short sentences. No jargon. Second-person (you/your). Warm, confident, never hype-y."
           />
-          <EditTextArea
-            label="AI image style"
-            value={imageStyle}
-            onChange={setImageStyle}
-            rows={3}
-            placeholder="e.g. Natural lighting, earth tones, no stock-photo people, product-first compositions."
-          />
           <DraftTagList
             label="Banned phrases"
             values={banned}
@@ -160,7 +150,6 @@ export function InfoBrandContentPrefsCard({
         <div className="space-y-5">
           <ReadField label="Tone of voice" value={voiceLabel} emptyLabel="Set on the Brand voice card above" />
           <ReadField label="Writing style" value={saved.writing_style} emptyLabel="No writing style set" />
-          <ReadField label="AI image style" value={saved.ai_image_style} emptyLabel="No image style set" />
           <ReadTags label="Banned phrases" values={saved.banned_phrases} />
           <ReadField
             label="Content language"

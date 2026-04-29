@@ -93,6 +93,12 @@ export function OnboardAnalyze({ name, websiteUrl, onNext, onBack }: OnboardAnal
         brand_voice: data.brand_voice || '',
         topic_keywords: data.topic_keywords || [],
         logo_url: data.logo_url || null,
+        tagline: data.tagline || '',
+        value_proposition: data.value_proposition || '',
+        mission_statement: data.mission_statement || '',
+        description: data.description || '',
+        writing_style: data.writing_style || '',
+        content_language: data.content_language || '',
       }));
 
       // Pre-fill social slots from scraped handles. Each platform not

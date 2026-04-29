@@ -261,6 +261,7 @@ export async function PATCH(
     const allowedFields = isAdmin
       ? [
           ...portalAllowedFields,
+          'name',
           'feature_flags',
           'is_active',
           'description',
@@ -304,6 +305,14 @@ export async function PATCH(
         ...existingFeatureFlags,
         ...(body.feature_flags as Record<string, unknown>),
       };
+    }
+
+    if ('name' in updates) {
+      const trimmed = String(updates.name ?? '').trim();
+      if (!trimmed) {
+        return NextResponse.json({ error: 'Name cannot be empty' }, { status: 400 });
+      }
+      updates.name = trimmed;
     }
 
     if ('admin_workspace_modules' in body) {

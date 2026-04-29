@@ -19,6 +19,14 @@ const onboardSchema = z.object({
   logo_url: z.string().nullable().optional().default(null),
   services: z.array(z.string()).optional().default([]),
   agency: z.string().optional().default(''),
+  // Brand essence + voice + content prefs auto-filled from analyze-url.
+  // All optional so manual onboards (no analyze step) still validate.
+  tagline: z.string().trim().max(500).optional().default(''),
+  value_proposition: z.string().trim().max(1000).optional().default(''),
+  mission_statement: z.string().trim().max(2000).optional().default(''),
+  description: z.string().trim().max(2000).optional().default(''),
+  writing_style: z.string().trim().max(2000).optional().default(''),
+  content_language: z.string().trim().min(2).max(10).optional().default(''),
   // NAT-57: per-platform social-profile slots captured during the
   // analyze step. `status: 'linked'` rows seed `social_profiles` with
   // the handle (manual/website-scraped); `status: 'no_account'` rows
@@ -142,6 +150,12 @@ export async function POST(request: NextRequest) {
             // detail page, branded PDF, and email digests all resolve to
             // the right brand (Nativz vs Anderson Collaborative).
             agency: data.agency || null,
+            tagline: data.tagline || null,
+            value_proposition: data.value_proposition || null,
+            mission_statement: data.mission_statement || null,
+            description: data.description || null,
+            writing_style: data.writing_style || null,
+            content_language: data.content_language || null,
             is_active: true,
           })
           .select('id')

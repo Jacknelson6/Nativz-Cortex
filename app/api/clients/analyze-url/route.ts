@@ -195,18 +195,26 @@ Return this exact JSON schema:
   "industry": "The business industry/category (e.g., 'Healthy Food & Beverage', 'Fitness & Wellness')",
   "target_audience": "A 1-2 sentence description of the likely target audience",
   "brand_voice": "A brief description of the brand's tone and voice (e.g., 'Friendly, energetic, health-forward')",
-  "topic_keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
+  "topic_keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
+  "tagline": "A short brand tagline / hook (5-10 words). Pull from the page if present, otherwise infer.",
+  "value_proposition": "One sentence describing what the brand offers and to whom.",
+  "mission_statement": "1-2 sentences on the brand's mission or 'why'. Infer if not stated.",
+  "description": "A 2-3 sentence brand voice description — how they sound, what words they use, what tone shows up. Read like a paragraph an admin would write in a brand profile.",
+  "writing_style": "1-2 sentences describing how copy should be written for this brand (sentence length, formality, punctuation habits, emoji usage, vocabulary, signature phrases).",
+  "content_language": "ISO 639-1 language code the website is primarily written in (e.g. 'en', 'es', 'fr')."
 }
 
 Guidelines:
 - industry should be specific but concise (2-5 words)
 - target_audience should describe demographics, interests, and psychographics
 - brand_voice should capture the tone in 3-5 descriptive words
-- topic_keywords should be 3-7 core topics the brand would want to create content about`;
+- topic_keywords should be 3-7 core topics the brand would want to create content about
+- tagline / value_proposition / mission_statement / description / writing_style are for the Brand Profile — write them in the brand's own register, not generic marketing-speak
+- content_language must be a 2-letter ISO code, lowercase`;
 
     const aiResult = await createCompletion({
       messages: [{ role: 'user', content: prompt }],
-      maxTokens: 500,
+      maxTokens: 1200,
       feature: 'client_analyze_url',
       userId: user.id,
       userEmail: user.email ?? undefined,
@@ -217,6 +225,12 @@ Guidelines:
       target_audience: string;
       brand_voice: string;
       topic_keywords: string[];
+      tagline?: string;
+      value_proposition?: string;
+      mission_statement?: string;
+      description?: string;
+      writing_style?: string;
+      content_language?: string;
     }>(aiResult.text);
 
     return NextResponse.json({ ...result, logo_url: logoUrl, socials });

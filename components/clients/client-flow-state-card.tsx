@@ -45,16 +45,29 @@ export async function ClientFlowStateCard({
   clientId: string;
   clientName: string;
 }) {
-  const { data: flow } = await admin
-    .from('onboarding_flows')
-    .select('id, status')
-    .eq('client_id', clientId)
-    .not('status', 'in', '(archived)')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle<FlowRow>();
+  const [{ data: flow }, { data: clientRow }] = await Promise.all([
+    admin
+      .from('onboarding_flows')
+      .select('id, status')
+      .eq('client_id', clientId)
+      .not('status', 'in', '(archived)')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle<FlowRow>(),
+    admin
+      .from('clients')
+      .select('lifecycle_state')
+      .eq('id', clientId)
+      .maybeSingle<{ lifecycle_state: string | null }>(),
+  ]);
+
+  // Only prospects (lifecycle = 'lead') get the "Start onboarding" CTA. Once a
+  // brand is past lead — contracted/paid/active/churned — re-pitching the
+  // sales kickoff is clutter; skip the empty-state card entirely.
+  const isProspect = clientRow?.lifecycle_state === 'lead';
 
   if (!flow) {
+    if (!isProspect) return null;
     return (
       <div className="rounded-xl border border-dashed border-nativz-border bg-surface p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">

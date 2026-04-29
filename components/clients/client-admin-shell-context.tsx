@@ -12,6 +12,11 @@ export type ClientAdminShellValue = {
   organizationId: string | null;
   /** Real client logo (fallback renders initials). */
   logoUrl?: string | null;
+  /** Sales-pipeline stage from `clients.lifecycle_state`. Only 'lead' brands
+   *  are still prospects — they're the ones that get the "Start onboarding"
+   *  CTA. Anything else (contracted/paid_deposit/active/churned) has either
+   *  already been onboarded or moved past the lead stage. */
+  lifecycleState: string | null;
   /** Normalized visibility for admin workspace nav (sidebar + mobile). */
   adminWorkspaceModules: Record<AdminWorkspaceToggleKey, boolean>;
 };

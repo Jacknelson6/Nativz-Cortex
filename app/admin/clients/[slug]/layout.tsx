@@ -29,7 +29,7 @@ export default async function AdminClientSlugLayout({
 
   const { data: client } = await admin
     .from('clients')
-    .select('id, name, slug, organization_id, admin_workspace_modules, logo_url')
+    .select('id, name, slug, organization_id, admin_workspace_modules, logo_url, lifecycle_state')
     .eq('slug', slug)
     .single();
 
@@ -49,6 +49,7 @@ export default async function AdminClientSlugLayout({
         clientId: client.id,
         organizationId: client.organization_id ?? null,
         logoUrl: (client as { logo_url?: string | null }).logo_url ?? null,
+        lifecycleState: (client as { lifecycle_state?: string | null }).lifecycle_state ?? null,
         adminWorkspaceModules: normalizeAdminWorkspaceModules(
           (client as { admin_workspace_modules?: unknown }).admin_workspace_modules,
         ),

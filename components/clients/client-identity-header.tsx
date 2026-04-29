@@ -21,7 +21,11 @@ import { StartOnboardingButton } from '@/components/onboarding/start-onboarding-
 export function ClientIdentityHeader() {
   const shell = useClientAdminShell();
   if (!shell) return null;
-  const { slug, clientName, clientId, organizationId, logoUrl } = shell;
+  const { slug, clientName, clientId, organizationId, logoUrl, lifecycleState } = shell;
+  // "Start onboarding" only makes sense for brands still in the lead/prospect
+  // stage — once they've signed/paid/gone active/churned, surfacing it again
+  // is just clutter (the Onboarding flow card below handles re-entry).
+  const isProspect = lifecycleState === 'lead';
 
   return (
     <div className="flex flex-wrap items-center gap-4 rounded-[10px] border border-nativz-border bg-surface/60 px-4 py-3">
@@ -33,7 +37,9 @@ export function ClientIdentityHeader() {
         <p className="mt-0.5 font-mono text-[11px] text-text-muted/70 truncate">{slug}</p>
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        <StartOnboardingButton clientId={clientId} clientName={clientName} variant="compact" />
+        {isProspect && (
+          <StartOnboardingButton clientId={clientId} clientName={clientName} variant="compact" />
+        )}
         <InviteButton
           clientId={clientId}
           clientName={clientName}

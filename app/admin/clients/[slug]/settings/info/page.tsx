@@ -43,7 +43,7 @@ export default async function ClientSettingsInfoPage({
         'brand_voice', 'target_audience', 'topic_keywords', 'description',
         'tagline', 'value_proposition', 'mission_statement',
         'products', 'brand_aliases',
-        'writing_style', 'ai_image_style', 'banned_phrases', 'content_language',
+        'writing_style', 'banned_phrases', 'content_language',
         'primary_country', 'primary_state', 'primary_city',
       ].join(','),
     )
@@ -68,7 +68,6 @@ export default async function ClientSettingsInfoPage({
       products: string[] | null;
       brand_aliases: string[] | null;
       writing_style: string | null;
-      ai_image_style: string | null;
       banned_phrases: string[] | null;
       content_language: string | null;
       primary_country: string | null;
@@ -152,7 +151,6 @@ export default async function ClientSettingsInfoPage({
         voiceLabel={client.brand_voice}
         initial={{
           writing_style: client.writing_style,
-          ai_image_style: client.ai_image_style,
           banned_phrases: client.banned_phrases ?? [],
           content_language: client.content_language,
         }}

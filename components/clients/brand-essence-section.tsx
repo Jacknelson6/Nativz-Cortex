@@ -19,7 +19,6 @@ interface BrandProfile {
   products: string[];
   brand_aliases: string[];
   writing_style: string | null;
-  ai_image_style: string | null;
   banned_phrases: string[];
   content_language: string | null;
   primary_country: string | null;
@@ -41,7 +40,6 @@ const DEFAULT_PROFILE: BrandProfile = {
   products: [],
   brand_aliases: [],
   writing_style: null,
-  ai_image_style: null,
   banned_phrases: [],
   content_language: 'en',
   primary_country: null,
@@ -327,13 +325,6 @@ function ContentGenerationCard({
         rows={3}
         value={profile.writing_style}
         onCommit={(v) => patch({ writing_style: v })}
-      />
-      <TextareaFieldOnBlur
-        label="AI image style"
-        placeholder="e.g. Natural lighting, earth tones, no stock-photo people, product-first compositions."
-        rows={3}
-        value={profile.ai_image_style}
-        onCommit={(v) => patch({ ai_image_style: v })}
       />
       <TagListField
         label="Banned phrases"
