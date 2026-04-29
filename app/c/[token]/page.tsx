@@ -1124,7 +1124,6 @@ function PostCard({
   const captionBlock = (
     <div className="min-w-0 flex-1 space-y-2 sm:space-y-3">
       <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-        <span className="text-[13px] font-medium text-text-muted">Post {index}</span>
         <SchedulePill
           scheduledAt={post.scheduled_at}
           scheduledLabel={scheduledLabel}
@@ -1158,10 +1157,18 @@ function PostCard({
           <textarea
             value={draftCaption}
             onChange={(e) => setDraftCaption(e.target.value)}
-            rows={Math.max(3, Math.min(10, draftCaption.split('\n').length + 1))}
+            rows={Math.max(
+              6,
+              Math.min(
+                24,
+                draftCaption
+                  .split('\n')
+                  .reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / 55)), 0) + 1,
+              ),
+            )}
             disabled={savingCaption}
             autoFocus
-            className="w-full resize-none rounded-lg border border-accent/40 bg-background/60 px-3 py-2 text-base leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent sm:text-sm"
+            className="w-full resize-y rounded-lg border border-accent/40 bg-background/60 px-3 py-2.5 text-[15px] leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent"
           />
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
@@ -1294,10 +1301,10 @@ function PostCard({
                 type="button"
                 onClick={() => revisionInputRef.current?.click()}
                 disabled={uploadingRevision}
-                className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-lg bg-black/70 px-2.5 py-1.5 text-[11px] font-medium text-white ring-1 ring-white/15 backdrop-blur transition-opacity hover:bg-black/85 disabled:opacity-60"
+                className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-black/70 px-3.5 py-2 text-sm font-medium text-white ring-1 ring-white/15 backdrop-blur transition-opacity hover:bg-black/85 disabled:opacity-60"
               >
-                {uploadingRevision ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                {uploadingRevision ? 'Uploading…' : 'Re-upload cut'}
+                {uploadingRevision ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                {uploadingRevision ? 'Uploading…' : 'Replace media'}
               </button>
             )}
           </div>
@@ -1336,10 +1343,10 @@ function PostCard({
                   revisionInputRef.current?.click();
                 }}
                 disabled={uploadingRevision}
-                className="inline-flex w-fit items-center gap-1 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-2.5 py-1 text-[11px] font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+                className="inline-flex w-fit items-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3.5 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
               >
-                {uploadingRevision ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}
-                {uploadingRevision ? 'Uploading…' : 'Re-upload'}
+                {uploadingRevision ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                {uploadingRevision ? 'Uploading…' : 'Replace media'}
               </button>
             )}
           </div>
@@ -1693,15 +1700,20 @@ function SchedulePill({
         type="button"
         onClick={() => onOpenChange(!open)}
         disabled={isPublished}
-        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors ${
+        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-all ${
           isPublished
             ? 'bg-surface-hover text-text-muted'
-            : 'bg-accent-surface text-accent-text hover:bg-accent/15'
+            : 'bg-accent-surface text-accent-text ring-1 ring-accent/40 hover:bg-accent/15 hover:ring-accent'
         }`}
         title={isPublished ? 'Already published — date is locked' : 'Change scheduled date'}
+        aria-label={isPublished ? `Scheduled ${scheduledLabel}` : `Scheduled ${scheduledLabel} — tap to change`}
       >
-        <Clock size={11} /> {scheduledLabel}
-        {!isPublished && <Pencil size={9} className="opacity-60" />}
+        <Clock size={13} /> {scheduledLabel}
+        {!isPublished && (
+          <span className="ml-0.5 inline-flex items-center gap-0.5 border-l border-accent/30 pl-1.5 text-[12px]">
+            <Pencil size={11} /> Change
+          </span>
+        )}
       </button>
       {open && !isPublished && (
         <div className="absolute left-0 top-full z-30 mt-1 w-[280px] rounded-lg border border-nativz-border bg-surface p-3 shadow-lg">
@@ -1784,8 +1796,8 @@ function HandleEditor({
 
   if (handles.length === 0 && !adding) {
     return (
-      <div className="flex items-center gap-2 text-[11px] text-text-muted">
-        <Icon size={11} />
+      <div className="flex items-center gap-2 text-sm text-text-muted">
+        <Icon size={14} />
         <span>{label}:</span>
         <button
           type="button"
@@ -1797,23 +1809,23 @@ function HandleEditor({
             setAdding(true);
           }}
           disabled={disabled}
-          className="inline-flex items-center gap-1 rounded-md border border-dashed border-nativz-border px-2 py-0.5 text-[11px] text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-dashed border-nativz-border px-2.5 py-1 text-sm text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-40"
         >
-          <Plus size={10} /> Add
+          <Plus size={12} /> Add
         </button>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-      <span className="inline-flex items-center gap-1 text-text-muted">
-        <Icon size={11} /> {label}:
+    <div className="flex flex-wrap items-center gap-2 text-sm">
+      <span className="inline-flex items-center gap-1.5 text-text-muted">
+        <Icon size={14} /> {label}:
       </span>
       {handles.map((h) => (
         <span
           key={h}
-          className="group inline-flex items-center gap-1 rounded-full bg-accent-surface px-2 py-0.5 text-accent-text"
+          className="group inline-flex items-center gap-1.5 rounded-full bg-accent-surface px-2.5 py-1 text-accent-text"
         >
           @{h}
           {!disabled && (
@@ -1823,13 +1835,13 @@ function HandleEditor({
               className="rounded-full p-0.5 text-accent-text/70 transition-colors hover:bg-accent/15 hover:text-accent-text"
               aria-label={`Remove ${h}`}
             >
-              <X size={9} />
+              <X size={11} />
             </button>
           )}
         </span>
       ))}
       {adding ? (
-        <span className="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-background/40 px-1.5 py-0.5">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-background/40 px-2 py-1">
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -1844,7 +1856,7 @@ function HandleEditor({
             }}
             placeholder={placeholder}
             autoFocus
-            className="w-24 bg-transparent text-[11px] text-text-primary placeholder:text-text-muted focus:outline-none"
+            className="w-28 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
           />
           <button
             type="button"
@@ -1852,7 +1864,7 @@ function HandleEditor({
             className="rounded-full p-0.5 text-accent-text transition-colors hover:bg-accent/15"
             aria-label="Add"
           >
-            <CheckCircle size={11} />
+            <CheckCircle size={13} />
           </button>
         </span>
       ) : (
@@ -1866,9 +1878,9 @@ function HandleEditor({
             setAdding(true);
           }}
           disabled={disabled}
-          className="inline-flex items-center gap-1 rounded-full border border-dashed border-nativz-border px-2 py-0.5 text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-nativz-border px-2.5 py-1 text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-40"
         >
-          <Plus size={10} /> Add
+          <Plus size={12} /> Add
         </button>
       )}
     </div>
