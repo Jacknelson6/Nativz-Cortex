@@ -1616,6 +1616,27 @@ function PostCard({
             <AlertTriangle size={13} /> Changes requested
           </span>
         )}
+        {/* Replace media — a quiet pill that joins the status-chip row.
+            Editor-only, intentionally lower-contrast than Schedule and the
+            review pills so it reads as a power action rather than a
+            primary control. Pushed to the right via ml-auto so the
+            decision pills stay anchored to the post's identity. */}
+        {isEditor && (
+          <button
+            type="button"
+            onClick={() => revisionInputRef.current?.click()}
+            disabled={uploadingRevision || submitting || uploading}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-nativz-border bg-transparent px-3 py-1.5 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-60"
+            title="Replace the current cut with a new upload"
+          >
+            {uploadingRevision ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+            {uploadingRevision
+              ? uploadProgress !== null
+                ? `${uploadProgress}%`
+                : 'Uploading…'
+              : 'Replace media'}
+          </button>
+        )}
       </div>
 
       {editingCaption ? (
@@ -1720,26 +1741,6 @@ function PostCard({
         }}
         hasName={!!authorName.trim()}
       />
-      {/* Replace media — sits with the other editor-only post-edit
-          affordances (caption, tags, collaborators) so all "change the
-          post" actions cluster in one place. The reviewer-facing
-          decisions (Approve / Request change) live with the composer
-          below. */}
-      {isEditor && (
-        <button
-          type="button"
-          onClick={() => revisionInputRef.current?.click()}
-          disabled={uploadingRevision || submitting || uploading}
-          className="inline-flex w-full items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-4 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-60 sm:w-auto"
-        >
-          {uploadingRevision ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-          {uploadingRevision
-            ? uploadProgress !== null
-              ? `Uploading… ${uploadProgress}%`
-              : 'Uploading…'
-            : 'Replace media'}
-        </button>
-      )}
     </div>
   );
 
