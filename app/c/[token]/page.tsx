@@ -349,36 +349,36 @@ function SharedDropView({
                     setPendingName(authorName);
                     setNameModalOpen(true);
                   }}
-                  className="rounded-lg border border-nativz-border bg-transparent px-2.5 py-1.5 text-xs text-text-secondary transition-colors hover:bg-surface-hover"
+                  className="rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3.5 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary"
                   title="Change name"
                 >
                   {authorName}
                 </button>
               )}
-              <div className="inline-flex overflow-hidden rounded-lg border border-nativz-border">
+              <div className="inline-flex overflow-hidden rounded-[var(--nz-btn-radius)] border border-nativz-border">
                 <button
                   type="button"
                   onClick={() => setViewMode('list')}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs transition-colors ${
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium transition-colors ${
                     viewMode === 'list'
                       ? 'bg-surface-hover text-text-primary'
                       : 'bg-transparent text-text-muted hover:bg-surface-hover'
                   }`}
                   aria-label="List view"
                 >
-                  <List size={12} /> <span className="hidden sm:inline">List</span>
+                  <List size={14} /> <span className="hidden sm:inline">List</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setViewMode('calendar')}
-                  className={`inline-flex items-center gap-1.5 border-l border-nativz-border px-2.5 py-1.5 text-xs transition-colors ${
+                  className={`inline-flex items-center gap-1.5 border-l border-nativz-border px-3.5 py-2 text-sm font-medium transition-colors ${
                     viewMode === 'calendar'
                       ? 'bg-surface-hover text-text-primary'
                       : 'bg-transparent text-text-muted hover:bg-surface-hover'
                   }`}
                   aria-label="Calendar view"
                 >
-                  <CalendarDays size={12} /> <span className="hidden sm:inline">Calendar</span>
+                  <CalendarDays size={14} /> <span className="hidden sm:inline">Calendar</span>
                 </button>
               </div>
             </div>
@@ -1396,12 +1396,12 @@ function PostCard({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={submitting || uploading || pendingAttachments.length >= 10}
-            className="inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3 py-1.5 text-xs font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3.5 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
           >
-            {uploading ? <Loader2 size={12} className="animate-spin" /> : <Paperclip size={12} />}
+            {uploading ? <Loader2 size={14} className="animate-spin" /> : <Paperclip size={14} />}
             {uploading ? 'Uploading…' : 'Attach files'}
           </button>
-          <span className="text-[11px] text-text-muted">up to 25 MB</span>
+          <span className="text-xs text-text-muted">up to 25 MB</span>
         </div>
 
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
@@ -1410,9 +1410,9 @@ function PostCard({
               type="button"
               onClick={removeApproval}
               disabled={removingApproval || submitting || uploading}
-              className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-4 py-2 text-xs font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50 sm:py-1.5"
+              className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-4 py-2.5 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50 sm:py-2"
             >
-              {removingApproval ? <Loader2 size={12} className="animate-spin" /> : <Undo2 size={12} />}
+              {removingApproval ? <Loader2 size={14} className="animate-spin" /> : <Undo2 size={14} />}
               Remove approval
             </button>
           ) : (
@@ -1420,18 +1420,18 @@ function PostCard({
               type="button"
               onClick={() => submit('approved')}
               disabled={submitting || uploading}
-              className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-accent px-4 py-2 text-xs font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 disabled:hover:bg-accent sm:py-1.5"
+              className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-accent px-4 py-2.5 text-sm font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 disabled:hover:bg-accent sm:py-2"
             >
-              <CheckCircle size={12} /> Approve
+              <CheckCircle size={14} /> Approve
             </button>
           )}
           <button
             type="button"
             onClick={() => submit('changes_requested')}
             disabled={submitting || uploading || (!commentText.trim() && pendingAttachments.length === 0)}
-            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-4 py-2 text-xs font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50 sm:py-1.5"
+            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-4 py-2.5 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50 sm:py-2"
           >
-            <MessageSquare size={12} /> Add revision
+            <MessageSquare size={14} /> Add revision
           </button>
         </div>
       </div>
