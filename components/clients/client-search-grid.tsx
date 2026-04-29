@@ -9,7 +9,8 @@ import {
   List,
   MoreHorizontal,
   Check,
-  ArrowRight,
+  Link2,
+  Trash2,
 } from 'lucide-react';
 // (SpotlightCard — the cursor-following cyan radial hover glow — was removed
 // 2026-04-24: looked stuck-blue on AC paper and wasn't needed to signal
@@ -132,32 +133,42 @@ const BUCKET_AGENCY_VALUE: Record<AgencyBucket, string | null> = {
   anderson: 'Anderson Collaborative',
 };
 
-// ─── Move menu ─────────────────────────────────────────────────────────────
+// ─── Action menu ───────────────────────────────────────────────────────────
 //
-// Single always-visible "Move" control replaces the old HTML5 drag-drop. The
-// menu adapts to the current sectioning mode — if the grid is organized by
-// user groups, it lists groups + Unassigned; if organized by agency bucket,
-// it lists the agency rows (Onboarding is read-only and excluded). Keeps the
-// interaction one click deep, which is what Jack asked for.
+// Per-card ellipsis menu with three actions: Move (to a group or agency
+// bucket, depending on sectioning mode), Copy invite link (mints a fresh
+// /join/<token> URL via /api/invites), and Delete. Replaced the old
+// always-visible "Move →" pill on 2026-04-28 — a single trigger keeps the
+// hover state of the card calm and gives delete + invite a home that isn't
+// hidden in the detail page.
 
 type MoveMode = 'groups' | 'agency';
 
-function MoveMenu({
+function ActionMenu({
   mode,
   groups,
+  clientId,
+  clientName,
   currentGroupId,
   currentBucket,
   onMoveGroup,
   onMoveAgency,
+  onDeleted,
 }: {
   mode: MoveMode;
   groups: ClientGroup[];
+  clientId: string;
+  clientName: string;
   currentGroupId: string | null | undefined;
   currentBucket: AgencyBucket;
   onMoveGroup: (groupId: string | null) => void;
   onMoveAgency: (bucket: AgencyBucket) => void;
+  onDeleted: (dbId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -176,84 +187,159 @@ function MoveMenu({
     };
   }, [open]);
 
-  // Agency buckets the user can pick — onboarding is tracker-driven, so it
-  // never appears as a manual destination.
   const agencyChoices = BUCKET_ORDER.filter((b) => b !== 'onboarding');
 
+  async function handleCopyInvite() {
+    if (copying) return;
+    setCopying(true);
+    try {
+      const res = await fetch('/api/invites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: clientId }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { invite_url?: string; error?: string };
+      if (!res.ok || !data.invite_url) {
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
+      await navigator.clipboard.writeText(data.invite_url);
+      toast.success('Invite link copied');
+    } catch (err) {
+      toast.error(`Failed to copy invite link: ${(err as Error).message}`);
+    } finally {
+      setCopying(false);
+      setOpen(false);
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string; details?: string };
+        const msg = [data.error ?? 'Failed to delete', data.details].filter(Boolean).join(' — ');
+        throw new Error(msg);
+      }
+      toast.success(`${clientName} deleted`);
+      onDeleted(clientId);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete client');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
-    <div ref={rootRef} className="relative">
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-        className="inline-flex items-center gap-1 rounded-md border border-nativz-border/70 bg-surface px-2 py-1 text-[11px] font-medium text-text-secondary hover:border-accent-border/60 hover:text-text-primary hover:bg-surface-hover cursor-pointer transition-colors"
-        title="Move to…"
-        aria-label="Move client"
-        aria-haspopup="menu"
-        aria-expanded={open}
-      >
-        <ArrowRight size={11} />
-        Move
-      </button>
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 top-full mt-1 z-30 min-w-[200px] rounded-lg border border-nativz-border bg-surface shadow-xl animate-[popIn_150ms_ease-out] py-1"
-          onClick={(e) => e.stopPropagation()}
+    <>
+      <div ref={rootRef} className="relative">
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-nativz-border/70 bg-surface text-text-secondary hover:border-accent-border/60 hover:text-text-primary hover:bg-surface-hover cursor-pointer transition-colors"
+          title="Actions"
+          aria-label={`Actions for ${clientName}`}
+          aria-haspopup="menu"
+          aria-expanded={open}
         >
-          <div className="px-3 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-text-muted/70">
-            Move to
-          </div>
-          {mode === 'groups' ? (
-            <>
-              {groups.map((g) => {
-                const s = colorStyles(g.color);
-                const active = g.id === currentGroupId;
+          <MoreHorizontal size={14} />
+        </button>
+        {open && (
+          <div
+            role="menu"
+            className="absolute right-0 top-full mt-1 z-30 min-w-[220px] rounded-lg border border-nativz-border bg-surface shadow-xl animate-[popIn_150ms_ease-out] py-1"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-3 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-text-muted/70">
+              Move to
+            </div>
+            {mode === 'groups' ? (
+              <>
+                {groups.map((g) => {
+                  const s = colorStyles(g.color);
+                  const active = g.id === currentGroupId;
+                  return (
+                    <button
+                      key={g.id}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => { setOpen(false); onMoveGroup(g.id); }}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-primary hover:bg-surface-hover transition-colors text-left"
+                    >
+                      <span className={`h-2 w-2 rounded-full ${s.dot}`} />
+                      <span className="flex-1 truncate">{g.name}</span>
+                      {active && <Check size={12} className="text-accent-text" />}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => { setOpen(false); onMoveGroup(null); }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-muted hover:bg-surface-hover transition-colors text-left"
+                >
+                  <span className="h-2 w-2 rounded-full bg-slate-600" />
+                  <span className="flex-1">Unassigned</span>
+                  {!currentGroupId && <Check size={12} className="text-accent-text" />}
+                </button>
+              </>
+            ) : (
+              agencyChoices.map((b) => {
+                const active = b === currentBucket;
                 return (
                   <button
-                    key={g.id}
+                    key={b}
                     type="button"
                     role="menuitem"
-                    onClick={() => { setOpen(false); onMoveGroup(g.id); }}
+                    onClick={() => { setOpen(false); if (!active) onMoveAgency(b); }}
                     className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-primary hover:bg-surface-hover transition-colors text-left"
                   >
-                    <span className={`h-2 w-2 rounded-full ${s.dot}`} />
-                    <span className="flex-1 truncate">{g.name}</span>
+                    <span className="flex-1 truncate">{BUCKET_LABEL[b]}</span>
                     {active && <Check size={12} className="text-accent-text" />}
                   </button>
                 );
-              })}
-              <div className="my-1 h-px bg-nativz-border/60" />
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => { setOpen(false); onMoveGroup(null); }}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-muted hover:bg-surface-hover transition-colors text-left"
-              >
-                <span className="h-2 w-2 rounded-full bg-slate-600" />
-                <span className="flex-1">Unassigned</span>
-                {!currentGroupId && <Check size={12} className="text-accent-text" />}
-              </button>
-            </>
-          ) : (
-            agencyChoices.map((b) => {
-              const active = b === currentBucket;
-              return (
-                <button
-                  key={b}
-                  type="button"
-                  role="menuitem"
-                  onClick={() => { setOpen(false); if (!active) onMoveAgency(b); }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-primary hover:bg-surface-hover transition-colors text-left"
-                >
-                  <span className="flex-1 truncate">{BUCKET_LABEL[b]}</span>
-                  {active && <Check size={12} className="text-accent-text" />}
-                </button>
-              );
-            })
-          )}
-        </div>
-      )}
-    </div>
+              })
+            )}
+
+            <div className="my-1 h-px bg-nativz-border/60" />
+
+            <button
+              type="button"
+              role="menuitem"
+              disabled={copying}
+              onClick={() => void handleCopyInvite()}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-primary hover:bg-surface-hover transition-colors text-left disabled:opacity-60"
+            >
+              <Link2 size={13} className="text-text-muted" />
+              <span className="flex-1">{copying ? 'Copying…' : 'Copy invite link'}</span>
+            </button>
+
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => { setOpen(false); setConfirmDelete(true); }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors text-left"
+            >
+              <Trash2 size={13} />
+              <span className="flex-1">Delete</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete client"
+        description={`Delete "${clientName}"? This cannot be undone.`}
+        confirmLabel={deleting ? 'Deleting…' : 'Delete'}
+        variant="danger"
+        onConfirm={() => {
+          setConfirmDelete(false);
+          void handleDelete();
+        }}
+        onCancel={() => setConfirmDelete(false)}
+      />
+    </>
   );
 }
 
@@ -269,6 +355,7 @@ function ClientCard({
   onNavigate,
   onMoveGroup,
   onMoveAgency,
+  onDeleted,
   animate = true,
 }: {
   client: ClientItem;
@@ -282,6 +369,7 @@ function ClientCard({
   onNavigate: () => void;
   onMoveGroup: (groupId: string | null) => void;
   onMoveAgency: (bucket: AgencyBucket) => void;
+  onDeleted: (dbId: string) => void;
   /**
    * When false, skip the entrance stagger animation. We turn this off after
    * the initial mount so cards don't re-animate from scratch on layout shifts.
@@ -292,27 +380,28 @@ function ClientCard({
   const staggerClass = animate ? 'animate-stagger-in' : '';
   const currentBucket = bucketFor(client.agency, client.inOnboarding);
 
-  // 2026-04-25: dropped the always-visible Eye (Impersonate) and Trash
-  // (Delete) icons that used to live at the card's top-right. Both actions
-  // now live inside the client detail page's identity header, which is one
-  // click away. Move stays — it's the only card-level action that makes
-  // sense without leaving the grid.
-  const moveButton = client.dbId && (
+  // 2026-04-28: Move pill became an ellipsis menu (Move / Copy invite link /
+  // Delete) — keeps the card resting state quiet and gives delete + invite
+  // mint a home that doesn't require opening the detail page.
+  const actionMenu = client.dbId && (
     <div className="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
-      <MoveMenu
+      <ActionMenu
         mode={moveMode}
         groups={groups}
+        clientId={client.dbId}
+        clientName={client.name}
         currentGroupId={client.groupId}
         currentBucket={currentBucket}
         onMoveGroup={onMoveGroup}
         onMoveAgency={onMoveAgency}
+        onDeleted={onDeleted}
       />
     </div>
   );
 
   const actionButtons = (
     <div className="flex items-center gap-0.5">
-      {moveButton}
+      {actionMenu}
     </div>
   );
 
@@ -765,6 +854,10 @@ export function ClientSearchGrid({
   // what the user is currently seeing on screen.
   const moveMode: MoveMode = useGroupSections ? 'groups' : 'agency';
 
+  const handleDeleted = useCallback((dbId: string) => {
+    setAllClients((xs) => xs.filter((c) => c.dbId !== dbId));
+  }, []);
+
   function renderBucket(items: typeof active, dimmed: boolean, indexBase = 0) {
     const commonCardProps = (client: (typeof items)[number], i: number) => ({
       client,
@@ -776,6 +869,7 @@ export function ClientSearchGrid({
       onNavigate: () => router.push(`/admin/clients/${client.slug}`),
       onMoveGroup: (gid: string | null) => client.dbId && handleMoveGroup(client.dbId, gid),
       onMoveAgency: (bucket: AgencyBucket) => handleMoveAgency(client, bucket),
+      onDeleted: handleDeleted,
     });
     if (listView) {
       return (
