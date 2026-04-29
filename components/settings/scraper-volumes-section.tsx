@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Check, Loader2 } from 'lucide-react';
+import { Check, Cpu, Loader2 } from 'lucide-react';
 import { PER_UNIT_COST_USD } from '@/lib/search/scraper-cost-constants';
 import { PLATFORM_CONFIG } from '@/components/search/platform-icon';
 import { TooltipCard } from '@/components/ui/tooltip-card';
@@ -166,6 +166,18 @@ interface UnitPricesResp {
   source?: Record<string, { actor: string; runs: number; source: string; price: number }> | null;
 }
 
+interface LlmCostResp {
+  modelId: string;
+  promptPricePerM: number | null;
+  completionPricePerM: number | null;
+  avgInputTokens: number;
+  avgOutputTokens: number;
+  costUsd: number | null;
+  sampleSize: number;
+  windowDays: number;
+  pricingAvailable: boolean;
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────
 
 function formatUsd(n: number): string {
@@ -177,6 +189,19 @@ function formatUsd(n: number): string {
 function formatUnitPrice(n: number): string {
   if (n === 0) return 'free';
   return `$${n.toFixed(4)}`;
+}
+
+function formatTokenCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}K`;
+  return `${n}`;
+}
+
+function formatPricePerM(n: number | null): string {
+  if (n == null) return '—';
+  if (n === 0) return 'free';
+  if (n < 0.01) return '<$0.01';
+  return `$${n.toFixed(2)}`;
 }
 
 function formatRelativeTime(iso: string | null): string {
@@ -199,14 +224,26 @@ function clampInt(raw: string | number): number {
   return Math.max(0, Math.min(5000, n));
 }
 
+type CostKey = PlatformKey | 'ai';
+
 // Platform palette — muted brand-adjacent hues so the donut reads as a
 // professional data viz rather than a saturated social-media mosaic. Same
-// map drives legend swatches so donut + side-list never drift.
-const PIE_COLORS: Record<PlatformKey, string> = {
+// map drives legend swatches so donut + side-list never drift. AI gets the
+// teal accent so the cost bar mirrors the IconCard swatch on each platform.
+const PIE_COLORS: Record<CostKey, string> = {
   reddit: '#EA580C',  // orange-600
   youtube: '#DC2626', // red-600
   tiktok: '#7C3AED',  // violet-600
   web: '#2563EB',     // blue-600
+  ai: '#14B8A6',      // teal-500 (Cortex accent)
+};
+
+const COST_LABELS: Record<CostKey, string> = {
+  reddit: 'Reddit',
+  youtube: 'YouTube',
+  tiktok: 'TikTok',
+  web: 'Web',
+  ai: 'AI',
 };
 
 // ── Main component ──────────────────────────────────────────────────────
@@ -214,6 +251,7 @@ const PIE_COLORS: Record<PlatformKey, string> = {
 export function ScraperVolumesSection() {
   const [row, setRow] = useState<SettingsRow | null>(null);
   const [prices, setPrices] = useState<UnitPricesResp | null>(null);
+  const [llmCost, setLlmCost] = useState<LlmCostResp | null>(null);
   const [loading, setLoading] = useState(true);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -223,12 +261,21 @@ export function ScraperVolumesSection() {
   useEffect(() => {
     void (async () => {
       try {
-        const res = await fetch('/api/admin/scraper-settings');
-        if (!res.ok) throw new Error(`status ${res.status}`);
-        const j = await res.json();
+        const [scrapeRes, llmRes] = await Promise.all([
+          fetch('/api/admin/scraper-settings'),
+          fetch('/api/admin/topic-search-llm-cost'),
+        ]);
+        if (!scrapeRes.ok) throw new Error(`status ${scrapeRes.status}`);
+        const j = await scrapeRes.json();
         setRow(j.settings);
         lastSavedRef.current = j.settings;
         setPrices(j.prices);
+        if (llmRes.ok) {
+          setLlmCost(await llmRes.json());
+        } else {
+          // Non-fatal — scrape volumes still render without the AI tile.
+          console.warn('llm-cost fetch failed', llmRes.status);
+        }
       } catch (err) {
         toast.error(`Failed to load volumes: ${(err as Error).message}`);
       } finally {
@@ -259,9 +306,11 @@ export function ScraperVolumesSection() {
     };
   }, [row, unitPrice]);
 
-  const totalCost = perPlatformCost
+  const aiCost = llmCost?.costUsd ?? 0;
+  const scrapeCost = perPlatformCost
     ? Object.values(perPlatformCost).reduce((a, b) => a + b, 0)
     : 0;
+  const totalCost = scrapeCost + aiCost;
 
   // Debounced autosave — fires 600ms after the last change. Manual state
   // transitions idle → saving → saved (brief flash) → idle so the user
@@ -336,13 +385,126 @@ export function ScraperVolumesSection() {
         ))}
       </div>
 
+      <AiCostCard llmCost={llmCost} />
+
       <CostSummaryBar
         perPlatformCost={perPlatformCost}
+        aiCost={aiCost}
         totalCost={totalCost}
         row={row}
         pricesRefreshedAt={prices?.refreshedAt ?? null}
         saveState={saveState}
       />
+    </div>
+  );
+}
+
+// ── AI cost card ────────────────────────────────────────────────────────
+
+/**
+ * Read-only summary of the LLM portion of a topic search:
+ *   - currently configured topic-search model id
+ *   - that model's live per-1M-token pricing (OpenRouter)
+ *   - empirical avg input/output tokens per search (last 30 days)
+ *   - resulting per-search cost
+ *
+ * Sits between the per-platform sliders and the cost summary because LLM
+ * cost isn't tied to slider values — it's a property of the model choice
+ * (set in the AI tab). Sample-size hint surfaces when the empirical window
+ * is thin so the user knows the number is a coarse default.
+ */
+function AiCostCard({ llmCost }: { llmCost: LlmCostResp | null }) {
+  if (!llmCost) {
+    return (
+      <div className="rounded-xl border border-nativz-border bg-surface p-5">
+        <div className="flex animate-pulse items-center gap-3">
+          <div className="h-9 w-9 rounded-xl bg-surface-hover" />
+          <div className="h-4 w-40 rounded bg-surface-hover" />
+        </div>
+      </div>
+    );
+  }
+
+  const { modelId, promptPricePerM, completionPricePerM, avgInputTokens, avgOutputTokens, costUsd, sampleSize, windowDays, pricingAvailable } =
+    llmCost;
+  const lowConfidence = sampleSize < 5;
+
+  return (
+    <section className="rounded-xl border border-nativz-border bg-surface p-5">
+      <header className="flex items-start justify-between gap-3">
+        <TooltipCard
+          title="AI cost"
+          description={`Estimated LLM spend for one topic search. Tokens are averaged from the last ${windowDays} days of api_usage_logs (${sampleSize} search${sampleSize === 1 ? '' : 'es'}); pricing is live from OpenRouter for whichever model is configured in the AI tab.`}
+          iconTrigger
+        >
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent-text">
+              <Cpu size={18} />
+            </span>
+            <div>
+              <h3 className="cursor-help text-base font-semibold text-text-primary">AI</h3>
+              <p className="text-[11px] text-text-muted">
+                {pricingAvailable ? formatUsd(costUsd ?? 0) : 'pricing unavailable'} per search
+              </p>
+            </div>
+          </div>
+        </TooltipCard>
+        <code className="shrink-0 rounded-md bg-background/60 px-2 py-1 text-[11px] font-medium text-text-secondary">
+          {modelId}
+        </code>
+      </header>
+
+      <dl className="mt-4 grid grid-cols-1 gap-3 text-[13px] sm:grid-cols-3">
+        <AiCostStat
+          label="Input price"
+          value={`${formatPricePerM(promptPricePerM)} / 1M`}
+          tooltip="Live OpenRouter price for prompt tokens on the configured model."
+        />
+        <AiCostStat
+          label="Output price"
+          value={`${formatPricePerM(completionPricePerM)} / 1M`}
+          tooltip="Live OpenRouter price for completion tokens on the configured model."
+        />
+        <AiCostStat
+          label="Tokens / search"
+          value={
+            <span className="tabular-nums">
+              {formatTokenCount(avgInputTokens)} in · {formatTokenCount(avgOutputTokens)} out
+            </span>
+          }
+          tooltip={`Empirical average across the last ${windowDays} days (${sampleSize} search${sampleSize === 1 ? '' : 'es'}).${lowConfidence ? ' Falling back to a coarse default until more searches log.' : ''}`}
+          warn={lowConfidence}
+        />
+      </dl>
+    </section>
+  );
+}
+
+function AiCostStat({
+  label,
+  value,
+  tooltip,
+  warn,
+}: {
+  label: string;
+  value: React.ReactNode;
+  tooltip: string;
+  warn?: boolean;
+}) {
+  return (
+    <div>
+      <TooltipCard title={label} description={tooltip}>
+        <dt className="cursor-help text-[11px] font-medium uppercase tracking-wider text-text-muted">
+          {label}
+        </dt>
+      </TooltipCard>
+      <dd
+        className={`mt-1 text-[14px] font-semibold tabular-nums ${
+          warn ? 'text-amber-300' : 'text-text-primary'
+        }`}
+      >
+        {value}
+      </dd>
     </div>
   );
 }
@@ -356,31 +518,39 @@ export function ScraperVolumesSection() {
  */
 function CostSummaryBar({
   perPlatformCost,
+  aiCost,
   totalCost,
   row,
   pricesRefreshedAt,
   saveState,
 }: {
   perPlatformCost: Record<PlatformKey, number> | null;
+  aiCost: number;
   totalCost: number;
   row: SettingsRow;
   pricesRefreshedAt: string | null;
   saveState: 'idle' | 'saving' | 'saved';
 }) {
-  const [activeKey, setActiveKey] = useState<PlatformKey | null>(null);
+  const [activeKey, setActiveKey] = useState<CostKey | null>(null);
 
   const segments = useMemo(() => {
     if (!perPlatformCost) return [];
-    return (Object.entries(perPlatformCost) as [PlatformKey, number][])
-      .filter(([, v]) => v > 0)
-      .map(([platform, value]) => ({
-        platform,
-        value,
-        pct: totalCost > 0 ? (value / totalCost) * 100 : 0,
-        count: row[primaryFieldForPlatform(platform)],
+    const entries: Array<{ key: CostKey; value: number; count: number | null }> = (
+      Object.entries(perPlatformCost) as [PlatformKey, number][]
+    ).map(([platform, value]) => ({
+      key: platform,
+      value,
+      count: row[primaryFieldForPlatform(platform)],
+    }));
+    if (aiCost > 0) entries.push({ key: 'ai', value: aiCost, count: null });
+    return entries
+      .filter((e) => e.value > 0)
+      .map((e) => ({
+        ...e,
+        pct: totalCost > 0 ? (e.value / totalCost) * 100 : 0,
       }))
       .sort((a, b) => b.value - a.value);
-  }, [perPlatformCost, totalCost, row]);
+  }, [perPlatformCost, aiCost, totalCost, row]);
 
   return (
     <div className="rounded-xl border border-nativz-border bg-surface p-5">
@@ -407,26 +577,26 @@ function CostSummaryBar({
           >
             {segments.map((seg) => (
               <div
-                key={seg.platform}
-                onMouseEnter={() => setActiveKey(seg.platform)}
+                key={seg.key}
+                onMouseEnter={() => setActiveKey(seg.key)}
                 className="h-full transition-opacity duration-150"
                 style={{
                   width: `${seg.pct}%`,
-                  backgroundColor: PIE_COLORS[seg.platform],
-                  opacity: activeKey == null || activeKey === seg.platform ? 1 : 0.35,
+                  backgroundColor: PIE_COLORS[seg.key],
+                  opacity: activeKey == null || activeKey === seg.key ? 1 : 0.35,
                 }}
-                title={`${PLATFORM_CONFIG[seg.platform].label}: ${formatUsd(seg.value)} (${seg.pct.toFixed(1)}%)`}
+                title={`${COST_LABELS[seg.key]}: ${formatUsd(seg.value)} (${seg.pct.toFixed(1)}%)`}
               />
             ))}
           </div>
 
           <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-[12px]">
             {segments.map((seg) => {
-              const dim = activeKey != null && activeKey !== seg.platform;
+              const dim = activeKey != null && activeKey !== seg.key;
               return (
                 <li
-                  key={seg.platform}
-                  onMouseEnter={() => setActiveKey(seg.platform)}
+                  key={seg.key}
+                  onMouseEnter={() => setActiveKey(seg.key)}
                   onMouseLeave={() => setActiveKey(null)}
                   className={`flex items-center gap-2 transition-opacity ${
                     dim ? 'opacity-50' : 'opacity-100'
@@ -435,12 +605,12 @@ function CostSummaryBar({
                   <span
                     aria-hidden
                     className="inline-block h-2 w-2 shrink-0 rounded-full"
-                    style={{ backgroundColor: PIE_COLORS[seg.platform] }}
+                    style={{ backgroundColor: PIE_COLORS[seg.key] }}
                   />
-                  <span className="text-text-secondary">
-                    {PLATFORM_CONFIG[seg.platform].label}
-                  </span>
-                  <span className="text-text-muted">· {seg.count}</span>
+                  <span className="text-text-secondary">{COST_LABELS[seg.key]}</span>
+                  {seg.count != null ? (
+                    <span className="text-text-muted">· {seg.count}</span>
+                  ) : null}
                   <span className="tabular-nums text-text-primary">{formatUsd(seg.value)}</span>
                   <span className="tabular-nums text-text-muted/70">
                     · {seg.pct < 1 ? '<1%' : `${Math.round(seg.pct)}%`}
