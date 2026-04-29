@@ -1343,7 +1343,7 @@ function PostCard({
                   revisionInputRef.current?.click();
                 }}
                 disabled={uploadingRevision}
-                className="inline-flex w-fit items-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3.5 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+                className="inline-flex self-center items-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3.5 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
               >
                 {uploadingRevision ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
                 {uploadingRevision ? 'Uploading…' : 'Replace media'}
