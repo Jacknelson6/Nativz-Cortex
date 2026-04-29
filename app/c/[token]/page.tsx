@@ -469,7 +469,19 @@ function SharedDropView({
             ))}
           </div>
         ) : (
-          <CalendarGrid posts={sortedPosts} drop={data.drop} onSelect={(p) => setDetailPostId(p.id)} />
+          <CalendarGrid
+            posts={sortedPosts}
+            drop={data.drop}
+            token={token}
+            authorName={authorName}
+            defaultPostTime={data.drop.default_post_time}
+            onSelect={(p) => setDetailPostId(p.id)}
+            onScheduleUpdated={updatePostScheduledAt}
+            requireName={() => {
+              setPendingName(authorName);
+              setNameModalOpen(true);
+            }}
+          />
         )}
       </main>
 
@@ -847,13 +859,89 @@ function PostDetailModal({
 function CalendarGrid({
   posts,
   drop,
+  token,
+  authorName,
+  defaultPostTime,
   onSelect,
+  onScheduleUpdated,
+  requireName,
 }: {
   posts: SharedPost[];
   drop: SharedDrop['drop'];
+  token: string;
+  authorName: string;
+  defaultPostTime: string;
   onSelect: (post: SharedPost) => void;
+  onScheduleUpdated: (postId: string, nextAt: string | null, c: SharedComment | null) => void;
+  requireName: () => void;
 }) {
   const { weeks, monthLabel } = useMemo(() => buildCalendarWeeks(posts, drop), [posts, drop]);
+  // Lifted drag state — the cell renders a different border treatment when
+  // it's the source vs an active drop target. Using state here (instead of
+  // dataTransfer-only) gives us a hover-feedback frame across the grid.
+  const [draggingPostId, setDraggingPostId] = useState<string | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+  const [moving, setMoving] = useState(false);
+
+  const postsById = useMemo(() => {
+    const map: Record<string, SharedPost> = {};
+    for (const p of posts) map[p.id] = p;
+    return map;
+  }, [posts]);
+
+  async function movePostToDate(postId: string, target: Date) {
+    if (moving) return;
+    if (!authorName.trim()) {
+      requireName();
+      return;
+    }
+    const post = postsById[postId];
+    if (!post) return;
+    const isPublished =
+      post.status === 'published' || post.status === 'publishing' || post.status === 'partially_failed';
+    if (isPublished) {
+      toast.error('Already published — date is locked');
+      return;
+    }
+    // Preserve the post's original time-of-day on the new date — falling back
+    // to the drop's default_post_time when the post was previously
+    // unscheduled (which can't actually drag from the calendar today, but
+    // we keep the branch for future drag-from-list-into-calendar flows).
+    const scheduledAt = buildScheduledAtForDate(target, post.scheduled_at, defaultPostTime);
+    const targetIso = scheduledAt;
+    setMoving(true);
+    // Optimistic local update — the parent's setData runs through
+    // onScheduleUpdated below, so we can roll back if the server rejects.
+    const previousIso = post.scheduled_at;
+    onScheduleUpdated(postId, new Date(targetIso).toISOString(), null);
+    try {
+      const res = await fetch(`/api/calendar/share/${token}/schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          postId,
+          authorName: authorName.trim(),
+          scheduledAt: targetIso,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof json.error === 'string' ? json.error : 'Failed to update date');
+      }
+      onScheduleUpdated(
+        postId,
+        (json.scheduledAt as string | null) ?? null,
+        (json.comment as SharedComment | null) ?? null,
+      );
+      toast.success('Date updated');
+    } catch (err) {
+      // Roll back the optimistic move on failure.
+      onScheduleUpdated(postId, previousIso, null);
+      toast.error(err instanceof Error ? err.message : 'Failed to update date');
+    } finally {
+      setMoving(false);
+    }
+  }
 
   return (
     <div className="rounded-xl border border-nativz-border bg-surface p-2 sm:p-4">
@@ -864,10 +952,43 @@ function CalendarGrid({
         ))}
       </div>
       <div className="mt-1 grid grid-cols-7 gap-0.5 sm:gap-1">
-        {weeks.flat().map((cell, idx) => (
-          <CalendarCell key={idx} cell={cell} onSelect={onSelect} />
-        ))}
+        {weeks.flat().map((cell, idx) => {
+          const key = ymdKey(cell.date);
+          return (
+            <CalendarCell
+              key={idx}
+              cell={cell}
+              isDragOver={dragOverKey === key && !!draggingPostId}
+              draggingPostId={draggingPostId}
+              onSelect={onSelect}
+              onDragStart={(postId) => setDraggingPostId(postId)}
+              onDragEnd={() => {
+                setDraggingPostId(null);
+                setDragOverKey(null);
+              }}
+              onDragOver={() => setDragOverKey(key)}
+              onDragLeave={() => {
+                setDragOverKey((curr) => (curr === key ? null : curr));
+              }}
+              onDrop={(postId) => {
+                setDragOverKey(null);
+                setDraggingPostId(null);
+                // Don't fire if the user dropped on the same day they
+                // started from — pointless and would still log a comment.
+                const post = postsById[postId];
+                if (post?.scheduled_at && isSameDay(new Date(post.scheduled_at), cell.date)) return;
+                void movePostToDate(postId, cell.date);
+              }}
+            />
+          );
+        })}
       </div>
+      {/* Subtle hint so first-time users discover the affordance — only
+          renders when there's at least one schedulable post and an admin
+          isn't already dragging. */}
+      <p className="mt-2 px-1 text-[11px] text-text-muted sm:px-0">
+        Drag a post to a different day to reschedule.
+      </p>
     </div>
   );
 }
@@ -880,25 +1001,136 @@ interface CalendarCell {
 
 function CalendarCell({
   cell,
+  isDragOver,
+  draggingPostId,
   onSelect,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDragLeave,
+  onDrop,
 }: {
   cell: CalendarCell;
+  isDragOver: boolean;
+  draggingPostId: string | null;
   onSelect: (post: SharedPost) => void;
+  onDragStart: (postId: string) => void;
+  onDragEnd: () => void;
+  onDragOver: () => void;
+  onDragLeave: () => void;
+  onDrop: (postId: string) => void;
 }) {
   const isToday = isSameDay(cell.date, new Date());
+  const post = cell.posts[0] ?? null;
+  const review = post ? latestReview(post.comments) : null;
+  const isPublished = post
+    ? post.status === 'published' || post.status === 'publishing' || post.status === 'partially_failed'
+    : false;
+  const isDraggable = !!post && !isPublished;
+  const isSourceCell = !!post && post.id === draggingPostId;
+
+  // Visual treatment:
+  //   - draggable cells with a post: full-bleed 9:16 thumbnail
+  //   - empty in-month cells: thin border, day number top-left
+  //   - out-of-month padding cells: transparent
+  const baseClass = `relative aspect-[9/16] overflow-hidden rounded-md border transition-all ${
+    cell.inMonth
+      ? isDragOver
+        ? 'border-accent ring-2 ring-accent/40 bg-accent-surface'
+        : 'border-nativz-border bg-background/40'
+      : 'border-transparent bg-transparent'
+  }`;
+
   return (
     <div
-      className={`relative flex aspect-square min-h-[44px] flex-col rounded-md border p-1 sm:min-h-[72px] sm:p-1.5 ${
-        cell.inMonth
-          ? 'border-nativz-border bg-background/40'
-          : 'border-transparent bg-transparent'
-      }`}
+      className={baseClass}
+      onDragOver={(e) => {
+        // preventDefault is mandatory to mark a drop target as valid.
+        if (!draggingPostId) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        onDragOver();
+      }}
+      onDragLeave={onDragLeave}
+      onDrop={(e) => {
+        e.preventDefault();
+        const postId = e.dataTransfer.getData('text/plain');
+        if (postId) onDrop(postId);
+      }}
     >
-      <div className="flex items-center justify-between">
+      {post ? (
+        <button
+          type="button"
+          onClick={() => onSelect(post)}
+          draggable={isDraggable}
+          onDragStart={(e) => {
+            if (!isDraggable) {
+              e.preventDefault();
+              return;
+            }
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', post.id);
+            onDragStart(post.id);
+          }}
+          onDragEnd={onDragEnd}
+          className={`group absolute inset-0 block w-full overflow-hidden bg-surface-hover transition-transform ${
+            isSourceCell ? 'opacity-40' : 'hover:scale-[1.02]'
+          } ${isDraggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+          title={post.caption.slice(0, 80)}
+        >
+          {post.cover_image_url ? (
+            <img
+              src={post.cover_image_url}
+              alt=""
+              className="h-full w-full object-cover"
+              draggable={false}
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <Film size={18} className="text-text-muted" />
+            </div>
+          )}
+          {post.video_url && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-black/55 shadow ring-1 ring-white/20 backdrop-blur-sm">
+                <Play size={11} className="ml-px text-white" fill="white" />
+              </div>
+            </div>
+          )}
+          {review === 'approved' && (
+            <span className="absolute right-1 top-1 rounded-full bg-status-success p-0.5">
+              <CheckCircle size={10} className="text-accent-contrast" />
+            </span>
+          )}
+          {review === 'changes_requested' && (
+            <span className="absolute right-1 top-1 rounded-full bg-status-warning p-0.5">
+              <AlertTriangle size={10} className="text-accent-contrast" />
+            </span>
+          )}
+          {/* Day number overlays the thumbnail in a translucent black chip so
+              it stays legible against any cover image. */}
+          <span
+            className={`absolute left-1 top-1 inline-flex items-center justify-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${
+              isToday
+                ? 'bg-accent text-accent-contrast'
+                : 'bg-black/55 text-white backdrop-blur-sm'
+            }`}
+          >
+            {cell.date.getDate()}
+          </span>
+          {cell.posts.length > 1 && (
+            <span className="absolute right-1 bottom-1 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+              +{cell.posts.length - 1}
+            </span>
+          )}
+        </button>
+      ) : (
+        // Empty cell — day number top-left in muted color. Drop target still
+        // active because the parent <div> handles dragover/drop.
         <span
-          className={`text-[11px] ${
+          className={`absolute left-1 top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[11px] ${
             isToday
-              ? 'inline-flex h-5 w-5 items-center justify-center rounded-full bg-accent font-semibold text-accent-contrast'
+              ? 'bg-accent font-semibold text-accent-contrast'
               : cell.inMonth
                 ? 'text-text-secondary'
                 : 'text-text-muted/40'
@@ -906,51 +1138,7 @@ function CalendarCell({
         >
           {cell.date.getDate()}
         </span>
-        {cell.posts.length > 1 && (
-          <span className="text-[10px] text-text-muted">+{cell.posts.length - 1}</span>
-        )}
-      </div>
-      {cell.posts.slice(0, 1).map((p) => {
-        const review = latestReview(p.comments);
-        return (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => onSelect(p)}
-            className="group relative mt-1 block flex-1 overflow-hidden rounded-sm bg-surface-hover transition-transform hover:scale-[1.02]"
-            title={p.caption.slice(0, 80)}
-          >
-            {p.cover_image_url ? (
-              <img
-                src={p.cover_image_url}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center">
-                <Film size={14} className="text-text-muted" />
-              </div>
-            )}
-            {p.video_url && (
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-black/55 shadow ring-1 ring-white/20 backdrop-blur-sm">
-                  <Play size={10} className="ml-px text-white" fill="white" />
-                </div>
-              </div>
-            )}
-            {review === 'approved' && (
-              <span className="absolute right-0.5 top-0.5 rounded-full bg-status-success p-0.5">
-                <CheckCircle size={9} className="text-accent-contrast" />
-              </span>
-            )}
-            {review === 'changes_requested' && (
-              <span className="absolute right-0.5 top-0.5 rounded-full bg-status-warning p-0.5">
-                <AlertTriangle size={9} className="text-accent-contrast" />
-              </span>
-            )}
-          </button>
-        );
-      })}
+      )}
     </div>
   );
 }
@@ -2423,6 +2611,32 @@ function suggestedDatetimeInput(defaultPostTime: string): string {
   d.setHours(Number(hh), Number(mm), 0, 0);
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/**
+ * Combine a target calendar day with the post's existing time-of-day (or the
+ * drop's default_post_time when the post was previously unscheduled) into the
+ * `YYYY-MM-DDTHH:MM` shape the schedule endpoint accepts. Used by the
+ * calendar-grid drag-drop handler.
+ */
+function buildScheduledAtForDate(
+  target: Date,
+  sourceIso: string | null,
+  defaultPostTime: string,
+): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  let hours = 12;
+  let minutes = 0;
+  if (sourceIso) {
+    const src = new Date(sourceIso);
+    hours = src.getHours();
+    minutes = src.getMinutes();
+  } else {
+    const [hh = '12', mm = '00'] = (defaultPostTime ?? '12:00').split(':');
+    hours = Number(hh);
+    minutes = Number(mm);
+  }
+  return `${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(target.getDate())}T${pad(hours)}:${pad(minutes)}`;
 }
 
 function AttachmentChip({
