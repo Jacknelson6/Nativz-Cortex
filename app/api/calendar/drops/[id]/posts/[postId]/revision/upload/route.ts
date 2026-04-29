@@ -74,6 +74,7 @@ export async function POST(
       revised_video_url: url,
       revised_video_uploaded_at: nowIso,
       revised_video_uploaded_by: user.id,
+      revised_video_notify_pending: true,
     })
     .eq('id', video.id);
   if (updateErr) {
