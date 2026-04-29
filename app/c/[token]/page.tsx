@@ -1402,7 +1402,7 @@ function PostCard({
               type="button"
               onClick={() => submit('approved')}
               disabled={submitting || uploading}
-              className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-status-success px-4 py-2 text-xs font-medium text-white shadow-[var(--shadow-card)] transition-all hover:shadow-[var(--shadow-card-hover)] hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:hover:brightness-100 sm:py-1.5"
+              className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-accent px-4 py-2 text-xs font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 disabled:hover:bg-accent sm:py-1.5"
             >
               <CheckCircle size={12} /> Approve
             </button>
