@@ -257,7 +257,11 @@ const PORTAL_HREF_REWRITES: Record<string, string> = {
  */
 const VIEWER_UNIFIED_HREFS: Record<string, string> = {
   '/admin/calendar': '/calendar',
-  '/admin/calendar/review': '/calendar/review',
+  // Viewer review surface is a top-level /review route (table layout
+  // tuned for client comprehension). The /calendar/review URL still
+  // resolves — it just bounces to /review — so legacy bookmarks keep
+  // working.
+  '/admin/calendar/review': '/review',
 };
 
 function getNavSectionsForRole(role: 'admin' | 'viewer', prefix: string): NavSection[] {
