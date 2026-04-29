@@ -157,10 +157,6 @@ export async function DELETE(
     return NextResponse.json({ error: 'comment is not part of this share link' }, { status: 400 });
   }
 
-  if (comment.status !== 'approved') {
-    return NextResponse.json({ error: 'only approvals can be removed via this endpoint' }, { status: 400 });
-  }
-
   const { error: delErr } = await admin
     .from('post_review_comments')
     .delete()
@@ -169,15 +165,19 @@ export async function DELETE(
     return NextResponse.json({ error: delErr.message }, { status: 500 });
   }
 
-  // Removing an approval can demote the calendar (e.g., "Client approved" →
-  // "Waiting on approval"). Re-derive and push to Monday after the response.
-  after(async () => {
-    try {
-      await syncMondayApprovalForDrop(admin, link.drop_id);
-    } catch (err) {
-      console.error('Monday calendar approval sync failed (delete):', err);
-    }
-  });
+  // Only approval deletions affect the Monday-side state ("Client approved" →
+  // "Waiting on approval"). Other history rows (caption_edit, tag_edit,
+  // schedule_change, video_revised, plain comments) are pure audit trail —
+  // skip the sync to avoid a needless Monday round-trip.
+  if (comment.status === 'approved') {
+    after(async () => {
+      try {
+        await syncMondayApprovalForDrop(admin, link.drop_id);
+      } catch (err) {
+        console.error('Monday calendar approval sync failed (delete):', err);
+      }
+    });
+  }
 
   return NextResponse.json({ ok: true, commentId: comment.id });
 }

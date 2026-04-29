@@ -1329,10 +1329,15 @@ function PostCard({
 
       {post.comments.length > 0 && (
         <div className="border-t border-nativz-border bg-background/40 px-3 py-3 sm:px-4">
-          <h3 className="mb-2 text-xs font-medium text-text-muted">Revisions</h3>
+          <h3 className="mb-2 text-xs font-medium text-text-muted">History</h3>
           <div className="space-y-2">
             {post.comments.map((c) => (
-              <CommentRow key={c.id} comment={c} />
+              <CommentRow
+                key={c.id}
+                comment={c}
+                token={token}
+                onDeleted={() => onCommentRemoved(c.id)}
+              />
             ))}
           </div>
         </div>
@@ -1414,7 +1419,49 @@ function PostCard({
   );
 }
 
-function CommentRow({ comment }: { comment: SharedComment }) {
+function CommentRow({
+  comment,
+  token,
+  onDeleted,
+}: {
+  comment: SharedComment;
+  token: string;
+  onDeleted: () => void;
+}) {
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    if (deleting) return;
+    if (!window.confirm('Remove this from history? This can’t be undone.')) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/calendar/share/${token}/comment`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ commentId: comment.id }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Failed to remove');
+      onDeleted();
+      toast.success('Removed from history');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to remove');
+      setDeleting(false);
+    }
+  }
+
+  const deleteButton = (
+    <button
+      type="button"
+      onClick={handleDelete}
+      disabled={deleting}
+      aria-label="Remove from history"
+      className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-text-muted opacity-0 transition hover:bg-status-danger/15 hover:text-status-danger focus-visible:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {deleting ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}
+    </button>
+  );
+
   const tone =
     comment.status === 'approved'
       ? 'text-status-success'
@@ -1448,11 +1495,12 @@ function CommentRow({ comment }: { comment: SharedComment }) {
 
   if (comment.status === 'caption_edit') {
     return (
-      <div className="rounded-lg border border-accent/25 bg-accent/5 px-3 py-2">
+      <div className="group rounded-lg border border-accent/25 bg-accent/5 px-3 py-2">
         <div className="mb-1 flex items-center gap-2 text-xs">
           <Icon size={11} className={tone} />
           <span className="font-medium text-text-primary">{comment.author_name}</span>
           <span className="text-text-muted">edited the caption · {time}</span>
+          {deleteButton}
         </div>
         {comment.caption_before && (
           <details className="mb-1.5 text-[11px] text-text-muted">
@@ -1478,22 +1526,24 @@ function CommentRow({ comment }: { comment: SharedComment }) {
     comment.status === 'video_revised'
   ) {
     return (
-      <div className="rounded-lg border border-accent/20 bg-accent/5 px-3 py-2">
+      <div className="group rounded-lg border border-accent/20 bg-accent/5 px-3 py-2">
         <div className="flex items-center gap-2 text-xs">
           <Icon size={11} className={tone} />
           <span className="font-medium text-text-primary">{comment.author_name}</span>
           <span className="text-text-muted">{comment.content || activityVerb(comment.status)} · {time}</span>
+          {deleteButton}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-nativz-border bg-surface px-3 py-2">
+    <div className="group rounded-lg border border-nativz-border bg-surface px-3 py-2">
       <div className="mb-0.5 flex items-center gap-2 text-xs">
         <Icon size={11} className={tone} />
         <span className="font-medium text-text-primary">{comment.author_name}</span>
         <span className="text-text-muted">· {time}</span>
+        {deleteButton}
       </div>
       {comment.content && (
         <p className="whitespace-pre-wrap text-sm text-text-secondary">{comment.content}</p>
