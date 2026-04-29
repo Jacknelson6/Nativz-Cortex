@@ -4,29 +4,55 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import {
+  ArrowUpDown,
   CheckIcon,
+  ChevronDown,
   Eye,
   ExternalLink,
   MessagesSquare,
   RefreshCcw,
   Send,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { ReviewLinkRow } from '@/components/scheduler/review-board';
 
 /**
  * Viewer review surface — table layout (replaces the bento grid for the
- * client side at /review). One row per share link the client has access
- * to, with a 4-stage progress track:
- *
- *   Sent  →  Viewed  →  Reviewing  →  Approved
- *
- * Stages are derived from existing aggregates returned by
- * `/api/calendar/review` — no schema changes.
+ * client side at /review). Built on the shared `<Table variant="card">`
+ * primitive so it shares the rounded surface, hover/selection states,
+ * and rhythm with any future card-tables across the app.
  *
  * Always brand-scoped: the page that mounts this passes `clientId` from
  * the active brand pill, so the table never mixes brands. Admin-only
  * cross-brand oversight stays on `/admin/share-links`.
+ *
+ * Stage track derives from existing aggregates returned by
+ * `/api/calendar/review` — no schema changes:
+ *
+ *   Sent  →  Viewed  →  Reviewing  →  Approved
+ *
+ * Selection model: rows can be checked individually or via the header
+ * "select all" box. The selection drives a bulk-action bar that opens
+ * the chosen reviews in new tabs at once. The actions stop short of
+ * destructive ops on purpose — this is a viewer surface, not admin.
  */
 
 type ReviewStage = 'sent' | 'viewed' | 'reviewing' | 'approved';
@@ -45,14 +71,13 @@ const stageIndex = (s: ReviewStage) => STAGES.findIndex((x) => x.key === s);
  *  without re-querying comments. */
 function currentStage(link: ReviewLinkRow): ReviewStage {
   if (link.status === 'approved') return 'approved';
-  // "Revising" status from the API maps to stage 3 (the client has left
-  // feedback). "ready_for_review" with no view yet → stage 1; with a view
-  // but no comments → stage 2.
   if (link.status === 'revising') return 'reviewing';
   if (link.changes_count > 0) return 'reviewing';
   if (link.last_viewed_at) return 'viewed';
   return 'sent';
 }
+
+type SortKey = 'newest' | 'oldest' | 'progress';
 
 interface ReviewTableProps {
   /** Active brand id from the top-bar pill. Required — this surface is
@@ -66,6 +91,8 @@ export function ReviewTable({ clientId, brandName }: ReviewTableProps) {
   const [links, setLinks] = useState<ReviewLinkRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [sort, setSort] = useState<SortKey>('newest');
 
   async function load(silent = false) {
     if (!silent) setLoading(true);
@@ -88,18 +115,52 @@ export function ReviewTable({ clientId, brandName }: ReviewTableProps) {
 
   useEffect(() => {
     void load();
-    // Refetch when the active brand changes upstream.
+    setSelected(new Set());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
   const grouped = useMemo(() => {
-    const active = links.filter((l) => l.status !== 'expired');
-    const expired = links.filter((l) => l.status === 'expired');
+    const sorted = [...links].sort((a, b) => sortLinks(a, b, sort));
+    const active = sorted.filter((l) => l.status !== 'expired');
+    const expired = sorted.filter((l) => l.status === 'expired');
     return { active, expired };
-  }, [links]);
+  }, [links, sort]);
+
+  function toggleRow(id: string, on: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleAll(rows: ReviewLinkRow[], on: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const r of rows) {
+        if (on) next.add(r.id);
+        else next.delete(r.id);
+      }
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelected(new Set());
+  }
+
+  function openSelectedInTabs() {
+    const tokens = links.filter((l) => selected.has(l.id)).map((l) => l.token);
+    if (tokens.length === 0) return;
+    for (const t of tokens) {
+      window.open(`/c/${t}`, '_blank', 'noopener,noreferrer');
+    }
+    toast.success(`Opened ${tokens.length} review${tokens.length === 1 ? '' : 's'}`);
+  }
 
   return (
-    <div className="cortex-page-gutter mx-auto max-w-6xl space-y-6">
+    <div className="cortex-page-gutter mx-auto max-w-6xl space-y-5">
       <header className="flex items-end justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-text-primary">Review</h1>
@@ -109,15 +170,18 @@ export function ReviewTable({ clientId, brandName }: ReviewTableProps) {
               : 'Calendars and content sent for review.'}
           </p>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => void load(true)}
-          disabled={refreshing}
-        >
-          <RefreshCcw size={14} className={refreshing ? 'animate-spin' : ''} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <SortMenu sort={sort} onChange={setSort} />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void load(true)}
+            disabled={refreshing}
+          >
+            <RefreshCcw size={14} className={refreshing ? 'animate-spin' : ''} />
+            Refresh
+          </Button>
+        </div>
       </header>
 
       {loading ? (
@@ -126,14 +190,32 @@ export function ReviewTable({ clientId, brandName }: ReviewTableProps) {
         <EmptyState brandName={brandName} />
       ) : (
         <>
-          <ReviewTableCard rows={grouped.active} />
+          <ReviewTableCard
+            rows={grouped.active}
+            selected={selected}
+            onToggleRow={toggleRow}
+            onToggleAll={(on) => toggleAll(grouped.active, on)}
+            bulkBar={
+              <BulkActionBar
+                count={selected.size}
+                onClear={clearSelection}
+                onOpenAll={openSelectedInTabs}
+              />
+            }
+          />
 
           {grouped.expired.length > 0 && (
             <section className="space-y-3 pt-2">
               <h2 className="text-xs font-medium uppercase tracking-wide text-text-muted">
                 Expired
               </h2>
-              <ReviewTableCard rows={grouped.expired} dim />
+              <ReviewTableCard
+                rows={grouped.expired}
+                selected={selected}
+                onToggleRow={toggleRow}
+                onToggleAll={(on) => toggleAll(grouped.expired, on)}
+                dim
+              />
             </section>
           )}
         </>
@@ -142,77 +224,117 @@ export function ReviewTable({ clientId, brandName }: ReviewTableProps) {
   );
 }
 
+interface ReviewTableCardProps {
+  rows: ReviewLinkRow[];
+  selected: Set<string>;
+  onToggleRow: (id: string, on: boolean) => void;
+  onToggleAll: (on: boolean) => void;
+  dim?: boolean;
+  bulkBar?: React.ReactNode;
+}
+
 /**
- * The table itself. Wrapped in a card surface so the whole table reads
- * as one panel — matches the "card-variant table" treatment in the
- * reference design.
+ * The table itself, in card variant. Above the `<thead>` we slot the
+ * bulk-action bar — when there's a selection it slides into view, when
+ * there isn't, the slot is empty and the table looks normal.
  */
-function ReviewTableCard({ rows, dim = false }: { rows: ReviewLinkRow[]; dim?: boolean }) {
+function ReviewTableCard({
+  rows,
+  selected,
+  onToggleRow,
+  onToggleAll,
+  dim = false,
+  bulkBar,
+}: ReviewTableCardProps) {
+  const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
+  const someChecked = rows.some((r) => selected.has(r.id));
+  const headerState: boolean | 'indeterminate' = allChecked
+    ? true
+    : someChecked
+      ? 'indeterminate'
+      : false;
+
   return (
-    <div
-      className={`overflow-hidden rounded-xl border border-nativz-border bg-surface ${
-        dim ? 'opacity-70' : ''
-      }`}
-    >
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-nativz-border text-left text-xs font-medium uppercase tracking-wide text-text-muted">
-              <th className="px-5 py-3 font-medium">Project</th>
-              <th className="px-3 py-3 font-medium">Items</th>
-              <th className="px-3 py-3 font-medium">Status</th>
-              <th className="px-3 py-3 font-medium">Progress</th>
-              <th className="px-5 py-3 text-right font-medium">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((link, i) => (
-              <ReviewTableRow key={link.id} link={link} isLast={i === rows.length - 1} />
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <div className={dim ? 'opacity-70' : undefined}>
+      {bulkBar}
+      <Table variant="card">
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead className="w-10">
+              <Checkbox
+                aria-label="Select all reviews"
+                checked={headerState}
+                onCheckedChange={(v) => onToggleAll(v === true)}
+              />
+            </TableHead>
+            <TableHead>Project</TableHead>
+            <TableHead>Items</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Progress</TableHead>
+            <TableHead className="text-right">Action</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((link) => (
+            <ReviewTableRow
+              key={link.id}
+              link={link}
+              checked={selected.has(link.id)}
+              onCheckedChange={(on) => onToggleRow(link.id, on)}
+            />
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }
 
-function ReviewTableRow({ link, isLast }: { link: ReviewLinkRow; isLast: boolean }) {
+interface ReviewTableRowProps {
+  link: ReviewLinkRow;
+  checked: boolean;
+  onCheckedChange: (on: boolean) => void;
+}
+
+function ReviewTableRow({ link, checked, onCheckedChange }: ReviewTableRowProps) {
   const project = formatProject(link.drop_start, link.drop_end);
   const lastSeen = link.last_viewed_at ? formatRelative(link.last_viewed_at) : null;
   const stage = currentStage(link);
 
   return (
-    <tr
-      className={`group transition-colors hover:bg-surface-hover ${
-        isLast ? '' : 'border-b border-nativz-border/60'
-      }`}
-    >
-      <td className="px-5 py-4 align-middle">
+    <TableRow data-state={checked ? 'selected' : undefined}>
+      <TableCell className="w-10">
+        <Checkbox
+          aria-label={`Select ${project}`}
+          checked={checked}
+          onCheckedChange={(v) => onCheckedChange(v === true)}
+        />
+      </TableCell>
+      <TableCell>
         <div className="font-medium text-text-primary">{project}</div>
         <div className="text-xs text-text-muted tabular-nums">
           {lastSeen ? `Last viewed ${lastSeen}` : 'Not yet viewed'}
         </div>
-      </td>
-      <td className="px-3 py-4 align-middle">
-        <span className="inline-flex items-center rounded-md border border-nativz-border bg-background px-2 py-0.5 font-mono text-[10px] text-text-secondary">
+      </TableCell>
+      <TableCell>
+        <Badge variant="default">
           {link.post_count} post{link.post_count === 1 ? '' : 's'}
-        </span>
-      </td>
-      <td className="px-3 py-4 align-middle">
+        </Badge>
+      </TableCell>
+      <TableCell>
         <StageTrack stage={stage} />
-      </td>
-      <td className="px-3 py-4 align-middle">
+      </TableCell>
+      <TableCell>
         <ProgressLabel link={link} />
-      </td>
-      <td className="px-5 py-4 text-right align-middle">
+      </TableCell>
+      <TableCell className="text-right">
         <Link href={`/c/${link.token}`} target="_blank" rel="noreferrer">
           <Button size="sm" variant="outline">
             <span>Open review</span>
             <ExternalLink size={12} />
           </Button>
         </Link>
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -244,9 +366,7 @@ function ProgressLabel({ link }: { link: ReviewLinkRow }) {
 
 /**
  * Four-circle stage tracker. Past stages tinted with success token,
- * current stage filled with the accent, future stages muted. Mirrors the
- * "Order → Packed → Shipped → Delivered" reference but for content
- * review.
+ * current stage filled with the accent, future stages muted.
  */
 function StageTrack({ stage }: { stage: ReviewStage }) {
   const idx = stageIndex(stage);
@@ -285,6 +405,64 @@ function StageTrack({ stage }: { stage: ReviewStage }) {
   );
 }
 
+function BulkActionBar({
+  count,
+  onClear,
+  onOpenAll,
+}: {
+  count: number;
+  onClear: () => void;
+  onOpenAll: () => void;
+}) {
+  if (count === 0) return null;
+  return (
+    <div className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-accent/30 bg-accent-surface/40 px-4 py-2.5">
+      <div className="flex items-center gap-3 text-sm">
+        <button
+          type="button"
+          onClick={onClear}
+          className="inline-flex size-5 items-center justify-center rounded text-text-muted hover:bg-surface-hover hover:text-text-primary"
+          aria-label="Clear selection"
+        >
+          <X className="size-3.5" />
+        </button>
+        <span className="font-medium text-text-primary">
+          {count} selected
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button size="sm" variant="outline" onClick={onOpenAll}>
+          <ExternalLink size={12} />
+          Open all
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function SortMenu({ sort, onChange }: { sort: SortKey; onChange: (s: SortKey) => void }) {
+  const label =
+    sort === 'newest' ? 'Newest first' : sort === 'oldest' ? 'Oldest first' : 'Most progress';
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="sm">
+          <ArrowUpDown size={14} />
+          <span>{label}</span>
+          <ChevronDown size={12} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuRadioGroup value={sort} onValueChange={(v) => onChange(v as SortKey)}>
+          <DropdownMenuRadioItem value="newest">Newest first</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="oldest">Oldest first</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="progress">Most progress</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function ReviewTableSkeleton() {
   return (
     <div className="overflow-hidden rounded-xl border border-nativz-border bg-surface">
@@ -294,6 +472,7 @@ function ReviewTableSkeleton() {
       <div className="divide-y divide-nativz-border/60">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="flex items-center gap-4 px-5 py-4">
+            <div className="size-4 animate-pulse rounded bg-nativz-border" />
             <div className="h-4 w-40 animate-pulse rounded bg-nativz-border" />
             <div className="ml-auto h-6 w-24 animate-pulse rounded bg-nativz-border" />
           </div>
@@ -315,6 +494,15 @@ function EmptyState({ brandName }: { brandName?: string }) {
       </p>
     </div>
   );
+}
+
+function sortLinks(a: ReviewLinkRow, b: ReviewLinkRow, sort: SortKey): number {
+  if (sort === 'progress') {
+    return stageIndex(currentStage(b)) - stageIndex(currentStage(a));
+  }
+  const aT = new Date(a.created_at ?? a.drop_start ?? 0).getTime();
+  const bT = new Date(b.created_at ?? b.drop_start ?? 0).getTime();
+  return sort === 'newest' ? bT - aT : aT - bT;
 }
 
 /** "May 2026 content" / "May–June 2026 content" / fallback. Names look
