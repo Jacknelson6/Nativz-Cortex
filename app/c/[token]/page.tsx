@@ -62,6 +62,12 @@ interface SharedPost {
   video_url: string | null;
   tagged_people: string[];
   collaborator_handles: string[];
+  // For ad / "other" project types we surface an editable title instead of
+  // a caption. `title` is the override (nullable), `filename_fallback` is
+  // the upload's original filename minus extension — used when the editor
+  // hasn't typed a title yet so the viewer always has something to show.
+  title: string | null;
+  filename_fallback: string | null;
   revised_video_url: string | null;
   revised_video_uploaded_at: string | null;
   revised_video_notify_pending: boolean;
@@ -73,9 +79,17 @@ interface SharedPost {
   comments: SharedComment[];
 }
 
+// Drives per-creative layout: organic uses the original 9:16 + caption flow;
+// the ad / "other" types swap caption for an editable title and adjust the
+// video aspect ratio. Falls back to organic_content for legacy share links
+// that predate the project_type column.
+type ShareProjectType = 'organic_content' | 'social_ads' | 'ctv_ads' | 'other';
+
 interface SharedDrop {
   clientName: string;
   isEditor: boolean;
+  projectType: ShareProjectType;
+  projectTypeOther: string | null;
   drop: { id: string; start_date: string; end_date: string; default_post_time: string };
   posts: SharedPost[];
   expiresAt: string;
@@ -219,6 +233,21 @@ function SharedDropView({
               p.id === postId
                 ? { ...p, caption, comments: [...p.comments, comment] }
                 : p,
+            ),
+          }
+        : prev,
+    );
+  }
+
+  function updatePostTitle(postId: string, title: string | null) {
+    // Title edits don't generate a comment row (caption edits do); we just
+    // mutate the row in place so the chip + sort label re-render.
+    setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            posts: prev.posts.map((p) =>
+              p.id === postId ? { ...p, title } : p,
             ),
           }
         : prev,
@@ -492,6 +521,7 @@ function SharedDropView({
                 key={post.id}
                 index={idx + 1}
                 post={post}
+                projectType={data.projectType}
                 isEditor={data.isEditor}
                 defaultPostTime={data.drop.default_post_time}
                 token={token}
@@ -504,6 +534,7 @@ function SharedDropView({
                 onScheduleUpdated={(at, c) => updatePostScheduledAt(post.id, at, c)}
                 onRevisionUploaded={(rev) => updatePostRevision(post.id, rev)}
                 onRemoveFromCalendar={() => removePostFromCalendar(post.id)}
+                onTitleUpdated={(title) => updatePostTitle(post.id, title)}
                 requireName={() => {
                   setPendingName(authorName);
                   setNameModalOpen(true);
@@ -588,6 +619,7 @@ function SharedDropView({
       <PostDetailModal
         post={detailPostId ? sortedPosts.find((p) => p.id === detailPostId) ?? null : null}
         index={detailPostId ? sortedPosts.findIndex((p) => p.id === detailPostId) + 1 : 0}
+        projectType={data.projectType}
         isEditor={data.isEditor}
         defaultPostTime={data.drop.default_post_time}
         token={token}
@@ -600,6 +632,7 @@ function SharedDropView({
         onScheduleUpdated={updatePostScheduledAt}
         onRevisionUploaded={updatePostRevision}
         onRemoveFromCalendar={removePostFromCalendar}
+        onTitleUpdated={updatePostTitle}
         onClose={() => setDetailPostId(null)}
         requireName={() => {
           setPendingName(authorName);
@@ -750,12 +783,21 @@ function VideoSurface({
   controls = true,
   autoPlay = false,
   className,
+  aspectClass = 'aspect-[9/16]',
+  aspectRatioStyle = '9 / 16',
   onPlayerReady,
 }: {
   post: VideoSurfacePost;
   controls?: boolean;
   autoPlay?: boolean | 'muted' | 'any';
   className?: string;
+  // Tailwind aspect class used by the placeholder/overlay branches. Defaults
+  // to 9:16 to preserve organic short-form behavior; ad-type viewers pass
+  // 'aspect-square' (Social Ads) or 'aspect-video' (CTV Ads) instead.
+  aspectClass?: string;
+  // Inline CSS aspect ratio used by Mux Player's style prop — Mux's element
+  // doesn't pick up Tailwind classes for sizing, so we drive it explicitly.
+  aspectRatioStyle?: string;
   // Handed a handle when the underlying media element mounts, and `null`
   // when it unmounts. Optional — most callers (calendar grid thumbs, lightbox)
   // don't need to seek into the player.
@@ -791,7 +833,7 @@ function VideoSurface({
       : null;
     const posterUrl = muxThumb ?? post.cover_image_url ?? null;
     return (
-      <div className={`relative aspect-[9/16] w-full overflow-hidden bg-black ${className ?? ''}`}>
+      <div className={`relative ${aspectClass} w-full overflow-hidden bg-black ${className ?? ''}`}>
         {posterUrl && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -834,8 +876,9 @@ function VideoSurface({
         autoPlay={autoPlay}
         accentColor="var(--accent)"
         poster={post.cover_image_url ?? undefined}
-        // 9:16 short-form video — keep aspect ratio while fitting parent.
-        style={{ aspectRatio: '9 / 16', maxHeight: 'inherit', width: '100%' }}
+        // Aspect ratio is driven by project type (9:16 organic / 1:1 social
+        // ad / 16:9 CTV / 9:16 other) — see PostCard for the mapping.
+        style={{ aspectRatio: aspectRatioStyle, maxHeight: 'inherit', width: '100%' }}
         className={className}
         // Disable Mux's default end-screen + remote playback chrome — keeps
         // the share-link surface focused on review, not branded promo.
@@ -858,7 +901,7 @@ function VideoSurface({
       : null;
     const posterUrl = muxThumb ?? post.cover_image_url ?? null;
     return (
-      <div className={`relative aspect-[9/16] w-full overflow-hidden bg-black ${className ?? ''}`}>
+      <div className={`relative ${aspectClass} w-full overflow-hidden bg-black ${className ?? ''}`}>
         {posterUrl && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -898,7 +941,7 @@ function VideoSurface({
     );
   }
   return (
-    <div className={`flex aspect-[9/16] w-full items-center justify-center ${className ?? ''}`}>
+    <div className={`flex ${aspectClass} w-full items-center justify-center ${className ?? ''}`}>
       <div className="text-center text-text-muted">
         <Film className="mx-auto mb-2" size={32} />
         <p className="text-sm">Video not available</p>
@@ -910,6 +953,7 @@ function VideoSurface({
 function PostDetailModal({
   post,
   index,
+  projectType,
   isEditor,
   defaultPostTime,
   token,
@@ -922,11 +966,13 @@ function PostDetailModal({
   onScheduleUpdated,
   onRevisionUploaded,
   onRemoveFromCalendar,
+  onTitleUpdated,
   onClose,
   requireName,
 }: {
   post: SharedPost | null;
   index: number;
+  projectType: ShareProjectType;
   isEditor: boolean;
   defaultPostTime: string;
   token: string;
@@ -953,6 +999,7 @@ function PostDetailModal({
     },
   ) => void;
   onRemoveFromCalendar: (postId: string) => void;
+  onTitleUpdated: (postId: string, title: string | null) => void;
   onClose: () => void;
   requireName: () => void;
 }) {
@@ -962,6 +1009,7 @@ function PostDetailModal({
       <PostCard
         index={index}
         post={post}
+        projectType={projectType}
         isEditor={isEditor}
         defaultPostTime={defaultPostTime}
         token={token}
@@ -977,6 +1025,7 @@ function PostDetailModal({
           onRemoveFromCalendar(post.id);
           onClose();
         }}
+        onTitleUpdated={(title) => onTitleUpdated(post.id, title)}
         requireName={requireName}
         layoutMode="modal"
       />
@@ -1326,6 +1375,7 @@ function isSameDay(a: Date, b: Date) {
 function PostCard({
   index,
   post,
+  projectType,
   isEditor,
   defaultPostTime,
   token,
@@ -1338,11 +1388,13 @@ function PostCard({
   onScheduleUpdated,
   onRevisionUploaded,
   onRemoveFromCalendar,
+  onTitleUpdated,
   requireName,
   layoutMode = 'inline',
 }: {
   index: number;
   post: SharedPost;
+  projectType: ShareProjectType;
   isEditor: boolean;
   defaultPostTime: string;
   token: string;
@@ -1365,6 +1417,7 @@ function PostCard({
     mux_status?: string | null;
   }) => void;
   onRemoveFromCalendar: () => void;
+  onTitleUpdated: (title: string | null) => void;
   requireName: () => void;
   /**
    * `inline` (default, list view): video stacked on top, captionBlock + history + composer below.
@@ -1373,6 +1426,20 @@ function PostCard({
    */
   layoutMode?: 'inline' | 'modal';
 }) {
+  // Project-type-driven layout decisions. Organic content keeps the original
+  // 9:16 + caption + tag/collab + schedule flow. Ad / "other" types swap the
+  // caption block for an editable title and adjust the video aspect ratio.
+  const isOrganic = projectType === 'organic_content';
+  const isCtv = projectType === 'ctv_ads';
+  const isSocialAd = projectType === 'social_ads';
+  const isOther = projectType === 'other';
+  const showCaptionFlow = isOrganic;
+  const showHandles = isOrganic;
+  const showSchedule = isOrganic;
+  const displayTitle =
+    (post.title && post.title.trim()) ||
+    (post.filename_fallback && post.filename_fallback.trim()) ||
+    'Untitled creative';
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [removingApproval, setRemovingApproval] = useState(false);
@@ -1784,22 +1851,24 @@ function PostCard({
   const captionBlock = (
     <div className="min-w-0 flex-1 space-y-2 sm:space-y-3">
       <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-        <SchedulePill
-          scheduledAt={post.scheduled_at}
-          scheduledLabel={scheduledLabel}
-          isPublished={isPublished}
-          defaultPostTime={defaultPostTime}
-          open={schedulePopoverOpen}
-          onOpenChange={(v) => {
-            if (v && !authorName.trim()) {
-              requireName();
-              return;
-            }
-            setSchedulePopoverOpen(v);
-          }}
-          saving={savingSchedule}
-          onSave={saveSchedule}
-        />
+        {showSchedule && (
+          <SchedulePill
+            scheduledAt={post.scheduled_at}
+            scheduledLabel={scheduledLabel}
+            isPublished={isPublished}
+            defaultPostTime={defaultPostTime}
+            open={schedulePopoverOpen}
+            onOpenChange={(v) => {
+              if (v && !authorName.trim()) {
+                requireName();
+                return;
+              }
+              setSchedulePopoverOpen(v);
+            }}
+            saving={savingSchedule}
+            onSave={saveSchedule}
+          />
+        )}
         {review === 'approved' && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-status-success/12 px-3 py-1.5 text-sm font-medium text-status-success ring-1 ring-status-success/30">
             <CheckCircle size={13} /> Approved
@@ -1812,7 +1881,22 @@ function PostCard({
         )}
       </div>
 
-      {editingCaption ? (
+      {!showCaptionFlow && (
+        <TitleEditor
+          token={token}
+          postId={post.id}
+          title={post.title}
+          fallback={post.filename_fallback}
+          displayTitle={displayTitle}
+          onSaved={onTitleUpdated}
+          requireName={() => {
+            if (!authorName.trim()) requireName();
+          }}
+          hasName={!!authorName.trim()}
+        />
+      )}
+
+      {showCaptionFlow && (editingCaption ? (
         <div className="space-y-2">
           <textarea
             value={draftCaption}
@@ -1876,9 +1960,9 @@ function PostCard({
             <Pencil size={11} /> Edit
           </button>
         </div>
-      )}
+      ))}
 
-      {!editingCaption && post.hashtags.length > 0 && (
+      {showCaptionFlow && !editingCaption && post.hashtags.length > 0 && (
         // Hashtags are reference data, not links — the cyan accent wall
         // visually competed with the Edit / Approve CTAs. Quieter chips on
         // a low-contrast surface keep them scannable without shouting.
@@ -1894,32 +1978,36 @@ function PostCard({
         </div>
       )}
 
-      <HandleEditor
-        label="Tagged"
-        icon={Tag}
-        placeholder="@username"
-        handles={post.tagged_people}
-        disabled={isPublished}
-        onAdd={(h) => changeHandle('tagged_people', h, 'add')}
-        onRemove={(h) => changeHandle('tagged_people', h, 'remove')}
-        requireName={() => {
-          if (!authorName.trim()) requireName();
-        }}
-        hasName={!!authorName.trim()}
-      />
-      <HandleEditor
-        label="Collaborators"
-        icon={Users}
-        placeholder="@collab"
-        handles={post.collaborator_handles}
-        disabled={isPublished}
-        onAdd={(h) => changeHandle('collaborator_handles', h, 'add')}
-        onRemove={(h) => changeHandle('collaborator_handles', h, 'remove')}
-        requireName={() => {
-          if (!authorName.trim()) requireName();
-        }}
-        hasName={!!authorName.trim()}
-      />
+      {showHandles && (
+        <>
+          <HandleEditor
+            label="Tagged"
+            icon={Tag}
+            placeholder="@username"
+            handles={post.tagged_people}
+            disabled={isPublished}
+            onAdd={(h) => changeHandle('tagged_people', h, 'add')}
+            onRemove={(h) => changeHandle('tagged_people', h, 'remove')}
+            requireName={() => {
+              if (!authorName.trim()) requireName();
+            }}
+            hasName={!!authorName.trim()}
+          />
+          <HandleEditor
+            label="Collaborators"
+            icon={Users}
+            placeholder="@collab"
+            handles={post.collaborator_handles}
+            disabled={isPublished}
+            onAdd={(h) => changeHandle('collaborator_handles', h, 'add')}
+            onRemove={(h) => changeHandle('collaborator_handles', h, 'remove')}
+            requireName={() => {
+              if (!authorName.trim()) requireName();
+            }}
+            hasName={!!authorName.trim()}
+          />
+        </>
+      )}
     </div>
   );
 
@@ -1929,6 +2017,14 @@ function PostCard({
   // the video's natural geometry — no letterboxing top/bottom. The Mux
   // player has its own fullscreen control built in, so "make it full
   // size" doesn't need an explicit button here.
+  // CSS aspect ratio used by the inner Mux player. Must mirror the Tailwind
+  // aspect class on the wrapping div (see videoColAspect below) so the
+  // player and its container agree on geometry.
+  const videoAspectRatioStyle = isCtv
+    ? '16 / 9'
+    : isSocialAd
+      ? '1 / 1'
+      : '9 / 16';
   const videoPanel = (
     <div
       ref={videoSectionRef}
@@ -1937,6 +2033,14 @@ function PostCard({
       <VideoSurface
         post={post}
         className="block h-full w-full"
+        aspectClass={
+          isCtv
+            ? 'aspect-video'
+            : isSocialAd
+              ? 'aspect-square'
+              : 'aspect-[9/16]'
+        }
+        aspectRatioStyle={videoAspectRatioStyle}
         onPlayerReady={(handle) => {
           playerHandleRef.current = handle;
           setPlayerReady(!!handle);
@@ -2210,29 +2314,51 @@ function PostCard({
     </div>
   );
 
-  // Two-column horizontal layout — video pinned left, scrollable column
-  // on the right. The video column hugs the video's 9:16 aspect ratio so
-  // there are no letterbox bars; the right column takes the remaining
-  // width and scrolls independently. Used for both list-view cards and
-  // the calendar's post-detail modal — the only difference is the modal
-  // allows a slightly taller card and drops the rounded border (the
-  // Dialog already provides chrome).
+  // Layout switches by project type:
+  //
+  //   organic_content (9:16 short-form): video pinned left, comments scroll
+  //     right. Original behavior — preserved exactly so existing share
+  //     links don't visually shift.
+  //
+  //   social_ads (1:1) / other: same horizontal split but the video column
+  //     hugs a square aspect ratio. Comments still flow to the right.
+  //
+  //   ctv_ads (16:9 landscape): horizontal split breaks down — the video
+  //     would be a thin letterboxed strip with most of the card empty.
+  //     Switch to a stacked layout: video on top filling card width at
+  //     16:9, comments fill the rest of the height below. Frame.io uses
+  //     the same flip for landscape ads.
   const heightPx = layoutMode === 'modal' ? 'md:h-[88vh]' : 'md:h-[78vh]';
+  const stackVertical = isCtv;
+  const layoutDirection = stackVertical ? '' : 'md:flex-row';
   const articleChrome =
     layoutMode === 'modal'
-      ? `flex flex-col overflow-hidden bg-surface md:flex-row ${heightPx}`
-      : `flex flex-col overflow-hidden rounded-xl border border-nativz-border bg-surface md:flex-row ${heightPx}`;
+      ? `flex flex-col overflow-hidden bg-surface ${layoutDirection} ${heightPx}`
+      : `flex flex-col overflow-hidden rounded-xl border border-nativz-border bg-surface ${layoutDirection} ${heightPx}`;
+  // Aspect ratio for the video column. Ad-type viewers got a custom shape;
+  // organic and "other" stay 9:16 to match the existing media library.
+  const videoColAspect = isCtv
+    ? 'aspect-video'
+    : isSocialAd
+      ? 'aspect-square'
+      : 'aspect-[9/16]';
+  // For CTV (vertical stack) the video occupies full card width with its
+  // natural 16:9 height; for the side-by-side layouts the video column is
+  // height-constrained so it hugs the card height.
+  const videoColSizing = stackVertical
+    ? 'w-full bg-black'
+    : 'w-full bg-black md:w-auto md:flex-shrink-0 md:h-full';
   return (
     <article className={articleChrome}>
       {revisionInput}
-      <div className="aspect-[9/16] w-full bg-black md:w-auto md:flex-shrink-0 md:h-full">
+      <div className={`${videoColAspect} ${videoColSizing}`}>
         {videoPanel}
       </div>
-      {/* Right column: caption + history scroll inside their own region;
-          the composer (Approve / Request change + expandable note box) is
-          pinned to the bottom of the card so the primary actions are at a
-          consistent hand-position regardless of how long the comment
-          thread runs. */}
+      {/* Right (or bottom for CTV) column: title/caption + history scroll
+          inside their own region; the composer (Approve / Request change
+          + expandable note box) is pinned to the bottom of the card so the
+          primary actions are at a consistent hand-position regardless of
+          how long the comment thread runs. */}
       <div className="flex flex-1 flex-col md:min-w-0 md:h-full">
         <div className="flex-1 overflow-y-auto">
           <div className="p-3 sm:p-4">{captionBlock}</div>
@@ -2688,6 +2814,142 @@ function SchedulePill({
         </div>
       )}
     </span>
+  );
+}
+
+/**
+ * Editable per-creative title for Social Ads / CTV Ads / Other share links.
+ *
+ * Click to enter edit mode → type → Enter (or click Save) commits, Esc
+ * reverts. Empty input resets the override to NULL so the viewer falls
+ * back to the underlying upload's filename. The chip stays unobtrusive
+ * (small font, dashed border on hover) so it doesn't compete with the
+ * primary "Approve / Request change" actions in the composer below.
+ */
+function TitleEditor({
+  token,
+  postId,
+  title,
+  fallback,
+  displayTitle,
+  onSaved,
+  requireName,
+  hasName,
+}: {
+  token: string;
+  postId: string;
+  title: string | null;
+  fallback: string | null;
+  displayTitle: string;
+  onSaved: (title: string | null) => void;
+  requireName: () => void;
+  hasName: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  // Draft seeds from the saved override or the filename fallback so the
+  // editor starts with something useful instead of an empty box.
+  const [draft, setDraft] = useState(title ?? fallback ?? '');
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (saving) return;
+    const next = draft.trim();
+    // Treat the filename fallback as the default — if the user "edited" it
+    // back to the same value, just exit edit mode without a network call.
+    if (next === (title ?? fallback ?? '')) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/calendar/share/${token}/title`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId, title: next }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof json.error === 'string' ? json.error : 'Failed to save title');
+      }
+      onSaved((json.title as string | null) ?? null);
+      toast.success('Title saved');
+      setEditing(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save title');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-2">
+        <Type size={14} className="text-text-muted" />
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void save();
+            } else if (e.key === 'Escape') {
+              setDraft(title ?? fallback ?? '');
+              setEditing(false);
+            }
+          }}
+          autoFocus
+          disabled={saving}
+          maxLength={160}
+          placeholder={fallback ?? 'Creative title'}
+          className="flex-1 rounded-md border border-accent/40 bg-background/60 px-2 py-1 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent"
+        />
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={saving}
+          className="inline-flex items-center gap-1 rounded-md bg-accent px-2 py-1 text-[11px] font-medium text-accent-contrast transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          {saving ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle size={11} />}
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setDraft(title ?? fallback ?? '');
+            setEditing(false);
+          }}
+          disabled={saving}
+          className="inline-flex items-center rounded-md border border-nativz-border bg-transparent px-2 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="group flex items-center gap-2">
+      <Type size={14} className="text-text-muted" />
+      <button
+        type="button"
+        onClick={() => {
+          if (!hasName) {
+            requireName();
+            return;
+          }
+          setDraft(title ?? fallback ?? '');
+          setEditing(true);
+        }}
+        className="flex-1 truncate rounded-md border border-transparent bg-transparent px-2 py-1 text-left text-base font-medium text-text-primary transition-colors hover:border-nativz-border hover:bg-surface-hover"
+        title="Edit title"
+      >
+        {displayTitle}
+      </button>
+      <Pencil
+        size={11}
+        className="text-text-muted opacity-0 transition-opacity group-hover:opacity-100"
+      />
+    </div>
   );
 }
 

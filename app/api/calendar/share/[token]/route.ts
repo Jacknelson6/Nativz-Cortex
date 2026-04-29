@@ -11,6 +11,29 @@ interface ShareLinkRow {
   included_post_ids: string[];
   post_review_link_map: Record<string, string>;
   expires_at: string;
+  project_type: string | null;
+  project_type_other: string | null;
+  name: string | null;
+}
+
+type ShareProjectType = 'organic_content' | 'social_ads' | 'ctv_ads' | 'other';
+
+function normalizeProjectType(raw: string | null | undefined): ShareProjectType {
+  // Defaults to organic_content so legacy share links keep working with
+  // the existing caption/hashtag/tag/schedule UI.
+  if (raw === 'social_ads' || raw === 'ctv_ads' || raw === 'other') return raw;
+  return 'organic_content';
+}
+
+function stripFileExtension(filename: string | null): string | null {
+  // Drive filenames usually carry an extension we don't want polluting
+  // the displayed title (e.g. "Hero spot v3.mp4" → "Hero spot v3"). The
+  // viewer can always re-derive the extension from the underlying URL
+  // when it actually needs it.
+  if (!filename) return null;
+  const lastDot = filename.lastIndexOf('.');
+  if (lastDot <= 0) return filename;
+  return filename.slice(0, lastDot);
 }
 
 interface ScheduledPostRow {
@@ -24,11 +47,13 @@ interface ScheduledPostRow {
   late_post_id: string | null;
   tagged_people: string[] | null;
   collaborator_handles: string[] | null;
+  title: string | null;
 }
 
 interface DropVideoRow {
   id: string;
   scheduled_post_id: string | null;
+  drive_file_name: string | null;
   video_url: string | null;
   revised_video_url: string | null;
   revised_video_uploaded_at: string | null;
@@ -89,7 +114,7 @@ export async function GET(
 
   const { data: link } = await admin
     .from('content_drop_share_links')
-    .select('id, drop_id, included_post_ids, post_review_link_map, expires_at')
+    .select('id, drop_id, included_post_ids, post_review_link_map, expires_at, project_type, project_type_other, name')
     .eq('token', token)
     .single<ShareLinkRow>();
   if (!link) return NextResponse.json({ error: 'not found' }, { status: 404 });
@@ -105,11 +130,11 @@ export async function GET(
       .single(),
     admin
       .from('scheduled_posts')
-      .select('id, client_id, caption, hashtags, scheduled_at, status, cover_image_url, late_post_id, tagged_people, collaborator_handles')
+      .select('id, client_id, caption, hashtags, scheduled_at, status, cover_image_url, late_post_id, tagged_people, collaborator_handles, title')
       .in('id', link.included_post_ids),
     admin
       .from('content_drop_videos')
-      .select('id, scheduled_post_id, video_url, revised_video_url, revised_video_uploaded_at, revised_video_notify_pending, mux_upload_id, mux_asset_id, mux_playback_id, mux_status')
+      .select('id, scheduled_post_id, drive_file_name, video_url, revised_video_url, revised_video_uploaded_at, revised_video_notify_pending, mux_upload_id, mux_asset_id, mux_playback_id, mux_status')
       .in('scheduled_post_id', link.included_post_ids),
   ]);
   if (!drop) return NextResponse.json({ error: 'content calendar missing' }, { status: 404 });
@@ -143,6 +168,7 @@ export async function GET(
   }
 
   const videoByPost: Record<string, string> = {};
+  const filenameByPost: Record<string, string> = {};
   const revisionByPost: Record<
     string,
     {
@@ -157,6 +183,7 @@ export async function GET(
     if (!v.scheduled_post_id) continue;
     const url = v.revised_video_url ?? v.video_url;
     if (url) videoByPost[v.scheduled_post_id] = url;
+    if (v.drive_file_name) filenameByPost[v.scheduled_post_id] = v.drive_file_name;
     revisionByPost[v.scheduled_post_id] = {
       revised_video_url: v.revised_video_url,
       revised_video_uploaded_at: v.revised_video_uploaded_at,
@@ -222,9 +249,13 @@ export async function GET(
     }
   });
 
+  const projectType = normalizeProjectType(link.project_type);
+
   return NextResponse.json({
     clientName: client?.name ?? 'Brand',
     isEditor,
+    projectType,
+    projectTypeOther: link.project_type_other,
     drop: {
       id: drop.id,
       start_date: drop.start_date,
@@ -233,6 +264,7 @@ export async function GET(
     },
     posts: ((posts ?? []) as ScheduledPostRow[]).map((p) => {
       const rev = revisionByPost[p.id];
+      const filename = filenameByPost[p.id] ?? null;
       return {
         id: p.id,
         caption: p.caption,
@@ -243,6 +275,12 @@ export async function GET(
         video_url: videoByPost[p.id] ?? null,
         tagged_people: p.tagged_people ?? [],
         collaborator_handles: p.collaborator_handles ?? [],
+        // For ad-type / "other" projects, the viewer surfaces a per-creative
+        // title. We store the explicit title on scheduled_posts and fall
+        // back to the underlying upload's filename so the viewer always has
+        // something to show without admins needing to type one out first.
+        title: p.title,
+        filename_fallback: stripFileExtension(filename),
         revised_video_url: rev?.revised_video_url ?? null,
         revised_video_uploaded_at: rev?.revised_video_uploaded_at ?? null,
         revised_video_notify_pending: rev?.revised_video_notify_pending ?? false,
