@@ -11,6 +11,7 @@ import {
   MessagesSquare,
   Pencil,
   RefreshCcw,
+  Send,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -56,7 +57,15 @@ import type {
  * Columns:
  *   Project name (inline-editable, defaults to derived "May 2026
  *     Content Calendar"-style label) · Date sent · Status · Project
- *     type · Total creatives · Approved creatives · Expiration
+ *     type · Total creatives · Approved creatives · Last followup ·
+ *     Expiration
+ *
+ * The Last-followup column tracks days-since the most recent admin
+ * "Send followup" press (or the initial send for fresh links). It
+ * colors yellow at 4 days, red at 5+, and renders a Send button so
+ * the admin can fire a generic check-in email without leaving the
+ * page. Only renders when the link is awaiting action — approved /
+ * abandoned / expired rows show "—" because there's nothing to chase.
  *
  * Status mapping (matches the agency's spoken vocabulary):
  *   - Ready for review (yellow) — sent, not yet finalized
@@ -282,7 +291,7 @@ function ReviewTableCard({ rows, showBrand = false, onPatchLink }: ReviewTableCa
       <thead>
         <tr>
           <th
-            colSpan={(showBrand ? 1 : 0) + 7}
+            colSpan={(showBrand ? 1 : 0) + 8}
             className="border-b border-nativz-border px-5 py-4"
           >
             <div className="flex items-center gap-3">
@@ -301,14 +310,15 @@ function ReviewTableCard({ rows, showBrand = false, onPatchLink }: ReviewTableCa
       </thead>
       <TableHeader>
         <TableRow>
-          {showBrand && <TableHead>Brand</TableHead>}
-          <TableHead>Project name</TableHead>
-          <TableHead>Date sent</TableHead>
-          <TableHead className="text-center">Status</TableHead>
-          <TableHead>Project type</TableHead>
-          <TableHead className="text-right">Total creatives</TableHead>
-          <TableHead className="text-right">Approved</TableHead>
-          <TableHead>Expiration</TableHead>
+          {showBrand && <TableHead className="whitespace-nowrap">Brand</TableHead>}
+          <TableHead className="whitespace-nowrap">Project name</TableHead>
+          <TableHead className="whitespace-nowrap text-center">Date sent</TableHead>
+          <TableHead className="whitespace-nowrap text-center">Status</TableHead>
+          <TableHead className="whitespace-nowrap text-center">Project type</TableHead>
+          <TableHead className="whitespace-nowrap text-center">Total creatives</TableHead>
+          <TableHead className="whitespace-nowrap text-center">Approved</TableHead>
+          <TableHead className="whitespace-nowrap text-center">Last followup</TableHead>
+          <TableHead className="whitespace-nowrap text-center">Expiration</TableHead>
           <TableHead className="w-10" aria-label="Open" />
         </TableRow>
       </TableHeader>
@@ -345,7 +355,7 @@ function ReviewTableRow({ link, showBrand = false, onPatch }: ReviewTableRowProp
       className={`cursor-pointer ${dim ? 'opacity-70' : ''}`}
     >
       {showBrand && (
-        <TableCell>
+        <TableCell className="whitespace-nowrap">
           <span className="text-sm text-text-secondary">{link.client_name ?? '—'}</span>
         </TableCell>
       )}
@@ -357,30 +367,47 @@ function ReviewTableRow({ link, showBrand = false, onPatch }: ReviewTableRowProp
           <ProjectNameCell link={link} onPatch={onPatch} />
         </div>
       </TableCell>
-      <TableCell>
+      <TableCell className="whitespace-nowrap text-center">
         <span className="text-sm text-text-secondary tabular-nums">
           {formatShortDate(link.created_at)}
         </span>
       </TableCell>
-      <TableCell className="text-center">
+      <TableCell className="whitespace-nowrap text-center">
         <div className="flex justify-center">
           <StatusPill status={link.status} />
         </div>
       </TableCell>
-      <TableCell onClick={(e) => e.stopPropagation()}>
-        <ProjectTypeCell link={link} onPatch={onPatch} />
+      <TableCell
+        className="whitespace-nowrap text-center"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex justify-center">
+          <ProjectTypeCell link={link} onPatch={onPatch} />
+        </div>
       </TableCell>
-      <TableCell className="text-right">
+      <TableCell className="whitespace-nowrap text-center">
         <span className="text-sm text-text-secondary tabular-nums">{link.post_count}</span>
       </TableCell>
-      <TableCell className="text-right">
-        <ApprovedCount link={link} />
+      <TableCell className="whitespace-nowrap text-center">
+        <div className="flex justify-center">
+          <ApprovedCount link={link} />
+        </div>
       </TableCell>
-      <TableCell>
-        <ExpirationCell expiresAt={link.expires_at} status={link.status} />
+      <TableCell
+        className="whitespace-nowrap text-center"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex justify-center">
+          <FollowupCell link={link} onPatch={onPatch} />
+        </div>
       </TableCell>
-      <TableCell className="w-10 text-right text-text-muted">
-        <ChevronRight className="size-4" />
+      <TableCell className="whitespace-nowrap text-center">
+        <div className="flex justify-center">
+          <ExpirationCell expiresAt={link.expires_at} status={link.status} />
+        </div>
+      </TableCell>
+      <TableCell className="w-10 whitespace-nowrap text-right text-text-tertiary">
+        <ChevronRight className="size-4 transition-transform group-hover/row:translate-x-0.5 group-hover/row:text-text-secondary" />
       </TableCell>
     </TableRow>
   );
@@ -566,6 +593,162 @@ function ProjectTypeCell({
       </DropdownMenuContent>
     </DropdownMenu>
   );
+}
+
+/**
+ * Last-followup column. Two responsibilities:
+ *   1. Render a days-since indicator with a colored dot — green when
+ *      we're within polite-nudge range, yellow once it's getting old,
+ *      red when it's been long enough that the client has probably
+ *      forgotten the calendar exists. Only fires for awaiting-action
+ *      states; approved / abandoned / expired rows show "—".
+ *   2. Provide a one-click "Send followup" button that POSTs to the
+ *      admin endpoint, emails every notifications-enabled review POC,
+ *      and resets the clock. Optimistically patches the row so the
+ *      indicator drops back to green without a refetch.
+ */
+function FollowupCell({
+  link,
+  onPatch,
+}: {
+  link: ReviewLinkRow;
+  onPatch: (patch: Partial<ReviewLinkRow>) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  // Awaiting action = ready_for_review or revising. Once the calendar's
+  // approved or dead, chasing the client doesn't make sense, so the
+  // indicator + button collapse to a simple em-dash.
+  const awaitingAction =
+    link.status === 'ready_for_review' || link.status === 'revising';
+
+  if (!awaitingAction) {
+    return <span className="text-sm text-text-muted">—</span>;
+  }
+
+  const stamp = link.last_followup_at;
+  const days = stamp ? daysSince(stamp) : null;
+  const tone = followupTone(days);
+  const label = formatFollowupLabel(days);
+
+  async function send() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await fetch(
+        `/api/calendar/share/${link.token}/followup`,
+        { method: 'POST' },
+      );
+      const data = (await res.json().catch(() => ({}))) as {
+        last_followup_at?: string;
+        followup_count?: number;
+        recipients_count?: number;
+        error?: string;
+      };
+      if (!res.ok) {
+        throw new Error(data.error || 'Followup failed');
+      }
+      onPatch({
+        last_followup_at: data.last_followup_at ?? new Date().toISOString(),
+        followup_count: data.followup_count ?? (link.followup_count ?? 0) + 1,
+      });
+      const recipientWord = data.recipients_count === 1 ? 'contact' : 'contacts';
+      toast.success(
+        data.recipients_count
+          ? `Followup sent to ${data.recipients_count} ${recipientWord}`
+          : 'Followup sent',
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Followup failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const tooltipBody =
+    days === null
+      ? 'No followups sent yet.'
+      : `${days === 0 ? 'Less than a day' : `${days} day${days === 1 ? '' : 's'}`} since the last nudge.${
+          link.followup_count > 0
+            ? ` ${link.followup_count} followup${link.followup_count === 1 ? '' : 's'} sent.`
+            : ''
+        }`;
+
+  return (
+    <div className="inline-flex items-center gap-1.5">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium tabular-nums ${tone.className}`}
+          >
+            <span className={`size-1.5 rounded-full ${tone.dot}`} aria-hidden />
+            {label}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="w-56">
+          <div className="font-medium text-text-primary">Last followup</div>
+          <div className="mt-0.5 text-text-muted">{tooltipBody}</div>
+        </TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={send}
+            disabled={busy}
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+            aria-label="Send followup"
+          >
+            <Send className="size-3" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top">
+          <div className="text-text-primary">Send followup email</div>
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  );
+}
+
+/** Whole-day delta between `iso` and now. Negatives clamp to 0 (clock
+ *  skew or future timestamps shouldn't blow up the indicator). */
+function daysSince(iso: string): number {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return 0;
+  const ms = Date.now() - then;
+  if (ms <= 0) return 0;
+  return Math.floor(ms / (24 * 60 * 60 * 1000));
+}
+
+/** Color cascade matches Jack's spec: green ≤3 days, yellow at 4,
+ *  red ≥5. Null (no stamp) reads as a fresh send and stays green. */
+function followupTone(days: number | null): { className: string; dot: string } {
+  if (days === null || days <= 3) {
+    return {
+      className:
+        'border-status-success/30 bg-status-success/10 text-status-success',
+      dot: 'bg-status-success',
+    };
+  }
+  if (days === 4) {
+    return {
+      className:
+        'border-status-warning/30 bg-status-warning/10 text-status-warning',
+      dot: 'bg-status-warning',
+    };
+  }
+  return {
+    className:
+      'border-status-danger/30 bg-status-danger/10 text-status-danger',
+    dot: 'bg-status-danger',
+  };
+}
+
+function formatFollowupLabel(days: number | null): string {
+  if (days === null) return 'New';
+  if (days === 0) return 'Today';
+  if (days === 1) return '1d ago';
+  return `${days}d ago`;
 }
 
 function ExpirationCell({

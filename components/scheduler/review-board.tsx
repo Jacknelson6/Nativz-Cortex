@@ -58,6 +58,13 @@ export interface ReviewLinkRow {
   project_type: ReviewProjectType | null;
   project_type_other: string | null;
   abandoned_at: string | null;
+  /** Most recent admin followup timestamp. Backfilled to `created_at`
+   *  for legacy rows so the days-since clock starts ticking from the
+   *  initial send. NULL only on truly new pre-migration rows. */
+  last_followup_at: string | null;
+  /** How many manual followups have been sent. Initial send is not
+   *  counted; only Send-followup-button presses bump this. */
+  followup_count: number;
 }
 
 interface ReviewBoardProps {

@@ -1200,3 +1200,99 @@ Also reverted the Button component's secondary/outline/ghost variants back to ne
 - `.btn-shimmer` CSS still exists in globals.css but no TSX references it since iter 11.1 (Button component stopped using it). Orphaned but harmless. Clean up in a future pass.
 - `.glow-btn` CSS still wired to `components/ui/glow-button.tsx`. Kept as-is.
 - Icon tiles in AC mode default to circles (matching Nativz). If AC screenshots show rectangular tiles, flag and I'll switch.
+
+## Goal 13 (set 2026-04-29) — Per-project-type viewer + admin followup polish
+
+Two parallel pushes. The viewer-rendering side is shipped (Goal 13.1). Followup
+tracking on the /review table is the open work — admins want to see at a glance
+how long it's been since each share link was nudged, and fire a generic
+check-in email without leaving the table.
+
+### Acceptance criteria
+
+- [x] Per-project-type viewer rendering at `/c/[token]` (organic / social ads /
+      CTV / other). Editable per-creative title with filename fallback. CTV
+      viewer flips to vertical 16:9 layout. Title PATCH endpoint live.
+- [x] **Review-table polish**: every body cell centered under its column
+      title, headers + cells `whitespace-nowrap`, chevron at end of row reads
+      legibly and shifts on row hover.
+- [x] **Last-followup column** on `/review`:
+      - Days-since indicator with green ≤3d / yellow at 4d / red ≥5d, shown
+        only for `ready_for_review` + `revising` rows.
+      - One-click Send button POSTs to `/api/calendar/share/[token]/followup`,
+        which emails every `notifications_enabled` POC on
+        `content_drop_review_contacts`, stamps `last_followup_at`, increments
+        `followup_count`. Optimistic patch resets the indicator.
+      - Migration 200 backfills `last_followup_at = created_at` so legacy
+        share links don't read as "never followed up."
+- [ ] **Phase 2** (deferred, queued for next push): admin-side image upload
+      pipeline for ad creatives, multi-aspect Meta variations, audio +
+      mixed-file support for "Other" project types.
+
+### Scope boundaries
+- IN: viewer rendering, /review table chrome, followup email + persistence,
+  contact resolution from `content_drop_review_contacts`
+- OUT: ad-creative upload pipeline (Phase 2), per-POC personalized followup
+  copy (single shared body for now), in-product followup history view
+  beyond the column tooltip
+
+## Goal 13 Iterations
+
+### Iteration 13.1 — 2026-04-29 · Per-project-type viewer + share-link polish
+
+**Shipped:** `feat(scheduler): per-project-type rendering for share-link viewer` (`96b76fea`).
+- Migration 199 (`scheduled_posts.title TEXT`) applied via Supabase MCP.
+- `/api/calendar/share/[token]/route.ts` now returns `projectType`,
+  `projectTypeOther`, per-post `title`, and `filename_fallback`.
+- New `/api/calendar/share/[token]/title` POST: empty string clears the
+  override and the viewer falls back to the underlying upload's filename.
+- `/c/[token]` page: new `TitleEditor` for non-organic types, conditional
+  rendering hides caption/hashtag/tag/collab/scheduled controls outside
+  organic, and the article container flips to a vertical stack with
+  `aspect-video` for CTV so 16:9 doesn't get letterboxed into a strip.
+
+### Iteration 13.2 — 2026-04-29 · Last-followup column + admin nudge endpoint
+
+**Focus:** Jack asked for a column tracking days-since the last admin
+followup, color-coded by urgency, with a one-click email send. Same iter
+also tightened the existing table chrome: centered all body cells under
+their column titles, blocked wrap, and made the open-row chevron more
+obvious.
+
+**Shipped:**
+- Migration 200 (`content_drop_share_links.last_followup_at`,
+  `followup_count`) applied via MCP. Backfilled `last_followup_at =
+  created_at` so the days-since clock starts ticking from the original
+  send for every legacy row.
+- New `lib/email/resend.ts → sendCalendarFollowupEmail`. Generic
+  "checking in on your content calendar" copy, comma-joins POC first
+  names, type-keyed `calendar_followup` for the email-hub feed.
+- New `app/api/calendar/share/[token]/followup/route.ts`: admin-only,
+  resolves brand contacts from `content_drop_review_contacts` filtered
+  to `notifications_enabled !== false`, sends, then stamps the share-
+  link state. Email sends *before* the timestamp update so a Resend
+  outage doesn't quietly reset the clock.
+- `app/api/calendar/review/route.ts`: GET response now includes
+  `last_followup_at` + `followup_count` for every share link.
+- `components/scheduler/review-board.tsx`: `ReviewLinkRow` extended
+  with the two new fields.
+- `components/scheduler/review-table.tsx`:
+  - All body cells centered under their column titles, headers and
+    cells use `whitespace-nowrap`, project-name column kept left-
+    aligned because of its multi-line "Last viewed …" subtitle.
+  - Open-row chevron upgraded from `text-text-muted` to
+    `text-text-tertiary` with a `group-hover/row:translate-x-0.5`
+    nudge — visibility without changing layout.
+  - New `<FollowupCell>` renders the days-since pill (green ≤3d /
+    yellow at 4d / red ≥5d) with a `Send` icon-button. Tooltip shows
+    total followups sent. Approved / abandoned / expired rows collapse
+    to "—" because chasing a closed link doesn't make sense.
+
+**Verification:**
+- `npx tsc --noEmit` — clean.
+- Migration 200 applied via Supabase MCP, no errors.
+
+**Next iteration:**
+- Phase 2 (image upload pipeline + Meta-variation aspect ratios + audio
+  support for "Other" creatives) — deferred until Jack confirms the
+  followup column is reading cleanly in production.

@@ -315,7 +315,7 @@ export async function sendTeamInviteEmail(opts: {
       <div class="card">
         <h1 class="heading">You're invited, ${opts.memberName}.</h1>
         <p class="subtext">
-          ${opts.invitedBy} has invited you to <span class="highlight">${brandName} Cortex</span> — your team's content intelligence platform.
+          ${opts.invitedBy} has invited you to <span class="highlight">${brandName} Cortex</span>, your team's content intelligence platform.
         </p>
         <div class="button-wrap">
           <a href="${opts.inviteUrl}" class="button">Create your account &rarr;</a>
@@ -371,7 +371,7 @@ export async function sendClientInviteEmail(opts: {
   inviteUrl: string;
   invitedBy: string;
   agency?: AgencyBrand;
-  /** Optional CC recipients — useful when an account manager wants a copy
+  /** Optional CC recipients, useful when an account manager wants a copy
    *  of every portal invite they fire out to a client org. */
   cc?: string | string[];
   clientId?: string;
@@ -385,7 +385,7 @@ export async function sendClientInviteEmail(opts: {
     cc: opts.cc,
     recipientName: opts.contactName,
     clientId: opts.clientId,
-    subject: `${opts.clientName} — Your Cortex portal is ready`,
+    subject: `Your ${opts.clientName} Cortex portal is ready`,
     html: buildClientInviteEmailHtml(opts),
     metadata: { invitedBy: opts.invitedBy, clientName: opts.clientName },
   });
@@ -447,7 +447,7 @@ export async function sendAffiliateWeeklyReportEmail(opts: {
 }) {
   const agency = opts.agency ?? 'nativz';
   const subjectPrefix = opts.isTestOverride ? '[Test] ' : '';
-  const subject = `${subjectPrefix}Weekly affiliate report — ${opts.clientName} (${opts.rangeLabel})`;
+  const subject = `${subjectPrefix}Weekly affiliate report for ${opts.clientName} (${opts.rangeLabel})`;
 
   const cardHtml = buildAffiliateWeeklyReportCardHtml({
     clientName: opts.clientName,
@@ -483,7 +483,7 @@ export async function sendWeeklySocialReportEmail(opts: {
 }) {
   const agency = opts.agency ?? 'nativz';
   const subjectPrefix = opts.isTestOverride ? '[Test] ' : '';
-  const subject = `${subjectPrefix}Weekly recap — ${opts.report.clientName} (${opts.rangeLabel})`;
+  const subject = `${subjectPrefix}Weekly recap for ${opts.report.clientName} (${opts.rangeLabel})`;
 
   const cardHtml = buildWeeklySocialReportCardHtml({
     report: opts.report,
@@ -526,7 +526,7 @@ export async function sendSearchCompletedEmail(opts: {
     typeKey: 'search_completed',
     agency,
     to: opts.to,
-    subject: `Research ready — ${opts.query}`,
+    subject: `Research ready, ${opts.query}`,
     html: layout(`
       <div class="card">
         <h1 class="heading">Your research is ready.</h1>
@@ -548,14 +548,14 @@ export async function sendSearchCompletedEmail(opts: {
 
 // ── Onboarding email (ad-hoc admin → client) ───────────────────────────────
 // Fires a pre-interpolated onboarding email template through Resend. Subject
-// and body markdown arrive already resolved against the tracker's context —
+// and body markdown arrive already resolved against the tracker's context -
 // this function is just the transport layer. Returns a discriminated union
 // so the caller can log the result either way.
 
 export async function sendOnboardingEmail(opts: {
   to: string;
   subject: string;
-  /** Markdown body — used when `html` is not provided. */
+  /** Markdown body, used when `html` is not provided. */
   bodyMarkdown?: string;
   /** Pre-rendered HTML override. Block-rendered templates pass this in. */
   html?: string;
@@ -599,9 +599,9 @@ export async function sendCompetitorReportEmail(opts: {
   const rangeLabel = (() => {
     const fmt = (iso: string) =>
       new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    return `${fmt(opts.data.period_start)} – ${fmt(opts.data.period_end)}`;
+    return `${fmt(opts.data.period_start)} to ${fmt(opts.data.period_end)}`;
   })();
-  const subject = `${subjectPrefix}Competitor update — ${opts.data.client_name} (${rangeLabel})`;
+  const subject = `${subjectPrefix}Competitor update for ${opts.data.client_name} (${rangeLabel})`;
 
   const cardHtml = buildCompetitorReportCardHtml({
     data: opts.data,
@@ -656,7 +656,7 @@ export async function sendDropCommentEmail(opts: {
     changes_requested: 'Changes requested.',
     comment: 'New comment.',
   } as const;
-  const subject = `${opts.authorName} ${verbBySubject[opts.status]} — ${opts.clientName}`;
+  const subject = `${opts.authorName} ${verbBySubject[opts.status]} on ${opts.clientName}`;
 
   return sendAndLog({
     category: 'transactional',
@@ -712,7 +712,7 @@ export async function sendCalendarCommentDigestEmail(opts: {
 }) {
   const agency = opts.agency ?? 'nativz';
   const totalComments = opts.groups.reduce((sum, g) => sum + g.comments.length, 0);
-  const subject = `${totalComments} content calendar ${totalComments === 1 ? 'comment' : 'comments'} — ${opts.windowLabel}`;
+  const subject = `${totalComments} content calendar ${totalComments === 1 ? 'comment' : 'comments'}, ${opts.windowLabel}`;
 
   const verbByStatus = {
     approved: 'approved',
@@ -751,7 +751,7 @@ export async function sendCalendarCommentDigestEmail(opts: {
       <div class="card">
         <h1 class="heading">Yesterday's calendar activity</h1>
         <p class="subtext">
-          ${totalComments} ${totalComments === 1 ? 'comment' : 'comments'} across ${opts.groups.length} ${opts.groups.length === 1 ? 'client' : 'clients'} — ${opts.windowLabel}.
+          ${totalComments} ${totalComments === 1 ? 'comment' : 'comments'} across ${opts.groups.length} ${opts.groups.length === 1 ? 'client' : 'clients'}, ${opts.windowLabel}.
         </p>
         ${sections}
       </div>
@@ -776,7 +776,7 @@ export async function sendCalendarNoOpenReminderEmail(opts: {
   dropId?: string;
 }) {
   const agency = opts.agency ?? 'nativz';
-  const subject = `Friendly nudge — your content calendar is ready to review`;
+  const subject = `Friendly nudge, your content calendar is ready to review`;
   return sendAndLog({
     category: 'transactional',
     typeKey: 'calendar_no_open_reminder',
@@ -788,7 +788,7 @@ export async function sendCalendarNoOpenReminderEmail(opts: {
     html: layout(`
       <div class="card">
         <h1 class="heading">Your content calendar is waiting</h1>
-        <p class="subtext">Hey ${opts.clientName} — we sent over your latest content calendar about ${opts.hours} hours ago and it hasn't been opened yet. Take a quick look and let us know if anything needs tweaking.</p>
+        <p class="subtext">Hey ${opts.clientName}, we sent over your latest content calendar about ${opts.hours} hours ago and it hasn't been opened yet. Take a quick look and let us know if anything needs tweaking.</p>
         <div style="margin-top:18px;">
           <a href="${opts.shareUrl}" class="btn">Open your calendar</a>
         </div>
@@ -820,13 +820,58 @@ export async function sendCalendarNoActionReminderEmail(opts: {
     html: layout(`
       <div class="card">
         <h1 class="heading">How's the calendar looking?</h1>
-        <p class="subtext">Hey ${opts.clientName} — you opened the calendar but haven't approved or requested changes on any posts yet. We just want to make sure nothing's blocking you. Hit reply or drop comments directly on the posts.</p>
+        <p class="subtext">Hey ${opts.clientName}, you opened the calendar but haven't approved or requested changes on any posts yet. We just want to make sure nothing's blocking you. Hit reply or drop comments directly on the posts.</p>
         <div style="margin-top:18px;">
           <a href="${opts.shareUrl}" class="btn">Review the posts</a>
         </div>
       </div>
     `, agency),
     metadata: { clientName: opts.clientName, hours: opts.hours },
+  });
+}
+
+/**
+ * Generic admin-triggered "checking in on the calendar" nudge. Powers the
+ * /review table's "Send followup" button — the admin flips it manually
+ * when the days-since-last-followup indicator hits yellow/red. Doesn't
+ * assume a particular client state (open vs. unopened, viewed vs. acted
+ * on), unlike the time-of-day reminder helpers above. Recipients get a
+ * single shared email with their first names comma-joined in the
+ * greeting so it doesn't read like an autoresponder.
+ */
+export async function sendCalendarFollowupEmail(opts: {
+  to: string | string[];
+  pocFirstNames: string[];
+  clientName: string;
+  shareUrl: string;
+  agency?: AgencyBrand;
+  clientId?: string;
+  dropId?: string;
+}) {
+  const agency = opts.agency ?? 'nativz';
+  const greetingNames = opts.pocFirstNames.length
+    ? opts.pocFirstNames.join(', ')
+    : opts.clientName;
+  const subject = `Checking in on your content calendar`;
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: 'calendar_followup',
+    agency,
+    to: opts.to,
+    clientId: opts.clientId,
+    dropId: opts.dropId,
+    subject,
+    html: layout(`
+      <div class="card">
+        <h1 class="heading">Quick check-in</h1>
+        <p class="subtext">Hey ${greetingNames}, just circling back on the latest content calendar for ${opts.clientName}. Whenever you have a few minutes, take a look and either approve the posts or drop comments where anything needs to change.</p>
+        <p class="subtext" style="margin-top:10px;">No rush — but the sooner we hear from you, the sooner the team can lock everything in.</p>
+        <div style="margin-top:18px;">
+          <a href="${opts.shareUrl}" class="btn">Open the calendar</a>
+        </div>
+      </div>
+    `, agency),
+    metadata: { clientName: opts.clientName, pocFirstNames: opts.pocFirstNames },
   });
 }
 
@@ -840,7 +885,7 @@ export async function sendCalendarFinalCallEmail(opts: {
   dropId?: string;
 }) {
   const agency = opts.agency ?? 'nativz';
-  const subject = `Heads up — first post goes live ${opts.firstPostAt}`;
+  const subject = `Heads up, first post goes live ${opts.firstPostAt}`;
   return sendAndLog({
     category: 'transactional',
     typeKey: 'calendar_final_call',
@@ -852,7 +897,7 @@ export async function sendCalendarFinalCallEmail(opts: {
     html: layout(`
       <div class="card">
         <h1 class="heading">Final call before we publish</h1>
-        <p class="subtext">Hey ${opts.clientName} — your first scheduled post goes live ${opts.firstPostAt}. We haven't heard back yet, so unless you flag something we'll publish on the dates you saw in the calendar.</p>
+        <p class="subtext">Hey ${opts.clientName}, your first scheduled post goes live ${opts.firstPostAt}. We haven't heard back yet, so unless you flag something we'll publish on the dates you saw in the calendar.</p>
         <p class="subtext" style="margin-top:10px;">If anything needs to change, drop a comment on the post or hit reply now.</p>
         <div style="margin-top:18px;">
           <a href="${opts.shareUrl}" class="btn">Open the calendar</a>
@@ -878,9 +923,9 @@ export async function sendCalendarDeliveryEmail(opts: {
   pocFirstNames: string[];
   clientName: string;
   postCount: number;
-  /** YYYY-MM-DD — first scheduled post date, used to derive the month label */
+  /** YYYY-MM-DD, first scheduled post date, used to derive the month label */
   startDate: string;
-  /** YYYY-MM-DD — last scheduled post date */
+  /** YYYY-MM-DD, last scheduled post date */
   endDate: string;
   shareUrl: string;
   /** Show the "calendars now arrive via email moving forward" intro */
@@ -1019,7 +1064,7 @@ export async function sendCombinedCalendarDeliveryEmail(opts: {
       <h1 class="heading" style="text-align:center;">Your ${monthLabel} content calendars are ready</h1>
       <p class="subtext" style="text-align:center;">
         ${greeting}, ${teamShort} just dropped fresh calendars for ${brandList}.
-        Each one has its own button below — tap in to watch the videos, read the
+        Each one has its own button below, tap in to watch the videos, read the
         captions, and approve or request changes one post at a time.
       </p>
       ${introBlock}
@@ -1077,7 +1122,7 @@ export async function sendCalendarRevisionsCompleteEmail(opts: {
   const html = layout(`
     <div class="card">
       <h1 class="heading">Revisions complete</h1>
-      <p class="subtext">Hey ${opts.clientName} — we've worked through every change you flagged. Hop back in to take a final look and approve the posts you're happy with.</p>
+      <p class="subtext">Hey ${opts.clientName}, we've worked through every change you flagged. Hop back in to take a final look and approve the posts you're happy with.</p>
       <div style="margin-top:18px;">
         <a href="${opts.shareUrl}" class="btn">Review the updated posts</a>
       </div>
@@ -1108,7 +1153,7 @@ export async function sendCalendarRevisionsCompleteEmail(opts: {
 //
 // Per-post `changes` is the raw text of every `changes_requested` comment
 // on that post's review_link, ordered oldest → newest. We render them as
-// blockquoted bullets — quoting (rather than paraphrasing) keeps the email
+// blockquoted bullets, quoting (rather than paraphrasing) keeps the email
 // truthful: the reviewer sees their own words, so there's no "did you
 // actually fix this?" ambiguity.
 
@@ -1120,7 +1165,7 @@ export async function sendCalendarRevisedVideosEmail(opts: {
   shareUrl: string;
   /** Past-tense action bullets describing what the editing team did this
    *  round, already AI-rephrased upstream (see lib/calendar/summarize-
-   *  revisions.ts). Pass [] when there were no recorded change requests —
+   *  revisions.ts). Pass [] when there were no recorded change requests -
    *  the email then ships without the "what we did" section. */
   summaryBullets: string[];
   /** How many videos were re-uploaded this round; drives subject + lead. */
@@ -1142,38 +1187,44 @@ export async function sendCalendarRevisedVideosEmail(opts: {
   const count = opts.revisedCount;
   const word = count === 1 ? 'video' : 'videos';
   const subjectPrefix = opts.isTestOverride ? '[Test] ' : '';
-  const subject = `${subjectPrefix}Revised ${word} ready for review — ${opts.clientName}`;
+  const subject = `${subjectPrefix}${opts.clientName}: revised ${word} ready for review`;
 
+  // The bulleted "what we did" list is wrapped in an inline-block so the list
+  // itself stays left-aligned (readable) while the wrapper sits centered on
+  // the row. Without this, centering the card would also center each bullet,
+  // which looks chaotic when bullets vary in length.
   const summarySection = opts.summaryBullets.length > 0
     ? `
-        <p class="subtext" style="margin-top:18px;">Here's what we did:</p>
-        <ul style="margin:8px 0 0;padding-left:20px;">
-          ${opts.summaryBullets
-            .map(
-              (b) =>
-                `<li style="color:#cbd2dd;font-size:14px;line-height:1.55;margin:0 0 6px;">${escapeAlertHtml(b)}</li>`,
-            )
-            .join('')}
-        </ul>
+        <p class="subtext" style="margin-top:18px;text-align:center;">Here's what we did:</p>
+        <div style="text-align:center;">
+          <ul style="margin:8px 0 0;padding:0 0 0 20px;display:inline-block;text-align:left;">
+            ${opts.summaryBullets
+              .map(
+                (b) =>
+                  `<li style="color:#cbd2dd;font-size:14px;line-height:1.55;margin:0 0 6px;">${escapeAlertHtml(b)}</li>`,
+              )
+              .join('')}
+          </ul>
+        </div>
       `
     : '';
 
   const html = layout(`
-    <div class="card">
-      <h1 class="heading">Revised ${word} ready for review</h1>
-      <p class="subtext">
+    <div class="card" style="text-align:center;">
+      <h1 class="heading" style="text-align:center;">Revised ${word} ready for review</h1>
+      <p class="subtext" style="text-align:center;">
         ${greeting},
       </p>
-      <p class="subtext">
+      <p class="subtext" style="text-align:center;">
         The ${teamLabel} has implemented the requested changes and the revised
         calendar is ready for review!
       </p>
       ${summarySection}
-      <div class="button-wrap" style="margin-top:24px;">
+      <div class="button-wrap" style="margin-top:24px;text-align:center;">
         <a href="${opts.shareUrl}" class="button">Re-review the calendar &rarr;</a>
       </div>
-      <p class="subtext" style="margin-top:24px;">
-        If there's any more feedback please let us know — or mark each post as
+      <p class="subtext" style="margin-top:24px;text-align:center;">
+        If there's any more feedback please let us know, or mark each post as
         approved if it matches what you were looking for.
       </p>
       <p class="small" style="text-align:center; margin-top:24px;">
@@ -1206,7 +1257,7 @@ export async function sendCalendarRevisedVideosEmail(opts: {
 // ── Post-health alert (ops digest) ────────────────────────────────────────────
 //
 // Sent by /api/cron/post-health when posts fail or social profiles disconnect.
-// Always Nativz-branded — agency split would just add noise for an internal
+// Always Nativz-branded, agency split would just add noise for an internal
 // ops alert. Same body content also goes out via Google Chat + in-app.
 
 export interface PostHealthFailedPost {
@@ -1276,7 +1327,7 @@ export async function sendPostHealthAlertEmail(opts: {
     <div class="card">
       <h1 class="heading">Posting health alert</h1>
       <p class="subtext">
-        The post-health cron picked up new issues. Each row fires once — re-posts and reconnects clear automatically.
+        The post-health cron picked up new issues. Each row fires once, re-posts and reconnects clear automatically.
       </p>
       ${failedSection}
       ${disconnectSection}
