@@ -12,8 +12,8 @@ export const dynamic = 'force-dynamic';
  * cross-brand context is obvious.
  *
  * Lives under Admin (not Content) because the brand-scoped review lives
- * at `/admin/calendar/review` and follows the brand pill. This page is
- * for "show me everything pending across the agency right now".
+ * at `/review` and follows the brand pill. This page is for "show me
+ * everything pending across the agency right now".
  */
 export default async function AdminShareLinksPage() {
   const supabase = await createServerSupabaseClient();
@@ -21,7 +21,7 @@ export default async function AdminShareLinksPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
-  if (!(await isAdmin(user.id))) redirect('/calendar/review');
+  if (!(await isAdmin(user.id))) redirect('/review');
 
   return (
     <ReviewBoard

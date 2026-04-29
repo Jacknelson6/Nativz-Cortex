@@ -102,7 +102,11 @@ const NAV_SECTIONS: NavSection[] = [
         icon: CalendarDays,
         children: [
           { href: '/admin/calendar', label: 'Calendar', icon: CalendarDays },
-          { href: '/admin/calendar/review', label: 'Review', icon: ClipboardCheck },
+          // Review is brand-scoped, lives at root /review (no /admin/
+          // prefix — same brand-root pattern as /brand-profile, /lab,
+          // /spying). Same URL serves admin and viewer; the page body
+          // branches on role.
+          { href: '/review', label: 'Review', icon: ClipboardCheck },
         ],
       },
       {
@@ -211,7 +215,7 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/notifications',
   '/admin/usage',
   // Cross-brand share-link oversight is operator-only — viewers see only
-  // their own brand's links via the unified-shell `/calendar/review` route.
+  // their own brand's links via the unified-shell `/review` route.
   '/admin/share-links',
   // Cost-driving brand tools stay admin-only. Spying triggers Apify scrapes
   // on every audit; the Ad Generator triggers Gemini 2.5 Flash Image
@@ -257,11 +261,6 @@ const PORTAL_HREF_REWRITES: Record<string, string> = {
  */
 const VIEWER_UNIFIED_HREFS: Record<string, string> = {
   '/admin/calendar': '/calendar',
-  // Viewer review surface is a top-level /review route (table layout
-  // tuned for client comprehension). The /calendar/review URL still
-  // resolves — it just bounces to /review — so legacy bookmarks keep
-  // working.
-  '/admin/calendar/review': '/review',
 };
 
 function getNavSectionsForRole(role: 'admin' | 'viewer', prefix: string): NavSection[] {
@@ -561,13 +560,13 @@ export function AdminSidebar({
                           <ul className="mt-1.5 ml-6 space-y-1 pb-1 pl-2 border-l border-nativz-border">
                             {item.children.map((child) => {
                               // Sibling-aware match: when one child's href is a
-                              // prefix of another's (Calendar → /admin/calendar
-                              // and Review → /admin/calendar/review), the broad
-                              // `pathname.startsWith(href + '/')` rule lights up
-                              // both children on /admin/calendar/review. Defer
-                              // to the longer match — if any sibling is a more
-                              // specific match for the current path, this child
-                              // is not active.
+                              // prefix of another's (e.g. Admin parent
+                              // /admin/clients vs. /admin/clients/[slug]),
+                              // the broad `pathname.startsWith(href + '/')`
+                              // rule lights up both children. Defer to the
+                              // longer match — if any sibling is a more
+                              // specific match for the current path, this
+                              // child is not active.
                               const cActive = (() => {
                                 if (pathname === child.href) return true;
                                 const moreSpecific = item.children!.some(

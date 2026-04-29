@@ -16,14 +16,17 @@ import {
 import { Button } from '@/components/ui/button';
 
 /**
- * Review board — the bento-grid view of share-link inventory rendered on
- * /admin/calendar/review (admin) and /calendar/review (viewer).
+ * Review board — bento-grid view of share-link inventory. Used by:
+ *  - /review (admin variant — brand-scoped via the active pill)
+ *  - /admin/share-links (cross-brand oversight, no clientId filter)
  *
- * Same component for both roles; the `isAdmin` prop drives the small set
- * of admin-only affordances (per-card overflow menu, "Create new share
- * link" CTA in the header). Data comes from `/api/calendar/review`,
- * which already handles the server-side scoping — viewers only ever
- * receive links for clients they can access.
+ * Viewers see a different surface (table layout) at /review; this
+ * component is admin-only in practice, but `isAdmin` stays a prop so
+ * the same component can be reused if we ever want a stripped-down
+ * read-only bento for shared / external viewers. Data comes from
+ * `/api/calendar/review`, which already handles server-side scoping —
+ * the request is unauthenticated callers never receive links for
+ * clients they can't access.
  */
 
 export interface ReviewLinkRow {
@@ -50,9 +53,9 @@ interface ReviewBoardProps {
    *  back to the calendar entry if not provided. */
   createHref?: string;
   /** When set, the API call appends `?clientId=` so the board renders
-   *  only that brand's share links. Used by `/admin/calendar/review`
-   *  (scoped to the active brand pill) and the viewer route. Leave null
-   *  for the cross-brand admin oversight page (`/admin/share-links`). */
+   *  only that brand's share links. Used by `/review` (admin variant —
+   *  scoped to the active brand pill). Leave null for the cross-brand
+   *  admin oversight page at `/admin/share-links`. */
   clientId?: string | null;
   /** Optional title override. Defaults to "Review". Cross-brand admin
    *  tool uses "Share links" to make the scope clear. */

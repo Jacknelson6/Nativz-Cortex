@@ -1,22 +1,24 @@
-import { redirect } from 'next/navigation';
 import { CalendarDays } from 'lucide-react';
 import { getActiveBrand } from '@/lib/active-brand';
+import { ReviewBoard } from '@/components/scheduler/review-board';
 import { ReviewTable } from '@/components/scheduler/review-table';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Viewer (client-side) Review page at `/review`. Brand-scoped via the
- * active pill — clients see only their own brand's share-link inventory
- * as a table with a 4-stage progress track per row.
+ * Brand-scoped Review page. Lives at root `/review` (no /admin/ prefix —
+ * Content is a brand-scoped section so its children match). Same URL
+ * serves both roles; the body branches on `isAdmin`:
  *
- * Admins landing here get redirected to `/admin/calendar/review` (the
- * brand-scoped admin variant); the agency-wide oversight grid is at
- * `/admin/share-links`.
+ *   - admin  → bento grid via <ReviewBoard> with create / revoke / copy
+ *              affordances. Cross-brand oversight stays on /admin/share-links.
+ *   - viewer → table via <ReviewTable> with the 4-stage progress track
+ *              tuned for client comprehension.
+ *
+ * Both surfaces are filtered by the active brand pill.
  */
-export default async function ViewerReviewPage() {
+export default async function ReviewPage() {
   const active = await getActiveBrand().catch(() => null);
-  if (active?.isAdmin) redirect('/admin/calendar/review');
 
   if (!active?.brand) {
     return (
@@ -27,10 +29,21 @@ export default async function ViewerReviewPage() {
         <div className="rounded-xl border border-nativz-border bg-surface p-12 text-center">
           <CalendarDays className="mx-auto mb-3 h-8 w-8 text-text-tertiary" />
           <p className="text-sm text-text-secondary">
-            Pick a brand from the top bar to see your content reviews.
+            Pick a brand from the top bar to see content reviews.
           </p>
         </div>
       </div>
+    );
+  }
+
+  if (active.isAdmin) {
+    return (
+      <ReviewBoard
+        isAdmin
+        clientId={active.brand.id}
+        createHref="/admin/calendar"
+        description={`Share links you’ve sent for ${active.brand.name}. Open one to see comments, approvals, and revision status.`}
+      />
     );
   }
 
