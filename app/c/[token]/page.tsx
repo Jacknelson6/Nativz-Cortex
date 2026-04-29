@@ -2159,10 +2159,11 @@ function CommentRow({
     );
   }
 
-  // Editor-only "Mark revised" affordance on a change-request row. After
-  // resolving, the same button reopens the row in case the editor flipped
-  // it by accident. Visible always (not just on hover) so editors can scan
-  // the history and see what's still outstanding.
+  // Editor-only "Revised" toggle on a change-request row. The label is the
+  // same in both states ("Revised") — what changes is the styling: success
+  // chip when resolved, neutral outline when still outstanding. Visible
+  // always (not just on hover) so editors can scan the history and see
+  // what's still on their plate.
   const resolveButton =
     comment.status === 'changes_requested' && isEditor ? (
       <button
@@ -2170,6 +2171,7 @@ function CommentRow({
         onClick={toggleResolved}
         disabled={resolving}
         aria-label={isResolved ? 'Reopen revision' : 'Mark as revised'}
+        aria-pressed={isResolved}
         className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
           isResolved
             ? 'bg-status-success/12 text-status-success ring-1 ring-status-success/30 hover:bg-status-success/20'
@@ -2182,7 +2184,7 @@ function CommentRow({
         ) : (
           <CheckCircle size={11} />
         )}
-        {isResolved ? 'Revised' : 'Mark revised'}
+        Revised
       </button>
     ) : null;
 
