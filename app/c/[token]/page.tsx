@@ -1477,36 +1477,48 @@ function CommentRow({
 
   if (confirming) {
     return (
-      <div className="rounded-lg border border-status-danger/40 bg-status-danger/10 px-3 py-2">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs">
-          <div className="flex items-center gap-2 text-text-secondary">
-            <AlertTriangle size={12} className="text-status-danger" />
-            <span>Remove this from history? This can’t be undone.</span>
+      <div
+        role="alertdialog"
+        aria-label="Confirm remove from history"
+        className="rounded-lg border border-[color:var(--status-danger)]/30 bg-[color:var(--status-danger)]/[0.06] px-3 py-2.5 sm:py-2"
+      >
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          <div className="flex items-start gap-2 sm:items-center">
+            <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[color:var(--status-danger)]/15 sm:mt-0">
+              <AlertTriangle size={11} className="text-[color:var(--status-danger)]" />
+            </span>
+            <div className="min-w-0 flex-1 text-xs leading-tight text-text-secondary">
+              <span className="block font-medium text-text-primary">Remove from history?</span>
+              <span className="block text-[11px] text-text-muted">This can’t be undone.</span>
+            </div>
           </div>
-          <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-text-muted select-none">
-            <input
-              type="checkbox"
-              checked={dontAsk}
-              onChange={(e) => setDontAsk(e.target.checked)}
-              className="h-3 w-3 accent-accent"
-            />
-            Don’t ask again
-          </label>
-          <div className="ml-auto flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setConfirming(false)}
-              className="rounded-md px-2 py-1 text-[11px] font-medium text-text-secondary transition hover:bg-surface-hover"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => void doDelete()}
-              className="rounded-md bg-status-danger px-2 py-1 text-[11px] font-medium text-white transition hover:bg-status-danger/90"
-            >
-              Remove
-            </button>
+          <div className="flex items-center justify-between gap-2 sm:ml-auto sm:justify-end sm:gap-3">
+            <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-text-muted select-none">
+              <input
+                type="checkbox"
+                checked={dontAsk}
+                onChange={(e) => setDontAsk(e.target.checked)}
+                className="h-3 w-3 accent-[color:var(--accent)]"
+              />
+              Don’t ask again
+            </label>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setConfirming(false)}
+                className="rounded-full px-3 py-1 text-[11px] font-medium text-text-secondary transition hover:bg-surface-hover"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void doDelete()}
+                autoFocus
+                className="rounded-full bg-[color:var(--status-danger)] px-3 py-1 text-[11px] font-medium text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--status-danger)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
+                Remove
+              </button>
+            </div>
           </div>
         </div>
       </div>
