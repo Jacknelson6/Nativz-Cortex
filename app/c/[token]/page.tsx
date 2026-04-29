@@ -1263,6 +1263,12 @@ function PostCard({
   // by default — the chip is visible from the moment the player is ready,
   // and dismissing it (×) hides it for the current draft. Reset on submit.
   const [pinEnabled, setPinEnabled] = useState(true);
+  // Composer is collapsed by default — only Approve / Request change live at
+  // the bottom of the card. Clicking Request change expands the textarea so
+  // the reviewer can write their note + hit Send. Keeps the resting state of
+  // the card calm (most posts get one decision, not a long thread) and
+  // matches the "talk only when you need to" Frame.io feel.
+  const [composerExpanded, setComposerExpanded] = useState(false);
 
   // Tick the displayed playhead once per second while the player is ready.
   // Light touch — we just read the cached time from the handle; no event
@@ -1417,6 +1423,8 @@ function PostCard({
       // Re-enable the live pin for the next draft. If the user dismissed it
       // earlier, they get a fresh chance with the new comment.
       setPinEnabled(true);
+      // Collapse the composer so the next interaction starts from rest.
+      setComposerExpanded(false);
       // Server may auto-upgrade a "changes_requested" submission to "approved"
       // when the body reads like an approval ("approved", "love this", etc.).
       // Reflect the actual recorded status in the toast so the user isn't
@@ -1796,7 +1804,11 @@ function PostCard({
 
   const historyBlock =
     post.comments.length > 0 ? (
-      <div className="border-t border-nativz-border bg-background/40 px-3 py-3 sm:px-4">
+      // mt-2 puts a small breathing room between the caption and the
+      // history list so the two sections don't read as one solid block.
+      // The internal border-t still does the visual divider work; the
+      // margin is purely to give the eye somewhere to rest.
+      <div className="mt-2 border-t border-nativz-border bg-background/40 px-3 py-4 sm:px-4">
         <h3 className="mb-2 text-[13px] font-medium text-text-muted">History</h3>
         <div className="space-y-2">
           {post.comments.map((c) => (
@@ -1815,89 +1827,121 @@ function PostCard({
     ) : null;
 
   const composerBlock = (
-    <div className="border-t border-nativz-border px-3 py-3 sm:px-4">
-      <h3 className="mb-2 text-[13px] font-medium text-text-muted">Leave feedback</h3>
+    <div className="border-t border-nativz-border bg-surface px-3 py-3 sm:px-4">
+      {/* Expanded composer — only renders when the reviewer is actively
+          drafting a "Request change" note. Default rest state hides this
+          entirely so the column doesn't read as a wall of inputs the user
+          must engage with before they can approve. */}
+      {composerExpanded && (
+        <div className="mb-3 rounded-lg border border-nativz-border bg-background/60 focus-within:border-accent/60 focus-within:ring-1 focus-within:ring-accent/40">
+          <textarea
+            ref={(el) => {
+              // Auto-focus on first expand so the cursor is already in place
+              // when the user opens the composer — no extra click required.
+              if (el && composerExpanded && document.activeElement !== el && !commentText) {
+                el.focus();
+              }
+            }}
+            value={commentText}
+            onChange={(e) => setCommentText(e.target.value)}
+            placeholder="Notes on the video (cuts, music, hook, etc.)"
+            rows={3}
+            className="w-full resize-none rounded-t-lg bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+            disabled={submitting}
+          />
 
-      {/* Comment box — darker fill so it's a clear input target against the
-          card surface. Attach files lives directly under the textarea so it
-          reads as part of the comment composition step, not a footer action. */}
-      <div className="mb-3 rounded-lg border border-nativz-border bg-background/60 focus-within:border-accent/60 focus-within:ring-1 focus-within:ring-accent/40">
-        <textarea
-          value={commentText}
-          onChange={(e) => setCommentText(e.target.value)}
-          placeholder="Notes on the video (cuts, music, hook, etc.)"
-          rows={2}
-          className="w-full resize-none rounded-t-lg bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
-          disabled={submitting}
-        />
+          {pendingAttachments.length > 0 && (
+            <div className="flex flex-wrap gap-2 px-3 pb-2">
+              {pendingAttachments.map((a) => (
+                <AttachmentChip key={a.url} attachment={a} onRemove={() => removeAttachment(a.url)} />
+              ))}
+            </div>
+          )}
 
-        {pendingAttachments.length > 0 && (
-          <div className="flex flex-wrap gap-2 px-3 pb-2">
-            {pendingAttachments.map((a) => (
-              <AttachmentChip key={a.url} attachment={a} onRemove={() => removeAttachment(a.url)} />
-            ))}
-          </div>
-        )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/*,video/*,application/pdf"
+            className="hidden"
+            onChange={(e) => uploadFiles(e.target.files)}
+          />
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept="image/*,video/*,application/pdf"
-          className="hidden"
-          onChange={(e) => uploadFiles(e.target.files)}
-        />
-
-        <div className="flex flex-wrap items-center gap-2 border-t border-nativz-border/60 px-2 py-2">
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={submitting || uploading || pendingAttachments.length >= 10}
-            className="inline-flex items-center gap-1.5 rounded-md bg-transparent px-2 py-1 text-xs font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
-          >
-            {uploading ? <Loader2 size={13} className="animate-spin" /> : <Paperclip size={13} />}
-            {uploading ? 'Uploading…' : 'Attach files'}
-          </button>
-          {/* Live timestamp chip — tracks the current playhead so the pinned
-              moment matches whatever the user is looking at when they hit
-              submit. Dismiss (×) opts out of pinning for the current draft;
-              the fallback button below lets them opt back in. The actual
-              value sent on submit is read fresh from the player handle. */}
-          {playerReady && (
-            pinEnabled ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-surface px-2.5 py-1 text-xs font-medium text-accent-text ring-1 ring-accent/40">
-                <MapPin size={12} />
-                At {formatSeconds(livePlayheadSeconds)}
+          {/* Action row inside the textbox — Attach + timestamp on the
+              left, Send on the right. Mirrors the "compose pane bottom
+              bar" pattern in Slack/Linear so reviewers don't have to hunt
+              for the submit affordance. */}
+          <div className="flex flex-wrap items-center gap-2 border-t border-nativz-border/60 px-2 py-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={submitting || uploading || pendingAttachments.length >= 10}
+              className="inline-flex items-center gap-1.5 rounded-md bg-transparent px-2 py-1 text-xs font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+            >
+              {uploading ? <Loader2 size={13} className="animate-spin" /> : <Paperclip size={13} />}
+              {uploading ? 'Uploading…' : 'Attach files'}
+            </button>
+            {/* Live timestamp chip — tracks the current playhead so the
+                pinned moment matches whatever the user is looking at when
+                they hit Send. Dismiss (×) opts out for the current draft;
+                the fallback button lets them opt back in. */}
+            {playerReady && (
+              pinEnabled ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-surface px-2.5 py-1 text-xs font-medium text-accent-text ring-1 ring-accent/40">
+                  <MapPin size={12} />
+                  At {formatSeconds(livePlayheadSeconds)}
+                  <button
+                    type="button"
+                    onClick={() => setPinEnabled(false)}
+                    className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-accent/20"
+                    aria-label="Don't reference a timestamp"
+                    title="Don't reference a timestamp"
+                  >
+                    <X size={11} />
+                  </button>
+                </span>
+              ) : (
                 <button
                   type="button"
-                  onClick={() => setPinEnabled(false)}
-                  className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-accent/20"
-                  aria-label="Don't reference a timestamp"
-                  title="Don't reference a timestamp"
+                  onClick={() => setPinEnabled(true)}
+                  disabled={submitting}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-transparent px-2 py-1 text-xs font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+                  title="Reference current timestamp"
                 >
-                  <X size={11} />
+                  <MapPin size={13} /> Reference timestamp
                 </button>
-              </span>
-            ) : (
+              )
+            )}
+            <div className="ml-auto flex items-center gap-1">
               <button
                 type="button"
-                onClick={() => setPinEnabled(true)}
-                disabled={submitting}
-                className="inline-flex items-center gap-1.5 rounded-md bg-transparent px-2 py-1 text-xs font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
-                title="Reference current timestamp"
+                onClick={() => {
+                  setComposerExpanded(false);
+                  setCommentText('');
+                  setPendingAttachments([]);
+                }}
+                disabled={submitting || uploading}
+                className="inline-flex items-center gap-1.5 rounded-md bg-transparent px-2 py-1 text-xs font-medium text-text-muted transition-all hover:bg-surface-hover hover:text-text-secondary disabled:opacity-50"
               >
-                <MapPin size={13} /> Reference timestamp
+                Cancel
               </button>
-            )
-          )}
-          <span className="ml-auto text-[11px] text-text-muted">up to 25 MB</span>
+              <button
+                type="button"
+                onClick={() => submit('changes_requested')}
+                disabled={submitting || uploading || (!commentText.trim() && pendingAttachments.length === 0)}
+                className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 disabled:hover:bg-accent"
+              >
+                {submitting ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                Send
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Reviewer decisions — Approve and Request change live together at
-          the bottom of the column, paired directly with the composer
-          they act on. Editor-only Replace media is up in the caption
-          block with the other "change the post" affordances. */}
+      {/* Reviewer decisions — anchored to the bottom of the column so the
+          two primary actions (Approve, Request change) are always at the
+          same hand-position regardless of comment thread length. */}
       <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
         {review === 'approved' && latestApprovedId ? (
           <button
@@ -1919,11 +1963,19 @@ function PostCard({
             <CheckCircle size={14} /> Approve
           </button>
         )}
+        {/* Request change opens the composer rather than submitting
+            directly — submission only fires from the Send button inside
+            the textbox, after the reviewer has actually written something. */}
         <button
           type="button"
-          onClick={() => submit('changes_requested')}
-          disabled={submitting || uploading || (!commentText.trim() && pendingAttachments.length === 0)}
-          className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-4 py-2.5 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50 sm:py-2"
+          onClick={() => setComposerExpanded((v) => !v)}
+          disabled={submitting || uploading}
+          aria-expanded={composerExpanded}
+          className={`inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-50 sm:py-2 ${
+            composerExpanded
+              ? 'border-accent/50 bg-accent-surface text-accent-text'
+              : 'border-nativz-border bg-transparent text-text-secondary hover:bg-surface-hover hover:text-text-primary'
+          }`}
         >
           <MessageSquare size={14} /> Request change
         </button>
@@ -1949,9 +2001,16 @@ function PostCard({
       <div className="aspect-[9/16] w-full bg-black md:w-auto md:flex-shrink-0 md:h-full">
         {videoPanel}
       </div>
-      <div className="flex flex-1 flex-col overflow-y-auto md:min-w-0 md:h-full">
-        <div className="p-3 sm:p-4">{captionBlock}</div>
-        {historyBlock}
+      {/* Right column: caption + history scroll inside their own region;
+          the composer (Approve / Request change + expandable note box) is
+          pinned to the bottom of the card so the primary actions are at a
+          consistent hand-position regardless of how long the comment
+          thread runs. */}
+      <div className="flex flex-1 flex-col md:min-w-0 md:h-full">
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-3 sm:p-4">{captionBlock}</div>
+          {historyBlock}
+        </div>
         {composerBlock}
       </div>
     </article>
