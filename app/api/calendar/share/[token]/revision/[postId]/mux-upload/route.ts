@@ -58,21 +58,44 @@ export async function POST(
     .single<{ id: string }>();
   if (!video) return NextResponse.json({ error: 'video not found' }, { status: 404 });
 
-  // CORS origin: the browser will PUT directly to Mux, so Mux needs to know
-  // which origin we're calling from. We trust the request URL — it's our
-  // own deployment.
-  const origin = new URL(req.url).origin;
+  // CORS origin: the browser will PUT directly to Mux, so Mux's CORS check
+  // is comparing the *browser's* origin against whatever we register here.
+  // Prefer the inbound `Origin` request header — that's the exact value the
+  // browser will use for the upload's CORS check. Falling back to
+  // `new URL(req.url).origin` is unreliable on Vercel: the edge proxy can
+  // surface an internal hostname (or a `vercel.app` preview URL) that
+  // doesn't match the user-visible page origin, which silently fails the
+  // PUT preflight and surfaces as `xhr.onerror` ("Network error during
+  // upload"). NEXT_PUBLIC_APP_URL is the third fallback for cases where
+  // there's no Origin header (curl, server-to-server) — still better than
+  // a synthetic origin guess.
+  const headerOrigin = req.headers.get('origin');
+  const origin =
+    headerOrigin ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    new URL(req.url).origin;
 
   const mux = getMux();
-  const upload = await mux.video.uploads.create({
-    cors_origin: origin,
-    new_asset_settings: {
-      playback_policies: ['public'],
-      // Reasonable defaults for short-form vertical video. Mux figures out
-      // resolution from the source.
-      video_quality: 'basic',
-    },
-  });
+  let upload;
+  try {
+    upload = await mux.video.uploads.create({
+      cors_origin: origin,
+      new_asset_settings: {
+        playback_policies: ['public'],
+        // Reasonable defaults for short-form vertical video. Mux figures out
+        // resolution from the source.
+        video_quality: 'basic',
+      },
+    });
+  } catch (err) {
+    // Logged with the chosen cors_origin so future "Network error during
+    // upload" reports can be traced to a CORS mismatch quickly.
+    console.error(`Mux upload mint failed (cors_origin=${origin}, post=${postId}):`, err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Could not start upload' },
+      { status: 502 },
+    );
+  }
 
   // Persist the upload id so the webhook can find this row later.
   // mux_status='uploading' lets the UI render a progress state.
