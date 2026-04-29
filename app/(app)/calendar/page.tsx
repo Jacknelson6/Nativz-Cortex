@@ -1,36 +1,45 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { CalendarDays, Clock } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
 import { getActiveBrand } from '@/lib/active-brand';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-import type { ContentDrop } from '@/lib/types/calendar';
+import { SchedulerContent } from '@/components/scheduler/scheduler-content';
+import type { ClientOption } from '@/components/scheduler/types';
 
 export const dynamic = 'force-dynamic';
 
-const VIEWER_VISIBLE_STATUSES: ContentDrop['status'][] = ['ready', 'scheduled'];
-
+/**
+ * Viewer calendar — same scheduler shell as the admin route, but
+ * `mode='viewer'` strips the autoschedule / new-post / drive-import /
+ * connect / share affordances. Viewers can still browse the calendar,
+ * open posts, and edit captions / tags / collaborators / scheduled
+ * times. Brand is resolved via `getActiveBrand()` so the top pill scopes
+ * the calendar to a single client at a time.
+ */
 export default async function ViewerCalendarPage() {
   const active = await getActiveBrand().catch(() => null);
   if (active?.isAdmin) redirect('/admin/calendar');
 
   if (!active?.brand) {
     return (
-      <div className="cortex-page-gutter max-w-6xl mx-auto space-y-6">
+      <div className="cortex-page-gutter mx-auto max-w-6xl space-y-6">
         <header>
           <h1 className="text-2xl font-semibold text-text-primary">Content calendar</h1>
         </header>
         <div className="rounded-xl border border-nativz-border bg-surface p-12 text-center">
           <CalendarDays className="mx-auto mb-3 h-8 w-8 text-text-tertiary" />
-          <p className="text-sm text-text-secondary">Pick a brand from the top bar to see its content calendars.</p>
+          <p className="text-sm text-text-secondary">
+            Pick a brand from the top bar to see its content calendar.
+          </p>
         </div>
       </div>
     );
   }
 
-  // Defence in depth: even though the brand pill resolves via user_client_access,
-  // re-verify that the current user actually has access to this client before
-  // returning anything. Cookie tampering can't widen scope this way.
+  // Defence in depth: even though the brand pill resolves via
+  // user_client_access, re-verify that the current user actually has
+  // access to this client before handing the SchedulerContent shell —
+  // cookie tampering can't widen scope this way.
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
@@ -46,74 +55,31 @@ export default async function ViewerCalendarPage() {
     .maybeSingle();
   if (!access) redirect('/');
 
-  const { data: drops } = await admin
-    .from('content_drops')
-    .select('id, start_date, end_date, default_post_time, total_videos, processed_videos, status, created_at')
-    .eq('client_id', active.brand.id)
-    .in('status', VIEWER_VISIBLE_STATUSES)
-    .order('start_date', { ascending: false });
+  // Viewer's brand pill picks one client at a time, so the dropdown is
+  // single-option (matches the active brand).
+  const { data: clientRow } = await admin
+    .from('clients')
+    .select('id, name, slug, default_posting_time, default_posting_timezone')
+    .eq('id', active.brand.id)
+    .maybeSingle();
+
+  const clients: ClientOption[] = clientRow
+    ? [
+        {
+          id: clientRow.id,
+          name: clientRow.name,
+          slug: clientRow.slug,
+          default_posting_time: (clientRow.default_posting_time as string) ?? null,
+          default_posting_timezone: (clientRow.default_posting_timezone as string) ?? null,
+        },
+      ]
+    : [];
 
   return (
-    <div className="cortex-page-gutter max-w-6xl mx-auto space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold text-text-primary">Content calendar</h1>
-        <p className="mt-1 text-sm text-text-secondary">
-          Posts scheduled for {active.brand.name}.
-        </p>
-      </header>
-
-      {(drops ?? []).length === 0 ? (
-        <div className="rounded-xl border border-nativz-border bg-surface p-12 text-center">
-          <CalendarDays className="mx-auto mb-3 h-8 w-8 text-text-tertiary" />
-          <p className="text-sm text-text-secondary">No content calendars to review yet.</p>
-          <p className="mt-1 text-xs text-text-muted">
-            Once your team finishes captioning a batch of content, it&rsquo;ll show up here.
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {(drops ?? []).map((d) => (
-            <DropCard key={d.id} drop={d as ContentDrop} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function DropCard({ drop }: { drop: ContentDrop }) {
-  return (
-    <Link
-      href={`/calendar/${drop.id}`}
-      className="block rounded-xl border border-nativz-border bg-surface p-4 transition-colors hover:bg-surface-hover"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-text-primary">
-            {drop.start_date} → {drop.end_date}
-          </p>
-          <p className="mt-1 text-xs text-text-muted">
-            {drop.processed_videos}/{drop.total_videos} posts · default {drop.default_post_time}
-          </p>
-        </div>
-        <StatusBadge status={drop.status} />
-      </div>
-    </Link>
-  );
-}
-
-function StatusBadge({ status }: { status: ContentDrop['status'] }) {
-  const tone =
-    status === 'scheduled'
-      ? 'bg-emerald-500/10 text-emerald-300'
-      : 'bg-amber-500/10 text-amber-300';
-  const label = status === 'scheduled' ? 'Scheduled' : 'In review';
-  return (
-    <span
-      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${tone}`}
-    >
-      <Clock size={10} />
-      {label}
-    </span>
+    <SchedulerContent
+      initialClients={clients}
+      initialClientId={active.brand.id}
+      mode="viewer"
+    />
   );
 }

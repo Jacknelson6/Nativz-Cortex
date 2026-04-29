@@ -1,8 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { isAdmin } from '@/lib/auth/permissions';
 import { z } from 'zod';
 import { getPostingService } from '@/lib/posting';
+
+/**
+ * Resolve the client_id a scheduled post belongs to and assert that the
+ * given user is allowed to mutate it. Admins skip the access check;
+ * viewers must have a row in `user_client_access` for the owning brand.
+ *
+ * Returns `{ ok: true }` when the user is allowed, or a NextResponse
+ * with the appropriate 403/404 to bail out with.
+ */
+async function assertPostAccess(
+  postId: string,
+  userId: string,
+): Promise<{ ok: true } | { ok: false; response: NextResponse }> {
+  const admin = createAdminClient();
+  const { data: post } = await admin
+    .from('scheduled_posts')
+    .select('client_id')
+    .eq('id', postId)
+    .maybeSingle();
+
+  if (!post) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Not found' }, { status: 404 }),
+    };
+  }
+
+  if (await isAdmin(userId)) return { ok: true };
+
+  const { data: access } = await admin
+    .from('user_client_access')
+    .select('client_id')
+    .eq('user_id', userId)
+    .eq('client_id', post.client_id)
+    .maybeSingle();
+
+  if (!access) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }),
+    };
+  }
+
+  return { ok: true };
+}
 
 const UpdatePostSchema = z.object({
   caption: z.string().optional(),
@@ -47,6 +93,9 @@ export async function PUT(
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const access = await assertPostAccess(id, user.id);
+    if (!access.ok) return access.response;
 
     const body = await request.json();
     const parsed = UpdatePostSchema.safeParse(body);
@@ -153,6 +202,12 @@ export async function DELETE(
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Delete is admin-only — viewers don't see the trash button in the
+    // UI and shouldn't be able to wipe a post via direct API call.
+    if (!(await isAdmin(user.id))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const adminClient = createAdminClient();

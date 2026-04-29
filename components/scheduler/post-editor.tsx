@@ -29,6 +29,10 @@ interface PostEditorProps {
   defaultPostingTimezone?: string | null;
   onSave: (data: PostEditorData) => Promise<void>;
   onDelete: (postId: string) => Promise<void>;
+  /** 'admin' (default) shows delete + share-for-review. 'viewer' hides
+   *  destructive + admin-only affordances; viewers can still edit
+   *  caption, tags, collaborators and reschedule. */
+  mode?: 'admin' | 'viewer';
 }
 
 export interface PostEditorData {
@@ -55,7 +59,9 @@ export function PostEditor({
   defaultPostingTime,
   onSave,
   onDelete,
+  mode = 'admin',
 }: PostEditorProps) {
+  const isAdmin = mode === 'admin';
   const [caption, setCaption] = useState('');
   const [hashtags, setHashtags] = useState<string[]>([]);
   const [selectedProfiles, setSelectedProfiles] = useState<string[]>([]);
@@ -587,7 +593,7 @@ export function PostEditor({
         {/* Footer */}
         <div className="flex items-center justify-between px-5 py-3 border-t border-nativz-border shrink-0">
           <div className="flex items-center gap-2">
-            {isEditing && (
+            {isAdmin && isEditing && (
               <button
                 onClick={handleDelete}
                 disabled={deleting}
@@ -596,7 +602,7 @@ export function PostEditor({
                 <Trash2 size={16} />
               </button>
             )}
-            {isEditing && (
+            {isAdmin && isEditing && (
               <Button size="sm" variant="ghost" onClick={handleShareForReview}>
                 <Share2 size={12} />
                 Share for review

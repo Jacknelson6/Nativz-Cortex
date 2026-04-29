@@ -48,13 +48,27 @@ function getMonthGridRange(currentDate: Date): { start: string; end: string } {
   return { start: fmt(gridStart), end: fmt(gridEnd) };
 }
 
+/**
+ * Scheduler shell — same component for admin + viewer.
+ *
+ * `mode='admin'` is the original surface (auto schedule, new post, drive
+ * imports, share-for-review, post delete, media library).
+ *
+ * `mode='viewer'` strips automation + creation affordances per the
+ * Content section spec: viewers can browse the calendar, open posts,
+ * edit captions / tags / collaborators, and reschedule by drag — but
+ * they cannot create, delete, share, or run autoscheduler tools.
+ */
 function SchedulerInner({
   initialClients,
   initialClientId,
+  mode,
 }: {
   initialClients: ClientOption[];
   initialClientId: string | null;
+  mode: 'admin' | 'viewer';
 }) {
+  const isAdmin = mode === 'admin';
   const searchParams = useSearchParams();
   const router = useRouter();
   const {
@@ -117,6 +131,8 @@ function SchedulerInner({
   }
 
   function handleDateClick(date: Date) {
+    // Empty-cell click creates a new post — admin-only.
+    if (!isAdmin) return;
     setEditingPost(null);
     setDefaultDate(date);
     setDefaultMedia(undefined);
@@ -124,6 +140,9 @@ function SchedulerInner({
   }
 
   function handleDropMedia(date: Date, mediaItem: MediaItem) {
+    // Drag-from-library → new post is also admin-only. Viewers don't have
+    // the library shown at all, so this is just defence in depth.
+    if (!isAdmin) return;
     setEditingPost(null);
     setDefaultDate(date);
     setDefaultMedia(mediaItem);
@@ -255,7 +274,7 @@ function SchedulerInner({
               </button>
             ))}
           </div>
-          {draftCount > 0 && (
+          {isAdmin && draftCount > 0 && (
             <Button
               variant="ghost"
               size="sm"
@@ -265,77 +284,85 @@ function SchedulerInner({
               Publish {draftCount} draft{draftCount === 1 ? '' : 's'}
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowAutoSchedule(true)}
-            disabled={!selectedClientId}
-          >
-            <Wand2 size={14} />
-            Auto schedule
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleShareCalendar}
-            disabled={!selectedClientId}
-          >
-            <Share2 size={14} />
-            Share
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowConnect(true)}
-            disabled={!selectedClientId}
-          >
-            <Link2 size={14} />
-            Connect
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowNewDrop(true)}
-            disabled={!selectedClientId}
-          >
-            <FolderInput size={14} />
-            From Drive
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => {
-              setEditingPost(null);
-              setDefaultDate(new Date());
-              setDefaultMedia(undefined);
-              setEditorOpen(true);
-            }}
-          >
-            <Plus size={14} />
-            New post
-          </Button>
+          {isAdmin && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAutoSchedule(true)}
+                disabled={!selectedClientId}
+              >
+                <Wand2 size={14} />
+                Auto schedule
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleShareCalendar}
+                disabled={!selectedClientId}
+              >
+                <Share2 size={14} />
+                Share
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowConnect(true)}
+                disabled={!selectedClientId}
+              >
+                <Link2 size={14} />
+                Connect
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowNewDrop(true)}
+                disabled={!selectedClientId}
+              >
+                <FolderInput size={14} />
+                From Drive
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setEditingPost(null);
+                  setDefaultDate(new Date());
+                  setDefaultMedia(undefined);
+                  setEditorOpen(true);
+                }}
+              >
+                <Plus size={14} />
+                New post
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
       {/* Body */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left sidebar: media library + client selector */}
-        <div className="flex flex-col w-72 border-r border-nativz-border bg-surface">
-          {selectedClientId ? (
-            <MediaLibrary
-              clientId={selectedClientId}
-              media={media}
-              profiles={profiles}
-              loading={mediaLoading}
-              onUploadComplete={() => selectedClientId && fetchMedia(selectedClientId, showUnusedOnly)}
-              showUnusedOnly={showUnusedOnly}
-              onToggleUnused={() => setShowUnusedOnly(!showUnusedOnly)}
-              onMediaClick={handleMediaClick}
-              onMediaDelete={handleMediaDelete}
-            />
-          ) : (
-            <div className="flex-1" />
-          )}
-        </div>
+        {/* Left sidebar: media library + client selector — admin only.
+            Viewers don't upload or manage source media; they only see the
+            scheduled posts the team has captioned for them. */}
+        {isAdmin && (
+          <div className="flex flex-col w-72 border-r border-nativz-border bg-surface">
+            {selectedClientId ? (
+              <MediaLibrary
+                clientId={selectedClientId}
+                media={media}
+                profiles={profiles}
+                loading={mediaLoading}
+                onUploadComplete={() => selectedClientId && fetchMedia(selectedClientId, showUnusedOnly)}
+                showUnusedOnly={showUnusedOnly}
+                onToggleUnused={() => setShowUnusedOnly(!showUnusedOnly)}
+                onMediaClick={handleMediaClick}
+                onMediaDelete={handleMediaDelete}
+              />
+            ) : (
+              <div className="flex-1" />
+            )}
+          </div>
+        )}
 
         {/* Calendar */}
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -364,9 +391,10 @@ function SchedulerInner({
         defaultPostingTimezone={selectedClient?.default_posting_timezone}
         onSave={handleSavePost}
         onDelete={handleDeletePost}
+        mode={mode}
       />
 
-      {showConnect && selectedClientId && (
+      {isAdmin && showConnect && selectedClientId && (
         <ConnectAccountDialog
           open={showConnect}
           onClose={() => setShowConnect(false)}
@@ -375,7 +403,7 @@ function SchedulerInner({
         />
       )}
 
-      {showShare && selectedClientId && (
+      {isAdmin && showShare && selectedClientId && (
         <SharePostsDialog
           open={showShare}
           onClose={() => setShowShare(false)}
@@ -385,7 +413,7 @@ function SchedulerInner({
         />
       )}
 
-      {showAutoSchedule && selectedClientId && (
+      {isAdmin && showAutoSchedule && selectedClientId && (
         <AutoScheduleDialog
           open={showAutoSchedule}
           onClose={() => setShowAutoSchedule(false)}
@@ -397,7 +425,7 @@ function SchedulerInner({
         />
       )}
 
-      {showNewDrop && (
+      {isAdmin && showNewDrop && (
         <NewDropDialog
           open={showNewDrop}
           onClose={() => setShowNewDrop(false)}
@@ -410,7 +438,7 @@ function SchedulerInner({
         />
       )}
 
-      {publishDraftsDialog}
+      {isAdmin && publishDraftsDialog}
     </div>
   );
 }
@@ -418,15 +446,21 @@ function SchedulerInner({
 export function SchedulerContent({
   initialClients,
   initialClientId = null,
+  mode = 'admin',
 }: {
   initialClients: ClientOption[];
   initialClientId?: string | null;
+  mode?: 'admin' | 'viewer';
 }) {
   // fallback={null} so a CSR bailout on useSearchParams doesn't paint a
   // second spinner after the route-level loading.tsx skeleton.
   return (
     <Suspense fallback={null}>
-      <SchedulerInner initialClients={initialClients} initialClientId={initialClientId} />
+      <SchedulerInner
+        initialClients={initialClients}
+        initialClientId={initialClientId}
+        mode={mode}
+      />
     </Suspense>
   );
 }
