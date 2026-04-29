@@ -368,6 +368,38 @@ function SharedDropView({
     }
   }
 
+  // Auto-poll the share endpoint while any post is mid-Mux-pipeline
+  // (uploading or processing). The Mux webhook updates the row when the
+  // asset goes ready; without this, the page would sit on the
+  // "Processing the new cut…" placeholder until the user manually
+  // refreshed. Polls every 5s, gives up after 4 minutes (Mux short-form
+  // typically packages in well under a minute, so 4 minutes covers the
+  // ~p99 case before we stop nagging the network).
+  const hasInFlightMux = useMemo(
+    () =>
+      data.posts.some(
+        (p) => p.mux_status === 'processing' || p.mux_status === 'uploading',
+      ),
+    [data.posts],
+  );
+  useEffect(() => {
+    if (!hasInFlightMux) return;
+    const startedAt = Date.now();
+    const MAX_MS = 4 * 60 * 1000;
+    const id = window.setInterval(() => {
+      if (Date.now() - startedAt > MAX_MS) {
+        window.clearInterval(id);
+        return;
+      }
+      void refetch();
+    }, 5000);
+    return () => window.clearInterval(id);
+    // refetch is a stable closure over token/storageKey/setData, all of
+    // which are stable inside this component. Re-running the effect on
+    // every render would reset the timer, defeating the point of polling.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasInFlightMux]);
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-nativz-border bg-surface px-4 py-5 sm:px-6 sm:py-7">
@@ -743,7 +775,7 @@ function VideoSurface({
         <div className="text-center text-text-muted">
           <Loader2 className="mx-auto mb-2 animate-spin" size={32} />
           <p className="text-sm">Processing the new cut…</p>
-          <p className="mt-1 text-[11px]">Usually takes about a minute. Refresh to check.</p>
+          <p className="mt-1 text-[11px]">Usually takes about a minute. This will update on its own.</p>
         </div>
       </div>
     );
