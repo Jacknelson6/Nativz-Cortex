@@ -1373,17 +1373,17 @@ function PostCard({
           onChange={(e) => uploadFiles(e.target.files)}
         />
 
-        <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="mb-2 flex items-center gap-2">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={submitting || uploading || pendingAttachments.length >= 10}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-nativz-border bg-transparent px-2.5 py-1.5 text-xs text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3 py-1.5 text-xs font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
           >
             {uploading ? <Loader2 size={12} className="animate-spin" /> : <Paperclip size={12} />}
             {uploading ? 'Uploading…' : 'Attach files'}
           </button>
-          <span className="text-[10px] text-text-muted">images, video, pdf · 25 MB</span>
+          <span className="text-[11px] text-text-muted">up to 25 MB</span>
         </div>
 
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
@@ -1392,7 +1392,7 @@ function PostCard({
               type="button"
               onClick={removeApproval}
               disabled={removingApproval || submitting || uploading}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50 sm:py-1.5"
+              className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-4 py-2 text-xs font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50 sm:py-1.5"
             >
               {removingApproval ? <Loader2 size={12} className="animate-spin" /> : <Undo2 size={12} />}
               Remove approval
@@ -1402,7 +1402,7 @@ function PostCard({
               type="button"
               onClick={() => submit('approved')}
               disabled={submitting || uploading}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-status-success px-3 py-2 text-xs font-medium text-accent-contrast transition-opacity hover:opacity-90 disabled:opacity-50 sm:py-1.5"
+              className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-status-success px-4 py-2 text-xs font-medium text-white shadow-[var(--shadow-card)] transition-all hover:shadow-[var(--shadow-card-hover)] hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:hover:brightness-100 sm:py-1.5"
             >
               <CheckCircle size={12} /> Approve
             </button>
@@ -1411,7 +1411,7 @@ function PostCard({
             type="button"
             onClick={() => submit('changes_requested')}
             disabled={submitting || uploading || (!commentText.trim() && pendingAttachments.length === 0)}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50 sm:py-1.5"
+            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-4 py-2 text-xs font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50 sm:py-1.5"
           >
             <MessageSquare size={12} /> Add revision
           </button>
@@ -1502,7 +1502,7 @@ function CommentRow({
               <button
                 type="button"
                 onClick={() => setConfirming(false)}
-                className="inline-flex items-center justify-center rounded-lg border border-nativz-border bg-transparent px-2.5 py-1 text-[11px] font-medium text-text-secondary transition-colors hover:bg-surface-hover"
+                className="inline-flex items-center justify-center rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3 py-1 text-[11px] font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary"
               >
                 Cancel
               </button>
@@ -1510,7 +1510,7 @@ function CommentRow({
                 type="button"
                 onClick={() => void doDelete()}
                 autoFocus
-                className="inline-flex items-center justify-center rounded-lg bg-[color:var(--status-danger)] px-2.5 py-1 text-[11px] font-medium text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--status-danger)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                className="inline-flex items-center justify-center rounded-[var(--nz-btn-radius)] bg-[color:var(--status-danger)] px-3 py-1 text-[11px] font-medium text-white shadow-[var(--shadow-card)] transition-all hover:shadow-[var(--shadow-card-hover)] hover:brightness-110 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--status-danger)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
                 Remove
               </button>
