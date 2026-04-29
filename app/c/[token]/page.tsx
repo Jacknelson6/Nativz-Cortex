@@ -55,6 +55,11 @@ interface SharedPost {
   revised_video_url: string | null;
   revised_video_uploaded_at: string | null;
   revised_video_notify_pending: boolean;
+  // Mux fields land once a Mux upload exists for this post. While we still
+  // support legacy <video src=revised_video_url> for older uploads, the
+  // share page picks Mux when mux_playback_id is present.
+  mux_playback_id: string | null;
+  mux_status: string | null;
   comments: SharedComment[];
 }
 
@@ -293,7 +298,13 @@ function SharedDropView({
 
   function updatePostRevision(
     postId: string,
-    revision: { revised_video_url: string; revised_video_uploaded_at: string; revised_video_notify_pending: boolean },
+    revision: {
+      revised_video_url: string | null;
+      revised_video_uploaded_at: string;
+      revised_video_notify_pending: boolean;
+      mux_playback_id?: string | null;
+      mux_status?: string | null;
+    },
   ) {
     setData((prev) =>
       prev
@@ -303,10 +314,16 @@ function SharedDropView({
               p.id === postId
                 ? {
                     ...p,
-                    video_url: revision.revised_video_url,
+                    // For Mux uploads we don't have a playback URL yet — clear
+                    // video_url so the UI shows a "processing" state until the
+                    // ready webhook lands. For legacy uploads (revised_video_url
+                    // is the actual URL) we still populate video_url.
+                    video_url: revision.revised_video_url ?? p.video_url,
                     revised_video_url: revision.revised_video_url,
                     revised_video_uploaded_at: revision.revised_video_uploaded_at,
                     revised_video_notify_pending: revision.revised_video_notify_pending,
+                    mux_playback_id: revision.mux_playback_id ?? p.mux_playback_id,
+                    mux_status: revision.mux_status ?? p.mux_status,
                   }
                 : p,
             ),
@@ -662,7 +679,13 @@ function PostDetailModal({
   onScheduleUpdated: (postId: string, nextAt: string | null, c: SharedComment | null) => void;
   onRevisionUploaded: (
     postId: string,
-    rev: { revised_video_url: string; revised_video_uploaded_at: string; revised_video_notify_pending: boolean },
+    rev: {
+      revised_video_url: string | null;
+      revised_video_uploaded_at: string;
+      revised_video_notify_pending: boolean;
+      mux_playback_id?: string | null;
+      mux_status?: string | null;
+    },
   ) => void;
   onClose: () => void;
   requireName: () => void;
@@ -891,9 +914,11 @@ function PostCard({
   ) => void;
   onScheduleUpdated: (nextAt: string | null, c: SharedComment | null) => void;
   onRevisionUploaded: (rev: {
-    revised_video_url: string;
+    revised_video_url: string | null;
     revised_video_uploaded_at: string;
     revised_video_notify_pending: boolean;
+    mux_playback_id?: string | null;
+    mux_status?: string | null;
   }) => void;
   onPlay?: () => void;
   requireName: () => void;
@@ -911,6 +936,10 @@ function PostCard({
   const [schedulePopoverOpen, setSchedulePopoverOpen] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [uploadingRevision, setUploadingRevision] = useState(false);
+  // 0–100 once we start the actual PUT to Mux. Lets the button render
+  // "Uploading… 42%" instead of a static spinner — important now that we
+  // bypass Vercel and the request can run for many minutes on a big file.
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const revisionInputRef = useRef<HTMLInputElement>(null);
   const isPublished =
     post.status === 'published' || post.status === 'publishing' || post.status === 'partially_failed';
@@ -1115,25 +1144,75 @@ function PostCard({
       return;
     }
     setUploadingRevision(true);
+    setUploadProgress(0);
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await fetch(`/api/calendar/share/${token}/revision/${post.id}`, {
-        method: 'POST',
-        body: fd,
+      // 1. Mint a Mux direct-upload URL on the server. This persists the
+      //    upload id on the row so the webhook can match it back.
+      const initRes = await fetch(
+        `/api/calendar/share/${token}/revision/${post.id}/mux-upload`,
+        { method: 'POST' },
+      );
+      const initJson = await initRes.json().catch(() => null);
+      if (!initRes.ok || !initJson?.uploadUrl) {
+        throw new Error(
+          typeof initJson?.error === 'string' ? initJson.error : 'Could not start upload',
+        );
+      }
+      const uploadUrl = initJson.uploadUrl as string;
+      const uploadId = initJson.uploadId as string;
+
+      // 2. PUT the bytes directly to Mux's signed URL via XHR so we get
+      //    progress events. Fetch's streams API doesn't expose upload
+      //    progress in browsers, so XHR is still the right tool here.
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', uploadUrl);
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            setUploadProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        });
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve();
+          else reject(new Error(`Mux upload failed (${xhr.status})`));
+        };
+        xhr.onerror = () => reject(new Error('Network error during upload'));
+        xhr.onabort = () => reject(new Error('Upload aborted'));
+        xhr.send(file);
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Upload failed');
+
+      // 3. Tell our server the upload finished so it can stamp the row.
+      //    The actual playback id arrives later via the asset.ready webhook.
+      const finRes = await fetch(
+        `/api/calendar/share/${token}/revision/${post.id}/mux-finalize`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uploadId }),
+        },
+      );
+      const finJson = await finRes.json().catch(() => null);
+      if (!finRes.ok) {
+        throw new Error(
+          typeof finJson?.error === 'string' ? finJson.error : 'Finalize failed',
+        );
+      }
+
       onRevisionUploaded({
-        revised_video_url: json.url as string,
-        revised_video_uploaded_at: json.uploaded_at as string,
+        // No playback URL yet — Mux is processing. The UI will show a
+        // "Processing…" state until the share endpoint reflects the
+        // playback id (next mount or refresh).
+        revised_video_url: null,
+        revised_video_uploaded_at: finJson.uploaded_at as string,
         revised_video_notify_pending: true,
+        mux_status: 'processing',
       });
-      toast.success('Revised video uploaded');
+      toast.success('Upload complete — Mux is processing the cut');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setUploadingRevision(false);
+      setUploadProgress(null);
       if (revisionInputRef.current) revisionInputRef.current.value = '';
     }
   }
@@ -1341,7 +1420,11 @@ function PostCard({
                 className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-black/70 px-3.5 py-2 text-sm font-medium text-white ring-1 ring-white/15 backdrop-blur transition-opacity hover:bg-black/85 disabled:opacity-60"
               >
                 {uploadingRevision ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                {uploadingRevision ? 'Uploading…' : 'Replace media'}
+                {uploadingRevision
+                  ? uploadProgress !== null
+                    ? `Uploading… ${uploadProgress}%`
+                    : 'Uploading…'
+                  : 'Replace media'}
               </button>
             )}
           </div>
@@ -1383,7 +1466,11 @@ function PostCard({
                 className="inline-flex self-center items-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3.5 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
               >
                 {uploadingRevision ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                {uploadingRevision ? 'Uploading…' : 'Replace media'}
+                {uploadingRevision
+                  ? uploadProgress !== null
+                    ? `Uploading… ${uploadProgress}%`
+                    : 'Uploading…'
+                  : 'Replace media'}
               </button>
             )}
           </div>

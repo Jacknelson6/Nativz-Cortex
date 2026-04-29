@@ -30,6 +30,8 @@ interface DropVideoRow {
   revised_video_url: string | null;
   revised_video_uploaded_at: string | null;
   revised_video_notify_pending: boolean | null;
+  mux_playback_id: string | null;
+  mux_status: string | null;
 }
 
 interface CommentAttachment {
@@ -101,7 +103,7 @@ export async function GET(
       .in('id', link.included_post_ids),
     admin
       .from('content_drop_videos')
-      .select('scheduled_post_id, video_url, revised_video_url, revised_video_uploaded_at, revised_video_notify_pending')
+      .select('scheduled_post_id, video_url, revised_video_url, revised_video_uploaded_at, revised_video_notify_pending, mux_playback_id, mux_status')
       .in('scheduled_post_id', link.included_post_ids),
   ]);
   if (!drop) return NextResponse.json({ error: 'content calendar missing' }, { status: 404 });
@@ -109,7 +111,13 @@ export async function GET(
   const videoByPost: Record<string, string> = {};
   const revisionByPost: Record<
     string,
-    { revised_video_url: string | null; revised_video_uploaded_at: string | null; revised_video_notify_pending: boolean }
+    {
+      revised_video_url: string | null;
+      revised_video_uploaded_at: string | null;
+      revised_video_notify_pending: boolean;
+      mux_playback_id: string | null;
+      mux_status: string | null;
+    }
   > = {};
   for (const v of (videos ?? []) as DropVideoRow[]) {
     if (!v.scheduled_post_id) continue;
@@ -119,6 +127,8 @@ export async function GET(
       revised_video_url: v.revised_video_url,
       revised_video_uploaded_at: v.revised_video_uploaded_at,
       revised_video_notify_pending: !!v.revised_video_notify_pending,
+      mux_playback_id: v.mux_playback_id,
+      mux_status: v.mux_status,
     };
   }
 
@@ -186,6 +196,8 @@ export async function GET(
         revised_video_url: rev?.revised_video_url ?? null,
         revised_video_uploaded_at: rev?.revised_video_uploaded_at ?? null,
         revised_video_notify_pending: rev?.revised_video_notify_pending ?? false,
+        mux_playback_id: rev?.mux_playback_id ?? null,
+        mux_status: rev?.mux_status ?? null,
         comments: (commentsByPost[p.id] ?? []).map((c) => ({
           id: c.id,
           review_link_id: c.review_link_id,
