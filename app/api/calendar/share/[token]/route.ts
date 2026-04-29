@@ -61,6 +61,7 @@ interface CommentRow {
   caption_before: string | null;
   caption_after: string | null;
   metadata: Record<string, unknown> | null;
+  timestamp_seconds: number | null;
 }
 
 export async function GET(
@@ -142,7 +143,7 @@ export async function GET(
   const { data: comments } = reviewLinkIds.length
     ? await admin
         .from('post_review_comments')
-        .select('id, review_link_id, author_name, content, status, created_at, attachments, caption_before, caption_after, metadata')
+        .select('id, review_link_id, author_name, content, status, created_at, attachments, caption_before, caption_after, metadata, timestamp_seconds')
         .in('review_link_id', reviewLinkIds)
         .order('created_at', { ascending: true })
     : { data: [] as CommentRow[] };
@@ -209,6 +210,7 @@ export async function GET(
           caption_before: c.caption_before,
           caption_after: c.caption_after,
           metadata: c.metadata ?? {},
+          timestamp_seconds: c.timestamp_seconds,
         })),
       };
     }),

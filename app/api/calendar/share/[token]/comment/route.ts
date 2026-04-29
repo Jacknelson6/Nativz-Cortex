@@ -26,6 +26,10 @@ const BodySchema = z.object({
   content: z.string().min(1).max(2000),
   status: z.enum(['approved', 'changes_requested', 'comment']),
   attachments: z.array(AttachmentSchema).max(10).optional(),
+  // Optional anchor — when present, the player will seek here on click.
+  // Capped at 24h to keep the column NUMERIC(10,3) safe and stay within
+  // sane short-form video bounds. Negative values rejected.
+  timestampSeconds: z.number().min(0).max(86400).nullable().optional(),
 });
 
 const DeleteSchema = z.object({
@@ -112,6 +116,13 @@ export async function POST(
     ? { auto_approved: true, original_status: submittedStatus }
     : {};
 
+  // Only honor a timestamp on plain comments and change requests — anchoring
+  // an "approved" stamp to a specific moment doesn't carry meaning.
+  const timestampSeconds =
+    finalStatus === 'comment' || finalStatus === 'changes_requested'
+      ? parsed.data.timestampSeconds ?? null
+      : null;
+
   const { data, error } = await admin
     .from('post_review_comments')
     .insert({
@@ -121,8 +132,9 @@ export async function POST(
       status: finalStatus,
       attachments: parsed.data.attachments ?? [],
       metadata: insertMetadata,
+      timestamp_seconds: timestampSeconds,
     })
-    .select('id, review_link_id, author_name, content, status, created_at, attachments, metadata')
+    .select('id, review_link_id, author_name, content, status, created_at, attachments, metadata, timestamp_seconds')
     .single();
   if (error || !data) {
     return NextResponse.json({ error: error?.message ?? 'failed' }, { status: 500 });
@@ -285,7 +297,7 @@ export async function PATCH(
     .from('post_review_comments')
     .update({ metadata: nextMetadata })
     .eq('id', comment.id)
-    .select('id, review_link_id, author_name, content, status, created_at, attachments, metadata')
+    .select('id, review_link_id, author_name, content, status, created_at, attachments, metadata, timestamp_seconds')
     .single();
   if (error || !updated) {
     return NextResponse.json({ error: error?.message ?? 'failed' }, { status: 500 });

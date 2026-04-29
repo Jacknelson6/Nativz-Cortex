@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import { use, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle, AlertTriangle, AtSign, BellRing, CalendarDays, CheckCircle, Clock,
-  File as FileIcon, Film, List, Loader2, MessageSquare, Paperclip, Pencil, Play,
+  File as FileIcon, Film, List, Loader2, MapPin, MessageSquare, Paperclip, Pencil, Play,
   Plus, Send, Tag, Type, Undo2, Upload, Users, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -46,6 +46,9 @@ interface SharedComment {
   caption_before: string | null;
   caption_after: string | null;
   metadata: Record<string, unknown>;
+  // Anchored timestamp inside the post's video (seconds, fractional). Null
+  // for general comments. Click on the chip seeks the player.
+  timestamp_seconds: number | null;
 }
 
 interface SharedPost {
@@ -614,20 +617,84 @@ type VideoSurfacePost = Pick<
   'mux_playback_id' | 'mux_status' | 'video_url' | 'cover_image_url'
 >;
 
+/**
+ * Tiny shape we expose upward from VideoSurface so timestamped-comment
+ * features (anchor, click-to-seek) can drive whichever player is mounted.
+ * MuxPlayer's element behaves like an HTMLVideoElement (currentTime setter +
+ * play()), so we can hand back the same closures regardless of branch.
+ */
+export interface PlayerHandle {
+  getCurrentTime: () => number;
+  seek: (seconds: number) => void;
+}
+
+interface PlayerLikeElement {
+  currentTime: number;
+  play?: () => Promise<void> | void;
+}
+
+function makePlayerHandle(el: PlayerLikeElement): PlayerHandle {
+  return {
+    getCurrentTime: () => el.currentTime || 0,
+    seek: (seconds) => {
+      try {
+        el.currentTime = Math.max(0, seconds);
+        // Best-effort resume — promise rejects on autoplay policy violations,
+        // which are fine to swallow (the user clicked, so a play() following
+        // a click should usually go through; if not, the seek already moved
+        // the playhead and the user can hit play themselves).
+        const playResult = el.play?.();
+        if (playResult && typeof (playResult as Promise<void>).catch === 'function') {
+          (playResult as Promise<void>).catch(() => {});
+        }
+      } catch {
+        // Player may not be ready yet — silently no-op.
+      }
+    },
+  };
+}
+
+function formatSeconds(total: number): string {
+  const t = Math.max(0, Math.floor(total));
+  const m = Math.floor(t / 60);
+  const s = t % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 function VideoSurface({
   post,
   controls = true,
   autoPlay = false,
   className,
+  onPlayerReady,
 }: {
   post: VideoSurfacePost;
   controls?: boolean;
   autoPlay?: boolean | 'muted' | 'any';
   className?: string;
+  // Handed a handle when the underlying media element mounts, and `null`
+  // when it unmounts. Optional — most callers (calendar grid thumbs, lightbox)
+  // don't need to seek into the player.
+  onPlayerReady?: (handle: PlayerHandle | null) => void;
 }) {
+  // Single ref callback shared across the Mux + legacy branches so the
+  // PlayerHandle wiring is identical. We treat MuxPlayerElement structurally
+  // as a PlayerLikeElement (it exposes `currentTime` + `play()` like a video).
+  const attachPlayer = (el: unknown) => {
+    if (!onPlayerReady) return;
+    if (el && typeof el === 'object' && 'currentTime' in (el as Record<string, unknown>)) {
+      onPlayerReady(makePlayerHandle(el as PlayerLikeElement));
+    } else {
+      onPlayerReady(null);
+    }
+  };
+
   if (post.mux_playback_id) {
     return (
       <MuxPlayer
+        // MuxPlayer's ref points at the <mux-player> custom element, which
+        // mirrors HTMLVideoElement enough for currentTime/play().
+        ref={attachPlayer as never}
         streamType="on-demand"
         playbackId={post.mux_playback_id}
         autoPlay={autoPlay}
@@ -656,6 +723,7 @@ function VideoSurface({
   if (post.video_url) {
     return (
       <video
+        ref={attachPlayer as never}
         src={post.video_url}
         controls={controls}
         playsInline
@@ -1001,6 +1069,31 @@ function PostCard({
   // bypass Vercel and the request can run for many minutes on a big file.
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const revisionInputRef = useRef<HTMLInputElement>(null);
+  // Player + timestamped-comment plumbing. The ref is set when VideoSurface
+  // mounts a player (only in the inline `withVideoHeader` mode); when it's
+  // null, we hide the anchor button and timestamp pills are non-interactive.
+  const playerHandleRef = useRef<PlayerHandle | null>(null);
+  const videoSectionRef = useRef<HTMLDivElement | null>(null);
+  const [playerReady, setPlayerReady] = useState(false);
+  const [anchorSeconds, setAnchorSeconds] = useState<number | null>(null);
+
+  function captureAnchor() {
+    const t = playerHandleRef.current?.getCurrentTime() ?? 0;
+    setAnchorSeconds(Math.max(0, Math.floor(t)));
+  }
+
+  function clearAnchor() {
+    setAnchorSeconds(null);
+  }
+
+  function seekTo(seconds: number) {
+    const handle = playerHandleRef.current;
+    if (!handle) return;
+    handle.seek(seconds);
+    // Bring the player into view if the user scrolled past it inside the
+    // modal — the comment they clicked is below the fold most of the time.
+    videoSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
   const isPublished =
     post.status === 'published' || post.status === 'publishing' || post.status === 'partially_failed';
 
@@ -1105,6 +1198,10 @@ function PostCard({
             (status === 'approved' ? 'Approved' : ''),
           status,
           attachments: pendingAttachments,
+          // Server only honors this for `comment` / `changes_requested`; the
+          // approval path strips it. Sending unconditionally keeps the
+          // client free of duplicate "should I include this?" branching.
+          timestampSeconds: anchorSeconds,
         }),
       });
       const json = await res.json();
@@ -1113,6 +1210,7 @@ function PostCard({
       onCommentAdded(savedComment);
       setCommentText('');
       setPendingAttachments([]);
+      setAnchorSeconds(null);
       // Server may auto-upgrade a "changes_requested" submission to "approved"
       // when the body reads like an approval ("approved", "love this", etc.).
       // Reflect the actual recorded status in the toast so the user isn't
@@ -1455,8 +1553,15 @@ function PostCard({
       )}
       {withVideoHeader ? (
         <>
-          <div className="relative bg-black">
-            <VideoSurface post={post} className="mx-auto block max-h-[55vh] w-auto" />
+          <div ref={videoSectionRef} className="relative bg-black">
+            <VideoSurface
+              post={post}
+              className="mx-auto block max-h-[55vh] w-auto"
+              onPlayerReady={(handle) => {
+                playerHandleRef.current = handle;
+                setPlayerReady(!!handle);
+              }}
+            />
             {isEditor && (
               <button
                 type="button"
@@ -1535,6 +1640,7 @@ function PostCard({
                 isEditor={isEditor}
                 onDeleted={() => onCommentRemoved(c.id)}
                 onUpdated={onCommentUpdated}
+                onSeek={playerReady ? seekTo : undefined}
               />
             ))}
           </div>
@@ -1569,7 +1675,7 @@ function PostCard({
           onChange={(e) => uploadFiles(e.target.files)}
         />
 
-        <div className="mb-2 flex items-center gap-2">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
@@ -1579,6 +1685,37 @@ function PostCard({
             {uploading ? <Loader2 size={14} className="animate-spin" /> : <Paperclip size={14} />}
             {uploading ? 'Uploading…' : 'Attach files'}
           </button>
+          {/* Anchor toggle — only meaningful when an inline player is mounted
+              (modal/withVideoHeader view). When `anchorSeconds` is null we
+              show a "Pin to current time" affordance; once set, the chip
+              displays the time + a clear button. */}
+          {playerReady && (
+            anchorSeconds === null ? (
+              <button
+                type="button"
+                onClick={captureAnchor}
+                disabled={submitting}
+                className="inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3.5 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+                title="Anchor this comment to the current moment in the video"
+              >
+                <MapPin size={14} /> Pin to current time
+              </button>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-surface px-3 py-1.5 text-sm font-medium text-accent-text ring-1 ring-accent/40">
+                <MapPin size={13} />
+                Pinned at {formatSeconds(anchorSeconds)}
+                <button
+                  type="button"
+                  onClick={clearAnchor}
+                  className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-accent/20"
+                  aria-label="Remove pin"
+                  title="Remove pin"
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            )
+          )}
           <span className="text-xs text-text-muted">up to 25 MB</span>
         </div>
 
@@ -1623,12 +1760,17 @@ function CommentRow({
   isEditor,
   onDeleted,
   onUpdated,
+  onSeek,
 }: {
   comment: SharedComment;
   token: string;
   isEditor: boolean;
   onDeleted: () => void;
   onUpdated: (comment: SharedComment) => void;
+  // When provided, the timestamp pill becomes clickable and seeks the
+  // shared player. Undefined for list-view rows where there's no inline
+  // player to drive (the user opens the lightbox instead).
+  onSeek?: (seconds: number) => void;
 }) {
   const [deleting, setDeleting] = useState(false);
   const [resolving, setResolving] = useState(false);
@@ -1908,12 +2050,36 @@ function CommentRow({
   // matters most. Other rows (comment / approved) keep the lighter
   // hover-revealed delete button in the header.
   const isChangesRequestedRow = comment.status === 'changes_requested';
+  // Timestamp pill — only renders on `comment` / `changes_requested` rows
+  // since approval rows aren't anchored. When an `onSeek` callback is wired
+  // (modal view with a live player), the pill is clickable and jumps the
+  // playhead; otherwise it's a static label.
+  const timestampPill =
+    comment.timestamp_seconds !== null &&
+    (comment.status === 'comment' || comment.status === 'changes_requested') ? (
+      <button
+        type="button"
+        onClick={onSeek ? () => onSeek(comment.timestamp_seconds as number) : undefined}
+        disabled={!onSeek}
+        className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-accent/30 ${
+          onSeek
+            ? 'cursor-pointer bg-accent-surface text-accent-text transition-colors hover:bg-accent/15 hover:ring-accent'
+            : 'cursor-default bg-accent-surface/70 text-accent-text/80'
+        }`}
+        title={onSeek ? `Jump to ${formatSeconds(comment.timestamp_seconds)} in the video` : `Pinned at ${formatSeconds(comment.timestamp_seconds)}`}
+        aria-label={onSeek ? `Jump to ${formatSeconds(comment.timestamp_seconds)} in the video` : `Pinned at ${formatSeconds(comment.timestamp_seconds)}`}
+      >
+        <MapPin size={10} />
+        {formatSeconds(comment.timestamp_seconds)}
+      </button>
+    ) : null;
   return (
     <div className={containerClass}>
       <div className="mb-1 flex items-center gap-2 text-[13px]">
         <Icon size={12} className={tone} />
         <span className="font-medium text-text-primary">{comment.author_name}</span>
         <span className="text-text-muted">· {trailingMeta}{time}</span>
+        {timestampPill}
         {!isChangesRequestedRow && headerDeleteButton}
       </div>
       {comment.content && (
