@@ -517,6 +517,8 @@ ${formatReferenceAdsForPrompt(referenceAds)}
 - Borrow only the reusable mechanism: layout, pacing, hierarchy, emotional angle, CTA treatment, offer framing, visual rhythm.
 - Ground claims in Brand DNA or uploaded assets only. If a claim is not supported, make it softer.
 - Vary the batch: testimonial/social proof, problem-solution, offer, comparison, stat callout, product/service showcase, founder/authority, and FAQ/objection.
+- Never render the brand's logo, wordmark, or any approximation of one. Brand recognition comes from product, palette, and typography — not a rendered logo. The image generator cannot draw logos accurately and any attempt will be wrong.
+- If Brand DNA describes a specific physical product, render it exactly as described — no stylization, no reinterpretation, no decorative embellishment, no invented features. If you cannot describe the product faithfully from Brand DNA alone, prefer a typographic or lifestyle ad with no product imagery over an inaccurate render.
 - ${renderImages
   ? 'These prompts will be rendered immediately, so keep them visually concrete and avoid vague art direction.'
   : 'These prompts may be rendered later, so keep them inspectable and editable.'}
@@ -529,9 +531,9 @@ Cover, in whatever order reads naturally:
 
 - The scene and subject — what we're looking at, framing, lighting.
 - On-image text — write the exact copy in double quotes, e.g. headline "Sleep deeper tonight". For tricky words, spell them letter-by-letter so the render keeps them legible. Note rough placement (top, lower third, centered) and the feel of the type (clean sans, bold display, friendly script). Don't specify hex colors for type.
-- Brand feel — palette and personality in plain English (warm earth tones, premium muted neutrals, energetic neon on charcoal). No hex codes. Place the logo only if Brand DNA confirms a clean lockup, and say where.
+- Brand feel — palette and personality in plain English (warm earth tones, premium muted neutrals, energetic neon on charcoal). No hex codes. Do not place a logo, wordmark, or brand name as a graphic element — typography in the headline is the only branded text.
 - Composition cues — what's the focal point, what reads next, where any CTA sits.
-- What to avoid — no watermarks, no extra logos, no clip-art icons, no stock-photo feel, no decorative gradients, no unrelated text.
+- What to avoid — no logos of any kind (including the brand's own), no wordmarks, no watermarks, no clip-art icons, no stock-photo feel, no decorative gradients, no unrelated text.
 
 For photoreal ads add "photorealistic, professional campaign photography." For graphic ads add "clean editorial layout" or "flat magazine illustration."
 
