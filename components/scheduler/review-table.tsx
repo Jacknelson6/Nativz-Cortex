@@ -1,17 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
+  Bell,
   CalendarDays,
-  CheckIcon,
   ChevronDown,
   ChevronRight,
-  Eye,
   FileText,
   MessagesSquare,
+  Pencil,
   RefreshCcw,
-  Send,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -25,8 +24,10 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -35,78 +36,96 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import type { ReviewLinkRow } from '@/components/scheduler/review-board';
+import { ReviewContactsPanel } from '@/components/scheduler/review-contacts-panel';
+import type {
+  ReviewLinkRow,
+  ReviewLinkStatus,
+  ReviewProjectType,
+} from '@/components/scheduler/review-board';
 
 /**
- * Viewer review surface — table layout. Built on the shared
- * `<Table variant="card">` primitive so the whole list lives inside
- * one rounded surface with hairline dividers between rows, matching
- * the agency's "All Reports" pattern.
+ * `/review` workspace — two subpages on a single tab strip:
  *
- * Always brand-scoped: the page that mounts this passes `clientId`
- * from the active brand pill, so the table never mixes brands.
- * Admin-only cross-brand oversight stays on `/admin/share-links`,
- * which renders the same component with `clientId={null}` and a
- * Brand column toggled on.
+ *   Content        → table of share links, one row per project
+ *   Notifications  → per-brand POC list (who gets emailed, cadence)
  *
- * Stage track derives from existing aggregates returned by
- * `/api/calendar/review` — no schema changes:
+ * Same table for admin (brand-scoped at /review) and admin oversight
+ * (/admin/share-links with `clientId={null}`); the only visual diff
+ * is a Brand column when the table is unscoped.
  *
- *   Sent  →  Viewed  →  Reviewing  →  Approved
+ * Columns:
+ *   Project name (inline-editable, defaults to derived "May 2026
+ *     Content Calendar"-style label) · Date sent · Status · Project
+ *     type · Total creatives · Approved creatives · Expiration
  *
- * The row is the click target (opens the review in a new tab).
- * No selection / bulk actions — viewers open one calendar at a time.
+ * Status mapping (matches the agency's spoken vocabulary):
+ *   - Ready for review (yellow) — sent, not yet finalized
+ *   - Revising (blue) — client requested changes
+ *   - Approved (green) — every post signed off
+ *   - Abandoned (red) — admin marked dead OR link expired
  */
 
-type ReviewStage = 'sent' | 'viewed' | 'reviewing' | 'approved';
+type StatusKey = ReviewLinkStatus;
 
-const STAGES: {
-  key: ReviewStage;
-  label: string;
-  icon: typeof CheckIcon;
-  description: string;
-}[] = [
-  { key: 'sent', label: 'Sent', icon: Send, description: 'Calendar shared, awaiting first view.' },
-  { key: 'viewed', label: 'Viewed', icon: Eye, description: 'Opened by the client, no feedback yet.' },
-  {
-    key: 'reviewing',
-    label: 'Reviewing',
-    icon: MessagesSquare,
-    description: 'Comments or change requests posted.',
+const STATUS_META: Record<
+  StatusKey,
+  { label: string; tone: string; description: string }
+> = {
+  ready_for_review: {
+    label: 'Ready for review',
+    tone: 'border-status-warning/30 bg-status-warning/10 text-status-warning',
+    description: 'Calendar is shared, awaiting first approval.',
   },
-  { key: 'approved', label: 'Approved', icon: CheckIcon, description: 'All posts signed off.' },
+  revising: {
+    label: 'Revising',
+    tone: 'border-accent-text/30 bg-accent-text/10 text-accent-text',
+    description: 'Comments or change requests are open.',
+  },
+  approved: {
+    label: 'Approved',
+    tone: 'border-status-success/30 bg-status-success/10 text-status-success',
+    description: 'Every post has been signed off.',
+  },
+  abandoned: {
+    label: 'Abandoned',
+    tone: 'border-status-danger/30 bg-status-danger/10 text-status-danger',
+    description: 'Marked dead by an admin. Posts will not ship.',
+  },
+  expired: {
+    // Expired collapses into the same red pill as abandoned visually,
+    // but keeps its own copy so we can debug expiry vs manual abandon.
+    label: 'Abandoned',
+    tone: 'border-status-danger/30 bg-status-danger/10 text-status-danger',
+    description: 'Link expired before review completed.',
+  },
+};
+
+const PROJECT_TYPE_OPTIONS: {
+  value: ReviewProjectType;
+  label: string;
+}[] = [
+  { value: 'organic_content', label: 'Organic Content' },
+  { value: 'social_ads', label: 'Social Ads' },
+  { value: 'ctv_ads', label: 'CTV Ads' },
+  { value: 'other', label: 'Other' },
 ];
 
-const stageIndex = (s: ReviewStage) => STAGES.findIndex((x) => x.key === s);
-
-/** Resolve which stage a link is currently in. Walks the aggregates the
- *  API already computes, so the table mirrors what the calendar shows
- *  without re-querying comments. */
-function currentStage(link: ReviewLinkRow): ReviewStage {
-  if (link.status === 'approved') return 'approved';
-  if (link.status === 'revising') return 'reviewing';
-  if (link.changes_count > 0) return 'reviewing';
-  if (link.last_viewed_at) return 'viewed';
-  return 'sent';
+function projectTypeLabel(row: ReviewLinkRow): string {
+  if (!row.project_type) return '—';
+  if (row.project_type === 'other') return row.project_type_other?.trim() || 'Other';
+  return PROJECT_TYPE_OPTIONS.find((o) => o.value === row.project_type)?.label ?? '—';
 }
 
 type SortKey = 'newest' | 'oldest' | 'progress';
+type Tab = 'content' | 'notifications';
 
 interface ReviewTableProps {
-  /** Active brand id. Pass `null` to render unscoped (cross-brand
-   *  admin oversight at `/admin/share-links`). */
+  /** Active brand id. Pass `null` for cross-brand admin oversight. */
   clientId: string | null;
-  /** Optional brand name for header copy. */
   brandName?: string;
-  /** Optional title override (e.g. "Share links" for cross-brand). */
   title?: string;
-  /** Optional description override. Falls back to a brand-scoped
-   *  default. */
   description?: string;
-  /** When true, prepend a Brand column so cross-brand views can
-   *  distinguish rows. Defaults to `true` when `clientId === null`,
-   *  off otherwise. The visual layout is otherwise identical for
-   *  every caller. */
+  /** When true, prepend a Brand column. Defaults on for cross-brand. */
   showBrand?: boolean;
 }
 
@@ -118,6 +137,7 @@ export function ReviewTable({
   showBrand,
 }: ReviewTableProps) {
   const showBrandColumn = showBrand ?? clientId === null;
+  const [tab, setTab] = useState<Tab>('content');
   const [links, setLinks] = useState<ReviewLinkRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -147,12 +167,10 @@ export function ReviewTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
-  const grouped = useMemo(() => {
-    const sorted = [...links].sort((a, b) => sortLinks(a, b, sort));
-    const active = sorted.filter((l) => l.status !== 'expired');
-    const expired = sorted.filter((l) => l.status === 'expired');
-    return { active, expired };
-  }, [links, sort]);
+  const sorted = useMemo(
+    () => [...links].sort((a, b) => sortLinks(a, b, sort)),
+    [links, sort],
+  );
 
   const total = links.length;
   const subtitle =
@@ -160,6 +178,10 @@ export function ReviewTable({
     (brandName
       ? `${brandName} · ${total} share link${total === 1 ? '' : 's'}`
       : `All brands · ${total} share link${total === 1 ? '' : 's'}`);
+
+  function patchLink(id: string, patch: Partial<ReviewLinkRow>) {
+    setLinks((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  }
 
   return (
     <TooltipProvider>
@@ -169,167 +191,193 @@ export function ReviewTable({
             <h1 className="text-xl font-semibold text-text-primary">{title ?? 'Review'}</h1>
             <p className="mt-1 text-sm text-text-muted">{subtitle}</p>
           </div>
-          <div className="flex items-center gap-2">
-            <SortMenu sort={sort} onChange={setSort} />
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => void load(true)}
-              disabled={refreshing}
-              aria-label="Refresh"
-            >
-              <RefreshCcw size={14} className={refreshing ? 'animate-spin' : ''} />
-            </Button>
-          </div>
+          {tab === 'content' && (
+            <div className="flex items-center gap-2">
+              <SortMenu sort={sort} onChange={setSort} />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void load(true)}
+                disabled={refreshing}
+                aria-label="Refresh"
+              >
+                <RefreshCcw size={14} className={refreshing ? 'animate-spin' : ''} />
+              </Button>
+            </div>
+          )}
         </header>
 
-        {loading ? (
-          <ReviewTableSkeleton />
-        ) : links.length === 0 ? (
-          <EmptyState brandName={brandName} />
-        ) : (
-          <>
-            <ReviewTableCard
-              rows={grouped.active}
-              showBrand={showBrandColumn}
-              cardTitle={title ?? 'Calendars'}
-              count={grouped.active.length}
-            />
+        <TabStrip active={tab} onChange={setTab} />
 
-            {grouped.expired.length > 0 && (
-              <section className="space-y-3 pt-2">
-                <h2 className="text-xs font-medium uppercase tracking-wide text-text-muted">
-                  Expired
-                </h2>
-                <ReviewTableCard
-                  rows={grouped.expired}
-                  showBrand={showBrandColumn}
-                  cardTitle="Expired"
-                  count={grouped.expired.length}
-                  dim
-                />
-              </section>
-            )}
-          </>
+        {tab === 'content' ? (
+          loading ? (
+            <ReviewTableSkeleton />
+          ) : links.length === 0 ? (
+            <EmptyState brandName={brandName} />
+          ) : (
+            <ReviewTableCard
+              rows={sorted}
+              showBrand={showBrandColumn}
+              onPatchLink={patchLink}
+            />
+          )
+        ) : clientId ? (
+          <ReviewContactsPanel clientId={clientId} brandName={brandName} />
+        ) : (
+          <div className="rounded-xl border border-nativz-border bg-surface p-12 text-center text-sm text-text-muted">
+            Pick a brand to manage notification contacts.
+          </div>
         )}
       </div>
     </TooltipProvider>
   );
 }
 
+function TabStrip({
+  active,
+  onChange,
+}: {
+  active: Tab;
+  onChange: (t: Tab) => void;
+}) {
+  const tabs: { key: Tab; label: string; icon: typeof FileText }[] = [
+    { key: 'content', label: 'Content', icon: FileText },
+    { key: 'notifications', label: 'Notifications', icon: Bell },
+  ];
+  return (
+    <nav className="flex items-center gap-1 border-b border-nativz-border" aria-label="Review sections">
+      {tabs.map((t) => {
+        const Icon = t.icon;
+        const isActive = active === t.key;
+        return (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => onChange(t.key)}
+            className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors ${
+              isActive
+                ? 'border-accent-text text-text-primary'
+                : 'border-transparent text-text-muted hover:text-text-secondary'
+            }`}
+            aria-current={isActive ? 'page' : undefined}
+          >
+            <Icon className="size-3.5" />
+            {t.label}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
 interface ReviewTableCardProps {
   rows: ReviewLinkRow[];
   showBrand?: boolean;
-  cardTitle: string;
-  count: number;
-  dim?: boolean;
+  onPatchLink: (id: string, patch: Partial<ReviewLinkRow>) => void;
 }
 
-/**
- * The card-variant table itself — a single rounded surface with a
- * tinted summary strip on top, then divider rows underneath. Each
- * row is the click target (no per-row action button); a chevron on
- * the right hints the row leads somewhere.
- */
-function ReviewTableCard({
-  rows,
-  showBrand = false,
-  cardTitle,
-  count,
-  dim = false,
-}: ReviewTableCardProps) {
+function ReviewTableCard({ rows, showBrand = false, onPatchLink }: ReviewTableCardProps) {
   return (
-    <div className={dim ? 'opacity-70' : undefined}>
-      <Table variant="card">
-        <thead>
-          {/* Title strip — sits flush inside the card border above the
-           *  column-header row. Mirrors the "All Reports · 8 reports
-           *  found" pattern from the reference. */}
-          <tr>
-            <th
-              colSpan={4 + (showBrand ? 1 : 0) + 1}
-              className="border-b border-nativz-border px-5 py-4"
-            >
-              <div className="flex items-center gap-3">
-                <span className="flex size-9 items-center justify-center rounded-lg bg-accent-text/10 text-accent-text">
-                  <FileText className="size-4" />
-                </span>
-                <div className="min-w-0 text-left">
-                  <div className="text-sm font-semibold text-text-primary">{cardTitle}</div>
-                  <div className="mt-0.5 text-xs text-text-muted">
-                    {count} calendar{count === 1 ? '' : 's'}
-                  </div>
+    <Table variant="card">
+      <thead>
+        <tr>
+          <th
+            colSpan={(showBrand ? 1 : 0) + 7}
+            className="border-b border-nativz-border px-5 py-4"
+          >
+            <div className="flex items-center gap-3">
+              <span className="flex size-9 items-center justify-center rounded-lg bg-accent-text/10 text-accent-text">
+                <FileText className="size-4" />
+              </span>
+              <div className="min-w-0 text-left">
+                <div className="text-sm font-semibold text-text-primary">Content</div>
+                <div className="mt-0.5 text-xs text-text-muted">
+                  {rows.length} project{rows.length === 1 ? '' : 's'}
                 </div>
               </div>
-            </th>
-          </tr>
-        </thead>
-        <TableHeader>
-          <TableRow>
-            {showBrand && <TableHead>Brand</TableHead>}
-            <TableHead>Calendar</TableHead>
-            <TableHead>Posts</TableHead>
-            <TableHead className="text-center">Status</TableHead>
-            <TableHead className="text-right">Progress</TableHead>
-            <TableHead className="w-10" aria-label="Open" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((link) => (
-            <ReviewTableRow key={link.id} link={link} showBrand={showBrand} />
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+            </div>
+          </th>
+        </tr>
+      </thead>
+      <TableHeader>
+        <TableRow>
+          {showBrand && <TableHead>Brand</TableHead>}
+          <TableHead>Project name</TableHead>
+          <TableHead>Date sent</TableHead>
+          <TableHead className="text-center">Status</TableHead>
+          <TableHead>Project type</TableHead>
+          <TableHead className="text-right">Total creatives</TableHead>
+          <TableHead className="text-right">Approved</TableHead>
+          <TableHead>Expiration</TableHead>
+          <TableHead className="w-10" aria-label="Open" />
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((link) => (
+          <ReviewTableRow
+            key={link.id}
+            link={link}
+            showBrand={showBrand}
+            onPatch={(patch) => onPatchLink(link.id, patch)}
+          />
+        ))}
+      </TableBody>
+    </Table>
   );
 }
 
 interface ReviewTableRowProps {
   link: ReviewLinkRow;
   showBrand?: boolean;
+  onPatch: (patch: Partial<ReviewLinkRow>) => void;
 }
 
-function ReviewTableRow({ link, showBrand = false }: ReviewTableRowProps) {
-  const project = formatCalendarName(link.drop_start, link.drop_end);
-  const lastSeen = link.last_viewed_at ? formatRelative(link.last_viewed_at) : null;
-  const stage = currentStage(link);
+function ReviewTableRow({ link, showBrand = false, onPatch }: ReviewTableRowProps) {
+  const dim = link.status === 'abandoned' || link.status === 'expired';
 
   function openReview() {
     window.open(`/c/${link.token}`, '_blank', 'noopener,noreferrer');
   }
 
   return (
-    <TableRow onClick={openReview} className="cursor-pointer">
+    <TableRow
+      onClick={openReview}
+      className={`cursor-pointer ${dim ? 'opacity-70' : ''}`}
+    >
       {showBrand && (
         <TableCell>
           <span className="text-sm text-text-secondary">{link.client_name ?? '—'}</span>
         </TableCell>
       )}
-      <TableCell>
+      <TableCell onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2.5">
           <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-nativz-border bg-background text-text-muted">
             <CalendarDays className="size-3.5" />
           </span>
-          <div className="min-w-0">
-            <div className="truncate font-medium text-text-primary">{project}</div>
-            <div className="text-xs text-text-muted tabular-nums">
-              {lastSeen ? `Last viewed ${lastSeen}` : 'Not yet viewed'}
-            </div>
-          </div>
+          <ProjectNameCell link={link} onPatch={onPatch} />
         </div>
       </TableCell>
       <TableCell>
-        <span className="inline-flex items-center rounded-md border border-nativz-border px-1.5 py-0.5 font-mono text-[10px] text-text-secondary">
-          {link.post_count} post{link.post_count === 1 ? '' : 's'}
+        <span className="text-sm text-text-secondary tabular-nums">
+          {formatShortDate(link.created_at)}
         </span>
       </TableCell>
       <TableCell className="text-center">
         <div className="flex justify-center">
-          <StagePill stage={stage} />
+          <StatusPill status={link.status} />
         </div>
       </TableCell>
+      <TableCell onClick={(e) => e.stopPropagation()}>
+        <ProjectTypeCell link={link} onPatch={onPatch} />
+      </TableCell>
       <TableCell className="text-right">
-        <ProgressLabel link={link} />
+        <span className="text-sm text-text-secondary tabular-nums">{link.post_count}</span>
+      </TableCell>
+      <TableCell className="text-right">
+        <ApprovedCount link={link} />
+      </TableCell>
+      <TableCell>
+        <ExpirationCell expiresAt={link.expires_at} status={link.status} />
       </TableCell>
       <TableCell className="w-10 text-right text-text-muted">
         <ChevronRight className="size-4" />
@@ -338,111 +386,226 @@ function ReviewTableRow({ link, showBrand = false }: ReviewTableRowProps) {
   );
 }
 
-function ProgressLabel({ link }: { link: ReviewLinkRow }) {
+/** Approved-creatives column. Renders "n / total" with the numerator
+ *  tinted by the underlying state (warning if there are open changes,
+ *  success when everything's signed off). */
+function ApprovedCount({ link }: { link: ReviewLinkRow }) {
   if (link.post_count === 0) {
-    return <span className="text-xs text-text-muted">—</span>;
+    return <span className="text-sm text-text-muted">—</span>;
   }
-  if (link.status === 'approved') {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs text-status-success">
-        <CheckIcon size={12} />
-        All approved
-      </span>
-    );
-  }
-  if (link.changes_count > 0) {
-    return (
-      <span className="text-xs text-status-warning tabular-nums">
-        {link.changes_count} need{link.changes_count === 1 ? 's' : ''} changes
-      </span>
-    );
-  }
+  const tone =
+    link.changes_count > 0
+      ? 'text-status-warning'
+      : link.approved_count === link.post_count
+        ? 'text-status-success'
+        : 'text-text-secondary';
   return (
-    <span className="text-xs text-text-secondary tabular-nums">
-      {link.approved_count} of {link.post_count} approved
+    <span className={`text-sm tabular-nums ${tone}`}>
+      {link.approved_count} / {link.post_count}
     </span>
   );
 }
 
 /**
- * Status pill — shows the current stage as a single coloured badge
- * with an icon, the way the reference's "Completed / In Progress"
- * pills work. Hovering reveals the full pipeline progression so the
- * row stays compact but the stage is unambiguous.
- *
- * Color rules:
- *   - approved → success (green)
- *   - reviewing → warning (amber)  — needs attention
- *   - viewed → accent (blue)        — moving along
- *   - sent → muted neutral          — quietly waiting
+ * Inline-edit project name. Shows the current name with a pencil icon
+ * that turns into an editable input on click. Empty string reverts to
+ * the derived "May 2026 Content Calendar" name.
  */
-function StagePill({ stage }: { stage: ReviewStage }) {
-  const meta = STAGES[stageIndex(stage)];
-  const Icon = meta.icon;
+function ProjectNameCell({
+  link,
+  onPatch,
+}: {
+  link: ReviewLinkRow;
+  onPatch: (patch: Partial<ReviewLinkRow>) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(link.name ?? '');
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const tone =
-    stage === 'approved'
-      ? 'border-status-success/30 bg-status-success/10 text-status-success'
-      : stage === 'reviewing'
-        ? 'border-status-warning/30 bg-status-warning/10 text-status-warning'
-        : stage === 'viewed'
-          ? 'border-accent-text/30 bg-accent-text/10 text-accent-text'
-          : 'border-nativz-border bg-background text-text-muted';
+  const displayName = link.name?.trim() || derivedName(link.drop_start, link.drop_end);
+  const lastSeen = link.last_viewed_at ? formatRelative(link.last_viewed_at) : null;
 
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  async function save() {
+    const trimmed = draft.trim();
+    const next = trimmed.length > 0 ? trimmed : null;
+    setEditing(false);
+    if (next === (link.name ?? null)) return;
+    // Optimistic.
+    onPatch({ name: next });
+    try {
+      const res = await fetch(`/api/calendar/review/${link.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: next }),
+      });
+      if (!res.ok) throw new Error('Rename failed');
+    } catch (err) {
+      onPatch({ name: link.name ?? null });
+      toast.error(err instanceof Error ? err.message : 'Rename failed');
+    }
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        type="text"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => void save()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') void save();
+          if (e.key === 'Escape') {
+            setDraft(link.name ?? '');
+            setEditing(false);
+          }
+        }}
+        className="w-full rounded-md border border-accent-text/40 bg-background px-2 py-1 text-sm font-medium text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-text"
+        placeholder="Project name"
+      />
+    );
+  }
+
+  return (
+    <div className="min-w-0">
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(link.name ?? '');
+          setEditing(true);
+        }}
+        className="group/name -mx-1 flex max-w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left hover:bg-surface-hover"
+        aria-label={`Rename ${displayName}`}
+      >
+        <span className="truncate font-medium text-text-primary">{displayName}</span>
+        <Pencil className="size-3 shrink-0 text-text-muted opacity-0 transition-opacity group-hover/name:opacity-100" />
+      </button>
+      <div className="text-xs text-text-muted tabular-nums">
+        {lastSeen ? `Last viewed ${lastSeen}` : 'Not yet viewed'}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Project-type chip with a dropdown to change the type. Closed state
+ * is just a badge so the row reads light; open state uses the same
+ * dropdown menu primitive as the sort menu.
+ */
+function ProjectTypeCell({
+  link,
+  onPatch,
+}: {
+  link: ReviewLinkRow;
+  onPatch: (patch: Partial<ReviewLinkRow>) => void;
+}) {
+  const label = projectTypeLabel(link);
+  const isUnset = !link.project_type;
+
+  async function setType(value: ReviewProjectType | null) {
+    onPatch({
+      project_type: value,
+      // Clear the freeform other-label when switching away from "other".
+      project_type_other: value === 'other' ? link.project_type_other : null,
+    });
+    try {
+      const res = await fetch(`/api/calendar/review/${link.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ project_type: value }),
+      });
+      if (!res.ok) throw new Error('Update failed');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Update failed');
+    }
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
+            isUnset
+              ? 'border-dashed border-nativz-border text-text-muted hover:bg-surface-hover'
+              : 'border-nativz-border text-text-secondary hover:bg-surface-hover'
+          }`}
+        >
+          {label}
+          <ChevronDown size={11} className="opacity-60" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-48">
+        <DropdownMenuRadioGroup
+          value={link.project_type ?? ''}
+          onValueChange={(v) =>
+            void setType((v || null) as ReviewProjectType | null)
+          }
+        >
+          {PROJECT_TYPE_OPTIONS.map((o) => (
+            <DropdownMenuRadioItem key={o.value} value={o.value}>
+              {o.label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+        {!isUnset && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => void setType(null)}>
+              Clear type
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function ExpirationCell({
+  expiresAt,
+  status,
+}: {
+  expiresAt: string | null;
+  status: StatusKey;
+}) {
+  if (!expiresAt) return <span className="text-sm text-text-muted">—</span>;
+  // The API already classifies expired/abandoned at fetch time, so we
+  // trust `status` rather than recomputing against a moving clock here
+  // (which would also be an impure call during render).
+  if (status === 'expired') {
+    return <span className="text-sm text-status-danger">Expired</span>;
+  }
+  return (
+    <span className="text-sm text-text-secondary tabular-nums">
+      {formatShortDate(expiresAt)}
+    </span>
+  );
+}
+
+/** Status pill — colored badge with a tooltip explaining the stage. */
+function StatusPill({ status }: { status: StatusKey }) {
+  const meta = STATUS_META[status];
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${tone}`}
+          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${meta.tone}`}
         >
-          <Icon className="size-3" />
           {meta.label}
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" className="w-56">
         <div className="font-medium text-text-primary">{meta.label}</div>
         <div className="mt-0.5 text-text-muted">{meta.description}</div>
-        <StageMiniTrack stage={stage} />
       </TooltipContent>
     </Tooltip>
-  );
-}
-
-/**
- * Tiny four-circle progression shown inside the tooltip. Lets the
- * viewer see at a glance where this calendar sits in the full
- * Sent → Approved arc without crowding the row itself.
- */
-function StageMiniTrack({ stage }: { stage: ReviewStage }) {
-  const idx = stageIndex(stage);
-  return (
-    <div className="mt-2 flex items-center gap-1">
-      {STAGES.map((s, i) => {
-        const reached = i < idx;
-        const current = i === idx;
-        return (
-          <div key={s.key} className="flex items-center gap-1">
-            <div
-              className={`size-1.5 rounded-full ${
-                current
-                  ? 'bg-accent-text'
-                  : reached
-                    ? 'bg-status-success/60'
-                    : 'bg-nativz-border'
-              }`}
-              aria-label={s.label}
-            />
-            {i < STAGES.length - 1 && (
-              <div
-                className={`h-px w-3 ${
-                  i < idx ? 'bg-status-success/40' : 'bg-nativz-border'
-                }`}
-              />
-            )}
-          </div>
-        );
-      })}
-    </div>
   );
 }
 
@@ -503,7 +666,14 @@ function EmptyState({ brandName }: { brandName?: string }) {
 
 function sortLinks(a: ReviewLinkRow, b: ReviewLinkRow, sort: SortKey): number {
   if (sort === 'progress') {
-    return stageIndex(currentStage(b)) - stageIndex(currentStage(a));
+    const order: Record<StatusKey, number> = {
+      ready_for_review: 0,
+      revising: 1,
+      approved: 2,
+      abandoned: 3,
+      expired: 3,
+    };
+    return order[b.status] - order[a.status];
   }
   const aT = new Date(a.created_at ?? a.drop_start ?? 0).getTime();
   const bT = new Date(b.created_at ?? b.drop_start ?? 0).getTime();
@@ -511,25 +681,31 @@ function sortLinks(a: ReviewLinkRow, b: ReviewLinkRow, sort: SortKey): number {
 }
 
 /**
- * Calendar-name formatter. Content calendars are always **for the
- * latter month** of the drop window — a calendar drafted in April
- * that drops across April–May posts is the "May 2026 content
- * calendar" to the client. We name by the END month so client-facing
- * copy reads as the month being delivered.
+ * Derives a calendar name from the drop window. Content calendars are
+ * always named for the **latter** month — an Apr–May drop is the
+ * "May 2026 Content Calendar" because that's the month being shipped.
  *
- * Same-month windows: "May 2026 content calendar".
- * Cross-month windows: still named by the end month.
- * Cross-year windows: include the end year alone — the start month
- * has already passed at delivery time.
+ * Title Case here matches the agency's project-naming convention in
+ * client-facing copy, even though the rest of the UI is sentence case.
  */
-function formatCalendarName(start: string | null, end: string | null): string {
-  if (!end) return 'Content calendar';
-  const e = new Date(end);
-  if (Number.isNaN(e.getTime())) return 'Content calendar';
-  const eMonth = e.toLocaleString('default', { month: 'long' });
-  // Use the end-date year so a Dec-start / Jan-end window reads as
-  // the January calendar, not the December one.
-  return `${eMonth} ${e.getFullYear()} content calendar`;
+function derivedName(start: string | null, end: string | null): string {
+  const ref = end ?? start;
+  if (!ref) return 'Content Calendar';
+  const d = new Date(ref);
+  if (Number.isNaN(d.getTime())) return 'Content Calendar';
+  const month = d.toLocaleString('default', { month: 'long' });
+  return `${month} ${d.getFullYear()} Content Calendar`;
+}
+
+function formatShortDate(iso: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 function formatRelative(iso: string): string {

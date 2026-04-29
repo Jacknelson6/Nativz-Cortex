@@ -67,7 +67,7 @@ export async function GET(req: Request) {
   const { data: links } = await admin
     .from('content_drop_share_links')
     .select(
-      'id, drop_id, token, included_post_ids, post_review_link_map, expires_at, created_at, last_viewed_at',
+      'id, drop_id, token, included_post_ids, post_review_link_map, expires_at, created_at, last_viewed_at, name, project_type, project_type_other, abandoned_at',
     )
     .in('drop_id', dropIds)
     .order('created_at', { ascending: false });
@@ -153,12 +153,21 @@ export async function GET(req: Request) {
     }
 
     const expired = new Date(link.expires_at).getTime() < now;
-    let status: 'expired' | 'approved' | 'revising' | 'ready_for_review';
-    if (expired) status = 'expired';
+    const abandoned = !!(link as { abandoned_at?: string | null }).abandoned_at;
+    let status: 'abandoned' | 'expired' | 'approved' | 'revising' | 'ready_for_review';
+    if (abandoned) status = 'abandoned';
+    else if (expired) status = 'expired';
     else if (changesCount > 0) status = 'revising';
     else if ((link.included_post_ids ?? []).length > 0 && approvedCount === (link.included_post_ids ?? []).length)
       status = 'approved';
     else status = 'ready_for_review';
+
+    const linkExtra = link as {
+      name?: string | null;
+      project_type?: string | null;
+      project_type_other?: string | null;
+      abandoned_at?: string | null;
+    };
 
     return {
       id: link.id,
@@ -176,6 +185,10 @@ export async function GET(req: Request) {
       expires_at: link.expires_at,
       created_at: link.created_at,
       last_viewed_at: link.last_viewed_at,
+      name: linkExtra.name ?? null,
+      project_type: linkExtra.project_type ?? null,
+      project_type_other: linkExtra.project_type_other ?? null,
+      abandoned_at: linkExtra.abandoned_at ?? null,
     };
   });
 

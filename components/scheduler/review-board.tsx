@@ -29,6 +29,14 @@ import { Button } from '@/components/ui/button';
  * clients they can't access.
  */
 
+export type ReviewProjectType = 'social_ads' | 'ctv_ads' | 'organic_content' | 'other';
+export type ReviewLinkStatus =
+  | 'abandoned'
+  | 'expired'
+  | 'approved'
+  | 'revising'
+  | 'ready_for_review';
+
 export interface ReviewLinkRow {
   id: string;
   token: string;
@@ -41,10 +49,15 @@ export interface ReviewLinkRow {
   approved_count: number;
   changes_count: number;
   pending_count: number;
-  status: 'expired' | 'approved' | 'revising' | 'ready_for_review';
+  status: ReviewLinkStatus;
   expires_at: string;
   created_at: string;
   last_viewed_at: string | null;
+  /** Admin-edited project name. NULL means UI derives one from drop dates. */
+  name: string | null;
+  project_type: ReviewProjectType | null;
+  project_type_other: string | null;
+  abandoned_at: string | null;
 }
 
 interface ReviewBoardProps {
@@ -366,15 +379,19 @@ function StatusPill({ status }: { status: ReviewLinkRow['status'] }) {
     },
     revising: {
       label: 'Revising',
-      className: 'bg-status-warning/10 text-status-warning border-status-warning/20',
+      className: 'bg-accent-surface/30 text-accent-text border-accent-text/20',
     },
     ready_for_review: {
       label: 'Ready for review',
-      className: 'bg-accent-surface/30 text-accent-text border-accent-text/20',
+      className: 'bg-status-warning/10 text-status-warning border-status-warning/20',
     },
     expired: {
       label: 'Expired',
       className: 'bg-text-muted/10 text-text-muted border-text-muted/20',
+    },
+    abandoned: {
+      label: 'Abandoned',
+      className: 'bg-status-danger/10 text-status-danger border-status-danger/20',
     },
   };
   const c = config[status];
