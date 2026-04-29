@@ -9,12 +9,14 @@ import { cn } from '@/lib/utils';
  *
  *   - `default`: bare-bones, lives inside whatever surface the caller
  *      already owns. Comfortable rhythm for dense admin tables.
- *   - `card`: rows render as **individual rounded cards** stacked with
- *      a small vertical gap, header sits on the page background. Click
- *      target is the whole row; selected rows get an accent ring.
- *      Mirrors the "Card-variant table" reference in the design kit.
+ *   - `card`: the **whole table** sits inside a single rounded card on
+ *      the page background — header row tinted, body rows separated
+ *      by hairline dividers, the last row rounds to match the card.
+ *      Think of the "All Reports" reference: one outer surface, every
+ *      row is a stripe inside it. Use this for hero tables that are
+ *      the page's main content.
  *
- * The `variant` flows through context so children pick up the right
+ * The variant flows through context so children pick up the right
  * spacing without each call-site repeating it.
  */
 
@@ -37,19 +39,18 @@ function Table({
   if (variant === 'card') {
     return (
       <TableVariantContext.Provider value={variant}>
-        <div data-slot="table-container" className={cn('w-full', containerClassName)}>
+        <div
+          data-slot="table-container"
+          className={cn(
+            'w-full overflow-hidden rounded-xl border border-nativz-border bg-surface',
+            containerClassName,
+          )}
+        >
           <div className="overflow-x-auto">
-            {/* `border-separate` + spacing gives the gap between row-cards.
-             *  Each <td> in the body paints the bg + border so rows look
-             *  like discrete cards without needing a div wrapper. */}
             <table
               data-slot="table"
               data-variant="card"
-              className={cn(
-                'w-full caption-bottom text-sm',
-                'border-separate border-spacing-x-0 border-spacing-y-1.5',
-                className,
-              )}
+              className={cn('w-full caption-bottom text-sm', className)}
               {...props}
             />
           </div>
@@ -76,7 +77,17 @@ function Table({
 }
 
 function TableHeader({ className, ...props }: React.HTMLAttributes<HTMLTableSectionElement>) {
-  return <thead data-slot="table-header" className={cn(className)} {...props} />;
+  const variant = React.useContext(TableVariantContext);
+  return (
+    <thead
+      data-slot="table-header"
+      className={cn(
+        variant === 'card' && 'bg-background/40 border-b border-nativz-border',
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
 function TableBody({ className, ...props }: React.HTMLAttributes<HTMLTableSectionElement>) {
@@ -95,16 +106,14 @@ function TableFooter({ className, ...props }: React.HTMLAttributes<HTMLTableSect
 
 function TableRow({ className, ...props }: React.HTMLAttributes<HTMLTableRowElement>) {
   const variant = React.useContext(TableVariantContext);
-  // The `group/row` lets cells in card variant pick up hover / selected
-  // paint with `group-data-[state=selected]/row:` and `group-hover/row:`.
   return (
     <tr
       data-slot="table-row"
       className={cn(
-        'group/row',
+        'group/row transition-colors',
         variant === 'card'
-          ? 'transition-colors'
-          : 'border-b border-nativz-border/60 transition-colors hover:bg-surface-hover/60 data-[state=selected]:bg-surface-hover',
+          ? 'border-b border-nativz-border/60 last:border-b-0 hover:bg-surface-hover/60 data-[state=selected]:bg-surface-hover'
+          : 'border-b border-nativz-border/60 hover:bg-surface-hover/60 data-[state=selected]:bg-surface-hover',
         className,
       )}
       {...props}
@@ -114,12 +123,8 @@ function TableRow({ className, ...props }: React.HTMLAttributes<HTMLTableRowElem
 
 function TableHead({ className, ...props }: React.ThHTMLAttributes<HTMLTableCellElement>) {
   const variant = React.useContext(TableVariantContext);
-  // Card variant: header cells sit on page background, no border / bg.
-  // Default variant: standard underlined header row.
   const variantClass =
-    variant === 'card'
-      ? 'px-4 py-2 first:pl-5 last:pr-5'
-      : 'px-3 py-2.5 border-b border-nativz-border';
+    variant === 'card' ? 'px-4 py-3 first:pl-5 last:pr-5' : 'px-3 py-2.5 border-b border-nativz-border';
   return (
     <th
       data-slot="table-head"
@@ -136,36 +141,14 @@ function TableHead({ className, ...props }: React.ThHTMLAttributes<HTMLTableCell
 
 function TableCell({ className, ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) {
   const variant = React.useContext(TableVariantContext);
-  if (variant === 'card') {
-    return (
-      <td
-        data-slot="table-cell"
-        className={cn(
-          'align-middle text-sm text-text-secondary',
-          // Each cell paints the row-card surface + horizontal borders.
-          // First / last cells round their outer edges and add the side
-          // borders, so the row reads as one rounded card.
-          'bg-surface border-y border-nativz-border',
-          'first:border-l first:rounded-l-xl first:pl-5',
-          'last:border-r last:rounded-r-xl last:pr-5',
-          'px-4 py-3.5',
-          // Hover / selected painting via the row's group token.
-          'group-hover/row:bg-surface-hover',
-          'group-data-[state=selected]/row:bg-surface-hover',
-          'group-data-[state=selected]/row:border-accent-text/40',
-          // Checkbox cell narrower.
-          '[&:has([role=checkbox])]:w-px [&:has([role=checkbox])]:pr-0',
-          className,
-        )}
-        {...props}
-      />
-    );
-  }
+  const variantClass =
+    variant === 'card' ? 'px-4 py-4 first:pl-5 last:pr-5' : 'px-3 py-3';
   return (
     <td
       data-slot="table-cell"
       className={cn(
-        'align-middle text-sm text-text-secondary px-3 py-3',
+        'align-middle text-sm text-text-secondary',
+        variantClass,
         '[&:has([role=checkbox])]:w-px [&:has([role=checkbox])]:pr-0',
         className,
       )}

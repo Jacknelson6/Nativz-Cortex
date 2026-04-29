@@ -3,17 +3,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
+  CalendarDays,
   CheckIcon,
   ChevronDown,
+  ChevronRight,
   Eye,
-  ExternalLink,
+  FileText,
   MessagesSquare,
   RefreshCcw,
   Send,
-  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -29,36 +29,52 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import type { ReviewLinkRow } from '@/components/scheduler/review-board';
 
 /**
- * Viewer review surface — table layout (replaces the bento grid for the
- * client side at /review). Built on the shared `<Table variant="card">`
- * primitive so it shares the rounded surface, hover/selection states,
- * and rhythm with any future card-tables across the app.
+ * Viewer review surface — table layout. Built on the shared
+ * `<Table variant="card">` primitive so the whole list lives inside
+ * one rounded surface with hairline dividers between rows, matching
+ * the agency's "All Reports" pattern.
  *
- * Always brand-scoped: the page that mounts this passes `clientId` from
- * the active brand pill, so the table never mixes brands. Admin-only
- * cross-brand oversight stays on `/admin/share-links`.
+ * Always brand-scoped: the page that mounts this passes `clientId`
+ * from the active brand pill, so the table never mixes brands.
+ * Admin-only cross-brand oversight stays on `/admin/share-links`,
+ * which renders the same component with `clientId={null}` and a
+ * Brand column toggled on.
  *
  * Stage track derives from existing aggregates returned by
  * `/api/calendar/review` — no schema changes:
  *
  *   Sent  →  Viewed  →  Reviewing  →  Approved
  *
- * Selection model: rows can be checked individually or via the header
- * "select all" box. The selection drives a bulk-action bar that opens
- * the chosen reviews in new tabs at once. The actions stop short of
- * destructive ops on purpose — this is a viewer surface, not admin.
+ * The row is the click target (opens the review in a new tab).
+ * No selection / bulk actions — viewers open one calendar at a time.
  */
 
 type ReviewStage = 'sent' | 'viewed' | 'reviewing' | 'approved';
 
-const STAGES: { key: ReviewStage; label: string; icon: typeof CheckIcon }[] = [
-  { key: 'sent', label: 'Sent', icon: Send },
-  { key: 'viewed', label: 'Viewed', icon: Eye },
-  { key: 'reviewing', label: 'Reviewing', icon: MessagesSquare },
-  { key: 'approved', label: 'Approved', icon: CheckIcon },
+const STAGES: {
+  key: ReviewStage;
+  label: string;
+  icon: typeof CheckIcon;
+  description: string;
+}[] = [
+  { key: 'sent', label: 'Sent', icon: Send, description: 'Calendar shared, awaiting first view.' },
+  { key: 'viewed', label: 'Viewed', icon: Eye, description: 'Opened by the client, no feedback yet.' },
+  {
+    key: 'reviewing',
+    label: 'Reviewing',
+    icon: MessagesSquare,
+    description: 'Comments or change requests posted.',
+  },
+  { key: 'approved', label: 'Approved', icon: CheckIcon, description: 'All posts signed off.' },
 ];
 
 const stageIndex = (s: ReviewStage) => STAGES.findIndex((x) => x.key === s);
@@ -105,7 +121,6 @@ export function ReviewTable({
   const [links, setLinks] = useState<ReviewLinkRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<SortKey>('newest');
 
   async function load(silent = false) {
@@ -129,7 +144,6 @@ export function ReviewTable({
 
   useEffect(() => {
     void load();
-    setSelected(new Set());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
@@ -140,39 +154,6 @@ export function ReviewTable({
     return { active, expired };
   }, [links, sort]);
 
-  function toggleRow(id: string, on: boolean) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (on) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  }
-
-  function toggleAll(rows: ReviewLinkRow[], on: boolean) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      for (const r of rows) {
-        if (on) next.add(r.id);
-        else next.delete(r.id);
-      }
-      return next;
-    });
-  }
-
-  function clearSelection() {
-    setSelected(new Set());
-  }
-
-  function openSelectedInTabs() {
-    const tokens = links.filter((l) => selected.has(l.id)).map((l) => l.token);
-    if (tokens.length === 0) return;
-    for (const t of tokens) {
-      window.open(`/c/${t}`, '_blank', 'noopener,noreferrer');
-    }
-    toast.success(`Opened ${tokens.length} review${tokens.length === 1 ? '' : 's'}`);
-  }
-
   const total = links.length;
   const subtitle =
     description ??
@@ -181,126 +162,121 @@ export function ReviewTable({
       : `All brands · ${total} share link${total === 1 ? '' : 's'}`);
 
   return (
-    <div className="cortex-page-gutter mx-auto max-w-6xl space-y-5">
-      <header className="flex items-end justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold text-text-primary">{title ?? 'Review'}</h1>
-          <p className="mt-1 text-sm text-text-muted">{subtitle}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {selected.size > 0 ? (
-            <InlineBulkBar
-              count={selected.size}
-              onClear={clearSelection}
-              onOpenAll={openSelectedInTabs}
+    <TooltipProvider>
+      <div className="cortex-page-gutter mx-auto max-w-6xl space-y-5">
+        <header className="flex items-end justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold text-text-primary">{title ?? 'Review'}</h1>
+            <p className="mt-1 text-sm text-text-muted">{subtitle}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <SortMenu sort={sort} onChange={setSort} />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void load(true)}
+              disabled={refreshing}
+              aria-label="Refresh"
+            >
+              <RefreshCcw size={14} className={refreshing ? 'animate-spin' : ''} />
+            </Button>
+          </div>
+        </header>
+
+        {loading ? (
+          <ReviewTableSkeleton />
+        ) : links.length === 0 ? (
+          <EmptyState brandName={brandName} />
+        ) : (
+          <>
+            <ReviewTableCard
+              rows={grouped.active}
+              showBrand={showBrandColumn}
+              cardTitle={title ?? 'Calendars'}
+              count={grouped.active.length}
             />
-          ) : null}
-          <SortMenu sort={sort} onChange={setSort} />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => void load(true)}
-            disabled={refreshing}
-            aria-label="Refresh"
-          >
-            <RefreshCcw size={14} className={refreshing ? 'animate-spin' : ''} />
-          </Button>
-        </div>
-      </header>
 
-      {loading ? (
-        <ReviewTableSkeleton />
-      ) : links.length === 0 ? (
-        <EmptyState brandName={brandName} />
-      ) : (
-        <>
-          <ReviewTableCard
-            rows={grouped.active}
-            selected={selected}
-            onToggleRow={toggleRow}
-            onToggleAll={(on) => toggleAll(grouped.active, on)}
-            showBrand={showBrandColumn}
-          />
-
-          {grouped.expired.length > 0 && (
-            <section className="space-y-3 pt-2">
-              <h2 className="text-xs font-medium uppercase tracking-wide text-text-muted">
-                Expired
-              </h2>
-              <ReviewTableCard
-                rows={grouped.expired}
-                selected={selected}
-                onToggleRow={toggleRow}
-                onToggleAll={(on) => toggleAll(grouped.expired, on)}
-                showBrand={showBrandColumn}
-                dim
-              />
-            </section>
-          )}
-        </>
-      )}
-    </div>
+            {grouped.expired.length > 0 && (
+              <section className="space-y-3 pt-2">
+                <h2 className="text-xs font-medium uppercase tracking-wide text-text-muted">
+                  Expired
+                </h2>
+                <ReviewTableCard
+                  rows={grouped.expired}
+                  showBrand={showBrandColumn}
+                  cardTitle="Expired"
+                  count={grouped.expired.length}
+                  dim
+                />
+              </section>
+            )}
+          </>
+        )}
+      </div>
+    </TooltipProvider>
   );
 }
 
 interface ReviewTableCardProps {
   rows: ReviewLinkRow[];
-  selected: Set<string>;
-  onToggleRow: (id: string, on: boolean) => void;
-  onToggleAll: (on: boolean) => void;
   showBrand?: boolean;
+  cardTitle: string;
+  count: number;
   dim?: boolean;
 }
 
 /**
- * The card-variant table itself. Each row paints as its own rounded
- * card via the Table primitive — no per-row action button (the row
- * itself is the click target; selected rows pick up an accent ring).
+ * The card-variant table itself — a single rounded surface with a
+ * tinted summary strip on top, then divider rows underneath. Each
+ * row is the click target (no per-row action button); a chevron on
+ * the right hints the row leads somewhere.
  */
 function ReviewTableCard({
   rows,
-  selected,
-  onToggleRow,
-  onToggleAll,
   showBrand = false,
+  cardTitle,
+  count,
   dim = false,
 }: ReviewTableCardProps) {
-  const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
-  const someChecked = rows.some((r) => selected.has(r.id));
-  const headerState: boolean | 'indeterminate' = allChecked
-    ? true
-    : someChecked
-      ? 'indeterminate'
-      : false;
-
   return (
     <div className={dim ? 'opacity-70' : undefined}>
       <Table variant="card">
+        <thead>
+          {/* Title strip — sits flush inside the card border above the
+           *  column-header row. Mirrors the "All Reports · 8 reports
+           *  found" pattern from the reference. */}
+          <tr>
+            <th
+              colSpan={4 + (showBrand ? 1 : 0) + 1}
+              className="border-b border-nativz-border px-5 py-4"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex size-9 items-center justify-center rounded-lg bg-accent-text/10 text-accent-text">
+                  <FileText className="size-4" />
+                </span>
+                <div className="min-w-0 text-left">
+                  <div className="text-sm font-semibold text-text-primary">{cardTitle}</div>
+                  <div className="mt-0.5 text-xs text-text-muted">
+                    {count} calendar{count === 1 ? '' : 's'}
+                  </div>
+                </div>
+              </div>
+            </th>
+          </tr>
+        </thead>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-10">
-              <Checkbox
-                aria-label="Select all reviews"
-                checked={headerState}
-                onCheckedChange={(v) => onToggleAll(v === true)}
-              />
-            </TableHead>
             {showBrand && <TableHead>Brand</TableHead>}
-            <TableHead>Project</TableHead>
-            <TableHead>Items</TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead>Calendar</TableHead>
+            <TableHead>Posts</TableHead>
+            <TableHead className="text-center">Status</TableHead>
             <TableHead className="text-right">Progress</TableHead>
+            <TableHead className="w-10" aria-label="Open" />
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.map((link) => (
-            <ReviewTableRow
-              key={link.id}
-              link={link}
-              checked={selected.has(link.id)}
-              onCheckedChange={(on) => onToggleRow(link.id, on)}
-              showBrand={showBrand}
-            />
+            <ReviewTableRow key={link.id} link={link} showBrand={showBrand} />
           ))}
         </TableBody>
       </Table>
@@ -310,47 +286,36 @@ function ReviewTableCard({
 
 interface ReviewTableRowProps {
   link: ReviewLinkRow;
-  checked: boolean;
-  onCheckedChange: (on: boolean) => void;
   showBrand?: boolean;
 }
 
-function ReviewTableRow({ link, checked, onCheckedChange, showBrand = false }: ReviewTableRowProps) {
-  const project = formatProject(link.drop_start, link.drop_end);
+function ReviewTableRow({ link, showBrand = false }: ReviewTableRowProps) {
+  const project = formatCalendarName(link.drop_start, link.drop_end);
   const lastSeen = link.last_viewed_at ? formatRelative(link.last_viewed_at) : null;
   const stage = currentStage(link);
 
-  // Whole row navigates to the review when clicked. Stop propagation on
-  // the checkbox cell so toggling selection doesn't also open the link.
   function openReview() {
     window.open(`/c/${link.token}`, '_blank', 'noopener,noreferrer');
   }
 
   return (
-    <TableRow
-      data-state={checked ? 'selected' : undefined}
-      onClick={openReview}
-      className="cursor-pointer"
-    >
-      <TableCell
-        className="w-10"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <Checkbox
-          aria-label={`Select ${project}`}
-          checked={checked}
-          onCheckedChange={(v) => onCheckedChange(v === true)}
-        />
-      </TableCell>
+    <TableRow onClick={openReview} className="cursor-pointer">
       {showBrand && (
         <TableCell>
           <span className="text-sm text-text-secondary">{link.client_name ?? '—'}</span>
         </TableCell>
       )}
       <TableCell>
-        <div className="font-medium text-text-primary">{project}</div>
-        <div className="text-xs text-text-muted tabular-nums">
-          {lastSeen ? `Last viewed ${lastSeen}` : 'Not yet viewed'}
+        <div className="flex items-center gap-2.5">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-nativz-border bg-background text-text-muted">
+            <CalendarDays className="size-3.5" />
+          </span>
+          <div className="min-w-0">
+            <div className="truncate font-medium text-text-primary">{project}</div>
+            <div className="text-xs text-text-muted tabular-nums">
+              {lastSeen ? `Last viewed ${lastSeen}` : 'Not yet viewed'}
+            </div>
+          </div>
         </div>
       </TableCell>
       <TableCell>
@@ -358,11 +323,16 @@ function ReviewTableRow({ link, checked, onCheckedChange, showBrand = false }: R
           {link.post_count} post{link.post_count === 1 ? '' : 's'}
         </span>
       </TableCell>
-      <TableCell>
-        <StageTrack stage={stage} />
+      <TableCell className="text-center">
+        <div className="flex justify-center">
+          <StagePill stage={stage} />
+        </div>
       </TableCell>
       <TableCell className="text-right">
         <ProgressLabel link={link} />
+      </TableCell>
+      <TableCell className="w-10 text-right text-text-muted">
+        <ChevronRight className="size-4" />
       </TableCell>
     </TableRow>
   );
@@ -395,32 +365,73 @@ function ProgressLabel({ link }: { link: ReviewLinkRow }) {
 }
 
 /**
- * Four-circle stage tracker. Past stages tinted with success token,
- * current stage filled with the accent, future stages muted.
+ * Status pill — shows the current stage as a single coloured badge
+ * with an icon, the way the reference's "Completed / In Progress"
+ * pills work. Hovering reveals the full pipeline progression so the
+ * row stays compact but the stage is unambiguous.
+ *
+ * Color rules:
+ *   - approved → success (green)
+ *   - reviewing → warning (amber)  — needs attention
+ *   - viewed → accent (blue)        — moving along
+ *   - sent → muted neutral          — quietly waiting
  */
-function StageTrack({ stage }: { stage: ReviewStage }) {
+function StagePill({ stage }: { stage: ReviewStage }) {
+  const meta = STAGES[stageIndex(stage)];
+  const Icon = meta.icon;
+
+  const tone =
+    stage === 'approved'
+      ? 'border-status-success/30 bg-status-success/10 text-status-success'
+      : stage === 'reviewing'
+        ? 'border-status-warning/30 bg-status-warning/10 text-status-warning'
+        : stage === 'viewed'
+          ? 'border-accent-text/30 bg-accent-text/10 text-accent-text'
+          : 'border-nativz-border bg-background text-text-muted';
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${tone}`}
+        >
+          <Icon className="size-3" />
+          {meta.label}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="w-56">
+        <div className="font-medium text-text-primary">{meta.label}</div>
+        <div className="mt-0.5 text-text-muted">{meta.description}</div>
+        <StageMiniTrack stage={stage} />
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
+ * Tiny four-circle progression shown inside the tooltip. Lets the
+ * viewer see at a glance where this calendar sits in the full
+ * Sent → Approved arc without crowding the row itself.
+ */
+function StageMiniTrack({ stage }: { stage: ReviewStage }) {
   const idx = stageIndex(stage);
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="mt-2 flex items-center gap-1">
       {STAGES.map((s, i) => {
-        const Icon = s.icon;
         const reached = i < idx;
         const current = i === idx;
         return (
-          <div key={s.key} className="flex items-center gap-1.5">
+          <div key={s.key} className="flex items-center gap-1">
             <div
-              className={`flex size-5 items-center justify-center rounded-full border text-[10px] ${
+              className={`size-1.5 rounded-full ${
                 current
-                  ? 'border-accent-text bg-accent-text text-background'
+                  ? 'bg-accent-text'
                   : reached
-                    ? 'border-status-success/30 bg-status-success/10 text-status-success'
-                    : 'border-nativz-border bg-background text-text-muted/60'
+                    ? 'bg-status-success/60'
+                    : 'bg-nativz-border'
               }`}
               aria-label={s.label}
-              title={s.label}
-            >
-              <Icon className="size-3" />
-            </div>
+            />
             {i < STAGES.length - 1 && (
               <div
                 className={`h-px w-3 ${
@@ -431,40 +442,6 @@ function StageTrack({ stage }: { stage: ReviewStage }) {
           </div>
         );
       })}
-    </div>
-  );
-}
-
-/**
- * Inline header bulk-action bar — sits next to the Sort button, only
- * visible when something is selected. Mirrors the reference's
- * "{N} selected · {actions}" pill in the page header.
- */
-function InlineBulkBar({
-  count,
-  onClear,
-  onOpenAll,
-}: {
-  count: number;
-  onClear: () => void;
-  onOpenAll: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-2 rounded-md border border-nativz-border bg-surface px-2.5 py-1.5">
-      <button
-        type="button"
-        onClick={onClear}
-        className="inline-flex size-5 items-center justify-center rounded text-text-muted hover:bg-surface-hover hover:text-text-primary"
-        aria-label="Clear selection"
-      >
-        <X className="size-3.5" />
-      </button>
-      <span className="text-sm text-text-primary">{count} selected</span>
-      <span className="text-text-muted/40">·</span>
-      <Button size="sm" variant="ghost" onClick={onOpenAll} className="h-7 px-2">
-        <ExternalLink size={12} />
-        Open all
-      </Button>
     </div>
   );
 }
@@ -494,13 +471,13 @@ function SortMenu({ sort, onChange }: { sort: SortKey; onChange: (s: SortKey) =>
 function ReviewTableSkeleton() {
   return (
     <div className="overflow-hidden rounded-xl border border-nativz-border bg-surface">
-      <div className="border-b border-nativz-border px-5 py-3">
-        <div className="h-3 w-24 animate-pulse rounded bg-nativz-border" />
+      <div className="border-b border-nativz-border px-5 py-4">
+        <div className="h-4 w-32 animate-pulse rounded bg-nativz-border" />
       </div>
       <div className="divide-y divide-nativz-border/60">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="flex items-center gap-4 px-5 py-4">
-            <div className="size-4 animate-pulse rounded bg-nativz-border" />
+            <div className="size-8 animate-pulse rounded-md bg-nativz-border" />
             <div className="h-4 w-40 animate-pulse rounded bg-nativz-border" />
             <div className="ml-auto h-6 w-24 animate-pulse rounded bg-nativz-border" />
           </div>
@@ -533,24 +510,26 @@ function sortLinks(a: ReviewLinkRow, b: ReviewLinkRow, sort: SortKey): number {
   return sort === 'newest' ? bT - aT : aT - bT;
 }
 
-/** "May 2026 content" / "May–June 2026 content" / fallback. Names look
- *  like project labels rather than literal date ranges so the column
- *  reads as a portfolio of work, not a calendar slice. */
-function formatProject(start: string | null, end: string | null): string {
-  if (!start || !end) return 'Content review';
-  const s = new Date(start);
+/**
+ * Calendar-name formatter. Content calendars are always **for the
+ * latter month** of the drop window — a calendar drafted in April
+ * that drops across April–May posts is the "May 2026 content
+ * calendar" to the client. We name by the END month so client-facing
+ * copy reads as the month being delivered.
+ *
+ * Same-month windows: "May 2026 content calendar".
+ * Cross-month windows: still named by the end month.
+ * Cross-year windows: include the end year alone — the start month
+ * has already passed at delivery time.
+ */
+function formatCalendarName(start: string | null, end: string | null): string {
+  if (!end) return 'Content calendar';
   const e = new Date(end);
-  const sM = s.toLocaleString('default', { month: 'long' });
-  const eM = e.toLocaleString('default', { month: 'long' });
-  const sameYear = s.getFullYear() === e.getFullYear();
-  const sameMonth = s.getMonth() === e.getMonth() && sameYear;
-  if (sameMonth) {
-    return `${sM} ${s.getFullYear()} content`;
-  }
-  if (sameYear) {
-    return `${sM}–${eM} ${s.getFullYear()} content`;
-  }
-  return `${sM} ${s.getFullYear()} – ${eM} ${e.getFullYear()} content`;
+  if (Number.isNaN(e.getTime())) return 'Content calendar';
+  const eMonth = e.toLocaleString('default', { month: 'long' });
+  // Use the end-date year so a Dec-start / Jan-end window reads as
+  // the January calendar, not the December one.
+  return `${eMonth} ${e.getFullYear()} content calendar`;
 }
 
 function formatRelative(iso: string): string {
