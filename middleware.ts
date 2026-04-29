@@ -20,6 +20,13 @@ const LEGACY_STRATEGY_LAB_CLIENT_ID = /^\/admin\/strategy-lab\/([0-9a-f]{8}-[0-9
 // so we scope this regex to the parent shape only.
 const LEGACY_AD_CREATIVES_CLIENT_ID = /^\/admin\/ad-creatives-v2\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/)?$/i;
 
+// /lab/<uuid> — finder's "Open in Strategy Lab" button and the analysis
+// chat drawer's continue-link both push this shape. The lab page itself
+// lives at /lab (no [id] segment per NAT-57); without this redirect the
+// route 404s. Mirror the strategy-lab pattern: set the cookie + 302 to
+// /lab in one middleware hop, preserving any ?attach= deep-link.
+const BRAND_LAB_CLIENT_ID = /^\/lab\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/)?$/i;
+
 type SupabaseFromMiddleware = ReturnType<typeof createServerClient>;
 
 /**
@@ -383,6 +390,27 @@ export async function middleware(request: NextRequest) {
   if (legacyAcMatch) {
     const clientId = legacyAcMatch[1];
     const target = new URL('/admin/ad-creatives', request.url);
+    const redirect = NextResponse.redirect(target);
+    redirect.cookies.set(ADMIN_ACTIVE_CLIENT_COOKIE, clientId, {
+      httpOnly: false,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 180,
+    });
+    return redirect;
+  }
+
+  // /lab/<uuid> → set active-brand cookie + 302 to /lab, carrying through
+  // any ?attach=topic_search:<id> deep-link. This is the only thing keeping
+  // the finder's "Open in Strategy Lab" button and the chat drawer's
+  // continue-link from 404'ing.
+  const brandLabMatch = pathname.match(BRAND_LAB_CLIENT_ID);
+  if (brandLabMatch) {
+    const clientId = brandLabMatch[1];
+    const target = new URL('/lab', request.url);
+    const attach = request.nextUrl.searchParams.get('attach');
+    if (attach) target.searchParams.set('attach', attach);
     const redirect = NextResponse.redirect(target);
     redirect.cookies.set(ADMIN_ACTIVE_CLIENT_COOKIE, clientId, {
       httpOnly: false,
