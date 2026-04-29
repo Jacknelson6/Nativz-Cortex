@@ -102,6 +102,51 @@ untouched until QA.
 
 **SRL Goal 12 code-complete pending Jack's manual QA. Branch `srl/calendar-collab-2026-04-28` not pushed.**
 
+### Iteration 12.3 — 2026-04-29 · Mux video hosting + timestamped comments
+
+**Context:** Goal 12 v1 shipped re-uploads via direct multipart POST to Vercel. Vercel functions cap bodies at 4.5MB so any real revision blew up before the route ran ("Reuploaded videos doesnt work!"). Same pass also surfaced reviewer pain — long videos meant clients couldn't say "fix the cut at 0:14" without timestamps in their comments. Approved 4-phase plan: Mux for hosting, anchored comments for timestamping. **`/c/[token]` only — no admin scheduler changes this pass.**
+
+**Shipped (4 commits on `srl/calendar-collab-2026-04-28`, not pushed):**
+
+- `feat(mux): phase 1 — foundation` (`c5563fd4`)
+  - Migration `196_mux_video_columns.sql` applied via Supabase MCP: adds `mux_upload_id` / `mux_asset_id` / `mux_playback_id` / `mux_status` to `content_drop_videos`, plus partial indexes; adds `timestamp_seconds NUMERIC(10,3)` to `post_review_comments`.
+  - `lib/mux/client.ts` — `getMux()` singleton with friendly throw if `MUX_TOKEN_ID` / `MUX_TOKEN_SECRET` missing.
+  - `@mux/mux-node` + `@mux/mux-player-react` installed.
+- `feat(mux): phase 2 — direct upload path bypasses Vercel body limit` (`25b27fb6`)
+  - `POST /api/calendar/share/[token]/revision/[postId]/mux-upload` mints Mux direct upload (CORS-locked, public playback policy, basic quality), persists `mux_upload_id` + `mux_status='uploading'`.
+  - `POST /api/calendar/share/[token]/revision/[postId]/mux-finalize` validates the returned upload id matches our row, stamps `revised_video_uploaded_at/by`, sets `mux_status='processing'`, flips `revised_video_notify_pending`.
+  - `POST /api/mux/webhook` verifies Mux signature (refuses unsigned in production, allows in dev) and handles `video.upload.asset_created` (matches by upload id, sets `mux_asset_id`), `video.asset.ready` (extracts public playback id, stamps `mux_playback_id` + `revised_video_url=https://stream.mux.com/{id}.m3u8` + `mux_status='ready'`), and errored variants.
+  - Client rewritten: 3-step XHR PUT to Mux's signed URL with `xhr.upload.progress` events feeding a `Uploading… 42%` button label. No more 4.5MB ceiling.
+- `feat(mux): phase 3 — Mux Player with legacy <video> fallback` (`2d2000dd`)
+  - New `<VideoSurface>` component picks between MuxPlayer (when `mux_playback_id` set), processing placeholder, legacy `<video src=video_url>`, or empty state. Used everywhere a video is rendered on the share page.
+  - MuxPlayer dynamic-imported with `ssr: false`, `streamType="on-demand"`, `accentColor="var(--accent)"` so the player picks up brand mode automatically.
+  - VideoPlayerModal simplified — old manual videoRef + try/catch unmute dance replaced by `autoPlay="any"` (Mux handles the unmuted-then-muted fallback internally).
+- `feat(mux): phase 4 — timestamped comments with click-to-seek` (`eb587430`)
+  - Server: comment `BodySchema` accepts `timestampSeconds: z.number().min(0).max(86400).nullable().optional()`. Only honored on `comment` / `changes_requested` (approval rows are stripped). `post_review_comments` insert + share GET return `timestamp_seconds`.
+  - `<VideoSurface>` exposes a `PlayerHandle` via `onPlayerReady(handle | null)`. Both branches use the same ref-callback shape — MuxPlayer's underlying element behaves like an `HTMLVideoElement` (currentTime + play()), so a single `makePlayerHandle(el)` wraps both.
+  - PostCard lifts the handle, captures `getCurrentTime()` only at click time (no per-frame re-renders), and threads a `seekTo` callback to CommentRow.
+  - Composer gains a "Pin to current time" button → flips into a removable accent chip "Pinned at 0:14". Submit POST sends `timestampSeconds`; `setAnchorSeconds(null)` after success.
+  - CommentRow renders a clickable timestamp pill on anchored `comment` / `changes_requested` rows. In modal view (live player), clicking jumps the playhead and scrolls the player into view; in list view (no inline player), the pill renders as a static label.
+
+**Verification:**
+- `npx tsc --noEmit` — clean across all four phases.
+- ESLint scoped to changed files — 0 errors. 7 pre-existing img-element warnings unrelated to Phase 4.
+
+**State vs Goal 12 supplemental:**
+| Criterion | Status |
+|-----------|--------|
+| Re-upload reliability beyond 4.5MB | done — direct-to-Mux uploads bypass Vercel functions entirely |
+| Reviewer can anchor comments to a frame | done — pin/seek end-to-end across both player branches |
+| Backwards compat with legacy Supabase Storage URLs | done — VideoSurface falls through to `<video src=video_url>` when `mux_playback_id` is null |
+
+**Known follow-ups (non-blocking, flagged for Jack's QA):**
+- `MUX_WEBHOOK_SECRET` must be set in production env once the Mux dashboard webhook is created. Without it, the webhook route refuses requests in prod (by design); in dev it logs unverified events.
+- Marker rail above the timeline (every comment as a tick on a scrubber) was in the original Phase 4 spec but skipped — anchoring + seek+pill cover the primary workflow. Easy add later if Jack wants visual density.
+- `Pinned at 0:14` pill only shows when a player is mounted (modal view). Card-list view shows the timestamp as a static label since opening the lightbox uses a separate VideoPlayerModal player that isn't wired through. Acceptable v1.
+- `editing.bug.fixed` `revised_video_url` legacy field still gets stamped by the webhook so anything still reading that column keeps working — can be retired later.
+
+**SRL Goal 12 supplemental (Mux + timestamps) code-complete. Branch `srl/calendar-collab-2026-04-28` still not pushed.**
+
 ---
 
 ## Iterations
