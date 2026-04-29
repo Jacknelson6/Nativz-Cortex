@@ -11,6 +11,8 @@ import { toast } from 'sonner';
 import { Dialog } from '@/components/ui/dialog';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
 
+const SKIP_DELETE_CONFIRM_KEY = 'cortex.share.skipDeleteConfirm';
+
 interface CommentAttachment {
   url: string;
   filename: string;
@@ -1429,11 +1431,34 @@ function CommentRow({
   onDeleted: () => void;
 }) {
   const [deleting, setDeleting] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [dontAsk, setDontAsk] = useState(false);
 
-  async function handleDelete() {
+  function requestDelete() {
     if (deleting) return;
-    if (!window.confirm('Remove this from history? This can’t be undone.')) return;
+    let skip = false;
+    try {
+      skip = typeof window !== 'undefined' && window.localStorage.getItem(SKIP_DELETE_CONFIRM_KEY) === '1';
+    } catch {
+      skip = false;
+    }
+    if (skip) {
+      void doDelete();
+    } else {
+      setConfirming(true);
+    }
+  }
+
+  async function doDelete() {
+    setConfirming(false);
     setDeleting(true);
+    if (dontAsk) {
+      try {
+        window.localStorage.setItem(SKIP_DELETE_CONFIRM_KEY, '1');
+      } catch {
+        // ignore storage failures (private mode / disabled storage)
+      }
+    }
     try {
       const res = await fetch(`/api/calendar/share/${token}/comment`, {
         method: 'DELETE',
@@ -1450,10 +1475,48 @@ function CommentRow({
     }
   }
 
+  if (confirming) {
+    return (
+      <div className="rounded-lg border border-status-danger/40 bg-status-danger/10 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs">
+          <div className="flex items-center gap-2 text-text-secondary">
+            <AlertTriangle size={12} className="text-status-danger" />
+            <span>Remove this from history? This can’t be undone.</span>
+          </div>
+          <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-text-muted select-none">
+            <input
+              type="checkbox"
+              checked={dontAsk}
+              onChange={(e) => setDontAsk(e.target.checked)}
+              className="h-3 w-3 accent-accent"
+            />
+            Don’t ask again
+          </label>
+          <div className="ml-auto flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              className="rounded-md px-2 py-1 text-[11px] font-medium text-text-secondary transition hover:bg-surface-hover"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void doDelete()}
+              className="rounded-md bg-status-danger px-2 py-1 text-[11px] font-medium text-white transition hover:bg-status-danger/90"
+            >
+              Remove
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const deleteButton = (
     <button
       type="button"
-      onClick={handleDelete}
+      onClick={requestDelete}
       disabled={deleting}
       aria-label="Remove from history"
       className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-text-muted opacity-0 transition hover:bg-status-danger/15 hover:text-status-danger focus-visible:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
