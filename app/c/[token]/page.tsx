@@ -6,7 +6,7 @@ import { use, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle, AlertTriangle, AtSign, BellRing, CalendarDays, CheckCircle, Clock,
   File as FileIcon, Film, List, Loader2, MapPin, MessageSquare, Paperclip, Pencil, Play,
-  Plus, Send, Tag, Type, Undo2, Upload, Users, X,
+  Plus, Send, Tag, Trash2, Type, Undo2, Upload, Users, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog } from '@/components/ui/dialog';
@@ -340,6 +340,17 @@ function SharedDropView({
     );
   }
 
+  // Editor-only "remove from calendar" — strips the post from this share
+  // link's `included_post_ids` server-side, then optimistically drops it
+  // from the in-memory list so the card disappears immediately. Reversible
+  // from admin UI (we don't delete the underlying scheduled_post or
+  // drop_video, just unlink it from this share link).
+  function removePostFromCalendar(postId: string) {
+    setData((prev) =>
+      prev ? { ...prev, posts: prev.posts.filter((p) => p.id !== postId) } : prev,
+    );
+  }
+
   function clearRevisionPending() {
     setData((prev) =>
       prev
@@ -491,6 +502,7 @@ function SharedDropView({
                 onHandlesUpdated={(field, next, c) => updatePostHandles(post.id, field, next, c)}
                 onScheduleUpdated={(at, c) => updatePostScheduledAt(post.id, at, c)}
                 onRevisionUploaded={(rev) => updatePostRevision(post.id, rev)}
+                onRemoveFromCalendar={() => removePostFromCalendar(post.id)}
                 requireName={() => {
                   setPendingName(authorName);
                   setNameModalOpen(true);
@@ -586,6 +598,7 @@ function SharedDropView({
         onHandlesUpdated={updatePostHandles}
         onScheduleUpdated={updatePostScheduledAt}
         onRevisionUploaded={updatePostRevision}
+        onRemoveFromCalendar={removePostFromCalendar}
         onClose={() => setDetailPostId(null)}
         requireName={() => {
           setPendingName(authorName);
@@ -854,6 +867,7 @@ function PostDetailModal({
   onHandlesUpdated,
   onScheduleUpdated,
   onRevisionUploaded,
+  onRemoveFromCalendar,
   onClose,
   requireName,
 }: {
@@ -884,6 +898,7 @@ function PostDetailModal({
       mux_status?: string | null;
     },
   ) => void;
+  onRemoveFromCalendar: (postId: string) => void;
   onClose: () => void;
   requireName: () => void;
 }) {
@@ -904,6 +919,10 @@ function PostDetailModal({
         onHandlesUpdated={(field, next, c) => onHandlesUpdated(post.id, field, next, c)}
         onScheduleUpdated={(at, c) => onScheduleUpdated(post.id, at, c)}
         onRevisionUploaded={(rev) => onRevisionUploaded(post.id, rev)}
+        onRemoveFromCalendar={() => {
+          onRemoveFromCalendar(post.id);
+          onClose();
+        }}
         requireName={requireName}
         layoutMode="modal"
       />
@@ -1264,6 +1283,7 @@ function PostCard({
   onHandlesUpdated,
   onScheduleUpdated,
   onRevisionUploaded,
+  onRemoveFromCalendar,
   requireName,
   layoutMode = 'inline',
 }: {
@@ -1290,6 +1310,7 @@ function PostCard({
     mux_playback_id?: string | null;
     mux_status?: string | null;
   }) => void;
+  onRemoveFromCalendar: () => void;
   requireName: () => void;
   /**
    * `inline` (default, list view): video stacked on top, captionBlock + history + composer below.
@@ -1336,6 +1357,36 @@ function PostCard({
   // the card calm (most posts get one decision, not a long thread) and
   // matches the "talk only when you need to" Frame.io feel.
   const [composerExpanded, setComposerExpanded] = useState(false);
+  // Editor-only "remove from calendar" confirmation. We don't auto-fire the
+  // delete on click — destructive enough to warrant a one-step "are you
+  // sure?" so an accidental click can't pull a post the editor wanted to
+  // keep. The action is reversible (the underlying scheduled_post + drop
+  // video stay intact), but reversing it requires admin UI, so we slow
+  // things down here.
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [removing, setRemoving] = useState(false);
+
+  async function confirmRemoveFromCalendar() {
+    if (removing) return;
+    setRemoving(true);
+    try {
+      const res = await fetch(`/api/calendar/share/${token}/revision/${post.id}`, {
+        method: 'DELETE',
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof json.error === 'string' ? json.error : 'Failed to remove');
+      }
+      toast.success('Removed from calendar');
+      setRemoveOpen(false);
+      // Optimistic — the parent strips this card from the list, so the
+      // dialog unmounts naturally with the card.
+      onRemoveFromCalendar();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to remove');
+      setRemoving(false);
+    }
+  }
 
   // Tick the displayed playhead once per second while the player is ready.
   // Light touch — we just read the cached time from the handle; no event
@@ -2046,7 +2097,74 @@ function PostCard({
         >
           <MessageSquare size={14} /> Request change
         </button>
+        {/* Editor-only remove. ml-auto on sm+ pushes it to the right
+            corner of the action row, well clear of Approve so the
+            destructive action isn't sitting next to the primary one.
+            Ghost styling + muted red on hover signals the destructive
+            tone without screaming for attention. Wraps below on
+            narrow screens via the parent's flex-wrap. */}
+        {isEditor && (
+          <button
+            type="button"
+            onClick={() => setRemoveOpen(true)}
+            disabled={submitting || uploading || removing}
+            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-transparent bg-transparent px-3 py-2.5 text-xs font-medium text-text-muted transition-all hover:border-status-error/40 hover:bg-status-error/10 hover:text-status-error disabled:opacity-50 sm:ml-auto sm:py-2"
+            title="Remove this post from the calendar"
+          >
+            <Trash2 size={13} /> Remove from calendar
+          </button>
+        )}
       </div>
+
+      {/* Confirmation modal — light copy, two clearly-labelled actions.
+          We tell the editor what survives the action (caption, comments,
+          underlying media) so they know it's recoverable and not a hard
+          delete. */}
+      <Dialog
+        open={removeOpen}
+        onClose={() => {
+          if (!removing) setRemoveOpen(false);
+        }}
+        title=""
+        maxWidth="sm"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-status-error/12 text-status-error">
+              <Trash2 size={16} />
+            </div>
+            <div className="min-w-0">
+              <h2 className="font-display text-base font-semibold tracking-tight text-text-primary">
+                Remove from calendar?
+              </h2>
+              <p className="mt-1 text-sm text-text-secondary">
+                This post will disappear from the calendar the brand sees. The
+                caption, comments, and underlying video stay safe — you can
+                add it back from the admin calendar if you change your mind.
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => setRemoveOpen(false)}
+              disabled={removing}
+              className="inline-flex items-center justify-center rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3 py-1.5 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmRemoveFromCalendar}
+              disabled={removing}
+              className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-status-error px-3 py-1.5 text-sm font-medium text-white transition-all hover:opacity-90 disabled:opacity-50"
+            >
+              {removing ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+              {removing ? 'Removing…' : 'Remove from calendar'}
+            </button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 

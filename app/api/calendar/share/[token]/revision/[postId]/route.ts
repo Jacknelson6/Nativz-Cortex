@@ -102,6 +102,70 @@ export async function POST(
   });
 }
 
+/**
+ * DELETE /api/calendar/share/[token]/revision/[postId]
+ *
+ * Admin-only "remove from calendar" — drops the post from this share
+ * link's `included_post_ids` and `post_review_link_map`. Intentionally
+ * non-destructive: the underlying `scheduled_posts` row and
+ * `content_drop_videos` row stay intact, so an editor who hits this by
+ * mistake can re-include the post from admin UI without losing the
+ * caption / media / comments. Use this when a client says "actually,
+ * pull that one" or when the editor decides a post shouldn't be in the
+ * calendar going to the brand.
+ */
+export async function DELETE(
+  _req: Request,
+  ctx: { params: Promise<{ token: string; postId: string }> },
+) {
+  const { token, postId } = await ctx.params;
+
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (!(await isAdmin(user.id))) {
+    return NextResponse.json({ error: 'admin only' }, { status: 403 });
+  }
+
+  const admin = createAdminClient();
+  const { data: link } = await admin
+    .from('content_drop_share_links')
+    .select('id, included_post_ids, post_review_link_map, expires_at')
+    .eq('token', token)
+    .single<{
+      id: string;
+      included_post_ids: string[];
+      post_review_link_map: Record<string, string>;
+      expires_at: string;
+    }>();
+  if (!link) return NextResponse.json({ error: 'not found' }, { status: 404 });
+  if (new Date(link.expires_at) < new Date()) {
+    return NextResponse.json({ error: 'link expired' }, { status: 410 });
+  }
+  if (!link.included_post_ids?.includes(postId)) {
+    return NextResponse.json({ error: 'post is not part of this share link' }, { status: 400 });
+  }
+
+  const nextIncluded = link.included_post_ids.filter((id) => id !== postId);
+  const nextMap = { ...(link.post_review_link_map ?? {}) };
+  delete nextMap[postId];
+
+  const { error: updateErr } = await admin
+    .from('content_drop_share_links')
+    .update({
+      included_post_ids: nextIncluded,
+      post_review_link_map: nextMap,
+    })
+    .eq('id', link.id);
+  if (updateErr) {
+    return NextResponse.json({ error: updateErr.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
 function mimeToExt(mime: string, fallbackName: string): string {
   const map: Record<string, string> = {
     'video/mp4': 'mp4',
