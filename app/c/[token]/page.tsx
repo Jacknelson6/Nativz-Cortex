@@ -440,9 +440,9 @@ function SharedDropView({
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-3 py-4 sm:px-6 sm:py-6">
+      <main className="mx-auto max-w-7xl px-3 py-4 sm:px-6 sm:py-6">
         {viewMode === 'list' ? (
-          <div className="mx-auto max-w-3xl space-y-3 sm:space-y-4">
+          <div className="mx-auto max-w-6xl space-y-3 sm:space-y-4">
             {sortedPosts.map((post, idx) => (
               <PostCard
                 key={post.id}
@@ -822,7 +822,7 @@ function PostDetailModal({
 }) {
   if (!post) return null;
   return (
-    <Dialog open={!!post} onClose={onClose} title="" maxWidth="5xl" bodyClassName="p-0" className="max-h-[92vh]">
+    <Dialog open={!!post} onClose={onClose} title="" maxWidth="7xl" bodyClassName="p-0" className="max-h-[92vh]">
       <PostCard
         index={index}
         post={post}
@@ -1723,27 +1723,20 @@ function PostCard({
     </div>
   );
 
-  // Video panel — same content for both layouts; the wrapper around it
-  // handles the geometry difference (full-bleed-on-top in inline mode vs
-  // pinned-left in modal mode). The Mux player has its own fullscreen
-  // control built in, so "make it full size" doesn't need an explicit
-  // button here.
+  // Video panel — both list-view cards and the post-detail modal use the
+  // same horizontal layout (video pinned left, scrollable column on the
+  // right). The wrapper has no enforced min-height, so the column hugs
+  // the video's natural geometry — no letterboxing top/bottom. The Mux
+  // player has its own fullscreen control built in, so "make it full
+  // size" doesn't need an explicit button here.
   const videoPanel = (
     <div
       ref={videoSectionRef}
-      className={
-        layoutMode === 'modal'
-          ? 'relative flex w-full items-center justify-center bg-black md:h-full md:max-h-[88vh] md:min-h-[60vh]'
-          : 'relative bg-black'
-      }
+      className="relative h-full w-full"
     >
       <VideoSurface
         post={post}
-        className={
-          layoutMode === 'modal'
-            ? 'block max-h-[88vh] w-full md:w-auto md:max-w-full'
-            : 'mx-auto block max-h-[55vh] w-auto'
-        }
+        className="block h-full w-full"
         onPlayerReady={(handle) => {
           playerHandleRef.current = handle;
           setPlayerReady(!!handle);
@@ -1911,34 +1904,29 @@ function PostCard({
       </div>
   );
 
-  if (layoutMode === 'modal') {
-    // Two-column horizontal layout — video pinned left, scrollable column
-    // on the right. Left column never scrolls; the right column owns the
-    // overflow so the video stays in view as the conversation grows.
-    return (
-      <article className="flex max-h-[92vh] flex-col overflow-hidden bg-surface md:flex-row">
-        {revisionInput}
-        <div className="bg-black md:max-h-[92vh] md:w-[55%] md:flex-shrink-0">
-          {videoPanel}
-        </div>
-        <div className="flex flex-1 flex-col overflow-y-auto md:max-h-[92vh] md:min-w-0">
-          <div className="p-3 sm:p-4">{captionBlock}</div>
-          {historyBlock}
-          {composerBlock}
-        </div>
-      </article>
-    );
-  }
-
-  // Inline (list view): video stacked on top, then captionBlock, history,
-  // composer in a single vertical card.
+  // Two-column horizontal layout — video pinned left, scrollable column
+  // on the right. The video column hugs the video's 9:16 aspect ratio so
+  // there are no letterbox bars; the right column takes the remaining
+  // width and scrolls independently. Used for both list-view cards and
+  // the calendar's post-detail modal — the only difference is the modal
+  // allows a slightly taller card and drops the rounded border (the
+  // Dialog already provides chrome).
+  const heightPx = layoutMode === 'modal' ? 'md:h-[88vh]' : 'md:h-[78vh]';
+  const articleChrome =
+    layoutMode === 'modal'
+      ? `flex flex-col overflow-hidden bg-surface md:flex-row ${heightPx}`
+      : `flex flex-col overflow-hidden rounded-xl border border-nativz-border bg-surface md:flex-row ${heightPx}`;
   return (
-    <article className="overflow-hidden rounded-xl border border-nativz-border bg-surface">
+    <article className={articleChrome}>
       {revisionInput}
-      {videoPanel}
-      <div className="p-3 sm:p-4">{captionBlock}</div>
-      {historyBlock}
-      {composerBlock}
+      <div className="aspect-[9/16] w-full bg-black md:w-auto md:flex-shrink-0 md:h-full">
+        {videoPanel}
+      </div>
+      <div className="flex flex-1 flex-col overflow-y-auto md:min-w-0 md:h-full">
+        <div className="p-3 sm:p-4">{captionBlock}</div>
+        {historyBlock}
+        {composerBlock}
+      </div>
     </article>
   );
 }

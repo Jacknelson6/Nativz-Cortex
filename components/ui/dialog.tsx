@@ -9,7 +9,7 @@ interface DialogProps {
   /** Omit or pass empty string for a close-only chrome (e.g. full-height wizards). */
   title?: string;
   children: ReactNode;
-  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '5xl' | 'full';
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '5xl' | '6xl' | '7xl' | 'full';
   /** Extra classes on the `<dialog>` element (e.g. max height). */
   className?: string;
   /** Override padding wrapper around children (default `p-6`). */
@@ -25,6 +25,8 @@ const maxWidthStyles = {
   xl: 'max-w-xl',
   '2xl': 'max-w-2xl',
   '5xl': 'max-w-5xl',
+  '6xl': 'max-w-6xl',
+  '7xl': 'max-w-7xl',
   full: 'max-w-[calc(100vw-4rem)] max-h-[calc(100vh-4rem)]',
 };
 
