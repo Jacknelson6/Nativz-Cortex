@@ -10,8 +10,6 @@ import {
   MoreHorizontal,
   Check,
   ArrowRight,
-  Sparkles,
-  Clock,
 } from 'lucide-react';
 // (SpotlightCard — the cursor-following cyan radial hover glow — was removed
 // 2026-04-24: looked stuck-blue on AC paper and wasn't needed to signal
@@ -527,15 +525,17 @@ function SectionHeader({
   label,
   count,
   icon,
+  labelClassName = 'text-text-muted',
 }: {
   label: string;
   count: number;
   icon?: React.ReactNode;
+  labelClassName?: string;
 }) {
   return (
     <div className="flex items-center gap-2 pb-1">
       {icon}
-      <h2 className="text-[12px] font-semibold uppercase tracking-[0.12em] text-text-muted">{label}</h2>
+      <h2 className={`text-[12px] font-semibold uppercase tracking-[0.12em] ${labelClassName}`}>{label}</h2>
       <span className="text-[12px] text-text-muted/60 tabular-nums">{count}</span>
       <div className="flex-1 h-px bg-nativz-border/40 ml-1" />
     </div>
@@ -899,18 +899,18 @@ export function ClientSearchGrid({
             agencyBuckets.map((g, gi) => {
               const offset = agencyBuckets.slice(0, gi).reduce((n, x) => n + x.items.length, 0);
               const readOnly = g.key === 'onboarding';
-              const icon =
-                g.key === 'onboarding' ? (
-                  <Clock size={12} className="text-amber-400" />
-                ) : g.key === 'prospect' ? (
-                  <Sparkles size={12} className="text-text-muted" />
-                ) : undefined;
+              const labelClassName =
+                g.key === 'onboarding' ? 'text-amber-400' : undefined;
               const emptyMessage = readOnly
                 ? 'Start an onboarding from the Onboarding page.'
                 : 'No clients in this row yet.';
               return (
                 <section key={g.key} className="space-y-2">
-                  <SectionHeader label={BUCKET_LABEL[g.key]} count={g.items.length} icon={icon} />
+                  <SectionHeader
+                    label={BUCKET_LABEL[g.key]}
+                    count={g.items.length}
+                    labelClassName={labelClassName}
+                  />
                   {g.items.length > 0 ? (
                     renderBucket(g.items, false, offset)
                   ) : (
