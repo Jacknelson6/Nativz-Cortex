@@ -9,6 +9,153 @@ import type { CompetitorReportData } from '@/lib/reporting/competitor-report-typ
 import { getSecret } from '@/lib/secrets/store';
 import type { WeeklySocialReport } from '@/lib/reporting/weekly-social-report';
 import type { AgencyBrand } from '@/lib/agency/detect';
+import { createAdminClient } from '@/lib/supabase/admin';
+
+// ── Centralized send + log wrapper ─────────────────────────────────────────
+//
+// Every sender in this file goes through `sendAndLog`. It writes a row to
+// `email_messages` with the fully rendered HTML *before* calling Resend, then
+// patches the row with the resend message id + status afterwards. This gives
+// the Email Hub UI a single feed across every email type (transactional,
+// system, campaign) with an inline HTML preview, and the Resend webhook
+// already updates rows here by `resend_id` so delivery/open/bounce events
+// flow into the same row automatically.
+
+export type EmailCategory = 'campaign' | 'transactional' | 'system';
+
+export interface SendAndLogInput {
+  category: EmailCategory;
+  typeKey: string;
+  agency: AgencyBrand;
+  to: string | string[];
+  cc?: string | string[];
+  bcc?: string | string[];
+  subject: string;
+  html: string;
+  fromOverride?: string;
+  replyToOverride?: string;
+  recipientName?: string | null;
+  recipientUserId?: string | null;
+  clientId?: string | null;
+  dropId?: string | null;
+  campaignId?: string | null;
+  contactId?: string | null;
+  attachments?: Array<{ filename: string; content: Buffer }>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SendAndLogResult {
+  ok: boolean;
+  id: string;
+  messageId: string | null;
+  html: string;
+  error?: string;
+}
+
+function toArray(v: string | string[] | undefined): string[] | undefined {
+  if (v === undefined) return undefined;
+  return Array.isArray(v) ? v : [v];
+}
+
+function primaryRecipient(to: string | string[]): string {
+  return Array.isArray(to) ? (to[0] ?? '') : to;
+}
+
+export async function sendAndLog(input: SendAndLogInput): Promise<SendAndLogResult> {
+  const admin = createAdminClient();
+  const fromAddress = input.fromOverride ?? getFromAddress(input.agency);
+  const replyTo = input.replyToOverride ?? getReplyTo(input.agency);
+
+  // Insert the message row first so the UI has a record even if Resend errors.
+  const insertPayload = {
+    category: input.category,
+    type_key: input.typeKey,
+    campaign_id: input.campaignId ?? null,
+    contact_id: input.contactId ?? null,
+    recipient_user_id: input.recipientUserId ?? null,
+    recipient_email: primaryRecipient(input.to),
+    recipient_name: input.recipientName ?? null,
+    agency: input.agency,
+    from_address: fromAddress,
+    from_name: null,
+    reply_to_address: replyTo,
+    cc: toArray(input.cc) ?? null,
+    bcc: toArray(input.bcc) ?? null,
+    subject: input.subject,
+    body_html: input.html,
+    status: 'sending' as const,
+    client_id: input.clientId ?? null,
+    drop_id: input.dropId ?? null,
+    metadata: (input.metadata ?? {}) as Record<string, unknown>,
+  };
+
+  const { data: row, error: insertErr } = await admin
+    .from('email_messages')
+    .insert(insertPayload)
+    .select('id')
+    .single();
+
+  if (insertErr || !row) {
+    console.warn('[sendAndLog] failed to insert email_messages row:', insertErr);
+  }
+  const rowId = row?.id ?? null;
+
+  // Build the Resend payload. Attachments use the SDK's attachment shape.
+  const sendPayload: Record<string, unknown> = {
+    from: fromAddress,
+    replyTo,
+    to: input.to,
+    subject: input.subject,
+    html: input.html,
+  };
+  if (input.cc) sendPayload.cc = input.cc;
+  if (input.bcc) sendPayload.bcc = input.bcc;
+  if (input.attachments && input.attachments.length > 0) {
+    sendPayload.attachments = input.attachments;
+  }
+
+  try {
+    // @ts-expect-error - Resend SDK accepts attachments; typed as generic Record for flexibility
+    const result = await (await getResend()).emails.send(sendPayload);
+    const resendId = result?.data?.id ?? null;
+
+    if (rowId) {
+      await admin
+        .from('email_messages')
+        .update({
+          resend_id: resendId,
+          status: 'sent',
+          sent_at: new Date().toISOString(),
+        })
+        .eq('id', rowId);
+    }
+
+    trackUsage({
+      service: 'resend',
+      model: 'email-api',
+      feature: input.category === 'campaign' ? 'email_delivery' : 'email_delivery',
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      costUsd: 0,
+    });
+
+    return { ok: true, id: rowId ?? '', messageId: resendId, html: input.html };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown send error';
+    if (rowId) {
+      await admin
+        .from('email_messages')
+        .update({
+          status: 'failed',
+          failed_at: new Date().toISOString(),
+          failure_reason: message,
+        })
+        .eq('id', rowId);
+    }
+    return { ok: false, id: rowId ?? '', messageId: null, html: input.html, error: message };
+  }
+}
 
 // Cached Resend client keyed by the API key currently in use. When the admin
 // rotates RESEND_API_KEY from the Setup UI, the next read from getSecret
@@ -157,10 +304,12 @@ export async function sendTeamInviteEmail(opts: {
 }) {
   const agency = opts.agency ?? 'nativz';
   const brandName = agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz';
-  const result = await (await getResend()).emails.send({
-    from: getFromAddress(agency),
-      replyTo: getReplyTo(agency),
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: 'team_invite',
+    agency,
     to: opts.to,
+    recipientName: opts.memberName,
     subject: `You're invited to ${brandName} Cortex`,
     html: layout(`
       <div class="card">
@@ -177,19 +326,8 @@ export async function sendTeamInviteEmail(opts: {
         </p>
       </div>
     `, agency),
+    metadata: { invitedBy: opts.invitedBy },
   });
-
-  trackUsage({
-    service: 'resend',
-    model: 'email-api',
-    feature: 'email_delivery',
-    inputTokens: 0,
-    outputTokens: 0,
-    totalTokens: 0,
-    costUsd: 0,
-  });
-
-  return result;
 }
 
 // ── Client portal invite ─────────────────────────────────────────────────────
@@ -236,28 +374,21 @@ export async function sendClientInviteEmail(opts: {
   /** Optional CC recipients — useful when an account manager wants a copy
    *  of every portal invite they fire out to a client org. */
   cc?: string | string[];
+  clientId?: string;
 }) {
   const agency = opts.agency ?? 'nativz';
-  const result = await (await getResend()).emails.send({
-    from: getFromAddress(agency),
-      replyTo: getReplyTo(agency),
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: 'client_invite',
+    agency,
     to: opts.to,
     cc: opts.cc,
+    recipientName: opts.contactName,
+    clientId: opts.clientId,
     subject: `${opts.clientName} — Your Cortex portal is ready`,
     html: buildClientInviteEmailHtml(opts),
+    metadata: { invitedBy: opts.invitedBy, clientName: opts.clientName },
   });
-
-  trackUsage({
-    service: 'resend',
-    model: 'email-api',
-    feature: 'email_delivery',
-    inputTokens: 0,
-    outputTokens: 0,
-    totalTokens: 0,
-    costUsd: 0,
-  });
-
-  return result;
 }
 
 // ── Welcome email (after account creation) ───────────────────────────────────
@@ -270,11 +401,12 @@ export async function sendWelcomeEmail(opts: {
   agency?: AgencyBrand;
 }) {
   const agency = opts.agency ?? 'nativz';
-  const isTeam = opts.role === 'admin';
-  const result = await (await getResend()).emails.send({
-    from: getFromAddress(agency),
-      replyTo: getReplyTo(agency),
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: 'welcome',
+    agency,
     to: opts.to,
+    recipientName: opts.name,
     subject: `Welcome to Cortex`,
     html: layout(`
       <div class="card">
@@ -291,19 +423,8 @@ export async function sendWelcomeEmail(opts: {
         </p>
       </div>
     `, agency),
+    metadata: { role: opts.role },
   });
-
-  trackUsage({
-    service: 'resend',
-    model: 'email-api',
-    feature: 'email_delivery',
-    inputTokens: 0,
-    outputTokens: 0,
-    totalTokens: 0,
-    costUsd: 0,
-  });
-
-  return result;
 }
 
 // ── Weekly affiliate analytics report ─────────────────────────────────────────
@@ -336,25 +457,19 @@ export async function sendAffiliateWeeklyReportEmail(opts: {
     agency,
   });
 
-  const result = await (await getResend()).emails.send({
-    from: getFromAddress(agency),
-      replyTo: getReplyTo(agency),
+  return sendAndLog({
+    category: 'system',
+    typeKey: 'affiliate_weekly_report',
+    agency,
     to: opts.to,
     subject,
     html: layout(cardHtml, agency),
+    metadata: {
+      clientName: opts.clientName,
+      rangeLabel: opts.rangeLabel,
+      isTestOverride: opts.isTestOverride,
+    },
   });
-
-  trackUsage({
-    service: 'resend',
-    model: 'email-api',
-    feature: 'email_delivery',
-    inputTokens: 0,
-    outputTokens: 0,
-    totalTokens: 0,
-    costUsd: 0,
-  });
-
-  return result;
 }
 
 // ── Weekly branded social report ──────────────────────────────────────────
@@ -376,25 +491,19 @@ export async function sendWeeklySocialReportEmail(opts: {
     agency,
   });
 
-  const result = await (await getResend()).emails.send({
-    from: getFromAddress(agency),
-    replyTo: getReplyTo(agency),
+  return sendAndLog({
+    category: 'system',
+    typeKey: 'weekly_social_report',
+    agency,
     to: opts.to,
     subject,
     html: layout(cardHtml, agency),
+    metadata: {
+      clientName: opts.report.clientName,
+      rangeLabel: opts.rangeLabel,
+      isTestOverride: opts.isTestOverride,
+    },
   });
-
-  trackUsage({
-    service: 'resend',
-    model: 'email-api',
-    feature: 'email_delivery',
-    inputTokens: 0,
-    outputTokens: 0,
-    totalTokens: 0,
-    costUsd: 0,
-  });
-
-  return result;
 }
 
 // ── Search completed notification ─────────────────────────────────────────
@@ -412,9 +521,10 @@ export async function sendSearchCompletedEmail(opts: {
     ? `<p class="detail-label">Client</p><p class="detail-value">${opts.clientName}</p>`
     : '';
 
-  const result = await (await getResend()).emails.send({
-    from: getFromAddress(agency),
-      replyTo: getReplyTo(agency),
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: 'search_completed',
+    agency,
     to: opts.to,
     subject: `Research ready — ${opts.query}`,
     html: layout(`
@@ -432,19 +542,8 @@ export async function sendSearchCompletedEmail(opts: {
         </div>
       </div>
     `, agency),
+    metadata: { query: opts.query, clientName: opts.clientName },
   });
-
-  trackUsage({
-    service: 'resend',
-    model: 'email-api',
-    feature: 'email_delivery',
-    inputTokens: 0,
-    outputTokens: 0,
-    totalTokens: 0,
-    costUsd: 0,
-  });
-
-  return result;
 }
 
 // ── Onboarding email (ad-hoc admin → client) ───────────────────────────────
@@ -461,40 +560,28 @@ export async function sendOnboardingEmail(opts: {
   /** Pre-rendered HTML override. Block-rendered templates pass this in. */
   html?: string;
   agency?: AgencyBrand;
+  clientId?: string | null;
 }): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   if (!opts.to.trim()) return { ok: false, error: 'Recipient email is empty' };
   if (!opts.html && !opts.bodyMarkdown) {
     return { ok: false, error: 'Either html or bodyMarkdown is required' };
   }
   const agency = opts.agency ?? 'nativz';
+  const html = opts.html ?? buildUserEmailHtml(opts.bodyMarkdown!, agency);
 
-  try {
-    const html = opts.html ?? buildUserEmailHtml(opts.bodyMarkdown!, agency);
-    const result = await (await getResend()).emails.send({
-      from: getFromAddress(agency),
-      replyTo: getReplyTo(agency),
-      to: opts.to,
-      subject: opts.subject,
-      html,
-    });
-    if (result.error) return { ok: false, error: result.error.message || 'Resend error' };
-    const id = result.data?.id;
-    if (!id) return { ok: false, error: 'Resend returned no id' };
+  const result = await sendAndLog({
+    category: 'transactional',
+    typeKey: 'onboarding',
+    agency,
+    to: opts.to,
+    clientId: opts.clientId ?? undefined,
+    subject: opts.subject,
+    html,
+  });
 
-    trackUsage({
-      service: 'resend',
-      model: 'email-api',
-      feature: 'onboarding_send',
-      inputTokens: 0,
-      outputTokens: 0,
-      totalTokens: 0,
-      costUsd: 0,
-    });
-
-    return { ok: true, id };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : 'Unknown send error' };
-  }
+  if (!result.ok) return { ok: false, error: result.error ?? 'Resend error' };
+  if (!result.messageId) return { ok: false, error: 'Resend returned no id' };
+  return { ok: true, id: result.messageId };
 }
 
 // ── Recurring competitor report ────────────────────────────────────────────
@@ -523,42 +610,26 @@ export async function sendCompetitorReportEmail(opts: {
   });
   const html = layout(cardHtml, agency);
 
-  try {
-    const sendPayload: Record<string, unknown> = {
-      from: getFromAddress(agency),
-      replyTo: getReplyTo(agency),
-      to: opts.to,
-      subject,
-      html,
-    };
-    if (opts.pdfAttachment) {
-      sendPayload.attachments = [
-        {
-          filename: opts.pdfAttachment.filename,
-          content: opts.pdfAttachment.content,
-        },
-      ];
-    }
-    // @ts-expect-error - Resend SDK accepts attachments; typed as generic Record for flexibility
-    const result = await (await getResend()).emails.send(sendPayload);
-    trackUsage({
-      service: 'resend',
-      model: 'email-api',
-      feature: 'email_delivery',
-      inputTokens: 0,
-      outputTokens: 0,
-      totalTokens: 0,
-      costUsd: 0,
-    });
-    const id = result?.data?.id ?? '';
-    return { ok: true, id, html };
-  } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : 'Unknown send error',
-      html,
-    };
-  }
+  const result = await sendAndLog({
+    category: 'system',
+    typeKey: 'competitor_report',
+    agency,
+    to: opts.to,
+    subject,
+    html,
+    attachments: opts.pdfAttachment
+      ? [{ filename: opts.pdfAttachment.filename, content: opts.pdfAttachment.content }]
+      : undefined,
+    metadata: {
+      clientName: opts.data.client_name,
+      periodStart: opts.data.period_start,
+      periodEnd: opts.data.period_end,
+      isTestOverride: opts.isTestOverride ?? false,
+    },
+  });
+
+  if (!result.ok) return { ok: false, error: result.error ?? 'Resend error', html };
+  return { ok: true, id: result.messageId ?? '', html };
 }
 
 // ── Content calendar share-link comment notification ─────────────────────
@@ -571,6 +642,8 @@ export async function sendDropCommentEmail(opts: {
   contentPreview: string;
   dropUrl: string;
   agency?: AgencyBrand;
+  clientId?: string;
+  dropId?: string;
 }) {
   const agency = opts.agency ?? 'nativz';
   const verbBySubject = {
@@ -585,10 +658,13 @@ export async function sendDropCommentEmail(opts: {
   } as const;
   const subject = `${opts.authorName} ${verbBySubject[opts.status]} — ${opts.clientName}`;
 
-  const result = await (await getResend()).emails.send({
-    from: getFromAddress(agency),
-    replyTo: getReplyTo(agency),
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: `calendar_comment_${opts.status}`,
+    agency,
     to: opts.to,
+    clientId: opts.clientId,
+    dropId: opts.dropId,
     subject,
     html: layout(`
       <div class="card">
@@ -604,19 +680,12 @@ export async function sendDropCommentEmail(opts: {
         </div>
       </div>
     `, agency),
+    metadata: {
+      authorName: opts.authorName,
+      clientName: opts.clientName,
+      status: opts.status,
+    },
   });
-
-  trackUsage({
-    service: 'resend',
-    model: 'email-api',
-    feature: 'email_delivery',
-    inputTokens: 0,
-    outputTokens: 0,
-    totalTokens: 0,
-    costUsd: 0,
-  });
-
-  return result;
 }
 
 // ── Calendar comment daily digest ────────────────────────────────────────────
@@ -672,9 +741,10 @@ export async function sendCalendarCommentDigestEmail(opts: {
     })
     .join('');
 
-  const result = await (await getResend()).emails.send({
-    from: getFromAddress(agency),
-    replyTo: getReplyTo(agency),
+  return sendAndLog({
+    category: 'system',
+    typeKey: 'calendar_comment_digest',
+    agency,
     to: opts.to,
     subject,
     html: layout(`
@@ -686,19 +756,12 @@ export async function sendCalendarCommentDigestEmail(opts: {
         ${sections}
       </div>
     `, agency),
+    metadata: {
+      totalComments,
+      windowLabel: opts.windowLabel,
+      groupCount: opts.groups.length,
+    },
   });
-
-  trackUsage({
-    service: 'resend',
-    model: 'email-api',
-    feature: 'email_delivery',
-    inputTokens: 0,
-    outputTokens: 0,
-    totalTokens: 0,
-    costUsd: 0,
-  });
-
-  return result;
 }
 
 // ── Calendar reminder cadence (no-open / no-action / final-call) ────────────
@@ -709,13 +772,18 @@ export async function sendCalendarNoOpenReminderEmail(opts: {
   shareUrl: string;
   hours: number;
   agency?: AgencyBrand;
+  clientId?: string;
+  dropId?: string;
 }) {
   const agency = opts.agency ?? 'nativz';
   const subject = `Friendly nudge — your content calendar is ready to review`;
-  const result = await (await getResend()).emails.send({
-    from: getFromAddress(agency),
-    replyTo: getReplyTo(agency),
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: 'calendar_no_open_reminder',
+    agency,
     to: opts.to,
+    clientId: opts.clientId,
+    dropId: opts.dropId,
     subject,
     html: layout(`
       <div class="card">
@@ -726,19 +794,8 @@ export async function sendCalendarNoOpenReminderEmail(opts: {
         </div>
       </div>
     `, agency),
+    metadata: { clientName: opts.clientName, hours: opts.hours },
   });
-
-  trackUsage({
-    service: 'resend',
-    model: 'email-api',
-    feature: 'email_delivery',
-    inputTokens: 0,
-    outputTokens: 0,
-    totalTokens: 0,
-    costUsd: 0,
-  });
-
-  return result;
 }
 
 export async function sendCalendarNoActionReminderEmail(opts: {
@@ -747,13 +804,18 @@ export async function sendCalendarNoActionReminderEmail(opts: {
   shareUrl: string;
   hours: number;
   agency?: AgencyBrand;
+  clientId?: string;
+  dropId?: string;
 }) {
   const agency = opts.agency ?? 'nativz';
   const subject = `Quick check-in on your content calendar`;
-  const result = await (await getResend()).emails.send({
-    from: getFromAddress(agency),
-    replyTo: getReplyTo(agency),
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: 'calendar_no_action_reminder',
+    agency,
     to: opts.to,
+    clientId: opts.clientId,
+    dropId: opts.dropId,
     subject,
     html: layout(`
       <div class="card">
@@ -764,19 +826,8 @@ export async function sendCalendarNoActionReminderEmail(opts: {
         </div>
       </div>
     `, agency),
+    metadata: { clientName: opts.clientName, hours: opts.hours },
   });
-
-  trackUsage({
-    service: 'resend',
-    model: 'email-api',
-    feature: 'email_delivery',
-    inputTokens: 0,
-    outputTokens: 0,
-    totalTokens: 0,
-    costUsd: 0,
-  });
-
-  return result;
 }
 
 export async function sendCalendarFinalCallEmail(opts: {
@@ -785,13 +836,18 @@ export async function sendCalendarFinalCallEmail(opts: {
   shareUrl: string;
   firstPostAt: string;
   agency?: AgencyBrand;
+  clientId?: string;
+  dropId?: string;
 }) {
   const agency = opts.agency ?? 'nativz';
   const subject = `Heads up — first post goes live ${opts.firstPostAt}`;
-  const result = await (await getResend()).emails.send({
-    from: getFromAddress(agency),
-    replyTo: getReplyTo(agency),
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: 'calendar_final_call',
+    agency,
     to: opts.to,
+    clientId: opts.clientId,
+    dropId: opts.dropId,
     subject,
     html: layout(`
       <div class="card">
@@ -803,19 +859,8 @@ export async function sendCalendarFinalCallEmail(opts: {
         </div>
       </div>
     `, agency),
+    metadata: { clientName: opts.clientName, firstPostAt: opts.firstPostAt },
   });
-
-  trackUsage({
-    service: 'resend',
-    model: 'email-api',
-    feature: 'email_delivery',
-    inputTokens: 0,
-    outputTokens: 0,
-    totalTokens: 0,
-    costUsd: 0,
-  });
-
-  return result;
 }
 
 /**
@@ -842,6 +887,8 @@ export async function sendCalendarDeliveryEmail(opts: {
   firstRoundIntro?: boolean;
   agency?: AgencyBrand;
   cc?: string | string[];
+  clientId?: string;
+  dropId?: string;
 }) {
   const agency = opts.agency ?? 'nativz';
   const isAC = agency === 'anderson';
@@ -864,43 +911,45 @@ export async function sendCalendarDeliveryEmail(opts: {
 
   const subject = `Your ${monthLabel} content calendar from ${isAC ? 'Anderson Collaborative' : 'Nativz'} is ready`;
 
-  const result = await (await getResend()).emails.send({
-    from: getFromAddress(agency),
-    replyTo,
+  const html = layout(`
+    <div class="card">
+      <h1 class="heading" style="text-align:center;">Your ${monthLabel} content calendar is ready</h1>
+      <p class="subtext" style="text-align:center;">
+        ${greeting}, ${teamShort} just dropped <span class="highlight">${opts.postCount} posts</span>
+        for you to review, scheduled across ${formatDateLabel(opts.startDate)} to ${formatDateLabel(opts.endDate)}.
+        Tap the button below to watch the videos, read the captions, and approve or
+        request changes one post at a time.
+      </p>
+      ${introBlock}
+      <div class="button-wrap">
+        <a href="${opts.shareUrl}" class="button">Open content calendar &rarr;</a>
+      </div>
+      <p class="small" style="text-align:center; margin-top:24px;">
+        Questions or want to chat about a post? Just reply to this email and it'll come straight to ${replyTo}.
+      </p>
+    </div>
+  `, agency);
+
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: 'calendar_delivery',
+    agency,
     to: opts.to,
     cc: opts.cc,
     subject,
-    html: layout(`
-      <div class="card">
-        <h1 class="heading" style="text-align:center;">Your ${monthLabel} content calendar is ready</h1>
-        <p class="subtext" style="text-align:center;">
-          ${greeting}, ${teamShort} just dropped <span class="highlight">${opts.postCount} posts</span>
-          for you to review, scheduled across ${formatDateLabel(opts.startDate)} to ${formatDateLabel(opts.endDate)}.
-          Tap the button below to watch the videos, read the captions, and approve or
-          request changes one post at a time.
-        </p>
-        ${introBlock}
-        <div class="button-wrap">
-          <a href="${opts.shareUrl}" class="button">Open content calendar &rarr;</a>
-        </div>
-        <p class="small" style="text-align:center; margin-top:24px;">
-          Questions or want to chat about a post? Just reply to this email and it'll come straight to ${replyTo}.
-        </p>
-      </div>
-    `, agency),
+    html,
+    replyToOverride: replyTo,
+    clientId: opts.clientId,
+    dropId: opts.dropId,
+    metadata: {
+      clientName: opts.clientName,
+      postCount: opts.postCount,
+      startDate: opts.startDate,
+      endDate: opts.endDate,
+      firstRoundIntro: !!opts.firstRoundIntro,
+      pocFirstNames: opts.pocFirstNames,
+    },
   });
-
-  trackUsage({
-    service: 'resend',
-    model: 'email-api',
-    feature: 'email_delivery',
-    inputTokens: 0,
-    outputTokens: 0,
-    totalTokens: 0,
-    costUsd: 0,
-  });
-
-  return result;
 }
 
 /**
@@ -965,42 +1014,39 @@ export async function sendCombinedCalendarDeliveryEmail(opts: {
 
   const subject = `Your ${monthLabel} content calendars from ${isAC ? 'Anderson Collaborative' : 'Nativz'} are ready`;
 
-  const result = await (await getResend()).emails.send({
-    from: getFromAddress(agency),
-    replyTo,
+  const html = layout(`
+    <div class="card">
+      <h1 class="heading" style="text-align:center;">Your ${monthLabel} content calendars are ready</h1>
+      <p class="subtext" style="text-align:center;">
+        ${greeting}, ${teamShort} just dropped fresh calendars for ${brandList}.
+        Each one has its own button below — tap in to watch the videos, read the
+        captions, and approve or request changes one post at a time.
+      </p>
+      ${introBlock}
+    </div>
+    ${calendarSections}
+    <div class="card" style="margin-top:16px;">
+      <p class="small" style="text-align:center;">
+        Questions or want to chat about a post? Just reply to this email and it'll come straight to ${replyTo}.
+      </p>
+    </div>
+  `, agency);
+
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: 'calendar_delivery_combined',
+    agency,
     to: opts.to,
     cc: opts.cc,
     subject,
-    html: layout(`
-      <div class="card">
-        <h1 class="heading" style="text-align:center;">Your ${monthLabel} content calendars are ready</h1>
-        <p class="subtext" style="text-align:center;">
-          ${greeting}, ${teamShort} just dropped fresh calendars for ${brandList}.
-          Each one has its own button below — tap in to watch the videos, read the
-          captions, and approve or request changes one post at a time.
-        </p>
-        ${introBlock}
-      </div>
-      ${calendarSections}
-      <div class="card" style="margin-top:16px;">
-        <p class="small" style="text-align:center;">
-          Questions or want to chat about a post? Just reply to this email and it'll come straight to ${replyTo}.
-        </p>
-      </div>
-    `, agency),
+    html,
+    replyToOverride: replyTo,
+    metadata: {
+      pocFirstNames: opts.pocFirstNames,
+      calendars: opts.calendars,
+      firstRoundIntro: !!opts.firstRoundIntro,
+    },
   });
-
-  trackUsage({
-    service: 'resend',
-    model: 'email-api',
-    feature: 'email_delivery',
-    inputTokens: 0,
-    outputTokens: 0,
-    totalTokens: 0,
-    costUsd: 0,
-  });
-
-  return result;
 }
 
 function humanizeNameList(names: string[]): string {
@@ -1023,36 +1069,34 @@ export async function sendCalendarRevisionsCompleteEmail(opts: {
   clientName: string;
   shareUrl: string;
   agency?: AgencyBrand;
+  clientId?: string;
+  dropId?: string;
 }) {
   const agency = opts.agency ?? 'nativz';
   const subject = 'Your revisions are ready to review';
-  const result = await (await getResend()).emails.send({
-    from: getFromAddress(agency),
-    replyTo: getReplyTo(agency),
+  const html = layout(`
+    <div class="card">
+      <h1 class="heading">Revisions complete</h1>
+      <p class="subtext">Hey ${opts.clientName} — we've worked through every change you flagged. Hop back in to take a final look and approve the posts you're happy with.</p>
+      <div style="margin-top:18px;">
+        <a href="${opts.shareUrl}" class="btn">Review the updated posts</a>
+      </div>
+    </div>
+  `, agency);
+
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: 'calendar_revisions_complete',
+    agency,
     to: opts.to,
     subject,
-    html: layout(`
-      <div class="card">
-        <h1 class="heading">Revisions complete</h1>
-        <p class="subtext">Hey ${opts.clientName} — we've worked through every change you flagged. Hop back in to take a final look and approve the posts you're happy with.</p>
-        <div style="margin-top:18px;">
-          <a href="${opts.shareUrl}" class="btn">Review the updated posts</a>
-        </div>
-      </div>
-    `, agency),
+    html,
+    clientId: opts.clientId,
+    dropId: opts.dropId,
+    metadata: {
+      clientName: opts.clientName,
+    },
   });
-
-  trackUsage({
-    service: 'resend',
-    model: 'email-api',
-    feature: 'email_delivery',
-    inputTokens: 0,
-    outputTokens: 0,
-    totalTokens: 0,
-    costUsd: 0,
-  });
-
-  return result;
 }
 
 // ── Post-health alert (ops digest) ────────────────────────────────────────────
@@ -1124,37 +1168,42 @@ export async function sendPostHealthAlertEmail(opts: {
   if (disconnects.length > 0) subjectParts.push(`${disconnects.length} disconnect${disconnects.length === 1 ? '' : 's'}`);
   const subject = `[Cortex] ${subjectParts.join(' · ')}`;
 
-  const result = await (await getResend()).emails.send({
-    from: getFromAddress('nativz'),
-    replyTo: getReplyTo('nativz'),
+  const html = layout(`
+    <div class="card">
+      <h1 class="heading">Posting health alert</h1>
+      <p class="subtext">
+        The post-health cron picked up new issues. Each row fires once — re-posts and reconnects clear automatically.
+      </p>
+      ${failedSection}
+      ${disconnectSection}
+      <div class="button-wrap">
+        <a href="https://cortex.nativz.io/admin/calendar" class="button">Open the calendar &rarr;</a>
+      </div>
+    </div>
+  `, 'nativz');
+
+  return sendAndLog({
+    category: 'system',
+    typeKey: 'post_health_alert',
+    agency: 'nativz',
     to: opts.to,
     subject,
-    html: layout(`
-      <div class="card">
-        <h1 class="heading">Posting health alert</h1>
-        <p class="subtext">
-          The post-health cron picked up new issues. Each row fires once — re-posts and reconnects clear automatically.
-        </p>
-        ${failedSection}
-        ${disconnectSection}
-        <div class="button-wrap">
-          <a href="https://cortex.nativz.io/admin/calendar" class="button">Open the calendar &rarr;</a>
-        </div>
-      </div>
-    `, 'nativz'),
+    html,
+    metadata: {
+      failedCount: failedPosts.length,
+      disconnectCount: disconnects.length,
+      failedPosts: failedPosts.map((p) => ({
+        postId: p.postId,
+        clientName: p.clientName,
+        retryCount: p.retryCount,
+      })),
+      disconnects: disconnects.map((d) => ({
+        profileId: d.profileId,
+        clientName: d.clientName,
+        platform: d.platform,
+      })),
+    },
   });
-
-  trackUsage({
-    service: 'resend',
-    model: 'email-api',
-    feature: 'email_delivery',
-    inputTokens: 0,
-    outputTokens: 0,
-    totalTokens: 0,
-    costUsd: 0,
-  });
-
-  return result;
 }
 
 function escapeAlertHtml(s: string): string {

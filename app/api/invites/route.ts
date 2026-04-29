@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
         });
         if (res.error) {
           emailStatus = 'failed';
-          emailError = res.error.message ?? 'resend error';
+          emailError = res.error;
           console.warn('[invites] send failed:', emailError);
         } else {
           emailStatus = 'sent';

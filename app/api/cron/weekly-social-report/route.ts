@@ -178,7 +178,7 @@ async function handler(request: NextRequest) {
             name: c.name ?? c.id,
             ok: false,
             step: 'email',
-            error: sendResult.error.message,
+            error: sendResult.error,
           });
           continue;
         }
@@ -187,7 +187,7 @@ async function handler(request: NextRequest) {
           clientId: c.id,
           name: c.name ?? c.id,
           ok: true,
-          messageId: sendResult.data?.id,
+          messageId: sendResult.messageId ?? undefined,
           recipients: to,
         });
 

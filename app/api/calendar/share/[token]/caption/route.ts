@@ -103,9 +103,9 @@ async function notifyAdminsOfCaptionEdit(
 ) {
   const { data: drop } = await admin
     .from('content_drops')
-    .select('id, created_by, clients(name)')
+    .select('id, created_by, client_id, clients(name)')
     .eq('id', dropId)
-    .single<{ id: string; created_by: string; clients: { name: string } | null }>();
+    .single<{ id: string; created_by: string; client_id: string | null; clients: { name: string } | null }>();
   if (!drop) return;
 
   const clientName = drop.clients?.name ?? 'Client';
@@ -137,6 +137,8 @@ async function notifyAdminsOfCaptionEdit(
       status: 'comment',
       contentPreview: `Edited caption: ${preview}`,
       dropUrl: `${appUrl}${linkPath}`,
+      clientId: drop.client_id ?? undefined,
+      dropId: drop.id,
     }).catch((err) => console.error('Caption-edit email send failed:', err));
   }
 }

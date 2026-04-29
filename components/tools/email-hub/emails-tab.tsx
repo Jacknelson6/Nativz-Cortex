@@ -6,11 +6,14 @@ import {
   AlertCircle,
   Ban,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock,
   Eye,
   FileEdit,
   Mail,
   MessageSquare,
+  MousePointerClick,
   Search,
   Send,
   UserX,
@@ -25,12 +28,17 @@ type Stats = {
   sent: number;
   delivered: number;
   opened: number;
+  clicked: number;
   replied: number;
   unsubscribed: number;
   bounced: number;
   failed: number;
   totalSent: number;
+  campaign: number;
+  transactional: number;
+  system: number;
   openRate: number;
+  clickRate: number;
   replyRate: number;
   bounceRate: number;
 };
@@ -40,20 +48,38 @@ type MessageRow = {
   campaign_id: string | null;
   contact_id: string | null;
   recipient_email: string;
+  recipient_name: string | null;
   agency: 'nativz' | 'anderson' | null;
   from_address: string | null;
+  from_name: string | null;
+  reply_to_address: string | null;
+  cc: string[] | null;
+  bcc: string[] | null;
   subject: string;
+  resend_id: string | null;
   status: string;
+  category: 'campaign' | 'transactional' | 'system' | null;
+  type_key: string | null;
+  body_html: string | null;
+  client_id: string | null;
+  drop_id: string | null;
   sent_at: string | null;
   delivered_at: string | null;
   opened_at: string | null;
+  last_opened_at: string | null;
   open_count: number;
+  clicked_at: string | null;
+  last_clicked_at: string | null;
+  click_count: number;
   replied_at: string | null;
   bounced_at: string | null;
   failure_reason: string | null;
+  metadata: Record<string, unknown> | null;
   created_at: string;
   campaign: { id: string; name: string } | null;
   contact: { id: string; email: string; full_name: string | null } | null;
+  client: { id: string; name: string } | null;
+  drop: { id: string; start_date: string; end_date: string } | null;
 };
 
 type StatusFilter =
@@ -68,7 +94,9 @@ type StatusFilter =
   | 'failed'
   | 'complained';
 
-type ReplyFilter = 'all' | 'yes' | 'no';
+type CategoryFilter = 'all' | 'campaign' | 'transactional' | 'system';
+
+type TypeRow = { typeKey: string; category: string | null; count: number };
 
 const EMPTY_STATS: Stats = {
   draft: 0,
@@ -76,41 +104,47 @@ const EMPTY_STATS: Stats = {
   sent: 0,
   delivered: 0,
   opened: 0,
+  clicked: 0,
   replied: 0,
   unsubscribed: 0,
   bounced: 0,
   failed: 0,
   totalSent: 0,
+  campaign: 0,
+  transactional: 0,
+  system: 0,
   openRate: 0,
+  clickRate: 0,
   replyRate: 0,
   bounceRate: 0,
 };
 
 export function EmailsTab() {
   const [status, setStatus] = useState<StatusFilter>('all');
-  const [replies, setReplies] = useState<ReplyFilter>('all');
-  const [domain, setDomain] = useState('');
-  const [campaignFilter, setCampaignFilter] = useState<string>('all');
+  const [category, setCategory] = useState<CategoryFilter>('all');
+  const [typeKey, setTypeKey] = useState<string>('all');
+  const [search, setSearch] = useState('');
 
   const params = new URLSearchParams();
   if (status !== 'all') params.set('status', status);
-  if (replies !== 'all') params.set('replies', replies);
-  if (domain.trim()) params.set('domain', domain.trim());
-  if (campaignFilter !== 'all') params.set('campaign', campaignFilter);
+  if (category !== 'all') params.set('category', category);
+  if (typeKey !== 'all') params.set('type', typeKey);
+  if (search.trim()) params.set('q', search.trim());
 
-  const { data, error, isLoading, mutate } = useSWR<{ messages: MessageRow[]; stats: Stats }>(
-    `/api/admin/email-hub/messages?${params.toString()}`,
-  );
+  const { data, error, isLoading, mutate } = useSWR<{
+    messages: MessageRow[];
+    stats: Stats;
+    types: TypeRow[];
+  }>(`/api/admin/email-hub/messages?${params.toString()}`);
   const messages = useMemo(() => data?.messages ?? [], [data]);
   const stats = data?.stats ?? EMPTY_STATS;
 
-  const campaigns = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const m of messages) {
-      if (m.campaign) seen.set(m.campaign.id, m.campaign.name);
-    }
-    return Array.from(seen, ([id, name]) => ({ id, name }));
-  }, [messages]);
+  // Scope the type dropdown to the active category for clarity.
+  const visibleTypes = useMemo(() => {
+    const allTypes = data?.types ?? [];
+    if (category === 'all') return allTypes;
+    return allTypes.filter((t) => t.category === category);
+  }, [data, category]);
 
   return (
     <div className="space-y-5">
@@ -133,32 +167,35 @@ export function EmailsTab() {
             />
             <input
               type="search"
-              value={domain}
-              onChange={(e) => setDomain(e.target.value)}
-              placeholder="Filter by domain…"
-              aria-label="Filter by recipient domain"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search subject or recipient…"
+              aria-label="Search by subject or recipient"
               className="w-full rounded-full border border-nativz-border bg-background px-9 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent/30"
             />
           </div>
 
-          <div className="flex items-center gap-1.5 text-xs" role="group" aria-label="Reply filter">
-            <span className="text-text-muted">Replies:</span>
-            <SegmentedButton
-              active={replies === 'all'}
-              onClick={() => setReplies('all')}
-              label="All"
-            />
-            <SegmentedButton
-              active={replies === 'yes'}
-              onClick={() => setReplies('yes')}
-              label="Yes"
-            />
-            <SegmentedButton
-              active={replies === 'no'}
-              onClick={() => setReplies('no')}
-              label="No"
-            />
+          <div className="flex items-center gap-1.5 text-xs" role="group" aria-label="Category filter">
+            <span className="text-text-muted">Category:</span>
+            <SegmentedButton active={category === 'all'} onClick={() => { setCategory('all'); setTypeKey('all'); }} label="All" />
+            <SegmentedButton active={category === 'transactional'} onClick={() => { setCategory('transactional'); setTypeKey('all'); }} label="Transactional" />
+            <SegmentedButton active={category === 'campaign'} onClick={() => { setCategory('campaign'); setTypeKey('all'); }} label="Campaign" />
+            <SegmentedButton active={category === 'system'} onClick={() => { setCategory('system'); setTypeKey('all'); }} label="System" />
           </div>
+
+          <select
+            value={typeKey}
+            onChange={(e) => setTypeKey(e.target.value)}
+            aria-label="Type filter"
+            className="rounded-full border border-nativz-border bg-background px-3 py-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30"
+          >
+            <option value="all">All types</option>
+            {visibleTypes.map((t) => (
+              <option key={t.typeKey} value={t.typeKey}>
+                {humanizeType(t.typeKey)} ({t.count})
+              </option>
+            ))}
+          </select>
 
           <select
             value={status}
@@ -176,20 +213,6 @@ export function EmailsTab() {
             <option value="bounced">Bounced</option>
             <option value="failed">Failed</option>
             <option value="complained">Unsubscribed</option>
-          </select>
-
-          <select
-            value={campaignFilter}
-            onChange={(e) => setCampaignFilter(e.target.value)}
-            aria-label="Campaign filter"
-            className="rounded-full border border-nativz-border bg-background px-3 py-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30"
-          >
-            <option value="all">All campaigns</option>
-            {campaigns.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
           </select>
         </div>
 
@@ -223,12 +246,6 @@ function SegmentedButton({
   );
 }
 
-/**
- * Three semantic clusters instead of one 8-card grid. Pipeline is the work
- * still in flight; Engagement is positive outcomes; Issues are problems that
- * need attention. Each cluster has its own visual treatment so the eye picks
- * out problems without scanning a uniform monoculture.
- */
 function StatsClusters({ stats }: { stats: Stats }) {
   const clusters: { title: string; tone: StatusTone; cards: ClusterCard[] }[] = [
     {
@@ -245,6 +262,7 @@ function StatsClusters({ stats }: { stats: Stats }) {
       tone: 'success',
       cards: [
         { label: 'Opened', value: stats.opened, icon: Eye, tone: 'info' },
+        { label: 'Clicked', value: stats.clicked, icon: MousePointerClick, tone: 'success' },
         { label: 'Replied', value: stats.replied, icon: MessageSquare, tone: 'success' },
       ],
     },
@@ -302,7 +320,7 @@ function RatesGrid({ stats }: { stats: Stats }) {
   const rates: { label: string; value: string; icon: typeof Send; tone: StatusTone }[] = [
     { label: 'Total sent', value: `${stats.totalSent}`, icon: Send, tone: 'neutral' },
     { label: 'Open rate', value: `${stats.openRate.toFixed(1)}%`, icon: Eye, tone: 'info' },
-    { label: 'Reply rate', value: `${stats.replyRate.toFixed(1)}%`, icon: MessageSquare, tone: 'success' },
+    { label: 'Click rate', value: `${stats.clickRate.toFixed(1)}%`, icon: MousePointerClick, tone: 'success' },
     { label: 'Bounce rate', value: `${stats.bounceRate.toFixed(1)}%`, icon: XCircle, tone: 'warning' },
   ];
   return (
@@ -360,10 +378,9 @@ function MessageList({
           <Mail size={22} className="text-accent-text" />
         </div>
         <div>
-          <h3 className="text-base font-semibold text-text-primary">No emails yet</h3>
+          <h3 className="text-base font-semibold text-text-primary">No emails match</h3>
           <p className="mt-1 max-w-md text-sm text-text-muted">
-            Start by creating a campaign or sending outreach emails. All your sent emails
-            will appear here.
+            Try a different status, category, or search term — every email Cortex sends shows up here.
           </p>
         </div>
       </div>
@@ -372,37 +389,145 @@ function MessageList({
   return (
     <ul className="divide-y divide-nativz-border">
       {messages.map((m) => (
-        <li key={m.id} className="px-5 py-3.5 flex items-center gap-3 hover:bg-surface/40">
-          <StatusDot status={m.status} replied={Boolean(m.replied_at)} />
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-text-primary truncate">{m.subject}</p>
-            <p className="text-xs text-text-muted truncate">
-              {m.contact?.full_name ? `${m.contact.full_name} • ` : ''}
-              {m.recipient_email}
-              {m.campaign?.name ? ` • ${m.campaign.name}` : ''}
-            </p>
-          </div>
-          <div className="flex items-center gap-3 text-xs text-text-muted shrink-0">
-            {m.open_count > 0 ? (
-              <span className="inline-flex items-center gap-1">
-                <Eye size={12} /> {m.open_count}
-              </span>
-            ) : null}
-            {m.replied_at ? (
-              <span className="inline-flex items-center gap-1 text-emerald-500">
-                <MessageSquare size={12} /> replied
-              </span>
-            ) : null}
-            {m.bounced_at ? (
-              <span className="inline-flex items-center gap-1 text-rose-500">
-                <Ban size={12} /> bounced
-              </span>
-            ) : null}
-            <time className="tabular-nums">{formatRel(m.sent_at ?? m.created_at)}</time>
-          </div>
-        </li>
+        <MessageRowItem key={m.id} message={m} />
       ))}
     </ul>
+  );
+}
+
+function MessageRowItem({ message: m }: { message: MessageRow }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <li className="px-5 py-3.5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-3 text-left hover:bg-surface/40 rounded -mx-2 px-2 py-1"
+      >
+        {open ? (
+          <ChevronDown size={14} className="text-text-muted shrink-0" />
+        ) : (
+          <ChevronRight size={14} className="text-text-muted shrink-0" />
+        )}
+        <StatusDot status={m.status} replied={Boolean(m.replied_at)} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium text-text-primary truncate">{m.subject}</p>
+            <CategoryPill category={m.category} typeKey={m.type_key} />
+          </div>
+          <p className="text-xs text-text-muted truncate">
+            {m.recipient_name ? `${m.recipient_name} • ` : ''}
+            {m.recipient_email}
+            {m.client?.name ? ` • ${m.client.name}` : ''}
+            {m.campaign?.name ? ` • ${m.campaign.name}` : ''}
+          </p>
+        </div>
+        <div className="flex items-center gap-3 text-xs text-text-muted shrink-0">
+          {m.open_count > 0 ? (
+            <span className="inline-flex items-center gap-1">
+              <Eye size={12} /> {m.open_count}
+            </span>
+          ) : null}
+          {m.click_count > 0 ? (
+            <span className="inline-flex items-center gap-1 text-emerald-500">
+              <MousePointerClick size={12} /> {m.click_count}
+            </span>
+          ) : null}
+          {m.replied_at ? (
+            <span className="inline-flex items-center gap-1 text-emerald-500">
+              <MessageSquare size={12} /> replied
+            </span>
+          ) : null}
+          {m.bounced_at ? (
+            <span className="inline-flex items-center gap-1 text-rose-500">
+              <Ban size={12} /> bounced
+            </span>
+          ) : null}
+          <time className="tabular-nums">{formatRel(m.sent_at ?? m.created_at)}</time>
+        </div>
+      </button>
+      {open ? <ExpandedMessage message={m} /> : null}
+    </li>
+  );
+}
+
+function CategoryPill({ category, typeKey }: { category: string | null; typeKey: string | null }) {
+  if (!category && !typeKey) return null;
+  const tone =
+    category === 'transactional'
+      ? 'bg-accent-surface text-accent-text'
+      : category === 'system'
+      ? 'bg-amber-500/10 text-amber-400'
+      : 'bg-emerald-500/10 text-emerald-400';
+  const label = typeKey ? humanizeType(typeKey) : (category ?? '');
+  return (
+    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${tone}`}>
+      {label}
+    </span>
+  );
+}
+
+function ExpandedMessage({ message: m }: { message: MessageRow }) {
+  return (
+    <div className="mt-3 grid gap-3 lg:grid-cols-[260px_1fr]">
+      <dl className="rounded-xl border border-nativz-border bg-background/40 p-3 text-xs space-y-1.5">
+        <Detail label="Status" value={m.status} />
+        {m.category ? <Detail label="Category" value={m.category} /> : null}
+        {m.type_key ? <Detail label="Type" value={humanizeType(m.type_key)} /> : null}
+        {m.from_address ? <Detail label="From" value={m.from_address} /> : null}
+        {m.reply_to_address ? <Detail label="Reply-to" value={m.reply_to_address} /> : null}
+        <Detail label="To" value={m.recipient_email} />
+        {m.cc && m.cc.length > 0 ? <Detail label="CC" value={m.cc.join(', ')} /> : null}
+        {m.bcc && m.bcc.length > 0 ? <Detail label="BCC" value={m.bcc.join(', ')} /> : null}
+        {m.client?.name ? <Detail label="Client" value={m.client.name} /> : null}
+        {m.drop?.id ? <Detail label="Calendar" value={`${m.drop.start_date} → ${m.drop.end_date}`} /> : null}
+        {m.sent_at ? <Detail label="Sent" value={new Date(m.sent_at).toLocaleString()} /> : null}
+        {m.opened_at ? <Detail label="Opened" value={`${new Date(m.opened_at).toLocaleString()}${m.open_count > 1 ? ` (${m.open_count}×)` : ''}`} /> : null}
+        {m.clicked_at ? <Detail label="Clicked" value={`${new Date(m.clicked_at).toLocaleString()}${m.click_count > 1 ? ` (${m.click_count}×)` : ''}`} /> : null}
+        {m.bounced_at ? <Detail label="Bounced" value={new Date(m.bounced_at).toLocaleString()} /> : null}
+        {m.failure_reason ? <Detail label="Failure" value={m.failure_reason} tone="danger" /> : null}
+        {m.resend_id ? <Detail label="Resend ID" value={m.resend_id} mono /> : null}
+      </dl>
+      <div className="rounded-xl border border-nativz-border bg-background/40 overflow-hidden">
+        {m.body_html ? (
+          <iframe
+            srcDoc={m.body_html}
+            sandbox=""
+            title={`Preview of ${m.subject}`}
+            className="w-full h-[480px] bg-white"
+          />
+        ) : (
+          <div className="px-4 py-12 text-center text-xs text-text-muted">
+            No HTML preview captured for this email.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Detail({
+  label,
+  value,
+  mono,
+  tone,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  tone?: 'danger';
+}) {
+  return (
+    <div className="flex gap-2">
+      <dt className="w-20 shrink-0 text-[10px] uppercase tracking-wider text-text-muted">{label}</dt>
+      <dd
+        className={`min-w-0 flex-1 break-words ${
+          mono ? 'font-mono text-[11px]' : ''
+        } ${tone === 'danger' ? 'text-rose-400' : 'text-text-primary'}`}
+      >
+        {value}
+      </dd>
+    </div>
   );
 }
 
@@ -420,6 +545,13 @@ function StatusDot({ status, replied }: { status: string; replied: boolean }) {
     return <Clock size={16} className="text-text-secondary shrink-0" />;
   }
   return <FileEdit size={16} className="text-text-muted shrink-0" />;
+}
+
+function humanizeType(key: string): string {
+  return key
+    .split('_')
+    .map((p) => (p.length === 0 ? '' : p[0].toUpperCase() + p.slice(1)))
+    .join(' ');
 }
 
 function formatRel(iso: string | null): string {

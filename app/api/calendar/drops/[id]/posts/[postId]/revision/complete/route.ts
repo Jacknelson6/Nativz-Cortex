@@ -204,6 +204,8 @@ async function maybeSendRevisionsCompleteEmail(opts: {
         clientName: client.name,
         shareUrl,
         agency: brand,
+        clientId: client.id,
+        dropId: opts.dropId,
       }),
     ),
   );

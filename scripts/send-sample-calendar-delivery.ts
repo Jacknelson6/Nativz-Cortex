@@ -120,7 +120,7 @@ async function main() {
     if (result.error) {
       console.error(`  ✗ failed:`, result.error);
     } else {
-      console.log(`  ✓ sent — id=${result.data?.id}`);
+      console.log(`  ✓ sent — id=${result.messageId}`);
     }
   }
 }

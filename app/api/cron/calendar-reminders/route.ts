@@ -174,6 +174,8 @@ async function handleGet(request: NextRequest) {
             shareUrl,
             hours: Math.round(ageHours),
             agency: brand,
+            clientId: client.id,
+            dropId: link.drop_id,
           })),
         );
         await admin
@@ -204,6 +206,8 @@ async function handleGet(request: NextRequest) {
               shareUrl,
               hours: Math.round(ageHours),
               agency: brand,
+              clientId: client.id,
+              dropId: link.drop_id,
             })),
           );
           await admin
@@ -238,6 +242,8 @@ async function handleGet(request: NextRequest) {
                 shareUrl,
                 firstPostAt: firstPostLabel,
                 agency: brand,
+                clientId: client.id,
+                dropId: link.drop_id,
               })),
             );
             // Chat the client space.

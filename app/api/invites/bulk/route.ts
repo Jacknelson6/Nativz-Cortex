@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
             agency,
           });
           if (res.error) {
-            const errMsg = res.error.message ?? JSON.stringify(res.error);
+            const errMsg = res.error;
             console.warn(`[invites/bulk] resend failed for ${contact.email}:`, errMsg);
             return {
               email: contact.email,

@@ -561,22 +561,6 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   },
   {
     "method": "GET",
-    "path": "/api/admin/email-hub/campaigns",
-    "description": "",
-    "auth": "",
-    "section": "Admin Ops",
-    "sectionSlug": "admin"
-  },
-  {
-    "method": "POST",
-    "path": "/api/admin/email-hub/campaigns",
-    "description": "",
-    "auth": "",
-    "section": "Admin Ops",
-    "sectionSlug": "admin"
-  },
-  {
-    "method": "GET",
     "path": "/api/admin/email-hub/contacts",
     "description": "",
     "auth": "",
@@ -625,127 +609,7 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   },
   {
     "method": "GET",
-    "path": "/api/admin/email-hub/lists",
-    "description": "",
-    "auth": "",
-    "section": "Admin Ops",
-    "sectionSlug": "admin"
-  },
-  {
-    "method": "POST",
-    "path": "/api/admin/email-hub/lists",
-    "description": "",
-    "auth": "",
-    "section": "Admin Ops",
-    "sectionSlug": "admin"
-  },
-  {
-    "method": "DELETE",
-    "path": "/api/admin/email-hub/lists/:id",
-    "description": "",
-    "auth": "",
-    "section": "Admin Ops",
-    "sectionSlug": "admin"
-  },
-  {
-    "method": "GET",
-    "path": "/api/admin/email-hub/lists/:id",
-    "description": "",
-    "auth": "",
-    "section": "Admin Ops",
-    "sectionSlug": "admin"
-  },
-  {
-    "method": "PATCH",
-    "path": "/api/admin/email-hub/lists/:id",
-    "description": "",
-    "auth": "",
-    "section": "Admin Ops",
-    "sectionSlug": "admin"
-  },
-  {
-    "method": "DELETE",
-    "path": "/api/admin/email-hub/lists/:id/members",
-    "description": "",
-    "auth": "",
-    "section": "Admin Ops",
-    "sectionSlug": "admin"
-  },
-  {
-    "method": "POST",
-    "path": "/api/admin/email-hub/lists/:id/members",
-    "description": "",
-    "auth": "",
-    "section": "Admin Ops",
-    "sectionSlug": "admin"
-  },
-  {
-    "method": "GET",
     "path": "/api/admin/email-hub/messages",
-    "description": "",
-    "auth": "",
-    "section": "Admin Ops",
-    "sectionSlug": "admin"
-  },
-  {
-    "method": "GET",
-    "path": "/api/admin/email-hub/sequences",
-    "description": "",
-    "auth": "",
-    "section": "Admin Ops",
-    "sectionSlug": "admin"
-  },
-  {
-    "method": "POST",
-    "path": "/api/admin/email-hub/sequences",
-    "description": "",
-    "auth": "",
-    "section": "Admin Ops",
-    "sectionSlug": "admin"
-  },
-  {
-    "method": "DELETE",
-    "path": "/api/admin/email-hub/sequences/:id",
-    "description": "",
-    "auth": "",
-    "section": "Admin Ops",
-    "sectionSlug": "admin"
-  },
-  {
-    "method": "GET",
-    "path": "/api/admin/email-hub/sequences/:id",
-    "description": "",
-    "auth": "",
-    "section": "Admin Ops",
-    "sectionSlug": "admin"
-  },
-  {
-    "method": "PATCH",
-    "path": "/api/admin/email-hub/sequences/:id",
-    "description": "",
-    "auth": "",
-    "section": "Admin Ops",
-    "sectionSlug": "admin"
-  },
-  {
-    "method": "POST",
-    "path": "/api/admin/email-hub/sequences/:id/enroll",
-    "description": "",
-    "auth": "",
-    "section": "Admin Ops",
-    "sectionSlug": "admin"
-  },
-  {
-    "method": "GET",
-    "path": "/api/admin/email-hub/setup",
-    "description": "Returns the configured sender identities per agency + webhook health. Read-only — Resend domain verification is configured in the Resend dashboard, not here.",
-    "auth": "",
-    "section": "Admin Ops",
-    "sectionSlug": "admin"
-  },
-  {
-    "method": "POST",
-    "path": "/api/admin/email-hub/setup/test-send",
     "description": "",
     "auth": "",
     "section": "Admin Ops",
@@ -795,6 +659,30 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     "method": "GET",
     "path": "/api/admin/errors",
     "description": "GET /api/admin/errors — recent API errors (super_admin only)",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/notifications/:key",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/admin/notifications/:key",
+    "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/notifications/:key/preview",
+    "description": "",
     "auth": "",
     "section": "Admin Ops",
     "sectionSlug": "admin"
@@ -1059,6 +947,14 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     "method": "PUT",
     "path": "/api/admin/secrets/:key",
     "description": "",
+    "auth": "",
+    "section": "Admin Ops",
+    "sectionSlug": "admin"
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/topic-search-llm-cost",
+    "description": "Estimated LLM cost for one topic search: - currently configured topic-search model (from agency_settings) - that model's per-1M-token pricing (cached OpenRouter catalog) - empirical avg input/output tokens per search over the last 30 days - resulting estimated $/search Token averages come from `api_usage_logs` rows where `feature` starts with `topic_search`, divided by the number of completed `topic_searches` in the same window. If the sample is empty we fall back to coarse defaults so the card never blanks out — `sampleSize` lets the UI flag low-confidence math.",
     "auth": "",
     "section": "Admin Ops",
     "sectionSlug": "admin"
@@ -2197,6 +2093,22 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     "path": "/api/clients/:id/brand-profile",
     "description": "Update one or many brand-profile fields. Only fields included in the body get updated — omit to leave untouched, pass null to clear.",
     "auth": "Admin only.",
+    "section": "Clients & Onboarding",
+    "sectionSlug": "clients"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/clients/:id/chat-webhook",
+    "description": "Disconnect the Google Chat webhook for a client.",
+    "auth": "Required (admin)",
+    "section": "Clients & Onboarding",
+    "sectionSlug": "clients"
+  },
+  {
+    "method": "POST",
+    "path": "/api/clients/:id/chat-webhook",
+    "description": "Save a Google Chat incoming-webhook URL on a client record. Sends a test \"connected\" message to verify the URL works before persisting.",
+    "auth": "Required (admin)",
     "section": "Clients & Onboarding",
     "sectionSlug": "clients"
   },
@@ -5144,7 +5056,7 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   {
     "method": "GET",
     "path": "/api/settings/openrouter-models",
-    "description": "Fetch all OpenRouter models with pricing and capability info. Cached server-side for 10 minutes to avoid hammering the API.",
+    "description": "Returns the cached OpenRouter catalog from the `openrouter_models` table (refreshed twice monthly by /api/cron/refresh-openrouter-models). Falls back to a single live fetch on cold cache.",
     "auth": "Required (any authenticated user)",
     "section": "Settings",
     "sectionSlug": "settings"
@@ -5222,6 +5134,110 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   },
   {
     "method": "GET",
+    "path": "/api/calendar/drops",
+    "description": "",
+    "auth": "",
+    "section": "Shoots & Calendar",
+    "sectionSlug": "shoots"
+  },
+  {
+    "method": "POST",
+    "path": "/api/calendar/drops",
+    "description": "",
+    "auth": "",
+    "section": "Shoots & Calendar",
+    "sectionSlug": "shoots"
+  },
+  {
+    "method": "GET",
+    "path": "/api/calendar/drops/:id",
+    "description": "",
+    "auth": "",
+    "section": "Shoots & Calendar",
+    "sectionSlug": "shoots"
+  },
+  {
+    "method": "POST",
+    "path": "/api/calendar/drops/:id/posts/:postId/revision/complete",
+    "description": "Admin-only. Stamps `revisions_completed_at` on every `post_review_links` row tied to this post (across all share links for the drop). When this resolves the last open `changes_requested` in the drop, fires the `calendar_revisions_complete` event email to portal users for the client.",
+    "auth": "",
+    "section": "Shoots & Calendar",
+    "sectionSlug": "shoots"
+  },
+  {
+    "method": "POST",
+    "path": "/api/calendar/drops/:id/posts/:postId/revision/upload",
+    "description": "Admin-only. Accepts a re-cut video for a single scheduled post inside a content drop. Stores the new file under `scheduler-media/drops/{dropId}/{videoId}-rev-{n}.{ext}` and stamps `revised_video_url` / `revised_video_uploaded_at` / `revised_video_uploaded_by` on the matching `content_drop_videos` row.",
+    "auth": "",
+    "section": "Shoots & Calendar",
+    "sectionSlug": "shoots"
+  },
+  {
+    "method": "POST",
+    "path": "/api/calendar/drops/:id/process",
+    "description": "",
+    "auth": "",
+    "section": "Shoots & Calendar",
+    "sectionSlug": "shoots"
+  },
+  {
+    "method": "POST",
+    "path": "/api/calendar/drops/:id/schedule",
+    "description": "",
+    "auth": "",
+    "section": "Shoots & Calendar",
+    "sectionSlug": "shoots"
+  },
+  {
+    "method": "GET",
+    "path": "/api/calendar/drops/:id/share",
+    "description": "",
+    "auth": "",
+    "section": "Shoots & Calendar",
+    "sectionSlug": "shoots"
+  },
+  {
+    "method": "POST",
+    "path": "/api/calendar/drops/:id/share",
+    "description": "",
+    "auth": "",
+    "section": "Shoots & Calendar",
+    "sectionSlug": "shoots"
+  },
+  {
+    "method": "POST",
+    "path": "/api/calendar/drops/:id/share/:linkId/revoke",
+    "description": "",
+    "auth": "",
+    "section": "Shoots & Calendar",
+    "sectionSlug": "shoots"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/calendar/drops/:id/videos/:videoId",
+    "description": "",
+    "auth": "",
+    "section": "Shoots & Calendar",
+    "sectionSlug": "shoots"
+  },
+  {
+    "method": "POST",
+    "path": "/api/calendar/drops/:id/videos/:videoId/retry",
+    "description": "",
+    "auth": "",
+    "section": "Shoots & Calendar",
+    "sectionSlug": "shoots"
+  },
+  {
+    "method": "GET",
+    "path": "/api/calendar/drops/active-brands",
+    "description": "",
+    "auth": "",
+    "section": "Shoots & Calendar",
+    "sectionSlug": "shoots"
+  },
+  {
+    "method": "GET",
     "path": "/api/calendar/events",
     "description": "Returns Google Calendar events for each scheduling_people row in the given window. Events are fetched via service-account / domain-wide delegation; each person's multiple workspace emails are unioned and deduped before being returned. Response: { calendars: { [personId]: { name, color, connection_type: 'team', events[], errors? } } }",
     "auth": "",
@@ -5274,6 +5290,46 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     "method": "PATCH",
     "path": "/api/calendar/people/:id",
     "description": "Update one person's attributes and optionally replace their email aliases. Email replacement is atomic: we delete the existing rows then insert the new set inside a best-effort sequence — if the insert fails we re-insert the old list so we don't strand a person with no emails.",
+    "auth": "",
+    "section": "Shoots & Calendar",
+    "sectionSlug": "shoots"
+  },
+  {
+    "method": "GET",
+    "path": "/api/calendar/share/:token",
+    "description": "",
+    "auth": "",
+    "section": "Shoots & Calendar",
+    "sectionSlug": "shoots"
+  },
+  {
+    "method": "POST",
+    "path": "/api/calendar/share/:token/caption",
+    "description": "",
+    "auth": "",
+    "section": "Shoots & Calendar",
+    "sectionSlug": "shoots"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/calendar/share/:token/comment",
+    "description": "",
+    "auth": "",
+    "section": "Shoots & Calendar",
+    "sectionSlug": "shoots"
+  },
+  {
+    "method": "POST",
+    "path": "/api/calendar/share/:token/comment",
+    "description": "",
+    "auth": "",
+    "section": "Shoots & Calendar",
+    "sectionSlug": "shoots"
+  },
+  {
+    "method": "POST",
+    "path": "/api/calendar/share/:token/upload",
+    "description": "",
     "auth": "",
     "section": "Shoots & Calendar",
     "sectionSlug": "shoots"

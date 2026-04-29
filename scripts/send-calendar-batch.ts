@@ -80,6 +80,7 @@ function extractToken(url: string): string | null {
 
 interface CalendarReady {
   clientId: string;
+  dropId: string;
   clientName: string;
   agency: string | null;
   shareUrl: string;
@@ -120,10 +121,11 @@ async function main() {
     clientByNorm.set(normalizeName(c.name), { id: c.id, name: c.name, agency: c.agency });
   }
 
-  const tokenToDrop = new Map<string, { clientId: string; startDate: string; endDate: string; postCount: number }>();
+  const tokenToDrop = new Map<string, { clientId: string; dropId: string; startDate: string; endDate: string; postCount: number }>();
   for (const s of sharesRes.data ?? []) {
     tokenToDrop.set(s.token, {
       clientId: s.content_drops.client_id,
+      dropId: s.drop_id,
       startDate: s.content_drops.start_date,
       endDate: s.content_drops.end_date,
       postCount: s.content_drops.total_videos,
@@ -178,6 +180,7 @@ async function main() {
     }
     ready.push({
       clientId: cortex.id,
+      dropId: drop.dropId,
       clientName: cortex.name,
       agency: cortex.agency,
       shareUrl: p.laterCalendarUrl,
@@ -253,8 +256,8 @@ async function main() {
     const cc = brand === 'anderson' ? CC_ANDERSON : CC_NATIVZ;
 
     try {
-      let sendError: unknown = null;
-      let sendId: string | undefined;
+      let sendError: string | undefined;
+      let sendId: string | null = null;
 
       if (shipment.length === 1) {
         const c = shipment[0];
@@ -269,9 +272,11 @@ async function main() {
           shareUrl: c.shareUrl,
           firstRoundIntro: true,
           agency: brand,
+          clientId: c.clientId,
+          dropId: c.dropId,
         });
         sendError = result.error;
-        sendId = result.data?.id;
+        sendId = result.messageId;
       } else {
         const result = await sendCombinedCalendarDeliveryEmail({
           to: recipients,
@@ -288,7 +293,7 @@ async function main() {
           agency: brand,
         });
         sendError = result.error;
-        sendId = result.data?.id;
+        sendId = result.messageId;
       }
 
       const label = shipment.map((s) => s.clientName).join(' + ');

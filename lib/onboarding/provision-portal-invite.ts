@@ -81,7 +81,7 @@ export async function provisionPortalInviteForEmail(
     });
     if (res.error) {
       emailStatus = 'failed';
-      emailError = res.error.message ?? 'resend error';
+      emailError = res.error;
     } else {
       emailStatus = 'sent';
     }

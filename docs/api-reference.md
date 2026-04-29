@@ -2,7 +2,7 @@
 
 > **For AI agents:** This document describes every API endpoint that exists on disk. Auto-generated from `app/api/**/route.ts` by `scripts/generate-api-docs.ts` — do not edit by hand. Re-run the script after adding/removing routes or tweaking a JSDoc block.
 
-**639 endpoints across 32 sections.**
+**646 endpoints across 32 sections.**
 
 ## Authentication
 
@@ -802,6 +802,18 @@ Return all the brand-profile fields in one shot. Readable by admins and viewers 
 Update one or many brand-profile fields. Only fields included in the body get updated — omit to leave untouched, pass null to clear.
 
 **Auth:** Admin only.
+
+### `DELETE /api/clients/:id/chat-webhook`
+
+Disconnect the Google Chat webhook for a client.
+
+**Auth:** Required (admin)
+
+### `POST /api/clients/:id/chat-webhook`
+
+Save a Google Chat incoming-webhook URL on a client record. Sends a test "connected" message to verify the URL works before persisting.
+
+**Auth:** Required (admin)
 
 ### `GET /api/clients/:id/contacts`
 
@@ -2238,6 +2250,36 @@ group_id - Optional: sync only this specific group/month
 
 _Shoot scheduling, planning, Google Calendar integration._
 
+### `GET /api/calendar/drops`
+
+### `POST /api/calendar/drops`
+
+### `GET /api/calendar/drops/:id`
+
+### `POST /api/calendar/drops/:id/posts/:postId/revision/complete`
+
+Admin-only. Stamps `revisions_completed_at` on every `post_review_links` row tied to this post (across all share links for the drop). When this resolves the last open `changes_requested` in the drop, fires the `calendar_revisions_complete` event email to portal users for the client.
+
+### `POST /api/calendar/drops/:id/posts/:postId/revision/upload`
+
+Admin-only. Accepts a re-cut video for a single scheduled post inside a content drop. Stores the new file under `scheduler-media/drops/{dropId}/{videoId}-rev-{n}.{ext}` and stamps `revised_video_url` / `revised_video_uploaded_at` / `revised_video_uploaded_by` on the matching `content_drop_videos` row.
+
+### `POST /api/calendar/drops/:id/process`
+
+### `POST /api/calendar/drops/:id/schedule`
+
+### `GET /api/calendar/drops/:id/share`
+
+### `POST /api/calendar/drops/:id/share`
+
+### `POST /api/calendar/drops/:id/share/:linkId/revoke`
+
+### `PATCH /api/calendar/drops/:id/videos/:videoId`
+
+### `POST /api/calendar/drops/:id/videos/:videoId/retry`
+
+### `GET /api/calendar/drops/active-brands`
+
 ### `GET /api/calendar/events`
 
 Returns Google Calendar events for each scheduling_people row in the given window. Events are fetched via service-account / domain-wide delegation; each person's multiple workspace emails are unioned and deduped before being returned. Response: { calendars: { [personId]: { name, color, connection_type: 'team', events[], errors? } } }
@@ -2277,6 +2319,16 @@ Soft-delete: flips is_active=false instead of removing the row, so any historica
 ### `PATCH /api/calendar/people/:id`
 
 Update one person's attributes and optionally replace their email aliases. Email replacement is atomic: we delete the existing rows then insert the new set inside a best-effort sequence — if the insert fails we re-insert the old list so we don't strand a person with no emails.
+
+### `GET /api/calendar/share/:token`
+
+### `POST /api/calendar/share/:token/caption`
+
+### `DELETE /api/calendar/share/:token/comment`
+
+### `POST /api/calendar/share/:token/comment`
+
+### `POST /api/calendar/share/:token/upload`
 
 ### `POST /api/calendar/sync`
 
@@ -5109,7 +5161,7 @@ Set or clear per-bucket OpenRouter keys and optional Nerd / ideas models.
 
 ### `GET /api/settings/openrouter-models`
 
-Fetch all OpenRouter models with pricing and capability info. Cached server-side for 10 minutes to avoid hammering the API.
+Returns the cached OpenRouter catalog from the `openrouter_models` table (refreshed twice monthly by /api/cron/refresh-openrouter-models). Falls back to a single live fetch on cold cache.
 
 **Auth:** Required (any authenticated user)
 
@@ -5252,10 +5304,6 @@ the period. Columns are ordered for the "drop into a spreadsheet and paste into 
 
 ### `PATCH /api/admin/banners/:id`
 
-### `GET /api/admin/email-hub/campaigns`
-
-### `POST /api/admin/email-hub/campaigns`
-
 ### `GET /api/admin/email-hub/contacts`
 
 ### `POST /api/admin/email-hub/contacts`
@@ -5270,39 +5318,7 @@ Find potential duplicate contacts. The email column has a lowercase-unique index
 
 ### `POST /api/admin/email-hub/contacts/import`
 
-### `GET /api/admin/email-hub/lists`
-
-### `POST /api/admin/email-hub/lists`
-
-### `DELETE /api/admin/email-hub/lists/:id`
-
-### `GET /api/admin/email-hub/lists/:id`
-
-### `PATCH /api/admin/email-hub/lists/:id`
-
-### `DELETE /api/admin/email-hub/lists/:id/members`
-
-### `POST /api/admin/email-hub/lists/:id/members`
-
 ### `GET /api/admin/email-hub/messages`
-
-### `GET /api/admin/email-hub/sequences`
-
-### `POST /api/admin/email-hub/sequences`
-
-### `DELETE /api/admin/email-hub/sequences/:id`
-
-### `GET /api/admin/email-hub/sequences/:id`
-
-### `PATCH /api/admin/email-hub/sequences/:id`
-
-### `POST /api/admin/email-hub/sequences/:id/enroll`
-
-### `GET /api/admin/email-hub/setup`
-
-Returns the configured sender identities per agency + webhook health. Read-only — Resend domain verification is configured in the Resend dashboard, not here.
-
-### `POST /api/admin/email-hub/setup/test-send`
 
 ### `GET /api/admin/email-log`
 
@@ -5319,6 +5335,12 @@ Unified send log across every email path in Cortex: - email_messages: campaigns,
 ### `GET /api/admin/errors`
 
 GET /api/admin/errors — recent API errors (super_admin only)
+
+### `GET /api/admin/notifications/:key`
+
+### `PATCH /api/admin/notifications/:key`
+
+### `GET /api/admin/notifications/:key/preview`
 
 ### `GET /api/admin/pdf/preview/branded-deliverable`
 
@@ -5407,6 +5429,10 @@ image file (multipart form, field name 'file'), stores it in the 'proposal-draft
 ### `DELETE /api/admin/secrets/:key`
 
 ### `PUT /api/admin/secrets/:key`
+
+### `GET /api/admin/topic-search-llm-cost`
+
+Estimated LLM cost for one topic search: - currently configured topic-search model (from agency_settings) - that model's per-1M-token pricing (cached OpenRouter catalog) - empirical avg input/output tokens per search over the last 30 days - resulting estimated $/search Token averages come from `api_usage_logs` rows where `feature` starts with `topic_search`, divided by the number of completed `topic_searches` in the same window. If the sample is empty we fall back to coarse defaults so the card never blanks out — `sampleSize` lets the UI flag low-confidence math.
 
 ### `DELETE /api/admin/users`
 
