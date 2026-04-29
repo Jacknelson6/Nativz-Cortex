@@ -1742,21 +1742,6 @@ function PostCard({
           setPlayerReady(!!handle);
         }}
       />
-      {isEditor && (
-        <button
-          type="button"
-          onClick={() => revisionInputRef.current?.click()}
-          disabled={uploadingRevision}
-          className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-black/70 px-3.5 py-2 text-sm font-medium text-white ring-1 ring-white/15 backdrop-blur transition-opacity hover:bg-black/85 disabled:opacity-60"
-        >
-          {uploadingRevision ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-          {uploadingRevision
-            ? uploadProgress !== null
-              ? `Uploading… ${uploadProgress}%`
-              : 'Uploading…'
-            : 'Replace media'}
-        </button>
-      )}
     </div>
   );
 
@@ -1796,18 +1781,23 @@ function PostCard({
   const composerBlock = (
     <div className="border-t border-nativz-border px-3 py-3 sm:px-4">
       <h3 className="mb-2 text-[13px] font-medium text-text-muted">Leave feedback</h3>
-      <textarea
+
+      {/* Comment box — darker fill so it's a clear input target against the
+          card surface. Attach files lives directly under the textarea so it
+          reads as part of the comment composition step, not a footer action. */}
+      <div className="mb-3 rounded-lg border border-nativz-border bg-background/60 focus-within:border-accent/60 focus-within:ring-1 focus-within:ring-accent/40">
+        <textarea
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
           onFocus={maybeAutoPin}
           placeholder="Notes on the video (cuts, music, hook, etc.)"
           rows={2}
-          className="mb-2 w-full resize-none rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent"
+          className="w-full resize-none rounded-t-lg bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
           disabled={submitting}
         />
 
         {pendingAttachments.length > 0 && (
-          <div className="mb-3 flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 px-3 pb-2">
             {pendingAttachments.map((a) => (
               <AttachmentChip key={a.url} attachment={a} onRemove={() => removeAttachment(a.url)} />
             ))}
@@ -1823,14 +1813,14 @@ function PostCard({
           onChange={(e) => uploadFiles(e.target.files)}
         />
 
-        <div className="mb-2 flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 border-t border-nativz-border/60 px-2 py-2">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={submitting || uploading || pendingAttachments.length >= 10}
-            className="inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3.5 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-md bg-transparent px-2 py-1 text-xs font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
           >
-            {uploading ? <Loader2 size={14} className="animate-spin" /> : <Paperclip size={14} />}
+            {uploading ? <Loader2 size={13} className="animate-spin" /> : <Paperclip size={13} />}
             {uploading ? 'Uploading…' : 'Attach files'}
           </button>
           {/* Frame.io-style timestamp chip. Pin is auto-captured when the
@@ -1840,8 +1830,8 @@ function PostCard({
               and want to opt back in for the same draft. */}
           {playerReady && (
             anchorSeconds !== null ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-surface px-3 py-1.5 text-sm font-medium text-accent-text ring-1 ring-accent/40">
-                <MapPin size={13} />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-surface px-2.5 py-1 text-xs font-medium text-accent-text ring-1 ring-accent/40">
+                <MapPin size={12} />
                 Pinned at {formatSeconds(anchorSeconds)}
                 <button
                   type="button"
@@ -1861,47 +1851,66 @@ function PostCard({
                   captureAnchor();
                 }}
                 disabled={submitting}
-                className="inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3.5 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-md bg-transparent px-2 py-1 text-xs font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
                 title="Pin to current time"
               >
-                <MapPin size={14} /> Pin to current time
+                <MapPin size={13} /> Pin to current time
               </button>
             ) : null
           )}
-          <span className="text-xs text-text-muted">up to 25 MB</span>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-          {review === 'approved' && latestApprovedId ? (
-            <button
-              type="button"
-              onClick={removeApproval}
-              disabled={removingApproval || submitting || uploading}
-              className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-4 py-2.5 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50 sm:py-2"
-            >
-              {removingApproval ? <Loader2 size={14} className="animate-spin" /> : <Undo2 size={14} />}
-              Remove approval
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => submit('approved')}
-              disabled={submitting || uploading}
-              className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-accent px-4 py-2.5 text-sm font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 disabled:hover:bg-accent sm:py-2"
-            >
-              <CheckCircle size={14} /> Approve
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => submit('changes_requested')}
-            disabled={submitting || uploading || (!commentText.trim() && pendingAttachments.length === 0)}
-            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-4 py-2.5 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50 sm:py-2"
-          >
-            <MessageSquare size={14} /> Add revision
-          </button>
+          <span className="ml-auto text-[11px] text-text-muted">up to 25 MB</span>
         </div>
       </div>
+
+      {/* Primary actions — Approve, Request change, Replace media all sit
+          together so the reviewer (and editor) finds them in one spot. The
+          editor-only Replace media joins the row when present. */}
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+        {review === 'approved' && latestApprovedId ? (
+          <button
+            type="button"
+            onClick={removeApproval}
+            disabled={removingApproval || submitting || uploading}
+            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-4 py-2.5 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50 sm:py-2"
+          >
+            {removingApproval ? <Loader2 size={14} className="animate-spin" /> : <Undo2 size={14} />}
+            Remove approval
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => submit('approved')}
+            disabled={submitting || uploading}
+            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-accent px-4 py-2.5 text-sm font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 disabled:hover:bg-accent sm:py-2"
+          >
+            <CheckCircle size={14} /> Approve
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => submit('changes_requested')}
+          disabled={submitting || uploading || (!commentText.trim() && pendingAttachments.length === 0)}
+          className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-4 py-2.5 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50 sm:py-2"
+        >
+          <MessageSquare size={14} /> Request change
+        </button>
+        {isEditor && (
+          <button
+            type="button"
+            onClick={() => revisionInputRef.current?.click()}
+            disabled={uploadingRevision || submitting || uploading}
+            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-4 py-2.5 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-60 sm:py-2"
+          >
+            {uploadingRevision ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+            {uploadingRevision
+              ? uploadProgress !== null
+                ? `Uploading… ${uploadProgress}%`
+                : 'Uploading…'
+              : 'Replace media'}
+          </button>
+        )}
+      </div>
+    </div>
   );
 
   // Two-column horizontal layout — video pinned left, scrollable column
