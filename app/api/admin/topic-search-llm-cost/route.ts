@@ -6,9 +6,13 @@ import { getOpenRouterModel } from '@/lib/ai/openrouter-models';
 
 export const dynamic = 'force-dynamic';
 
-const FALLBACK_AVG_INPUT = 12_000;
-const FALLBACK_AVG_OUTPUT = 2_500;
+const FALLBACK_AVG_INPUT = 40_000;
+const FALLBACK_AVG_OUTPUT = 5_000;
 const WINDOW_DAYS = 30;
+/** A topic search fires ~8 LLM calls in <100ms; group rows that share user_id
+ * + this bucket into one session. 1-minute is generous enough to cover the
+ * slowest pipeline runs without colliding with a follow-up search. */
+const SESSION_BUCKET_MS = 60_000;
 
 /**
  * GET /api/admin/topic-search-llm-cost
@@ -19,10 +23,13 @@ const WINDOW_DAYS = 30;
  *   - empirical avg input/output tokens per search over the last 30 days
  *   - resulting estimated $/search
  *
- * Token averages come from `api_usage_logs` rows where `feature` starts with
- * `topic_search`, divided by the number of completed `topic_searches` in the
- * same window. If the sample is empty we fall back to coarse defaults so the
- * card never blanks out — `sampleSize` lets the UI flag low-confidence math.
+ * The pipeline fires multiple LLM calls per search (planner + per-subtopic
+ * research + merger) and `api_usage_logs` doesn't carry a `search_id`, so
+ * we infer sessions by bucketing rows by `(user_id, minute)`. This matches
+ * what an operator means by "one search" and avoids the old bug where we
+ * divided total tokens by `topic_searches.count` — which over-counts because
+ * many searches in the window pre-date the LLM pipeline (zero log rows) and
+ * dilute the average to ~5% of reality.
  */
 export async function GET() {
   const supabase = await createServerSupabaseClient();
@@ -41,7 +48,7 @@ export async function GET() {
 
   const since = new Date(Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-  const [settingsRes, usageRes, searchCountRes] = await Promise.all([
+  const [settingsRes, usageRes] = await Promise.all([
     admin
       .from('agency_settings')
       .select('topic_search_planner_model, topic_search_research_model, topic_search_merger_model')
@@ -49,12 +56,8 @@ export async function GET() {
       .maybeSingle(),
     admin
       .from('api_usage_logs')
-      .select('input_tokens, output_tokens, feature')
+      .select('user_id, created_at, input_tokens, output_tokens')
       .like('feature', 'topic_search%')
-      .gte('created_at', since),
-    admin
-      .from('topic_searches')
-      .select('id', { count: 'exact', head: true })
       .gte('created_at', since),
   ]);
 
@@ -64,14 +67,29 @@ export async function GET() {
     settingsRes.data?.topic_search_merger_model?.trim() ||
     DEFAULT_OPENROUTER_MODEL;
 
-  const usage = usageRes.data ?? [];
-  const searchCount = searchCountRes.count ?? 0;
-  const sumInput = usage.reduce((acc, r) => acc + (Number(r.input_tokens) || 0), 0);
-  const sumOutput = usage.reduce((acc, r) => acc + (Number(r.output_tokens) || 0), 0);
+  // Bucket calls into search sessions. Key = `${user_id}|${minute_bucket}`;
+  // any rows within SESSION_BUCKET_MS of each other from the same user fold
+  // into one session even if the wall-clock straddles a minute boundary.
+  const sessions = new Map<string, { in: number; out: number }>();
+  for (const row of usageRes.data ?? []) {
+    const ts = new Date(row.created_at).getTime();
+    const bucket = Math.floor(ts / SESSION_BUCKET_MS);
+    const key = `${row.user_id ?? 'anon'}|${bucket}`;
+    const session = sessions.get(key) ?? { in: 0, out: 0 };
+    session.in += Number(row.input_tokens) || 0;
+    session.out += Number(row.output_tokens) || 0;
+    sessions.set(key, session);
+  }
 
-  const hasSample = searchCount > 0 && usage.length > 0;
-  const avgInputTokens = hasSample ? Math.round(sumInput / searchCount) : FALLBACK_AVG_INPUT;
-  const avgOutputTokens = hasSample ? Math.round(sumOutput / searchCount) : FALLBACK_AVG_OUTPUT;
+  const sessionList = [...sessions.values()];
+  const sampleSize = sessionList.length;
+  const hasSample = sampleSize > 0;
+  const avgInputTokens = hasSample
+    ? Math.round(sessionList.reduce((acc, s) => acc + s.in, 0) / sampleSize)
+    : FALLBACK_AVG_INPUT;
+  const avgOutputTokens = hasSample
+    ? Math.round(sessionList.reduce((acc, s) => acc + s.out, 0) / sampleSize)
+    : FALLBACK_AVG_OUTPUT;
 
   const model = await getOpenRouterModel(admin, modelId).catch(() => null);
   const pricingAvailable = model != null && !model.isVariable;
@@ -91,7 +109,7 @@ export async function GET() {
     avgInputTokens,
     avgOutputTokens,
     costUsd,
-    sampleSize: searchCount,
+    sampleSize,
     windowDays: WINDOW_DAYS,
     pricingAvailable,
   });
