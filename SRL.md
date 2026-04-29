@@ -149,6 +149,34 @@ untouched until QA.
 
 ---
 
+### Iteration 12.4 — 2026-04-29 · Calendar drag-drop, 9:16 thumbnails, typography polish
+
+**Context:** Jack QA-ing the share-page calendar surface flagged three rough edges in quick succession: (1) needed to drag posts between days to reschedule (the `<SchedulePill>` flow worked but felt clunky for 30-post drops), (2) wanted thumbnails inside calendar cells in 9:16 so the grid actually looked like a content calendar, (3) the type scale was too tight to scan — day numbers + header subtitle/badges all sat at 10–13px. Single feature-branch pass, all on `srl/calendar-collab-2026-04-28`.
+
+**Shipped (2 commits, both pushed):**
+
+- `feat(share): drag posts between days, 9:16 cell thumbnails` (earlier commit on this branch)
+  - `CalendarGrid` lifted drag state (`draggingPostId`, `dragOverKey`) and a `movePostToDate` helper that does an optimistic `onScheduleUpdated` call, awaits `/schedule`, then rewrites with the canonical server response (or rolls back on error and surfaces the toast).
+  - `CalendarCell` rewritten as `aspect-[9/16]` with full-bleed `<img>` cover thumbnails. Day number + today indicator + review-status badge + multi-post `+N` chip all overlay the thumbnail. Empty cells get a thin border + day-number chip and remain valid drop targets.
+  - HTML5 native drag/drop (no new dep). Source dims to `opacity-40` mid-drag; valid drop targets get `border-accent ring-2 ring-accent/40 bg-accent-surface`. Same-day drops silently ignored. Published / publishing / partially_failed posts non-draggable.
+  - Hint copy under the grid: "Drag a post to a different day to reschedule." so first-time users discover the affordance.
+- `ui(share): bump header + calendar typography for legibility` (`adbb3bb5`, pushed)
+  - Header h1 → `text-xl sm:text-3xl`, subtitle → `text-sm sm:text-base`, status pills → 13/14px with `size-14` icons + `px-2.5 py-1`.
+  - Calendar month label → `text-base sm:text-lg`, day-of-week headers → 11/13px, day numbers (overlay chip + empty cell) → 13px sm:text-sm with taller `min-w-[24px]` chips, `+N` overflow → 11px, hint copy → `text-[13px] sm:text-sm`.
+
+**Verification:**
+- `npx tsc --noEmit` — clean.
+- `npx eslint app/c/[token]/page.tsx` — 7 pre-existing warnings (img-element + one unused var); no new errors or warnings introduced.
+
+**Known follow-ups (non-blocking):**
+- HTML5 drag/drop is mouse-only. Mobile / iOS Safari: long-press triggers selection menu, not a drag. If clients on iPad complain, swap in `@dnd-kit/core` (touch sensor) without touching the network layer.
+- `<img>` warnings unchanged — covers + share-header logo are external Supabase Storage URLs that don't fit `next/image`'s loader well; would need a custom loader, scoped out for this run.
+- Marker rail (timestamps as ticks on a scrubber) still on the deferred list from 12.3.
+
+**SRL still on `srl/calendar-collab-2026-04-28`. Awaiting Jack's QA before merge.**
+
+---
+
 ## Iterations
 
 
