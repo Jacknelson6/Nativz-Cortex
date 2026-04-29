@@ -6,7 +6,7 @@ import { use, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle, AlertTriangle, AtSign, BellRing, CalendarDays, CheckCircle, Clock,
   File as FileIcon, Film, List, Loader2, MapPin, MessageSquare, Paperclip, Pencil, Play,
-  Plus, Send, Tag, Trash2, Type, Undo2, Upload, Users, X,
+  Plus, RefreshCw, Send, Tag, Trash2, Type, Undo2, Upload, Users, VideoOff, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog } from '@/components/ui/dialog';
@@ -773,12 +773,62 @@ function VideoSurface({
     }
   };
 
+  // Native error chrome on <video> ("A network error caused the media
+  // download to fail.") and Mux's red flash both look hostile on a brand
+  // share link. We swallow them here, render a Cortex-toned overlay, and
+  // expose a Retry button that remounts the player. Bumping `retryKey`
+  // forces React to discard the failed element and try the source fresh.
+  const [errored, setErrored] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
+  const handleRetry = () => {
+    setErrored(false);
+    setRetryKey((k) => k + 1);
+  };
+
+  if (errored && (post.mux_playback_id || post.video_url)) {
+    const muxThumb = post.mux_playback_id
+      ? `https://image.mux.com/${post.mux_playback_id}/thumbnail.jpg?width=720&fit_mode=preserve&time=1`
+      : null;
+    const posterUrl = muxThumb ?? post.cover_image_url ?? null;
+    return (
+      <div className={`relative aspect-[9/16] w-full overflow-hidden bg-black ${className ?? ''}`}>
+        {posterUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={posterUrl}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover opacity-30"
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/30" />
+        <div className="absolute inset-0 flex items-center justify-center px-6">
+          <div className="rounded-2xl bg-black/55 px-5 py-4 text-center text-white backdrop-blur-md ring-1 ring-white/10 max-w-[20rem]">
+            <VideoOff className="mx-auto mb-2 text-white/80" size={26} />
+            <p className="text-sm font-medium">Couldn&apos;t load this video</p>
+            <p className="mt-0.5 text-[11px] text-white/70">
+              The connection dropped or the source is unavailable. Try again — usually it&apos;s a transient hiccup.
+            </p>
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-[11px] font-medium text-white ring-1 ring-white/20 transition-colors hover:bg-white/25"
+            >
+              <RefreshCw size={12} />
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (post.mux_playback_id) {
     return (
       <MuxPlayer
         // MuxPlayer's ref points at the <mux-player> custom element, which
         // mirrors HTMLVideoElement enough for currentTime/play().
         ref={attachPlayer as never}
+        key={`mux-${post.mux_playback_id}-${retryKey}`}
         streamType="on-demand"
         playbackId={post.mux_playback_id}
         autoPlay={autoPlay}
@@ -790,6 +840,7 @@ function VideoSurface({
         // Disable Mux's default end-screen + remote playback chrome — keeps
         // the share-link surface focused on review, not branded promo.
         metadata={{ player_name: 'cortex-share' }}
+        onError={() => setErrored(true)}
       />
     );
   }
@@ -833,6 +884,7 @@ function VideoSurface({
     return (
       <video
         ref={attachPlayer as never}
+        key={`legacy-${retryKey}`}
         src={post.video_url}
         controls={controls}
         playsInline
@@ -841,6 +893,7 @@ function VideoSurface({
         muted={autoPlay === 'muted'}
         poster={post.cover_image_url ?? undefined}
         className={className}
+        onError={() => setErrored(true)}
       />
     );
   }
@@ -1826,9 +1879,15 @@ function PostCard({
       )}
 
       {!editingCaption && post.hashtags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        // Hashtags are reference data, not links — the cyan accent wall
+        // visually competed with the Edit / Approve CTAs. Quieter chips on
+        // a low-contrast surface keep them scannable without shouting.
+        <div className="flex flex-wrap gap-1">
           {post.hashtags.map((h) => (
-            <span key={h} className="text-sm text-accent-text">
+            <span
+              key={h}
+              className="rounded-md bg-surface-hover/60 px-2 py-0.5 text-xs text-text-muted"
+            >
               #{h}
             </span>
           ))}
@@ -1928,7 +1987,18 @@ function PostCard({
       // The internal border-t still does the visual divider work; the
       // margin is purely to give the eye somewhere to rest.
       <div className="mt-2 border-t border-nativz-border bg-background/40 px-3 py-4 sm:px-4">
-        <h3 className="mb-2 text-[13px] font-medium text-text-muted">History</h3>
+        {/* Section heading uses the same uppercase-eyebrow treatment as
+            other admin sub-sections so History reads as metadata rather
+            than competing with the caption above. Count gives instant
+            sense of how much there is to scroll. */}
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+            History
+          </h3>
+          <span className="text-[10px] font-medium text-text-muted/70">
+            {post.comments.length}
+          </span>
+        </div>
         <div className="space-y-2">
           {post.comments.map((c) => (
             <CommentRow
@@ -2060,14 +2130,16 @@ function PostCard({
 
       {/* Reviewer decisions — anchored to the bottom of the column so the
           two primary actions (Approve, Request change) are always at the
-          same hand-position regardless of comment thread length. */}
-      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+          same hand-position regardless of comment thread length. The
+          editor-only Remove is split off behind ml-auto on sm+ and
+          rendered icon-only so it never visually competes with Approve. */}
+      <div className="flex flex-wrap items-center gap-2">
         {review === 'approved' && latestApprovedId ? (
           <button
             type="button"
             onClick={removeApproval}
             disabled={removingApproval || submitting || uploading}
-            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-4 py-2.5 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50 sm:py-2"
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-4 py-2.5 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50 sm:flex-none sm:py-2"
           >
             {removingApproval ? <Loader2 size={14} className="animate-spin" /> : <Undo2 size={14} />}
             Remove approval
@@ -2077,7 +2149,7 @@ function PostCard({
             type="button"
             onClick={() => submit('approved')}
             disabled={submitting || uploading}
-            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-accent px-4 py-2.5 text-sm font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 disabled:hover:bg-accent sm:py-2"
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-accent px-4 py-2.5 text-sm font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 disabled:hover:bg-accent sm:flex-none sm:py-2"
           >
             <CheckCircle size={14} /> Approve
           </button>
@@ -2090,7 +2162,7 @@ function PostCard({
           onClick={() => setComposerExpanded((v) => !v)}
           disabled={submitting || uploading}
           aria-expanded={composerExpanded}
-          className={`inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-50 sm:py-2 ${
+          className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-50 sm:flex-none sm:py-2 ${
             composerExpanded
               ? 'border-accent/50 bg-accent-surface text-accent-text'
               : 'border-nativz-border bg-transparent text-text-secondary hover:bg-surface-hover hover:text-text-primary'
@@ -2098,22 +2170,21 @@ function PostCard({
         >
           <MessageSquare size={14} /> Request change
         </button>
-        {/* Editor-only remove. ml-auto on sm+ pushes it to the right
-            corner of the action row, well clear of Approve so the
-            destructive action isn't sitting next to the primary one.
-            Ghost styling + muted red on hover signals the destructive
-            tone without screaming for attention. Wraps below on
-            narrow screens via the parent's flex-wrap. */}
+        {/* Editor-only remove. Icon-only on sm+ to avoid competing with
+            the two primary CTAs visually; full-width labelled button
+            below them on mobile so the destructive action stays
+            discoverable without a tooltip. */}
         {isEditor && (
           <button
             type="button"
             onClick={() => setRemoveOpen(true)}
             disabled={submitting || uploading || removing}
-            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-transparent bg-transparent px-3 py-2.5 text-xs font-medium text-text-muted transition-all hover:border-status-danger/40 hover:bg-status-danger/10 hover:text-status-danger disabled:opacity-50 sm:ml-auto sm:py-2"
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-transparent bg-transparent px-3 py-2 text-xs font-medium text-text-muted transition-all hover:border-status-danger/40 hover:bg-status-danger/10 hover:text-status-danger disabled:opacity-50 sm:ml-auto sm:h-9 sm:w-9 sm:px-0 sm:py-0"
             title="Remove this post from the calendar"
+            aria-label="Remove this post from the calendar"
           >
             {removing ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
-            {removing ? 'Removing…' : 'Remove from calendar'}
+            <span className="sm:hidden">{removing ? 'Removing…' : 'Remove from calendar'}</span>
           </button>
         )}
       </div>
