@@ -1720,6 +1720,26 @@ function PostCard({
         }}
         hasName={!!authorName.trim()}
       />
+      {/* Replace media — sits with the other editor-only post-edit
+          affordances (caption, tags, collaborators) so all "change the
+          post" actions cluster in one place. The reviewer-facing
+          decisions (Approve / Request change) live with the composer
+          below. */}
+      {isEditor && (
+        <button
+          type="button"
+          onClick={() => revisionInputRef.current?.click()}
+          disabled={uploadingRevision || submitting || uploading}
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-4 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-60 sm:w-auto"
+        >
+          {uploadingRevision ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+          {uploadingRevision
+            ? uploadProgress !== null
+              ? `Uploading… ${uploadProgress}%`
+              : 'Uploading…'
+            : 'Replace media'}
+        </button>
+      )}
     </div>
   );
 
@@ -1862,9 +1882,10 @@ function PostCard({
         </div>
       </div>
 
-      {/* Primary actions — Approve, Request change, Replace media all sit
-          together so the reviewer (and editor) finds them in one spot. The
-          editor-only Replace media joins the row when present. */}
+      {/* Reviewer decisions — Approve and Request change live together at
+          the bottom of the column, paired directly with the composer
+          they act on. Editor-only Replace media is up in the caption
+          block with the other "change the post" affordances. */}
       <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
         {review === 'approved' && latestApprovedId ? (
           <button
@@ -1894,21 +1915,6 @@ function PostCard({
         >
           <MessageSquare size={14} /> Request change
         </button>
-        {isEditor && (
-          <button
-            type="button"
-            onClick={() => revisionInputRef.current?.click()}
-            disabled={uploadingRevision || submitting || uploading}
-            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-4 py-2.5 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-60 sm:py-2"
-          >
-            {uploadingRevision ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-            {uploadingRevision
-              ? uploadProgress !== null
-                ? `Uploading… ${uploadProgress}%`
-                : 'Uploading…'
-              : 'Replace media'}
-          </button>
-        )}
       </div>
     </div>
   );
