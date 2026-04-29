@@ -1,10 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { toast } from 'sonner';
 import {
-  ArrowUpDown,
   CheckIcon,
   ChevronDown,
   Eye,
@@ -15,7 +13,6 @@ import {
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
@@ -176,28 +173,37 @@ export function ReviewTable({
     toast.success(`Opened ${tokens.length} review${tokens.length === 1 ? '' : 's'}`);
   }
 
+  const total = links.length;
+  const subtitle =
+    description ??
+    (brandName
+      ? `${brandName} · ${total} share link${total === 1 ? '' : 's'}`
+      : `All brands · ${total} share link${total === 1 ? '' : 's'}`);
+
   return (
     <div className="cortex-page-gutter mx-auto max-w-6xl space-y-5">
       <header className="flex items-end justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold text-text-primary">{title ?? 'Review'}</h1>
-          <p className="mt-1 text-sm text-text-secondary">
-            {description ??
-              (brandName
-                ? `Calendars and content sent to ${brandName} for review.`
-                : 'Calendars and content sent for review.')}
-          </p>
+          <h1 className="text-xl font-semibold text-text-primary">{title ?? 'Review'}</h1>
+          <p className="mt-1 text-sm text-text-muted">{subtitle}</p>
         </div>
         <div className="flex items-center gap-2">
+          {selected.size > 0 ? (
+            <InlineBulkBar
+              count={selected.size}
+              onClear={clearSelection}
+              onOpenAll={openSelectedInTabs}
+            />
+          ) : null}
           <SortMenu sort={sort} onChange={setSort} />
           <Button
             variant="ghost"
             size="sm"
             onClick={() => void load(true)}
             disabled={refreshing}
+            aria-label="Refresh"
           >
             <RefreshCcw size={14} className={refreshing ? 'animate-spin' : ''} />
-            Refresh
           </Button>
         </div>
       </header>
@@ -214,13 +220,6 @@ export function ReviewTable({
             onToggleRow={toggleRow}
             onToggleAll={(on) => toggleAll(grouped.active, on)}
             showBrand={showBrandColumn}
-            bulkBar={
-              <BulkActionBar
-                count={selected.size}
-                onClear={clearSelection}
-                onOpenAll={openSelectedInTabs}
-              />
-            }
           />
 
           {grouped.expired.length > 0 && (
@@ -251,13 +250,12 @@ interface ReviewTableCardProps {
   onToggleAll: (on: boolean) => void;
   showBrand?: boolean;
   dim?: boolean;
-  bulkBar?: React.ReactNode;
 }
 
 /**
- * The table itself, in card variant. Above the `<thead>` we slot the
- * bulk-action bar — when there's a selection it slides into view, when
- * there isn't, the slot is empty and the table looks normal.
+ * The card-variant table itself. Each row paints as its own rounded
+ * card via the Table primitive — no per-row action button (the row
+ * itself is the click target; selected rows pick up an accent ring).
  */
 function ReviewTableCard({
   rows,
@@ -266,7 +264,6 @@ function ReviewTableCard({
   onToggleAll,
   showBrand = false,
   dim = false,
-  bulkBar,
 }: ReviewTableCardProps) {
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
   const someChecked = rows.some((r) => selected.has(r.id));
@@ -278,10 +275,9 @@ function ReviewTableCard({
 
   return (
     <div className={dim ? 'opacity-70' : undefined}>
-      {bulkBar}
       <Table variant="card">
         <TableHeader>
-          <TableRow className="hover:bg-transparent">
+          <TableRow>
             <TableHead className="w-10">
               <Checkbox
                 aria-label="Select all reviews"
@@ -293,8 +289,7 @@ function ReviewTableCard({
             <TableHead>Project</TableHead>
             <TableHead>Items</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead>Progress</TableHead>
-            <TableHead className="text-right">Action</TableHead>
+            <TableHead className="text-right">Progress</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -325,9 +320,22 @@ function ReviewTableRow({ link, checked, onCheckedChange, showBrand = false }: R
   const lastSeen = link.last_viewed_at ? formatRelative(link.last_viewed_at) : null;
   const stage = currentStage(link);
 
+  // Whole row navigates to the review when clicked. Stop propagation on
+  // the checkbox cell so toggling selection doesn't also open the link.
+  function openReview() {
+    window.open(`/c/${link.token}`, '_blank', 'noopener,noreferrer');
+  }
+
   return (
-    <TableRow data-state={checked ? 'selected' : undefined}>
-      <TableCell className="w-10">
+    <TableRow
+      data-state={checked ? 'selected' : undefined}
+      onClick={openReview}
+      className="cursor-pointer"
+    >
+      <TableCell
+        className="w-10"
+        onClick={(e) => e.stopPropagation()}
+      >
         <Checkbox
           aria-label={`Select ${project}`}
           checked={checked}
@@ -346,23 +354,15 @@ function ReviewTableRow({ link, checked, onCheckedChange, showBrand = false }: R
         </div>
       </TableCell>
       <TableCell>
-        <Badge variant="default">
+        <span className="inline-flex items-center rounded-md border border-nativz-border px-1.5 py-0.5 font-mono text-[10px] text-text-secondary">
           {link.post_count} post{link.post_count === 1 ? '' : 's'}
-        </Badge>
+        </span>
       </TableCell>
       <TableCell>
         <StageTrack stage={stage} />
       </TableCell>
-      <TableCell>
-        <ProgressLabel link={link} />
-      </TableCell>
       <TableCell className="text-right">
-        <Link href={`/c/${link.token}`} target="_blank" rel="noreferrer">
-          <Button size="sm" variant="outline">
-            <span>Open review</span>
-            <ExternalLink size={12} />
-          </Button>
-        </Link>
+        <ProgressLabel link={link} />
       </TableCell>
     </TableRow>
   );
@@ -435,7 +435,12 @@ function StageTrack({ stage }: { stage: ReviewStage }) {
   );
 }
 
-function BulkActionBar({
+/**
+ * Inline header bulk-action bar — sits next to the Sort button, only
+ * visible when something is selected. Mirrors the reference's
+ * "{N} selected · {actions}" pill in the page header.
+ */
+function InlineBulkBar({
   count,
   onClear,
   onOpenAll,
@@ -444,40 +449,33 @@ function BulkActionBar({
   onClear: () => void;
   onOpenAll: () => void;
 }) {
-  if (count === 0) return null;
   return (
-    <div className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-accent/30 bg-accent-surface/40 px-4 py-2.5">
-      <div className="flex items-center gap-3 text-sm">
-        <button
-          type="button"
-          onClick={onClear}
-          className="inline-flex size-5 items-center justify-center rounded text-text-muted hover:bg-surface-hover hover:text-text-primary"
-          aria-label="Clear selection"
-        >
-          <X className="size-3.5" />
-        </button>
-        <span className="font-medium text-text-primary">
-          {count} selected
-        </span>
-      </div>
-      <div className="flex items-center gap-2">
-        <Button size="sm" variant="outline" onClick={onOpenAll}>
-          <ExternalLink size={12} />
-          Open all
-        </Button>
-      </div>
+    <div className="flex items-center gap-2 rounded-md border border-nativz-border bg-surface px-2.5 py-1.5">
+      <button
+        type="button"
+        onClick={onClear}
+        className="inline-flex size-5 items-center justify-center rounded text-text-muted hover:bg-surface-hover hover:text-text-primary"
+        aria-label="Clear selection"
+      >
+        <X className="size-3.5" />
+      </button>
+      <span className="text-sm text-text-primary">{count} selected</span>
+      <span className="text-text-muted/40">·</span>
+      <Button size="sm" variant="ghost" onClick={onOpenAll} className="h-7 px-2">
+        <ExternalLink size={12} />
+        Open all
+      </Button>
     </div>
   );
 }
 
 function SortMenu({ sort, onChange }: { sort: SortKey; onChange: (s: SortKey) => void }) {
   const label =
-    sort === 'newest' ? 'Newest first' : sort === 'oldest' ? 'Oldest first' : 'Most progress';
+    sort === 'newest' ? 'Sort by date' : sort === 'oldest' ? 'Oldest first' : 'Most progress';
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm">
-          <ArrowUpDown size={14} />
+        <Button variant="outline" size="sm">
           <span>{label}</span>
           <ChevronDown size={12} />
         </Button>
