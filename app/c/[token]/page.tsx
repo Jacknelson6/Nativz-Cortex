@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import dynamic from 'next/dynamic';
 import { use, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle, AlertTriangle, AtSign, BellRing, CalendarDays, CheckCircle, Clock,
@@ -10,6 +11,11 @@ import {
 import { toast } from 'sonner';
 import { Dialog } from '@/components/ui/dialog';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
+
+// Mux Player is a heavy web-component-backed React component. Dynamic-import
+// with ssr:false keeps it out of the initial server bundle and avoids
+// hydration warnings from the underlying custom element.
+const MuxPlayer = dynamic(() => import('@mux/mux-player-react'), { ssr: false });
 
 const SKIP_DELETE_CONFIRM_KEY = 'cortex.share.skipDeleteConfirm';
 
@@ -589,25 +595,89 @@ function findLatestApprovedId(comments: SharedComment[]): string | null {
   return null;
 }
 
+/**
+ * Renders the right player for a post, in priority order:
+ *   1. Mux: if mux_playback_id is set, use <MuxPlayer> (HLS, adaptive
+ *      bitrate, brand-color accent).
+ *   2. Processing: if Mux is still packaging (mux_status='processing' or
+ *      'uploading'), show a friendly "Processing the new cut…" placeholder
+ *      so editors know the upload landed but they should refresh shortly.
+ *   3. Legacy: fall back to <video src=video_url> for older Supabase Storage
+ *      uploads that haven't been re-uploaded through Mux yet.
+ *   4. Empty: nothing to show.
+ *
+ * Click-to-seek for timestamped comments will hook into this component
+ * via the optional `playerRef` in Phase 4.
+ */
+type VideoSurfacePost = Pick<
+  SharedPost,
+  'mux_playback_id' | 'mux_status' | 'video_url' | 'cover_image_url'
+>;
+
+function VideoSurface({
+  post,
+  controls = true,
+  autoPlay = false,
+  className,
+}: {
+  post: VideoSurfacePost;
+  controls?: boolean;
+  autoPlay?: boolean | 'muted' | 'any';
+  className?: string;
+}) {
+  if (post.mux_playback_id) {
+    return (
+      <MuxPlayer
+        streamType="on-demand"
+        playbackId={post.mux_playback_id}
+        autoPlay={autoPlay}
+        accentColor="var(--accent)"
+        poster={post.cover_image_url ?? undefined}
+        // 9:16 short-form video — keep aspect ratio while fitting parent.
+        style={{ aspectRatio: '9 / 16', maxHeight: 'inherit', width: '100%' }}
+        className={className}
+        // Disable Mux's default end-screen + remote playback chrome — keeps
+        // the share-link surface focused on review, not branded promo.
+        metadata={{ player_name: 'cortex-share' }}
+      />
+    );
+  }
+  if (post.mux_status === 'processing' || post.mux_status === 'uploading') {
+    return (
+      <div className={`flex aspect-[9/16] w-full items-center justify-center ${className ?? ''}`}>
+        <div className="text-center text-text-muted">
+          <Loader2 className="mx-auto mb-2 animate-spin" size={32} />
+          <p className="text-sm">Processing the new cut…</p>
+          <p className="mt-1 text-[11px]">Usually takes about a minute. Refresh to check.</p>
+        </div>
+      </div>
+    );
+  }
+  if (post.video_url) {
+    return (
+      <video
+        src={post.video_url}
+        controls={controls}
+        playsInline
+        preload="auto"
+        autoPlay={autoPlay === true || autoPlay === 'any' || autoPlay === 'muted'}
+        muted={autoPlay === 'muted'}
+        poster={post.cover_image_url ?? undefined}
+        className={className}
+      />
+    );
+  }
+  return (
+    <div className={`flex aspect-[9/16] w-full items-center justify-center ${className ?? ''}`}>
+      <div className="text-center text-text-muted">
+        <Film className="mx-auto mb-2" size={32} />
+        <p className="text-sm">Video not available</p>
+      </div>
+    </div>
+  );
+}
+
 function VideoPlayerModal({ post, onClose }: { post: SharedPost | null; onClose: () => void }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  // Mobile Safari blocks autoplay-with-sound when the video element wasn't
-  // mounted in the same tap that opened the modal. Try to play on mount, and
-  // if the browser refuses, retry muted so playback at least starts — the
-  // user can unmute via the controls.
-  useEffect(() => {
-    if (!post) return;
-    const v = videoRef.current;
-    if (!v) return;
-    v.play().catch(() => {
-      v.muted = true;
-      v.play().catch(() => {
-        // Final fallback: leave the controls visible so the user can tap play.
-      });
-    });
-  }, [post]);
-
   if (!post) return null;
   return (
     <Dialog open={!!post} onClose={onClose} title="" maxWidth="lg" bodyClassName="p-0">
@@ -620,24 +690,14 @@ function VideoPlayerModal({ post, onClose }: { post: SharedPost | null; onClose:
         >
           <X size={16} />
         </button>
-        {post.video_url ? (
-          <video
-            ref={videoRef}
-            src={post.video_url}
-            controls
-            playsInline
-            preload="auto"
-            poster={post.cover_image_url ?? undefined}
-            className="mx-auto block max-h-[80vh] w-auto"
-          />
-        ) : (
-          <div className="flex aspect-[9/16] w-full items-center justify-center">
-            <div className="text-center text-text-muted">
-              <Film className="mx-auto mb-2" size={32} />
-              <p className="text-sm">Video not available</p>
-            </div>
-          </div>
-        )}
+        {/* autoPlay="any" lets MuxPlayer (and our legacy <video> branch via
+            VideoSurface) try unmuted then fall back to muted on mobile
+            Safari — same behavior the previous useEffect was doing manually. */}
+        <VideoSurface
+          post={post}
+          autoPlay="any"
+          className="mx-auto block max-h-[80vh] w-auto"
+        />
       </div>
     </Dialog>
   );
@@ -1396,22 +1456,7 @@ function PostCard({
       {withVideoHeader ? (
         <>
           <div className="relative bg-black">
-            {post.video_url ? (
-              <video
-                src={post.video_url}
-                controls
-                playsInline
-                poster={post.cover_image_url ?? undefined}
-                className="mx-auto block max-h-[55vh] w-auto"
-              />
-            ) : (
-              <div className="flex aspect-[9/16] max-h-[55vh] w-full items-center justify-center">
-                <div className="text-center text-text-muted">
-                  <Film className="mx-auto mb-2" size={32} />
-                  <p className="text-sm">Video not available</p>
-                </div>
-              </div>
-            )}
+            <VideoSurface post={post} className="mx-auto block max-h-[55vh] w-auto" />
             {isEditor && (
               <button
                 type="button"
