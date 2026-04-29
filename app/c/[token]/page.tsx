@@ -3,8 +3,9 @@
 import Image from 'next/image';
 import { use, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertCircle, AlertTriangle, CalendarDays, CheckCircle, Clock, File as FileIcon,
-  Film, List, Loader2, MessageSquare, Paperclip, Pencil, Play, Type, Undo2, X,
+  AlertCircle, AlertTriangle, AtSign, BellRing, CalendarDays, CheckCircle, Clock,
+  File as FileIcon, Film, List, Loader2, MessageSquare, Paperclip, Pencil, Play,
+  Plus, Send, Tag, Type, Undo2, Upload, Users, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog } from '@/components/ui/dialog';
@@ -17,16 +18,26 @@ interface CommentAttachment {
   size_bytes: number;
 }
 
+type SharedCommentStatus =
+  | 'approved'
+  | 'changes_requested'
+  | 'comment'
+  | 'caption_edit'
+  | 'tag_edit'
+  | 'schedule_change'
+  | 'video_revised';
+
 interface SharedComment {
   id: string;
   review_link_id: string;
   author_name: string;
   content: string;
-  status: 'approved' | 'changes_requested' | 'comment' | 'caption_edit';
+  status: SharedCommentStatus;
   created_at: string;
   attachments: CommentAttachment[];
   caption_before: string | null;
   caption_after: string | null;
+  metadata: Record<string, unknown>;
 }
 
 interface SharedPost {
@@ -37,11 +48,17 @@ interface SharedPost {
   status: string;
   cover_image_url: string | null;
   video_url: string | null;
+  tagged_people: string[];
+  collaborator_handles: string[];
+  revised_video_url: string | null;
+  revised_video_uploaded_at: string | null;
+  revised_video_notify_pending: boolean;
   comments: SharedComment[];
 }
 
 interface SharedDrop {
   clientName: string;
+  isEditor: boolean;
   drop: { id: string; start_date: string; end_date: string; default_post_time: string };
   posts: SharedPost[];
   expiresAt: string;
@@ -149,9 +166,16 @@ function SharedDropView({
     setNameModalOpen(false);
   }
 
+  // Show unscheduled posts at the top, then chronological by scheduled_at
+  // ascending. Mirrors how editors think about the timeline.
+  const sortedPosts = useMemo(() => sortPostsForList(data.posts), [data.posts]);
+
   const total = data.posts.length;
   const approvedCount = data.posts.filter((p) => latestReview(p.comments) === 'approved').length;
   const changesCount = data.posts.filter((p) => latestReview(p.comments) === 'changes_requested').length;
+  const pendingRevisionCount = data.isEditor
+    ? data.posts.filter((p) => p.revised_video_notify_pending).length
+    : 0;
   const expiresLabel = useMemo(() => {
     const d = new Date(data.expiresAt);
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
@@ -198,6 +222,105 @@ function SharedDropView({
           }
         : prev,
     );
+  }
+
+  function updatePostHandles(
+    postId: string,
+    field: 'tagged_people' | 'collaborator_handles',
+    next: string[],
+    comment: SharedComment | null,
+  ) {
+    setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            posts: prev.posts.map((p) =>
+              p.id === postId
+                ? {
+                    ...p,
+                    [field]: next,
+                    comments: comment ? [...p.comments, comment] : p.comments,
+                  }
+                : p,
+            ),
+          }
+        : prev,
+    );
+  }
+
+  function updatePostScheduledAt(
+    postId: string,
+    nextAt: string | null,
+    comment: SharedComment | null,
+  ) {
+    setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            posts: prev.posts.map((p) =>
+              p.id === postId
+                ? {
+                    ...p,
+                    scheduled_at: nextAt,
+                    comments: comment ? [...p.comments, comment] : p.comments,
+                  }
+                : p,
+            ),
+          }
+        : prev,
+    );
+  }
+
+  function updatePostRevision(
+    postId: string,
+    revision: { revised_video_url: string; revised_video_uploaded_at: string; revised_video_notify_pending: boolean },
+  ) {
+    setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            posts: prev.posts.map((p) =>
+              p.id === postId
+                ? {
+                    ...p,
+                    video_url: revision.revised_video_url,
+                    revised_video_url: revision.revised_video_url,
+                    revised_video_uploaded_at: revision.revised_video_uploaded_at,
+                    revised_video_notify_pending: revision.revised_video_notify_pending,
+                  }
+                : p,
+            ),
+          }
+        : prev,
+    );
+  }
+
+  function clearRevisionPending() {
+    setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            posts: prev.posts.map((p) =>
+              p.revised_video_notify_pending ? { ...p, revised_video_notify_pending: false } : p,
+            ),
+          }
+        : prev,
+    );
+  }
+
+  async function refetch() {
+    try {
+      const storedName =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem(storageKey)?.trim() ?? ''
+          : '';
+      const qs = storedName ? `?as=${encodeURIComponent(storedName)}` : '';
+      const res = await fetch(`/api/calendar/share/${token}${qs}`);
+      const json = await res.json();
+      if (res.ok) setData(() => json as SharedDrop);
+    } catch {
+      // refetch failure is non-fatal; UI keeps the optimistic state
+    }
   }
 
   return (
@@ -275,16 +398,21 @@ function SharedDropView({
       <main className="mx-auto max-w-5xl px-3 py-4 sm:px-6 sm:py-6">
         {viewMode === 'list' ? (
           <div className="mx-auto max-w-3xl space-y-3 sm:space-y-4">
-            {data.posts.map((post, idx) => (
+            {sortedPosts.map((post, idx) => (
               <PostCard
                 key={post.id}
                 index={idx + 1}
                 post={post}
+                isEditor={data.isEditor}
+                defaultPostTime={data.drop.default_post_time}
                 token={token}
                 authorName={authorName}
                 onCommentAdded={(c) => appendComment(post.id, c)}
                 onCommentRemoved={(commentId) => removeComment(post.id, commentId)}
                 onCaptionUpdated={(caption, c) => updatePostCaption(post.id, caption, c)}
+                onHandlesUpdated={(field, next, c) => updatePostHandles(post.id, field, next, c)}
+                onScheduleUpdated={(at, c) => updatePostScheduledAt(post.id, at, c)}
+                onRevisionUploaded={(rev) => updatePostRevision(post.id, rev)}
                 onPlay={() => setPlayingPost(post)}
                 requireName={() => {
                   setPendingName(authorName);
@@ -294,9 +422,24 @@ function SharedDropView({
             ))}
           </div>
         ) : (
-          <CalendarGrid posts={data.posts} drop={data.drop} onSelect={(p) => setDetailPostId(p.id)} />
+          <CalendarGrid posts={sortedPosts} drop={data.drop} onSelect={(p) => setDetailPostId(p.id)} />
         )}
       </main>
+
+      {data.isEditor && pendingRevisionCount > 0 && (
+        <NotifyRevisionsToast
+          token={token}
+          count={pendingRevisionCount}
+          onDone={async (didNotify) => {
+            clearRevisionPending();
+            if (didNotify) {
+              // Refetch so the inserted video_revised comment rows show up
+              // in the share-link history without a page reload.
+              await refetch();
+            }
+          }}
+        />
+      )}
 
       <Dialog
         open={nameModalOpen}
@@ -343,13 +486,18 @@ function SharedDropView({
       <VideoPlayerModal post={playingPost} onClose={() => setPlayingPost(null)} />
 
       <PostDetailModal
-        post={detailPostId ? data.posts.find((p) => p.id === detailPostId) ?? null : null}
-        index={detailPostId ? data.posts.findIndex((p) => p.id === detailPostId) + 1 : 0}
+        post={detailPostId ? sortedPosts.find((p) => p.id === detailPostId) ?? null : null}
+        index={detailPostId ? sortedPosts.findIndex((p) => p.id === detailPostId) + 1 : 0}
+        isEditor={data.isEditor}
+        defaultPostTime={data.drop.default_post_time}
         token={token}
         authorName={authorName}
         onCommentAdded={appendComment}
         onCommentRemoved={removeComment}
         onCaptionUpdated={updatePostCaption}
+        onHandlesUpdated={updatePostHandles}
+        onScheduleUpdated={updatePostScheduledAt}
+        onRevisionUploaded={updatePostRevision}
         onClose={() => setDetailPostId(null)}
         requireName={() => {
           setPendingName(authorName);
@@ -441,21 +589,39 @@ function VideoPlayerModal({ post, onClose }: { post: SharedPost | null; onClose:
 function PostDetailModal({
   post,
   index,
+  isEditor,
+  defaultPostTime,
   token,
   authorName,
   onCommentAdded,
   onCommentRemoved,
   onCaptionUpdated,
+  onHandlesUpdated,
+  onScheduleUpdated,
+  onRevisionUploaded,
   onClose,
   requireName,
 }: {
   post: SharedPost | null;
   index: number;
+  isEditor: boolean;
+  defaultPostTime: string;
   token: string;
   authorName: string;
   onCommentAdded: (postId: string, c: SharedComment) => void;
   onCommentRemoved: (postId: string, commentId: string) => void;
   onCaptionUpdated: (postId: string, caption: string, c: SharedComment) => void;
+  onHandlesUpdated: (
+    postId: string,
+    field: 'tagged_people' | 'collaborator_handles',
+    next: string[],
+    c: SharedComment | null,
+  ) => void;
+  onScheduleUpdated: (postId: string, nextAt: string | null, c: SharedComment | null) => void;
+  onRevisionUploaded: (
+    postId: string,
+    rev: { revised_video_url: string; revised_video_uploaded_at: string; revised_video_notify_pending: boolean },
+  ) => void;
   onClose: () => void;
   requireName: () => void;
 }) {
@@ -466,11 +632,16 @@ function PostDetailModal({
         <PostCard
           index={index}
           post={post}
+          isEditor={isEditor}
+          defaultPostTime={defaultPostTime}
           token={token}
           authorName={authorName}
           onCommentAdded={(c) => onCommentAdded(post.id, c)}
           onCommentRemoved={(commentId) => onCommentRemoved(post.id, commentId)}
           onCaptionUpdated={(caption, c) => onCaptionUpdated(post.id, caption, c)}
+          onHandlesUpdated={(field, next, c) => onHandlesUpdated(post.id, field, next, c)}
+          onScheduleUpdated={(at, c) => onScheduleUpdated(post.id, at, c)}
+          onRevisionUploaded={(rev) => onRevisionUploaded(post.id, rev)}
           requireName={requireName}
           withVideoHeader
         />
@@ -645,22 +816,40 @@ function isSameDay(a: Date, b: Date) {
 function PostCard({
   index,
   post,
+  isEditor,
+  defaultPostTime,
   token,
   authorName,
   onCommentAdded,
   onCommentRemoved,
   onCaptionUpdated,
+  onHandlesUpdated,
+  onScheduleUpdated,
+  onRevisionUploaded,
   onPlay,
   requireName,
   withVideoHeader = false,
 }: {
   index: number;
   post: SharedPost;
+  isEditor: boolean;
+  defaultPostTime: string;
   token: string;
   authorName: string;
   onCommentAdded: (c: SharedComment) => void;
   onCommentRemoved: (commentId: string) => void;
   onCaptionUpdated: (caption: string, c: SharedComment) => void;
+  onHandlesUpdated: (
+    field: 'tagged_people' | 'collaborator_handles',
+    next: string[],
+    c: SharedComment | null,
+  ) => void;
+  onScheduleUpdated: (nextAt: string | null, c: SharedComment | null) => void;
+  onRevisionUploaded: (rev: {
+    revised_video_url: string;
+    revised_video_uploaded_at: string;
+    revised_video_notify_pending: boolean;
+  }) => void;
   onPlay?: () => void;
   requireName: () => void;
   withVideoHeader?: boolean;
@@ -674,6 +863,12 @@ function PostCard({
   const [editingCaption, setEditingCaption] = useState(false);
   const [draftCaption, setDraftCaption] = useState(post.caption);
   const [savingCaption, setSavingCaption] = useState(false);
+  const [schedulePopoverOpen, setSchedulePopoverOpen] = useState(false);
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  const [uploadingRevision, setUploadingRevision] = useState(false);
+  const revisionInputRef = useRef<HTMLInputElement>(null);
+  const isPublished =
+    post.status === 'published' || post.status === 'publishing' || post.status === 'partially_failed';
 
   const review = latestReview(post.comments);
   const latestApprovedId = review === 'approved' ? findLatestApprovedId(post.comments) : null;
@@ -791,6 +986,101 @@ function PostCard({
     }
   }
 
+  async function changeHandle(
+    field: 'tagged_people' | 'collaborator_handles',
+    handle: string,
+    action: 'add' | 'remove',
+  ) {
+    if (!authorName.trim()) {
+      requireName();
+      return;
+    }
+    const cleaned = handle.trim().replace(/^@+/, '');
+    if (!cleaned) return;
+    try {
+      const res = await fetch(`/api/calendar/share/${token}/tags`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          postId: post.id,
+          authorName: authorName.trim(),
+          action,
+          kind: field === 'tagged_people' ? 'tag' : 'collab',
+          handle: cleaned,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Failed to update');
+      const next = (json[field] as string[] | undefined) ?? [];
+      onHandlesUpdated(field, next, (json.comment as SharedComment | null) ?? null);
+      toast.success(action === 'add' ? `${field === 'tagged_people' ? 'Tag' : 'Collaborator'} added` : 'Removed');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update');
+    }
+  }
+
+  async function saveSchedule(nextAt: string | null) {
+    if (!authorName.trim()) {
+      requireName();
+      return;
+    }
+    if (isPublished) {
+      toast.error('Already published — date is locked');
+      return;
+    }
+    setSavingSchedule(true);
+    try {
+      const res = await fetch(`/api/calendar/share/${token}/schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          postId: post.id,
+          authorName: authorName.trim(),
+          scheduledAt: nextAt,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Failed to update date');
+      onScheduleUpdated(json.scheduledAt as string | null, (json.comment as SharedComment | null) ?? null);
+      setSchedulePopoverOpen(false);
+      toast.success('Date updated');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update date');
+    } finally {
+      setSavingSchedule(false);
+    }
+  }
+
+  async function uploadRevisionFile(file: File) {
+    if (!isEditor) return;
+    if (!file.type.startsWith('video/')) {
+      toast.error('Choose a video file');
+      return;
+    }
+    setUploadingRevision(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`/api/calendar/share/${token}/revision/${post.id}`, {
+        method: 'POST',
+        body: fd,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Upload failed');
+      onRevisionUploaded({
+        revised_video_url: json.url as string,
+        revised_video_uploaded_at: json.uploaded_at as string,
+        revised_video_notify_pending: true,
+      });
+      toast.success('Revised video uploaded');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploadingRevision(false);
+      if (revisionInputRef.current) revisionInputRef.current.value = '';
+    }
+  }
+
   async function removeApproval() {
     if (!latestApprovedId) return;
     setRemovingApproval(true);
@@ -815,9 +1105,22 @@ function PostCard({
     <div className="min-w-0 flex-1 space-y-2 sm:space-y-3">
       <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
         <span className="text-xs font-medium text-text-muted">Post {index}</span>
-        <span className="inline-flex items-center gap-1 rounded-full bg-accent-surface px-2 py-0.5 text-xs text-accent-text">
-          <Clock size={11} /> {scheduledLabel}
-        </span>
+        <SchedulePill
+          scheduledAt={post.scheduled_at}
+          scheduledLabel={scheduledLabel}
+          isPublished={isPublished}
+          defaultPostTime={defaultPostTime}
+          open={schedulePopoverOpen}
+          onOpenChange={(v) => {
+            if (v && !authorName.trim()) {
+              requireName();
+              return;
+            }
+            setSchedulePopoverOpen(v);
+          }}
+          saving={savingSchedule}
+          onSave={saveSchedule}
+        />
         {review === 'approved' && (
           <span className="inline-flex items-center gap-1 rounded-full bg-status-success/12 px-2 py-0.5 text-xs font-medium text-status-success">
             <CheckCircle size={11} /> Approved
@@ -897,6 +1200,33 @@ function PostCard({
           ))}
         </div>
       )}
+
+      <HandleEditor
+        label="Tagged"
+        icon={Tag}
+        placeholder="@username"
+        handles={post.tagged_people}
+        disabled={isPublished}
+        onAdd={(h) => changeHandle('tagged_people', h, 'add')}
+        onRemove={(h) => changeHandle('tagged_people', h, 'remove')}
+        requireName={() => {
+          if (!authorName.trim()) requireName();
+        }}
+        hasName={!!authorName.trim()}
+      />
+      <HandleEditor
+        label="Collaborators"
+        icon={Users}
+        placeholder="@collab"
+        handles={post.collaborator_handles}
+        disabled={isPublished}
+        onAdd={(h) => changeHandle('collaborator_handles', h, 'add')}
+        onRemove={(h) => changeHandle('collaborator_handles', h, 'remove')}
+        requireName={() => {
+          if (!authorName.trim()) requireName();
+        }}
+        hasName={!!authorName.trim()}
+      />
     </div>
   );
 
@@ -908,6 +1238,18 @@ function PostCard({
           : 'overflow-hidden rounded-xl border border-nativz-border bg-surface'
       }
     >
+      {isEditor && (
+        <input
+          ref={revisionInputRef}
+          type="file"
+          accept="video/*"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) uploadRevisionFile(f);
+          }}
+        />
+      )}
       {withVideoHeader ? (
         <>
           <div className="relative bg-black">
@@ -926,6 +1268,17 @@ function PostCard({
                   <p className="text-sm">Video not available</p>
                 </div>
               </div>
+            )}
+            {isEditor && (
+              <button
+                type="button"
+                onClick={() => revisionInputRef.current?.click()}
+                disabled={uploadingRevision}
+                className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-lg bg-black/70 px-2.5 py-1.5 text-[11px] font-medium text-white ring-1 ring-white/15 backdrop-blur transition-opacity hover:bg-black/85 disabled:opacity-60"
+              >
+                {uploadingRevision ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                {uploadingRevision ? 'Uploading…' : 'Re-upload cut'}
+              </button>
             )}
           </div>
           <div className="p-3 sm:p-4">{captionBlock}</div>
@@ -955,6 +1308,20 @@ function PostCard({
                 </div>
               </div>
             </button>
+            {isEditor && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  revisionInputRef.current?.click();
+                }}
+                disabled={uploadingRevision}
+                className="mt-1.5 inline-flex w-full items-center justify-center gap-1 rounded-md border border-nativz-border bg-transparent px-2 py-1 text-[10px] text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50"
+              >
+                {uploadingRevision ? <Loader2 size={10} className="animate-spin" /> : <Upload size={10} />}
+                {uploadingRevision ? 'Uploading…' : 'Re-upload'}
+              </button>
+            )}
           </div>
           {captionBlock}
         </div>
@@ -1053,9 +1420,11 @@ function CommentRow({ comment }: { comment: SharedComment }) {
       ? 'text-status-success'
       : comment.status === 'changes_requested'
         ? 'text-status-warning'
-        : comment.status === 'caption_edit'
+        : comment.status === 'caption_edit' || comment.status === 'tag_edit' || comment.status === 'video_revised'
           ? 'text-accent-text'
-          : 'text-text-secondary';
+          : comment.status === 'schedule_change'
+            ? 'text-accent-text'
+            : 'text-text-secondary';
   const Icon =
     comment.status === 'approved'
       ? CheckCircle
@@ -1063,7 +1432,13 @@ function CommentRow({ comment }: { comment: SharedComment }) {
         ? AlertTriangle
         : comment.status === 'caption_edit'
           ? Type
-          : MessageSquare;
+          : comment.status === 'tag_edit'
+            ? AtSign
+            : comment.status === 'schedule_change'
+              ? Clock
+              : comment.status === 'video_revised'
+                ? Film
+                : MessageSquare;
   const time = new Date(comment.created_at).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -1097,6 +1472,22 @@ function CommentRow({ comment }: { comment: SharedComment }) {
     );
   }
 
+  if (
+    comment.status === 'tag_edit' ||
+    comment.status === 'schedule_change' ||
+    comment.status === 'video_revised'
+  ) {
+    return (
+      <div className="rounded-lg border border-accent/20 bg-accent/5 px-3 py-2">
+        <div className="flex items-center gap-2 text-xs">
+          <Icon size={11} className={tone} />
+          <span className="font-medium text-text-primary">{comment.author_name}</span>
+          <span className="text-text-muted">{comment.content || activityVerb(comment.status)} · {time}</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-lg border border-nativz-border bg-surface px-3 py-2">
       <div className="mb-0.5 flex items-center gap-2 text-xs">
@@ -1116,6 +1507,324 @@ function CommentRow({ comment }: { comment: SharedComment }) {
       )}
     </div>
   );
+}
+
+function activityVerb(status: SharedCommentStatus): string {
+  switch (status) {
+    case 'tag_edit':
+      return 'updated tags';
+    case 'schedule_change':
+      return 'changed the schedule';
+    case 'video_revised':
+      return 're-uploaded the video';
+    default:
+      return '';
+  }
+}
+
+function SchedulePill({
+  scheduledAt,
+  scheduledLabel,
+  isPublished,
+  defaultPostTime,
+  open,
+  onOpenChange,
+  saving,
+  onSave,
+}: {
+  scheduledAt: string | null;
+  scheduledLabel: string;
+  isPublished: boolean;
+  defaultPostTime: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  saving: boolean;
+  onSave: (nextAt: string | null) => void;
+}) {
+  const initial = scheduledAt ? toLocalDatetimeInput(scheduledAt) : suggestedDatetimeInput(defaultPostTime);
+  const [draft, setDraft] = useState(initial);
+
+  useEffect(() => {
+    setDraft(scheduledAt ? toLocalDatetimeInput(scheduledAt) : suggestedDatetimeInput(defaultPostTime));
+  }, [scheduledAt, defaultPostTime]);
+
+  return (
+    <span className="relative">
+      <button
+        type="button"
+        onClick={() => onOpenChange(!open)}
+        disabled={isPublished}
+        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors ${
+          isPublished
+            ? 'bg-surface-hover text-text-muted'
+            : 'bg-accent-surface text-accent-text hover:bg-accent/15'
+        }`}
+        title={isPublished ? 'Already published — date is locked' : 'Change scheduled date'}
+      >
+        <Clock size={11} /> {scheduledLabel}
+        {!isPublished && <Pencil size={9} className="opacity-60" />}
+      </button>
+      {open && !isPublished && (
+        <div className="absolute left-0 top-full z-30 mt-1 w-[280px] rounded-lg border border-nativz-border bg-surface p-3 shadow-lg">
+          <p className="mb-2 text-[11px] font-medium text-text-muted">Move post to</p>
+          <input
+            type="datetime-local"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            className="mb-2 w-full rounded-md border border-nativz-border bg-transparent px-2 py-1.5 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+          />
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => onSave(null)}
+              disabled={saving || !scheduledAt}
+              className="inline-flex items-center gap-1 rounded-md border border-nativz-border bg-transparent px-2 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-40"
+            >
+              Unschedule
+            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => onOpenChange(false)}
+                disabled={saving}
+                className="rounded-md border border-nativz-border bg-transparent px-2 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!draft) return;
+                  onSave(new Date(draft).toISOString());
+                }}
+                disabled={saving || !draft}
+                className="inline-flex items-center gap-1 rounded-md bg-accent px-2 py-1 text-[11px] font-medium text-accent-contrast transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {saving ? <Loader2 size={10} className="animate-spin" /> : <CheckCircle size={10} />}
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </span>
+  );
+}
+
+function HandleEditor({
+  label,
+  icon: Icon,
+  placeholder,
+  handles,
+  disabled,
+  onAdd,
+  onRemove,
+  requireName,
+  hasName,
+}: {
+  label: string;
+  icon: typeof Tag;
+  placeholder: string;
+  handles: string[];
+  disabled: boolean;
+  onAdd: (h: string) => void | Promise<void>;
+  onRemove: (h: string) => void | Promise<void>;
+  requireName: () => void;
+  hasName: boolean;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  function commit() {
+    const cleaned = draft.trim().replace(/^@+/, '');
+    if (!cleaned) return;
+    onAdd(cleaned);
+    setDraft('');
+    setAdding(false);
+  }
+
+  if (handles.length === 0 && !adding) {
+    return (
+      <div className="flex items-center gap-2 text-[11px] text-text-muted">
+        <Icon size={11} />
+        <span>{label}:</span>
+        <button
+          type="button"
+          onClick={() => {
+            if (!hasName) {
+              requireName();
+              return;
+            }
+            setAdding(true);
+          }}
+          disabled={disabled}
+          className="inline-flex items-center gap-1 rounded-md border border-dashed border-nativz-border px-2 py-0.5 text-[11px] text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-40"
+        >
+          <Plus size={10} /> Add
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+      <span className="inline-flex items-center gap-1 text-text-muted">
+        <Icon size={11} /> {label}:
+      </span>
+      {handles.map((h) => (
+        <span
+          key={h}
+          className="group inline-flex items-center gap-1 rounded-full bg-accent-surface px-2 py-0.5 text-accent-text"
+        >
+          @{h}
+          {!disabled && (
+            <button
+              type="button"
+              onClick={() => onRemove(h)}
+              className="rounded-full p-0.5 text-accent-text/70 transition-colors hover:bg-accent/15 hover:text-accent-text"
+              aria-label={`Remove ${h}`}
+            >
+              <X size={9} />
+            </button>
+          )}
+        </span>
+      ))}
+      {adding ? (
+        <span className="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-background/40 px-1.5 py-0.5">
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                commit();
+              } else if (e.key === 'Escape') {
+                setAdding(false);
+                setDraft('');
+              }
+            }}
+            placeholder={placeholder}
+            autoFocus
+            className="w-24 bg-transparent text-[11px] text-text-primary placeholder:text-text-muted focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={commit}
+            className="rounded-full p-0.5 text-accent-text transition-colors hover:bg-accent/15"
+            aria-label="Add"
+          >
+            <CheckCircle size={11} />
+          </button>
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            if (!hasName) {
+              requireName();
+              return;
+            }
+            setAdding(true);
+          }}
+          disabled={disabled}
+          className="inline-flex items-center gap-1 rounded-full border border-dashed border-nativz-border px-2 py-0.5 text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-40"
+        >
+          <Plus size={10} /> Add
+        </button>
+      )}
+    </div>
+  );
+}
+
+function NotifyRevisionsToast({
+  token,
+  count,
+  onDone,
+}: {
+  token: string;
+  count: number;
+  onDone: (didNotify: boolean) => void | Promise<void>;
+}) {
+  const [busy, setBusy] = useState<'notify' | 'skip' | null>(null);
+
+  async function call(action: 'notify' | 'skip') {
+    setBusy(action);
+    try {
+      const res = await fetch(`/api/calendar/share/${token}/notify-revisions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Failed');
+      if (action === 'notify') toast.success('Client notified');
+      await onDone(action === 'notify');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="fixed bottom-5 right-5 z-40 w-[320px] max-w-[calc(100vw-2rem)] rounded-xl border border-accent/40 bg-surface p-4 shadow-xl">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-accent-surface text-accent-text">
+          <BellRing size={14} />
+        </span>
+        <h4 className="font-display text-sm font-semibold text-text-primary">
+          {count} revised {count === 1 ? 'video' : 'videos'} ready
+        </h4>
+      </div>
+      <p className="mb-3 text-xs text-text-secondary">
+        Notify the client to take another look at the new {count === 1 ? 'cut' : 'cuts'}?
+      </p>
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => call('skip')}
+          disabled={busy !== null}
+          className="inline-flex items-center gap-1 rounded-lg border border-nativz-border bg-transparent px-3 py-1.5 text-xs text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50"
+        >
+          {busy === 'skip' ? <Loader2 size={11} className="animate-spin" /> : null}
+          Skip
+        </button>
+        <button
+          type="button"
+          onClick={() => call('notify')}
+          disabled={busy !== null}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-contrast transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          {busy === 'notify' ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
+          Notify client
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function sortPostsForList(posts: SharedPost[]): SharedPost[] {
+  return [...posts].sort((a, b) => {
+    if (!a.scheduled_at && !b.scheduled_at) return 0;
+    if (!a.scheduled_at) return -1;
+    if (!b.scheduled_at) return 1;
+    return new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime();
+  });
+}
+
+function toLocalDatetimeInput(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function suggestedDatetimeInput(defaultPostTime: string): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const [hh = '12', mm = '00'] = (defaultPostTime ?? '12:00').split(':');
+  d.setHours(Number(hh), Number(mm), 0, 0);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function AttachmentChip({
