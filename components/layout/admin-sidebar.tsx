@@ -22,6 +22,7 @@ import {
   Bell,
   Calendar,
   CalendarDays,
+  ClipboardCheck,
   Cpu,
   Gauge,
   Telescope,
@@ -91,7 +92,19 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: '/finder/new', label: 'Trend Finder', icon: TrendingUp },
       { href: '/lab', label: 'Strategy Lab', icon: MessagesSquare },
-      { href: '/admin/calendar', label: 'Calendar', icon: CalendarDays },
+      {
+        // "Content" parent — splits the old flat Calendar row into a
+        // 2-child accordion (Calendar + Review). Default child stays
+        // /admin/calendar so existing bookmarks land on the scheduler;
+        // Review is the new share-link inventory subpage.
+        href: '/admin/calendar',
+        label: 'Content',
+        icon: CalendarDays,
+        children: [
+          { href: '/admin/calendar', label: 'Calendar', icon: CalendarDays },
+          { href: '/admin/calendar/review', label: 'Review', icon: ClipboardCheck },
+        ],
+      },
       {
         // NAT-62 (2026-04-22): unified landing page. Renamed back to
         // "Competitor spying" 2026-04-22 evening per Jack — feels more
@@ -236,6 +249,7 @@ const PORTAL_HREF_REWRITES: Record<string, string> = {
  */
 const VIEWER_UNIFIED_HREFS: Record<string, string> = {
   '/admin/calendar': '/calendar',
+  '/admin/calendar/review': '/calendar/review',
 };
 
 function getNavSectionsForRole(role: 'admin' | 'viewer', prefix: string): NavSection[] {
@@ -534,7 +548,26 @@ export function AdminSidebar({
                         <div className="overflow-hidden">
                           <ul className="mt-1.5 ml-6 space-y-1 pb-1 pl-2 border-l border-nativz-border">
                             {item.children.map((child) => {
-                              const cActive = isActivePath(pathname, child.href, searchParams);
+                              // Sibling-aware match: when one child's href is a
+                              // prefix of another's (Calendar → /admin/calendar
+                              // and Review → /admin/calendar/review), the broad
+                              // `pathname.startsWith(href + '/')` rule lights up
+                              // both children on /admin/calendar/review. Defer
+                              // to the longer match — if any sibling is a more
+                              // specific match for the current path, this child
+                              // is not active.
+                              const cActive = (() => {
+                                if (pathname === child.href) return true;
+                                const moreSpecific = item.children!.some(
+                                  (sibling) =>
+                                    sibling.href !== child.href &&
+                                    sibling.href.startsWith(child.href + '/') &&
+                                    (pathname === sibling.href ||
+                                      pathname.startsWith(sibling.href + '/')),
+                                );
+                                if (moreSpecific) return false;
+                                return isActivePath(pathname, child.href, searchParams);
+                              })();
                               return (
                                 <li key={child.href}>
                                   <Link
