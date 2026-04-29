@@ -226,6 +226,24 @@ function SharedDropView({
     );
   }
 
+  function updateComment(postId: string, comment: SharedComment) {
+    setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            posts: prev.posts.map((p) =>
+              p.id === postId
+                ? {
+                    ...p,
+                    comments: p.comments.map((c) => (c.id === comment.id ? comment : c)),
+                  }
+                : p,
+            ),
+          }
+        : prev,
+    );
+  }
+
   function updatePostHandles(
     postId: string,
     field: 'tagged_people' | 'collaborator_handles',
@@ -411,6 +429,7 @@ function SharedDropView({
                 authorName={authorName}
                 onCommentAdded={(c) => appendComment(post.id, c)}
                 onCommentRemoved={(commentId) => removeComment(post.id, commentId)}
+                onCommentUpdated={(c) => updateComment(post.id, c)}
                 onCaptionUpdated={(caption, c) => updatePostCaption(post.id, caption, c)}
                 onHandlesUpdated={(field, next, c) => updatePostHandles(post.id, field, next, c)}
                 onScheduleUpdated={(at, c) => updatePostScheduledAt(post.id, at, c)}
@@ -496,6 +515,7 @@ function SharedDropView({
         authorName={authorName}
         onCommentAdded={appendComment}
         onCommentRemoved={removeComment}
+        onCommentUpdated={updateComment}
         onCaptionUpdated={updatePostCaption}
         onHandlesUpdated={updatePostHandles}
         onScheduleUpdated={updatePostScheduledAt}
@@ -615,6 +635,7 @@ function PostDetailModal({
   authorName,
   onCommentAdded,
   onCommentRemoved,
+  onCommentUpdated,
   onCaptionUpdated,
   onHandlesUpdated,
   onScheduleUpdated,
@@ -630,6 +651,7 @@ function PostDetailModal({
   authorName: string;
   onCommentAdded: (postId: string, c: SharedComment) => void;
   onCommentRemoved: (postId: string, commentId: string) => void;
+  onCommentUpdated: (postId: string, c: SharedComment) => void;
   onCaptionUpdated: (postId: string, caption: string, c: SharedComment) => void;
   onHandlesUpdated: (
     postId: string,
@@ -658,6 +680,7 @@ function PostDetailModal({
           authorName={authorName}
           onCommentAdded={(c) => onCommentAdded(post.id, c)}
           onCommentRemoved={(commentId) => onCommentRemoved(post.id, commentId)}
+          onCommentUpdated={(c) => onCommentUpdated(post.id, c)}
           onCaptionUpdated={(caption, c) => onCaptionUpdated(post.id, caption, c)}
           onHandlesUpdated={(field, next, c) => onHandlesUpdated(post.id, field, next, c)}
           onScheduleUpdated={(at, c) => onScheduleUpdated(post.id, at, c)}
@@ -842,6 +865,7 @@ function PostCard({
   authorName,
   onCommentAdded,
   onCommentRemoved,
+  onCommentUpdated,
   onCaptionUpdated,
   onHandlesUpdated,
   onScheduleUpdated,
@@ -858,6 +882,7 @@ function PostCard({
   authorName: string;
   onCommentAdded: (c: SharedComment) => void;
   onCommentRemoved: (commentId: string) => void;
+  onCommentUpdated: (c: SharedComment) => void;
   onCaptionUpdated: (caption: string, c: SharedComment) => void;
   onHandlesUpdated: (
     field: 'tagged_people' | 'collaborator_handles',
@@ -995,10 +1020,22 @@ function PostCard({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Failed to submit');
-      onCommentAdded(json.comment as SharedComment);
+      const savedComment = json.comment as SharedComment;
+      onCommentAdded(savedComment);
       setCommentText('');
       setPendingAttachments([]);
-      toast.success(status === 'approved' ? 'Post approved' : 'Revision added');
+      // Server may auto-upgrade a "changes_requested" submission to "approved"
+      // when the body reads like an approval ("approved", "love this", etc.).
+      // Reflect the actual recorded status in the toast so the user isn't
+      // confused when their "revision" turns into a green checkmark.
+      const wasAutoApproved = status !== 'approved' && savedComment.status === 'approved';
+      toast.success(
+        wasAutoApproved
+          ? 'Looked like an approval — marked approved'
+          : status === 'approved'
+            ? 'Post approved'
+            : 'Revision added',
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to submit');
     } finally {
@@ -1363,7 +1400,9 @@ function PostCard({
                 key={c.id}
                 comment={c}
                 token={token}
+                isEditor={isEditor}
                 onDeleted={() => onCommentRemoved(c.id)}
+                onUpdated={onCommentUpdated}
               />
             ))}
           </div>
@@ -1449,15 +1488,52 @@ function PostCard({
 function CommentRow({
   comment,
   token,
+  isEditor,
   onDeleted,
+  onUpdated,
 }: {
   comment: SharedComment;
   token: string;
+  isEditor: boolean;
   onDeleted: () => void;
+  onUpdated: (comment: SharedComment) => void;
 }) {
   const [deleting, setDeleting] = useState(false);
+  const [resolving, setResolving] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [dontAsk, setDontAsk] = useState(false);
+  // metadata.resolved is the editor-set "this revision was handled" flag.
+  // Stored in metadata (not a status flip) so the audit thread still groups
+  // with other change-request rows but the icon/copy switch to a green check.
+  const isResolved =
+    comment.status === 'changes_requested' &&
+    !!(comment.metadata && (comment.metadata as Record<string, unknown>).resolved);
+  // metadata.auto_approved is set by the server when a "love this, change
+  // nothing"-style comment was upgraded to an approval — used below to label
+  // the row "Auto-approved" rather than just "Approved".
+  const wasAutoApproved =
+    comment.status === 'approved' &&
+    !!(comment.metadata && (comment.metadata as Record<string, unknown>).auto_approved);
+
+  async function toggleResolved() {
+    if (resolving) return;
+    setResolving(true);
+    try {
+      const res = await fetch(`/api/calendar/share/${token}/comment`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ commentId: comment.id, resolved: !isResolved }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Failed to update');
+      onUpdated(json.comment as SharedComment);
+      toast.success(!isResolved ? 'Marked as revised' : 'Reopened revision');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update');
+    } finally {
+      setResolving(false);
+    }
+  }
 
   function requestDelete() {
     if (deleting) return;
@@ -1546,20 +1622,48 @@ function CommentRow({
     );
   }
 
+  // Editor-only "Mark revised" affordance on a change-request row. After
+  // resolving, the same button reopens the row in case the editor flipped
+  // it by accident. Visible always (not just on hover) so editors can scan
+  // the history and see what's still outstanding.
+  const resolveButton =
+    comment.status === 'changes_requested' && isEditor ? (
+      <button
+        type="button"
+        onClick={toggleResolved}
+        disabled={resolving}
+        aria-label={isResolved ? 'Reopen revision' : 'Mark as revised'}
+        className={`ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
+          isResolved
+            ? 'bg-status-success/12 text-status-success ring-1 ring-status-success/30 hover:bg-status-success/20'
+            : 'bg-surface text-text-secondary ring-1 ring-nativz-border hover:bg-status-success/10 hover:text-status-success hover:ring-status-success/40'
+        }`}
+        title={isResolved ? 'Click to reopen this revision' : 'Click when this revision is done'}
+      >
+        {resolving ? (
+          <Loader2 size={11} className="animate-spin" />
+        ) : (
+          <CheckCircle size={11} />
+        )}
+        {isResolved ? 'Revised' : 'Mark revised'}
+      </button>
+    ) : null;
+
   const deleteButton = (
     <button
       type="button"
       onClick={requestDelete}
       disabled={deleting}
       aria-label="Remove from history"
-      className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-text-muted opacity-0 transition hover:bg-status-danger/15 hover:text-status-danger focus-visible:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
+      className={`${resolveButton ? 'ml-1' : 'ml-auto'} inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-text-muted opacity-0 transition hover:bg-status-danger/15 hover:text-status-danger focus-visible:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50`}
     >
       {deleting ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}
     </button>
   );
 
-  const tone =
-    comment.status === 'approved'
+  const tone = isResolved
+    ? 'text-status-success'
+    : comment.status === 'approved'
       ? 'text-status-success'
       : comment.status === 'changes_requested'
         ? 'text-status-warning'
@@ -1568,8 +1672,9 @@ function CommentRow({
           : comment.status === 'schedule_change'
             ? 'text-accent-text'
             : 'text-text-secondary';
-  const Icon =
-    comment.status === 'approved'
+  const Icon = isResolved
+    ? CheckCircle
+    : comment.status === 'approved'
       ? CheckCircle
       : comment.status === 'changes_requested'
         ? AlertTriangle
@@ -1633,12 +1738,29 @@ function CommentRow({
     );
   }
 
+  // Default branch covers `comment`, `approved`, and `changes_requested`. The
+  // last one is the row that gets the resolveButton + green tint when an
+  // editor marks it done — visible to the client too so they know the revision
+  // landed.
+  const containerClass =
+    isResolved
+      ? 'group rounded-lg border border-status-success/30 bg-status-success/5 px-3 py-2'
+      : comment.status === 'changes_requested'
+        ? 'group rounded-lg border border-status-warning/30 bg-status-warning/5 px-3 py-2'
+        : 'group rounded-lg border border-nativz-border bg-surface px-3 py-2';
+  const trailingMeta =
+    comment.status === 'approved' && wasAutoApproved
+      ? 'auto-approved · '
+      : isResolved
+        ? 'marked revised · '
+        : '';
   return (
-    <div className="group rounded-lg border border-nativz-border bg-surface px-3 py-2">
+    <div className={containerClass}>
       <div className="mb-1 flex items-center gap-2 text-[13px]">
         <Icon size={12} className={tone} />
         <span className="font-medium text-text-primary">{comment.author_name}</span>
-        <span className="text-text-muted">· {time}</span>
+        <span className="text-text-muted">· {trailingMeta}{time}</span>
+        {resolveButton}
         {deleteButton}
       </div>
       {comment.content && (

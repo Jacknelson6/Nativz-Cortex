@@ -32,6 +32,37 @@ const DeleteSchema = z.object({
   commentId: z.string().uuid(),
 });
 
+const PatchSchema = z.object({
+  commentId: z.string().uuid(),
+  resolved: z.boolean(),
+});
+
+/**
+ * Detect natural-language approval inside a "comment" / "changes_requested"
+ * payload. Some clients submit the revision form with text like "approved" or
+ * "love this, change nothing" — the smart move is to treat those as an
+ * approval rather than a vague request for changes.
+ *
+ * Heuristic:
+ *   1. Trimmed message must be ≤80 chars (long, nuanced messages are not
+ *      blanket approvals).
+ *   2. Must match an approval phrase.
+ *   3. Must not contain a hedging conjunction ("but", "however", …) that
+ *      signals a follow-up request.
+ *
+ * Conservative on purpose. Better to miss a fuzzy approval than to publish a
+ * post the client wanted to tweak.
+ */
+function looksLikeApproval(content: string): boolean {
+  const trimmed = content.trim();
+  if (!trimmed || trimmed.length > 80) return false;
+  const APPROVAL_RE =
+    /\b(approved?|approving|lgtm|sgtm|ship ?it|good to go|all good|love (this|it|them)|nothing to change|change nothing|no (changes?|edits|notes|revisions?)|leave (as is|it)|perfect|looks (good|great|amazing|perfect|fantastic)|sounds (good|great)|green ?light)\b/i;
+  if (!APPROVAL_RE.test(trimmed)) return false;
+  if (/\b(but|except|however|though|other than|aside from)\b/i.test(trimmed)) return false;
+  return true;
+}
+
 const TITLE_BY_STATUS: Record<'approved' | 'changes_requested' | 'comment', (a: string, c: string) => string> = {
   approved: (a, c) => `${a} approved a post in ${c}`,
   changes_requested: (a, c) => `${a} requested changes in ${c}`,
@@ -66,16 +97,32 @@ export async function POST(
     return NextResponse.json({ error: 'post is not part of this share link' }, { status: 400 });
   }
 
+  // Smart approval: if the user submitted via "Add revision" (or as a plain
+  // comment) but the body reads like an approval, upgrade the status. We
+  // attach a metadata flag so the audit trail still shows it was inferred,
+  // not a button-press, and the public UI can surface that nuance.
+  const submittedStatus = parsed.data.status;
+  const trimmedContent = parsed.data.content.trim();
+  const inferredApproval =
+    submittedStatus !== 'approved' && looksLikeApproval(trimmedContent);
+  const finalStatus: 'approved' | 'changes_requested' | 'comment' = inferredApproval
+    ? 'approved'
+    : submittedStatus;
+  const insertMetadata: Record<string, unknown> = inferredApproval
+    ? { auto_approved: true, original_status: submittedStatus }
+    : {};
+
   const { data, error } = await admin
     .from('post_review_comments')
     .insert({
       review_link_id: reviewLinkId,
       author_name: parsed.data.authorName.trim(),
-      content: parsed.data.content.trim(),
-      status: parsed.data.status,
+      content: trimmedContent,
+      status: finalStatus,
       attachments: parsed.data.attachments ?? [],
+      metadata: insertMetadata,
     })
-    .select('id, review_link_id, author_name, content, status, created_at, attachments')
+    .select('id, review_link_id, author_name, content, status, created_at, attachments, metadata')
     .single();
   if (error || !data) {
     return NextResponse.json({ error: error?.message ?? 'failed' }, { status: 500 });
@@ -91,8 +138,8 @@ export async function POST(
     try {
       await notifyAdminsOfComment(admin, link.drop_id, token, reviewLinkMap, {
         authorName: parsed.data.authorName.trim(),
-        content: parsed.data.content.trim(),
-        status: parsed.data.status,
+        content: trimmedContent,
+        status: finalStatus,
         attachments: parsed.data.attachments ?? [],
       });
     } catch (err) {
@@ -109,7 +156,7 @@ export async function POST(
       console.error('Monday calendar approval sync failed:', err);
     }
 
-    if (parsed.data.status === 'approved') {
+    if (finalStatus === 'approved') {
       // publishScheduledPost is idempotent (returns alreadyPublished=true if
       // already scheduled), so re-approval / multiple approvers won't double-post.
       try {
@@ -180,6 +227,71 @@ export async function DELETE(
   }
 
   return NextResponse.json({ ok: true, commentId: comment.id });
+}
+
+/**
+ * Toggle the "resolved" flag on a `changes_requested` history row. Editors
+ * use this to mark a revision request as handled — the icon flips from a
+ * warning to a green check and the label changes to "Revised". Stored as a
+ * metadata flag rather than a status change so the comment still threads
+ * correctly with other change-request rows in the audit trail.
+ */
+export async function PATCH(
+  req: Request,
+  ctx: { params: Promise<{ token: string }> },
+) {
+  const { token } = await ctx.params;
+  const body = await req.json().catch(() => null);
+  const parsed = PatchSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  const admin = createAdminClient();
+  const { data: link } = await admin
+    .from('content_drop_share_links')
+    .select('drop_id, post_review_link_map, expires_at')
+    .eq('token', token)
+    .single<{ drop_id: string; post_review_link_map: Record<string, string>; expires_at: string }>();
+  if (!link) return NextResponse.json({ error: 'not found' }, { status: 404 });
+  if (new Date(link.expires_at) < new Date()) {
+    return NextResponse.json({ error: 'link expired' }, { status: 410 });
+  }
+
+  const { data: comment } = await admin
+    .from('post_review_comments')
+    .select('id, review_link_id, status, metadata')
+    .eq('id', parsed.data.commentId)
+    .single<{ id: string; review_link_id: string; status: string; metadata: Record<string, unknown> | null }>();
+  if (!comment) return NextResponse.json({ error: 'not found' }, { status: 404 });
+
+  const allowedReviewIds = new Set(Object.values(link.post_review_link_map ?? {}));
+  if (!allowedReviewIds.has(comment.review_link_id)) {
+    return NextResponse.json({ error: 'comment is not part of this share link' }, { status: 400 });
+  }
+  if (comment.status !== 'changes_requested') {
+    return NextResponse.json(
+      { error: 'only revision requests can be marked resolved' },
+      { status: 400 },
+    );
+  }
+
+  const existing = comment.metadata ?? {};
+  const nextMetadata: Record<string, unknown> = parsed.data.resolved
+    ? { ...existing, resolved: true, resolved_at: new Date().toISOString() }
+    : { ...existing, resolved: false, resolved_at: null };
+
+  const { data: updated, error } = await admin
+    .from('post_review_comments')
+    .update({ metadata: nextMetadata })
+    .eq('id', comment.id)
+    .select('id, review_link_id, author_name, content, status, created_at, attachments, metadata')
+    .single();
+  if (error || !updated) {
+    return NextResponse.json({ error: error?.message ?? 'failed' }, { status: 500 });
+  }
+
+  return NextResponse.json({ comment: updated });
 }
 
 async function notifyAdminsOfComment(
