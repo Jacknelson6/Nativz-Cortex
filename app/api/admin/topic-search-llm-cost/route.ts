@@ -2,57 +2,9 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { DEFAULT_OPENROUTER_MODEL } from '@/lib/ai/openrouter-default-model';
+import { getOpenRouterModel } from '@/lib/ai/openrouter-models';
 
 export const dynamic = 'force-dynamic';
-
-interface OpenRouterPricing {
-  promptPricePerM: number;
-  completionPricePerM: number;
-  isVariable: boolean;
-}
-
-interface ModelsCacheEntry {
-  pricingByModel: Map<string, OpenRouterPricing>;
-  fetchedAt: number;
-}
-
-let modelsCache: ModelsCacheEntry | null = null;
-const MODELS_TTL_MS = 10 * 60 * 1000;
-
-async function getOpenRouterPricing(): Promise<Map<string, OpenRouterPricing>> {
-  const now = Date.now();
-  if (modelsCache && now - modelsCache.fetchedAt < MODELS_TTL_MS) {
-    return modelsCache.pricingByModel;
-  }
-
-  const res = await fetch('https://openrouter.ai/api/v1/models', {
-    headers: { 'Content-Type': 'application/json' },
-    next: { revalidate: 600 },
-  });
-  if (!res.ok) {
-    if (modelsCache) return modelsCache.pricingByModel;
-    throw new Error(`OpenRouter API error: ${res.status}`);
-  }
-
-  const json = (await res.json()) as { data?: Array<Record<string, unknown>> };
-  const map = new Map<string, OpenRouterPricing>();
-  for (const m of json.data ?? []) {
-    const id = m.id as string | undefined;
-    if (!id) continue;
-    const pricing = m.pricing as { prompt?: string; completion?: string } | undefined;
-    const promptPerToken = parseFloat(pricing?.prompt ?? '0');
-    const completionPerToken = parseFloat(pricing?.completion ?? '0');
-    const isVariable = promptPerToken < 0 || completionPerToken < 0;
-    map.set(id, {
-      promptPricePerM: isVariable ? -1 : promptPerToken * 1_000_000,
-      completionPricePerM: isVariable ? -1 : completionPerToken * 1_000_000,
-      isVariable,
-    });
-  }
-
-  modelsCache = { pricingByModel: map, fetchedAt: now };
-  return map;
-}
 
 const FALLBACK_AVG_INPUT = 12_000;
 const FALLBACK_AVG_OUTPUT = 2_500;
@@ -63,7 +15,7 @@ const WINDOW_DAYS = 30;
  *
  * Estimated LLM cost for one topic search:
  *   - currently configured topic-search model (from agency_settings)
- *   - that model's live per-1M-token pricing (OpenRouter)
+ *   - that model's per-1M-token pricing (cached OpenRouter catalog)
  *   - empirical avg input/output tokens per search over the last 30 days
  *   - resulting estimated $/search
  *
@@ -89,7 +41,7 @@ export async function GET() {
 
   const since = new Date(Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-  const [settingsRes, usageRes, searchCountRes, pricingMap] = await Promise.all([
+  const [settingsRes, usageRes, searchCountRes] = await Promise.all([
     admin
       .from('agency_settings')
       .select('topic_search_planner_model, topic_search_research_model, topic_search_merger_model')
@@ -104,7 +56,6 @@ export async function GET() {
       .from('topic_searches')
       .select('id', { count: 'exact', head: true })
       .gte('created_at', since),
-    getOpenRouterPricing().catch(() => null),
   ]);
 
   const modelId =
@@ -122,9 +73,10 @@ export async function GET() {
   const avgInputTokens = hasSample ? Math.round(sumInput / searchCount) : FALLBACK_AVG_INPUT;
   const avgOutputTokens = hasSample ? Math.round(sumOutput / searchCount) : FALLBACK_AVG_OUTPUT;
 
-  const pricing = pricingMap?.get(modelId) ?? null;
-  const promptPricePerM = pricing && !pricing.isVariable ? pricing.promptPricePerM : null;
-  const completionPricePerM = pricing && !pricing.isVariable ? pricing.completionPricePerM : null;
+  const model = await getOpenRouterModel(admin, modelId).catch(() => null);
+  const pricingAvailable = model != null && !model.isVariable;
+  const promptPricePerM = pricingAvailable ? model!.promptPrice : null;
+  const completionPricePerM = pricingAvailable ? model!.completionPrice : null;
 
   const costUsd =
     promptPricePerM != null && completionPricePerM != null
@@ -141,6 +93,6 @@ export async function GET() {
     costUsd,
     sampleSize: searchCount,
     windowDays: WINDOW_DAYS,
-    pricingAvailable: pricing != null,
+    pricingAvailable,
   });
 }
