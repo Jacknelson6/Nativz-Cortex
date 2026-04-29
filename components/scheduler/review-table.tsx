@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Bell,
-  CalendarDays,
   ChevronDown,
   ChevronRight,
   FileText,
@@ -57,8 +56,8 @@ import type {
  * Columns:
  *   Project name (inline-editable, defaults to derived "May 2026
  *     Content Calendar"-style label) · Date sent · Status · Project
- *     type · Total creatives · Approved creatives · Last followup ·
- *     Expiration
+ *     type · Creatives (rendered as `approved / total`) · Last
+ *     followup · Expiration
  *
  * The Last-followup column tracks days-since the most recent admin
  * "Send followup" press (or the initial send for fresh links). It
@@ -291,7 +290,7 @@ function ReviewTableCard({ rows, showBrand = false, onPatchLink }: ReviewTableCa
       <thead>
         <tr>
           <th
-            colSpan={(showBrand ? 1 : 0) + 8}
+            colSpan={(showBrand ? 1 : 0) + 7}
             className="border-b border-nativz-border px-5 py-4"
           >
             <div className="flex items-center gap-3">
@@ -310,16 +309,17 @@ function ReviewTableCard({ rows, showBrand = false, onPatchLink }: ReviewTableCa
       </thead>
       <TableHeader>
         <TableRow>
-          {showBrand && <TableHead className="whitespace-nowrap">Brand</TableHead>}
-          <TableHead className="whitespace-nowrap">Project name</TableHead>
-          <TableHead className="whitespace-nowrap text-center">Date sent</TableHead>
-          <TableHead className="whitespace-nowrap text-center">Status</TableHead>
-          <TableHead className="whitespace-nowrap text-center">Project type</TableHead>
-          <TableHead className="whitespace-nowrap text-center">Total creatives</TableHead>
-          <TableHead className="whitespace-nowrap text-center">Approved</TableHead>
-          <TableHead className="whitespace-nowrap text-center">Last followup</TableHead>
-          <TableHead className="whitespace-nowrap text-center">Expiration</TableHead>
-          <TableHead className="w-10" aria-label="Open" />
+          {showBrand && (
+            <TableHead className="whitespace-nowrap px-2.5">Brand</TableHead>
+          )}
+          <TableHead className="whitespace-nowrap px-2.5">Project name</TableHead>
+          <TableHead className="whitespace-nowrap px-2.5 text-center">Date sent</TableHead>
+          <TableHead className="whitespace-nowrap px-2.5 text-center">Status</TableHead>
+          <TableHead className="whitespace-nowrap px-2.5 text-center">Project type</TableHead>
+          <TableHead className="whitespace-nowrap px-2.5 text-center">Creatives</TableHead>
+          <TableHead className="whitespace-nowrap px-2.5 text-center">Last followup</TableHead>
+          <TableHead className="whitespace-nowrap px-2.5 text-center">Expiration</TableHead>
+          <TableHead className="w-8 px-2" aria-label="Open" />
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -355,58 +355,50 @@ function ReviewTableRow({ link, showBrand = false, onPatch }: ReviewTableRowProp
       className={`cursor-pointer ${dim ? 'opacity-70' : ''}`}
     >
       {showBrand && (
-        <TableCell className="whitespace-nowrap">
+        <TableCell className="whitespace-nowrap px-2.5">
           <span className="text-sm text-text-secondary">{link.client_name ?? '—'}</span>
         </TableCell>
       )}
-      <TableCell onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center gap-2.5">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-nativz-border bg-background text-text-muted">
-            <CalendarDays className="size-3.5" />
-          </span>
-          <ProjectNameCell link={link} onPatch={onPatch} />
-        </div>
+      <TableCell className="px-2.5" onClick={(e) => e.stopPropagation()}>
+        <ProjectNameCell link={link} onPatch={onPatch} />
       </TableCell>
-      <TableCell className="whitespace-nowrap text-center">
+      <TableCell className="whitespace-nowrap px-2.5 text-center">
         <span className="text-sm text-text-secondary tabular-nums">
           {formatShortDate(link.created_at)}
         </span>
       </TableCell>
-      <TableCell className="whitespace-nowrap text-center">
+      <TableCell className="whitespace-nowrap px-2.5 text-center">
         <div className="flex justify-center">
           <StatusPill status={link.status} />
         </div>
       </TableCell>
       <TableCell
-        className="whitespace-nowrap text-center"
+        className="whitespace-nowrap px-2.5 text-center"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-center">
           <ProjectTypeCell link={link} onPatch={onPatch} />
         </div>
       </TableCell>
-      <TableCell className="whitespace-nowrap text-center">
-        <span className="text-sm text-text-secondary tabular-nums">{link.post_count}</span>
-      </TableCell>
-      <TableCell className="whitespace-nowrap text-center">
+      <TableCell className="whitespace-nowrap px-2.5 text-center">
         <div className="flex justify-center">
           <ApprovedCount link={link} />
         </div>
       </TableCell>
       <TableCell
-        className="whitespace-nowrap text-center"
+        className="whitespace-nowrap px-2.5 text-center"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-center">
           <FollowupCell link={link} onPatch={onPatch} />
         </div>
       </TableCell>
-      <TableCell className="whitespace-nowrap text-center">
+      <TableCell className="whitespace-nowrap px-2.5 text-center">
         <div className="flex justify-center">
           <ExpirationCell expiresAt={link.expires_at} status={link.status} />
         </div>
       </TableCell>
-      <TableCell className="w-10 whitespace-nowrap text-right text-text-tertiary">
+      <TableCell className="w-8 whitespace-nowrap px-2 text-right text-text-tertiary">
         <ChevronRight className="size-4 transition-transform group-hover/row:translate-x-0.5 group-hover/row:text-text-secondary" />
       </TableCell>
     </TableRow>
@@ -450,7 +442,6 @@ function ProjectNameCell({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const displayName = link.name?.trim() || derivedName(link.drop_start, link.drop_end);
-  const lastSeen = link.last_viewed_at ? formatRelative(link.last_viewed_at) : null;
 
   useEffect(() => {
     if (editing) {
@@ -501,23 +492,18 @@ function ProjectNameCell({
   }
 
   return (
-    <div className="min-w-0">
-      <button
-        type="button"
-        onClick={() => {
-          setDraft(link.name ?? '');
-          setEditing(true);
-        }}
-        className="group/name -mx-1 flex max-w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left hover:bg-surface-hover"
-        aria-label={`Rename ${displayName}`}
-      >
-        <span className="truncate font-medium text-text-primary">{displayName}</span>
-        <Pencil className="size-3 shrink-0 text-text-muted opacity-0 transition-opacity group-hover/name:opacity-100" />
-      </button>
-      <div className="text-xs text-text-muted tabular-nums">
-        {lastSeen ? `Last viewed ${lastSeen}` : 'Not yet viewed'}
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={() => {
+        setDraft(link.name ?? '');
+        setEditing(true);
+      }}
+      className="group/name -mx-1 flex max-w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left hover:bg-surface-hover"
+      aria-label={`Rename ${displayName}`}
+    >
+      <span className="whitespace-nowrap font-medium text-text-primary">{displayName}</span>
+      <Pencil className="size-3 shrink-0 text-text-muted opacity-0 transition-opacity group-hover/name:opacity-100" />
+    </button>
   );
 }
 
@@ -891,15 +877,3 @@ function formatShortDate(iso: string | null): string {
   });
 }
 
-function formatRelative(iso: string): string {
-  const then = new Date(iso).getTime();
-  const now = Date.now();
-  const diff = Math.max(0, now - then);
-  const min = 60_000;
-  const hr = 60 * min;
-  const day = 24 * hr;
-  if (diff < hr) return `${Math.max(1, Math.round(diff / min))}m ago`;
-  if (diff < day) return `${Math.round(diff / hr)}h ago`;
-  if (diff < 7 * day) return `${Math.round(diff / day)}d ago`;
-  return new Date(iso).toLocaleDateString();
-}
