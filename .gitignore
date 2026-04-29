@@ -103,3 +103,6 @@ tmp/
 
 # Claude Code scheduled-tasks plugin runtime lockfile.
 .claude/scheduled_tasks.lock
+
+# SWC build artifacts
+.swc/
