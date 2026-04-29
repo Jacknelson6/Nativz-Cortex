@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog } from '@/components/ui/dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
 
 // Mux Player is a heavy web-component-backed React component. Dynamic-import
@@ -2108,63 +2109,33 @@ function PostCard({
             type="button"
             onClick={() => setRemoveOpen(true)}
             disabled={submitting || uploading || removing}
-            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-transparent bg-transparent px-3 py-2.5 text-xs font-medium text-text-muted transition-all hover:border-status-error/40 hover:bg-status-error/10 hover:text-status-error disabled:opacity-50 sm:ml-auto sm:py-2"
+            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-transparent bg-transparent px-3 py-2.5 text-xs font-medium text-text-muted transition-all hover:border-status-danger/40 hover:bg-status-danger/10 hover:text-status-danger disabled:opacity-50 sm:ml-auto sm:py-2"
             title="Remove this post from the calendar"
           >
-            <Trash2 size={13} /> Remove from calendar
+            {removing ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+            {removing ? 'Removing…' : 'Remove from calendar'}
           </button>
         )}
       </div>
 
-      {/* Confirmation modal — light copy, two clearly-labelled actions.
-          We tell the editor what survives the action (caption, comments,
-          underlying media) so they know it's recoverable and not a hard
-          delete. */}
-      <Dialog
+      {/* Project-standard ConfirmDialog — same shell used by Delete client
+          and other destructive flows so the styling reads as native. The
+          confirm path closes the dialog before firing so the auto-focused
+          button can't fire twice; the parent handles the loading toast. */}
+      <ConfirmDialog
         open={removeOpen}
-        onClose={() => {
+        title="Remove from calendar?"
+        description="This post will disappear from the calendar the brand sees. The caption, comments, and underlying video stay safe — you can add it back from the admin calendar if you change your mind."
+        confirmLabel={removing ? 'Removing…' : 'Remove'}
+        variant="danger"
+        onConfirm={() => {
+          setRemoveOpen(false);
+          void confirmRemoveFromCalendar();
+        }}
+        onCancel={() => {
           if (!removing) setRemoveOpen(false);
         }}
-        title=""
-        maxWidth="sm"
-      >
-        <div className="space-y-4">
-          <div className="flex items-start gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-status-error/12 text-status-error">
-              <Trash2 size={16} />
-            </div>
-            <div className="min-w-0">
-              <h2 className="font-display text-base font-semibold tracking-tight text-text-primary">
-                Remove from calendar?
-              </h2>
-              <p className="mt-1 text-sm text-text-secondary">
-                This post will disappear from the calendar the brand sees. The
-                caption, comments, and underlying video stay safe — you can
-                add it back from the admin calendar if you change your mind.
-              </p>
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => setRemoveOpen(false)}
-              disabled={removing}
-              className="inline-flex items-center justify-center rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3 py-1.5 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={confirmRemoveFromCalendar}
-              disabled={removing}
-              className="inline-flex items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-status-error px-3 py-1.5 text-sm font-medium text-white transition-all hover:opacity-90 disabled:opacity-50"
-            >
-              {removing ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
-              {removing ? 'Removing…' : 'Remove from calendar'}
-            </button>
-          </div>
-        </div>
-      </Dialog>
+      />
     </div>
   );
 
