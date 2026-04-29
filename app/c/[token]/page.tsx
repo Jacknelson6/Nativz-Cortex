@@ -624,9 +624,19 @@ function ShareHeaderLogo() {
 }
 
 function latestReview(comments: SharedComment[]): ReviewStatus | null {
+  // Walk newest → oldest and return the first "live" review signal. A
+  // changes_requested row that's been marked Revised (metadata.resolved)
+  // is no longer live — we skip past it so the pill can fall through to
+  // an earlier approval, or disappear entirely if every revision has
+  // been handled. This is what makes the header pill clear once an
+  // editor checks Revised on the change-request thread.
   for (let i = comments.length - 1; i >= 0; i--) {
     const c = comments[i];
-    if (c.status === 'approved' || c.status === 'changes_requested') return c.status;
+    if (c.status === 'approved') return 'approved';
+    if (c.status === 'changes_requested') {
+      const resolved = !!(c.metadata && (c.metadata as Record<string, unknown>).resolved);
+      if (!resolved) return 'changes_requested';
+    }
   }
   return null;
 }
