@@ -7,11 +7,8 @@ import {
   UserX,
   LayoutGrid,
   List,
-  Loader2,
-  Plus,
   MoreHorizontal,
   Check,
-  FolderPlus,
   ArrowRight,
   Sparkles,
   Clock,
@@ -524,84 +521,6 @@ function GroupSectionHeader({
   );
 }
 
-// ─── New group inline form ─────────────────────────────────────────────────
-
-function NewGroupForm({
-  onCreate,
-  onCancel,
-}: {
-  onCreate: (name: string, color: ColorKey) => Promise<void>;
-  onCancel: () => void;
-}) {
-  const [name, setName] = useState('');
-  const [color, setColor] = useState<ColorKey>('cyan');
-  const [saving, setSaving] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => { inputRef.current?.focus(); }, []);
-
-  async function submit() {
-    const v = name.trim();
-    if (!v) { onCancel(); return; }
-    setSaving(true);
-    try {
-      await onCreate(v, color);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="rounded-[10px] border border-nativz-border bg-surface p-3 space-y-2.5">
-      <div className="flex items-center gap-2">
-        <span className={`h-2.5 w-2.5 rounded-full ${colorStyles(color).dot} shrink-0`} />
-        <input
-          ref={inputRef}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') { e.preventDefault(); void submit(); }
-            if (e.key === 'Escape') { onCancel(); }
-          }}
-          placeholder="Group name (e.g. Onboarding, Active, Pause)"
-          className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
-          disabled={saving}
-        />
-      </div>
-      <div className="flex items-center gap-1.5">
-        {GROUP_COLORS.map((c) => (
-          <button
-            key={c.key}
-            type="button"
-            onClick={() => setColor(c.key)}
-            className={`h-5 w-5 rounded-full ${c.dot} ring-2 ring-offset-2 ring-offset-surface transition-all ${c.key === color ? 'ring-accent-border' : 'ring-transparent hover:ring-nativz-border'}`}
-            title={c.label}
-            aria-label={c.label}
-          />
-        ))}
-        <div className="flex-1" />
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={saving}
-          className="text-xs text-text-muted hover:text-text-primary px-2 py-1 rounded transition-colors"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={() => void submit()}
-          disabled={saving || !name.trim()}
-          className="inline-flex items-center gap-1 rounded-full bg-accent-text text-background px-3 py-1 text-xs font-semibold disabled:opacity-50 transition-opacity"
-        >
-          {saving ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
-          Create
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ─── Generic section header (agency fallback + inactive bucket) ────────────
 
 function SectionHeader({
@@ -625,8 +544,6 @@ function SectionHeader({
 
 // ─── Grid ──────────────────────────────────────────────────────────────────
 
-type AgencyFilter = 'all' | 'nativz' | 'ac';
-
 export function ClientSearchGrid({
   clients: rawClients,
   groups: initialGroups = [],
@@ -644,9 +561,7 @@ export function ClientSearchGrid({
   const [groups, setGroups] = useState<ClientGroup[]>(initialGroups);
   const [pendingGroupDelete, setPendingGroupDelete] = useState<{ id: string; name: string; memberCount: number } | null>(null);
   const [query, setQuery] = useState('');
-  const [agencyFilter, setAgencyFilter] = useState<AgencyFilter>('all');
   const [listView, setListView] = useState(false);
-  const [showNewGroup, setShowNewGroup] = useState(false);
   // Once the initial stagger has had time to play, turn it off. Otherwise every
   // card would re-animate when a move causes layout to shift.
   const [canAnimateIn, setCanAnimateIn] = useState(true);
@@ -694,26 +609,6 @@ export function ClientSearchGrid({
       setAllClients(prev);
     }
   }, [allClients, groups]);
-
-  const handleCreateGroup = useCallback(async (name: string, color: ColorKey) => {
-    try {
-      const res = await fetch('/api/client-groups', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, color }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error((d as { error?: string }).error || 'Failed to create group');
-      }
-      const { group } = await res.json() as { group: ClientGroup };
-      setGroups((gs) => [...gs, group]);
-      setShowNewGroup(false);
-      toast.success(`Group "${group.name}" created`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create group');
-    }
-  }, []);
 
   const handleUpdateGroup = useCallback(async (id: string, fields: Partial<ClientGroup>) => {
     const prev = groups;
@@ -818,7 +713,7 @@ export function ClientSearchGrid({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    let list = q
+    const list = q
       ? allClients.filter((c) =>
           c.name.toLowerCase().includes(q) ||
           (c.abbreviation && c.abbreviation.toLowerCase().includes(q)) ||
@@ -827,17 +722,8 @@ export function ClientSearchGrid({
         )
       : allClients;
 
-    if (agencyFilter !== 'all') {
-      list = list.filter((c) => {
-        const a = (c.agency ?? '').trim().toLowerCase();
-        return agencyFilter === 'nativz'
-          ? a.includes('nativz')
-          : a.includes('anderson') || a === 'ac';
-      });
-    }
-
     return [...list].sort((a, b) => a.name.localeCompare(b.name));
-  }, [query, agencyFilter, allClients]);
+  }, [query, allClients]);
 
   const active = filtered.filter((c) => c.isActive !== false);
   const inactive = filtered.filter((c) => c.isActive === false);
@@ -861,7 +747,7 @@ export function ClientSearchGrid({
   }, [useGroupSections, active]);
 
   const agencyBuckets = useMemo(() => {
-    if (useGroupSections || agencyFilter !== 'all') return [];
+    if (useGroupSections) return [];
     // Include every bucket (even empty ones) so every row is a visible drop
     // target. Prospect and Onboarding especially need to be there at zero-count
     // so new cards have somewhere to land.
@@ -869,7 +755,7 @@ export function ClientSearchGrid({
       key,
       items: active.filter((c) => bucketFor(c.agency, c.inOnboarding) === key),
     }));
-  }, [useGroupSections, active, agencyFilter]);
+  }, [useGroupSections, active]);
 
   const totalShown = filtered.length;
   const totalAll = allClients.length;
@@ -911,7 +797,7 @@ export function ClientSearchGrid({
     );
   }
 
-  const filtering = query.trim().length > 0 || agencyFilter !== 'all';
+  const filtering = query.trim().length > 0;
 
   return (
     <div className="space-y-5">
@@ -932,27 +818,6 @@ export function ClientSearchGrid({
             /
           </kbd>
         </div>
-
-        <select
-          value={agencyFilter}
-          onChange={(e) => setAgencyFilter(e.target.value as AgencyFilter)}
-          className="rounded-lg border border-nativz-border bg-surface-primary pl-3 pr-8 py-2 text-sm text-text-primary focus:border-accent-border focus:outline-none cursor-pointer"
-          aria-label="Filter by agency"
-        >
-          <option value="all">All agencies</option>
-          <option value="nativz">Nativz</option>
-          <option value="ac">Anderson Collaborative</option>
-        </select>
-
-        <button
-          type="button"
-          onClick={() => setShowNewGroup(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-nativz-border bg-surface-primary px-3 py-2 text-sm text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
-          title="Create new pipeline group"
-        >
-          <FolderPlus size={14} />
-          New group
-        </button>
 
         <div className="flex rounded-lg border border-nativz-border overflow-hidden">
           <button
@@ -983,10 +848,6 @@ export function ClientSearchGrid({
           </p>
         )}
       </div>
-
-      {showNewGroup && (
-        <NewGroupForm onCreate={handleCreateGroup} onCancel={() => setShowNewGroup(false)} />
-      )}
 
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center rounded-[10px] border border-dashed border-nativz-border/60">

@@ -107,7 +107,7 @@ export default async function AdminClientsPage() {
               <Link href="/admin/clients/onboard">
                 <Button size="sm">
                   <Plus size={14} />
-                  New client
+                  New
                 </Button>
               </Link>
             ) : null
@@ -123,7 +123,7 @@ export default async function AdminClientsPage() {
               <Link href="/admin/clients/onboard">
                 <Button size="sm">
                   <Plus size={14} />
-                  New client
+                  New
                 </Button>
               </Link>
             }
