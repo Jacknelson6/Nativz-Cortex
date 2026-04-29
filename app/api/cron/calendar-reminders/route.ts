@@ -13,6 +13,11 @@ import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
 
 export const maxDuration = 60;
 
+// Same role filter used by scripts/send-calendar-batch.ts so the cron's
+// contacts-fallback can't accidentally email media buyers or aliases that the
+// initial bulk-send deliberately skipped.
+const EXCLUDE_CONTACT_ROLES = [/paid media only/i, /avoid bulk/i];
+
 /**
  * GET /api/cron/calendar-reminders
  *
@@ -107,19 +112,39 @@ async function handleGet(request: NextRequest) {
       : getCortexAppUrl(brand);
     const shareUrl = `${appUrl}/c/${link.token}`;
 
-    // Recipients: portal users for this client (role = viewer).
+    // Recipients: portal users (role=viewer) first; fall back to eligible
+    // contacts when the client hasn't onboarded any portal users yet. Contact
+    // roles tagged "Paid Media only" or "Avoid bulk" are filtered to match
+    // scripts/send-calendar-batch.ts behavior.
     const { data: portalUsers } = await admin
       .from('user_client_access')
       .select('users!inner(email, role)')
       .eq('client_id', client.id)
       .returns<{ users: { email: string; role: string } | null }[]>();
-    const recipientEmails = Array.from(
+    let recipientEmails = Array.from(
       new Set(
         (portalUsers ?? [])
           .map((r) => r.users?.email)
           .filter((e): e is string => !!e),
       ),
     );
+
+    if (recipientEmails.length === 0) {
+      const { data: contacts } = await admin
+        .from('contacts')
+        .select('email, role')
+        .eq('client_id', client.id)
+        .returns<{ email: string | null; role: string | null }[]>();
+      recipientEmails = Array.from(
+        new Set(
+          (contacts ?? [])
+            .filter((c) => !!c.email)
+            .filter((c) => !EXCLUDE_CONTACT_ROLES.some((re) => re.test(c.role ?? '')))
+            .map((c) => c.email!.trim())
+            .filter((e) => e.length > 0),
+        ),
+      );
+    }
 
     if (recipientEmails.length === 0) {
       sent.skipped += 1;

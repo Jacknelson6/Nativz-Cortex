@@ -100,3 +100,6 @@ tmp/
 # Accessibility / DOM snapshots dumped by Playwright MCP during local debugging.
 # These are working artifacts, not source — keep them out of commits.
 /*-snapshot.md
+
+# Claude Code scheduled-tasks plugin runtime lockfile.
+.claude/scheduled_tasks.lock

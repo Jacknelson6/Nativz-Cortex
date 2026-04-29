@@ -818,6 +818,206 @@ export async function sendCalendarFinalCallEmail(opts: {
   return result;
 }
 
+/**
+ * Initial "your content calendar is ready" delivery email.
+ *
+ * Copy is intentionally informal:
+ *   • Greets POC by first name (or comma-joined first names if multiple)
+ *   • Uses month name ("May") not ISO ("2026-05")
+ *   • Optional `firstRoundIntro` paragraph for the inaugural email cycle
+ *     where we tell clients calendars now arrive via email so the team can
+ *     turn revisions faster
+ */
+export async function sendCalendarDeliveryEmail(opts: {
+  to: string | string[];
+  pocFirstNames: string[];
+  clientName: string;
+  postCount: number;
+  /** YYYY-MM-DD — first scheduled post date, used to derive the month label */
+  startDate: string;
+  /** YYYY-MM-DD — last scheduled post date */
+  endDate: string;
+  shareUrl: string;
+  /** Show the "calendars now arrive via email moving forward" intro */
+  firstRoundIntro?: boolean;
+  agency?: AgencyBrand;
+  cc?: string | string[];
+}) {
+  const agency = opts.agency ?? 'nativz';
+  const isAC = agency === 'anderson';
+  const teamShort = isAC ? 'the AC team' : 'the Nativz team';
+  const monthLabel = new Date(`${opts.startDate}T00:00:00Z`).toLocaleString('en-US', {
+    month: 'long',
+    timeZone: 'UTC',
+  });
+  const greeting = opts.pocFirstNames.length > 0
+    ? `Hey ${humanizeNameList(opts.pocFirstNames)}`
+    : `Hey ${opts.clientName}`;
+  const replyTo = isAC ? 'jack@andersoncollaborative.com' : 'jack@nativz.io';
+
+  const introBlock = opts.firstRoundIntro
+    ? `<p class="subtext" style="text-align:center; margin-top:12px;">
+         Quick heads up: content calendars are now landing in your inbox so we can
+         turn revisions around faster. Reply, comment on a post, or approve everything in one click.
+       </p>`
+    : '';
+
+  const subject = `Your ${monthLabel} content calendar from ${isAC ? 'Anderson Collaborative' : 'Nativz'} is ready`;
+
+  const result = await (await getResend()).emails.send({
+    from: getFromAddress(agency),
+    replyTo,
+    to: opts.to,
+    cc: opts.cc,
+    subject,
+    html: layout(`
+      <div class="card">
+        <h1 class="heading" style="text-align:center;">Your ${monthLabel} content calendar is ready</h1>
+        <p class="subtext" style="text-align:center;">
+          ${greeting}, ${teamShort} just dropped <span class="highlight">${opts.postCount} posts</span>
+          for you to review, scheduled across ${formatDateLabel(opts.startDate)} to ${formatDateLabel(opts.endDate)}.
+          Tap the button below to watch the videos, read the captions, and approve or
+          request changes one post at a time.
+        </p>
+        ${introBlock}
+        <div class="button-wrap">
+          <a href="${opts.shareUrl}" class="button">Open content calendar &rarr;</a>
+        </div>
+        <p class="small" style="text-align:center; margin-top:24px;">
+          Questions or want to chat about a post? Just reply to this email and it'll come straight to ${replyTo}.
+        </p>
+      </div>
+    `, agency),
+  });
+
+  trackUsage({
+    service: 'resend',
+    model: 'email-api',
+    feature: 'email_delivery',
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    costUsd: 0,
+  });
+
+  return result;
+}
+
+/**
+ * Variant of sendCalendarDeliveryEmail for POCs who manage multiple brands.
+ * Renders one shipment with a sub-section per calendar (own heading, post
+ * count, date range, share button) so each calendar can be opened/approved
+ * independently.
+ */
+export async function sendCombinedCalendarDeliveryEmail(opts: {
+  to: string | string[];
+  pocFirstNames: string[];
+  calendars: Array<{
+    clientName: string;
+    postCount: number;
+    startDate: string;
+    endDate: string;
+    shareUrl: string;
+  }>;
+  firstRoundIntro?: boolean;
+  agency?: AgencyBrand;
+  cc?: string | string[];
+}) {
+  if (opts.calendars.length === 0) throw new Error('calendars must not be empty');
+
+  const agency = opts.agency ?? 'nativz';
+  const isAC = agency === 'anderson';
+  const teamShort = isAC ? 'the AC team' : 'the Nativz team';
+  const replyTo = isAC ? 'jack@andersoncollaborative.com' : 'jack@nativz.io';
+
+  const monthLabel = new Date(`${opts.calendars[0].startDate}T00:00:00Z`).toLocaleString('en-US', {
+    month: 'long',
+    timeZone: 'UTC',
+  });
+  const greeting = opts.pocFirstNames.length > 0
+    ? `Hey ${humanizeNameList(opts.pocFirstNames)}`
+    : 'Hey there';
+  const brandList = humanizeNameList(opts.calendars.map((c) => c.clientName));
+
+  const introBlock = opts.firstRoundIntro
+    ? `<p class="subtext" style="text-align:center; margin-top:12px;">
+         Quick heads up: content calendars are now landing in your inbox so we can
+         turn revisions around faster. Reply, comment on a post, or approve everything in one click.
+       </p>`
+    : '';
+
+  const calendarSections = opts.calendars
+    .map(
+      (c) => `
+        <div class="card" style="margin-top:16px;">
+          <h2 class="heading" style="text-align:center; font-size:20px;">${c.clientName}</h2>
+          <p class="subtext" style="text-align:center;">
+            <span class="highlight">${c.postCount} posts</span>
+            scheduled ${formatDateLabel(c.startDate)} to ${formatDateLabel(c.endDate)}.
+          </p>
+          <div class="button-wrap">
+            <a href="${c.shareUrl}" class="button">Open ${c.clientName} calendar &rarr;</a>
+          </div>
+        </div>
+      `,
+    )
+    .join('');
+
+  const subject = `Your ${monthLabel} content calendars from ${isAC ? 'Anderson Collaborative' : 'Nativz'} are ready`;
+
+  const result = await (await getResend()).emails.send({
+    from: getFromAddress(agency),
+    replyTo,
+    to: opts.to,
+    cc: opts.cc,
+    subject,
+    html: layout(`
+      <div class="card">
+        <h1 class="heading" style="text-align:center;">Your ${monthLabel} content calendars are ready</h1>
+        <p class="subtext" style="text-align:center;">
+          ${greeting}, ${teamShort} just dropped fresh calendars for ${brandList}.
+          Each one has its own button below — tap in to watch the videos, read the
+          captions, and approve or request changes one post at a time.
+        </p>
+        ${introBlock}
+      </div>
+      ${calendarSections}
+      <div class="card" style="margin-top:16px;">
+        <p class="small" style="text-align:center;">
+          Questions or want to chat about a post? Just reply to this email and it'll come straight to ${replyTo}.
+        </p>
+      </div>
+    `, agency),
+  });
+
+  trackUsage({
+    service: 'resend',
+    model: 'email-api',
+    feature: 'email_delivery',
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    costUsd: 0,
+  });
+
+  return result;
+}
+
+function humanizeNameList(names: string[]): string {
+  const cleaned = names.map((n) => n.trim()).filter(Boolean);
+  if (cleaned.length <= 1) return cleaned[0] ?? '';
+  if (cleaned.length === 2) return `${cleaned[0]} and ${cleaned[1]}`;
+  return `${cleaned.slice(0, -1).join(', ')}, and ${cleaned[cleaned.length - 1]}`;
+}
+
+function formatDateLabel(isoDate: string): string {
+  return new Date(`${isoDate}T00:00:00Z`).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 export async function sendCalendarRevisionsCompleteEmail(opts: {
   to: string;
   clientName: string;
@@ -853,4 +1053,119 @@ export async function sendCalendarRevisionsCompleteEmail(opts: {
   });
 
   return result;
+}
+
+// ── Post-health alert (ops digest) ────────────────────────────────────────────
+//
+// Sent by /api/cron/post-health when posts fail or social profiles disconnect.
+// Always Nativz-branded — agency split would just add noise for an internal
+// ops alert. Same body content also goes out via Google Chat + in-app.
+
+export interface PostHealthFailedPost {
+  postId: string;
+  clientName: string;
+  caption: string | null;
+  scheduledFor: string | null;
+  failureReason: string | null;
+  retryCount: number;
+}
+
+export interface PostHealthDisconnect {
+  profileId: string;
+  clientName: string;
+  platform: string;
+  username: string | null;
+}
+
+export async function sendPostHealthAlertEmail(opts: {
+  to: string;
+  failedPosts: PostHealthFailedPost[];
+  disconnects: PostHealthDisconnect[];
+}) {
+  const { failedPosts, disconnects } = opts;
+  if (failedPosts.length === 0 && disconnects.length === 0) return null;
+
+  const failedSection = failedPosts.length === 0 ? '' : `
+    <h2 style="color:#fff;font-size:16px;font-weight:700;margin:0 0 12px;">Failed posts (${failedPosts.length})</h2>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
+      ${failedPosts.map((p) => `
+        <tr>
+          <td style="padding:12px 0;border-bottom:1px solid #1f2937;">
+            <p style="margin:0 0 4px;color:#fff;font-size:14px;font-weight:600;">${escapeAlertHtml(p.clientName)}</p>
+            <p style="margin:0 0 4px;color:#94a3b8;font-size:12px;">
+              ${p.scheduledFor ? new Date(p.scheduledFor).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : 'no scheduled time'} · retries: ${p.retryCount}
+            </p>
+            ${p.caption ? `<p style="margin:0 0 6px;color:#cbd5e1;font-size:13px;line-height:1.5;">${escapeAlertHtml(truncateAlert(p.caption, 120))}</p>` : ''}
+            ${p.failureReason ? `<p style="margin:0;color:#fca5a5;font-size:12px;font-family:ui-monospace,Menlo,monospace;">${escapeAlertHtml(truncateAlert(p.failureReason, 240))}</p>` : ''}
+          </td>
+        </tr>
+      `).join('')}
+    </table>
+  `;
+
+  const disconnectSection = disconnects.length === 0 ? '' : `
+    <h2 style="color:#fff;font-size:16px;font-weight:700;margin:0 0 12px;">Disconnected accounts (${disconnects.length})</h2>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
+      ${disconnects.map((d) => `
+        <tr>
+          <td style="padding:12px 0;border-bottom:1px solid #1f2937;">
+            <p style="margin:0 0 4px;color:#fff;font-size:14px;font-weight:600;">${escapeAlertHtml(d.clientName)}</p>
+            <p style="margin:0;color:#94a3b8;font-size:12px;">
+              ${escapeAlertHtml(d.platform)}${d.username ? ` · @${escapeAlertHtml(d.username)}` : ''}
+            </p>
+          </td>
+        </tr>
+      `).join('')}
+    </table>
+  `;
+
+  const subjectParts: string[] = [];
+  if (failedPosts.length > 0) subjectParts.push(`${failedPosts.length} failed post${failedPosts.length === 1 ? '' : 's'}`);
+  if (disconnects.length > 0) subjectParts.push(`${disconnects.length} disconnect${disconnects.length === 1 ? '' : 's'}`);
+  const subject = `[Cortex] ${subjectParts.join(' · ')}`;
+
+  const result = await (await getResend()).emails.send({
+    from: getFromAddress('nativz'),
+    replyTo: getReplyTo('nativz'),
+    to: opts.to,
+    subject,
+    html: layout(`
+      <div class="card">
+        <h1 class="heading">Posting health alert</h1>
+        <p class="subtext">
+          The post-health cron picked up new issues. Each row fires once — re-posts and reconnects clear automatically.
+        </p>
+        ${failedSection}
+        ${disconnectSection}
+        <div class="button-wrap">
+          <a href="https://cortex.nativz.io/admin/calendar" class="button">Open the calendar &rarr;</a>
+        </div>
+      </div>
+    `, 'nativz'),
+  });
+
+  trackUsage({
+    service: 'resend',
+    model: 'email-api',
+    feature: 'email_delivery',
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    costUsd: 0,
+  });
+
+  return result;
+}
+
+function escapeAlertHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function truncateAlert(s: string, max: number): string {
+  return s.length <= max ? s : s.slice(0, max - 1) + '…';
 }
