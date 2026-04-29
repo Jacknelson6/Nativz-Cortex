@@ -97,7 +97,7 @@ function normalizeServices(raw: string[]): string[] {
   return STANDARD_SERVICES.filter((s) => result.has(s));
 }
 
-type AgencyBucket = 'prospect' | 'onboarding' | 'nativz' | 'anderson' | 'internal';
+type AgencyBucket = 'prospect' | 'onboarding' | 'nativz' | 'anderson';
 
 /**
  * Bucket each client into a pipeline row.
@@ -109,9 +109,9 @@ function bucketFor(agency: string | null | undefined, inOnboarding?: boolean): A
   if (inOnboarding) return 'onboarding';
   const a = (agency ?? '').trim().toLowerCase();
   if (!a) return 'prospect';
-  if (a.includes('nativz')) return 'nativz';
   if (a.includes('anderson') || a === 'ac') return 'anderson';
-  if (a === 'internal') return 'internal';
+  // Anything else with an agency tag (nativz, internal, misc) folds into Nativz.
+  if (a) return 'nativz';
   return 'prospect';
 }
 
@@ -120,10 +120,9 @@ const BUCKET_LABEL: Record<AgencyBucket, string> = {
   onboarding: 'Onboarding',
   nativz: 'Nativz',
   anderson: 'Anderson Collaborative',
-  internal: 'Internal',
 };
 
-const BUCKET_ORDER: AgencyBucket[] = ['prospect', 'onboarding', 'nativz', 'anderson', 'internal'];
+const BUCKET_ORDER: AgencyBucket[] = ['prospect', 'onboarding', 'nativz', 'anderson'];
 
 /** DB `agency` value to write when a card is dropped on a bucket. `null` clears the field. */
 const BUCKET_AGENCY_VALUE: Record<AgencyBucket, string | null> = {
@@ -131,7 +130,6 @@ const BUCKET_AGENCY_VALUE: Record<AgencyBucket, string | null> = {
   onboarding: null, // read-only; drops here are rejected
   nativz: 'Nativz',
   anderson: 'Anderson Collaborative',
-  internal: 'Internal',
 };
 
 // ─── Move menu ─────────────────────────────────────────────────────────────
@@ -900,7 +898,10 @@ export function ClientSearchGrid({
               const offset = agencyBuckets.slice(0, gi).reduce((n, x) => n + x.items.length, 0);
               const readOnly = g.key === 'onboarding';
               const labelClassName =
-                g.key === 'onboarding' ? 'text-amber-400' : undefined;
+                g.key === 'onboarding' ? 'text-amber-400'
+                : g.key === 'nativz' ? 'text-[#00AEEF]'
+                : g.key === 'anderson' ? 'text-[#36D1C2]'
+                : undefined;
               const emptyMessage = readOnly
                 ? 'Start an onboarding from the Onboarding page.'
                 : 'No clients in this row yet.';
