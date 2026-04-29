@@ -553,6 +553,24 @@ function findLatestApprovedId(comments: SharedComment[]): string | null {
 }
 
 function VideoPlayerModal({ post, onClose }: { post: SharedPost | null; onClose: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Mobile Safari blocks autoplay-with-sound when the video element wasn't
+  // mounted in the same tap that opened the modal. Try to play on mount, and
+  // if the browser refuses, retry muted so playback at least starts — the
+  // user can unmute via the controls.
+  useEffect(() => {
+    if (!post) return;
+    const v = videoRef.current;
+    if (!v) return;
+    v.play().catch(() => {
+      v.muted = true;
+      v.play().catch(() => {
+        // Final fallback: leave the controls visible so the user can tap play.
+      });
+    });
+  }, [post]);
+
   if (!post) return null;
   return (
     <Dialog open={!!post} onClose={onClose} title="" maxWidth="lg" bodyClassName="p-0">
@@ -567,9 +585,9 @@ function VideoPlayerModal({ post, onClose }: { post: SharedPost | null; onClose:
         </button>
         {post.video_url ? (
           <video
+            ref={videoRef}
             src={post.video_url}
             controls
-            autoPlay
             playsInline
             preload="auto"
             poster={post.cover_image_url ?? undefined}
@@ -1286,12 +1304,12 @@ function PostCard({
           <div className="p-3 sm:p-4">{captionBlock}</div>
         </>
       ) : (
-        <div className="flex gap-3 p-3 sm:gap-4 sm:p-4 md:flex-row">
-          <div className="shrink-0">
+        <div className="flex gap-3 p-3 sm:gap-4 sm:p-4">
+          <div className="flex shrink-0 flex-col gap-1.5">
             <button
               type="button"
               onClick={onPlay}
-              className="relative aspect-[9/16] w-24 overflow-hidden rounded-lg bg-surface-hover sm:w-32 md:w-36"
+              className="relative aspect-[9/16] w-32 overflow-hidden rounded-lg bg-surface-hover sm:w-44 md:w-52"
             >
               {post.cover_image_url ? (
                 <img
@@ -1301,12 +1319,12 @@ function PostCard({
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center">
-                  <Film size={28} className="text-text-muted" />
+                  <Film size={32} className="text-text-muted" />
                 </div>
               )}
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black/55 shadow-lg ring-1 ring-white/20 backdrop-blur-sm">
-                  <Play size={18} fill="white" className="ml-0.5 text-white" />
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/55 shadow-lg ring-1 ring-white/20 backdrop-blur-sm">
+                  <Play size={22} fill="white" className="ml-0.5 text-white" />
                 </div>
               </div>
             </button>
@@ -1318,9 +1336,9 @@ function PostCard({
                   revisionInputRef.current?.click();
                 }}
                 disabled={uploadingRevision}
-                className="mt-1.5 inline-flex w-full items-center justify-center gap-1 rounded-md border border-nativz-border bg-transparent px-2 py-1 text-[10px] text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50"
+                className="inline-flex w-fit items-center gap-1 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-2.5 py-1 text-[11px] font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
               >
-                {uploadingRevision ? <Loader2 size={10} className="animate-spin" /> : <Upload size={10} />}
+                {uploadingRevision ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}
                 {uploadingRevision ? 'Uploading…' : 'Re-upload'}
               </button>
             )}
