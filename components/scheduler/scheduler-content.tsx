@@ -8,9 +8,8 @@ import { MediaLibrary } from '@/components/scheduler/media-library';
 import type { PostEditorData } from '@/components/scheduler/post-editor';
 import { useSchedulerData } from '@/components/scheduler/hooks/use-scheduler-data';
 import type { CalendarPost, CalendarViewMode, MediaItem, ClientOption } from '@/components/scheduler/types';
-import { ComboSelect } from '@/components/ui/combo-select';
 import { Button } from '@/components/ui/button';
-import { Plus, Loader2, Link2, Share2, Wand2, Send, FolderInput } from 'lucide-react';
+import { Plus, Link2, Share2, Wand2, Send, FolderInput } from 'lucide-react';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 
 const PostEditor = dynamic(() => import('@/components/scheduler/post-editor').then(m => ({ default: m.PostEditor })));
@@ -32,12 +31,10 @@ function SchedulerInner({
   const {
     clients,
     selectedClientId,
-    setSelectedClientId,
     posts,
     setPosts,
     media,
     profiles,
-    loading,
     mediaLoading,
     fetchPosts,
     fetchMedia,
@@ -325,18 +322,6 @@ function SchedulerInner({
           ) : (
             <div className="flex-1" />
           )}
-
-          {/* Client selector */}
-          <div className="p-3 border-t border-nativz-border">
-            <ComboSelect
-              label="Client"
-              value={selectedClientId ?? ''}
-              onChange={(val) => setSelectedClientId(val || null)}
-              options={clients.map((c) => ({ value: c.id, label: c.name }))}
-              placeholder="Select client…"
-              dropdownPosition="top"
-            />
-          </div>
         </div>
 
         {/* Calendar */}
