@@ -378,10 +378,10 @@ function SharedDropView({
           </div>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <h1 className="font-display text-lg font-semibold tracking-tight text-text-primary sm:text-2xl">
+              <h1 className="font-display text-xl font-semibold tracking-tight text-text-primary sm:text-3xl">
                 {data.clientName} — Content calendar
               </h1>
-              <p className="mt-1.5 text-[13px] text-text-secondary sm:text-sm">
+              <p className="mt-2 text-sm text-text-secondary sm:text-base">
                 {total} post{total !== 1 ? 's' : ''} to review · scheduled {data.drop.start_date} → {data.drop.end_date}
               </p>
             </div>
@@ -427,15 +427,15 @@ function SharedDropView({
               </div>
             </div>
           </div>
-          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-            <span className="inline-flex items-center gap-1 rounded-full bg-status-success/12 px-2 py-0.5 text-status-success">
-              <CheckCircle size={12} /> {approvedCount} approved
+          <div className="mt-5 flex flex-wrap items-center gap-2 text-[13px] sm:text-sm">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-status-success/12 px-2.5 py-1 text-status-success">
+              <CheckCircle size={14} /> {approvedCount} approved
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-status-warning/12 px-2 py-0.5 text-status-warning">
-              <AlertTriangle size={12} /> {changesCount} changes requested
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-status-warning/12 px-2.5 py-1 text-status-warning">
+              <AlertTriangle size={14} /> {changesCount} changes requested
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-surface-hover px-2 py-0.5 text-text-muted">
-              <Clock size={12} /> link expires {expiresLabel}
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-hover px-2.5 py-1 text-text-muted">
+              <Clock size={14} /> link expires {expiresLabel}
             </span>
           </div>
         </div>
@@ -945,10 +945,10 @@ function CalendarGrid({
 
   return (
     <div className="rounded-xl border border-nativz-border bg-surface p-2 sm:p-4">
-      <h2 className="mb-2 px-1 text-sm font-medium text-text-primary sm:mb-3 sm:px-0">{monthLabel}</h2>
-      <div className="grid grid-cols-7 gap-0.5 text-center text-[10px] font-medium uppercase tracking-wide text-text-muted sm:gap-1 sm:text-[11px]">
+      <h2 className="mb-3 px-1 text-base font-semibold text-text-primary sm:mb-4 sm:px-0 sm:text-lg">{monthLabel}</h2>
+      <div className="grid grid-cols-7 gap-0.5 text-center text-[11px] font-medium uppercase tracking-wide text-text-muted sm:gap-1 sm:text-[13px]">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-          <div key={d} className="py-1.5">{d}</div>
+          <div key={d} className="py-2">{d}</div>
         ))}
       </div>
       <div className="mt-1 grid grid-cols-7 gap-0.5 sm:gap-1">
@@ -986,7 +986,7 @@ function CalendarGrid({
       {/* Subtle hint so first-time users discover the affordance — only
           renders when there's at least one schedulable post and an admin
           isn't already dragging. */}
-      <p className="mt-2 px-1 text-[11px] text-text-muted sm:px-0">
+      <p className="mt-3 px-1 text-[13px] text-text-muted sm:px-0 sm:text-sm">
         Drag a post to a different day to reschedule.
       </p>
     </div>
@@ -1110,7 +1110,7 @@ function CalendarCell({
           {/* Day number overlays the thumbnail in a translucent black chip so
               it stays legible against any cover image. */}
           <span
-            className={`absolute left-1 top-1 inline-flex items-center justify-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${
+            className={`absolute left-1.5 top-1.5 inline-flex items-center justify-center rounded-md px-2 py-0.5 text-[13px] font-semibold sm:text-sm ${
               isToday
                 ? 'bg-accent text-accent-contrast'
                 : 'bg-black/55 text-white backdrop-blur-sm'
@@ -1119,7 +1119,7 @@ function CalendarCell({
             {cell.date.getDate()}
           </span>
           {cell.posts.length > 1 && (
-            <span className="absolute right-1 bottom-1 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+            <span className="absolute right-1.5 bottom-1.5 rounded-md bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm sm:text-xs">
               +{cell.posts.length - 1}
             </span>
           )}
@@ -1128,11 +1128,11 @@ function CalendarCell({
         // Empty cell — day number top-left in muted color. Drop target still
         // active because the parent <div> handles dragover/drop.
         <span
-          className={`absolute left-1 top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[11px] ${
+          className={`absolute left-1.5 top-1.5 inline-flex h-6 min-w-[24px] items-center justify-center rounded-full px-1.5 text-[13px] sm:text-sm ${
             isToday
               ? 'bg-accent font-semibold text-accent-contrast'
               : cell.inMonth
-                ? 'text-text-secondary'
+                ? 'font-medium text-text-secondary'
                 : 'text-text-muted/40'
           }`}
         >
