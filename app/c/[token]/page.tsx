@@ -2415,10 +2415,12 @@ function CommentRow({
       </button>
     ) : null;
 
-  // Two flavors of the delete button: the inline header version (hover-only,
-  // for low-stakes comment/approved rows) and the footer version (always
-  // visible, paired with Mark revised on changes_requested rows so editors
-  // never have to hover to find the controls on the row that matters).
+  // Single hover-revealed X in the top-right corner of every history row,
+  // including changes_requested. Earlier we duplicated this control with a
+  // labelled "✕ Remove" pill in the footer, but the visual weight competed
+  // with Revised and made the row look like it had two equal CTAs. The
+  // hover-X matches every other status row's chrome — one consistent
+  // delete affordance, no double-button layout.
   const headerDeleteButton = (
     <button
       type="button"
@@ -2428,19 +2430,6 @@ function CommentRow({
       className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-text-muted opacity-0 transition hover:bg-status-danger/15 hover:text-status-danger focus-visible:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
     >
       {deleting ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}
-    </button>
-  );
-  const footerDeleteButton = (
-    <button
-      type="button"
-      onClick={requestDelete}
-      disabled={deleting}
-      aria-label="Remove from history"
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-text-secondary ring-1 ring-nativz-border transition hover:bg-status-danger/10 hover:text-status-danger hover:ring-status-danger/40 disabled:cursor-not-allowed disabled:opacity-50"
-      title="Remove this comment from history"
-    >
-      {deleting ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}
-      Remove
     </button>
   );
 
@@ -2572,7 +2561,7 @@ function CommentRow({
         <span className="font-medium text-text-primary">{comment.author_name}</span>
         <span className="text-text-muted">· {trailingMeta}{time}</span>
         {timestampPill}
-        {!isChangesRequestedRow && headerDeleteButton}
+        {headerDeleteButton}
       </div>
       {comment.content && (
         <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-text-secondary">{comment.content}</p>
@@ -2585,9 +2574,10 @@ function CommentRow({
         </div>
       )}
       {isChangesRequestedRow && (
-        <div className="mt-2 flex items-center justify-end gap-2 border-t border-nativz-border/60 pt-2">
+        // Footer keeps only Revised — the destructive Remove now lives as
+        // the hover-X in the header so this row matches every other one.
+        <div className="mt-2 flex items-center justify-end border-t border-nativz-border/60 pt-2">
           {resolveButton}
-          {footerDeleteButton}
         </div>
       )}
     </div>
