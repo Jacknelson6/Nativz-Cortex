@@ -1365,3 +1365,28 @@ right now across every brand" page.
 **Next iteration:**
 - 14.2: real reachability probes per integration (Resend `/domains`, Monday `me {}`, Supabase heartbeat, Drive token refresh, OpenRouter cheap ping). Return `{status, lastCheckedAt, latencyMs, detail}` per row.
 
+### Iteration 14.2 — 2026-04-29 · Connections tab real reachability probes
+
+**Shipped:**
+- `feat(content-tools): real reachability probes on Connections tab` (a4917d8f)
+
+**State vs goal:**
+| Criterion | Status |
+|-----------|--------|
+| Live round-trip on Supabase (service-role SELECT) | done |
+| Live round-trip on Resend (`GET /domains` + verified-domain count) | done |
+| Live round-trip on Monday (`{ me {} }` GraphQL, surfaces linked email) | done |
+| Live round-trip on OpenRouter (`/api/v1/credits` + remaining balance) | done |
+| Live round-trip on Gemini (`v1beta/models?pageSize=1`) | done |
+| Drive reachability (JWT exchange) | deferred to 14.4 — Drive client lands with Quick Schedule pipeline anyway |
+| Zernio reachability | deferred indefinitely — no public health endpoint, presence-only with `presence-only` tag |
+| Per-probe 5s timeout via AbortController | done |
+| Parallel execution via `Promise.allSettled` so one bad probe can't tank the dashboard | done |
+
+**Gaps or regressions:**
+- Drive + Zernio rows now read "presence-only" in the detail line; the UI gives an admin the right signal but the JWT exchange isn't actually exercised. Acceptable trade-off because both will be exercised by other tabs in iter 14.4 (Drive) and existing webhook traffic (Zernio).
+- Latency is encoded in the detail string rather than a dedicated badge; revisiting if iter 14.3 needs a separate latency column.
+
+**Next iteration:**
+- 14.3: Notifications tab polish — primarily a styling pass since the data layer shipped in 14.1. Goal is to harden the empty / error states and surface a "fetch failed" banner instead of a silent toast for the activity feed.
+
