@@ -82,6 +82,22 @@ export interface ReviewLinkRow {
    */
   kind?: 'calendar' | 'editing';
   editing_project_id?: string | null;
+  /**
+   * Raw editing-project lifecycle status, only set when `kind === 'editing'`.
+   * The shared review table reads this to render the *exact* same status
+   * label as the detail dialog (e.g. "Editing", "Needs approval"), instead of
+   * the lossy 5-state calendar mapping in `status`. The mapped `status` is
+   * still set so filtering / sorting logic that groups by stage continues to
+   * work.
+   */
+  editing_status?:
+    | 'editing'
+    | 'need_approval'
+    | 'revising'
+    | 'approved'
+    | 'done'
+    | 'archived'
+    | null;
 }
 
 interface ReviewBoardProps {
@@ -322,7 +338,7 @@ function ReviewCard({
             <p className="truncate text-xs text-text-muted">{link.client_name}</p>
           )}
         </div>
-        <StatusPill status={link.status} />
+        <StatusPill link={link} />
       </header>
 
       <div className="flex items-center gap-3 text-xs text-text-secondary">
@@ -392,8 +408,8 @@ function ReviewCard({
   );
 }
 
-function StatusPill({ status }: { status: ReviewLinkRow['status'] }) {
-  const config: Record<
+function StatusPill({ link }: { link: ReviewLinkRow }) {
+  const calendarConfig: Record<
     ReviewLinkRow['status'],
     { label: string; className: string }
   > = {
@@ -418,7 +434,44 @@ function StatusPill({ status }: { status: ReviewLinkRow['status'] }) {
       className: 'bg-status-danger/10 text-status-danger border-status-danger/20',
     },
   };
-  const c = config[status];
+
+  // Editing-project rows render their *own* status label so the card and the
+  // detail dialog read identically (no "Editing" vs "Ready for review" drift).
+  // Tones reuse the calendar palette for visual consistency.
+  const editingConfig: Record<
+    NonNullable<ReviewLinkRow['editing_status']>,
+    { label: string; className: string }
+  > = {
+    editing: {
+      label: 'Editing',
+      className: 'bg-accent-surface/30 text-accent-text border-accent-text/20',
+    },
+    need_approval: {
+      label: 'Needs approval',
+      className: 'bg-status-warning/10 text-status-warning border-status-warning/20',
+    },
+    revising: {
+      label: 'Revising',
+      className: 'bg-accent-surface/30 text-accent-text border-accent-text/20',
+    },
+    approved: {
+      label: 'Approved',
+      className: 'bg-status-success/10 text-status-success border-status-success/20',
+    },
+    done: {
+      label: 'Done',
+      className: 'bg-status-success/10 text-status-success border-status-success/20',
+    },
+    archived: {
+      label: 'Archived',
+      className: 'bg-status-danger/10 text-status-danger border-status-danger/20',
+    },
+  };
+
+  const c =
+    link.kind === 'editing' && link.editing_status
+      ? editingConfig[link.editing_status]
+      : calendarConfig[link.status];
   return (
     <span
       className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${c.className}`}

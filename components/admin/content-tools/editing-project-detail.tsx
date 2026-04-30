@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Select } from '@/components/ui/select';
+import { ComboSelect } from '@/components/ui/combo-select';
 import { SubNav } from '@/components/ui/sub-nav';
 import { ClientLogo } from '@/components/clients/client-logo';
 import {
@@ -350,28 +350,28 @@ export function EditingProjectDetail({
           {/* Side column */}
           <div className="space-y-4">
             <SideField label="Status">
-              <Select
-                id="editing-detail-status"
+              <ComboSelect
                 value={status}
-                onChange={(e) => {
-                  const next = e.target.value as EditingProjectStatus;
-                  setStatus(next);
-                  void patch({ status: next });
+                onChange={(next) => {
+                  const value = next as EditingProjectStatus;
+                  setStatus(value);
+                  void patch({ status: value });
                 }}
                 options={STATUS_OPTIONS}
+                searchable={false}
               />
             </SideField>
 
             <SideField label="Type">
-              <Select
-                id="editing-detail-type"
+              <ComboSelect
                 value={type}
-                onChange={(e) => {
-                  const next = e.target.value as EditingProjectType;
-                  setType(next);
-                  void patch({ project_type: next });
+                onChange={(next) => {
+                  const value = next as EditingProjectType;
+                  setType(value);
+                  void patch({ project_type: value });
                 }}
                 options={TYPE_OPTIONS}
+                searchable={false}
               />
             </SideField>
 

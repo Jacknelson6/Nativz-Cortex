@@ -199,6 +199,7 @@ function editingProjectToRow(p: EditingProject): ReviewLinkRow {
     followup_count: 0,
     kind: 'editing',
     editing_project_id: p.id,
+    editing_status: p.status,
   };
 }
 

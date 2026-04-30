@@ -643,7 +643,7 @@ function ReviewTableRow({
       {showStatus && (
         <TableCell className="whitespace-nowrap px-2.5 text-center">
           <div className="flex justify-center">
-            <StatusPill status={link.status} />
+            <StatusPill link={link} />
           </div>
         </TableCell>
       )}
@@ -1019,9 +1019,67 @@ function formatFollowupLabel(days: number | null): string {
   return `${days}d ago`;
 }
 
-/** Status pill, colored badge with a tooltip explaining the stage. */
-function StatusPill({ status }: { status: StatusKey }) {
-  const meta = STATUS_META[status];
+/**
+ * Editing-project specific status metadata. Mirrors `EDITING_STATUS_LABEL`
+ * in `lib/editing/types.ts` so the table pill and the detail dialog show
+ * the *same* label for the same row. Tones reuse the calendar palette so
+ * the existing colour vocabulary still reads correctly:
+ *   - editing      → blue (in flight, mirrors revising/info)
+ *   - need_approval → yellow (waiting for client)
+ *   - revising     → blue (client requested changes)
+ *   - approved     → green (client signed off)
+ *   - done         → green (handed off, with "Done" copy)
+ *   - archived     → red (dead)
+ */
+const EDITING_STATUS_META: Record<
+  NonNullable<ReviewLinkRow['editing_status']>,
+  { label: string; tone: string; description: string }
+> = {
+  editing: {
+    label: 'Editing',
+    tone: 'border-accent-text/30 bg-accent-text/10 text-accent-text',
+    description: 'Editor is working on the cuts.',
+  },
+  need_approval: {
+    label: 'Needs approval',
+    tone: 'border-status-warning/30 bg-status-warning/10 text-status-warning',
+    description: 'Sent to the client, awaiting first approval.',
+  },
+  revising: {
+    label: 'Revising',
+    tone: 'border-accent-text/30 bg-accent-text/10 text-accent-text',
+    description: 'Client requested changes; editor is revising.',
+  },
+  approved: {
+    label: 'Approved',
+    tone: 'border-status-success/30 bg-status-success/10 text-status-success',
+    description: 'Every video signed off by the client.',
+  },
+  done: {
+    label: 'Done',
+    tone: 'border-status-success/30 bg-status-success/10 text-status-success',
+    description: 'Handed off to paid media / scheduling.',
+  },
+  archived: {
+    label: 'Archived',
+    tone: 'border-status-danger/30 bg-status-danger/10 text-status-danger',
+    description: 'Project archived. Will not ship.',
+  },
+};
+
+/**
+ * Status pill, colored badge with a tooltip explaining the stage.
+ *
+ * For editing-project rows, prefers the raw `editing_status` over the
+ * mapped `status` so the pill reads identically to the detail dialog
+ * (no more "Editing" in the dialog vs "Ready for review" in the table).
+ */
+function StatusPill({ link }: { link: ReviewLinkRow }) {
+  const editingMeta =
+    link.kind === 'editing' && link.editing_status
+      ? EDITING_STATUS_META[link.editing_status]
+      : null;
+  const meta = editingMeta ?? STATUS_META[link.status];
   return (
     <Tooltip>
       <TooltipTrigger asChild>
