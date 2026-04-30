@@ -55,6 +55,12 @@ interface ClientRow {
   name: string;
   slug: string | null;
   logoUrl: string | null;
+  /**
+   * Active services from `clients.services` (text[]), canonical values:
+   * 'SMM', 'Paid Media', 'Editing', 'Affiliates'. Surfaced so the UI can
+   * filter the matrix to brands the agency is actively producing for.
+   */
+  services: string[];
   profiles: Record<Platform, PlatformSlot>;
 }
 
@@ -91,7 +97,7 @@ export async function GET() {
   const [clientsRes, profilesRes] = await Promise.all([
     admin
       .from('clients')
-      .select('id, name, slug, logo_url')
+      .select('id, name, slug, logo_url, services')
       .order('name'),
     admin
       .from('social_profiles')
@@ -145,6 +151,7 @@ export async function GET() {
       name: c.name,
       slug: c.slug ?? null,
       logoUrl: c.logo_url ?? null,
+      services: Array.isArray(c.services) ? (c.services as string[]) : [],
       profiles,
     };
   });

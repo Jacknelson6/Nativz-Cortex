@@ -69,7 +69,22 @@ interface ClientRow {
   name: string;
   slug: string | null;
   logoUrl: string | null;
+  /**
+   * Active services from `clients.services` (text[]). Used for the
+   * "Active production only" filter chip; canonical values are 'SMM',
+   * 'Paid Media', 'Editing', 'Affiliates'.
+   */
+  services: string[];
   profiles: Record<PlatformKey, PlatformSlot>;
+}
+
+/** Services that count as "active production" for the filter chip. */
+const PRODUCTION_SERVICES = ['SMM', 'Editing'] as const;
+
+function hasActiveProduction(c: ClientRow): boolean {
+  return c.services.some((s) =>
+    (PRODUCTION_SERVICES as readonly string[]).includes(s),
+  );
 }
 
 interface MatrixResponse {
@@ -87,6 +102,13 @@ export function ConnectionsTab() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
+  /**
+   * "Active production only" hides brands without SMM or Editing on
+   * their service list. Useful when the matrix grows past ~30 brands
+   * and the operator only cares about who we're posting / cutting for
+   * right now.
+   */
+  const [activeOnly, setActiveOnly] = useState(false);
 
   async function load(silent = false) {
     if (silent) setRefreshing(true);
@@ -115,12 +137,20 @@ export function ConnectionsTab() {
   const filtered = useMemo(() => {
     if (!data) return [];
     const q = query.trim().toLowerCase();
-    if (!q) return data.clients;
-    return data.clients.filter((c) =>
-      c.name.toLowerCase().includes(q) ||
-      (c.slug ?? '').toLowerCase().includes(q),
-    );
-  }, [data, query]);
+    return data.clients.filter((c) => {
+      if (activeOnly && !hasActiveProduction(c)) return false;
+      if (!q) return true;
+      return (
+        c.name.toLowerCase().includes(q) ||
+        (c.slug ?? '').toLowerCase().includes(q)
+      );
+    });
+  }, [data, query, activeOnly]);
+
+  const activeCount = useMemo(
+    () => (data ? data.clients.filter(hasActiveProduction).length : 0),
+    [data],
+  );
 
   return (
     <div className="overflow-hidden rounded-xl border border-nativz-border bg-surface">
@@ -143,6 +173,28 @@ export function ConnectionsTab() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveOnly((v) => !v)}
+            className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors ${
+              activeOnly
+                ? 'border-accent-text/40 bg-accent-text/10 text-accent-text'
+                : 'border-nativz-border bg-background text-text-muted hover:text-text-primary'
+            }`}
+            aria-pressed={activeOnly}
+            title="Filter to brands with SMM or Editing on their service list"
+          >
+            <span>Active production</span>
+            <span
+              className={`rounded px-1 text-[10px] tabular-nums ${
+                activeOnly
+                  ? 'bg-accent-text/20'
+                  : 'bg-surface-hover text-text-muted'
+              }`}
+            >
+              {activeCount}
+            </span>
+          </button>
           <SearchInput value={query} onChange={setQuery} />
           <Button
             variant="ghost"
@@ -327,7 +379,9 @@ const STATUS_META: Record<
   manual: {
     label: 'Manual access',
     Icon: Hand,
-    chip: 'border-accent-text/30 bg-accent-text/10 text-accent-text',
+    // Amber instead of teal so it reads as "halfway there" rather than
+    // "all good" - the agency still has to log in by hand on these.
+    chip: 'border-status-warning/40 bg-status-warning/10 text-status-warning',
   },
   disconnected: {
     label: 'Disconnected',
