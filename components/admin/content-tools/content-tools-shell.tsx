@@ -26,11 +26,13 @@ import type {
   ReviewLinkRow,
   ReviewProjectType,
 } from '@/components/scheduler/review-board';
+import type { EditingProjectType } from '@/lib/editing/types';
 import { ProjectsEmptyState } from './projects-empty-state';
 import { ProjectsTableSkeleton } from './projects-table-skeleton';
 import { QuickScheduleTab } from './quick-schedule-tab';
 import { ConnectionsTab } from './connections-tab';
 import { NotificationsTab } from './notifications-tab';
+import { EditingProjectsPanel } from './editing-projects-panel';
 
 /**
  * `/admin/content-tools` shell. Reorganised around project type so
@@ -108,6 +110,24 @@ const PROJECT_TAB_LABEL: Record<ProjectTabSlug, string> = {
   paid_social: 'Paid social',
   ctv: 'CTV',
   other: 'Other',
+};
+
+/**
+ * Project-type tab → `editing_projects.project_type` filter for the
+ * inline editing-projects panel below the share-link table. `null`
+ * surfaces every editing project (the All projects tab); the Other
+ * tab folds in `general` so legacy / pre-migration rows don't sink
+ * out of view.
+ */
+const EDITING_PANEL_FILTER: Record<
+  ProjectTabSlug,
+  EditingProjectType | EditingProjectType[] | null
+> = {
+  projects: null,
+  organic_social: 'organic_content',
+  paid_social: 'social_ads',
+  ctv: 'ctv_ads',
+  other: ['general', 'other'],
 };
 
 function isProjectTab(tab: ContentToolsTab): tab is ProjectTabSlug {
@@ -313,23 +333,38 @@ export function ContentToolsShell() {
           ariaLabel="Content tools sections"
         />
 
-        {activeProjectTab &&
-          (loading ? (
-            <ProjectsTableSkeleton />
-          ) : links.length === 0 ? (
-            <ProjectsEmptyState />
-          ) : (
-            <ReviewTableCard
-              rows={visibleProjects}
-              showBrand
-              onPatchLink={patchLink}
-              onArchiveLink={archiveLink}
-              title={PROJECT_TAB_LABEL[activeProjectTab]}
-              sort={sort}
-              onSortChange={setSort}
-              hideColumns={PROJECT_TAB_HIDE[activeProjectTab]}
+        {activeProjectTab && (
+          <>
+            {loading ? (
+              <ProjectsTableSkeleton />
+            ) : links.length === 0 ? (
+              <ProjectsEmptyState />
+            ) : (
+              <ReviewTableCard
+                rows={visibleProjects}
+                showBrand
+                onPatchLink={patchLink}
+                onArchiveLink={archiveLink}
+                title={PROJECT_TAB_LABEL[activeProjectTab]}
+                sort={sort}
+                onSortChange={setSort}
+                hideColumns={PROJECT_TAB_HIDE[activeProjectTab]}
+              />
+            )}
+            {/*
+              Editing projects live in a parallel data model
+              (`editing_projects` + `editing_project_videos`) from the
+              calendar share links above. Surfacing the panel here gives
+              the team one tab where they can: see in-flight projects,
+              upload edited cuts straight to Mux, mint a share link, and
+              drop the public review URL into a client email.
+            */}
+            <EditingProjectsPanel
+              projectType={EDITING_PANEL_FILTER[activeProjectTab]}
+              tabLabel={PROJECT_TAB_LABEL[activeProjectTab]}
             />
-          ))}
+          </>
+        )}
         {tab === 'quick-schedule' && <QuickScheduleTab />}
         {tab === 'connections' && <ConnectionsTab />}
         {tab === 'notifications' && <NotificationsTab />}
