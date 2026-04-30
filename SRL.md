@@ -1340,3 +1340,28 @@ right now across every brand" page.
 
 ## Goal 14 Iterations
 
+### Iteration 14.1 — 2026-04-29 · Shell + Projects/Connections/Notifications wired, Quick Schedule placeholder
+
+**Shipped:**
+- `feat(content-tools): scaffold 4-tab admin shell, rename share links` (4d0605b1)
+
+**State vs goal:**
+| Criterion | Status |
+|-----------|--------|
+| Sidebar rename + 308 redirect from `/admin/share-links` | done |
+| `/admin/content-tools` 4-tab shell (Projects / Quick schedule / Connections / Notifications) | done |
+| Styling parity with /review (SubNav, bg-surface cards, sentence-case header, dark-theme tokens) | done |
+| Projects tab loads real cross-brand share links via existing `/api/calendar/review` (clientId=null) | done |
+| Connections tab returns real env-presence rows (Supabase / Resend / Monday / Zernio / Drive / OpenRouter / Gemini); Resend probes `getSecret` for app_secrets override | done |
+| Notifications activity feed reads last 40 calendar transactional emails from `email_messages` with brand-name join | done |
+| Notifications POC overview rolls up `content_drop_review_contacts` per client, flags brands with `notifyEnabled=0` | done |
+| Quick Schedule MVP picker + thumbnail/transcribe/caption pipeline | partial — explainer + 404-tolerant queue placeholder; full pipeline waits for iter 14.4 |
+| `/review` brand-scoped still works (no regressions to ReviewTable) | done — refactor exported `ReviewTableCard` + `sortLinks` from existing review-table.tsx; brand-scoped path unchanged |
+
+**Gaps or regressions:**
+- Connections tab is presence-only (env var set or not). No reachability probes yet — iter 14.2.
+- Quick Schedule tab paints "coming online" until the Monday pull lands — iter 14.4. The 404 tolerance is intentional so the rest of the shell isn't blocked by the missing pipeline route.
+
+**Next iteration:**
+- 14.2: real reachability probes per integration (Resend `/domains`, Monday `me {}`, Supabase heartbeat, Drive token refresh, OpenRouter cheap ping). Return `{status, lastCheckedAt, latencyMs, detail}` per row.
+
