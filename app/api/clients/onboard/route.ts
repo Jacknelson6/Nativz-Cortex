@@ -12,6 +12,11 @@ export const maxDuration = 60;
 const onboardSchema = z.object({
   name: z.string().min(1, 'Client name is required'),
   website_url: z.string().url('A valid URL is required'),
+  // Sales-pipeline stage from the first step. 'lead' = prospect (default),
+  // 'active' = brand we're already servicing. Persisted to
+  // `clients.lifecycle_state`. Other values in the enum (contracted,
+  // paid_deposit, churned) are reserved for downstream signing/billing flows.
+  lifecycle_state: z.enum(['lead', 'active']).optional().default('lead'),
   industry: z.string().min(1, 'Industry is required'),
   target_audience: z.string().optional().default(''),
   brand_voice: z.string().optional().default(''),
@@ -156,6 +161,7 @@ export async function POST(request: NextRequest) {
             description: data.description || null,
             writing_style: data.writing_style || null,
             content_language: data.content_language || null,
+            lifecycle_state: data.lifecycle_state,
             is_active: true,
           })
           .select('id')

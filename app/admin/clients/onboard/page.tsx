@@ -14,9 +14,12 @@ export default function OnboardWizardPage() {
   const [completedSteps, setCompletedSteps] = useState<OnboardStep[]>([]);
 
   // State across steps
-  const [inputData, setInputData] = useState<Pick<OnboardFormData, 'name' | 'website_url'>>({
+  const [inputData, setInputData] = useState<
+    Pick<OnboardFormData, 'name' | 'website_url' | 'lifecycle_state'>
+  >({
     name: '',
     website_url: '',
+    lifecycle_state: 'lead',
   });
   const [formData, setFormData] = useState<OnboardFormData | null>(null);
   const [clientId, setClientId] = useState('');
@@ -33,7 +36,9 @@ export default function OnboardWizardPage() {
   }
 
   // Step 1 → Step 2
-  function handleInputNext(data: Pick<OnboardFormData, 'name' | 'website_url'>) {
+  function handleInputNext(
+    data: Pick<OnboardFormData, 'name' | 'website_url' | 'lifecycle_state'>,
+  ) {
     setInputData(data);
     completeStep('input');
     setCurrentStep('analyze');
@@ -47,12 +52,15 @@ export default function OnboardWizardPage() {
   const handleAnalyzeNext = useCallback(async (data: OnboardFormData) => {
     if (onboardInFlight.current) return;
     onboardInFlight.current = true;
+    // Forward the lifecycle_state captured in step 1; analyze step doesn't
+    // collect it, so merge it back in here before the POST.
+    const requestBody = { ...data, lifecycle_state: inputData.lifecycle_state };
     setFormData(data);
     try {
       const res = await fetch('/api/clients/onboard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(requestBody),
       });
       const payload = await res.json().catch(() => null);
 
@@ -76,10 +84,10 @@ export default function OnboardWizardPage() {
       completeStep('analyze');
       setCurrentStep('strategy');
     } catch {
-      toast.error('Something went wrong creating the client — try again.');
+      toast.error('Something went wrong creating the client, try again.');
       onboardInFlight.current = false;
     }
-  }, []);
+  }, [inputData.lifecycle_state]);
 
   // Step 3 → Step 4
   const handleStrategyNext = useCallback((id: string) => {
@@ -90,13 +98,10 @@ export default function OnboardWizardPage() {
 
   return (
     <div className="cortex-page-gutter max-w-3xl mx-auto">
-      {/* Page title — fades out after step 1 */}
+      {/* Page title, fades out after step 1 */}
       {currentStep === 'input' && (
         <div className="text-center mb-2 animate-fade-slide-in">
-          <h1 className="ui-page-title">Onboard a new client</h1>
-          <p className="text-sm text-text-muted mt-1">
-            From URL to full content strategy in 5 minutes
-          </p>
+          <h1 className="ui-page-title">Add a new brand</h1>
         </div>
       )}
 

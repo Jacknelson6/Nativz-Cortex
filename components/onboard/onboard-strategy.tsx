@@ -110,7 +110,7 @@ export function OnboardStrategy({ clientId, clientName, onNext, onBack }: Onboar
   return (
     <div className="animate-fade-slide-in">
       <div className="text-center mb-8">
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent2-surface text-accent2-text text-xs font-medium mb-4">
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent/10 text-accent text-xs font-medium mb-4">
           <Brain size={12} />
           AI strategy engine
         </div>
@@ -118,7 +118,7 @@ export function OnboardStrategy({ clientId, clientName, onNext, onBack }: Onboar
           Building {clientName}&apos;s content playbook
         </h2>
         <p className="text-sm text-text-muted mt-1">
-          This takes 1–3 minutes — crafting a full brand strategy
+          This takes 1 to 3 minutes, crafting a full brand strategy.
         </p>
       </div>
 
@@ -126,11 +126,8 @@ export function OnboardStrategy({ clientId, clientName, onNext, onBack }: Onboar
         {/* Progress bar */}
         <div className="h-2 rounded-full bg-surface-hover overflow-hidden">
           <div
-            className="h-full rounded-full transition-all duration-300 ease-out"
-            style={{
-              width: `${progress}%`,
-              background: `linear-gradient(90deg, var(--accent), var(--accent2))`,
-            }}
+            className="h-full rounded-full bg-accent transition-all duration-300 ease-out"
+            style={{ width: `${progress}%` }}
           />
         </div>
         <p className="mt-2 text-xs text-text-muted text-right tabular-nums">
@@ -154,7 +151,7 @@ export function OnboardStrategy({ clientId, clientName, onNext, onBack }: Onboar
                   </div>
                 ) : (
                   <div className="flex h-5 w-5 items-center justify-center">
-                    <Loader2 size={14} className="animate-spin text-accent2-text" />
+                    <Loader2 size={14} className="animate-spin text-accent" />
                   </div>
                 )}
                 <span className={`text-sm transition-colors ${
@@ -173,7 +170,7 @@ export function OnboardStrategy({ clientId, clientName, onNext, onBack }: Onboar
                 <Check size={12} className="text-emerald-400" />
               </div>
               <span className="text-sm text-emerald-400 font-medium">
-                Strategy complete — preparing your review
+                Strategy complete, preparing your review.
               </span>
             </div>
           )}

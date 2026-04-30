@@ -100,6 +100,10 @@ export interface ClientStrategy {
 export interface OnboardFormData {
   name: string;
   website_url: string;
+  /** Sales-pipeline stage chosen at the very first step. 'lead' = prospect
+   *  (default for cold inbound), 'active' = existing brand we're already
+   *  servicing. Persisted to `clients.lifecycle_state` on insert. */
+  lifecycle_state?: 'lead' | 'active';
   industry: string;
   target_audience: string;
   brand_voice: string;

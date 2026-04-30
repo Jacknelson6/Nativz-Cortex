@@ -1,17 +1,17 @@
 'use client';
 
-import { Check } from 'lucide-react';
+import { Stepper, type StepperStep } from '@/components/ui/stepper';
 import type { OnboardStep } from '@/lib/types/strategy';
 
 // Provisioning (Cortex insert + knowledge-graph sync + Monday board) used
 // to be its own "Set up" step. We now run it silently during the Analyze
-// → Strategy transition so the user doesn't sit through a redundant
+// to Strategy transition so the user doesn't sit through a redundant
 // "creating records" screen.
-const STEPS: { key: OnboardStep; label: string; number: number }[] = [
-  { key: 'input', label: 'Client info', number: 1 },
-  { key: 'analyze', label: 'AI analysis', number: 2 },
-  { key: 'strategy', label: 'Strategy', number: 3 },
-  { key: 'review', label: 'Review', number: 4 },
+const STEPS: StepperStep<OnboardStep>[] = [
+  { key: 'input', label: 'Brand info' },
+  { key: 'analyze', label: 'AI analysis' },
+  { key: 'strategy', label: 'Strategy' },
+  { key: 'review', label: 'Review' },
 ];
 
 interface OnboardProgressProps {
@@ -20,61 +20,11 @@ interface OnboardProgressProps {
 }
 
 export function OnboardProgress({ currentStep, completedSteps }: OnboardProgressProps) {
-  const currentIndex = STEPS.findIndex((s) => s.key === currentStep);
-
   return (
-    <div className="flex items-center justify-between w-full max-w-2xl mx-auto mb-8">
-      {STEPS.map((step, i) => {
-        const isComplete = completedSteps.includes(step.key);
-        const isCurrent = step.key === currentStep;
-        const isPast = i < currentIndex;
-
-        return (
-          <div key={step.key} className="flex items-center flex-1 last:flex-none">
-            {/* Step circle */}
-            <div className="flex flex-col items-center">
-              <div
-                className={`
-                  flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold
-                  transition-all duration-500 ease-out
-                  ${isComplete
-                    ? 'bg-accent text-white shadow-[0_0_12px_rgba(4,107,210,0.4)]'
-                    : isCurrent
-                      ? 'bg-accent/20 text-accent border-2 border-accent shadow-[0_0_16px_var(--accent-surface)]'
-                      : 'bg-surface-hover text-text-muted border border-nativz-border'
-                  }
-                `}
-              >
-                {isComplete ? (
-                  <Check size={14} className="animate-fade-slide-in" />
-                ) : (
-                  step.number
-                )}
-              </div>
-              <span
-                className={`
-                  mt-2 text-xs font-medium whitespace-nowrap transition-colors duration-300
-                  ${isCurrent ? 'text-accent' : isPast || isComplete ? 'text-text-secondary' : 'text-text-muted'}
-                `}
-              >
-                {step.label}
-              </span>
-            </div>
-
-            {/* Connector line */}
-            {i < STEPS.length - 1 && (
-              <div className="flex-1 mx-3 mt-[-20px]">
-                <div className="h-0.5 rounded-full bg-surface-hover overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-accent transition-all duration-700 ease-out"
-                    style={{ width: isPast || isComplete ? '100%' : isCurrent ? '50%' : '0%' }}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
+    <Stepper
+      steps={STEPS}
+      currentStep={currentStep}
+      completedSteps={completedSteps}
+    />
   );
 }

@@ -200,9 +200,9 @@ summary {
   --accent-hover: #2AB5A7;      /* ac-teal-500 */
   --accent-surface: rgba(54, 209, 194, 0.10);
   --accent-text: #1F9489;       /* ac-teal-600 — contrast text on paper */
-  /* AC teal is too light for white text — use navy for CTA foreground.
-     #001631 on #36D1C2 ≈ 8.6:1, passes WCAG AAA. */
-  --accent-contrast: #001631;   /* ac-navy-600 */
+  /* CTA foreground stays white per AC brand call. Note: white on AC teal
+     (#36D1C2) is ~1.5:1 and fails WCAG, accept the tradeoff for brand. */
+  --accent-contrast: #FFFFFF;
 
   /* Secondary accent — AC orange (not teal) for warmth + energy moments */
   --accent2: #FF7A45;           /* ac-orange-400 */
@@ -231,12 +231,14 @@ summary {
   --shadow-elevated: 0 24px 60px rgba(0, 22, 49, 0.12);
   --shadow-dropdown: 0 12px 32px rgba(0, 22, 49, 0.14);
 
-  /* Typography — Sora display + Roboto body + Rubik UI. The semantic font
-     tokens (read by Tailwind `font-display`, `font-sans`) are remapped so
-     every `ui-page-title` etc. picks up Sora in AC mode automatically. */
-  --font-nz-display: var(--font-ac-display);  /* Sora */
+  /* Typography — Rubik for headings + Roboto body + Rubik UI. Per AC
+     brand call, headings use Rubik (not Sora), so we remap the display
+     token to the shared Rubik face. Sora is no longer the heading face,
+     `--font-ac-display` stays defined in the layout for future use but is
+     intentionally unreferenced here. */
+  --font-nz-display: var(--font-nz-sans);     /* Rubik */
   --font-nz-body: var(--font-ac-body);        /* Roboto */
-  /* --font-nz-sans stays on Rubik (AC uses it too) */
+  /* --font-nz-sans stays on Rubik (AC uses it for UI too) */
 
   /* Button shape — AC matches Nativz pill shape (Jack visual-QA call).
      Token spec originally said rectangle; pill felt wrong in product UI. */
@@ -1063,16 +1065,6 @@ button.bg-accent,
 a.bg-accent,
 [role="button"].bg-accent {
   border-radius: var(--nz-btn-radius, var(--nz-radius-pill));
-}
-
-/* ═══════════════════════════════════════════════════════════
-   AC mode — swap `text-white` → navy on any `bg-accent` CTA.
-   AC teal (#36D1C2) vs white = ~1.5:1, fails WCAG. Navy (#001631) gives
-   ~8.6:1 (AAA). This recolors ~40 inline-styled buttons across the app
-   without touching each call site. Nativz stays unchanged — cyan + white
-   is WCAG-fine. Specificity: attr + 2 classes beats `.text-white` alone. */
-[data-brand-mode="anderson"] .bg-accent.text-white {
-  color: var(--accent-contrast);
 }
 
 /* ═══════════════════════════════════════════════════════════

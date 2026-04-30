@@ -7,8 +7,10 @@ import { Input } from '@/components/ui/input';
 import { GlassButton } from '@/components/ui/glass-button';
 import type { OnboardFormData } from '@/lib/types/strategy';
 
+type LifecycleChoice = NonNullable<OnboardFormData['lifecycle_state']>;
+
 interface OnboardInputProps {
-  onNext: (data: Pick<OnboardFormData, 'name' | 'website_url'>) => void;
+  onNext: (data: Pick<OnboardFormData, 'name' | 'website_url' | 'lifecycle_state'>) => void;
 }
 
 // Easter egg: the input label subtly pulses blue when a valid URL is detected
@@ -16,6 +18,9 @@ export function OnboardInput({ onNext }: OnboardInputProps) {
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [urlValid, setUrlValid] = useState(false);
+  // Default to 'lead' (prospect) since most brands added here are inbound
+  // sales prospects, not existing accounts.
+  const [lifecycle, setLifecycle] = useState<LifecycleChoice>('lead');
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -35,43 +40,64 @@ export function OnboardInput({ onNext }: OnboardInputProps) {
 
   const canProceed = name.trim().length >= 2 && urlValid;
 
+  function submit() {
+    const fullUrl = url.startsWith('http') ? url : `https://${url}`;
+    onNext({ name: name.trim(), website_url: fullUrl, lifecycle_state: lifecycle });
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canProceed) return;
-    const fullUrl = url.startsWith('http') ? url : `https://${url}`;
-    onNext({ name: name.trim(), website_url: fullUrl });
+    submit();
   }
 
   // Easter egg: pressing Cmd+Enter also submits
   function handleKeyDown(e: React.KeyboardEvent) {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canProceed) {
       e.preventDefault();
-      const fullUrl = url.startsWith('http') ? url : `https://${url}`;
-      onNext({ name: name.trim(), website_url: fullUrl });
+      submit();
     }
   }
 
   return (
     <div className="animate-fade-slide-in">
       <div className="text-center mb-8">
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent/10 text-accent text-xs font-medium mb-4">
-          <Sparkles size={12} />
-          New client
-        </div>
         <h2 className="text-xl font-semibold text-text-primary">
-          Who are we onboarding?
+          Who&apos;s the brand?
         </h2>
         <p className="text-sm text-text-muted mt-1.5">
-          Just a name and website — we&apos;ll figure out the rest
+          Just a name and website, we&apos;ll figure out the rest.
         </p>
       </div>
 
       <Card className="max-w-md mx-auto">
         <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="space-y-5">
+          <div>
+            <p className="text-xs font-medium text-text-muted mb-2">Status</p>
+            <div
+              role="radiogroup"
+              aria-label="Brand status"
+              className="inline-flex w-full p-1 rounded-lg bg-white/5 border border-nativz-border"
+            >
+              <LifecycleOption
+                label="Existing client"
+                value="active"
+                current={lifecycle}
+                onSelect={setLifecycle}
+              />
+              <LifecycleOption
+                label="Prospect"
+                value="lead"
+                current={lifecycle}
+                onSelect={setLifecycle}
+              />
+            </div>
+          </div>
+
           <Input
             ref={nameRef}
             id="client-name"
-            label="Client name"
+            label="Brand name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Acme Coffee Co."
@@ -107,5 +133,34 @@ export function OnboardInput({ onNext }: OnboardInputProps) {
         </form>
       </Card>
     </div>
+  );
+}
+
+function LifecycleOption({
+  label,
+  value,
+  current,
+  onSelect,
+}: {
+  label: string;
+  value: LifecycleChoice;
+  current: LifecycleChoice;
+  onSelect: (v: LifecycleChoice) => void;
+}) {
+  const selected = current === value;
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={() => onSelect(value)}
+      className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+        selected
+          ? 'bg-accent/15 text-accent'
+          : 'text-text-muted hover:text-text-primary'
+      }`}
+    >
+      {label}
+    </button>
   );
 }
