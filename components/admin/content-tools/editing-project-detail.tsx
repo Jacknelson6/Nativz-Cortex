@@ -233,7 +233,7 @@ export function EditingProjectDetail({
 
   return (
     <Dialog open={open} onClose={onClose} title="" maxWidth="5xl" bodyClassName="p-0">
-      <div className="flex h-full max-h-[80vh] flex-col">
+      <div className="flex h-[80vh] min-h-[560px] flex-col">
         {/* Header */}
         <div className="flex items-start gap-3 border-b border-nativz-border py-4 pl-6 pr-14">
           <ClientLogo

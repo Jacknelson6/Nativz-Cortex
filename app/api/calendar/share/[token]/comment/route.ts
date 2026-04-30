@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createNotification } from '@/lib/notifications/create';
 import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
 import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import { formatPostTimeForChat } from '@/lib/chat/format-post-time';
 import { isMondayConfigured } from '@/lib/monday/client';
 import {
   findContentCalendarItem,
@@ -157,6 +158,7 @@ export async function POST(
   after(async () => {
     try {
       await notifyAdminsOfComment(admin, link.drop_id, token, reviewLinkMap, {
+        postId: parsed.data.postId,
         authorName: parsed.data.authorName.trim(),
         content: trimmedContent,
         status: finalStatus,
@@ -437,25 +439,39 @@ async function notifyAdminsOfComment(
   shareToken: string,
   reviewLinkMap: Record<string, string>,
   comment: {
+    postId: string;
     authorName: string;
     content: string;
     status: 'approved' | 'changes_requested' | 'comment';
     attachments: Array<{ url: string; filename: string; mime_type: string; size_bytes: number }>;
   },
 ) {
-  const { data: drop } = await admin
-    .from('content_drops')
-    .select('id, start_date, clients(name, chat_webhook_url)')
-    .eq('id', dropId)
-    .single<{
-      id: string;
-      start_date: string;
-      clients: { name: string; chat_webhook_url: string | null } | null;
-    }>();
+  // Fetch drop + the specific post in parallel — the post's `scheduled_at` is
+  // surfaced in the chat message body so reviewers can see *which* post the
+  // change request / comment / approval is about without opening the link.
+  const [dropRes, postRes] = await Promise.all([
+    admin
+      .from('content_drops')
+      .select('id, start_date, clients(name, chat_webhook_url)')
+      .eq('id', dropId)
+      .single<{
+        id: string;
+        start_date: string;
+        clients: { name: string; chat_webhook_url: string | null } | null;
+      }>(),
+    admin
+      .from('scheduled_posts')
+      .select('scheduled_at')
+      .eq('id', comment.postId)
+      .maybeSingle<{ scheduled_at: string | null }>(),
+  ]);
+  const drop = dropRes.data;
   if (!drop) return;
 
   const clientName = drop.clients?.name ?? 'Client';
   const chatWebhookUrl = drop.clients?.chat_webhook_url ?? null;
+  const postScheduledAt = postRes.data?.scheduled_at ?? null;
+  const postTimeLine = postScheduledAt ? formatPostTimeForChat(postScheduledAt) : null;
   const title = TITLE_BY_STATUS[comment.status](comment.authorName, clientName);
   // Truncate only the in-app notification body — chat gets full content.
   // Attachment-only comments have no text, so fall back to a file summary.
@@ -509,7 +525,10 @@ async function notifyAdminsOfComment(
           ? '\n\n' +
             comment.attachments.map((a) => `📎 ${a.filename}\n${a.url}`).join('\n\n')
           : '';
-      const text = `*${comment.authorName}* ${verb} on ${clientName}:${quotedBlock}${attachmentBlock}\n\n${shareUrl}`;
+      // Show *which* post — by scheduled date/time — so the team can scan
+      // the chat without opening the share link.
+      const postLine = postTimeLine ? `\n_Post scheduled for ${postTimeLine}_` : '';
+      const text = `*${comment.authorName}* ${verb} on ${clientName}:${postLine}${quotedBlock}${attachmentBlock}\n\n${shareUrl}`;
       postToGoogleChatSafe(chatWebhookUrl, { text }, `comment ${dropId}`);
     } else if (comment.status === 'approved' && allApproved) {
       const reviewLinkIds = Object.values(reviewLinkMap);

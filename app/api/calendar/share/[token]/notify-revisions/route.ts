@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/auth/permissions';
 import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import { formatPostTimeForChat } from '@/lib/chat/format-post-time';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { sendCalendarRevisedVideosEmail } from '@/lib/email/resend';
 import { syncMondayApprovalForDrop } from '@/lib/monday/calendar-approval';
@@ -130,10 +131,31 @@ export async function POST(
   const editorName =
     editorRow?.full_name?.trim() || editorRow?.email?.split('@')[0] || 'Editor';
 
+  // Pull scheduled_at for each revised post so the chat ping shows *which*
+  // posts were re-uploaded (not just a count). Same reasoning as the
+  // comment route — reviewers shouldn't have to open the share link to
+  // figure out which slot the revision belongs to.
+  const pendingPostIdsForChat = pendingForLink
+    .map((v) => v.scheduled_post_id)
+    .filter((id): id is string => !!id);
+  const { data: postRows } = pendingPostIdsForChat.length > 0
+    ? await admin
+        .from('scheduled_posts')
+        .select('id, scheduled_at')
+        .in('id', pendingPostIdsForChat)
+    : { data: [] as Array<{ id: string; scheduled_at: string | null }> };
+  const postTimes = (postRows ?? [])
+    .map((p) => (p.scheduled_at ? formatPostTimeForChat(p.scheduled_at) : null))
+    .filter((s): s is string => !!s)
+    .sort();
+
   if (chatWebhookUrl) {
     const word = pendingForLink.length === 1 ? 'video has' : 'videos have';
+    const postsBlock = postTimes.length > 0
+      ? '\n' + postTimes.map((t) => `• ${t}`).join('\n')
+      : '';
     const text =
-      `*${editorName}* re-uploaded ${pendingForLink.length} revised ${word} for *${clientName}*.\n` +
+      `*${editorName}* re-uploaded ${pendingForLink.length} revised ${word} for *${clientName}*.${postsBlock}\n` +
       `Open the share link to review the new cuts:\n${shareUrl}`;
     postToGoogleChatSafe(chatWebhookUrl, { text }, `revised-videos ${link.drop_id}`);
   }

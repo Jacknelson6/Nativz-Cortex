@@ -76,7 +76,7 @@ export const EDITING_STATUSES: StatusConfig[] = [
   { value: 'editing', label: 'Editing', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
   { value: 'edited', label: 'Edited', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
   { value: 'em_approved', label: 'EM approved', color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' },
-  { value: 'revising', label: 'Revising', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+  { value: 'revising', label: 'Revising', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
   { value: 'blocked', label: 'Blocked', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
   { value: 'scheduled', label: 'Scheduled', color: 'bg-emerald-700/20 text-emerald-400 border-emerald-500/30' },
   { value: 'done', label: 'Done', color: 'bg-green-500/20 text-green-400 border-green-500/30' },

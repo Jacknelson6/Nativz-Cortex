@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createNotification } from '@/lib/notifications/create';
 import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import { formatPostTimeForChat } from '@/lib/chat/format-post-time';
 
 const BodySchema = z.object({
   postId: z.string().uuid(),
@@ -49,9 +50,9 @@ export async function POST(
 
   const { data: post } = await admin
     .from('scheduled_posts')
-    .select('id, caption')
+    .select('id, caption, scheduled_at')
     .eq('id', parsed.data.postId)
-    .single<{ id: string; caption: string | null }>();
+    .single<{ id: string; caption: string | null; scheduled_at: string | null }>();
   if (!post) return NextResponse.json({ error: 'post not found' }, { status: 404 });
 
   const previousCaption = post.caption ?? '';
@@ -88,6 +89,7 @@ export async function POST(
     authorName: parsed.data.authorName.trim(),
     previousCaption,
     newCaption,
+    scheduledAt: post.scheduled_at,
   }).catch((err) => console.error('Caption-edit notification failed:', err));
 
   return NextResponse.json({
@@ -100,7 +102,12 @@ async function notifyOfCaptionEdit(
   admin: ReturnType<typeof createAdminClient>,
   dropId: string,
   token: string,
-  edit: { authorName: string; previousCaption: string; newCaption: string },
+  edit: {
+    authorName: string;
+    previousCaption: string;
+    newCaption: string;
+    scheduledAt: string | null;
+  },
 ) {
   const { data: drop } = await admin
     .from('content_drops')
@@ -125,8 +132,10 @@ async function notifyOfCaptionEdit(
   const after = truncate(edit.newCaption || '(empty)');
 
   if (chatWebhookUrl) {
+    const postTimeLine = formatPostTimeForChat(edit.scheduledAt);
+    const postLine = postTimeLine ? `\n_Post scheduled for ${postTimeLine}_` : '';
     const text =
-      `*${edit.authorName}* edited a caption for *${clientName}*.\n` +
+      `*${edit.authorName}* edited a caption for *${clientName}*.${postLine}\n` +
       `_Before:_ ${before}\n` +
       `_After:_ ${after}\n` +
       `Share link: ${shareUrl}`;

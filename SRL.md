@@ -1985,3 +1985,46 @@ wiring, build clean, em-dash audit clean. The follow-up assignee
 picker is the obvious next iteration but not part of this goal.
 
 **SRL complete.** All acceptance criteria met as of iteration 17.3.
+
+
+---
+
+## Goal 18 (set 2026-04-30) — Detail dialog ship-readiness + branded email migration
+
+End state: both detail dialogs (editing project + calendar link) feel polished
+and consistent, every email Cortex sends uses Trevor's new branded templates
+for Nativz + Anderson Collaborative, and the edited-video share-link UX is
+indistinguishable from the calendar share-link UX (minus calendar grid +
+captions). Ship to main; no feature branch.
+
+### Acceptance criteria
+- [ ] `revising` status color is blue everywhere (table chip + dialog Select)
+- [ ] No paper-airplane Send button on the table (already done iter prior); confirm dialog is the only send surface
+- [ ] Edited-video thumbnails render in the editing project detail dialog
+- [ ] History tab loading state preserves dialog body height (no shrink/jump)
+- [ ] Strategist is a working assignee picker in the dialog
+- [ ] Type dropdown uses Cortex Select component (no native `<select>`)
+- [ ] Status dropdown uses Cortex Select component
+- [ ] Share-link mint + open + view-tracking verified end-to-end on JAMNOLA
+- [ ] "Send share" from dialog emails the client POCs and skips POCs with `do_not_email = true`
+- [ ] History shows: share mint, share view, email sent, follow-up sent, revision uploaded — each with date
+- [ ] Google Chat webhook for review notifications includes the post timestamp
+- [ ] Status changes in dialog reflect in the table immediately (and vice versa)
+- [ ] Follow-up emails use the new branded template + button-styled CTA (no raw links)
+- [ ] Edited-video share page (`/c/edit/<token>`) visually matches `/c/<token>` (calendar share) — same buttons, same fonts, same spacing, same flow — minus calendar grid + captions
+- [ ] Detail dialog has working "Send delivery email" + "Send re-review email" buttons
+- [ ] Re-review tracking: DB knows which videos have been revised since last share; "Send re-review link" enabled when there are revisions
+- [ ] Every email template across the repo (search: `email-templates/`, `lib/email/`, `app/api/.../email`, etc.) uses the new Trevor-built branded layout for the relevant brand
+
+### Scope boundaries
+- **IN:** dialog UX fixes, share UI parity, email template migration (visual only — keep our Resend backend), DB additions for revision tracking, history feed extensions, webhook payload tweaks, branded-button helper for emails
+- **OUT:** redesigning the share pages themselves (besides the edited-video parity item), Resend backend swaps, building Trevor's email backend, Anderson Collaborative theme migration of unrelated surfaces
+
+### Decisions made (Jack offline)
+- **Push directly to main** per `feedback_push_main_only`
+- **Brand detection** for emails uses existing `getBrandFromAgency(client.agency)`
+- **Re-review tracking** via `editing_project_share_links.revisions_acknowledged_at` + `editing_project_videos.revised_at` so we can compute "revisions since last share open"
+- **POC email selection** queries `client_contacts` filtered by `do_not_email = false`; if none match, surface a UI error with the list of contacts so Jack can fix flags
+- **Cortex Select component**: use the existing `components/ui/select.tsx` (Radix-based) used across admin
+- **History panel** extended via the activity API; no new table needed
+

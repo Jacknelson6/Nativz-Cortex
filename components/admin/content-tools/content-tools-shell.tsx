@@ -144,7 +144,7 @@ function projectTypeForReview(
  * Map an editing-project lifecycle state onto the smaller status
  * vocabulary the shared review table understands.
  *   editing / need_approval        → ready_for_review (yellow)
- *   revising                       → revising (orange)
+ *   revising                       → revising (blue)
  *   approved / done                → approved (green)
  *   archived                       → expired (red, dimmed)
  */
