@@ -5,26 +5,18 @@ import { toast } from 'sonner';
 import {
   Bell,
   Cable,
-  ChevronDown,
   FileText,
   RefreshCcw,
   Scissors,
   Wand2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { SubNav } from '@/components/ui/sub-nav';
 import {
   ReviewTableCard,
-  sortLinks,
-  type SortKey,
+  sortLinksBy,
+  type SortState,
 } from '@/components/scheduler/review-table';
 import type { ReviewLinkRow } from '@/components/scheduler/review-board';
 import { ProjectsEmptyState } from './projects-empty-state';
@@ -104,7 +96,10 @@ export function ContentToolsShell() {
   const [links, setLinks] = useState<ReviewLinkRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [sort, setSort] = useState<SortKey>('newest');
+  // Default sort is "Date sent, newest first" - same intent as the
+  // previous SortMenu's default - but the user can now click any
+  // column header to re-sort the whole table.
+  const [sort, setSort] = useState<SortState>({ field: 'date_sent', dir: 'desc' });
 
   async function loadProjects(silent = false) {
     if (!silent) setLoading(true);
@@ -127,7 +122,7 @@ export function ContentToolsShell() {
   }, []);
 
   const sortedLinks = useMemo(
-    () => [...links].sort((a, b) => sortLinks(a, b, sort)),
+    () => [...links].sort((a, b) => sortLinksBy(a, b, sort)),
     [links, sort],
   );
 
@@ -171,7 +166,6 @@ export function ContentToolsShell() {
           </div>
           {tab === 'projects' && (
             <div className="flex items-center gap-2">
-              <SortMenu sort={sort} onChange={setSort} />
               <Button
                 variant="ghost"
                 size="sm"
@@ -207,6 +201,8 @@ export function ContentToolsShell() {
               onPatchLink={patchLink}
               onArchiveLink={archiveLink}
               title="Projects"
+              sort={sort}
+              onSortChange={setSort}
             />
           ))}
         {tab === 'editing' && <EditingTab />}
@@ -235,37 +231,3 @@ function describeSubtitle(tab: ContentToolsTab, projectCount: number): string {
   }
 }
 
-function SortMenu({
-  sort,
-  onChange,
-}: {
-  sort: SortKey;
-  onChange: (s: SortKey) => void;
-}) {
-  const label =
-    sort === 'newest'
-      ? 'Sort by date'
-      : sort === 'oldest'
-        ? 'Oldest first'
-        : 'Most progress';
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm">
-          <span>{label}</span>
-          <ChevronDown size={12} />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuRadioGroup
-          value={sort}
-          onValueChange={(v) => onChange(v as SortKey)}
-        >
-          <DropdownMenuRadioItem value="newest">Newest first</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="oldest">Oldest first</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="progress">Most progress</DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}

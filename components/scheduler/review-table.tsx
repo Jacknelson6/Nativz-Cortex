@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   Bell,
   ChevronDown,
   ChevronRight,
@@ -136,6 +139,35 @@ function projectTypeLabel(row: ReviewLinkRow): string {
 }
 
 export type SortKey = 'newest' | 'oldest' | 'progress';
+
+/**
+ * Column-driven sort. The Projects table now sorts by clicking the
+ * column header rather than via a separate dropdown menu - same
+ * pattern as Monday boards. `field` identifies which column owns
+ * the sort, `dir` toggles ascending vs descending.
+ *
+ * Status order ranks the active states first (ready_for_review +
+ * revising) and pushes terminal ones (approved / abandoned / expired)
+ * to the bottom under ascending. That matches the gut intent of "show
+ * me what still needs work" when the user clicks the Status header.
+ *
+ * Last-followup is tricky: for terminal links the column shows a
+ * dash because there is nothing to chase. Those rows always sort to
+ * the bottom regardless of direction so they don't poison the column.
+ */
+export type SortField =
+  | 'brand'
+  | 'name'
+  | 'date_sent'
+  | 'status'
+  | 'project_type'
+  | 'creatives'
+  | 'last_followup';
+
+export type SortDirection = 'asc' | 'desc';
+
+export type SortState = { field: SortField; dir: SortDirection };
+
 type Tab = 'content' | 'notifications';
 
 interface ReviewTableProps {
@@ -160,7 +192,7 @@ export function ReviewTable({
   const [links, setLinks] = useState<ReviewLinkRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [sort, setSort] = useState<SortKey>('newest');
+  const [sort, setSort] = useState<SortState>({ field: 'date_sent', dir: 'desc' });
 
   async function load(silent = false) {
     if (!silent) setLoading(true);
@@ -187,7 +219,7 @@ export function ReviewTable({
   }, [clientId]);
 
   const sorted = useMemo(
-    () => [...links].sort((a, b) => sortLinks(a, b, sort)),
+    () => [...links].sort((a, b) => sortLinksBy(a, b, sort)),
     [links, sort],
   );
 
@@ -212,7 +244,6 @@ export function ReviewTable({
           </div>
           {tab === 'content' && (
             <div className="flex items-center gap-2">
-              <SortMenu sort={sort} onChange={setSort} />
               <Button
                 variant="ghost"
                 size="sm"
@@ -238,6 +269,8 @@ export function ReviewTable({
               rows={sorted}
               showBrand={showBrandColumn}
               onPatchLink={patchLink}
+              sort={sort}
+              onSortChange={setSort}
             />
           )
         ) : clientId ? (
@@ -301,9 +334,39 @@ interface ReviewTableCardProps {
   onArchiveLink?: (id: string) => void;
   /** Override the card's internal title block. Defaults to "Content". */
   title?: string;
+  /**
+   * Optional column-sort state. When supplied, the header row renders
+   * clickable sort buttons with directional arrows (Monday-style).
+   * The parent owns the state so multiple cards stay in sync and so
+   * the toggle survives cross-tab navigation.
+   */
+  sort?: SortState;
+  onSortChange?: (next: SortState) => void;
 }
 
-export function ReviewTableCard({ rows, showBrand = false, onPatchLink, onArchiveLink, title }: ReviewTableCardProps) {
+export function ReviewTableCard({
+  rows,
+  showBrand = false,
+  onPatchLink,
+  onArchiveLink,
+  title,
+  sort,
+  onSortChange,
+}: ReviewTableCardProps) {
+  // When the parent doesn't pass a sort handler we render plain
+  // header labels (read-only contexts, e.g. portal previews).
+  const sortable = !!onSortChange;
+  function handleSort(field: SortField) {
+    if (!onSortChange) return;
+    if (sort?.field === field) {
+      onSortChange({ field, dir: sort.dir === 'asc' ? 'desc' : 'asc' });
+    } else {
+      // First click on a new column defaults to descending so most
+      // useful values (newest dates, fullest creatives, longest
+      // followup gaps) surface at the top.
+      onSortChange({ field, dir: 'desc' });
+    }
+  }
   return (
     <Table variant="card">
       <thead>
@@ -331,14 +394,75 @@ export function ReviewTableCard({ rows, showBrand = false, onPatchLink, onArchiv
       <TableHeader>
         <TableRow>
           {showBrand && (
-            <TableHead className="whitespace-nowrap px-2.5">Brand</TableHead>
+            <TableHead className="whitespace-nowrap px-2.5">
+              <SortableHeader
+                field="brand"
+                sort={sort}
+                onSortChange={sortable ? () => handleSort('brand') : undefined}
+              >
+                Brand
+              </SortableHeader>
+            </TableHead>
           )}
-          <TableHead className="whitespace-nowrap px-2.5">Project name</TableHead>
-          <TableHead className="whitespace-nowrap px-2.5 text-center">Date sent</TableHead>
-          <TableHead className="whitespace-nowrap px-2.5 text-center">Status</TableHead>
-          <TableHead className="whitespace-nowrap px-2.5 text-center">Project type</TableHead>
-          <TableHead className="whitespace-nowrap px-2.5 text-center">Creatives</TableHead>
-          <TableHead className="whitespace-nowrap px-2.5 text-center">Last followup</TableHead>
+          <TableHead className="whitespace-nowrap px-2.5">
+            <SortableHeader
+              field="name"
+              sort={sort}
+              onSortChange={sortable ? () => handleSort('name') : undefined}
+            >
+              Project name
+            </SortableHeader>
+          </TableHead>
+          <TableHead className="whitespace-nowrap px-2.5 text-center">
+            <SortableHeader
+              field="date_sent"
+              sort={sort}
+              align="center"
+              onSortChange={sortable ? () => handleSort('date_sent') : undefined}
+            >
+              Date sent
+            </SortableHeader>
+          </TableHead>
+          <TableHead className="whitespace-nowrap px-2.5 text-center">
+            <SortableHeader
+              field="status"
+              sort={sort}
+              align="center"
+              onSortChange={sortable ? () => handleSort('status') : undefined}
+            >
+              Status
+            </SortableHeader>
+          </TableHead>
+          <TableHead className="whitespace-nowrap px-2.5 text-center">
+            <SortableHeader
+              field="project_type"
+              sort={sort}
+              align="center"
+              onSortChange={sortable ? () => handleSort('project_type') : undefined}
+            >
+              Project type
+            </SortableHeader>
+          </TableHead>
+          <TableHead className="whitespace-nowrap px-2.5 text-center">
+            <SortableHeader
+              field="creatives"
+              sort={sort}
+              align="center"
+              onSortChange={sortable ? () => handleSort('creatives') : undefined}
+            >
+              Creatives
+            </SortableHeader>
+          </TableHead>
+          <TableHead className="whitespace-nowrap px-2.5 text-center">
+            <SortableHeader
+              field="last_followup"
+              sort={sort}
+              align="center"
+              onSortChange={sortable ? () => handleSort('last_followup') : undefined}
+            >
+              Last followup
+            </SortableHeader>
+          </TableHead>
           <TableHead className="w-8 px-2" aria-label="Open" />
         </TableRow>
       </TableHeader>
@@ -795,25 +919,65 @@ function StatusPill({ status }: { status: StatusKey }) {
   );
 }
 
-function SortMenu({ sort, onChange }: { sort: SortKey; onChange: (s: SortKey) => void }) {
-  const label =
-    sort === 'newest' ? 'Sort by date' : sort === 'oldest' ? 'Oldest first' : 'Most progress';
+/**
+ * Clickable column-header label. Renders the column name plus a small
+ * directional arrow (or a neutral up/down indicator when the column
+ * isn't the active sort axis). The whole header turns into a button
+ * so the click target spans the full cell.
+ *
+ * Visual behavior:
+ *   - Active asc  -> arrow up, text in primary tone
+ *   - Active desc -> arrow down, text in primary tone
+ *   - Inactive    -> faint up/down indicator, muted text
+ *
+ * When `onSortChange` is omitted (read-only contexts) the header
+ * renders as plain static text - no button, no hover affordance.
+ */
+function SortableHeader({
+  field,
+  sort,
+  onSortChange,
+  align,
+  children,
+}: {
+  field: SortField;
+  sort?: SortState;
+  onSortChange?: () => void;
+  align?: 'left' | 'center';
+  children: React.ReactNode;
+}) {
+  if (!onSortChange) return <>{children}</>;
+  const active = sort?.field === field;
+  const dir = active ? sort?.dir : null;
+  const Icon = !active ? ArrowUpDown : dir === 'asc' ? ArrowUp : ArrowDown;
+  const justify = align === 'center' ? 'justify-center' : 'justify-start';
+  // `aria-sort` belongs on the parent <th>, not the button (a11y
+  // lint catches `aria-sort` on a button). Screen readers still
+  // pick up the active state through the button's accessible name
+  // ("Project name, descending") via the title attribute.
+  const ariaLabel = `${typeof children === 'string' ? children : 'column'}, ${
+    active ? (dir === 'asc' ? 'sorted ascending' : 'sorted descending') : 'click to sort'
+  }`;
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm">
-          <span>{label}</span>
-          <ChevronDown size={12} />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuRadioGroup value={sort} onValueChange={(v) => onChange(v as SortKey)}>
-          <DropdownMenuRadioItem value="newest">Newest first</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="oldest">Oldest first</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="progress">Most progress</DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <button
+      type="button"
+      onClick={onSortChange}
+      title={ariaLabel}
+      className={`group/sort -mx-1 flex w-full items-center gap-1 rounded-md px-1 py-0.5 ${justify} text-xs font-medium uppercase tracking-wider transition-colors ${
+        active
+          ? 'text-text-primary'
+          : 'text-text-muted hover:text-text-secondary'
+      }`}
+    >
+      <span>{children}</span>
+      <Icon
+        size={12}
+        className={`shrink-0 transition-opacity ${
+          active ? 'opacity-100 text-accent-text' : 'opacity-50 group-hover/sort:opacity-80'
+        }`}
+        aria-hidden
+      />
+    </button>
   );
 }
 
@@ -864,6 +1028,96 @@ export function sortLinks(a: ReviewLinkRow, b: ReviewLinkRow, sort: SortKey): nu
   const aT = new Date(a.created_at ?? a.drop_start ?? 0).getTime();
   const bT = new Date(b.created_at ?? b.drop_start ?? 0).getTime();
   return sort === 'newest' ? bT - aT : aT - bT;
+}
+
+/** Status ordering shared by `sortLinksBy` and the legacy `sortLinks`
+ *  so the click-to-sort UI matches the dropdown's "progress" axis. */
+const STATUS_RANK: Record<StatusKey, number> = {
+  ready_for_review: 0,
+  revising: 1,
+  approved: 2,
+  abandoned: 3,
+  expired: 3,
+};
+
+/**
+ * Column-aware comparator. Used by `ReviewTableCard` when the parent
+ * passes a `sort: SortState`. Each branch falls back to date_sent on a
+ * tie so the row order stays deterministic and the user doesn't see
+ * adjacent rows visually swap on every re-render.
+ *
+ * `last_followup`: rows whose `last_followup_at` is null (terminal
+ * links - approved / abandoned / expired) always sink to the bottom,
+ * regardless of direction. Otherwise sorting them by null-as-zero
+ * dumps a wall of dashes at the top whenever the user clicks asc.
+ *
+ * `creatives`: sorted by approval ratio (`approved_count / post_count`).
+ * Empty-creative rows (post_count === 0) sink to the bottom.
+ */
+export function sortLinksBy(
+  a: ReviewLinkRow,
+  b: ReviewLinkRow,
+  state: SortState,
+): number {
+  const sign = state.dir === 'asc' ? 1 : -1;
+
+  // Some columns sink "blank" rows to the bottom regardless of
+  // direction (terminal followups, empty-creative rows). These run
+  // first and short-circuit before sign multiplication.
+  if (state.field === 'creatives') {
+    const aEmpty = a.post_count === 0;
+    const bEmpty = b.post_count === 0;
+    if (aEmpty !== bEmpty) return aEmpty ? 1 : -1;
+  }
+  if (state.field === 'last_followup') {
+    const aBlank = !a.last_followup_at;
+    const bBlank = !b.last_followup_at;
+    if (aBlank !== bBlank) return aBlank ? 1 : -1;
+  }
+
+  const cmp = (() => {
+    switch (state.field) {
+      case 'brand': {
+        const av = (a.client_name ?? '').toLowerCase();
+        const bv = (b.client_name ?? '').toLowerCase();
+        return av.localeCompare(bv);
+      }
+      case 'name': {
+        const aName = (a.name?.trim() || derivedName(a.drop_start, a.drop_end)).toLowerCase();
+        const bName = (b.name?.trim() || derivedName(b.drop_start, b.drop_end)).toLowerCase();
+        return aName.localeCompare(bName);
+      }
+      case 'date_sent': {
+        const aT = new Date(a.created_at ?? a.drop_start ?? 0).getTime();
+        const bT = new Date(b.created_at ?? b.drop_start ?? 0).getTime();
+        return aT - bT;
+      }
+      case 'status':
+        return STATUS_RANK[a.status] - STATUS_RANK[b.status];
+      case 'project_type': {
+        const av = projectTypeLabel(a).toLowerCase();
+        const bv = projectTypeLabel(b).toLowerCase();
+        return av.localeCompare(bv);
+      }
+      case 'creatives': {
+        const aR = a.post_count === 0 ? 0 : a.approved_count / a.post_count;
+        const bR = b.post_count === 0 ? 0 : b.approved_count / b.post_count;
+        return aR - bR;
+      }
+      case 'last_followup': {
+        const aT = new Date(a.last_followup_at ?? 0).getTime();
+        const bT = new Date(b.last_followup_at ?? 0).getTime();
+        return aT - bT;
+      }
+    }
+  })();
+
+  if (cmp !== 0) return cmp * sign;
+
+  // Tie-breaker: most recently sent at the top so reorder feels stable.
+  const aT = new Date(a.created_at ?? a.drop_start ?? 0).getTime();
+  const bT = new Date(b.created_at ?? b.drop_start ?? 0).getTime();
+  return bT - aT;
 }
 
 /**

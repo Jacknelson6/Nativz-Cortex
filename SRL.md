@@ -1825,3 +1825,70 @@ that Jack asked for - editor uploads bypassing Drive, brand-by-brand
 Zernio status, archivable Projects, working sales picker - are live.
 
 Goal 16 closed. The next brief from Jack will open Goal 17.
+
+---
+
+## Goal 17 (set 2026-04-30) - Cortex as the Monday replacement for content production
+
+### Context
+
+Jack wants to retire the Monday content calendars boards entirely. The
+existing Projects table (`/admin/content-tools` -> Projects tab,
+rendered via `ReviewTableCard` from `components/scheduler/review-table.tsx`)
+is the right starting point - it already lists every share link as a
+project row across every brand. The plan is to:
+
+1. Make the Projects table feel like Monday: column-header click to
+   sort up/down, plus eventual filter chips (later).
+2. Extend the underlying data model with the production-pipeline
+   columns Monday tracks today: project briefs (strategy notes for
+   editors), raw footage upload status, shoot dates, assigned
+   editor/videographer/strategist.
+3. Reuse the same Projects rows for two sibling pages aimed at
+   different roles:
+   - **Editor page** (replacing the legacy `/admin/content-tools`
+     Editing tab): editor-facing list with strategy, strategist
+     assignee, and edited-video upload.
+   - **Videographer page** (new): strategist surface for raw footage
+     uploads + briefs + shoot dates.
+
+### Acceptance criteria
+
+- [ ] Projects table column headers (brand, project name, date sent,
+      status, project type, creatives, last followup) are clickable to
+      sort ascending / descending. Active column shows a directional
+      arrow; other columns show a neutral indicator.
+- [ ] DB schema carries the production-pipeline fields: `project_briefs`
+      (long-form strategy text + assigned strategist), `raw_footage_uploads`
+      (one or more uploads tied to a project), `assigned_editor_id`,
+      `assigned_videographer_id`, `shoot_date`. Migration applied
+      on production via Supabase MCP.
+- [ ] `/admin/content-tools` Editing tab is rebuilt against the same
+      project rows. Shows assigned editor, strategy summary, raw
+      footage status, and edited-video upload action. Old Editing
+      placeholder content is removed.
+- [ ] New Videographer page (route TBD - probably `/admin/videographer`
+      or as another tab inside Content Tools) lets a strategist mark
+      raw footage uploaded, attach a brief, and set a shoot date for
+      each project.
+- [ ] Build clean: `npx tsc --noEmit` exits 0 on every iteration.
+- [ ] No em dashes (U+2013 / U+2014) introduced in new code or copy.
+
+### Scope boundaries
+
+- IN: schema migration, sortable headers, Editing tab rebuild,
+  Videographer page (read+write of brief/raw/shoot fields), reuse
+  existing `clients.id` as the `assigned_*` foreign key target where
+  the role is an internal team member (no separate "team_members"
+  expansion this goal).
+- IN: Sentinel UI affordances - dropdowns for assignee selection,
+  date picker for shoot date, file-upload widget for raw footage
+  (using Drive folder url for now, real Supabase storage later).
+- OUT: Per-role RBAC (an editor logging in to a sandboxed
+  `/editor` route) - this is admin-only this goal.
+- OUT: Notifications when a brief lands or raw footage drops -
+  follow-up cron is still gated behind the larger `scheduled_emails`
+  cron buildout from goal 16.
+- OUT: Filter chips on the Projects table. Sorting first, filters
+  later if it stays useful.
+
