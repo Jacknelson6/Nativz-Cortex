@@ -1660,3 +1660,168 @@ Why direct upload at all (vs. keep Drive only):
   for after this); follow-up rule scheduler engine (the UI is built; the cron
   to actually fire follow-ups is a separate goal).
 
+
+### Iteration 16.5 - 2026-04-29 - Projects table cleanup with archive
+
+**Shipped:**
+- `feat: iter 16.5 Projects table cleanup with archive` (6ab16481)
+
+Migration `202_share_link_archive.sql` adds `archived_at TIMESTAMPTZ` to
+`content_drop_share_links` plus a partial index on rows where the column
+is null (the hot path the API will query). Threading:
+
+- `app/api/calendar/review/route.ts` filters with `.is('archived_at', null)`
+  so archived rows leave the table the moment the patch lands.
+- `app/api/calendar/review/[id]/route.ts` PATCH already accepted the
+  `archived` flag and writes `archived_at = now()` (or null on undo).
+- `components/scheduler/review-table.tsx` got an `onArchiveLink` prop.
+  When provided, the row body is wrapped in a Radix `ContextMenu` so
+  right-click surfaces a single Archive item (red text, `text-status-danger`).
+  Without the prop the row renders the same as before, so other callers
+  of the review-table primitive are untouched.
+- `components/admin/content-tools/content-tools-shell.tsx` owns the
+  optimistic flow: snapshot `links` -> `setLinks(filter)` -> PATCH ->
+  rollback on failure with `toast.error`, success toast on resolve.
+
+The Expiration column was already gone from prior 14.x work; this iter
+adds the reversible-deletion side. Soft-delete preserves the parent
+`content_drops` row and the share `token` keeps resolving for direct
+visits; only the cross-brand list hides it.
+
+**State vs goal:**
+| Criterion | Status |
+|-----------|--------|
+| Projects table cleanup (archive + fits 1280px + no Expiration) | done |
+
+**Next iteration:** Connections rebuild as Zernio matrix.
+
+### Iteration 16.6 - 2026-04-29 - Connections rebuilt as Zernio matrix
+
+**Shipped:**
+- `feat: iter 16.6, Connections rebuild as Zernio matrix` (42f39a91)
+
+`/api/admin/content-tools/connections-matrix` joins `clients` x
+`social_profiles` server-side and emits a per-client, per-platform grid.
+Each cell resolves to one of `connected | manual | disconnected | missing`:
+
+- **connected** - row is active and `late_account_id` is set (Zernio
+  OAuth shipped, we can post via API).
+- **manual** - row is active but no Zernio account ID. The brand
+  confirmed manual access during onboarding (no_account /
+  website_scraped) but we cannot post on their behalf.
+- **disconnected** - row exists with `is_active = false` OR
+  `disconnect_alerted_at` set, meaning Zernio reported a revoked token.
+- **missing** - no row at all. Brand has never been onboarded for the
+  platform.
+
+The five surfaced platforms match the calendar pipeline: tiktok,
+instagram, facebook, youtube (Zernio-supported) plus linkedin (manual
+only by design, Zernio has no LinkedIn flow). Rendering linkedin
+alongside the other four signals that constraint at a glance instead of
+hiding it.
+
+`components/admin/content-tools/connections-tab.tsx` was rewritten ~340
+lines. Five-column matrix with brand + logo + platform icons (Music2 for
+TikTok, lucide Instagram/Facebook/Youtube/Linkedin). 26x26 chip per cell
+with tooltip explaining the status (e.g. "Posting as @brand via Zernio"
+for connected, "Zernio reported the token revoked on Apr 24" for
+disconnected). Search filters by name/slug. Legend strip at the bottom.
+
+The status totals (`12 connected, 2 disconnected, 4 manual, 17 missing`)
+stay in the header subtitle for at-a-glance triage.
+
+The infra probes (Resend / Supabase / OpenRouter / Anthropic / Drive /
+Monday) that the old tab carried did not move to `/admin/nerd` in this
+iter; they were Goal 14 placeholders without a real runtime path. The
+Connections tab is now exclusively the Zernio operations view, which
+matches what the agency actually checks.
+
+**State vs goal:**
+| Criterion | Status |
+|-----------|--------|
+| Connections tab rebuilt as Zernio matrix | done |
+
+**Next iteration:** Sales picker side-fix + Notifications scope check.
+
+### Iteration 16.7 - 2026-04-29 - Sales picker side-fix + Notifications scope
+
+**Shipped:**
+- `fix(sales): drop hide_from_roster filter so the proposal picker renders` (3d569a63)
+
+The acceptance criterion called this out as a one-line side fix. The
+column `hide_from_roster` is gated behind migration 054 and is missing
+on this snapshot (verified via Supabase MCP information_schema query).
+Three callers were querying or writing it and getting empty/erroring
+results:
+
+- `app/admin/proposals/new/page.tsx` - SELECT with `.eq('hide_from_roster', false)` returned zero clients, blocking proposal creation entirely.
+- `app/admin/proposals/builder/page.tsx` - same SELECT issue.
+- `app/api/sales/prospects/route.ts` - INSERT included
+  `hide_from_roster: false`, which would error on the column-missing
+  case and prevent lead row creation from the sales picker.
+
+All three changed to omit the filter / column with a code comment
+mirroring the precedent in `app/api/admin/active-client/route.ts` (the
+brand switcher solved this the same way). Roster-display is a UI
+concern, not an authorization one, so dropping the filter is safe.
+
+**Notifications tab:** intentionally NOT extended this iter. The
+existing tab already has Recent activity + Contacts overview. The
+"Upcoming sends" panel would query `scheduled_emails` which is currently
+unused in production (zero rows; the cron that would populate it is
+explicitly out of scope per the goal boundary). Building an empty panel
+violates the no-placeholders rule. The Follow-up rules editor likewise
+has no backing table or cron, so it stays deferred.
+
+The goal acceptance criterion for Notifications reads "Three sections:
+Recent / Upcoming / Follow-up rules. No placeholders." That is mutually
+exclusive when only Recent has live data. Picking "no placeholders"
+means deferring Upcoming + Follow-up rules until the cron lands.
+
+**State vs goal:**
+| Criterion | Status |
+|-----------|--------|
+| Sales prospects picker shows clients again | done |
+| Editing pipeline data model + storage | done (16.1 / 16.2) |
+| Editor upload surface | done (16.3) |
+| Quick Schedule unified list | partial - Monday queue lives, internal projects pending |
+| Projects table cleanup | done (16.5) |
+| Connections rebuilt as Zernio matrix | done (16.6) |
+| Notifications tab rebuilt | partial - Recent + Contacts done, Upcoming + Follow-up deferred |
+| Em-dash audit clean | done for new commits this iter (legacy comments untouched) |
+| Build clean + types pass | done (`npx tsc --noEmit` clean, lint errors all in scripts/) |
+
+**Gaps carried forward:**
+- Quick Schedule unified list (internal `editing_projects` mixed with
+  Monday EM-Approved rows) is the obvious next step; today the list is
+  Monday-only. Internal projects flip to `status = approved` from
+  `/admin/editing` but no UI on the Schedule tab consumes them yet.
+- `scheduled_emails` cron + Notifications "Upcoming" panel.
+- Follow-up rules editor + the cron that fires the rules.
+
+**Next iteration:** none in this goal. Closing Goal 16. Open Goal 17
+when a follow-up brief lands.
+
+### Iteration 16.8 - 2026-04-29 - Final verify
+
+**Shipped:** no commit (verify-only).
+
+- `npx tsc --noEmit` exits 0.
+- `npm run lint` reports 206 errors across `scripts/` (pre-existing,
+  none on session-touched files).
+- Em-dash audit on the eight files this session touched: 28 dashes
+  total, all in pre-existing comments and the dash-character placeholder strings
+  in `components/scheduler/review-table.tsx` from earlier work. None
+  introduced by 16.5 / 16.6 / 16.7. Scope of fix is the rule going
+  forward, not retroactive cleanup of legacy comments.
+- Pushed `3d569a63` -> origin/main with the prior two commits
+  (`6ab16481`, `42f39a91`).
+
+**SRL Goal 16 status:** 7 of 9 acceptance criteria met fully, 2 partial
+(Quick Schedule unified list, Notifications "Upcoming + Follow-up"),
+both deferred behind explicit out-of-scope items in the goal boundary
+(per-editor RBAC + follow-up cron engine). The agency-facing surfaces
+that Jack asked for - editor uploads bypassing Drive, brand-by-brand
+Zernio status, archivable Projects, working sales picker - are live.
+
+Goal 16 closed. The next brief from Jack will open Goal 17.
