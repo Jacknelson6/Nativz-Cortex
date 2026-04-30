@@ -106,3 +106,103 @@ export async function findRowByName(token: string, name: string): Promise<Monday
   const rows = await fetchAprilRows(token);
   return rows.find((r) => r.name === name) ?? null;
 }
+
+export interface MondayApprovedItem {
+  itemId: string;
+  itemName: string;
+  groupName: string;
+  status: string;
+  folderUrl: string | null;
+  shareLink: string | null;
+  /** Monday doesn't expose status-change timestamps without an activity-
+   *  log query, so we fall back to the row's `updated_at` here. Close
+   *  enough for "how stale is this approval" sorting. */
+  updatedAt: string | null;
+}
+
+/** Pull every item across every group on the Content Calendars board
+ *  and surface the ones flagged `EM Approved` (or any caller-specified
+ *  set of labels). One query, not a per-group fan-out, so the Quick
+ *  Schedule tab stays under the route's 5s budget on a board with 10+
+ *  monthly groups. Order: most-recently-updated first. */
+export async function fetchApprovedItems(
+  token: string,
+  approvedLabels: readonly string[] = [STATUS_EM_APPROVED],
+): Promise<MondayApprovedItem[]> {
+  const data = (await gql(
+    token,
+    `query {
+      boards(ids:[${BOARD_ID}]){
+        groups{
+          id
+          title
+          items_page(limit:200){
+            items{
+              id
+              name
+              updated_at
+              column_values(ids:["${COL_EDITING_STATUS}","${COL_EDITED_FOLDER}","${COL_LATER_LINK}"]){
+                id text value
+              }
+            }
+          }
+        }
+      }
+    }`,
+  )) as {
+    boards: {
+      groups: {
+        id: string;
+        title: string;
+        items_page: {
+          items: {
+            id: string;
+            name: string;
+            updated_at: string | null;
+            column_values: { id: string; text: string | null; value: string | null }[];
+          }[];
+        };
+      }[];
+    }[];
+  };
+
+  const groups = data.boards[0]?.groups ?? [];
+  const out: MondayApprovedItem[] = [];
+
+  for (const group of groups) {
+    for (const row of group.items_page.items) {
+      const get = (id: string) => row.column_values.find((c) => c.id === id);
+      const status = get(COL_EDITING_STATUS)?.text ?? '';
+      if (!approvedLabels.includes(status)) continue;
+
+      const parseLinkValue = (raw: string | null | undefined): string | null => {
+        if (!raw) return null;
+        try {
+          const parsed = JSON.parse(raw) as { url?: string };
+          return parsed.url ?? null;
+        } catch {
+          return null;
+        }
+      };
+
+      out.push({
+        itemId: row.id,
+        itemName: row.name,
+        groupName: group.title,
+        status,
+        folderUrl: parseLinkValue(get(COL_EDITED_FOLDER)?.value),
+        shareLink: parseLinkValue(get(COL_LATER_LINK)?.value),
+        updatedAt: row.updated_at,
+      });
+    }
+  }
+
+  out.sort((a, b) => {
+    if (!a.updatedAt && !b.updatedAt) return 0;
+    if (!a.updatedAt) return 1;
+    if (!b.updatedAt) return -1;
+    return b.updatedAt.localeCompare(a.updatedAt);
+  });
+
+  return out;
+}

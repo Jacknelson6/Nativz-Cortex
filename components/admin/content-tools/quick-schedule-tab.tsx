@@ -3,9 +3,11 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
+  AlertTriangle,
   CheckCircle2,
   ChevronRight,
   Clock3,
+  ExternalLink,
   Image as ImageIcon,
   Mic2,
   RefreshCcw,
@@ -37,36 +39,57 @@ interface ApprovedItem {
   itemName: string;
   groupName: string;
   approvedAt: string | null;
+  folderUrl: string | null;
+  shareLink: string | null;
+  status: string;
 }
 
-export function QuickScheduleTab() {
-  const [items, setItems] = useState<ApprovedItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [available, setAvailable] = useState<boolean | null>(null);
+type LoadState =
+  | { kind: 'idle' }
+  | { kind: 'loading' }
+  | { kind: 'ok'; items: ApprovedItem[] }
+  | { kind: 'unconfigured'; detail: string }
+  | { kind: 'error'; detail: string };
 
-  async function load() {
-    setLoading(true);
+export function QuickScheduleTab() {
+  const [state, setState] = useState<LoadState>({ kind: 'idle' });
+
+  async function load(silent = false) {
+    if (!silent) setState({ kind: 'loading' });
     try {
-      // Endpoint isn't wired yet (iter 14.4). For now we hit a known
-      // 404 path so the "available" probe stays honest -- once the real
-      // route lands we just swap the URL and the tab lights up.
       const res = await fetch('/api/admin/content-tools/quick-schedule', {
         cache: 'no-store',
       });
-      if (res.status === 404) {
-        setAvailable(false);
-        setItems([]);
+
+      // 503 = MONDAY_API_TOKEN missing on this env. Distinct from a
+      // generic upstream error so the tab can paint a "coming online"
+      // placeholder rather than a scary banner.
+      if (res.status === 503) {
+        const body = (await res.json().catch(() => null)) as
+          | { detail?: string }
+          | null;
+        setState({
+          kind: 'unconfigured',
+          detail: body?.detail ?? 'MONDAY_API_TOKEN not set',
+        });
         return;
       }
-      if (!res.ok) throw new Error('Failed to load Monday queue');
+
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as
+          | { detail?: string; error?: string }
+          | null;
+        throw new Error(
+          body?.detail ?? body?.error ?? `HTTP ${res.status}`,
+        );
+      }
+
       const data = (await res.json()) as { items: ApprovedItem[] };
-      setItems(data.items ?? []);
-      setAvailable(true);
+      setState({ kind: 'ok', items: data.items ?? [] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to load queue');
-      setAvailable(false);
-    } finally {
-      setLoading(false);
+      const detail = err instanceof Error ? err.message : 'Failed to load queue';
+      if (silent) toast.error(detail);
+      setState({ kind: 'error', detail });
     }
   }
 
@@ -74,14 +97,17 @@ export function QuickScheduleTab() {
     void load();
   }, []);
 
+  const items = state.kind === 'ok' ? state.items : [];
+  const loading = state.kind === 'loading' || state.kind === 'idle';
+
   return (
     <div className="space-y-4">
       <PipelineExplainer />
       <ApprovedQueue
         items={items}
         loading={loading}
-        available={available}
-        onRefresh={() => void load()}
+        state={state}
+        onRefresh={() => void load(true)}
       />
     </div>
   );
@@ -144,14 +170,28 @@ function PipelineExplainer() {
 function ApprovedQueue({
   items,
   loading,
-  available,
+  state,
   onRefresh,
 }: {
   items: ApprovedItem[];
   loading: boolean;
-  available: boolean | null;
+  state: LoadState;
   onRefresh: () => void;
 }) {
+  const subtitle = (() => {
+    if (loading) return 'Pulling EM-Approved items from Monday...';
+    if (state.kind === 'unconfigured') {
+      return 'Monday integration not configured on this environment';
+    }
+    if (state.kind === 'error') return 'Monday queue unreachable';
+    if (state.kind === 'ok') {
+      return items.length === 0
+        ? 'No editor-approved items right now'
+        : `${items.length} editor-approved item${items.length === 1 ? '' : 's'} ready to schedule`;
+    }
+    return 'Pulled from Monday Content Calendars where the EM Approved label is set';
+  })();
+
   return (
     <div className="overflow-hidden rounded-xl border border-nativz-border bg-surface">
       <div className="flex items-center justify-between gap-3 border-b border-nativz-border px-5 py-4">
@@ -159,9 +199,7 @@ function ApprovedQueue({
           <div className="text-sm font-semibold text-text-primary">
             Editor-approved queue
           </div>
-          <div className="mt-0.5 text-xs text-text-muted">
-            Pulled from Monday Content Calendars where the EM Approved label is set
-          </div>
+          <div className="mt-0.5 text-xs text-text-muted">{subtitle}</div>
         </div>
         <Button
           variant="ghost"
@@ -173,10 +211,21 @@ function ApprovedQueue({
           <RefreshCcw size={14} className={loading ? 'animate-spin' : ''} />
         </Button>
       </div>
+
+      {state.kind === 'error' && (
+        <div className="flex items-start gap-2 border-b border-status-danger/20 bg-status-danger/5 px-5 py-3 text-xs text-status-danger">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+          <div className="min-w-0">
+            <div className="font-medium">Couldn&apos;t reach Monday.</div>
+            <div className="mt-0.5 text-status-danger/80">{state.detail}</div>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <QueueSkeleton />
-      ) : available === false ? (
-        <ComingSoonState />
+      ) : state.kind === 'unconfigured' ? (
+        <UnconfiguredState detail={state.detail} />
       ) : items.length === 0 ? (
         <EmptyQueue />
       ) : (
@@ -191,19 +240,34 @@ function ApprovedQueue({
                   {it.itemName}
                 </div>
                 <div className="mt-0.5 flex items-center gap-2 text-xs text-text-muted">
-                  <span>{it.groupName}</span>
+                  <span className="truncate">{it.groupName}</span>
                   {it.approvedAt && (
                     <>
                       <span>·</span>
-                      <span className="inline-flex items-center gap-1">
+                      <span className="inline-flex items-center gap-1 shrink-0">
                         <Clock3 className="size-3" />
                         {formatRelative(it.approvedAt)}
                       </span>
                     </>
                   )}
+                  {it.folderUrl && (
+                    <>
+                      <span>·</span>
+                      <a
+                        href={it.folderUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex shrink-0 items-center gap-1 text-accent-text hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <ExternalLink className="size-3" />
+                        Folder
+                      </a>
+                    </>
+                  )}
                 </div>
               </div>
-              <Button variant="outline" size="sm" disabled>
+              <Button variant="outline" size="sm" disabled title="Pipeline lands in iter 14.5">
                 Schedule
                 <ChevronRight size={12} />
               </Button>
@@ -240,13 +304,13 @@ function EmptyQueue() {
   );
 }
 
-function ComingSoonState() {
+function UnconfiguredState({ detail }: { detail: string }) {
   return (
     <div className="px-5 py-10 text-center">
       <Wand2 className="mx-auto mb-3 h-7 w-7 text-text-tertiary" />
-      <p className="text-sm text-text-secondary">Pipeline coming online.</p>
+      <p className="text-sm text-text-secondary">Monday not configured.</p>
       <p className="mt-1 text-xs text-text-muted">
-        Wiring the Monday pull, thumbnail extract, and caption pre-fill behind one button.
+        {detail}. Set the env var and redeploy to light up the queue.
       </p>
     </div>
   );
