@@ -24,6 +24,7 @@ import {
   type EditingProject,
   type EditingProjectStatus,
 } from '@/lib/editing/types';
+import { AssigneePicker, type AssigneeRole } from './assignee-picker';
 
 /**
  * `PipelineTable` is the shared sortable view used by both the Editing
@@ -100,6 +101,7 @@ export function PipelineTable({
   sort,
   onSortChange,
   onOpen,
+  onReload,
   emptyState,
 }: {
   projects: EditingProject[];
@@ -107,6 +109,9 @@ export function PipelineTable({
   sort: PipelineSortState;
   onSortChange: (next: PipelineSortState) => void;
   onOpen: (id: string) => void;
+  /** Called after an inline edit (e.g. assignee picker save) so the
+   *  parent can refetch the project list and rerender. */
+  onReload?: () => void;
   emptyState?: React.ReactNode;
 }) {
   const sorted = useMemo(
@@ -304,17 +309,35 @@ export function PipelineTable({
             )}
             {columns.includes('strategist') && (
               <TableCell>
-                <RoleCell email={p.strategist_email} />
+                <RoleCell
+                  projectId={p.id}
+                  role="strategist_id"
+                  userId={p.strategist_id}
+                  email={p.strategist_email}
+                  onReload={onReload}
+                />
               </TableCell>
             )}
             {columns.includes('videographer') && (
               <TableCell>
-                <RoleCell email={p.videographer_email} />
+                <RoleCell
+                  projectId={p.id}
+                  role="videographer_id"
+                  userId={p.videographer_id}
+                  email={p.videographer_email}
+                  onReload={onReload}
+                />
               </TableCell>
             )}
             {columns.includes('editor') && (
               <TableCell>
-                <RoleCell email={p.assignee_email} />
+                <RoleCell
+                  projectId={p.id}
+                  role="assignee_id"
+                  userId={p.assignee_id}
+                  email={p.assignee_email}
+                  onReload={onReload}
+                />
               </TableCell>
             )}
             {columns.includes('raws') && (
@@ -391,12 +414,28 @@ function ShootDateCell({ shootDate }: { shootDate: string | null }) {
   );
 }
 
-function RoleCell({ email }: { email: string | null }) {
-  if (!email) return <span className="text-xs text-text-muted">{NO_VALUE}</span>;
+function RoleCell({
+  projectId,
+  role,
+  userId,
+  email,
+  onReload,
+}: {
+  projectId: string;
+  role: AssigneeRole;
+  userId: string | null;
+  email: string | null;
+  onReload?: () => void;
+}) {
   return (
-    <span className="text-xs text-text-secondary" title={email}>
-      {email.split('@')[0]}
-    </span>
+    <AssigneePicker
+      projectId={projectId}
+      role={role}
+      currentUserId={userId}
+      currentEmail={email}
+      variant="compact"
+      onSaved={onReload}
+    />
   );
 }
 

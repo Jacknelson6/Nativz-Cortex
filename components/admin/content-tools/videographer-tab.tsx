@@ -133,6 +133,7 @@ export function VideographerTab() {
           sort={sort}
           onSortChange={setSort}
           onOpen={(id) => setActiveProjectId(id)}
+          onReload={() => void load(true)}
           emptyState={<EmptyState />}
         />
       )}

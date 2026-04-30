@@ -26,6 +26,7 @@ import {
   type EditingProjectType,
   type EditingProjectVideo,
 } from '@/lib/editing/types';
+import { AssigneePicker } from './assignee-picker';
 
 /**
  * Detail panel for a single editing project. Drives:
@@ -459,6 +460,54 @@ export function EditingProjectDetail({
                   void patch({ shoot_date: shootDate || null });
                 }}
                 className="block w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+            </SideField>
+
+            <SideField label="Strategist">
+              <AssigneePicker
+                projectId={project.id}
+                role="strategist_id"
+                currentUserId={data?.project.strategist_id ?? project.strategist_id}
+                currentEmail={
+                  data?.project.strategist_email ?? project.strategist_email
+                }
+                variant="field"
+                onSaved={() => {
+                  void load();
+                  onChanged();
+                }}
+              />
+            </SideField>
+
+            <SideField label="Videographer">
+              <AssigneePicker
+                projectId={project.id}
+                role="videographer_id"
+                currentUserId={data?.project.videographer_id ?? project.videographer_id}
+                currentEmail={
+                  data?.project.videographer_email ?? project.videographer_email
+                }
+                variant="field"
+                onSaved={() => {
+                  void load();
+                  onChanged();
+                }}
+              />
+            </SideField>
+
+            <SideField label="Editor">
+              <AssigneePicker
+                projectId={project.id}
+                role="assignee_id"
+                currentUserId={data?.project.assignee_id ?? project.assignee_id}
+                currentEmail={
+                  data?.project.assignee_email ?? project.assignee_email
+                }
+                variant="field"
+                onSaved={() => {
+                  void load();
+                  onChanged();
+                }}
               />
             </SideField>
 

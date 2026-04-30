@@ -104,6 +104,7 @@ export function EditingTab() {
           sort={sort}
           onSortChange={setSort}
           onOpen={(id) => setActiveProjectId(id)}
+          onReload={() => void load(true)}
           emptyState={<EmptyState onNew={() => setNewOpen(true)} />}
         />
       )}
