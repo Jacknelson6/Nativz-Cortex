@@ -36,6 +36,27 @@ export interface EditingProjectVideo {
   created_at: string;
 }
 
+/**
+ * Raw clips uploaded by the videographer. Mirrors `EditingProjectVideo`
+ * minus version/position (raw footage is append-only) plus an optional
+ * `label` so a strategist can tag a clip ("hero shot", "B-roll").
+ */
+export interface EditingProjectRawVideo {
+  id: string;
+  project_id: string;
+  storage_path: string | null;
+  public_url: string | null;
+  drive_file_id: string | null;
+  filename: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  duration_s: number | null;
+  thumbnail_url: string | null;
+  label: string | null;
+  uploaded_by: string | null;
+  created_at: string;
+}
+
 export interface EditingProject {
   id: string;
   client_id: string;
@@ -48,7 +69,7 @@ export interface EditingProject {
   assignee_id: string | null;
   assignee_email: string | null;
   /**
-   * Pipeline role assignments (added in migration 203). All optional —
+   * Pipeline role assignments (added in migration 203). All optional;
    * not every project has all three roles wired the moment it lands.
    * `assignee_id` is the legacy editor slot, kept for backward compat.
    */

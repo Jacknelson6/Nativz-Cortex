@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import {
   Bell,
   Cable,
+  Camera,
   FileText,
   RefreshCcw,
   Scissors,
@@ -25,6 +26,7 @@ import { QuickScheduleTab } from './quick-schedule-tab';
 import { ConnectionsTab } from './connections-tab';
 import { NotificationsTab } from './notifications-tab';
 import { EditingTab } from './editing-tab';
+import { VideographerTab } from './videographer-tab';
 
 /**
  * `/admin/content-tools` shell. Replaces the old single-purpose
@@ -54,6 +56,7 @@ import { EditingTab } from './editing-tab';
 
 type ContentToolsTab =
   | 'projects'
+  | 'videographer'
   | 'editing'
   | 'quick-schedule'
   | 'connections'
@@ -65,6 +68,11 @@ const TABS: {
   icon: React.ReactNode;
 }[] = [
   { slug: 'projects', label: 'Projects', icon: <FileText className="size-3.5" /> },
+  {
+    slug: 'videographer',
+    label: 'Videographer',
+    icon: <Camera className="size-3.5" />,
+  },
   {
     slug: 'editing',
     label: 'Editing',
@@ -205,6 +213,7 @@ export function ContentToolsShell() {
               onSortChange={setSort}
             />
           ))}
+        {tab === 'videographer' && <VideographerTab />}
         {tab === 'editing' && <EditingTab />}
         {tab === 'quick-schedule' && <QuickScheduleTab />}
         {tab === 'connections' && <ConnectionsTab />}
@@ -220,6 +229,8 @@ function describeSubtitle(tab: ContentToolsTab, projectCount: number): string {
       const word = projectCount === 1 ? 'project' : 'projects';
       return `${projectCount} ${word} across every brand`;
     }
+    case 'videographer':
+      return 'Strategy briefs, shoot dates, and raw footage hand-offs';
     case 'editing':
       return 'Internal pipeline for short-form video projects';
     case 'quick-schedule':

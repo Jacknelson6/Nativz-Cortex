@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { FileVideo, Plus, RefreshCcw } from 'lucide-react';
+import { Camera, RefreshCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { type EditingProject } from '@/lib/editing/types';
-import { EditingNewProjectDialog } from './editing-new-project-dialog';
 import { EditingProjectDetail } from './editing-project-detail';
 import {
   PipelineTable,
@@ -14,37 +13,46 @@ import {
 } from './pipeline-table';
 
 /**
- * Editor-facing list of editing projects. Replaces the old kanban view
- * (Goal 17). Editors see one row per project with the strategy summary
- * surfaced through the brief, who the strategist is, raw footage
- * availability, and how many edited cuts have been delivered.
+ * Videographer-facing list. Strategists use this surface to:
  *
- * Default sort matches the editor's mental model: most-recently-updated
- * first so projects with new strategist input or fresh raw uploads
- * float to the top. Click any header to re-sort.
+ *   - Confirm shoot dates the videographer is booked for
+ *   - Drop a project brief on each row so the videographer knows
+ *     what they're filming
+ *   - Track which projects already have raw footage uploaded
+ *   - Hand the project off to an editor once raws land
+ *
+ * The default sort is by shoot_date ascending so the next on-set day
+ * is always at the top. Projects without a shoot_date sink to the
+ * bottom (handled inside `sortProjectsBy`) so the unscheduled ones
+ * don't drown the booked rows.
+ *
+ * We hide `posted` and `archived` rows by default; once a project has
+ * shipped a videographer doesn't need to scroll past it. Toggle on
+ * the chip to surface them.
  */
 
 const COLUMNS: PipelineColumnKey[] = [
   'brand',
   'name',
-  'status',
   'shoot_date',
   'strategist',
-  'editor',
+  'videographer',
   'raws',
-  'edits',
+  'status',
   'updated_at',
 ];
 
-export function EditingTab() {
+const HIDDEN_BY_DEFAULT = new Set(['posted', 'archived']);
+
+export function VideographerTab() {
   const [projects, setProjects] = useState<EditingProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [newOpen, setNewOpen] = useState(false);
+  const [showShipped, setShowShipped] = useState(false);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [sort, setSort] = useState<PipelineSortState>({
-    field: 'updated_at',
-    dir: 'desc',
+    field: 'shoot_date',
+    dir: 'asc',
   });
 
   async function load(silent = false) {
@@ -52,7 +60,7 @@ export function EditingTab() {
     else setRefreshing(true);
     try {
       const res = await fetch('/api/admin/editing/projects', { cache: 'no-store' });
-      if (!res.ok) throw new Error('Failed to load editing projects');
+      if (!res.ok) throw new Error('Failed to load projects');
       const data = (await res.json()) as { projects: EditingProject[] };
       setProjects(data.projects ?? []);
     } catch (err) {
@@ -67,18 +75,43 @@ export function EditingTab() {
     void load();
   }, []);
 
+  const visible = useMemo(() => {
+    if (showShipped) return projects;
+    return projects.filter((p) => !HIDDEN_BY_DEFAULT.has(p.status));
+  }, [projects, showShipped]);
+
   const activeProject = activeProjectId
     ? projects.find((p) => p.id === activeProjectId) ?? null
     : null;
+
+  const shippedCount = projects.length - visible.length;
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-text-muted">
-          {projects.length}{' '}
-          {projects.length === 1 ? 'project' : 'projects'} across every brand
+          {visible.length}{' '}
+          {visible.length === 1 ? 'project' : 'projects'} on the shoot board
         </p>
         <div className="flex items-center gap-2">
+          {shippedCount > 0 && !showShipped && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowShipped(true)}
+            >
+              Show {shippedCount} shipped
+            </Button>
+          )}
+          {showShipped && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowShipped(false)}
+            >
+              Hide shipped
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -88,10 +121,6 @@ export function EditingTab() {
           >
             <RefreshCcw size={14} className={refreshing ? 'animate-spin' : ''} />
           </Button>
-          <Button size="sm" onClick={() => setNewOpen(true)}>
-            <Plus size={14} />
-            <span>New project</span>
-          </Button>
         </div>
       </div>
 
@@ -99,24 +128,14 @@ export function EditingTab() {
         <TableSkeleton />
       ) : (
         <PipelineTable
-          projects={projects}
+          projects={visible}
           columns={COLUMNS}
           sort={sort}
           onSortChange={setSort}
           onOpen={(id) => setActiveProjectId(id)}
-          emptyState={<EmptyState onNew={() => setNewOpen(true)} />}
+          emptyState={<EmptyState />}
         />
       )}
-
-      <EditingNewProjectDialog
-        open={newOpen}
-        onClose={() => setNewOpen(false)}
-        onCreated={async (id) => {
-          setNewOpen(false);
-          await load(true);
-          setActiveProjectId(id);
-        }}
-      />
 
       <EditingProjectDetail
         project={activeProject}
@@ -127,22 +146,19 @@ export function EditingTab() {
   );
 }
 
-function EmptyState({ onNew }: { onNew: () => void }) {
+function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-nativz-border bg-surface p-10 text-center">
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-surface text-accent-text">
-        <FileVideo size={20} />
+        <Camera size={20} />
       </div>
       <div>
-        <p className="text-sm font-medium text-text-primary">No editing projects yet</p>
+        <p className="text-sm font-medium text-text-primary">No shoots on deck</p>
         <p className="mt-1 text-xs text-text-muted">
-          Spin one up so editors can drop footage straight into Cortex instead of Drive.
+          Create a project from the Editing tab and it will land here once a
+          shoot date is set.
         </p>
       </div>
-      <Button size="sm" onClick={onNew}>
-        <Plus size={14} />
-        <span>New project</span>
-      </Button>
     </div>
   );
 }
@@ -159,7 +175,3 @@ function TableSkeleton() {
     </div>
   );
 }
-
-// Keep the dialog re-exports so the parent shell only imports one symbol
-// from this file (matches the pre-rewrite contract).
-export { EditingNewProjectDialog, EditingProjectDetail };
