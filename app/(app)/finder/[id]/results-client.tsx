@@ -4,9 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Building2, Clock, FlaskConical } from 'lucide-react';
-import { contentLabTopicSearchStorageKey } from '@/lib/content-lab/topic-search-selection-storage';
-import { ContentLabAttachClientDialog } from '@/components/content-lab/content-lab-attach-client-dialog';
+import { ArrowLeft, Building2, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollToTop } from '@/components/ui/scroll-to-top';
@@ -78,7 +76,6 @@ export function AdminResultsClient({
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(search.query);
   const [savingTitle, setSavingTitle] = useState(false);
-  const [attachDialogOpen, setAttachDialogOpen] = useState(false);
   const aiResponse = search.raw_ai_response as TopicSearchAIResponse | null;
   const trendingTopics = (search.trending_topics ?? []) as (TrendingTopic | LegacyTrendingTopic)[];
 
@@ -238,42 +235,6 @@ export function AdminResultsClient({
                 {formatRelativeTime(search.completed_at)}
               </span>
             )}
-            {/* Header CTA is the single filled primary on the page — the
-                bottom "Turn these findings into a content plan" panel was
-                retired, so this is now the page's one strong call to action. */}
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => {
-                if (!clientInfo) {
-                  // No client attached yet — open the inline picker so the
-                  // user can attach in-place and land in the lab without a
-                  // round-trip through the admin settings.
-                  setAttachDialogOpen(true);
-                  return;
-                }
-                // Pre-pin this search as the ONLY selection so the Strategy
-                // Lab workspace auto-attaches it on mount. See the multi-pin
-                // hoisted state in content-lab-workspace.tsx.
-                try {
-                  const key = contentLabTopicSearchStorageKey(clientInfo.id);
-                  window.localStorage.setItem(key, JSON.stringify([search.id]));
-                } catch {
-                  /* quota / JSON — non-fatal, user will see the lab but nothing pinned */
-                }
-                // Route param is the client UUID, not the slug.
-                router.push(`/lab/${clientInfo.id}`);
-              }}
-              title={clientInfo ? `Open this search in Strategy Lab with ${clientInfo.name}` : 'Pick a client and open in Strategy Lab'}
-            >
-              <FlaskConical size={14} aria-hidden />
-              Open in Strategy Lab
-            </Button>
-            <ContentLabAttachClientDialog
-              open={attachDialogOpen}
-              onClose={() => setAttachDialogOpen(false)}
-              searchId={search.id}
-            />
             <ExportPdfButton search={search} clientName={clientInfo?.name} agency={agencyBrand} />
             <ShareButton searchId={search.id} />
           </div>
