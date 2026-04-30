@@ -148,14 +148,20 @@ async function handleGet(request: NextRequest) {
     // The single source of truth: how many posts in this link still need
     // the client's eyes. Drives whether we email at all and what the copy
     // says. Replaces the old binary "any-action / ball-in-court" guards.
-    const { pending, total } = await countPendingPosts(admin, link.included_post_ids);
+    const { pending, total, hasRevisionFeedback } = await countPendingPosts(
+      admin,
+      link.included_post_ids,
+    );
     const sentMs = new Date(link.created_at).getTime();
     const ageHours = (now - sentMs) / (1000 * 60 * 60);
 
-    // If nothing is pending, stamp every unstamped column and move on. We
-    // never want this link to fire any nudge again — if state somehow flips
-    // back (rare: an approval comment is deleted), an admin can re-mint.
-    if (pending === 0) {
+    // Suppress all nudges when:
+    //   • nothing is pending (everything approved or in our court), or
+    //   • the client has left ANY revision feedback in this drop. Their
+    //     comment on one post often applies to others, so we'd rather wait
+    //     for them to come back on their own than badger them to review
+    //     posts they may have implicitly addressed already.
+    if (pending === 0 || hasRevisionFeedback) {
       const stamps: Record<string, string> = {};
       const nowIso = new Date().toISOString();
       if (!link.no_open_nudge_sent_at) stamps.no_open_nudge_sent_at = nowIso;
@@ -359,9 +365,9 @@ function toNumber(v: number | string | boolean | string[], fallback: number): nu
 async function countPendingPosts(
   admin: ReturnType<typeof createAdminClient>,
   postIds: string[],
-): Promise<{ pending: number; total: number }> {
+): Promise<{ pending: number; total: number; hasRevisionFeedback: boolean }> {
   const total = postIds.length;
-  if (total === 0) return { pending: 0, total: 0 };
+  if (total === 0) return { pending: 0, total: 0, hasRevisionFeedback: false };
 
   type Row = {
     created_at: string;
@@ -384,11 +390,13 @@ async function countPendingPosts(
     string,
     { status: 'approved' | 'changes_requested'; created_at: string; revisions_completed_at: string | null }
   >();
+  let hasRevisionFeedback = false;
   for (const row of data ?? []) {
     const link = Array.isArray(row.post_review_links)
       ? row.post_review_links[0] ?? null
       : row.post_review_links;
     if (!link) continue;
+    if (row.status === 'changes_requested') hasRevisionFeedback = true;
     if (latestByPost.has(link.post_id)) continue;
     latestByPost.set(link.post_id, {
       status: row.status,
@@ -415,7 +423,7 @@ async function countPendingPosts(
     pending += 1;
   }
 
-  return { pending, total };
+  return { pending, total, hasRevisionFeedback };
 }
 
 /**

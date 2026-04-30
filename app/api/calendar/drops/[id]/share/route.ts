@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
+import { mintOrRefreshShareLink } from '@/lib/calendar/share-link';
 
 export async function POST(
   _req: Request,
@@ -52,23 +53,26 @@ export async function POST(
     reviewMap[rl.post_id as string] = rl.id as string;
   }
 
-  const { data: shareLink, error: shareErr } = await admin
-    .from('content_drop_share_links')
-    .insert({
-      drop_id: id,
-      included_post_ids: postIds,
-      post_review_link_map: reviewMap,
-    })
-    .select('id, token, expires_at')
-    .single();
-  if (shareErr || !shareLink) {
-    return NextResponse.json({ error: shareErr?.message ?? 'Failed to create share link' }, { status: 500 });
+  let link;
+  try {
+    link = await mintOrRefreshShareLink(admin, {
+      dropId: id,
+      clientId: drop.client_id,
+      postIds,
+      reviewMap,
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Failed to create share link' },
+      { status: 500 },
+    );
   }
 
   const appUrl = resolveAppUrl(drop.clients?.agency);
   return NextResponse.json({
-    link: shareLink,
-    url: `${appUrl}/c/${shareLink.token}`,
+    link: { id: link.id, token: link.token, expires_at: link.expires_at },
+    url: `${appUrl}/c/${link.token}`,
+    refreshed: link.refreshed,
   });
 }
 

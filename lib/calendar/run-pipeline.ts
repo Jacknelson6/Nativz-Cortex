@@ -11,6 +11,7 @@ import { ingestDrop } from '@/lib/calendar/ingest-drop';
 import { analyzeDropVideos } from '@/lib/calendar/analyze-video';
 import { generateDropCaptions } from '@/lib/calendar/generate-caption';
 import { scheduleDrop } from '@/lib/calendar/schedule-drop';
+import { mintOrRefreshShareLink } from '@/lib/calendar/share-link';
 import type { SocialPlatform } from '@/lib/posting';
 
 export interface RunPipelineParams {
@@ -209,16 +210,19 @@ export async function runCalendarPipeline(
       const reviewMap: Record<string, string> = {};
       for (const rl of reviewLinks ?? []) reviewMap[rl.post_id as string] = rl.id as string;
 
-      const { data: shareLink } = await admin
-        .from('content_drop_share_links')
-        .insert({
-          drop_id: drop.id,
-          included_post_ids: postIds,
-          post_review_link_map: reviewMap,
-        })
-        .select('token')
-        .single<{ token: string }>();
-      if (shareLink) shareUrl = `${appUrl}/c/${shareLink.token}`;
+      try {
+        const link = await mintOrRefreshShareLink(admin, {
+          dropId: drop.id,
+          clientId,
+          postIds,
+          reviewMap,
+        });
+        shareUrl = `${appUrl}/c/${link.token}`;
+      } catch (err) {
+        console.warn(
+          `      share link mint failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
     }
   }
 
