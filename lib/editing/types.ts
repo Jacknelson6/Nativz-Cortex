@@ -12,11 +12,11 @@ export type EditingProjectType =
   | 'other';
 
 export type EditingProjectStatus =
-  | 'draft'
-  | 'in_review'
+  | 'editing'
+  | 'need_approval'
+  | 'revising'
   | 'approved'
-  | 'scheduled'
-  | 'posted'
+  | 'done'
   | 'archived';
 
 export interface EditingProjectVideo {
@@ -97,11 +97,11 @@ export interface EditingProject {
 }
 
 export const EDITING_STATUS_LABEL: Record<EditingProjectStatus, string> = {
-  draft: 'Draft',
-  in_review: 'In review',
+  editing: 'Editing',
+  need_approval: 'Need approval',
+  revising: 'Revising',
   approved: 'Approved',
-  scheduled: 'Scheduled',
-  posted: 'Posted',
+  done: 'Done',
   archived: 'Archived',
 };
 

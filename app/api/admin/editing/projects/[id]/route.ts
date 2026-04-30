@@ -22,7 +22,7 @@ const PatchBody = z
       .enum(['organic_content', 'social_ads', 'ctv_ads', 'general', 'other'])
       .optional(),
     status: z
-      .enum(['draft', 'in_review', 'approved', 'scheduled', 'posted', 'archived'])
+      .enum(['editing', 'need_approval', 'revising', 'approved', 'done', 'archived'])
       .optional(),
     assignee_id: z.string().uuid().nullable().optional(),
     videographer_id: z.string().uuid().nullable().optional(),
@@ -39,11 +39,11 @@ const PatchBody = z
   .refine((b) => Object.keys(b).length > 0, { message: 'no fields to update' });
 
 const STATUS_TIMESTAMP_MAP: Record<EditingProjectStatus, string | null> = {
-  draft: null,
-  in_review: 'ready_at',
+  editing: null,
+  need_approval: 'ready_at',
+  revising: null,
   approved: 'approved_at',
-  scheduled: 'scheduled_at',
-  posted: null,
+  done: 'scheduled_at',
   archived: 'archived_at',
 };
 

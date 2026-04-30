@@ -21,7 +21,6 @@ import {
   EDITING_STATUS_LABEL,
   EDITING_TYPE_LABEL,
   type EditingProject,
-  type EditingProjectRawVideo,
   type EditingProjectStatus,
   type EditingProjectType,
   type EditingProjectVideo,
@@ -33,15 +32,16 @@ import { EditingShareButton } from './editing-share-button';
  * Detail panel for a single editing project. Drives:
  *
  *   - Inline rename, type change, status flip, notes
- *   - Drag-drop multi-video upload (signed URL -> direct PUT to
- *     Supabase Storage)
- *   - Per-video thumbnail/filename/size, with delete
- *   - "Mark ready" / "Approve" / "Archive" status shortcuts so the
- *     editor doesn't have to pick from a long enum
+ *   - Drag-drop multi-video upload of edited cuts (signed URL -> direct
+ *     PUT to Supabase Storage), with progress + per-video delete.
+ *   - Raw footage as a single Drive folder URL link. The strategist /
+ *     videographer drops a folder link rather than uploading bulk
+ *     camera files into our bucket; storage cost + Supabase upload
+ *     time make a folder link the right primitive there.
  *
- * Large clips upload directly to the bucket via the signed-upload URL
- * minted by `POST /api/admin/editing/projects/:id/videos`. We track
- * progress per-file via XHR (`fetch` doesn't expose upload progress).
+ * The status enum runs editing -> need_approval -> revising -> approved
+ * -> done (post-handoff to paid media). Selecting a status auto-stamps
+ * the corresponding timestamp column server-side.
  */
 
 const STATUS_OPTIONS: { value: EditingProjectStatus; label: string }[] = (
@@ -55,10 +55,12 @@ const TYPE_OPTIONS: { value: EditingProjectType; label: string }[] = (
 interface DetailResponse {
   project: EditingProject;
   videos: EditingProjectVideo[];
-  raw_videos: EditingProjectRawVideo[];
+  // Raw videos collection is left over from the previous design where
+  // raw footage uploaded into Supabase. We've moved raw to a Drive
+  // folder URL on the project itself — kept the field nullable so the
+  // route continues to return whatever's in the table without breaking.
+  raw_videos?: unknown[];
 }
-
-type UploadKind = 'edited' | 'raw';
 
 interface UploadJob {
   id: string;
@@ -66,7 +68,6 @@ interface UploadJob {
   size: number;
   progress: number;
   state: 'queued' | 'signing' | 'uploading' | 'finalizing' | 'done' | 'error';
-  kind: UploadKind;
   detail?: string;
 }
 
@@ -85,12 +86,11 @@ export function EditingProjectDetail({
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState('');
   const [notes, setNotes] = useState('');
-  const [brief, setBrief] = useState('');
-  const [shootDate, setShootDate] = useState('');
+  const [driveUrl, setDriveUrl] = useState('');
   const [type, setType] = useState<EditingProjectType>('organic_content');
-  const [status, setStatus] = useState<EditingProjectStatus>('draft');
+  const [status, setStatus] = useState<EditingProjectStatus>('editing');
   const [uploads, setUploads] = useState<UploadJob[]>([]);
-  const [dragActive, setDragActive] = useState<UploadKind | null>(null);
+  const [dragActive, setDragActive] = useState(false);
 
   const projectId = project?.id ?? null;
 
@@ -106,8 +106,7 @@ export function EditingProjectDetail({
       setData(body);
       setName(body.project.name);
       setNotes(body.project.notes ?? '');
-      setBrief(body.project.project_brief ?? '');
-      setShootDate(body.project.shoot_date ?? '');
+      setDriveUrl(body.project.drive_folder_url ?? '');
       setType(body.project.project_type);
       setStatus(body.project.status);
     } catch (err) {
@@ -163,15 +162,14 @@ export function EditingProjectDetail({
     }
   }
 
-  async function deleteVideo(videoId: string, kind: UploadKind) {
+  async function deleteVideo(videoId: string) {
     if (!projectId) return;
-    if (!confirm('Delete this clip? This cannot be undone.')) return;
-    const path =
-      kind === 'raw'
-        ? `/api/admin/editing/projects/${projectId}/raw-videos/${videoId}`
-        : `/api/admin/editing/projects/${projectId}/videos/${videoId}`;
+    if (!confirm('Delete this video? This cannot be undone.')) return;
     try {
-      const res = await fetch(path, { method: 'DELETE' });
+      const res = await fetch(
+        `/api/admin/editing/projects/${projectId}/videos/${videoId}`,
+        { method: 'DELETE' },
+      );
       if (!res.ok) throw new Error('Delete failed');
       toast.success('Deleted');
       await load();
@@ -181,7 +179,7 @@ export function EditingProjectDetail({
     }
   }
 
-  async function startUploads(files: File[], kind: UploadKind = 'edited') {
+  async function startUploads(files: File[]) {
     if (!projectId || files.length === 0) return;
     const queued: UploadJob[] = files.map((f) => ({
       id: crypto.randomUUID(),
@@ -189,48 +187,38 @@ export function EditingProjectDetail({
       size: f.size,
       progress: 0,
       state: 'queued',
-      kind,
     }));
     setUploads((prev) => [...prev, ...queued]);
 
-    // Run uploads sequentially so we don't saturate the user's pipe and
-    // so progress bars feel deterministic (one moves at a time).
+    // Sequential so we don't saturate the user's pipe and progress
+    // bars feel deterministic (one moves at a time).
     for (let i = 0; i < files.length; i += 1) {
-      const file = files[i];
-      const job = queued[i];
-      await runUpload(projectId, file, job);
+      await runUpload(projectId, files[i], queued[i]);
     }
 
     await load();
     onChanged();
   }
 
-  function runUpload(
-    pid: string,
-    file: File,
-    job: UploadJob,
-  ): Promise<void> {
+  function runUpload(pid: string, file: File, job: UploadJob): Promise<void> {
     return new Promise(async (resolve) => {
       try {
-        // 1. Mint a signed URL + create the placeholder row.
         setUploads((prev) =>
           prev.map((j) => (j.id === job.id ? { ...j, state: 'signing' } : j)),
         );
-        const endpoint =
-          job.kind === 'raw'
-            ? `/api/admin/editing/projects/${pid}/raw-videos`
-            : `/api/admin/editing/projects/${pid}/videos`;
-        const body: Record<string, unknown> = {
-          filename: file.name,
-          mime_type: file.type || 'application/octet-stream',
-          size_bytes: file.size,
-        };
-        if (job.kind === 'edited') body.position = 0;
-        const signRes = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
+        const signRes = await fetch(
+          `/api/admin/editing/projects/${pid}/videos`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: file.name,
+              mime_type: file.type || 'application/octet-stream',
+              size_bytes: file.size,
+              position: 0,
+            }),
+          },
+        );
         if (!signRes.ok) {
           const err = (await signRes.json().catch(() => null)) as
             | { detail?: string; error?: string }
@@ -238,14 +226,10 @@ export function EditingProjectDetail({
           throw new Error(err?.detail ?? err?.error ?? 'sign failed');
         }
         const signed = (await signRes.json()) as {
-          video_id?: string;
-          raw_video_id?: string;
           storage_path: string;
           upload_token: string;
         };
 
-        // 2. PUT bytes via supabase-js (handles auth headers + the
-        //    `x-upsert` etiquette). XHR for progress.
         setUploads((prev) =>
           prev.map((j) => (j.id === job.id ? { ...j, state: 'uploading' } : j)),
         );
@@ -256,21 +240,14 @@ export function EditingProjectDetail({
           file,
           onProgress: (pct) => {
             setUploads((prev) =>
-              prev.map((j) =>
-                j.id === job.id ? { ...j, progress: pct } : j,
-              ),
+              prev.map((j) => (j.id === job.id ? { ...j, progress: pct } : j)),
             );
           },
         });
 
-        // 3. Stamp metadata server-side. Duration/thumbnail extraction
-        //    is a follow-up cron; for now we just mark the row final
-        //    by clearing the placeholder upload state.
         setUploads((prev) =>
           prev.map((j) =>
-            j.id === job.id
-              ? { ...j, state: 'done', progress: 100 }
-              : j,
+            j.id === job.id ? { ...j, state: 'done', progress: 100 } : j,
           ),
         );
       } catch (err) {
@@ -334,23 +311,47 @@ export function EditingProjectDetail({
 
         {/* Body */}
         <div className="grid flex-1 grid-cols-1 gap-6 overflow-y-auto p-6 lg:grid-cols-[1fr_320px]">
-          {/* Videos column */}
+          {/* Main column: raw footage link + edited videos */}
           <div className="space-y-5">
-            <UploadSection
-              label="Raw footage"
-              kind="raw"
-              dragActive={dragActive === 'raw'}
-              setDragActive={setDragActive}
-              onUploadFiles={(files) => void startUploads(files, 'raw')}
-            />
+            <Section label={`Raw footage`}>
+              <div className="rounded-lg border border-nativz-border bg-surface p-3">
+                <input
+                  value={driveUrl}
+                  onChange={(e) => setDriveUrl(e.target.value)}
+                  onBlur={() => {
+                    const trimmed = driveUrl.trim();
+                    void patch({ drive_folder_url: trimmed || null });
+                  }}
+                  placeholder="Paste a Google Drive folder link"
+                  className="block w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+                {driveUrl && (
+                  <a
+                    href={driveUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1 text-[12px] text-accent-text hover:underline"
+                  >
+                    Open folder <ExternalLink size={11} />
+                  </a>
+                )}
+              </div>
+            </Section>
 
-            <UploadSection
-              label="Edited cuts"
-              kind="edited"
-              dragActive={dragActive === 'edited'}
-              setDragActive={setDragActive}
-              onUploadFiles={(files) => void startUploads(files, 'edited')}
-            />
+            <Section
+              label={`Edited videos${
+                data?.videos.length ? ` (${data.videos.length})` : ''
+              }`}
+            >
+              <EditedVideosBox
+                loading={loading}
+                videos={data?.videos ?? []}
+                dragActive={dragActive}
+                setDragActive={setDragActive}
+                onUploadFiles={(files) => void startUploads(files)}
+                onDelete={(id) => void deleteVideo(id)}
+              />
+            </Section>
 
             {uploads.length > 0 && (
               <div className="space-y-2 rounded-lg border border-nativz-border bg-surface p-3">
@@ -364,64 +365,6 @@ export function EditingProjectDetail({
                 </ul>
               </div>
             )}
-
-            <div>
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
-                Raw clips ({data?.raw_videos.length ?? 0})
-              </p>
-              {loading ? (
-                <div className="flex items-center justify-center rounded-lg border border-dashed border-nativz-border p-6 text-sm text-text-muted">
-                  <Loader2 size={14} className="mr-2 animate-spin" />
-                  Loading clips...
-                </div>
-              ) : !data || data.raw_videos.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-nativz-border p-6 text-center">
-                  <FileVideo size={18} className="text-text-muted" />
-                  <p className="text-sm text-text-muted">
-                    No raw footage yet. Drop camera files above.
-                  </p>
-                </div>
-              ) : (
-                <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {data.raw_videos.map((v) => (
-                    <RawVideoCard
-                      key={v.id}
-                      video={v}
-                      onDelete={() => void deleteVideo(v.id, 'raw')}
-                    />
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div>
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
-                Edited cuts ({data?.videos.length ?? 0})
-              </p>
-              {loading ? (
-                <div className="flex items-center justify-center rounded-lg border border-dashed border-nativz-border p-6 text-sm text-text-muted">
-                  <Loader2 size={14} className="mr-2 animate-spin" />
-                  Loading clips...
-                </div>
-              ) : !data || data.videos.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-nativz-border p-6 text-center">
-                  <FileVideo size={18} className="text-text-muted" />
-                  <p className="text-sm text-text-muted">
-                    No edited cuts yet. Drop the next version above.
-                  </p>
-                </div>
-              ) : (
-                <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {data.videos.map((v) => (
-                    <VideoCard
-                      key={v.id}
-                      video={v}
-                      onDelete={() => void deleteVideo(v.id, 'edited')}
-                    />
-                  ))}
-                </ul>
-              )}
-            </div>
           </div>
 
           {/* Side column */}
@@ -452,18 +395,6 @@ export function EditingProjectDetail({
               />
             </SideField>
 
-            <SideField label="Shoot date">
-              <input
-                type="date"
-                value={shootDate}
-                onChange={(e) => setShootDate(e.target.value)}
-                onBlur={() => {
-                  void patch({ shoot_date: shootDate || null });
-                }}
-                className="block w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-              />
-            </SideField>
-
             <SideField label="Strategist">
               <AssigneePicker
                 projectId={project.id}
@@ -477,51 +408,6 @@ export function EditingProjectDetail({
                   void load();
                   onChanged();
                 }}
-              />
-            </SideField>
-
-            <SideField label="Videographer">
-              <AssigneePicker
-                projectId={project.id}
-                role="videographer_id"
-                currentUserId={data?.project.videographer_id ?? project.videographer_id}
-                currentEmail={
-                  data?.project.videographer_email ?? project.videographer_email
-                }
-                variant="field"
-                onSaved={() => {
-                  void load();
-                  onChanged();
-                }}
-              />
-            </SideField>
-
-            <SideField label="Editor">
-              <AssigneePicker
-                projectId={project.id}
-                role="assignee_id"
-                currentUserId={data?.project.assignee_id ?? project.assignee_id}
-                currentEmail={
-                  data?.project.assignee_email ?? project.assignee_email
-                }
-                variant="field"
-                onSaved={() => {
-                  void load();
-                  onChanged();
-                }}
-              />
-            </SideField>
-
-            <SideField label="Project brief">
-              <textarea
-                value={brief}
-                onChange={(e) => setBrief(e.target.value)}
-                onBlur={() => {
-                  void patch({ project_brief: brief.trim() || null });
-                }}
-                rows={4}
-                placeholder="What is the videographer filming? Key shots, talent, location."
-                className="block w-full resize-none rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
               />
             </SideField>
 
@@ -544,13 +430,30 @@ export function EditingProjectDetail({
               {project.ready_at && <p>Marked ready {formatTimestamp(project.ready_at)}</p>}
               {project.approved_at && <p>Approved {formatTimestamp(project.approved_at)}</p>}
               {project.scheduled_at && (
-                <p>Scheduled {formatTimestamp(project.scheduled_at)}</p>
+                <p>Done {formatTimestamp(project.scheduled_at)}</p>
               )}
             </div>
           </div>
         </div>
       </div>
     </Dialog>
+  );
+}
+
+function Section({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
+        {label}
+      </p>
+      {children}
+    </div>
   );
 }
 
@@ -571,49 +474,57 @@ function SideField({
   );
 }
 
-function UploadSection({
-  label,
-  kind,
+/**
+ * One combined surface for edited videos: list of cards + drop zone +
+ * "choose files" button live in a single dashed-border box. Empty
+ * state shows the Upload icon + prompt; populated state shows cards
+ * with an inline "Add more" affordance.
+ */
+function EditedVideosBox({
+  loading,
+  videos,
   dragActive,
   setDragActive,
   onUploadFiles,
+  onDelete,
 }: {
-  label: string;
-  kind: UploadKind;
+  loading: boolean;
+  videos: EditingProjectVideo[];
   dragActive: boolean;
-  setDragActive: (kind: UploadKind | null) => void;
+  setDragActive: (active: boolean) => void;
   onUploadFiles: (files: File[]) => void;
+  onDelete: (id: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const empty = !loading && videos.length === 0;
+
+  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setDragActive(false);
+    const files = Array.from(e.dataTransfer.files).filter((f) =>
+      f.type.startsWith('video/'),
+    );
+    if (files.length === 0) {
+      toast.error('Drop video files only');
+      return;
+    }
+    onUploadFiles(files);
+  }
+
   return (
     <div
       onDragOver={(e) => {
         e.preventDefault();
-        setDragActive(kind);
+        setDragActive(true);
       }}
-      onDragLeave={() => setDragActive(null)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragActive(null);
-        const files = Array.from(e.dataTransfer.files).filter((f) =>
-          f.type.startsWith('video/'),
-        );
-        if (files.length === 0) {
-          toast.error('Drop video files only');
-          return;
-        }
-        onUploadFiles(files);
-      }}
-      className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
+      onDragLeave={() => setDragActive(false)}
+      onDrop={handleDrop}
+      className={`rounded-xl border-2 border-dashed p-3 transition-colors ${
         dragActive
           ? 'border-accent bg-accent-surface/30'
           : 'border-nativz-border bg-surface'
       }`}
     >
-      <div className="flex items-center gap-2">
-        <Upload size={16} className="text-text-muted" />
-        <p className="text-sm font-medium text-text-primary">{label}</p>
-      </div>
       <input
         ref={inputRef}
         type="file"
@@ -626,13 +537,43 @@ function UploadSection({
           if (inputRef.current) inputRef.current.value = '';
         }}
       />
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => inputRef.current?.click()}
-      >
-        Choose files
-      </Button>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-8 text-sm text-text-muted">
+          <Loader2 size={14} className="mr-2 animate-spin" />
+          Loading videos...
+        </div>
+      ) : empty ? (
+        <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
+          <Upload size={18} className="text-text-muted" />
+          <p className="text-sm text-text-primary">Drop video files here</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => inputRef.current?.click()}
+          >
+            Choose files
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {videos.map((v) => (
+              <VideoCard key={v.id} video={v} onDelete={() => onDelete(v.id)} />
+            ))}
+          </ul>
+          <div className="flex justify-center pt-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => inputRef.current?.click()}
+            >
+              <Upload size={12} className="mr-1.5" />
+              Add more
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -681,9 +622,7 @@ function VideoCard({
   video: EditingProjectVideo;
   onDelete: () => void;
 }) {
-  const sizeLabel = video.size_bytes
-    ? formatBytes(video.size_bytes)
-    : '';
+  const sizeLabel = video.size_bytes ? formatBytes(video.size_bytes) : '';
   return (
     <li className="group flex items-center gap-3 rounded-lg border border-nativz-border bg-background p-3">
       <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-surface-hover">
@@ -730,60 +669,6 @@ function VideoCard({
   );
 }
 
-function RawVideoCard({
-  video,
-  onDelete,
-}: {
-  video: EditingProjectRawVideo;
-  onDelete: () => void;
-}) {
-  const sizeLabel = video.size_bytes ? formatBytes(video.size_bytes) : '';
-  return (
-    <li className="group flex items-center gap-3 rounded-lg border border-nativz-border bg-background p-3">
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-surface-hover">
-        {video.thumbnail_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={video.thumbnail_url}
-            alt=""
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <FileVideo size={16} className="text-text-muted" />
-        )}
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm text-text-primary">{video.filename}</p>
-        <p className="text-[11px] text-text-muted">
-          {sizeLabel}
-          {video.label && ` - ${video.label}`}
-        </p>
-      </div>
-      <div className="flex items-center gap-1">
-        {video.public_url && (
-          <a
-            href={video.public_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-md p-1.5 text-text-muted opacity-0 transition-opacity hover:bg-surface-hover hover:text-text-primary group-hover:opacity-100"
-            aria-label="Open"
-          >
-            <ExternalLink size={14} />
-          </a>
-        )}
-        <button
-          type="button"
-          onClick={onDelete}
-          className="rounded-md p-1.5 text-text-muted opacity-0 transition-opacity hover:bg-surface-hover hover:text-[color:var(--status-danger)] group-hover:opacity-100"
-          aria-label="Delete"
-        >
-          <Trash2 size={14} />
-        </button>
-      </div>
-    </li>
-  );
-}
-
 // Pure XHR upload so we can wire `onProgress`. Supabase signed-upload
 // URLs accept a PUT with the bytes as the request body and the upload
 // token in the `x-upsert` / `Authorization` headers; the SDK helper
@@ -796,8 +681,6 @@ function uploadWithProgress(opts: {
 }): Promise<void> {
   return new Promise((resolve, reject) => {
     const supabase = createClient();
-    // Use the SDK to compute the signed URL the same way it does
-    // internally so we stay in sync if they ever change the format.
     void supabase.storage
       .from('editing-media')
       .uploadToSignedUrl(opts.path, opts.token, opts.file)

@@ -24,7 +24,9 @@ export const dynamic = 'force-dynamic';
  */
 
 const ListQuery = z.object({
-  status: z.enum(['draft', 'in_review', 'approved', 'scheduled', 'posted', 'archived']).optional(),
+  status: z
+    .enum(['editing', 'need_approval', 'revising', 'approved', 'done', 'archived'])
+    .optional(),
   clientId: z.string().uuid().optional(),
   include: z.enum(['archived']).optional(),
 });

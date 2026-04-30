@@ -141,22 +141,22 @@ function projectTypeForReview(
 /**
  * Map an editing-project lifecycle state onto the smaller status
  * vocabulary the shared review table understands.
- *   draft / in_review              → ready_for_review (yellow)
- *   approved / scheduled / posted  → approved (green)
+ *   editing / need_approval        → ready_for_review (yellow)
+ *   revising                       → revising (orange)
+ *   approved / done                → approved (green)
  *   archived                       → expired (red, dimmed)
- * Editing rows never enter `revising` or `abandoned` — those states
- * are calendar-specific (per-post comment threads).
  */
 function statusForReview(
   status: EditingProjectStatus,
 ): ReviewLinkStatus {
   switch (status) {
-    case 'draft':
-    case 'in_review':
+    case 'editing':
+    case 'need_approval':
       return 'ready_for_review';
+    case 'revising':
+      return 'revising';
     case 'approved':
-    case 'scheduled':
-    case 'posted':
+    case 'done':
       return 'approved';
     case 'archived':
       return 'expired';
@@ -171,8 +171,7 @@ function statusForReview(
  * `/c/<token>`.
  */
 function editingProjectToRow(p: EditingProject): ReviewLinkRow {
-  const isApproved =
-    p.status === 'approved' || p.status === 'scheduled' || p.status === 'posted';
+  const isApproved = p.status === 'approved' || p.status === 'done';
   return {
     id: `editing:${p.id}`,
     token: '',
