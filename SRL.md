@@ -1560,3 +1560,103 @@ to the existing scheduler. One click from the queue, no shell scripts.
 of iteration 15.2. The async-poller follow-up (iter 15.3) is a nice-to-
 have for big drops but isn't part of the original Goal 15 brief, so it
 moves to a fresh Goal 16 if Jack wants it.
+
+
+## Goal 16 (set 2026-04-29) - Content Tools overhaul + editing pipeline
+
+Jack came back after iter 15.2 with a wider brief: `/admin/content-tools` should
+be the agency's true production hub - not just a share-link inventory + a
+Monday-only Quick Schedule. It needs to host every kind of project (organic
+content, ads, general content revisions), give editors a clean upload surface
+that does NOT depend on Drive folder hygiene, surface real Zernio wiring per
+client, and replace the placeholder Notifications tab with something that
+shows transactional email reality (recent sends + scheduled + follow-up rules).
+
+Plus: the Projects table overflows at 1280px and there is no way to delete a
+stale project row. The Quick Schedule tab also returns "can't reach Monday" in
+dev because `MONDAY_API_TOKEN` is missing - it should at least say so plainly.
+
+### Architecture decision (made autonomously - no user round-trip)
+
+**Editor uploads target Supabase Storage via Cortex, not Drive.** Drive folders
+stay supported as a legacy import path so we don't break the current EM-Approved
+pipeline mid-flight, but new projects get a Cortex-native upload UI.
+
+Why Supabase Storage (not Vercel Blob, not Mux):
+- We already use Supabase Storage for the scheduler pipeline
+  (`lib/calendar/storage-upload.ts` writes to `scheduler-media` and
+  `scheduler-thumbnails`). A new `editing-media` bucket is zero new infra,
+  zero new auth, zero new billing surface. Jack's design rule: consolidate.
+- The codebase already has a battle-tested TUS resumable upload helper for
+  files >40MB. Editor short-form clips are typically 10-200MB; the helper
+  handles single-PUT and resumable cases.
+- Mux is a streaming CDN. Our posts go straight to TikTok/Reels/YouTube where
+  each platform handles its own re-encode. We never serve playback ourselves.
+  Mux can be a follow-up if the share-link preview ever needs scrubbing.
+- Cleanup is a cron that deletes the storage object once every scheduled
+  `content_drop_videos.late_posted_at` fires.
+
+Why direct upload at all (vs. keep Drive only):
+- Editors hit Drive permission walls constantly (folder-not-shared, JWT scope).
+  A first-party upload removes the entire permission class.
+- We get a real `editing_projects` table - status (draft / in review / approved /
+  scheduled / posted), assignee, version history, brand link. Today none of that
+  exists; status lives on a Monday board outside the app.
+- Quick Schedule becomes "schedule this approved project", not "go fish on
+  Monday." The Monday board stays for ops visibility but is no longer
+  load-bearing.
+
+### Acceptance criteria
+
+- [ ] **Sales prospects picker shows clients again** (one-line side fix - drop
+  the `hide_from_roster` filter; column doesn't exist on `clients`).
+- [ ] **Editing pipeline data model + storage**
+  - New `editing_projects` table: id, client_id, name, project_type
+    (organic / social_ads / ctv_ads / general / other), status, assignee_id,
+    drive_folder_url (optional legacy), notes, created_at, updated_at.
+  - New `editing_project_videos` table: id, project_id, storage_path,
+    public_url, drive_file_id (legacy), filename, mime, size_bytes, duration_s,
+    thumbnail_url, version, position, uploaded_by, created_at.
+  - Upload route (`/api/admin/editing/upload`) creates the row and returns a
+    Supabase Storage signed-upload URL so the browser PUTs bytes directly,
+    bypassing Vercel Function payload limits.
+- [ ] **Editor upload surface**
+  - New `/admin/editing` (under Content Tools shell as a 5th tab? or its own
+    page? - decide during build, prefer consolidation per Jack's design rule).
+  - Drag-drop multi-video upload. Real progress bars (per file). Persist on
+    refresh. Status flips draft -> in review when the editor marks ready.
+- [ ] **Quick Schedule pulls from internal projects, not just Monday**
+  - Tab becomes "Schedule" - lists internal "approved" `editing_projects`
+    plus the existing EM-Approved Monday rows in one unified list, sortable by
+    "ready since".
+  - Picking either kicks the same `runCalendarPipeline` it already does.
+  - Surface real Monday config errors plainly when the env is missing.
+- [ ] **Projects table cleanup**
+  - Drop the Expiration column. Default project-type label to a sensible value
+    when null (use the parent drop's nature - Content Calendar etc.).
+  - Right-click a row -> context menu with Delete (soft delete; row hides from
+    list, drop preserved).
+  - Fits at 1280px with no horizontal scroll.
+- [ ] **Connections tab rebuilt as Zernio matrix**
+  - Per-client x per-platform grid sourced from `social_profiles`. IG / TikTok /
+    YouTube / Facebook / LinkedIn / X. Shows connected vs. disconnected vs. token
+    expiring. Click a cell -> deep link to Zernio so Jack can fix it.
+  - Drop the infra probes; they belong in `/admin/nerd`.
+- [ ] **Notifications tab rebuilt**
+  - Three sections: Recent sends (transactional emails fired in the last 30
+    days), Upcoming (scheduled emails with run time), Follow-up rules (read +
+    edit auto-followups, e.g. "if no response 2 days after sending").
+  - No placeholders. Each row links to the project / drop / share link it
+    relates to.
+- [ ] **Em-dash audit clean** on every commit. CLAUDE.md hard rule.
+- [ ] **Build clean + types pass** (`npx tsc --noEmit`, `npm run lint`).
+
+### Scope boundaries
+- **IN:** new `editing_projects` data model + Blob upload + editor UI; Content
+  Tools tab consolidation; Connections tab rebuild; Notifications tab rebuild;
+  Projects table fixes; sales picker side-fix.
+- **OUT:** Mux integration; full transcoding pipeline; multi-tenant editor
+  accounts (editors are still admin/super_admin role - per-editor RBAC waits
+  for after this); follow-up rule scheduler engine (the UI is built; the cron
+  to actually fire follow-ups is a separate goal).
+

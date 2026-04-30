@@ -8,6 +8,7 @@ import {
   ChevronDown,
   FileText,
   RefreshCcw,
+  Scissors,
   Wand2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -31,6 +32,7 @@ import { ProjectsTableSkeleton } from './projects-table-skeleton';
 import { QuickScheduleTab } from './quick-schedule-tab';
 import { ConnectionsTab } from './connections-tab';
 import { NotificationsTab } from './notifications-tab';
+import { EditingTab } from './editing-tab';
 
 /**
  * `/admin/content-tools` shell. Replaces the old single-purpose
@@ -60,6 +62,7 @@ import { NotificationsTab } from './notifications-tab';
 
 type ContentToolsTab =
   | 'projects'
+  | 'editing'
   | 'quick-schedule'
   | 'connections'
   | 'notifications';
@@ -70,6 +73,11 @@ const TABS: {
   icon: React.ReactNode;
 }[] = [
   { slug: 'projects', label: 'Projects', icon: <FileText className="size-3.5" /> },
+  {
+    slug: 'editing',
+    label: 'Editing',
+    icon: <Scissors className="size-3.5" />,
+  },
   {
     slug: 'quick-schedule',
     label: 'Quick schedule',
@@ -178,6 +186,7 @@ export function ContentToolsShell() {
               title="Projects"
             />
           ))}
+        {tab === 'editing' && <EditingTab />}
         {tab === 'quick-schedule' && <QuickScheduleTab />}
         {tab === 'connections' && <ConnectionsTab />}
         {tab === 'notifications' && <NotificationsTab />}
@@ -192,6 +201,8 @@ function describeSubtitle(tab: ContentToolsTab, projectCount: number): string {
       const word = projectCount === 1 ? 'project' : 'projects';
       return `${projectCount} ${word} across every brand`;
     }
+    case 'editing':
+      return 'Internal pipeline for short-form video projects';
     case 'quick-schedule':
       return 'Pull editor-approved videos out of Monday and queue them up';
     case 'connections':

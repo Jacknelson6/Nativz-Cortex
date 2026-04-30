@@ -1,0 +1,161 @@
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { isAdmin } from '@/lib/auth/permissions';
+import { deleteEditingObject } from '@/lib/editing/storage';
+import type { EditingProjectStatus } from '@/lib/editing/types';
+
+export const dynamic = 'force-dynamic';
+
+/**
+ * GET    /api/admin/editing/projects/:id   one project + its videos
+ * PATCH  /api/admin/editing/projects/:id   rename, retype, change status, set assignee
+ * DELETE /api/admin/editing/projects/:id   archive (soft delete) - flips status=archived,
+ *                                          stamps archived_at, leaves rows + storage intact
+ */
+
+const PatchBody = z
+  .object({
+    name: z.string().min(1).max(200).optional(),
+    project_type: z
+      .enum(['organic_content', 'social_ads', 'ctv_ads', 'general', 'other'])
+      .optional(),
+    status: z
+      .enum(['draft', 'in_review', 'approved', 'scheduled', 'posted', 'archived'])
+      .optional(),
+    assignee_id: z.string().uuid().nullable().optional(),
+    drive_folder_url: z.string().url().nullable().optional(),
+    notes: z.string().max(2000).nullable().optional(),
+  })
+  .refine((b) => Object.keys(b).length > 0, { message: 'no fields to update' });
+
+const STATUS_TIMESTAMP_MAP: Record<EditingProjectStatus, string | null> = {
+  draft: null,
+  in_review: 'ready_at',
+  approved: 'approved_at',
+  scheduled: 'scheduled_at',
+  posted: null,
+  archived: 'archived_at',
+};
+
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (!(await isAdmin(user.id))) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+
+  const admin = createAdminClient();
+  const { data: project, error } = await admin
+    .from('editing_projects')
+    .select(
+      `*,
+       client:clients!editing_projects_client_id_fkey(id, name, slug, logo_url),
+       assignee:users!editing_projects_assignee_id_fkey(id, email)`,
+    )
+    .eq('id', id)
+    .maybeSingle();
+
+  if (error) return NextResponse.json({ error: 'db_error', detail: error.message }, { status: 500 });
+  if (!project) return NextResponse.json({ error: 'not_found' }, { status: 404 });
+
+  const { data: videos } = await admin
+    .from('editing_project_videos')
+    .select('*')
+    .eq('project_id', id)
+    .order('position', { ascending: true })
+    .order('version', { ascending: false });
+
+  return NextResponse.json({ project, videos: videos ?? [] });
+}
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (!(await isAdmin(user.id))) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+
+  const body = (await req.json().catch(() => null)) as unknown;
+  const parsed = PatchBody.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'bad_request', detail: parsed.error.message }, { status: 400 });
+  }
+
+  const admin = createAdminClient();
+  const update: Record<string, unknown> = { ...parsed.data };
+
+  if (parsed.data.status) {
+    const stampField = STATUS_TIMESTAMP_MAP[parsed.data.status];
+    if (stampField) update[stampField] = new Date().toISOString();
+  }
+
+  const { error } = await admin
+    .from('editing_projects')
+    .update(update)
+    .eq('id', id);
+
+  if (error) {
+    return NextResponse.json({ error: 'update_failed', detail: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true });
+}
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (!(await isAdmin(user.id))) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+
+  const url = new URL(req.url);
+  const hard = url.searchParams.get('hard') === '1';
+
+  const admin = createAdminClient();
+  if (!hard) {
+    const { error } = await admin
+      .from('editing_projects')
+      .update({ status: 'archived', archived_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) {
+      return NextResponse.json({ error: 'archive_failed', detail: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, mode: 'archived' });
+  }
+
+  // Hard delete: also try to clean up storage objects so the bucket
+  // doesn't accumulate orphan files. Best-effort - if any individual
+  // remove fails, the row delete still proceeds (cascade clears child
+  // rows) and the file becomes orphan storage instead of an orphan row.
+  const { data: videos } = await admin
+    .from('editing_project_videos')
+    .select('storage_path')
+    .eq('project_id', id);
+  for (const v of videos ?? []) {
+    if (v.storage_path) {
+      await deleteEditingObject(admin, v.storage_path).catch(() => {});
+    }
+  }
+
+  const { error } = await admin.from('editing_projects').delete().eq('id', id);
+  if (error) {
+    return NextResponse.json({ error: 'delete_failed', detail: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true, mode: 'hard_deleted' });
+}

@@ -56,7 +56,6 @@ export default async function SalesPipelinePage({
     admin
       .from('clients')
       .select('id, name, slug, logo_url, agency')
-      .eq('hide_from_roster', false)
       .order('name', { ascending: true }),
   ]);
 
