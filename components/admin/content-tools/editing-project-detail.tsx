@@ -27,6 +27,7 @@ import {
   type EditingProjectVideo,
 } from '@/lib/editing/types';
 import { AssigneePicker } from './assignee-picker';
+import { EditingShareButton } from './editing-share-button';
 
 /**
  * Detail panel for a single editing project. Drives:
@@ -315,6 +316,10 @@ export function EditingProjectDetail({
           </div>
           <div className="flex items-center gap-2">
             {saving && <Loader2 size={14} className="animate-spin text-text-muted" />}
+            <EditingShareButton
+              projectId={project.id}
+              hasVideos={(data?.videos.length ?? 0) > 0}
+            />
             <Button variant="ghost" size="sm" onClick={archive} aria-label="Archive">
               <Archive size={14} />
             </Button>
