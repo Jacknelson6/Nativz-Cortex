@@ -88,7 +88,9 @@ export async function POST(req: NextRequest) {
         slug,
         agency,
         lifecycle_state: 'lead',
-        hide_from_roster: false,
+        // `hide_from_roster` intentionally omitted, column is gated
+        // behind migration 054 and missing on this snapshot. Inserting
+        // it errors and blocks lead creation from the sales picker.
       })
       .select('id')
       .single();

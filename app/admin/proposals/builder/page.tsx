@@ -37,10 +37,12 @@ export default async function ProposalBuilderPage({
   if (!isAdmin) redirect('/admin/dashboard');
 
   if (!sp.draft) {
+    // `hide_from_roster` filter intentionally omitted: the column is
+    // gated behind migration 054 and is missing on this snapshot. With
+    // the filter, PostgREST errors and the picker shows zero clients.
     const { data: clients } = await admin
       .from('clients')
       .select('id, name, slug, logo_url, agency')
-      .eq('hide_from_roster', false)
       .order('name');
 
     let prefillClientId: string | null = null;

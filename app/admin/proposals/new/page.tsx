@@ -39,10 +39,13 @@ export default async function NewProposalPage({
   const isAdmin = me?.is_super_admin === true || me?.role === 'admin' || me?.role === 'super_admin';
   if (!isAdmin) redirect('/admin/dashboard');
 
+  // `hide_from_roster` filter intentionally omitted: the column is gated
+  // behind migration 054 and is missing on this snapshot. Applying the
+  // filter makes PostgREST error and the picker renders empty, blocking
+  // proposal creation entirely.
   const { data: clients } = await admin
     .from('clients')
     .select('id, name, slug')
-    .eq('hide_from_roster', false)
     .order('name');
 
   const preselectClientId = (() => {
