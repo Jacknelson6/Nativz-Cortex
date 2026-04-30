@@ -87,7 +87,6 @@ export function EditingProjectDetail({
   const [notes, setNotes] = useState('');
   const [brief, setBrief] = useState('');
   const [shootDate, setShootDate] = useState('');
-  const [driveUrl, setDriveUrl] = useState('');
   const [type, setType] = useState<EditingProjectType>('organic_content');
   const [status, setStatus] = useState<EditingProjectStatus>('draft');
   const [uploads, setUploads] = useState<UploadJob[]>([]);
@@ -109,7 +108,6 @@ export function EditingProjectDetail({
       setNotes(body.project.notes ?? '');
       setBrief(body.project.project_brief ?? '');
       setShootDate(body.project.shoot_date ?? '');
-      setDriveUrl(body.project.drive_folder_url ?? '');
       setType(body.project.project_type);
       setStatus(body.project.status);
     } catch (err) {
@@ -340,7 +338,6 @@ export function EditingProjectDetail({
           <div className="space-y-5">
             <UploadSection
               label="Raw footage"
-              hint="Append-only. Drop the camera files here so the editor can grab them."
               kind="raw"
               dragActive={dragActive === 'raw'}
               setDragActive={setDragActive}
@@ -349,7 +346,6 @@ export function EditingProjectDetail({
 
             <UploadSection
               label="Edited cuts"
-              hint="Versioned deliverables. Drop the latest cut and it lands as the next version."
               kind="edited"
               dragActive={dragActive === 'edited'}
               setDragActive={setDragActive}
@@ -529,29 +525,6 @@ export function EditingProjectDetail({
               />
             </SideField>
 
-            <SideField label="Drive folder URL">
-              <input
-                value={driveUrl}
-                onChange={(e) => setDriveUrl(e.target.value)}
-                onBlur={() => {
-                  const trimmed = driveUrl.trim();
-                  void patch({ drive_folder_url: trimmed || null });
-                }}
-                placeholder="https://drive.google.com/..."
-                className="block w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-              />
-              {driveUrl && (
-                <a
-                  href={driveUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-1 inline-flex items-center gap-1 text-[11px] text-accent-text hover:underline"
-                >
-                  Open folder <ExternalLink size={10} />
-                </a>
-              )}
-            </SideField>
-
             <SideField label="Notes">
               <textarea
                 value={notes}
@@ -600,14 +573,12 @@ function SideField({
 
 function UploadSection({
   label,
-  hint,
   kind,
   dragActive,
   setDragActive,
   onUploadFiles,
 }: {
   label: string;
-  hint: string;
   kind: UploadKind;
   dragActive: boolean;
   setDragActive: (kind: UploadKind | null) => void;
@@ -643,7 +614,6 @@ function UploadSection({
         <Upload size={16} className="text-text-muted" />
         <p className="text-sm font-medium text-text-primary">{label}</p>
       </div>
-      <p className="text-[11px] text-text-muted">{hint}</p>
       <input
         ref={inputRef}
         type="file"

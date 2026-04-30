@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Building2 } from 'lucide-react';
+import { Building2, Search } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
@@ -44,7 +44,6 @@ export function EditingNewProjectDialog({
   const [name, setName] = useState('');
   const [type, setType] = useState<EditingProjectType>('organic_content');
   const [notes, setNotes] = useState('');
-  const [driveUrl, setDriveUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -70,7 +69,6 @@ export function EditingNewProjectDialog({
     setName('');
     setType('organic_content');
     setNotes('');
-    setDriveUrl('');
   }
 
   async function submit() {
@@ -85,7 +83,6 @@ export function EditingNewProjectDialog({
           client_id: clientId,
           name: name.trim(),
           project_type: type,
-          drive_folder_url: driveUrl.trim() || undefined,
           notes: notes.trim() || undefined,
         }),
       });
@@ -131,19 +128,7 @@ export function EditingNewProjectDialog({
           />
         </Field>
 
-        <Field
-          label="Drive folder URL"
-          helper="Optional. Paste the source folder so editors can fall back to Drive if they need to."
-        >
-          <input
-            value={driveUrl}
-            onChange={(e) => setDriveUrl(e.target.value)}
-            placeholder="https://drive.google.com/..."
-            className="block w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_var(--focus-ring)]"
-          />
-        </Field>
-
-        <Field label="Notes" helper="Optional brief, references, or hand-off context.">
+        <Field label="Notes">
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -168,18 +153,15 @@ export function EditingNewProjectDialog({
 
 function Field({
   label,
-  helper,
   children,
 }: {
   label: string;
-  helper?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="space-y-1.5">
       <label className="block text-sm font-medium text-text-secondary">{label}</label>
       {children}
-      {helper && <p className="text-[11px] text-text-muted">{helper}</p>}
     </div>
   );
 }
@@ -193,14 +175,28 @@ function ClientField({
   value: string;
   onChange: (id: string) => void;
 }) {
+  const [query, setQuery] = useState('');
   const selected = clients.find((c) => c.id === value);
+
+  // Filter on a normalized substring match. Brands lists run 30+
+  // entries deep so a search bar shaves the cognitive load down to
+  // "type the first few letters and hit enter on the first row."
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return clients;
+    return clients.filter((c) => c.name.toLowerCase().includes(q));
+  }, [clients, query]);
+
   return (
     <div className="space-y-1.5">
       <label className="block text-sm font-medium text-text-secondary">Brand</label>
       {selected ? (
         <button
           type="button"
-          onClick={() => onChange('')}
+          onClick={() => {
+            onChange('');
+            setQuery('');
+          }}
           className="flex w-full items-center gap-2.5 rounded-lg border border-accent/40 bg-accent-surface px-3 py-2 text-sm font-medium text-accent-text transition-colors hover:bg-accent-surface/90"
         >
           <ClientLogo
@@ -212,28 +208,47 @@ function ClientField({
           <span className="text-[11px] text-text-muted">change</span>
         </button>
       ) : (
-        <div className="max-h-56 overflow-y-auto rounded-lg border border-nativz-border bg-surface">
-          {clients.length === 0 ? (
-            <div className="flex items-center gap-2 px-3 py-3 text-sm text-text-muted">
-              <Building2 size={14} />
-              <span>Loading brands...</span>
-            </div>
-          ) : (
-            <ul>
-              {clients.map((c) => (
-                <li key={c.id}>
-                  <button
-                    type="button"
-                    onClick={() => onChange(c.id)}
-                    className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-surface-hover"
-                  >
-                    <ClientLogo src={c.logo_url} name={c.name} size="sm" />
-                    <span className="flex-1 truncate">{c.name}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+        <div className="overflow-hidden rounded-lg border border-nativz-border bg-surface">
+          <div className="relative border-b border-nativz-border">
+            <Search
+              size={14}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+            />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search brands"
+              autoFocus
+              className="block w-full bg-transparent py-2 pl-9 pr-3 text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+            />
+          </div>
+          <div className="max-h-56 overflow-y-auto">
+            {clients.length === 0 ? (
+              <div className="flex items-center gap-2 px-3 py-3 text-sm text-text-muted">
+                <Building2 size={14} />
+                <span>Loading brands...</span>
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="px-3 py-3 text-sm text-text-muted">
+                No brands match "{query}"
+              </div>
+            ) : (
+              <ul>
+                {filtered.map((c) => (
+                  <li key={c.id}>
+                    <button
+                      type="button"
+                      onClick={() => onChange(c.id)}
+                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-surface-hover"
+                    >
+                      <ClientLogo src={c.logo_url} name={c.name} size="sm" />
+                      <span className="flex-1 truncate">{c.name}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       )}
     </div>
