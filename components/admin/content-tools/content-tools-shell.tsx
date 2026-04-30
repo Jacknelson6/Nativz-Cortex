@@ -24,15 +24,21 @@ import {
 } from '@/components/scheduler/review-table';
 import type {
   ReviewLinkRow,
+  ReviewLinkStatus,
   ReviewProjectType,
 } from '@/components/scheduler/review-board';
-import type { EditingProjectType } from '@/lib/editing/types';
+import type {
+  EditingProject,
+  EditingProjectStatus,
+  EditingProjectType,
+} from '@/lib/editing/types';
 import { ProjectsEmptyState } from './projects-empty-state';
 import { ProjectsTableSkeleton } from './projects-table-skeleton';
 import { QuickScheduleTab } from './quick-schedule-tab';
 import { ConnectionsTab } from './connections-tab';
 import { NotificationsTab } from './notifications-tab';
-import { EditingProjectsPanel } from './editing-projects-panel';
+import { EditingNewProjectDialog } from './editing-new-project-dialog';
+import { EditingProjectDetail } from './editing-project-detail';
 
 /**
  * `/admin/content-tools` shell. Reorganised around project type so
@@ -112,26 +118,91 @@ const PROJECT_TAB_LABEL: Record<ProjectTabSlug, string> = {
   other: 'Other',
 };
 
-/**
- * Project-type tab → `editing_projects.project_type` filter for the
- * inline editing-projects panel below the share-link table. `null`
- * surfaces every editing project (the All projects tab); the Other
- * tab folds in `general` so legacy / pre-migration rows don't sink
- * out of view.
- */
-const EDITING_PANEL_FILTER: Record<
-  ProjectTabSlug,
-  EditingProjectType | EditingProjectType[] | null
-> = {
-  projects: null,
-  organic_social: 'organic_content',
-  paid_social: 'social_ads',
-  ctv: 'ctv_ads',
-  other: ['general', 'other'],
-};
-
 function isProjectTab(tab: ContentToolsTab): tab is ProjectTabSlug {
   return tab in PROJECT_TAB_FILTER;
+}
+
+/**
+ * Map an editing project's `project_type` into a `ReviewProjectType`
+ * so it can ride in the unified table. The editing model carries an
+ * extra `general` bucket for pre-typed legacy rows; we collapse that
+ * into `other` here so a row never falls outside the four shared
+ * project tabs.
+ */
+function projectTypeForReview(
+  type: EditingProjectType,
+): ReviewProjectType {
+  switch (type) {
+    case 'organic_content':
+    case 'social_ads':
+    case 'ctv_ads':
+      return type;
+    case 'general':
+    case 'other':
+      return 'other';
+  }
+}
+
+/**
+ * Map an editing-project lifecycle state onto the smaller status
+ * vocabulary the shared review table understands.
+ *   draft / in_review              → ready_for_review (yellow)
+ *   approved / scheduled / posted  → approved (green)
+ *   archived                       → expired (red, dimmed)
+ * Editing rows never enter `revising` or `abandoned` — those states
+ * are calendar-specific (per-post comment threads).
+ */
+function statusForReview(
+  status: EditingProjectStatus,
+): ReviewLinkStatus {
+  switch (status) {
+    case 'draft':
+    case 'in_review':
+      return 'ready_for_review';
+    case 'approved':
+    case 'scheduled':
+    case 'posted':
+      return 'approved';
+    case 'archived':
+      return 'expired';
+  }
+}
+
+/**
+ * Project an `editing_projects` row into the `ReviewLinkRow` shape
+ * the shared table renders. Calendar-only fields (token, drop dates,
+ * followup state) are zeroed out; the `kind` discriminator tells the
+ * table to route clicks to the editing detail dialog instead of
+ * `/c/<token>`.
+ */
+function editingProjectToRow(p: EditingProject): ReviewLinkRow {
+  const isApproved =
+    p.status === 'approved' || p.status === 'scheduled' || p.status === 'posted';
+  return {
+    id: `editing:${p.id}`,
+    token: '',
+    drop_id: p.drop_id ?? '',
+    drop_start: null,
+    drop_end: null,
+    client_id: p.client_id,
+    client_name: p.client_name,
+    post_count: p.video_count,
+    approved_count: isApproved ? p.video_count : 0,
+    changes_count: 0,
+    pending_count: isApproved ? 0 : p.video_count,
+    status: statusForReview(p.status),
+    expires_at: p.created_at,
+    created_at: p.created_at,
+    last_viewed_at: null,
+    name: p.name,
+    project_type: projectTypeForReview(p.project_type),
+    project_type_other: null,
+    abandoned_at: p.archived_at,
+    last_followup_at: null,
+    followup_count: 0,
+    kind: 'editing',
+    editing_project_id: p.id,
+  };
 }
 
 const TABS: {
@@ -186,10 +257,21 @@ export function ContentToolsShell() {
 
   // Projects state lives at the shell level so the same fetch backs
   // every project-type tab. Cross-tab navigation is instant because
-  // we slice locally instead of refetching per tab.
+  // we slice locally instead of refetching per tab. Calendar share
+  // links and editing projects are kept in separate slices so each
+  // can refresh independently and so the row-shape projection is
+  // local to the editing slice.
   const [links, setLinks] = useState<ReviewLinkRow[]>([]);
+  const [editingProjects, setEditingProjects] = useState<EditingProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Editing-detail dialog + new-project dialog state. Lifted out of
+  // the deleted `EditingProjectsPanel` so editing rows in the unified
+  // table can pop the detail dialog directly.
+  const [activeEditingId, setActiveEditingId] = useState<string | null>(null);
+  const [newEditingOpen, setNewEditingOpen] = useState(false);
+
   // Default sort is "Date sent, newest first" - same intent as the
   // previous SortMenu's default - but the user can now click any
   // column header to re-sort the whole table.
@@ -199,10 +281,29 @@ export function ContentToolsShell() {
     if (!silent) setLoading(true);
     else setRefreshing(true);
     try {
-      const res = await fetch('/api/calendar/review', { cache: 'no-store' });
-      if (!res.ok) throw new Error('Failed to load projects');
-      const data = (await res.json()) as { links: ReviewLinkRow[] };
-      setLinks(data.links ?? []);
+      // Calendar share links and editing projects load in parallel so
+      // the merged table renders as soon as both slices arrive.
+      const [calendarRes, editingRes] = await Promise.all([
+        fetch('/api/calendar/review', { cache: 'no-store' }),
+        fetch('/api/admin/editing/projects', { cache: 'no-store' }),
+      ]);
+      if (!calendarRes.ok) throw new Error('Failed to load projects');
+      const calendarData = (await calendarRes.json()) as {
+        links: ReviewLinkRow[];
+      };
+      setLinks(calendarData.links ?? []);
+
+      // Editing-project failure is non-fatal so a flaky editing API
+      // doesn't blank the whole table. Surface a toast instead.
+      if (editingRes.ok) {
+        const editingData = (await editingRes.json()) as {
+          projects: EditingProject[];
+        };
+        setEditingProjects(editingData.projects ?? []);
+      } else {
+        setEditingProjects([]);
+        toast.error('Failed to load editing projects');
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to load projects');
     } finally {
@@ -215,25 +316,44 @@ export function ContentToolsShell() {
     void loadProjects();
   }, []);
 
+  // Editing-project rows are projected into ReviewLinkRow shape so
+  // the shared table renders both kinds side-by-side. Archived
+  // editing rows are filtered out (the calendar slice already does
+  // this server-side via `archived_at IS NULL`).
+  const editingRows = useMemo<ReviewLinkRow[]>(
+    () =>
+      editingProjects
+        .filter((p) => p.status !== 'archived')
+        .map(editingProjectToRow),
+    [editingProjects],
+  );
+
+  const allRows = useMemo<ReviewLinkRow[]>(
+    () => [...links, ...editingRows],
+    [links, editingRows],
+  );
+
   const sortedLinks = useMemo(
-    () => [...links].sort((a, b) => sortLinksBy(a, b, sort)),
-    [links, sort],
+    () => [...allRows].sort((a, b) => sortLinksBy(a, b, sort)),
+    [allRows, sort],
   );
 
   // Per-tab counts feed the badges in the top-level tab strip so Jack
   // can see "11 organic social, 4 paid social, 0 CTV" at a glance.
+  // Counts include both calendar share links and editing projects so
+  // every row in the merged view is accounted for.
   const projectTabCounts = useMemo(() => {
     const counts: Record<ProjectTabSlug, number> = {
-      projects: links.length,
+      projects: allRows.length,
       organic_social: 0,
       paid_social: 0,
       ctv: 0,
       other: 0,
     };
-    for (const link of links) {
+    for (const row of allRows) {
       // Untyped rows fall into "Other" so nothing slips through the
       // cracks when a project hasn't been classified yet.
-      const type: ReviewProjectType = link.project_type ?? 'other';
+      const type: ReviewProjectType = row.project_type ?? 'other';
       switch (type) {
         case 'organic_content':
           counts.organic_social += 1;
@@ -250,7 +370,7 @@ export function ContentToolsShell() {
       }
     }
     return counts;
-  }, [links]);
+  }, [allRows]);
 
   const activeProjectTab: ProjectTabSlug | null = isProjectTab(tab) ? tab : null;
   const visibleProjects = useMemo(() => {
@@ -263,16 +383,56 @@ export function ContentToolsShell() {
     });
   }, [sortedLinks, activeProjectTab]);
 
+  /**
+   * Optimistic patch. The discriminator on the row id (`editing:<uuid>`)
+   * tells us which slice owns the row so a rename or project-type
+   * change updates the right state container without a refetch.
+   */
   function patchLink(id: string, patch: Partial<ReviewLinkRow>) {
+    if (id.startsWith('editing:')) {
+      const projectId = id.slice('editing:'.length);
+      setEditingProjects((prev) =>
+        prev.map((p) =>
+          p.id === projectId
+            ? {
+                ...p,
+                name: patch.name !== undefined ? (patch.name ?? p.name) : p.name,
+                project_type:
+                  patch.project_type !== undefined && patch.project_type !== null
+                    ? (patch.project_type as EditingProjectType)
+                    : p.project_type,
+              }
+            : p,
+        ),
+      );
+      return;
+    }
     setLinks((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   }
 
   /**
-   * Archive a project (soft-delete via `archived_at`). The row vanishes
-   * from local state immediately so the UI feels instant; on failure we
-   * pull the snapshot back so the row reappears with everything intact.
+   * Archive a project (soft-delete). Calendar links flip
+   * `archived_at` via PATCH; editing projects DELETE through the
+   * editing API (which sets `status='archived'`). Both branches strip
+   * the row optimistically and roll back on failure.
    */
   async function archiveLink(id: string) {
+    if (id.startsWith('editing:')) {
+      const projectId = id.slice('editing:'.length);
+      const snapshot = editingProjects;
+      setEditingProjects((prev) => prev.filter((p) => p.id !== projectId));
+      try {
+        const res = await fetch(`/api/admin/editing/projects/${projectId}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) throw new Error('Archive failed');
+        toast.success('Project archived');
+      } catch (err) {
+        setEditingProjects(snapshot);
+        toast.error(err instanceof Error ? err.message : 'Archive failed');
+      }
+      return;
+    }
     const snapshot = links;
     setLinks((prev) => prev.filter((l) => l.id !== id));
     try {
@@ -288,6 +448,13 @@ export function ContentToolsShell() {
       toast.error(err instanceof Error ? err.message : 'Archive failed');
     }
   }
+
+  // Editing detail dialog reads its project from the live editing
+  // slice so renames + status changes inside the dialog propagate
+  // back into the table without an extra round-trip.
+  const activeEditingProject = activeEditingId
+    ? editingProjects.find((p) => p.id === activeEditingId) ?? null
+    : null;
 
   const subtitle = describeSubtitle(tab, visibleProjects.length);
 
@@ -310,6 +477,12 @@ export function ContentToolsShell() {
           </div>
           {activeProjectTab && (
             <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => setNewEditingOpen(true)}
+              >
+                New editing project
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
@@ -337,7 +510,7 @@ export function ContentToolsShell() {
           <>
             {loading ? (
               <ProjectsTableSkeleton />
-            ) : links.length === 0 ? (
+            ) : allRows.length === 0 ? (
               <ProjectsEmptyState />
             ) : (
               <ReviewTableCard
@@ -349,25 +522,36 @@ export function ContentToolsShell() {
                 sort={sort}
                 onSortChange={setSort}
                 hideColumns={PROJECT_TAB_HIDE[activeProjectTab]}
+                onOpenEditingProject={(id) => setActiveEditingId(id)}
               />
             )}
-            {/*
-              Editing projects live in a parallel data model
-              (`editing_projects` + `editing_project_videos`) from the
-              calendar share links above. Surfacing the panel here gives
-              the team one tab where they can: see in-flight projects,
-              upload edited cuts straight to Mux, mint a share link, and
-              drop the public review URL into a client email.
-            */}
-            <EditingProjectsPanel
-              projectType={EDITING_PANEL_FILTER[activeProjectTab]}
-              tabLabel={PROJECT_TAB_LABEL[activeProjectTab]}
-            />
           </>
         )}
         {tab === 'quick-schedule' && <QuickScheduleTab />}
         {tab === 'connections' && <ConnectionsTab />}
         {tab === 'notifications' && <NotificationsTab />}
+
+        {/*
+          Editing-project dialogs live at the shell root so they can be
+          opened from any project tab and so their state survives tab
+          switches without remounting. `EditingProjectDetail` is
+          mounted with `project={null}` when nothing is active so it
+          stays in the React tree and animates closed cleanly.
+        */}
+        <EditingProjectDetail
+          project={activeEditingProject}
+          onClose={() => setActiveEditingId(null)}
+          onChanged={() => void loadProjects(true)}
+        />
+        <EditingNewProjectDialog
+          open={newEditingOpen}
+          onClose={() => setNewEditingOpen(false)}
+          onCreated={async (id) => {
+            setNewEditingOpen(false);
+            await loadProjects(true);
+            setActiveEditingId(id);
+          }}
+        />
       </div>
     </TooltipProvider>
   );

@@ -91,6 +91,19 @@ import type {
 
 type StatusKey = ReviewLinkStatus;
 
+/**
+ * Resolve the PATCH endpoint for a row based on its `kind`. Calendar
+ * rows hit the share-link review API; editing rows hit the editing-
+ * project API. Bodies are intentionally compatible (`{ name }`,
+ * `{ project_type }`) so the cells don't need to translate payloads.
+ */
+function rowPatchUrl(link: ReviewLinkRow): string {
+  if (link.kind === 'editing' && link.editing_project_id) {
+    return `/api/admin/editing/projects/${link.editing_project_id}`;
+  }
+  return `/api/calendar/review/${link.id}`;
+}
+
 const STATUS_META: Record<
   StatusKey,
   { label: string; tone: string; description: string }
@@ -347,6 +360,12 @@ interface ReviewTableCardProps {
    * id. The parent owns optimistic removal from local state.
    */
   onArchiveLink?: (id: string) => void;
+  /**
+   * Click handler for `kind: 'editing'` rows. Calendar rows always
+   * open `/c/<token>` in a new tab; editing rows route here so the
+   * parent can pop the editing-project detail dialog.
+   */
+  onOpenEditingProject?: (editingProjectId: string) => void;
   /** Override the card's internal title block. Defaults to "Content". */
   title?: string;
   /**
@@ -371,6 +390,7 @@ export function ReviewTableCard({
   showBrand = false,
   onPatchLink,
   onArchiveLink,
+  onOpenEditingProject,
   title,
   sort,
   onSortChange,
@@ -528,6 +548,7 @@ export function ReviewTableCard({
             showLastFollowup={showLastFollowup}
             onPatch={(patch) => onPatchLink(link.id, patch)}
             onArchive={onArchiveLink ? () => onArchiveLink(link.id) : undefined}
+            onOpenEditingProject={onOpenEditingProject}
           />
         ))}
       </TableBody>
@@ -546,6 +567,8 @@ interface ReviewTableRowProps {
   onPatch: (patch: Partial<ReviewLinkRow>) => void;
   /** Right-click "Archive" handler. Hides the menu item when omitted. */
   onArchive?: () => void;
+  /** Editing-project click handler. Used when `link.kind === 'editing'`. */
+  onOpenEditingProject?: (editingProjectId: string) => void;
 }
 
 function ReviewTableRow({
@@ -558,10 +581,17 @@ function ReviewTableRow({
   showLastFollowup = true,
   onPatch,
   onArchive,
+  onOpenEditingProject,
 }: ReviewTableRowProps) {
   const dim = link.status === 'abandoned' || link.status === 'expired';
 
   function openReview() {
+    if (link.kind === 'editing') {
+      if (link.editing_project_id && onOpenEditingProject) {
+        onOpenEditingProject(link.editing_project_id);
+      }
+      return;
+    }
     window.open(`/c/${link.token}`, '_blank', 'noopener,noreferrer');
   }
 
@@ -699,7 +729,7 @@ function ProjectNameCell({
     // Optimistic.
     onPatch({ name: next });
     try {
-      const res = await fetch(`/api/calendar/review/${link.id}`, {
+      const res = await fetch(rowPatchUrl(link), {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ name: next }),
@@ -789,10 +819,16 @@ function ProjectTypeCell({
       project_type_other: value === 'other' ? link.project_type_other : null,
     });
     try {
-      const res = await fetch(`/api/calendar/review/${link.id}`, {
+      // Editing endpoint requires a non-null project_type (no "Clear
+      // type" support). When clearing on an editing row, fall through
+      // to 'general' so the PATCH is accepted; the projected row will
+      // re-render as 'other' on next reload.
+      const payloadValue =
+        link.kind === 'editing' && value === null ? 'general' : value;
+      const res = await fetch(rowPatchUrl(link), {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ project_type: value }),
+        body: JSON.stringify({ project_type: payloadValue }),
       });
       if (!res.ok) throw new Error('Update failed');
     } catch (err) {
@@ -862,9 +898,16 @@ function FollowupCell({
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
 
+  // Followup tracking is calendar-only (the followup POST endpoint is
+  // keyed on a share-link token). Editing-project rows render a dash
+  // so the column lines up but the row stays inert.
+  if (link.kind === 'editing') {
+    return <span className="text-sm text-text-muted">—</span>;
+  }
+
   // Awaiting action = ready_for_review or revising. Once the calendar's
   // approved or dead, chasing the client doesn't make sense, so the
-  // indicator + button collapse to a simple em-dash.
+  // indicator + button collapse to a simple dash.
   const awaitingAction =
     link.status === 'ready_for_review' || link.status === 'revising';
 

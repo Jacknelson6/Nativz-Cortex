@@ -65,6 +65,18 @@ export interface ReviewLinkRow {
   /** How many manual followups have been sent. Initial send is not
    *  counted; only Send-followup-button presses bump this. */
   followup_count: number;
+  /**
+   * Discriminator so a single table can render both calendar share-link
+   * rows and editing-project rows side-by-side. `'calendar'` (or
+   * undefined for legacy callers) means the row is keyed on a
+   * `content_drop_share_links` id and clicking should open `/c/<token>`.
+   * `'editing'` means the row projects an `editing_projects` row;
+   * `editing_project_id` carries the underlying project id and clicks
+   * should open the editing detail dialog instead of routing to the
+   * public share URL.
+   */
+  kind?: 'calendar' | 'editing';
+  editing_project_id?: string | null;
 }
 
 interface ReviewBoardProps {
