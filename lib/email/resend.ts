@@ -771,12 +771,15 @@ export async function sendCalendarNoOpenReminderEmail(opts: {
   clientName: string;
   shareUrl: string;
   hours: number;
+  pending: number;
+  total: number;
   agency?: AgencyBrand;
   clientId?: string;
   dropId?: string;
 }) {
   const agency = opts.agency ?? 'nativz';
-  const subject = `Friendly nudge, your content calendar is ready to review`;
+  const noun = opts.pending === 1 ? 'post' : 'posts';
+  const subject = `${opts.pending} ${noun} still need your review`;
   return sendAndLog({
     category: 'transactional',
     typeKey: 'calendar_no_open_reminder',
@@ -787,14 +790,14 @@ export async function sendCalendarNoOpenReminderEmail(opts: {
     subject,
     html: layout(`
       <div class="card">
-        <h1 class="heading">Your content calendar is waiting</h1>
-        <p class="subtext">Hey ${opts.clientName}, we sent over your latest content calendar about ${opts.hours} hours ago and it hasn't been opened yet. Take a quick look and let us know if anything needs tweaking.</p>
+        <h1 class="heading">${opts.pending} of ${opts.total} ${opts.pending === 1 ? 'post' : 'posts'} still need your review</h1>
+        <p class="subtext">Hey ${opts.clientName}, we sent over your latest content calendar about ${opts.hours} hours ago and haven't seen anyone open it yet. Take a quick look and either approve the posts or drop comments where anything needs to change.</p>
         <div style="margin-top:18px;">
           <a href="${opts.shareUrl}" class="btn">Open your calendar</a>
         </div>
       </div>
     `, agency),
-    metadata: { clientName: opts.clientName, hours: opts.hours },
+    metadata: { clientName: opts.clientName, hours: opts.hours, pending: opts.pending, total: opts.total },
   });
 }
 
@@ -803,12 +806,21 @@ export async function sendCalendarNoActionReminderEmail(opts: {
   clientName: string;
   shareUrl: string;
   hours: number;
+  pending: number;
+  total: number;
   agency?: AgencyBrand;
   clientId?: string;
   dropId?: string;
 }) {
   const agency = opts.agency ?? 'nativz';
-  const subject = `Quick check-in on your content calendar`;
+  const noun = opts.pending === 1 ? 'post' : 'posts';
+  const subject = `${opts.pending} ${noun} still need your review`;
+  // Tone shifts based on whether they've started reviewing (partial action)
+  // versus opened-but-untouched. Keeps the message honest in both cases.
+  const partialAction = opts.pending < opts.total;
+  const body = partialAction
+    ? `Hey ${opts.clientName}, you've reviewed some of the calendar already, thanks for that. ${opts.pending} of ${opts.total} ${noun} still need your eyes. Hit reply or drop comments directly on the posts.`
+    : `Hey ${opts.clientName}, you opened the calendar but the ${opts.total} ${opts.total === 1 ? 'post' : 'posts'} still need your review. Hit reply or drop comments directly on the posts.`;
   return sendAndLog({
     category: 'transactional',
     typeKey: 'calendar_no_action_reminder',
@@ -819,14 +831,14 @@ export async function sendCalendarNoActionReminderEmail(opts: {
     subject,
     html: layout(`
       <div class="card">
-        <h1 class="heading">How's the calendar looking?</h1>
-        <p class="subtext">Hey ${opts.clientName}, you opened the calendar but haven't approved or requested changes on any posts yet. We just want to make sure nothing's blocking you. Hit reply or drop comments directly on the posts.</p>
+        <h1 class="heading">${opts.pending} of ${opts.total} ${noun} still need your review</h1>
+        <p class="subtext">${body}</p>
         <div style="margin-top:18px;">
           <a href="${opts.shareUrl}" class="btn">Review the posts</a>
         </div>
       </div>
     `, agency),
-    metadata: { clientName: opts.clientName, hours: opts.hours },
+    metadata: { clientName: opts.clientName, hours: opts.hours, pending: opts.pending, total: opts.total },
   });
 }
 
@@ -933,12 +945,15 @@ export async function sendCalendarFinalCallEmail(opts: {
   clientName: string;
   shareUrl: string;
   firstPostAt: string;
+  pending: number;
+  total: number;
   agency?: AgencyBrand;
   clientId?: string;
   dropId?: string;
 }) {
   const agency = opts.agency ?? 'nativz';
-  const subject = `Heads up, first post goes live ${opts.firstPostAt}`;
+  const noun = opts.pending === 1 ? 'post' : 'posts';
+  const subject = `${opts.pending} ${noun} still pending, first post goes live ${opts.firstPostAt}`;
   return sendAndLog({
     category: 'transactional',
     typeKey: 'calendar_final_call',
@@ -950,14 +965,14 @@ export async function sendCalendarFinalCallEmail(opts: {
     html: layout(`
       <div class="card">
         <h1 class="heading">Final call before we publish</h1>
-        <p class="subtext">Hey ${opts.clientName}, your first scheduled post goes live ${opts.firstPostAt}. We haven't heard back yet, so unless you flag something we'll publish on the dates you saw in the calendar.</p>
+        <p class="subtext">Hey ${opts.clientName}, your first scheduled post goes live ${opts.firstPostAt}. ${opts.pending} of ${opts.total} ${noun} still ${opts.pending === 1 ? 'needs' : 'need'} your sign-off, so unless you flag something we'll publish on the dates you saw in the calendar.</p>
         <p class="subtext" style="margin-top:10px;">If anything needs to change, drop a comment on the post or hit reply now.</p>
         <div style="margin-top:18px;">
           <a href="${opts.shareUrl}" class="btn">Open the calendar</a>
         </div>
       </div>
     `, agency),
-    metadata: { clientName: opts.clientName, firstPostAt: opts.firstPostAt },
+    metadata: { clientName: opts.clientName, firstPostAt: opts.firstPostAt, pending: opts.pending, total: opts.total },
   });
 }
 

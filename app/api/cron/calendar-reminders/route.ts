@@ -13,21 +13,17 @@ import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
 
 export const maxDuration = 60;
 
-// Same role filter used by scripts/send-calendar-batch.ts so the cron's
-// contacts-fallback can't accidentally email media buyers or aliases that the
-// initial bulk-send deliberately skipped.
 const EXCLUDE_CONTACT_ROLES = [/paid media only/i, /avoid bulk/i];
 
 /**
  * GET /api/cron/calendar-reminders
  *
- * Three nudge types per share link, each fires at most once (we stamp the
- * column when we ship). Suppressed when the ball is in our court — i.e. there
- * are open `changes_requested` comments without a corresponding admin
- * revision-complete marker.
+ * Three nudge types per share link, each fires at most once. Suppressed when:
+ *   • pending count == 0 (everything is approved or actively in our court), or
+ *   • another share link on the same drop already nudged that type recently.
  *
  *   1. no_open_nudge      — share link not opened   (default 48h after sent)
- *   2. no_action_nudge    — opened, no approvals/revisions (default 72h)
+ *   2. no_action_nudge    — opened, posts still pending (default 72h)
  *   3. final_call         — Xh before earliest scheduled post
  *                           (email client + chat client + chat us)
  *
@@ -113,9 +109,7 @@ async function handleGet(request: NextRequest) {
     const shareUrl = `${appUrl}/c/${link.token}`;
 
     // Recipients: portal users (role=viewer) first; fall back to eligible
-    // contacts when the client hasn't onboarded any portal users yet. Contact
-    // roles tagged "Paid Media only" or "Avoid bulk" are filtered to match
-    // scripts/send-calendar-batch.ts behavior.
+    // contacts when the client hasn't onboarded any portal users yet.
     const { data: portalUsers } = await admin
       .from('user_client_access')
       .select('users!inner(email, role)')
@@ -151,29 +145,46 @@ async function handleGet(request: NextRequest) {
       continue;
     }
 
-    // Ball-in-court check: any open `changes_requested` on any post in this
-    // share link without a matching revision-complete marker means we owe the
-    // client work — skip all nudges until we're done.
-    const ballInCourtIsOurs = await isBallInOurCourt(admin, link.included_post_ids);
+    // The single source of truth: how many posts in this link still need
+    // the client's eyes. Drives whether we email at all and what the copy
+    // says. Replaces the old binary "any-action / ball-in-court" guards.
+    const { pending, total } = await countPendingPosts(admin, link.included_post_ids);
     const sentMs = new Date(link.created_at).getTime();
     const ageHours = (now - sentMs) / (1000 * 60 * 60);
 
+    // If nothing is pending, stamp every unstamped column and move on. We
+    // never want this link to fire any nudge again — if state somehow flips
+    // back (rare: an approval comment is deleted), an admin can re-mint.
+    if (pending === 0) {
+      const stamps: Record<string, string> = {};
+      const nowIso = new Date().toISOString();
+      if (!link.no_open_nudge_sent_at) stamps.no_open_nudge_sent_at = nowIso;
+      if (!link.no_action_nudge_sent_at) stamps.no_action_nudge_sent_at = nowIso;
+      if (!link.final_call_sent_at) stamps.final_call_sent_at = nowIso;
+      if (Object.keys(stamps).length > 0) {
+        await admin
+          .from('content_drop_share_links')
+          .update(stamps)
+          .eq('id', link.id);
+      }
+      sent.skipped += 1;
+      continue;
+    }
+
     // ── 1. no_open_nudge ────────────────────────────────────────────────
-    // Why the approvals guard: a drop can be approved via a previous share
-    // link (re-mint, multi-stakeholder share). The new link's
-    // `last_viewed_at` is null even though the work is already done. Without
-    // this check we email "you didn't open the link" to clients who already
-    // approved on the prior link. The drop, not the link, is the unit of
-    // "have they acted." Stamp the suppression so we don't re-evaluate.
     if (
       noOpenSetting.enabled
       && !link.no_open_nudge_sent_at
-      && !ballInCourtIsOurs
       && link.last_viewed_at === null
       && ageHours >= toNumber(noOpenSetting.params.windowHours, 48)
     ) {
-      const alreadyActioned = await hasApprovalsOrRevisions(admin, link.included_post_ids);
-      if (alreadyActioned) {
+      const dropAlreadyNudged = await alreadyNudgedDrop(
+        admin,
+        link.drop_id,
+        link.id,
+        'no_open_nudge_sent_at',
+      );
+      if (dropAlreadyNudged) {
         await admin
           .from('content_drop_share_links')
           .update({ no_open_nudge_sent_at: new Date().toISOString() })
@@ -187,6 +198,8 @@ async function handleGet(request: NextRequest) {
               clientName: client.name,
               shareUrl,
               hours: Math.round(ageHours),
+              pending,
+              total,
               agency: brand,
               clientId: client.id,
               dropId: link.drop_id,
@@ -207,12 +220,22 @@ async function handleGet(request: NextRequest) {
     if (
       noActionSetting.enabled
       && !link.no_action_nudge_sent_at
-      && !ballInCourtIsOurs
       && link.last_viewed_at !== null
       && ageHours >= toNumber(noActionSetting.params.windowHours, 72)
     ) {
-      const hasAnyAction = await hasApprovalsOrRevisions(admin, link.included_post_ids);
-      if (!hasAnyAction) {
+      const dropAlreadyNudged = await alreadyNudgedDrop(
+        admin,
+        link.drop_id,
+        link.id,
+        'no_action_nudge_sent_at',
+      );
+      if (dropAlreadyNudged) {
+        await admin
+          .from('content_drop_share_links')
+          .update({ no_action_nudge_sent_at: new Date().toISOString() })
+          .eq('id', link.id);
+        sent.skipped += 1;
+      } else {
         try {
           await Promise.all(
             recipientEmails.map((to) => sendCalendarNoActionReminderEmail({
@@ -220,6 +243,8 @@ async function handleGet(request: NextRequest) {
               clientName: client.name,
               shareUrl,
               hours: Math.round(ageHours),
+              pending,
+              total,
               agency: brand,
               clientId: client.id,
               dropId: link.drop_id,
@@ -240,7 +265,6 @@ async function handleGet(request: NextRequest) {
     if (
       finalCallSetting.enabled
       && !link.final_call_sent_at
-      && !ballInCourtIsOurs
     ) {
       const earliestPostAt = await getEarliestScheduledPostAt(admin, link.included_post_ids);
       if (earliestPostAt) {
@@ -248,43 +272,57 @@ async function handleGet(request: NextRequest) {
         const hoursUntilFirst = (firstMs - now) / (1000 * 60 * 60);
         const window = toNumber(finalCallSetting.params.hoursBeforeFirstPost, 24);
         if (hoursUntilFirst > 0 && hoursUntilFirst <= window) {
-          const firstPostLabel = formatPostDateTime(earliestPostAt);
-          try {
-            await Promise.all(
-              recipientEmails.map((to) => sendCalendarFinalCallEmail({
-                to,
-                clientName: client.name,
-                shareUrl,
-                firstPostAt: firstPostLabel,
-                agency: brand,
-                clientId: client.id,
-                dropId: link.drop_id,
-              })),
-            );
-            // Chat the client space.
-            postToGoogleChatSafe(
-              client.chat_webhook_url,
-              {
-                text: `*Final call before publishing* — your first scheduled post goes live ${firstPostLabel}. We'll publish on the dates you saw unless you flag changes. ${shareUrl}`,
-              },
-              `final_call:${link.id}`,
-            );
-            // Chat us (Nativz/AC ops space).
-            const opsWebhook = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
-            postToGoogleChatSafe(
-              opsWebhook,
-              {
-                text: `📣 Final-call ping sent to *${client.name}* — first post ${firstPostLabel}. ${shareUrl}`,
-              },
-              `final_call_ops:${link.id}`,
-            );
+          const dropAlreadyNudged = await alreadyNudgedDrop(
+            admin,
+            link.drop_id,
+            link.id,
+            'final_call_sent_at',
+          );
+          if (dropAlreadyNudged) {
             await admin
               .from('content_drop_share_links')
               .update({ final_call_sent_at: new Date().toISOString() })
               .eq('id', link.id);
-            sent.final_call += 1;
-          } catch (e) {
-            console.error('calendar-reminders: final_call send failed:', e);
+            sent.skipped += 1;
+          } else {
+            const firstPostLabel = formatPostDateTime(earliestPostAt);
+            try {
+              await Promise.all(
+                recipientEmails.map((to) => sendCalendarFinalCallEmail({
+                  to,
+                  clientName: client.name,
+                  shareUrl,
+                  firstPostAt: firstPostLabel,
+                  pending,
+                  total,
+                  agency: brand,
+                  clientId: client.id,
+                  dropId: link.drop_id,
+                })),
+              );
+              postToGoogleChatSafe(
+                client.chat_webhook_url,
+                {
+                  text: `*Final call before publishing* — ${pending} of ${total} ${pending === 1 ? 'post' : 'posts'} still pending. Your first scheduled post goes live ${firstPostLabel}. ${shareUrl}`,
+                },
+                `final_call:${link.id}`,
+              );
+              const opsWebhook = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
+              postToGoogleChatSafe(
+                opsWebhook,
+                {
+                  text: `📣 Final-call ping sent to *${client.name}* — ${pending}/${total} pending, first post ${firstPostLabel}. ${shareUrl}`,
+                },
+                `final_call_ops:${link.id}`,
+              );
+              await admin
+                .from('content_drop_share_links')
+                .update({ final_call_sent_at: new Date().toISOString() })
+                .eq('id', link.id);
+              sent.final_call += 1;
+            } catch (e) {
+              console.error('calendar-reminders: final_call send failed:', e);
+            }
           }
         }
       }
@@ -307,52 +345,99 @@ function toNumber(v: number | string | boolean | string[], fallback: number): nu
   return fallback;
 }
 
-async function isBallInOurCourt(
+/**
+ * For each post in `postIds`, find its newest meaningful comment
+ * (`approved` or `changes_requested`) and decide whose court it's in:
+ *   • approved                                    → done, ignore
+ *   • changes_requested newer than revisions_completed_at → ours, ignore
+ *   • changes_requested older than the marker     → back in client's court, pending
+ *   • no comments                                 → pending
+ *
+ * Returns the count of "pending" posts (need the client's eyes) so the
+ * cron can decide whether to nudge AND surface the count in the email.
+ */
+async function countPendingPosts(
   admin: ReturnType<typeof createAdminClient>,
   postIds: string[],
-): Promise<boolean> {
-  if (postIds.length === 0) return false;
-  // For each post, find the newest changes_requested comment and the
-  // matching post_review_links.revisions_completed_at marker. The ball is in
-  // our court only when the newest changes_requested is newer than the
-  // marker (or the marker is null).
-  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const { data } = await admin
-    .from('post_review_comments')
-    .select('created_at, review_link_id, post_review_links!inner(post_id, revisions_completed_at)')
-    .eq('status', 'changes_requested')
-    .gte('created_at', since)
-    .in('post_review_links.post_id', postIds)
-    .order('created_at', { ascending: false });
+): Promise<{ pending: number; total: number }> {
+  const total = postIds.length;
+  if (total === 0) return { pending: 0, total: 0 };
+
   type Row = {
     created_at: string;
+    status: 'approved' | 'changes_requested';
     post_review_links:
       | { post_id: string; revisions_completed_at: string | null }
       | { post_id: string; revisions_completed_at: string | null }[]
       | null;
   };
-  for (const row of (data ?? []) as unknown as Row[]) {
+  const { data } = await admin
+    .from('post_review_comments')
+    .select('created_at, status, post_review_links!inner(post_id, revisions_completed_at)')
+    .in('status', ['approved', 'changes_requested'])
+    .in('post_review_links.post_id', postIds)
+    .order('created_at', { ascending: false })
+    .returns<Row[]>();
+
+  // Latest comment per post (data is already ordered DESC, so first hit wins).
+  const latestByPost = new Map<
+    string,
+    { status: 'approved' | 'changes_requested'; created_at: string; revisions_completed_at: string | null }
+  >();
+  for (const row of data ?? []) {
     const link = Array.isArray(row.post_review_links)
       ? row.post_review_links[0] ?? null
       : row.post_review_links;
-    const completedAt = link?.revisions_completed_at ?? null;
-    if (!completedAt || new Date(row.created_at) > new Date(completedAt)) {
-      return true;
-    }
+    if (!link) continue;
+    if (latestByPost.has(link.post_id)) continue;
+    latestByPost.set(link.post_id, {
+      status: row.status,
+      created_at: row.created_at,
+      revisions_completed_at: link.revisions_completed_at,
+    });
   }
-  return false;
+
+  let pending = 0;
+  for (const id of postIds) {
+    const latest = latestByPost.get(id);
+    if (!latest) {
+      pending += 1;
+      continue;
+    }
+    if (latest.status === 'approved') continue;
+    const completedAt = latest.revisions_completed_at;
+    if (!completedAt || new Date(latest.created_at) > new Date(completedAt)) {
+      // Latest is changes_requested with no matching revision-complete marker
+      // (or older one) — ball is in OUR court, not the client's. Skip.
+      continue;
+    }
+    // We delivered revisions after the changes_requested → client owes us.
+    pending += 1;
+  }
+
+  return { pending, total };
 }
 
-async function hasApprovalsOrRevisions(
+/**
+ * Drop-level dedupe. If another share link on the same drop already sent
+ * this nudge type within the last 7 days, skip and stamp this link so we
+ * don't keep evaluating. Prevents re-mint flows from double-emailing
+ * clients who got the same nudge through the prior link.
+ */
+async function alreadyNudgedDrop(
   admin: ReturnType<typeof createAdminClient>,
-  postIds: string[],
+  dropId: string,
+  excludeLinkId: string,
+  column: 'no_open_nudge_sent_at' | 'no_action_nudge_sent_at' | 'final_call_sent_at',
 ): Promise<boolean> {
-  if (postIds.length === 0) return false;
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const { data } = await admin
-    .from('post_review_comments')
-    .select('id, post_review_links!inner(post_id)')
-    .in('status', ['approved', 'changes_requested'])
-    .in('post_review_links.post_id', postIds)
+    .from('content_drop_share_links')
+    .select('id')
+    .eq('drop_id', dropId)
+    .neq('id', excludeLinkId)
+    .not(column, 'is', null)
+    .gte(column, since)
     .limit(1);
   return (data?.length ?? 0) > 0;
 }
