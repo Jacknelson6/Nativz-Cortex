@@ -184,27 +184,32 @@ export function getReplyTo(agency: AgencyBrand): string {
 }
 
 // ── Shared layout ────────────────────────────────────────────────────────────
+//
+// Wraps inner email content in the canonical Trevor-designed shell:
+//   - Light page background (#f4f6f9)
+//   - White rounded card with shadow
+//   - Dark gradient header (logo + accent stripe along the bottom)
+//   - Body in the white card
+//   - Footer below the card with tagline + address + website link
+//
+// Mirrors `emailShell()` in andersoncollab/nativz-docs and
+// Anderson-Collaborative/ac-docs so every Cortex email is visually identical
+// to Trevor's onboarding/agreement emails. Brand-specific tokens come from
+// `getEmailBrand(agency)`.
+//
+// Existing class names (`.card`, `.heading`, `.subtext`, `.button`, etc.) are
+// preserved for backward compatibility but their styles flip from the old
+// dark-on-dark palette to the new light-card palette so existing senders
+// inherit the Trevor look without per-template edits.
 
 export function layout(content: string, agency: AgencyBrand = 'nativz') {
   const BRAND = getEmailBrand(agency);
   const logoSrc = getEmailLogoUrl(agency);
-  const isAC = agency === 'anderson';
 
-  // Both brands: logo on transparent background, no wrapper panel needed
-  const brandName = isAC ? 'Anderson Collaborative' : 'Nativz';
-  const logoPanel = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-      <tr>
-        <td align="center" style="padding:28px 40px;">
-          <img src="${logoSrc}" width="180" height="60" alt="${brandName}" style="display:block;margin:0 auto;border:0;outline:none;text-decoration:none;max-width:180px;height:auto;width:auto;" />
-        </td>
-      </tr>
-    </table>`;
-
-  const footerCopy = isAC
-    ? `<p>&copy; ${new Date().getFullYear()} Anderson Collaborative &middot; <a href="https://cortex.andersoncollaborative.com">cortex.andersoncollaborative.com</a></p>
-       <p style="margin-top:8px;"><a href="https://andersoncollaborative.com">andersoncollaborative.com</a></p>`
-    : `<p>&copy; ${new Date().getFullYear()} Nativz &middot; <a href="https://cortex.nativz.io">cortex.nativz.io</a></p>
-       <p style="margin-top:8px;"><a href="https://nativz.io">nativz.io</a></p>`;
+  const cortexUrl =
+    agency === 'anderson'
+      ? 'https://cortex.andersoncollaborative.com'
+      : 'https://cortex.nativz.io';
 
   return `
 <!DOCTYPE html>
@@ -212,80 +217,93 @@ export function layout(content: string, agency: AgencyBrand = 'nativz') {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!--suppress CheckEmptyScriptTag -->
   <style>
-    body { margin: 0; padding: 0; background: ${BRAND.bgDark}; font-family: ${BRAND.fontStack}; -webkit-font-smoothing: antialiased; }
-    /* Card */
-    .card { background: ${BRAND.bgCard}; border: 1px solid ${BRAND.borderCard}; border-radius: 16px; padding: 36px 32px; }
+    body { margin: 0; padding: 0; background: ${BRAND.pageBg}; font-family: ${BRAND.fontStack}; -webkit-font-smoothing: antialiased; }
+    .wrap { max-width: 620px; margin: 0 auto; padding: 32px 16px; color: ${BRAND.textPrimary}; }
+
+    /* Card with dark gradient header strip. Class is intentionally unique
+       so existing inner blocks that use <div class="card"> stay harmless. */
+    .nz-shell { background: ${BRAND.cardBg}; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 24px rgba(10, 22, 40, 0.08); }
+    .nz-shell-header { background: linear-gradient(135deg, ${BRAND.headerGradStart} 0%, ${BRAND.headerGradEnd} 100%); padding: 32px 32px 28px; position: relative; }
+    .nz-shell-header::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(to right, ${BRAND.accent}, ${BRAND.accentDark}); }
+    .logo { display: block; height: 28px; width: auto; margin-bottom: 18px; }
+    .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: ${BRAND.accent}; margin: 0; }
+    .nz-shell-body { padding: 32px 32px 28px; background: ${BRAND.cardBg}; }
+    /* Strip any nested <div class="card"> styling so legacy templates passthrough. */
+    .nz-shell-body .card { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; border-radius: 0 !important; }
 
     /* Typography */
-    .heading { color: ${BRAND.textPrimary}; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 12px; }
-    .subtext { color: ${BRAND.textBody}; font-size: 14px; line-height: 1.7; margin: 0 0 24px; }
+    .heading { font-family: ${BRAND.titleFontStack}; color: ${BRAND.textPrimary}; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 14px; line-height: 1.3; }
+    .subtext { color: ${BRAND.textBody}; font-size: 14px; line-height: 1.7; margin: 0 0 18px; }
     .small { color: ${BRAND.textMuted}; font-size: 12px; line-height: 1.6; margin: 0; }
 
-    /* CTA Button */
-    .button-wrap { text-align: center; margin: 28px 0; }
-    .button {
+    /* CTA. .button (new) and .btn (legacy) both render the branded pill. */
+    .button-wrap { text-align: left; margin: 24px 0 8px; }
+    .button, .btn {
       display: inline-block;
-      background: ${BRAND.blueCta};
-      color: #ffffff !important;
+      background: ${BRAND.accent};
+      color: ${BRAND.textPrimary} !important;
       text-decoration: none;
-      font-size: 14px;
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      padding: 14px 36px;
+      font-weight: 700;
+      padding: 14px 32px;
       border-radius: 10px;
-      mso-padding-alt: 14px 36px;
+      font-size: 15px;
+      letter-spacing: 0.01em;
+      mso-padding-alt: 14px 32px;
     }
 
     /* Divider */
-    .divider { border: none; border-top: 1px solid ${BRAND.borderCard}; margin: 28px 0; }
+    .divider { border: none; border-top: 1px solid ${BRAND.border}; margin: 24px 0; }
 
-    /* Detail rows */
+    /* Stats panel (used by transactional templates) */
+    .stats { background: ${BRAND.panelBg}; border: 1px solid ${BRAND.border}; border-left: 3px solid ${BRAND.accent}; border-radius: 8px; padding: 16px 18px; margin: 18px 0 6px; }
+    .stats table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .stats td { padding: 5px 0; vertical-align: top; }
+    .stats td.k { color: ${BRAND.textMuted}; width: 140px; }
+    .stats td.v { color: ${BRAND.textPrimary}; font-weight: 600; }
+
+    /* Detail rows (legacy class) */
     .detail-label { color: ${BRAND.textMuted}; font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 600; margin: 0 0 4px; }
     .detail-value { color: ${BRAND.textBody}; font-size: 14px; margin: 0 0 16px; }
 
-    /* Badges */
-    .badge { display: inline-block; background: ${BRAND.blueSurface}; color: ${BRAND.blue}; font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 20px; letter-spacing: 0.02em; }
-
-    /* Highlight */
-    .highlight { color: ${BRAND.blue}; font-weight: 600; }
+    /* Badges + highlights */
+    .badge { display: inline-block; background: ${BRAND.accentSurface}; color: ${BRAND.accentDark}; font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 999px; letter-spacing: 0.02em; }
+    .highlight { color: ${BRAND.accentDark}; font-weight: 600; }
 
     /* Feature list */
     .features { margin: 0; padding: 0; list-style: none; }
     .features li { color: ${BRAND.textBody}; font-size: 13px; padding: 6px 0; padding-left: 20px; position: relative; }
-    .features li::before { content: ""; position: absolute; left: 0; top: 13px; width: 8px; height: 8px; border-radius: 50%; background: ${BRAND.blue}; opacity: 0.5; }
+    .features li::before { content: ""; position: absolute; left: 0; top: 13px; width: 8px; height: 8px; border-radius: 50%; background: ${BRAND.accent}; opacity: 0.7; }
 
     /* Footer */
-    .footer { text-align: center; padding-top: 36px; }
-    .footer p { color: ${BRAND.textFooter}; font-size: 11px; margin: 0 0 4px; }
-    .footer a { color: ${BRAND.blue}; text-decoration: none; }
-    .footer-line { display: block; width: 40px; height: 2px; background: ${BRAND.blue}; opacity: 0.2; margin: 0 auto 16px; border-radius: 1px; }
+    .footer { text-align: center; padding-top: 0; margin-top: 16px; }
+    .footer p { color: ${BRAND.textMuted}; font-size: 11px; margin: 0 0 4px; line-height: 1.55; }
+    .footer a { color: ${BRAND.accentDark}; text-decoration: none; }
+    .tagline { font-style: italic; color: ${BRAND.textMuted}; font-size: 11.5px; letter-spacing: 0.01em; margin: 14px 0 0; text-align: center; }
   </style>
 </head>
-<body style="margin:0;padding:0;background-color:${BRAND.bgDark};">
-  <!-- Table shell: Gmail strips body backgrounds; bgcolor + td styles keep the logo visible. -->
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${BRAND.bgDark}" style="background-color:${BRAND.bgDark};">
+<body style="margin:0;padding:0;background-color:${BRAND.pageBg};">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${BRAND.pageBg}" style="background-color:${BRAND.pageBg};">
     <tr>
-      <td align="center" style="padding:48px 24px;background-color:${BRAND.bgDark};">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background-color:${BRAND.bgDark};">
-          <tr>
-            <td align="center" style="padding:0 0 16px;background-color:${BRAND.bgDark};">
-              ${logoPanel}
-            </td>
-          </tr>
-          <tr>
-            <td style="background-color:${BRAND.bgDark};">
+      <td align="center" style="padding:0;background-color:${BRAND.pageBg};">
+        <div class="wrap">
+          <div class="nz-shell">
+            <div class="nz-shell-header">
+              <img class="logo" src="${logoSrc}" alt="${BRAND.brandName}" />
+              <p class="eyebrow">${BRAND.brandName}</p>
+            </div>
+            <div class="nz-shell-body">
               ${content}
-            </td>
-          </tr>
-          <tr>
-            <td align="center" class="footer" style="background-color:${BRAND.bgDark};padding-top:36px;">
-              <div class="footer-line"></div>
-              ${footerCopy}
-            </td>
-          </tr>
-        </table>
+            </div>
+          </div>
+          <p class="tagline">${BRAND.tagline}</p>
+          <p style="text-align:center;font-size:10.5px;color:${BRAND.textMuted};margin:6px 0 0;line-height:1.55;">
+            ${BRAND.address} &middot; <a href="${BRAND.websiteUrl}" style="color:${BRAND.accentDark};">${BRAND.websiteUrl.replace(/^https?:\/\//, '')}</a>
+          </p>
+          <p style="text-align:center;font-size:10.5px;color:${BRAND.textMuted};margin:4px 0 0;line-height:1.55;">
+            <a href="${cortexUrl}" style="color:${BRAND.accentDark};">${cortexUrl.replace(/^https?:\/\//, '')}</a>
+          </p>
+        </div>
       </td>
     </tr>
   </table>
