@@ -2,8 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Check, Copy, Eye, Link2, Loader2, Share2, Trash2 } from 'lucide-react';
+import {
+  Check,
+  Copy,
+  Eye,
+  Link2,
+  Loader2,
+  Send,
+  Share2,
+  Trash2,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
 import {
   Popover,
   PopoverContent,
@@ -43,6 +53,7 @@ export function EditingShareButton({
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [justCopiedId, setJustCopiedId] = useState<string | null>(null);
+  const [emailLinkId, setEmailLinkId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -120,6 +131,7 @@ export function EditingShareButton({
   }
 
   return (
+    <>
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="sm" aria-label="Share for review">
@@ -217,14 +229,24 @@ export function EditingShareButton({
                         ' · not opened yet'
                       )}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => void revoke(link.id)}
-                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-text-muted transition-colors hover:bg-status-danger/10 hover:text-status-danger"
-                    >
-                      <Trash2 size={11} />
-                      Revoke
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setEmailLinkId(link.id)}
+                        className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-text-muted transition-colors hover:bg-accent/10 hover:text-accent-text"
+                      >
+                        <Send size={11} />
+                        Send to client
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void revoke(link.id)}
+                        className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-text-muted transition-colors hover:bg-status-danger/10 hover:text-status-danger"
+                      >
+                        <Trash2 size={11} />
+                        Revoke
+                      </button>
+                    </div>
                   </div>
                 </li>
               ))}
@@ -233,6 +255,209 @@ export function EditingShareButton({
         </div>
       </PopoverContent>
     </Popover>
+    {emailLinkId && (
+      <SendToClientDialog
+        projectId={projectId}
+        linkId={emailLinkId}
+        onClose={() => setEmailLinkId(null)}
+        onSent={() => {
+          setEmailLinkId(null);
+          void load();
+        }}
+      />
+    )}
+    </>
+  );
+}
+
+interface DeliverableDraft {
+  subject: string;
+  message: string;
+  recipients: { email: string; name: string | null }[];
+  client_name: string;
+  project_name: string;
+  share_url: string;
+}
+
+/**
+ * Preview + edit the deliverable email before it goes out. Mirrors the
+ * calendar followup draft dialog: GET pulls the auto-composed copy and
+ * the recipient list (POCs from the brand's review contacts), the admin
+ * tweaks subject/body inline, and POST sends it via Resend through the
+ * shared sendAndLog logger.
+ */
+function SendToClientDialog({
+  projectId,
+  linkId,
+  onClose,
+  onSent,
+}: {
+  projectId: string;
+  linkId: string;
+  onClose: () => void;
+  onSent: () => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [draft, setDraft] = useState<DeliverableDraft | null>(null);
+  const [subject, setSubject] = useState('');
+  const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch(
+          `/api/admin/editing/projects/${projectId}/share/${linkId}/email`,
+          { cache: 'no-store' },
+        );
+        const data = (await res.json().catch(() => ({}))) as
+          | (DeliverableDraft & { error?: never })
+          | { error: string };
+        if (cancelled) return;
+        if (!res.ok || 'error' in data) {
+          throw new Error(('error' in data && data.error) || 'Could not load draft');
+        }
+        setDraft(data);
+        setSubject(data.subject);
+        setMessage(data.message);
+      } catch (err) {
+        if (!cancelled) {
+          setLoadError(err instanceof Error ? err.message : 'Could not load draft');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, linkId]);
+
+  async function send() {
+    if (sending) return;
+    setSending(true);
+    try {
+      const res = await fetch(
+        `/api/admin/editing/projects/${projectId}/share/${linkId}/email`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            subject: subject.trim(),
+            message: message.trim(),
+          }),
+        },
+      );
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        recipients_count?: number;
+        error?: string;
+      };
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Send failed');
+      const count = data.recipients_count ?? draft?.recipients.length ?? 0;
+      const word = count === 1 ? 'contact' : 'contacts';
+      toast.success(count ? `Sent to ${count} ${word}` : 'Email sent');
+      onSent();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Send failed');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const recipientsLine = draft?.recipients.length
+    ? draft.recipients
+        .map((r) => (r.name ? `${r.name} <${r.email}>` : r.email))
+        .join(', ')
+    : '';
+
+  const canSend =
+    !sending &&
+    !loading &&
+    !loadError &&
+    subject.trim().length > 0 &&
+    message.trim().length > 0;
+
+  return (
+    <Dialog open onClose={onClose} title="Send cuts for review" maxWidth="xl">
+      {loading ? (
+        <div className="flex items-center justify-center py-10 text-text-muted">
+          <Loader2 className="size-4 animate-spin" />
+          <span className="ml-2 text-sm">Loading draft...</span>
+        </div>
+      ) : loadError ? (
+        <div className="space-y-3">
+          <p className="text-sm text-status-danger">{loadError}</p>
+          <div className="flex justify-end">
+            <Button variant="secondary" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div>
+            <div className="text-xs font-medium uppercase tracking-wider text-text-muted">
+              To
+            </div>
+            <div className="mt-1 text-sm text-text-secondary">
+              {recipientsLine || 'No recipients'}
+            </div>
+          </div>
+
+          <label className="block">
+            <span className="text-xs font-medium uppercase tracking-wider text-text-muted">
+              Subject
+            </span>
+            <input
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="mt-1 block w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:border-accent-text focus:outline-none focus:ring-1 focus:ring-accent-text"
+              maxLength={200}
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-xs font-medium uppercase tracking-wider text-text-muted">
+              Message
+            </span>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              rows={8}
+              className="mt-1 block w-full resize-y rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:border-accent-text focus:outline-none focus:ring-1 focus:ring-accent-text"
+              maxLength={5000}
+            />
+            <span className="mt-1 block text-xs text-text-muted">
+              Blank lines start a new paragraph. The branded layout and the &ldquo;Watch the cuts&rdquo; button are added automatically.
+            </span>
+          </label>
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <Button variant="secondary" onClick={onClose} disabled={sending}>
+              Cancel
+            </Button>
+            <Button onClick={send} disabled={!canSend}>
+              {sending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="size-4" />
+                  Send
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+    </Dialog>
   );
 }
 

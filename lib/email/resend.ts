@@ -1426,3 +1426,77 @@ function escapeAlertHtml(s: string): string {
 function truncateAlert(s: string, max: number): string {
   return s.length <= max ? s : s.slice(0, max - 1) + '…';
 }
+
+// ── Editing deliverable email ───────────────────────────────────────────────
+//
+// Mirrors the calendar followup pattern: a default subject + body the admin
+// can preview and tweak in a draft dialog before sending. Triggered from the
+// editing project share popover ("Send to client") so POCs receive the
+// branded `/c/edit/<token>` link in their inbox instead of needing to copy +
+// paste it into Slack or DMs. Logged via sendAndLog so the Email Hub UI
+// shows delivery + open status alongside calendar emails.
+
+export function buildEditingDeliverableDraft(opts: {
+  pocFirstNames: string[];
+  clientName: string;
+  projectName: string;
+}): { subject: string; message: string } {
+  const greetingNames = opts.pocFirstNames.length
+    ? opts.pocFirstNames.join(', ')
+    : opts.clientName;
+  const subject = `Your ${opts.projectName} cuts are ready for review`;
+  const message =
+    `Hey ${greetingNames}, the latest cuts for ${opts.projectName} are ready for your review. ` +
+    `Tap the button below to watch each video and either approve it or drop comments where you'd like changes.\n\n` +
+    `Once you've signed off we'll get everything packaged for delivery.`;
+  return { subject, message };
+}
+
+export async function sendEditingDeliverableEmail(opts: {
+  to: string | string[];
+  pocFirstNames: string[];
+  clientName: string;
+  projectName: string;
+  shareUrl: string;
+  agency?: AgencyBrand;
+  clientId?: string;
+  projectId?: string;
+  /** Admin-edited subject from the draft dialog. Falls back to the default. */
+  subjectOverride?: string;
+  /** Admin-edited body (plain text, blank-line separated paragraphs). */
+  messageOverride?: string;
+}) {
+  const agency = opts.agency ?? 'nativz';
+  const draft = buildEditingDeliverableDraft({
+    pocFirstNames: opts.pocFirstNames,
+    clientName: opts.clientName,
+    projectName: opts.projectName,
+  });
+  const subject = opts.subjectOverride?.trim() || draft.subject;
+  const messageText = opts.messageOverride?.trim() || draft.message;
+  const bodyHtml = messageToHtmlParagraphs(messageText);
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: 'editing_deliverable',
+    agency,
+    to: opts.to,
+    clientId: opts.clientId,
+    subject,
+    html: layout(`
+      <div class="card">
+        <h1 class="heading">Cuts ready for review</h1>
+        ${bodyHtml}
+        <div style="margin-top:18px;">
+          <a href="${opts.shareUrl}" class="btn">Watch the cuts</a>
+        </div>
+      </div>
+    `, agency),
+    metadata: {
+      clientName: opts.clientName,
+      projectName: opts.projectName,
+      projectId: opts.projectId,
+      pocFirstNames: opts.pocFirstNames,
+      edited: !!(opts.subjectOverride || opts.messageOverride),
+    },
+  });
+}
