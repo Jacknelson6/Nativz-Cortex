@@ -1,15 +1,18 @@
 import Link from 'next/link';
 import { headers } from 'next/headers';
+import { detectAgencyFromHostname } from '@/lib/agency/detect';
 
 /**
- * Brand-aware 404. Middleware stamps `x-agency` on every non-API response
- * based on the request hostname, so we can branch the marketing-site link
- * here without needing the client to know about theming. Defaults to Nativz
- * for dev / localhost where the header isn't set.
+ * Brand-aware 404. Prefers the middleware-set `x-agency` header but falls
+ * back to hostname detection so paths the middleware matcher doesn't cover
+ * (and any 404'd path on the AC domain) still render the right brand.
  */
 export default async function NotFound() {
   const headerList = await headers();
-  const agency = headerList.get('x-agency') ?? 'nativz';
+  const headerAgency = headerList.get('x-agency') as 'anderson' | 'nativz' | null;
+  const hostname =
+    headerList.get('x-forwarded-host') ?? headerList.get('host') ?? '';
+  const agency = headerAgency ?? detectAgencyFromHostname(hostname);
   const isAC = agency === 'anderson';
 
   const homeHref = isAC ? 'https://andersoncollaborative.com' : 'https://nativz.io';

@@ -457,6 +457,8 @@ export const config = {
     '/login',
     '/search/:path*',
     '/history',
+    '/lab',
+    '/lab/:path*',
     '/api/:path*',
   ],
 };
