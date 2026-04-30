@@ -159,6 +159,12 @@ async function handleGet(request: NextRequest) {
     const ageHours = (now - sentMs) / (1000 * 60 * 60);
 
     // ── 1. no_open_nudge ────────────────────────────────────────────────
+    // Why the approvals guard: a drop can be approved via a previous share
+    // link (re-mint, multi-stakeholder share). The new link's
+    // `last_viewed_at` is null even though the work is already done. Without
+    // this check we email "you didn't open the link" to clients who already
+    // approved on the prior link. The drop, not the link, is the unit of
+    // "have they acted." Stamp the suppression so we don't re-evaluate.
     if (
       noOpenSetting.enabled
       && !link.no_open_nudge_sent_at
@@ -166,25 +172,34 @@ async function handleGet(request: NextRequest) {
       && link.last_viewed_at === null
       && ageHours >= toNumber(noOpenSetting.params.windowHours, 48)
     ) {
-      try {
-        await Promise.all(
-          recipientEmails.map((to) => sendCalendarNoOpenReminderEmail({
-            to,
-            clientName: client.name,
-            shareUrl,
-            hours: Math.round(ageHours),
-            agency: brand,
-            clientId: client.id,
-            dropId: link.drop_id,
-          })),
-        );
+      const alreadyActioned = await hasApprovalsOrRevisions(admin, link.included_post_ids);
+      if (alreadyActioned) {
         await admin
           .from('content_drop_share_links')
           .update({ no_open_nudge_sent_at: new Date().toISOString() })
           .eq('id', link.id);
-        sent.no_open += 1;
-      } catch (e) {
-        console.error('calendar-reminders: no_open send failed:', e);
+        sent.skipped += 1;
+      } else {
+        try {
+          await Promise.all(
+            recipientEmails.map((to) => sendCalendarNoOpenReminderEmail({
+              to,
+              clientName: client.name,
+              shareUrl,
+              hours: Math.round(ageHours),
+              agency: brand,
+              clientId: client.id,
+              dropId: link.drop_id,
+            })),
+          );
+          await admin
+            .from('content_drop_share_links')
+            .update({ no_open_nudge_sent_at: new Date().toISOString() })
+            .eq('id', link.id);
+          sent.no_open += 1;
+        } catch (e) {
+          console.error('calendar-reminders: no_open send failed:', e);
+        }
       }
     }
 
