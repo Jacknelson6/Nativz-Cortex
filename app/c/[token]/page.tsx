@@ -172,6 +172,8 @@ function SharedDropView({
   const [pendingName, setPendingName] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [detailPostId, setDetailPostId] = useState<string | null>(null);
+  const [approveAllOpen, setApproveAllOpen] = useState(false);
+  const [approvingAll, setApprovingAll] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -203,6 +205,10 @@ function SharedDropView({
   const total = data.posts.length;
   const approvedCount = data.posts.filter((p) => latestReview(p.comments) === 'approved').length;
   const changesCount = data.posts.filter((p) => latestReview(p.comments) === 'changes_requested').length;
+  const unapprovedPosts = useMemo(
+    () => data.posts.filter((p) => latestReview(p.comments) !== 'approved'),
+    [data.posts],
+  );
   const pendingRevisionCount = data.isEditor
     ? data.posts.filter((p) => p.revised_video_notify_pending).length
     : 0;
@@ -222,6 +228,59 @@ function SharedDropView({
           }
         : prev,
     );
+  }
+
+  // Bulk approve every post that's still pending. Sequential rather than
+  // parallel so the existing per-post pipeline (Monday sync, Zernio publish,
+  // 🎉 chat ping when the *last* approval lands) sees each insert in order
+  // and the documented allApproved race only fires once at the end.
+  async function approveAll() {
+    if (!authorName.trim()) {
+      setPendingName(authorName);
+      setNameModalOpen(true);
+      return;
+    }
+    const targets = data.posts.filter((p) => latestReview(p.comments) !== 'approved');
+    if (targets.length === 0) return;
+
+    setApprovingAll(true);
+    const toastId = toast.loading(`Approving 0 of ${targets.length}…`);
+    let done = 0;
+    let failed = 0;
+    try {
+      for (const post of targets) {
+        try {
+          const res = await fetch(`/api/calendar/share/${token}/comment`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              postId: post.id,
+              authorName: authorName.trim(),
+              content: 'Approved',
+              status: 'approved',
+              attachments: [],
+              timestampSeconds: null,
+            }),
+          });
+          const json = await res.json();
+          if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Failed');
+          appendComment(post.id, json.comment as SharedComment);
+          done++;
+        } catch {
+          failed++;
+        }
+        toast.loading(`Approving ${done + failed} of ${targets.length}…`, { id: toastId });
+      }
+      if (failed === 0) {
+        toast.success(`Approved ${done} post${done === 1 ? '' : 's'}`, { id: toastId });
+      } else if (done === 0) {
+        toast.error(`Could not approve any posts. Try again.`, { id: toastId });
+      } else {
+        toast.error(`Approved ${done}, ${failed} failed. Try the rest manually.`, { id: toastId });
+      }
+    } finally {
+      setApprovingAll(false);
+    }
   }
 
   function updatePostCaption(postId: string, caption: string, comment: SharedComment) {
@@ -458,6 +517,33 @@ function SharedDropView({
               </p>
             </div>
             <div className="flex items-center gap-2">
+              {unapprovedPosts.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!authorName.trim()) {
+                      setPendingName(authorName);
+                      setNameModalOpen(true);
+                      return;
+                    }
+                    setApproveAllOpen(true);
+                  }}
+                  disabled={approvingAll}
+                  className="inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-status-success px-3.5 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {approvingAll ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <CheckCircle size={14} />
+                  )}
+                  <span className="hidden sm:inline">
+                    {approvingAll ? 'Approving…' : `Approve all (${unapprovedPosts.length})`}
+                  </span>
+                  <span className="sm:hidden">
+                    {approvingAll ? '…' : `Approve all (${unapprovedPosts.length})`}
+                  </span>
+                </button>
+              )}
               {authorName && (
                 <button
                   type="button"
@@ -637,6 +723,20 @@ function SharedDropView({
         requireName={() => {
           setPendingName(authorName);
           setNameModalOpen(true);
+        }}
+      />
+
+      <ConfirmDialog
+        open={approveAllOpen}
+        title={`Approve all ${unapprovedPosts.length} post${unapprovedPosts.length === 1 ? '' : 's'}?`}
+        description="This signs off on every post that's still pending. Posts already marked changes requested will also be approved. You can still leave comments after."
+        confirmLabel={approvingAll ? 'Approving…' : 'Approve all'}
+        onConfirm={() => {
+          setApproveAllOpen(false);
+          void approveAll();
+        }}
+        onCancel={() => {
+          if (!approvingAll) setApproveAllOpen(false);
         }}
       />
     </div>
