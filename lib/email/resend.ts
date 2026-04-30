@@ -839,6 +839,49 @@ export async function sendCalendarNoActionReminderEmail(opts: {
  * single shared email with their first names comma-joined in the
  * greeting so it doesn't read like an autoresponder.
  */
+/**
+ * Build the default subject + message body for the followup nudge.
+ * Returned to the /review draft dialog so admins can preview and tweak
+ * the copy before sending.
+ */
+export function buildCalendarFollowupDraft(opts: {
+  pocFirstNames: string[];
+  clientName: string;
+}): { subject: string; message: string } {
+  const greetingNames = opts.pocFirstNames.length
+    ? opts.pocFirstNames.join(', ')
+    : opts.clientName;
+  const subject = `Checking in on your content calendar`;
+  const message =
+    `Hey ${greetingNames}, just circling back on the latest content calendar for ${opts.clientName}. ` +
+    `Whenever you have a few minutes, take a look and either approve the posts or drop comments where anything needs to change.\n\n` +
+    `No rush, but the sooner we hear from you, the sooner the team can lock everything in.`;
+  return { subject, message };
+}
+
+function escapeHtml(input: string): string {
+  return input
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function messageToHtmlParagraphs(message: string): string {
+  const paragraphs = message
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return paragraphs
+    .map((p, i) => {
+      const safe = escapeHtml(p).replace(/\n/g, '<br />');
+      const margin = i === 0 ? '' : ' style="margin-top:10px;"';
+      return `<p class="subtext"${margin}>${safe}</p>`;
+    })
+    .join('');
+}
+
 export async function sendCalendarFollowupEmail(opts: {
   to: string | string[];
   pocFirstNames: string[];
@@ -847,12 +890,19 @@ export async function sendCalendarFollowupEmail(opts: {
   agency?: AgencyBrand;
   clientId?: string;
   dropId?: string;
+  /** Admin-edited subject from the draft dialog. Falls back to the default. */
+  subjectOverride?: string;
+  /** Admin-edited body (plain text, blank-line separated paragraphs). */
+  messageOverride?: string;
 }) {
   const agency = opts.agency ?? 'nativz';
-  const greetingNames = opts.pocFirstNames.length
-    ? opts.pocFirstNames.join(', ')
-    : opts.clientName;
-  const subject = `Checking in on your content calendar`;
+  const draft = buildCalendarFollowupDraft({
+    pocFirstNames: opts.pocFirstNames,
+    clientName: opts.clientName,
+  });
+  const subject = opts.subjectOverride?.trim() || draft.subject;
+  const messageText = opts.messageOverride?.trim() || draft.message;
+  const bodyHtml = messageToHtmlParagraphs(messageText);
   return sendAndLog({
     category: 'transactional',
     typeKey: 'calendar_followup',
@@ -864,14 +914,17 @@ export async function sendCalendarFollowupEmail(opts: {
     html: layout(`
       <div class="card">
         <h1 class="heading">Quick check-in</h1>
-        <p class="subtext">Hey ${greetingNames}, just circling back on the latest content calendar for ${opts.clientName}. Whenever you have a few minutes, take a look and either approve the posts or drop comments where anything needs to change.</p>
-        <p class="subtext" style="margin-top:10px;">No rush — but the sooner we hear from you, the sooner the team can lock everything in.</p>
+        ${bodyHtml}
         <div style="margin-top:18px;">
           <a href="${opts.shareUrl}" class="btn">Open the calendar</a>
         </div>
       </div>
     `, agency),
-    metadata: { clientName: opts.clientName, pocFirstNames: opts.pocFirstNames },
+    metadata: {
+      clientName: opts.clientName,
+      pocFirstNames: opts.pocFirstNames,
+      edited: !!(opts.subjectOverride || opts.messageOverride),
+    },
   });
 }
 
