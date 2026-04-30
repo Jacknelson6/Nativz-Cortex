@@ -86,44 +86,41 @@ export function VideographerTab() {
 
   const shippedCount = projects.length - visible.length;
 
+  const subtitle = `${visible.length} ${visible.length === 1 ? 'project' : 'projects'} on the shoot board`;
+  const actions = (
+    <>
+      {shippedCount > 0 && !showShipped && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowShipped(true)}
+        >
+          Show {shippedCount} shipped
+        </Button>
+      )}
+      {showShipped && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowShipped(false)}
+        >
+          Hide shipped
+        </Button>
+      )}
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => void load(true)}
+        disabled={refreshing}
+        aria-label="Refresh"
+      >
+        <RefreshCcw size={14} className={refreshing ? 'animate-spin' : ''} />
+      </Button>
+    </>
+  );
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm text-text-muted">
-          {visible.length}{' '}
-          {visible.length === 1 ? 'project' : 'projects'} on the shoot board
-        </p>
-        <div className="flex items-center gap-2">
-          {shippedCount > 0 && !showShipped && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowShipped(true)}
-            >
-              Show {shippedCount} shipped
-            </Button>
-          )}
-          {showShipped && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowShipped(false)}
-            >
-              Hide shipped
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => void load(true)}
-            disabled={refreshing}
-            aria-label="Refresh"
-          >
-            <RefreshCcw size={14} className={refreshing ? 'animate-spin' : ''} />
-          </Button>
-        </div>
-      </div>
-
       {loading ? (
         <TableSkeleton />
       ) : (
@@ -135,6 +132,12 @@ export function VideographerTab() {
           onOpen={(id) => setActiveProjectId(id)}
           onReload={() => void load(true)}
           emptyState={<EmptyState />}
+          chrome={{
+            icon: <Camera className="size-4" />,
+            title: 'Videographer',
+            subtitle,
+            actions,
+          }}
         />
       )}
 

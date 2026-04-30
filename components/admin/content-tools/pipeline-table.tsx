@@ -103,6 +103,7 @@ export function PipelineTable({
   onOpen,
   onReload,
   emptyState,
+  chrome,
 }: {
   projects: EditingProject[];
   columns: PipelineColumnKey[];
@@ -113,6 +114,19 @@ export function PipelineTable({
    *  parent can refetch the project list and rerender. */
   onReload?: () => void;
   emptyState?: React.ReactNode;
+  /**
+   * Optional card-chrome header rendered inside the table card, matching
+   * the Projects subpage pattern: accent-tinted icon swatch on the left,
+   * title + subtitle stack, optional `actions` slot on the right
+   * (refresh button, "New project" CTA, etc.). When omitted the table
+   * renders without chrome, same as before.
+   */
+  chrome?: {
+    icon: React.ReactNode;
+    title: string;
+    subtitle?: string;
+    actions?: React.ReactNode;
+  };
 }) {
   const sorted = useMemo(
     () => [...projects].sort((a, b) => sortProjectsBy(a, b, sort)),
@@ -131,6 +145,37 @@ export function PipelineTable({
 
   return (
     <Table variant="card">
+      {chrome && (
+        <thead>
+          <tr>
+            <th
+              colSpan={columns.length}
+              className="border-b border-nativz-border px-5 py-4"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex size-9 items-center justify-center rounded-lg bg-accent-text/10 text-accent-text">
+                  {chrome.icon}
+                </span>
+                <div className="min-w-0 flex-1 text-left">
+                  <div className="text-sm font-semibold text-text-primary">
+                    {chrome.title}
+                  </div>
+                  {chrome.subtitle && (
+                    <div className="mt-0.5 text-xs text-text-muted">
+                      {chrome.subtitle}
+                    </div>
+                  )}
+                </div>
+                {chrome.actions && (
+                  <div className="flex shrink-0 items-center gap-2">
+                    {chrome.actions}
+                  </div>
+                )}
+              </div>
+            </th>
+          </tr>
+        </thead>
+      )}
       <TableHeader>
         <TableRow>
           {columns.includes('brand') && (

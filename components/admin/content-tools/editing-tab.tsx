@@ -71,30 +71,27 @@ export function EditingTab() {
     ? projects.find((p) => p.id === activeProjectId) ?? null
     : null;
 
+  const subtitle = `${projects.length} ${projects.length === 1 ? 'project' : 'projects'} across every brand`;
+  const actions = (
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => void load(true)}
+        disabled={refreshing}
+        aria-label="Refresh"
+      >
+        <RefreshCcw size={14} className={refreshing ? 'animate-spin' : ''} />
+      </Button>
+      <Button size="sm" onClick={() => setNewOpen(true)}>
+        <Plus size={14} />
+        <span>New project</span>
+      </Button>
+    </>
+  );
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm text-text-muted">
-          {projects.length}{' '}
-          {projects.length === 1 ? 'project' : 'projects'} across every brand
-        </p>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => void load(true)}
-            disabled={refreshing}
-            aria-label="Refresh"
-          >
-            <RefreshCcw size={14} className={refreshing ? 'animate-spin' : ''} />
-          </Button>
-          <Button size="sm" onClick={() => setNewOpen(true)}>
-            <Plus size={14} />
-            <span>New project</span>
-          </Button>
-        </div>
-      </div>
-
       {loading ? (
         <TableSkeleton />
       ) : (
@@ -106,6 +103,12 @@ export function EditingTab() {
           onOpen={(id) => setActiveProjectId(id)}
           onReload={() => void load(true)}
           emptyState={<EmptyState onNew={() => setNewOpen(true)} />}
+          chrome={{
+            icon: <FileVideo className="size-4" />,
+            title: 'Editing',
+            subtitle,
+            actions,
+          }}
         />
       )}
 
