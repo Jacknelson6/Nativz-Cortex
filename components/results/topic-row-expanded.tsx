@@ -4,10 +4,6 @@ import { useState } from 'react';
 import {
   MessageSquare,
   FileText,
-  Globe,
-  MessageCircle,
-  Video,
-  ExternalLink,
   Copy,
   Check,
   Download,
@@ -16,10 +12,8 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { hasSources } from '@/lib/types/search';
-import type { TrendingTopic, LegacyTrendingTopic, TopicSource, VideoIdea, SearchPlatform } from '@/lib/types/search';
+import type { TrendingTopic, LegacyTrendingTopic, VideoIdea } from '@/lib/types/search';
 import { displayIdeaFormat, displayIdeaVirality, effectiveVirality } from '@/lib/search/video-idea-display';
-import { PLATFORM_CONFIG } from '@/components/search/platform-icon';
 import { formatTopicReach, RESONANCE_LABEL } from '@/lib/search/topic-metrics';
 import { getResearchAlignmentHint } from '@/lib/search/topic-research-alignment';
 import { getSentimentLabel } from '@/lib/utils/sentiment';
@@ -29,21 +23,6 @@ interface TopicRowExpandedProps {
   topic: TrendingTopic | LegacyTrendingTopic;
   clientId?: string | null;
   searchId?: string;
-}
-
-// Source type icons — muted by default since the source URL text is the
-// actual signal. The prior rainbow (blue/emerald/purple) was decorative
-// drift; it made every source list look like a toy.
-const SOURCE_TYPE_ICON: Record<string, React.ReactNode> = {
-  web: <Globe size={12} className="text-text-muted shrink-0" />,
-  discussion: <MessageCircle size={12} className="text-text-muted shrink-0" />,
-  video: <Video size={12} className="text-accent-text shrink-0" />,
-};
-
-function getPlatformBadge(platform: string): { label: string; className: string } | null {
-  const cfg = PLATFORM_CONFIG[platform as SearchPlatform];
-  if (!cfg) return null;
-  return { label: cfg.label, className: `${cfg.bg} ${cfg.color} border border-current/20` };
 }
 
 function formatIdeaAsText(
@@ -116,38 +95,6 @@ function downloadAsTextFile(
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-}
-
-function SourceLink({ source }: { source: TopicSource }) {
-  return (
-    <a
-      href={source.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-start gap-2 rounded-md border border-nativz-border bg-surface px-3 py-2 text-sm transition-colors hover:border-accent/40 hover:bg-accent-surface group"
-    >
-      {SOURCE_TYPE_ICON[source.type] || SOURCE_TYPE_ICON.web}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <p className="font-medium text-text-secondary truncate group-hover:text-accent-text transition-colors text-xs">
-            {source.title}
-          </p>
-          {source.platform && source.platform !== 'web' && (() => {
-            const badge = getPlatformBadge(source.platform);
-            return badge ? (
-              <span className={`shrink-0 rounded px-1 py-0.5 text-[10px] font-medium ${badge.className}`}>
-                {badge.label}
-              </span>
-            ) : null;
-          })()}
-        </div>
-        {source.relevance && (
-          <p className="text-xs text-text-muted mt-0.5 line-clamp-1">{source.relevance}</p>
-        )}
-      </div>
-      <ExternalLink size={10} className="shrink-0 mt-0.5 text-text-muted group-hover:text-accent-text transition-colors" />
-    </a>
-  );
 }
 
 function TopicMetricsSnapshot({ topic }: { topic: TrendingTopic | LegacyTrendingTopic }) {
@@ -321,7 +268,6 @@ export function TopicRowExpanded({ topic, clientId, searchId }: TopicRowExpanded
   const [copiedAll, setCopiedAll] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [extraIdeas, setExtraIdeas] = useState<VideoIdea[]>([]);
-  const topicHasSources = hasSources(topic);
   const baseIdeas = topic.video_ideas ?? [];
   const ideas = [...baseIdeas, ...extraIdeas];
 
@@ -395,20 +341,6 @@ export function TopicRowExpanded({ topic, clientId, searchId }: TopicRowExpanded
           <p className="text-sm leading-relaxed text-text-secondary">{topic.comments_overview}</p>
         </div>
       </div>
-
-      {/* Source links (new shape only) */}
-      {topicHasSources && topic.sources.length > 0 && (
-        <div className="mb-5">
-          <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
-            Sources ({topic.sources.length})
-          </h4>
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-            {topic.sources.map((source, i) => (
-              <SourceLink key={i} source={source} />
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Video ideas — list format */}
       {ideas.length > 0 && (

@@ -1,12 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { VideoGrid } from '@/components/research/video-grid';
-import { ViralCarousel } from '@/components/research/viral-carousel';
 import { OutlierCreatorsTable } from '@/components/research/outlier-creators-table';
 import { HashtagCloud } from '@/components/research/hashtag-cloud';
 import { HookPatterns } from '@/components/research/hook-patterns';
-import { SearchStatsRow } from '@/components/results/search-stats-row';
 import { ViewsOverTime } from '@/components/charts/views-over-time';
 import { WebContextSection } from '@/components/results/web-context-section';
 import type { TopicSearchVideoRow, TopicSearchHookRow } from '@/lib/scrapers/types';
@@ -27,11 +24,6 @@ interface ScrapedVideosSectionProps {
   shareToken?: string;
   /** Web context data from pipeline_state */
   webContext?: WebContextData | null;
-  /** Topic search client (for inline video analysis rescript) */
-  defaultClientId?: string | null;
-  clientName?: string | null;
-  /** Admin-only: inline analysis uses POST /api/analysis/items. Default true. */
-  enableInlineVideoAnalysis?: boolean;
 }
 
 export function ScrapedVideosSection({
@@ -39,9 +31,6 @@ export function ScrapedVideosSection({
   scrapedVideoCount,
   shareToken,
   webContext,
-  defaultClientId,
-  clientName,
-  enableInlineVideoAnalysis = true,
 }: ScrapedVideosSectionProps) {
   const [videos, setVideos] = useState<TopicSearchVideoRow[]>([]);
   const [hooks, setHooks] = useState<TopicSearchHookRow[]>([]);
@@ -100,17 +89,6 @@ export function ScrapedVideosSection({
 
   return (
     <div className="space-y-6">
-      <SearchStatsRow videos={videos} />
-      <div className="rounded-xl border border-nativz-border bg-surface p-5">
-        <ViralCarousel videos={videos} />
-      </div>
-      <VideoGrid
-        videos={videos}
-        searchId={searchId}
-        defaultClientId={defaultClientId ?? null}
-        clientName={clientName ?? null}
-        enableInlineVideoAnalysis={enableInlineVideoAnalysis}
-      />
       <OutlierCreatorsTable videos={videos} />
       <HookPatterns hooks={hooks} />
       <HashtagCloud videos={videos} />

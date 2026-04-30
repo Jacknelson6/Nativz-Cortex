@@ -110,13 +110,12 @@ export function SharedSearchClient({
           </div>
         ) : null}
 
-        {/* Scraped videos — outlier board, video grid, hook patterns */}
+        {/* Scraped videos — outlier board, hook patterns, hashtags */}
         <ScrapedVideosSection
           searchId={search.id}
           scrapedVideoCount={scrapedVideoCount}
           shareToken={shareToken}
           webContext={((search as { pipeline_state?: { web_context?: unknown } }).pipeline_state?.web_context ?? null) as never}
-          enableInlineVideoAnalysis={false}
         />
 
         {aiResponse?.synthetic_audiences?.segments?.length ? (

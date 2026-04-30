@@ -306,13 +306,11 @@ export function AdminResultsClient({
           </div>
         ) : null}
 
-        {/* Scraped videos — outlier board, video grid, hook patterns */}
+        {/* Scraped videos — outlier board, hook patterns, hashtags */}
         <ScrapedVideosSection
           searchId={search.id}
           scrapedVideoCount={scrapedVideoCount}
           webContext={((search as { pipeline_state?: { web_context?: unknown } }).pipeline_state?.web_context ?? null) as never}
-          defaultClientId={search.client_id}
-          clientName={clientInfo?.name ?? null}
         />
 
         {aiResponse?.synthetic_audiences?.segments?.length ? (
