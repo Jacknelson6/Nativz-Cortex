@@ -9,7 +9,7 @@ import { sendCalendarRevisedVideosEmail } from '@/lib/email/resend';
 import { syncMondayApprovalForDrop } from '@/lib/monday/calendar-approval';
 import { summarizeRevisionEdits } from '@/lib/calendar/summarize-revisions';
 
-// Same role exclusions as scripts/send-calendar-batch.ts — keep these in sync.
+// Same role exclusions as scripts/send-calendar-batch.ts, keep these in sync.
 // Paid-media-only POCs don't care about organic content; "Avoid bulk" is a
 // manual flag for contacts who get hand-curated comms only.
 const EXCLUDE_ROLE_PATTERNS = [/paid media only/i, /avoid bulk/i];
@@ -79,7 +79,7 @@ export async function POST(
     return NextResponse.json({ ok: true, count: 0, action: parsed.data.action });
   }
 
-  // Always clear the pending flags afterward — both Notify and Skip.
+  // Always clear the pending flags afterward, both Notify and Skip.
   const ids = pendingForLink.map((v) => v.id);
 
   if (parsed.data.action === 'skip') {
@@ -100,7 +100,7 @@ export async function POST(
     return NextResponse.json({ ok: true, count: pendingForLink.length, action: 'skip' });
   }
 
-  // action === 'notify' — emit chat ping + comment row + email POCs.
+  // action === 'notify', emit chat ping + comment row + email POCs.
   const { data: drop } = await admin
     .from('content_drops')
     .select('id, client_id, clients(id, name, agency, chat_webhook_url)')
@@ -143,13 +143,35 @@ export async function POST(
   // them into past-tense "what we did" bullets. The reviewer's exact words
   // would read awkward bounced back at them; the LLM rewrite makes the email
   // sound like the editing team is reporting on a finished job.
+  //
+  // IMPORTANT: a single drop can have multiple share links (one per reviewer
+  // batch). Each share link gets its own row in `post_review_links`, so the
+  // same scheduled post is represented by a different `review_link_id` per
+  // share link. If we only pulled comments off the CURRENT share link's map,
+  // we'd miss notes left by reviewers on other share links of the same drop
+  // (e.g. an earlier link sent to a different stakeholder). To capture every
+  // change request, we fetch ALL share links for this drop and union their
+  // `post_review_link_map` values for the pending posts.
   const pendingPostIds = pendingForLink
     .map((v) => v.scheduled_post_id)
     .filter((id): id is string => !!id);
   const reviewLinkByPost = link.post_review_link_map ?? {};
-  const reviewLinkIds = pendingPostIds
-    .map((pid) => reviewLinkByPost[pid])
-    .filter((id): id is string => !!id);
+
+  const { data: allDropShareLinks } = await admin
+    .from('content_drop_share_links')
+    .select('post_review_link_map')
+    .eq('drop_id', link.drop_id)
+    .returns<Array<{ post_review_link_map: Record<string, string> | null }>>();
+
+  const reviewLinkIdSet = new Set<string>();
+  for (const sl of allDropShareLinks ?? []) {
+    const map = sl.post_review_link_map ?? {};
+    for (const pid of pendingPostIds) {
+      const rid = map[pid];
+      if (rid) reviewLinkIdSet.add(rid);
+    }
+  }
+  const reviewLinkIds = Array.from(reviewLinkIdSet);
 
   const [commentsRes, contactsRes] = await Promise.all([
     reviewLinkIds.length > 0
@@ -245,7 +267,7 @@ export async function POST(
     .update({ revised_video_notify_pending: false })
     .in('id', ids);
 
-  // Ball is back in the client's court — recompute the Monday approval label
+  // Ball is back in the client's court, recompute the Monday approval label
   // and push. With no remaining notify-pending rows, the calendar falls out
   // of "Revised" and back into "Waiting on approval". Wrapped in `after()`
   // so the response returns immediately; Vercel keeps the function alive.

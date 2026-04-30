@@ -4,7 +4,7 @@
  * client POCs. Used to QA the notify-revisions email path end to end.
  *
  * Picks the most recent share link for the target client (default: Safestop)
- * and assembles the same payload the live route builds — caption preview +
+ * and assembles the same payload the live route builds, caption preview +
  * the bulleted change-request quotes per pending revised video. If no
  * `revised_video_notify_pending` rows exist (the editor's already cleared
  * them), it falls back to the most recent revised videos on that drop so the
@@ -70,7 +70,7 @@ async function main() {
     console.log('Multiple clients matched; using first:', clients.map((c) => c.name));
   }
   const client = clients[0];
-  console.log(`Client: ${client.name} (${client.id}) — agency=${client.agency ?? '∅'}`);
+  console.log(`Client: ${client.name} (${client.id}), agency=${client.agency ?? '∅'}`);
 
   // Most recent share link for that client (joined through content_drops).
   const { data: shareLinks, error: linkErr } = await admin
@@ -132,14 +132,28 @@ async function main() {
       `(${pendingForLink.length} actually pending; fallback used = ${pendingForLink.length === 0})`,
   );
 
-  // Same payload assembly as the live route.
+  // Same payload assembly as the live route. NOTE: union review_link_ids
+  // across every share link for this drop so we capture comments from
+  // reviewers who came in via a DIFFERENT share link (each share link has
+  // its own `post_review_link_map`).
   const pendingPostIds = usedRows
     .map((v) => v.scheduled_post_id)
     .filter((id): id is string => !!id);
-  const reviewLinkByPost = link.post_review_link_map ?? {};
-  const reviewLinkIds = pendingPostIds
-    .map((pid) => reviewLinkByPost[pid])
-    .filter((id): id is string => !!id);
+
+  const { data: allDropShareLinks } = await admin
+    .from('content_drop_share_links')
+    .select('post_review_link_map')
+    .eq('drop_id', link.drop_id)
+    .returns<Array<{ post_review_link_map: Record<string, string> | null }>>();
+  const reviewLinkIdSet = new Set<string>();
+  for (const sl of allDropShareLinks ?? []) {
+    const map = sl.post_review_link_map ?? {};
+    for (const pid of pendingPostIds) {
+      const rid = map[pid];
+      if (rid) reviewLinkIdSet.add(rid);
+    }
+  }
+  const reviewLinkIds = Array.from(reviewLinkIdSet);
 
   const commentsRes = reviewLinkIds.length > 0
     ? await admin
@@ -170,7 +184,7 @@ async function main() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
   const shareUrl = `${appUrl}/c/${link.token}`;
 
-  // POC first names — pull a real list so the greeting reads like the real
+  // POC first names, pull a real list so the greeting reads like the real
   // email, but the recipient is the test address. Falls back to "Jack" if
   // no contacts exist for the client.
   const { data: contactRows } = await admin

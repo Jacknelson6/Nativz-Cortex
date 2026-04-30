@@ -10,7 +10,7 @@ import { createCompletion } from '@/lib/ai/client';
  * Returns:
  *   • [] if no change requests on file (caller renders the soft fallback line)
  *   • ['We took care of all of your requested revisions.'] on any AI error or
- *     when the model returns nothing parseable — the user's preferred
+ *     when the model returns nothing parseable, the user's preferred
  *     "we hit all your revisions" fallback so the email still ships clean.
  *   • Otherwise: the parsed bullet list (≤ 8 items, each one short past-tense
  *     statement starting with a verb).

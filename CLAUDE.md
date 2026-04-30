@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Nativz Cortex** — dual-dashboard AI-powered topic research and content ideation platform for the Nativz marketing agency. Admin dashboard for the team + client portal for clients. Core problem: videographers show up on set without knowing what to film. This tool runs AI-powered topic research so they have trending topics and video ideas ready.
+**Nativz Cortex**, dual-dashboard AI-powered topic research and content ideation platform for the Nativz marketing agency. Admin dashboard for the team + client portal for clients. Core problem: videographers show up on set without knowing what to film. This tool runs AI-powered topic research so they have trending topics and video ideas ready.
 
 ## Tech Stack
 
@@ -39,7 +39,7 @@ Full doc index lives in `docs/`. Read on-demand based on the task:
 ## Session Startup
 
 1. **Check Linear.** The `SessionStart` hook runs `scripts/linear-todos.sh` and injects open issues assigned to Jack. If the list is non-empty, your *first* response asks which issue to work on (grouped by priority). Don't pick one unilaterally; don't start until Jack picks. If empty, proceed normally.
-2. Run `git status` — if dirty, ask whether to commit, stash, or discard before starting new work.
+2. Run `git status`, if dirty, ask whether to commit, stash, or discard before starting new work.
 3. Read `todo.md` for current status / priorities.
 4. Reference `docs/detail-design-patterns.md` when implementing any UI component.
 
@@ -53,18 +53,19 @@ For any marketing/CRO/copy/SEO/growth task, read `.agents/MARKETING-SKILLS.md` a
 
 ## Working Preferences
 
-- **Plans are always approved** — proceed with implementation without asking for permission.
-- **Don't ask "is this plan good?"** — just build it.
-- **Run the commands.** Whenever you would tell the user to run a terminal command (scripts, seeds, migrations, tests, typecheck, lint), run it yourself. Don't stop at "here's what to run." Exceptions: steps that truly require the user (browser-only auth, dashboard clicks, deploying from their account) — say so briefly, but still run everything that can run here.
+- **NEVER USE EM DASHES.** Not in emails, not in UI copy, not in code comments, not in commit messages, not in chat replies, not in markdown docs. Anywhere. The em dash character (U+2014) and its en-dash sibling (U+2013) are banned. Use commas, periods, colons, parentheses, or a regular hyphen `-` instead. This is a hard rule. Audit your output before sending. If you catch yourself typing one, rewrite the sentence. Same goes for any code or copy you generate. Date ranges should read "Jan 1 to Jan 7", not "Jan 1 to 7" with a fancy dash.
+- **Plans are always approved.** Proceed with implementation without asking for permission.
+- **Don't ask "is this plan good?"** Just build it.
+- **Run the commands.** Whenever you would tell the user to run a terminal command (scripts, seeds, migrations, tests, typecheck, lint), run it yourself. Don't stop at "here's what to run." Exceptions: steps that truly require the user (browser-only auth, dashboard clicks, deploying from their account); say so briefly, but still run everything that can run here.
 - **Secrets in chat are fine.** Do not add disclaimers or "don't paste secrets" warnings unless explicitly asked for a security review. (`.env.local` stays gitignored.)
-- **Run until ship-ready, not just code-ready.** When building or modifying any feature, keep working autonomously until it is ready to ship *and* visually + experientially consistent with the rest of the site. This is required, not a recommendation. Before reporting done, verify: (1) builds clean + types pass, (2) the new surface matches existing screens — same typography, spacing, component primitives (`bg-surface` cards, `accent-text`, button styles), dark theme tokens, sentence-case copy, layout density, loading/error states. **If the new screen looks like it came from a different app, it isn't done.** Pull patterns from existing screens before inventing new ones; reference `docs/detail-design-patterns.md` and the closest sibling page in the same area (`/admin/...` or `/portal/...`).
+- **Run until ship-ready, not just code-ready.** When building or modifying any feature, keep working autonomously until it is ready to ship *and* visually + experientially consistent with the rest of the site. This is required, not a recommendation. Before reporting done, verify: (1) builds clean + types pass, (2) the new surface matches existing screens, same typography, spacing, component primitives (`bg-surface` cards, `accent-text`, button styles), dark theme tokens, sentence-case copy, layout density, loading/error states. **If the new screen looks like it came from a different app, it isn't done.** Pull patterns from existing screens before inventing new ones; reference `docs/detail-design-patterns.md` and the closest sibling page in the same area (`/admin/...` or `/portal/...`).
 
 ## Key Conventions
 
 - API routes: Zod validation + auth check before processing
 - Next.js 15 params: `params: Promise<{ id: string }>` (must `await params`)
 - UI: dark theme, `bg-surface` cards on `bg-background`, blue accent (`accent-text`)
-- Copy: **sentence case** in product UI (admin sidebar nav is the documented exception — Title Case there). Doc/file headings use Title Case.
+- Copy: **sentence case** in product UI (admin sidebar nav is the documented exception, Title Case there). Doc/file headings use Title Case.
 - AI responses: always null-safe (`?? []`, `?? ''`, `?? 0`)
 - Admin: `createAdminClient()` (service role); Portal: scope by `organization_id`
 - Charts: always `'use client'`
@@ -80,7 +81,7 @@ Pick the cheapest model that can do the subtask well:
 - Opus: subtasks needing real planning or tradeoffs
 
 Subagents follow the same rules recursively, with two caps:
-- Haiku does not spawn further subagents. If it needs to, the task was wrong-sized for Haiku — return to the parent.
+- Haiku does not spawn further subagents. If it needs to, the task was wrong-sized for Haiku, return to the parent.
 - Max 3 tiers total (parent → subagent → one further tier). No nesting beyond that.
 
 Don't escalate tiers without a concrete reason. If a subagent realizes it needs a higher tier than itself, return to the parent rather than spawning up.
@@ -91,8 +92,8 @@ Parent owns final output and cross-spawn synthesis. User instructions override.
 
 ### Data Fetching
 
-1. **WebFetch** — free, text-only, works on public pages that don't block bots.
-2. **agent-browser CLI** (when installed — check with `which agent-browser`) — local Rust CLI + Chrome via CDP. For dynamic pages or auth walls. Returns accessibility tree with element refs — ~82% fewer tokens than screenshot tools. Install: `npm i -g agent-browser && agent-browser install`. If not installed, fall back to a Chrome MCP / Playwright tool.
+1. **WebFetch**, free, text-only, works on public pages that don't block bots.
+2. **agent-browser CLI** (when installed, check with `which agent-browser`), local Rust CLI + Chrome via CDP. For dynamic pages or auth walls. Returns accessibility tree with element refs, ~82% fewer tokens than screenshot tools. Install: `npm i -g agent-browser && agent-browser install`. If not installed, fall back to a Chrome MCP / Playwright tool.
 3. **Notice recurring fetch patterns and propose wrapping them as dedicated tools.** When the same fetch/parse logic comes up more than once, suggest wrapping it as a named tool (e.g. a skill file or a `.py` script that calls `agent-browser` with the snapshot and extraction steps baked in). Reference it by name on future calls.
 
 ### PDF Files
@@ -101,7 +102,7 @@ Use `pdftotext`, not the `Read` tool. Use `Read` only when the user directly ask
 
 ## Large Data Files (skip unless directly relevant)
 
-- `app/admin/nerd/api/api-docs-data.ts` + `docs/api-reference.md` — both auto-generated from `app/api/**/route.ts` by `scripts/generate-api-docs.ts`. Do not edit by hand. Run `npm run docs:api` after adding/removing routes or tweaking the JSDoc block above an exported HTTP method.
+- `app/admin/nerd/api/api-docs-data.ts` + `docs/api-reference.md`, both auto-generated from `app/api/**/route.ts` by `scripts/generate-api-docs.ts`. Do not edit by hand. Run `npm run docs:api` after adding/removing routes or tweaking the JSDoc block above an exported HTTP method.
 
 ## Portal Security (CRITICAL)
 
@@ -110,8 +111,8 @@ Use `pdftotext`, not the `Read` tool. Use `Read` only when the user directly ask
 - Portal users are scoped via `user_client_access` table → `organization_id`
 - Use `getPortalClient()` (from `lib/portal/get-portal-client.ts`) in portal pages to get the user's client + org
 - API routes: check `users.organization_id` and filter results accordingly. Never return unscoped data to non-admin users.
-- `createAdminClient()` bypasses RLS — if using it, you MUST manually enforce org scoping in the query
-- `createServerSupabaseClient()` respects RLS — prefer this for portal-facing routes when possible
+- `createAdminClient()` bypasses RLS, if using it, you MUST manually enforce org scoping in the query
+- `createServerSupabaseClient()` respects RLS, prefer this for portal-facing routes when possible
 - Supabase RLS is enabled on all tables with admin + viewer policies. The `topic_searches` table has org-scoped RLS.
 
 **Pattern for API route scoping:**
@@ -149,4 +150,4 @@ For complex features, check the `tasks/` directory for detailed specs. Build fro
 
 ## Long-running sessions
 
-Auto-compaction is configured (threshold lowered to 80% per `490221a4`). You can run multi-phase, multi-day phased builds continuously without worrying about the context window — old turns are summarized as needed. When Jack approves a multi-phase plan ("continue on phase 1-4 until you're done"), execute every phase end-to-end with the verify gates per phase (typecheck + lint + dev visual + `/audit` + commit), pausing only for genuine blockers (missing creds, browser-only auth, destructive ops). No "stopping for the night" prompts; no "should I continue?" — just keep shipping.
+Auto-compaction is configured (threshold lowered to 80% per `490221a4`). You can run multi-phase, multi-day phased builds continuously without worrying about the context window, old turns are summarized as needed. When Jack approves a multi-phase plan ("continue on phase 1-4 until you're done"), execute every phase end-to-end with the verify gates per phase (typecheck + lint + dev visual + `/audit` + commit), pausing only for genuine blockers (missing creds, browser-only auth, destructive ops). No "stopping for the night" prompts; no "should I continue?", just keep shipping.

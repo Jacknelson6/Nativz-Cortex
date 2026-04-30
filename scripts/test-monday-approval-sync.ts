@@ -2,7 +2,7 @@
  * Quick read-only smoke test for `syncMondayApprovalForDrop` after the
  * Monday-on-notify wiring. Computes the label that *would* be pushed for
  * the most recent share link of a given client without actually mutating
- * Monday — so we can confirm the new "anyRevised && anyNotifyPending"
+ * Monday, so we can confirm the new "anyRevised && anyNotifyPending"
  * gating resolves to the right label.
  *
  * Usage:

@@ -14,12 +14,12 @@
  *
  * "Revised" is a transient state: it's only true between the editor uploading
  * the new cut and the editor clicking Notify Client / Skip. After notify, the
- * client knows about it, so the label flips back to "Waiting on approval" —
+ * client knows about it, so the label flips back to "Waiting on approval" -
  * the ball is back in the client's court for re-review.
  *
  * Monday item lookup is by client name + month group. The group naming
  * convention is *creation month*: the "April 2026" group holds the May
- * 1–31 calendar (created in April, scheduled for May).
+ * 1 to 31 calendar (created in April, scheduled for May).
  */
 
 import {
@@ -45,7 +45,7 @@ export type ApprovalLabel =
 
 /**
  * Group title for a calendar whose first scheduled post lands on `startDate`.
- * Subtracts one calendar month — "April 2026" group holds the May calendar.
+ * Subtracts one calendar month, "April 2026" group holds the May calendar.
  */
 export function groupTitleForCalendarStart(startDate: string): string {
   const d = new Date(startDate);
@@ -64,7 +64,7 @@ export interface CalendarItemMatch {
 
 /**
  * Find the Monday Content Calendars item for a given client + month group.
- * Item names are formatted "Client Name (ABBR)" — `parseContentCalendarItem`
+ * Item names are formatted "Client Name (ABBR)", `parseContentCalendarItem`
  * strips the parenthetical for matching.
  */
 export async function findContentCalendarItem(
@@ -147,7 +147,7 @@ export async function computeApprovalLabel(
     // "Revised" only stays sticky while at least one revised video is still
     // pending an outbound notify. Once the editor clicks Notify Client (or
     // Skip), `revised_video_notify_pending` flips false on every row in the
-    // drop, and the label falls through to "Waiting on approval" — i.e.,
+    // drop, and the label falls through to "Waiting on approval", i.e.,
     // the ball is back in the client's court for re-review.
     admin
       .from('content_drop_videos')
@@ -206,7 +206,7 @@ export async function computeApprovalLabel(
 
 /**
  * End-to-end: derive the current label from Cortex state and push it to the
- * matching Monday item. Idempotent — flipping a column to its current value
+ * matching Monday item. Idempotent, flipping a column to its current value
  * is a no-op. Errors are logged, not thrown; callers wrap in `after()` so
  * Vercel keeps the function alive past the response.
  */
