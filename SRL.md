@@ -1296,3 +1296,47 @@ obvious.
 - Phase 2 (image upload pipeline + Meta-variation aspect ratios + audio
   support for "Other" creatives) — deferred until Jack confirms the
   followup column is reading cleanly in production.
+
+## Goal 14 (set 2026-04-29) — Content Tools admin shell
+
+Rename `/admin/share-links` to `/admin/content-tools` and grow it from a
+single share-link table into a 4-tab operations console for everything
+content-pipeline-adjacent. The agency's day-to-day "what's happening
+right now across every brand" page.
+
+### Acceptance criteria
+
+- [ ] Sidebar entry renames `Share Links` -> `Content tools`. Old href
+      `/admin/share-links` 308-redirects to `/admin/content-tools`.
+- [ ] `/admin/content-tools` renders a 4-tab shell with the same tab
+      strip pattern the existing review page uses:
+      - **Projects** -- the existing cross-brand share-link table.
+      - **Quick schedule** -- list of Monday Content-Calendar items
+        flagged "EM Approved", one-click pipeline that pulls thumbnails
+        + transcribes audio + writes captions from saved snippets, then
+        kicks off the existing scheduler flow.
+      - **Connections** -- health dashboard for every integration the
+        agency depends on (Drive / Monday / Resend / Zernio / Supabase
+        / Anthropic / OpenRouter / Nango). Each card shows connected /
+        missing + last-sync timestamp where available.
+      - **Notifications** -- POC contacts list (existing
+        ReviewContactsPanel) PLUS a recent-emails activity feed pulled
+        from `email_log` filtered to `category=transactional` and
+        calendar-related type keys.
+- [ ] Page styling matches the existing /review subpage: same header
+      block, same TabStrip primitive, same `bg-surface` cards, same
+      sentence-case copy and dark-theme tokens.
+- [ ] No regressions: `/review` (brand-scoped) still works, the
+      cross-brand projects list still loads identically.
+
+### Scope boundaries
+- IN: shell + 4 tabs, real data on Projects, real data on Connections,
+  real data on Notifications activity feed, MVP-level Monday picker
+  for Quick schedule (list + per-row "Schedule" button stub if the
+  pipeline isn't fully wired yet).
+- OUT: shipping a fully autonomous Monday -> Zernio scheduler in one
+  iteration; per-tab analytics; mobile responsive polish beyond what
+  the existing /review page already gives us.
+
+## Goal 14 Iterations
+

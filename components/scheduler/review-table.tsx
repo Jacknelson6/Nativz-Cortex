@@ -124,7 +124,7 @@ function projectTypeLabel(row: ReviewLinkRow): string {
   return PROJECT_TYPE_OPTIONS.find((o) => o.value === row.project_type)?.label ?? '—';
 }
 
-type SortKey = 'newest' | 'oldest' | 'progress';
+export type SortKey = 'newest' | 'oldest' | 'progress';
 type Tab = 'content' | 'notifications';
 
 interface ReviewTableProps {
@@ -282,9 +282,11 @@ interface ReviewTableCardProps {
   rows: ReviewLinkRow[];
   showBrand?: boolean;
   onPatchLink: (id: string, patch: Partial<ReviewLinkRow>) => void;
+  /** Override the card's internal title block. Defaults to "Content". */
+  title?: string;
 }
 
-function ReviewTableCard({ rows, showBrand = false, onPatchLink }: ReviewTableCardProps) {
+export function ReviewTableCard({ rows, showBrand = false, onPatchLink, title }: ReviewTableCardProps) {
   return (
     <Table variant="card">
       <thead>
@@ -298,7 +300,9 @@ function ReviewTableCard({ rows, showBrand = false, onPatchLink }: ReviewTableCa
                 <FileText className="size-4" />
               </span>
               <div className="min-w-0 text-left">
-                <div className="text-sm font-semibold text-text-primary">Content</div>
+                <div className="text-sm font-semibold text-text-primary">
+                  {title ?? 'Content'}
+                </div>
                 <div className="mt-0.5 text-xs text-text-muted">
                   {rows.length} project{rows.length === 1 ? '' : 's'}
                 </div>
@@ -833,7 +837,7 @@ function EmptyState({ brandName }: { brandName?: string }) {
   );
 }
 
-function sortLinks(a: ReviewLinkRow, b: ReviewLinkRow, sort: SortKey): number {
+export function sortLinks(a: ReviewLinkRow, b: ReviewLinkRow, sort: SortKey): number {
   if (sort === 'progress') {
     const order: Record<StatusKey, number> = {
       ready_for_review: 0,
