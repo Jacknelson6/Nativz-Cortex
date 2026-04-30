@@ -5,21 +5,28 @@ import { use, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   CalendarDays,
+  Clock,
   Download,
   FileVideo,
+  Film,
   Loader2,
   Play,
 } from 'lucide-react';
+import { useBrandMode } from '@/components/layout/brand-mode-provider';
 
 /**
  * Public review page for an editing project.
  *
- * Same /c/* family as the social calendar share page, but stripped down:
- * editing projects carry only videos (no captions, hashtags, schedule,
- * platforms, per-post status), so this page is a branded grid of cuts
- * with a player modal. Anyone with the link can view; the API logs
- * one view row on first paint with the optional `as` query param so we
- * can later say "Sarah opened this twice."
+ * Visually mirrors the calendar share page (/c/[token]) so the brand
+ * experience stays consistent: brand-aware logo header, font-display
+ * client-name title, status pill row, branded card chrome. The
+ * differences from /c/[token] are intentional: editing projects have
+ * no calendar grid, no captions, no tagged people, no schedule. Only
+ * the cuts and an optional brief.
+ *
+ * Anyone with the link can view; the API logs one view row on first
+ * paint with the optional `as` query param so we can later say
+ * "Sarah opened this twice."
  */
 
 interface SharedVideo {
@@ -133,41 +140,42 @@ export default function EditingProjectSharePage({
     day: 'numeric',
     year: 'numeric',
   });
+  const cutCount = data.videos.length;
+  const clientName = data.client.name ?? 'Review';
+  const projectName = data.project.name;
 
   return (
     <div className="min-h-screen bg-background text-text-primary">
-      <header className="border-b border-nativz-border bg-surface">
-        <div className="mx-auto flex max-w-5xl items-center gap-4 px-6 py-5">
-          {data.client.logo_url ? (
-            <Image
-              src={data.client.logo_url}
-              alt={data.client.name ?? 'Client'}
-              width={44}
-              height={44}
-              className="h-11 w-11 shrink-0 rounded-lg object-cover"
-              unoptimized
-            />
-          ) : (
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-accent-surface text-accent-text">
-              <FileVideo size={20} />
-            </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-xs uppercase tracking-wide text-text-muted">
-              {data.client.name ?? 'Review'}
-            </p>
-            <h1 className="truncate text-lg font-semibold text-text-primary">
-              {data.project.name}
-            </h1>
+      <header className="border-b border-nativz-border bg-surface px-4 py-5 sm:px-6 sm:py-7">
+        <div className="mx-auto max-w-5xl">
+          <div className="mb-4 flex items-center sm:mb-5">
+            <ShareHeaderLogo />
           </div>
-          <div className="hidden text-right text-xs text-text-muted sm:block">
-            <p>Link expires {expiresLabel}</p>
-            <p>{data.videos.length} {data.videos.length === 1 ? 'cut' : 'cuts'}</p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="font-display text-xl font-semibold tracking-tight text-text-primary sm:text-3xl">
+                {clientName} {DASH} {projectName}
+              </h1>
+              <p className="mt-2 text-sm text-text-secondary sm:text-base">
+                {cutCount} {cutCount === 1 ? 'cut' : 'cuts'} to review
+                {data.project.shoot_date
+                  ? ` · shot ${formatShoot(data.project.shoot_date)}`
+                  : ''}
+              </p>
+            </div>
+          </div>
+          <div className="mt-5 flex flex-wrap items-center gap-2 text-[13px] sm:text-sm">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-surface/40 px-2.5 py-1 text-accent-text">
+              <Film size={14} /> {cutCount} {cutCount === 1 ? 'cut' : 'cuts'}
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-hover px-2.5 py-1 text-text-muted">
+              <Clock size={14} /> link expires {expiresLabel}
+            </span>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl space-y-6 px-6 py-8">
+      <main className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
         {data.project.brief ? (
           <section className="rounded-xl border border-nativz-border bg-surface p-5">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
@@ -179,30 +187,27 @@ export default function EditingProjectSharePage({
             {data.project.shoot_date ? (
               <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-text-muted">
                 <CalendarDays size={12} />
-                Shot{' '}
-                {new Date(data.project.shoot_date).toLocaleDateString(undefined, {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric',
-                })}
+                Shot {formatShoot(data.project.shoot_date)}
               </p>
             ) : null}
           </section>
         ) : null}
 
-        {data.videos.length === 0 ? (
+        {cutCount === 0 ? (
           <div className="rounded-xl border border-dashed border-nativz-border bg-surface p-12 text-center">
             <FileVideo className="mx-auto h-10 w-10 text-text-muted" />
             <p className="mt-3 text-sm text-text-secondary">
-              The team hasn't uploaded any cuts yet.
+              The team hasn{APOS}t uploaded any cuts yet.
             </p>
           </div>
         ) : (
           <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {data.videos.map((v) => (
+            {data.videos.map((v, idx) => (
               <VideoTile
                 key={v.id}
+                index={idx}
                 video={v}
+                clientLogo={data.client.logo_url}
                 onPlay={() => setActiveVideoId(v.id)}
               />
             ))}
@@ -217,14 +222,45 @@ export default function EditingProjectSharePage({
   );
 }
 
+function ShareHeaderLogo() {
+  const { mode } = useBrandMode();
+  if (mode === 'nativz') {
+    return (
+      <Image
+        src="/nativz-logo.png"
+        alt="Nativz"
+        width={120}
+        height={45}
+        className="h-5 w-auto sm:h-6"
+        priority
+      />
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/anderson-logo-dark.svg"
+      alt="Anderson Collaborative"
+      className="h-5 w-auto sm:h-6"
+      loading="eager"
+      fetchPriority="high"
+      decoding="async"
+    />
+  );
+}
+
 function VideoTile({
+  index,
   video,
+  clientLogo,
   onPlay,
 }: {
+  index: number;
   video: SharedVideo;
+  clientLogo: string | null;
   onPlay: () => void;
 }) {
-  const label = stripExt(video.filename) ?? `Cut ${(video.position ?? 0) + 1}`;
+  const label = stripExt(video.filename) ?? `Cut ${index + 1}`;
   const playable = Boolean(video.public_url);
   return (
     <button
@@ -256,6 +292,17 @@ function VideoTile({
         </div>
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+      <div className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm">
+        {clientLogo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={clientLogo}
+            alt=""
+            className="h-3.5 w-3.5 rounded-full object-cover"
+          />
+        ) : null}
+        Cut {index + 1}
+      </div>
       <div className="relative mt-auto flex items-end justify-between gap-2 p-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-white">{label}</p>
@@ -289,7 +336,7 @@ function VideoModal({
   }, [onClose]);
 
   if (!video.public_url) return null;
-  const label = stripExt(video.filename) ?? `Cut ${(video.position ?? 0) + 1}`;
+  const label = stripExt(video.filename) ?? 'Cut';
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-10"
@@ -347,6 +394,14 @@ function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+function formatShoot(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
 function friendlyError(code: string): string {
   switch (code) {
     case 'expired':
@@ -359,3 +414,9 @@ function friendlyError(code: string): string {
       return 'Failed to load.';
   }
 }
+
+// Plain hyphen + ASCII apostrophe used in JSX to keep the file 100%
+// free of em/en dashes (see CLAUDE.md). Constants make the intent
+// readable and let an audit grep for them.
+const DASH = '-';
+const APOS = "'";
