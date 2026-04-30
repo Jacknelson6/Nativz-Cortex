@@ -295,6 +295,30 @@ summary {
   --color-accent2-surface: var(--accent2-surface);
   --color-accent2-text: var(--accent2-text);
 
+  /* shadcn primitive tokens. The bundled DropdownMenu, ContextMenu, and
+     Select primitives ship with `bg-popover` / `text-popover-foreground` /
+     `border-border` / `bg-accent` baked into their classNames. Without
+     these mappings, Tailwind v4 falls back to shadcn's light-mode
+     defaults and our dark-themed app renders Radix popups with white
+     backgrounds. Map the names onto our existing surface palette so
+     every Radix popover inherits the dark theme automatically. */
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--text-primary);
+  --color-accent-foreground: var(--accent-contrast);
+  --color-border: var(--border);
+  --color-input: var(--surface-elevated);
+  --color-ring: var(--accent);
+  --color-muted: var(--surface-hover);
+  --color-muted-foreground: var(--text-muted);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text-primary);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-contrast);
+  --color-secondary: var(--surface-hover);
+  --color-secondary-foreground: var(--text-primary);
+  --color-destructive: var(--status-danger);
+  --color-destructive-foreground: var(--text-primary);
+
   /* Brand palette (reachable via `bg-nz-cyan`, `text-nz-purple`, etc.) */
   --color-nz-cyan: var(--nz-cyan);
   --color-nz-cyan-700: var(--nz-cyan-700);
