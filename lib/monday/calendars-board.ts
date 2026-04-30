@@ -206,3 +206,59 @@ export async function fetchApprovedItems(
 
   return out;
 }
+
+/** Fetch a single Content-Calendar row by item id. Returns null if the
+ *  item doesn't exist on the board (e.g. archived between the queue
+ *  refresh and the user clicking Schedule). */
+export async function fetchItemById(
+  token: string,
+  itemId: string,
+): Promise<MondayApprovedItem | null> {
+  const data = (await gql(
+    token,
+    `query($itemId: [ID!]) {
+      items(ids: $itemId) {
+        id
+        name
+        updated_at
+        group { id title }
+        column_values(ids:["${COL_EDITING_STATUS}","${COL_EDITED_FOLDER}","${COL_LATER_LINK}"]){
+          id text value
+        }
+      }
+    }`,
+    { itemId: [itemId] },
+  )) as {
+    items: {
+      id: string;
+      name: string;
+      updated_at: string | null;
+      group: { id: string; title: string } | null;
+      column_values: { id: string; text: string | null; value: string | null }[];
+    }[];
+  };
+
+  const row = data.items?.[0];
+  if (!row) return null;
+
+  const get = (id: string) => row.column_values.find((c) => c.id === id);
+  const parseLinkValue = (raw: string | null | undefined): string | null => {
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as { url?: string };
+      return parsed.url ?? null;
+    } catch {
+      return null;
+    }
+  };
+
+  return {
+    itemId: row.id,
+    itemName: row.name,
+    groupName: row.group?.title ?? '',
+    status: get(COL_EDITING_STATUS)?.text ?? '',
+    folderUrl: parseLinkValue(get(COL_EDITED_FOLDER)?.value),
+    shareLink: parseLinkValue(get(COL_LATER_LINK)?.value),
+    updatedAt: row.updated_at,
+  };
+}

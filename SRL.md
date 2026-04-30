@@ -1471,3 +1471,45 @@ to the existing scheduler. One click from the queue, no shell scripts.
 
 ## Goal 15 Iterations
 
+### Iteration 15.1 - 2026-04-29
+
+**Shipped:**
+- `feat(content-tools): POST /quick-schedule/start endpoint + brand resolver` (pending commit)
+
+**What landed:**
+- `lib/monday/client-mapping.ts` extracts `MONDAY_NAME_TO_CORTEX_SLUG` +
+  `resolveCortexClientFromMondayName` from the queue-from-monday script so
+  the per-row route and the bulk script fail identically (no slug, inactive,
+  no SMM service, no connected platforms). Single source of truth.
+- `lib/monday/calendars-board.ts` gains `fetchItemById` so the start route
+  can verify a single row without re-walking the whole board (10x cheaper
+  than the queue endpoint).
+- `app/api/admin/content-tools/quick-schedule/start/route.ts` is the per-row
+  pipeline trigger: validates body with Zod, refetches the Monday row to
+  catch stale clicks, lists the Drive folder, picks an even spread across
+  the next 30 days (override-able via body), runs the existing
+  `runCalendarPipeline` with mintShareLink+draftMode, then writes the share
+  link + Scheduled status back to Monday. Failure modes get distinct
+  status codes (400 / 404 / 422 / 502 / 503) so the UI can paint a tight
+  inline error rather than a generic toast.
+
+**State vs goal:**
+
+| Criterion | Status |
+|-----------|--------|
+| Start endpoint accepts itemId, resolves brand, kicks off ingest, returns dropId | done |
+| Per-row Schedule button wired with status poller + lands in /admin/calendar | not started |
+| Caption pre-fill from saved-captions library | done (already wired in `generateDropCaptions`) |
+| Monday status flip on success | done (in start route; UI wiring still pending) |
+
+**Gaps or regressions:**
+- Synchronous run; browser holds the connection for the pipeline duration.
+  Fine for typical 5-10 video drops; iter 15.2 will move to async + poller.
+- No UI yet. The button on quick-schedule-tab is still disabled.
+
+**Next iteration:**
+- 15.2: Wire the per-row Schedule button to call /start, swap to a
+  "Scheduling..." state with a spinner, surface success (share link +
+  drop link to /admin/calendar) and failure (inline banner per error
+  code) inline in the queue row.
+
