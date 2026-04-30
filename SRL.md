@@ -1306,15 +1306,16 @@ right now across every brand" page.
 
 ### Acceptance criteria
 
-- [ ] Sidebar entry renames `Share Links` -> `Content tools`. Old href
+- [x] Sidebar entry renames `Share Links` -> `Content tools`. Old href
       `/admin/share-links` 308-redirects to `/admin/content-tools`.
-- [ ] `/admin/content-tools` renders a 4-tab shell with the same tab
+- [x] `/admin/content-tools` renders a 4-tab shell with the same tab
       strip pattern the existing review page uses:
       - **Projects** -- the existing cross-brand share-link table.
       - **Quick schedule** -- list of Monday Content-Calendar items
         flagged "EM Approved", one-click pipeline that pulls thumbnails
         + transcribes audio + writes captions from saved snippets, then
-        kicks off the existing scheduler flow.
+        kicks off the existing scheduler flow. (List ships in 14.4;
+        per-row pipeline tracked under Goal 15 per the scope boundary.)
       - **Connections** -- health dashboard for every integration the
         agency depends on (Drive / Monday / Resend / Zernio / Supabase
         / Anthropic / OpenRouter / Nango). Each card shows connected /
@@ -1323,10 +1324,10 @@ right now across every brand" page.
         ReviewContactsPanel) PLUS a recent-emails activity feed pulled
         from `email_log` filtered to `category=transactional` and
         calendar-related type keys.
-- [ ] Page styling matches the existing /review subpage: same header
+- [x] Page styling matches the existing /review subpage: same header
       block, same TabStrip primitive, same `bg-surface` cards, same
       sentence-case copy and dark-theme tokens.
-- [ ] No regressions: `/review` (brand-scoped) still works, the
+- [x] No regressions: `/review` (brand-scoped) still works, the
       cross-brand projects list still loads identically.
 
 ### Scope boundaries
@@ -1410,4 +1411,63 @@ right now across every brand" page.
 
 **Next iteration:**
 - 14.4: Quick Schedule MVP. Wire the actual Monday pull (Content Calendars board, EM Approved label filter), thumbnail extraction from the linked Drive folder, and caption pre-fill from the brand's saved-snippets table. This is the largest remaining lift on Goal 14 and the only criterion that's still flagged "partial".
+
+### Iteration 14.4 — 2026-04-29 · Quick Schedule live Monday queue
+
+**Shipped:**
+- `feat(content-tools): wire Quick Schedule to live Monday EM-Approved queue` (869fa496)
+
+**State vs goal:**
+| Criterion | Status |
+|-----------|--------|
+| Quick Schedule tab pulls live EM-Approved items from Monday Content Calendars board | done |
+| Item rows show name + group title + relative-time approval + folder link | done |
+| Distinguishes 503 unconfigured (placeholder) from 502 upstream error (banner) from empty success | done |
+| Per-row "Schedule" button (stub, MVP-scope) | done — disabled with tooltip pointing at Goal 15 |
+| `lib/monday/calendars-board.ts` extended with `fetchApprovedItems()` (one query, walks all groups, sorts by updated_at desc) | done |
+
+**Gaps or regressions:**
+- Per-row Schedule button is a disabled stub. The actual ingest + caption pre-fill is OUT of scope for Goal 14 (explicit scope boundary) and gets a fresh goal below.
+- Approval timestamp uses Monday's `updated_at` as proxy. The board doesn't expose status-change timestamps without an activity-log query. Acceptable for "how stale is this approval" sorting.
+
+**SRL complete on Goal 14.** All acceptance criteria met as of iteration 14.4. Per-row scheduler pipeline tracked under Goal 15.
+
+
+## Goal 15 (set 2026-04-29) - Quick Schedule per-row pipeline
+
+Goal 14 shipped the read side of the Quick Schedule queue: an admin can
+see every Monday Content-Calendar item flagged "EM Approved" in one
+place. Goal 15 wires the per-row "Schedule" button to actually do the
+pipeline Jack asked for in the original Content Tools brief: walk the
+linked Drive folder, ingest masters, extract a thumbnail, transcribe,
+pre-fill captions from the brand's saved-snippet library, and hand off
+to the existing scheduler. One click from the queue, no shell scripts.
+
+### Acceptance criteria
+
+- [ ] POST `/api/admin/content-tools/quick-schedule/start` accepts a
+      Monday item id, looks up the linked edited-folder URL, resolves
+      the brand by walking the folder back to a known client, kicks
+      off ingest, returns a job id.
+- [ ] Per-row Schedule button on the Quick Schedule tab calls that
+      endpoint, swaps to a "Scheduling..." state with a job-status
+      poller, and lands the row in a per-brand calendar entry the
+      existing /admin/calendar surface already renders.
+- [ ] Caption pre-fill uses the brand's saved-captions library. Empty
+      library is a soft fallback (the editor still gets a draft, just
+      generic).
+- [ ] Monday status flips from "EM Approved" to "Scheduled" via the
+      existing `setStatusScheduled()` helper once the calendar entry
+      lands. Failure mid-pipeline leaves the Monday row untouched and
+      surfaces the error in the queue UI.
+
+### Scope boundaries
+
+- IN: server route + Quick Schedule button wiring + saved-captions
+  pre-fill + Monday status flip + minimum viable per-row error state.
+- OUT: per-row preview modal (admin can edit captions etc); a full
+  per-job activity log in the Notifications tab (we'll surface a one-
+  line toast for now); cross-brand bulk schedule.
+
+## Goal 15 Iterations
 
