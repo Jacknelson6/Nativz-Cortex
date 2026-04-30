@@ -7,6 +7,7 @@ import {
   Cable,
   CheckCircle2,
   Circle,
+  Copy,
   Hand,
   RefreshCcw,
   Search,
@@ -14,6 +15,7 @@ import {
 import { Facebook, Instagram, Linkedin, Music2, Youtube } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ClientLogo } from '@/components/clients/client-logo';
+import { Dialog } from '@/components/ui/dialog';
 import {
   Tooltip,
   TooltipContent,
@@ -109,6 +111,12 @@ export function ConnectionsTab() {
    * right now.
    */
   const [activeOnly, setActiveOnly] = useState(false);
+  /**
+   * Which client's "Send connection links" modal is open. Clicking the
+   * brand cell sets this; the modal lists all 5 platforms with a
+   * copy-to-clipboard URL Jack can forward to the client.
+   */
+  const [linksFor, setLinksFor] = useState<ClientRow | null>(null);
 
   async function load(silent = false) {
     if (silent) setRefreshing(true);
@@ -218,10 +226,15 @@ export function ConnectionsTab() {
           {query ? 'No brands match that search.' : 'No brands yet.'}
         </div>
       ) : (
-        <MatrixTable rows={filtered} />
+        <MatrixTable rows={filtered} onPickClient={setLinksFor} />
       )}
 
       <Legend />
+
+      <SendLinksModal
+        client={linksFor}
+        onClose={() => setLinksFor(null)}
+      />
     </div>
   );
 }
@@ -250,7 +263,13 @@ function SearchInput({
   );
 }
 
-function MatrixTable({ rows }: { rows: ClientRow[] }) {
+function MatrixTable({
+  rows,
+  onPickClient,
+}: {
+  rows: ClientRow[];
+  onPickClient: (c: ClientRow) => void;
+}) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-sm">
@@ -279,7 +298,12 @@ function MatrixTable({ rows }: { rows: ClientRow[] }) {
               className="border-b border-nativz-border/60 transition-colors hover:bg-surface-hover/40"
             >
               <td className="px-5 py-3">
-                <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => onPickClient(row)}
+                  className="-mx-1.5 -my-1 flex items-center gap-2.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-surface-hover focus:bg-surface-hover focus:outline-none"
+                  title="Send connection links"
+                >
                   <ClientLogo
                     name={row.name}
                     src={row.logoUrl}
@@ -290,7 +314,7 @@ function MatrixTable({ rows }: { rows: ClientRow[] }) {
                       {row.name}
                     </div>
                   </div>
-                </div>
+                </button>
               </td>
               {PLATFORMS.map(({ key }) => (
                 <td key={key} className="px-3 py-3 text-center">
@@ -424,6 +448,157 @@ function summarize(totals: MatrixResponse['totals']): string {
   if (totals.manual > 0) parts.push(`${totals.manual} manual`);
   if (totals.missing > 0) parts.push(`${totals.missing} missing`);
   return parts.join(' · ');
+}
+
+/**
+ * "Send connection links" modal.
+ *
+ * Triggered by clicking a brand cell in the matrix. Lists all five
+ * platforms with:
+ *   - status icon (reuses STATUS_META, so it matches the matrix cells)
+ *   - attached username when connected
+ *   - copy-to-clipboard URL the agency can forward to the client
+ *
+ * LinkedIn is special-cased: Zernio has no LinkedIn flow, so instead
+ * of a connection URL we show "Manual setup" copy. Putting it inside
+ * the same modal (rather than hiding it) makes the gap obvious to the
+ * operator, matching how the matrix shows it.
+ */
+function SendLinksModal({
+  client,
+  onClose,
+}: {
+  client: ClientRow | null;
+  onClose: () => void;
+}) {
+  const open = !!client;
+  // Snapshot the origin so we can preview the URL the client will see.
+  // SSR-safe: we only ever read this on the client.
+  const origin =
+    typeof window !== 'undefined' ? window.location.origin : 'https://cortex.nativz.io';
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={
+        client ? `Send ${client.name} a connection link` : 'Send connection link'
+      }
+      maxWidth="lg"
+    >
+      {client && (
+        <div className="space-y-2">
+          <p className="text-xs text-text-muted">
+            Copy any of the links below and send it to the client. They&apos;ll
+            land on a one-tap login page that connects the account
+            straight into Cortex.
+          </p>
+          <ul className="mt-2 divide-y divide-nativz-border/60 rounded-lg border border-nativz-border bg-background/40">
+            {PLATFORMS.map((p) => (
+              <PlatformLinkRow
+                key={p.key}
+                platform={p}
+                slot={client.profiles[p.key]}
+                slug={client.slug}
+                origin={origin}
+              />
+            ))}
+          </ul>
+        </div>
+      )}
+    </Dialog>
+  );
+}
+
+type PlatformDef = (typeof PLATFORMS)[number];
+
+function PlatformLinkRow({
+  platform,
+  slot,
+  slug,
+  origin,
+}: {
+  platform: PlatformDef;
+  slot: PlatformSlot;
+  slug: string | null;
+  origin: string;
+}) {
+  const { key, label, Icon } = platform;
+  const meta = STATUS_META[slot.status];
+  const StatusIcon = meta.Icon;
+  const isLinkedIn = key === 'linkedin';
+  // LinkedIn has no Zernio flow - everything else uses the public
+  // slug-based kickoff endpoint.
+  const url = !isLinkedIn && slug ? `${origin}/connect/${slug}/${key}` : null;
+
+  async function handleCopy() {
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success(`Copied ${label} link`);
+    } catch {
+      toast.error('Could not copy. Select and copy by hand.');
+    }
+  }
+
+  return (
+    <li className="flex items-center gap-3 px-3 py-3">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-nativz-border bg-surface text-text-secondary">
+        <Icon className="size-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-text-primary">
+            {label}
+          </span>
+          <span
+            className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${meta.chip}`}
+          >
+            <StatusIcon className="size-3" />
+            {meta.label}
+          </span>
+        </div>
+        <div className="mt-0.5 truncate text-xs text-text-muted">
+          {renderSubline(slot, isLinkedIn, url)}
+        </div>
+      </div>
+      {url ? (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void handleCopy()}
+          className="shrink-0"
+        >
+          <Copy className="size-3.5" />
+          <span>Copy link</span>
+        </Button>
+      ) : (
+        <span className="shrink-0 text-[11px] text-text-tertiary">
+          {isLinkedIn ? 'Manual setup' : 'Slug missing'}
+        </span>
+      )}
+    </li>
+  );
+}
+
+function renderSubline(
+  slot: PlatformSlot,
+  isLinkedIn: boolean,
+  url: string | null,
+): string {
+  if (slot.status === 'connected' && slot.username) {
+    return `Posting as @${slot.username}`;
+  }
+  if (slot.status === 'manual' && slot.username) {
+    return `Manual access as @${slot.username}`;
+  }
+  if (isLinkedIn) {
+    return 'Zernio has no LinkedIn flow. Post via the client account by hand.';
+  }
+  if (slot.status === 'disconnected') {
+    return 'Token revoked. Send the link to reconnect.';
+  }
+  return url ?? 'No link available';
 }
 
 function MatrixSkeleton() {
