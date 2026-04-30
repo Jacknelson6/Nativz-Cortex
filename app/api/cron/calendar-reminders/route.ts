@@ -166,7 +166,7 @@ async function handleGet(request: NextRequest) {
     // OPS_NUDGE_HOURS, ping ops chat once. The stamp clears in
     // revision/complete when the drop becomes clean, so the next
     // round of feedback can re-trigger.
-    const OPS_NUDGE_HOURS = 24;
+    const OPS_NUDGE_HOURS = 48;
     if (
       ourCourtCount > 0
       && !link.revisions_ops_nudged_at
