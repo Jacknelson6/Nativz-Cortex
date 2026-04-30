@@ -54,6 +54,7 @@ async function handleGet(request: NextRequest) {
     no_open_nudge_sent_at: string | null;
     no_action_nudge_sent_at: string | null;
     final_call_sent_at: string | null;
+    revisions_ops_nudged_at: string | null;
     expires_at: string;
     content_drops: {
       id: string;
@@ -79,6 +80,7 @@ async function handleGet(request: NextRequest) {
       no_open_nudge_sent_at,
       no_action_nudge_sent_at,
       final_call_sent_at,
+      revisions_ops_nudged_at,
       expires_at,
       content_drops!inner (
         id,
@@ -86,7 +88,7 @@ async function handleGet(request: NextRequest) {
         clients!inner ( id, name, agency, chat_webhook_url )
       )
     `)
-    .or('no_open_nudge_sent_at.is.null,no_action_nudge_sent_at.is.null,final_call_sent_at.is.null')
+    .or('no_open_nudge_sent_at.is.null,no_action_nudge_sent_at.is.null,final_call_sent_at.is.null,revisions_ops_nudged_at.is.null')
     .gt('expires_at', new Date().toISOString())
     .returns<ShareLinkRow[]>();
 
@@ -148,14 +150,49 @@ async function handleGet(request: NextRequest) {
     // The single source of truth: how many posts in this link still need
     // the client's eyes. Drives whether we email at all and what the copy
     // says. Replaces the old binary "any-action / ball-in-court" guards.
-    const { pending, total, hasRevisionFeedback } = await countPendingPosts(
-      admin,
-      link.included_post_ids,
-    );
+    const {
+      pending,
+      total,
+      hasRevisionFeedback,
+      ourCourtCount,
+      oldestOurCourtAt,
+    } = await countPendingPosts(admin, link.included_post_ids);
     const sentMs = new Date(link.created_at).getTime();
     const ageHours = (now - sentMs) / (1000 * 60 * 60);
 
-    // Suppress all nudges when:
+    // ── Ops nudge: revisions sitting in our court ───────────────────
+    //
+    // When the client leaves revisions and we've sat on them for
+    // OPS_NUDGE_HOURS, ping ops chat once. The stamp clears in
+    // revision/complete when the drop becomes clean, so the next
+    // round of feedback can re-trigger.
+    const OPS_NUDGE_HOURS = 24;
+    if (
+      ourCourtCount > 0
+      && !link.revisions_ops_nudged_at
+      && oldestOurCourtAt
+      && (now - new Date(oldestOurCourtAt).getTime()) / (1000 * 60 * 60) >= OPS_NUDGE_HOURS
+    ) {
+      const oldestHours = Math.round(
+        (now - new Date(oldestOurCourtAt).getTime()) / (1000 * 60 * 60),
+      );
+      const noun = ourCourtCount === 1 ? 'post' : 'posts';
+      postToGoogleChatSafe(
+        process.env.OPS_CHAT_WEBHOOK_URL ?? null,
+        {
+          text:
+            `🛠 Revisions overdue — *${client.name}* has ${ourCourtCount} ${noun} `
+            + `awaiting our edits (oldest ${oldestHours}h ago). ${shareUrl}`,
+        },
+        `revisions_ops:${link.id}`,
+      );
+      await admin
+        .from('content_drop_share_links')
+        .update({ revisions_ops_nudged_at: new Date().toISOString() })
+        .eq('id', link.id);
+    }
+
+    // Suppress all client-facing nudges when:
     //   • nothing is pending (everything approved or in our court), or
     //   • the client has left ANY revision feedback in this drop. Their
     //     comment on one post often applies to others, so we'd rather wait
@@ -365,9 +402,23 @@ function toNumber(v: number | string | boolean | string[], fallback: number): nu
 async function countPendingPosts(
   admin: ReturnType<typeof createAdminClient>,
   postIds: string[],
-): Promise<{ pending: number; total: number; hasRevisionFeedback: boolean }> {
+): Promise<{
+  pending: number;
+  total: number;
+  hasRevisionFeedback: boolean;
+  ourCourtCount: number;
+  oldestOurCourtAt: string | null;
+}> {
   const total = postIds.length;
-  if (total === 0) return { pending: 0, total: 0, hasRevisionFeedback: false };
+  if (total === 0) {
+    return {
+      pending: 0,
+      total: 0,
+      hasRevisionFeedback: false,
+      ourCourtCount: 0,
+      oldestOurCourtAt: null,
+    };
+  }
 
   type Row = {
     created_at: string;
@@ -406,6 +457,8 @@ async function countPendingPosts(
   }
 
   let pending = 0;
+  let ourCourtCount = 0;
+  let oldestOurCourtAt: string | null = null;
   for (const id of postIds) {
     const latest = latestByPost.get(id);
     if (!latest) {
@@ -416,14 +469,18 @@ async function countPendingPosts(
     const completedAt = latest.revisions_completed_at;
     if (!completedAt || new Date(latest.created_at) > new Date(completedAt)) {
       // Latest is changes_requested with no matching revision-complete marker
-      // (or older one) — ball is in OUR court, not the client's. Skip.
+      // (or older one) — ball is in OUR court, not the client's.
+      ourCourtCount += 1;
+      if (!oldestOurCourtAt || new Date(latest.created_at) < new Date(oldestOurCourtAt)) {
+        oldestOurCourtAt = latest.created_at;
+      }
       continue;
     }
     // We delivered revisions after the changes_requested → client owes us.
     pending += 1;
   }
 
-  return { pending, total, hasRevisionFeedback };
+  return { pending, total, hasRevisionFeedback, ourCourtCount, oldestOurCourtAt };
 }
 
 /**

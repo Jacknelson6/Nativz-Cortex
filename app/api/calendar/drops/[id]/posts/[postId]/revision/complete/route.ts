@@ -78,6 +78,13 @@ export async function POST(
       dropId,
       shareLinks: shareLinks ?? [],
     });
+    // Clear the ops "revisions overdue" stamp so the next round of
+    // changes_requested can re-trigger an alert if we sit on it.
+    await admin
+      .from('content_drop_share_links')
+      .update({ revisions_ops_nudged_at: null })
+      .eq('drop_id', dropId)
+      .not('revisions_ops_nudged_at', 'is', null);
   }
 
   after(async () => {
