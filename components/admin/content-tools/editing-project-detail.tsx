@@ -16,7 +16,6 @@ import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { ClientLogo } from '@/components/clients/client-logo';
-import { createClient } from '@/lib/supabase/client';
 import {
   EDITING_STATUS_LABEL,
   EDITING_TYPE_LABEL,
@@ -228,6 +227,7 @@ export function EditingProjectDetail({
         const signed = (await signRes.json()) as {
           storage_path: string;
           upload_token: string;
+          signed_url: string;
         };
 
         setUploads((prev) =>
@@ -235,8 +235,7 @@ export function EditingProjectDetail({
         );
 
         await uploadWithProgress({
-          path: signed.storage_path,
-          token: signed.upload_token,
+          signedUrl: signed.signed_url,
           file,
           onProgress: (pct) => {
             setUploads((prev) =>
@@ -297,15 +296,8 @@ export function EditingProjectDetail({
             />
             <Button variant="ghost" size="sm" onClick={archive} aria-label="Archive">
               <Archive size={14} />
+              <span className="hidden sm:inline">Archive</span>
             </Button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
-              aria-label="Close"
-            >
-              <X size={16} />
-            </button>
           </div>
         </div>
 
@@ -669,40 +661,48 @@ function VideoCard({
   );
 }
 
-// Pure XHR upload so we can wire `onProgress`. Supabase signed-upload
-// URLs accept a PUT with the bytes as the request body and the upload
-// token in the `x-upsert` / `Authorization` headers; the SDK helper
-// internally does the same, but doesn't expose progress.
+// Real XHR PUT to the Supabase signed-upload URL. The signed URL is a
+// fully-resolvable https endpoint, so we don't need the SDK; PUT-ing
+// the bytes directly gives accurate progress + surfaces HTTP errors
+// (the SDK helper was hanging silently on transient failures, leaving
+// the progress bar pinned at the fake-progress 95% cap).
 function uploadWithProgress(opts: {
-  path: string;
-  token: string;
+  signedUrl: string;
   file: File;
   onProgress: (pct: number) => void;
 }): Promise<void> {
   return new Promise((resolve, reject) => {
-    const supabase = createClient();
-    void supabase.storage
-      .from('editing-media')
-      .uploadToSignedUrl(opts.path, opts.token, opts.file)
-      .then(({ error }) => {
-        if (error) reject(new Error(error.message));
-        else {
-          opts.onProgress(100);
-          resolve();
-        }
-      })
-      .catch((err) => reject(err instanceof Error ? err : new Error(String(err))));
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', opts.signedUrl, true);
+    xhr.setRequestHeader(
+      'Content-Type',
+      opts.file.type || 'application/octet-stream',
+    );
+    xhr.setRequestHeader('x-upsert', 'true');
 
-    // Best-effort progress: the SDK doesn't expose progress, so we
-    // pulse the bar every 250ms based on size estimate. Replace with
-    // a real XHR PUT if precise progress matters.
-    const start = Date.now();
-    const estMs = Math.max(1500, Math.min(30_000, opts.file.size / 200_000));
-    const tick = setInterval(() => {
-      const pct = Math.min(95, Math.floor(((Date.now() - start) / estMs) * 100));
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable) return;
+      const pct = Math.min(99, Math.floor((e.loaded / e.total) * 100));
       opts.onProgress(pct);
-      if (pct >= 95) clearInterval(tick);
-    }, 250);
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        opts.onProgress(100);
+        resolve();
+      } else {
+        reject(
+          new Error(
+            `upload http ${xhr.status}: ${xhr.responseText?.slice(0, 200) || xhr.statusText}`,
+          ),
+        );
+      }
+    };
+    xhr.onerror = () => reject(new Error('network error during upload'));
+    xhr.onabort = () => reject(new Error('upload aborted'));
+    xhr.ontimeout = () => reject(new Error('upload timed out'));
+
+    xhr.send(opts.file);
   });
 }
 

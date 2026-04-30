@@ -10,7 +10,6 @@ import {
   ExternalLink,
   Eye,
   MessagesSquare,
-  X,
 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -126,14 +125,6 @@ export function CalendarLinkDetail({
           </div>
           <div className="flex items-center gap-2">
             <StatusPill status={link.status} />
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
-              aria-label="Close"
-            >
-              <X size={16} />
-            </button>
           </div>
         </div>
 
