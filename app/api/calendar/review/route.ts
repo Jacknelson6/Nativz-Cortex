@@ -63,13 +63,16 @@ export async function GET(req: Request) {
   const dropIds = drops.map((d) => d.id);
   const dropById = new Map(drops.map((d) => [d.id, d]));
 
-  // Step 2: pull share links for those drops.
+  // Step 2: pull share links for those drops. Archived rows are
+  // soft-deleted via `archived_at` and must stay out of this list, the
+  // share token still resolves directly so the column does the hiding.
   const { data: links } = await admin
     .from('content_drop_share_links')
     .select(
       'id, drop_id, token, included_post_ids, post_review_link_map, expires_at, created_at, last_viewed_at, name, project_type, project_type_other, abandoned_at, last_followup_at, followup_count',
     )
     .in('drop_id', dropIds)
+    .is('archived_at', null)
     .order('created_at', { ascending: false });
 
   if (!links || links.length === 0) {

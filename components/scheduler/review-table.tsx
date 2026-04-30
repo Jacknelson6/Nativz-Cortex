@@ -31,6 +31,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import { Trash2 } from 'lucide-react';
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -57,7 +64,11 @@ import type {
  *   Project name (inline-editable, defaults to derived "May 2026
  *     Content Calendar"-style label) · Date sent · Status · Project
  *     type · Creatives (rendered as `approved / total`) · Last
- *     followup · Expiration
+ *     followup
+ *
+ * Right-click a row to archive it (soft-delete via `archived_at`); the
+ * underlying drop and posts are untouched, the row just stops surfacing
+ * in this table.
  *
  * The Last-followup column tracks days-since the most recent admin
  * "Send followup" press (or the initial send for fresh links). It
@@ -282,17 +293,23 @@ interface ReviewTableCardProps {
   rows: ReviewLinkRow[];
   showBrand?: boolean;
   onPatchLink: (id: string, patch: Partial<ReviewLinkRow>) => void;
+  /**
+   * Optional archive handler. When provided, right-clicking a row
+   * surfaces an "Archive" item that calls this with the share-link
+   * id. The parent owns optimistic removal from local state.
+   */
+  onArchiveLink?: (id: string) => void;
   /** Override the card's internal title block. Defaults to "Content". */
   title?: string;
 }
 
-export function ReviewTableCard({ rows, showBrand = false, onPatchLink, title }: ReviewTableCardProps) {
+export function ReviewTableCard({ rows, showBrand = false, onPatchLink, onArchiveLink, title }: ReviewTableCardProps) {
   return (
     <Table variant="card">
       <thead>
         <tr>
           <th
-            colSpan={(showBrand ? 1 : 0) + 7}
+            colSpan={(showBrand ? 1 : 0) + 6}
             className="border-b border-nativz-border px-5 py-4"
           >
             <div className="flex items-center gap-3">
@@ -322,7 +339,6 @@ export function ReviewTableCard({ rows, showBrand = false, onPatchLink, title }:
           <TableHead className="whitespace-nowrap px-2.5 text-center">Project type</TableHead>
           <TableHead className="whitespace-nowrap px-2.5 text-center">Creatives</TableHead>
           <TableHead className="whitespace-nowrap px-2.5 text-center">Last followup</TableHead>
-          <TableHead className="whitespace-nowrap px-2.5 text-center">Expiration</TableHead>
           <TableHead className="w-8 px-2" aria-label="Open" />
         </TableRow>
       </TableHeader>
@@ -333,6 +349,7 @@ export function ReviewTableCard({ rows, showBrand = false, onPatchLink, title }:
             link={link}
             showBrand={showBrand}
             onPatch={(patch) => onPatchLink(link.id, patch)}
+            onArchive={onArchiveLink ? () => onArchiveLink(link.id) : undefined}
           />
         ))}
       </TableBody>
@@ -344,16 +361,18 @@ interface ReviewTableRowProps {
   link: ReviewLinkRow;
   showBrand?: boolean;
   onPatch: (patch: Partial<ReviewLinkRow>) => void;
+  /** Right-click "Archive" handler. Hides the menu item when omitted. */
+  onArchive?: () => void;
 }
 
-function ReviewTableRow({ link, showBrand = false, onPatch }: ReviewTableRowProps) {
+function ReviewTableRow({ link, showBrand = false, onPatch, onArchive }: ReviewTableRowProps) {
   const dim = link.status === 'abandoned' || link.status === 'expired';
 
   function openReview() {
     window.open(`/c/${link.token}`, '_blank', 'noopener,noreferrer');
   }
 
-  return (
+  const rowBody = (
     <TableRow
       onClick={openReview}
       className={`cursor-pointer ${dim ? 'opacity-70' : ''}`}
@@ -397,15 +416,30 @@ function ReviewTableRow({ link, showBrand = false, onPatch }: ReviewTableRowProp
           <FollowupCell link={link} onPatch={onPatch} />
         </div>
       </TableCell>
-      <TableCell className="whitespace-nowrap px-2.5 text-center">
-        <div className="flex justify-center">
-          <ExpirationCell expiresAt={link.expires_at} status={link.status} />
-        </div>
-      </TableCell>
       <TableCell className="w-8 whitespace-nowrap px-2 text-right text-text-tertiary">
         <ChevronRight className="size-4 transition-transform group-hover/row:translate-x-0.5 group-hover/row:text-text-secondary" />
       </TableCell>
     </TableRow>
+  );
+
+  // Without an archive handler, render the row directly. Wrapping in
+  // ContextMenu adds a Radix portal per row, which is wasted work for
+  // surfaces that don't support archive (e.g. read-only viewer view).
+  if (!onArchive) return rowBody;
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{rowBody}</ContextMenuTrigger>
+      <ContextMenuContent className="w-44">
+        <ContextMenuItem
+          onSelect={onArchive}
+          className="text-status-danger focus:text-status-danger"
+        >
+          <Trash2 size={14} />
+          Archive
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -741,28 +775,7 @@ function formatFollowupLabel(days: number | null): string {
   return `${days}d ago`;
 }
 
-function ExpirationCell({
-  expiresAt,
-  status,
-}: {
-  expiresAt: string | null;
-  status: StatusKey;
-}) {
-  if (!expiresAt) return <span className="text-sm text-text-muted">—</span>;
-  // The API already classifies expired/abandoned at fetch time, so we
-  // trust `status` rather than recomputing against a moving clock here
-  // (which would also be an impure call during render).
-  if (status === 'expired') {
-    return <span className="text-sm text-status-danger">Expired</span>;
-  }
-  return (
-    <span className="text-sm text-text-secondary tabular-nums">
-      {formatShortDate(expiresAt)}
-    </span>
-  );
-}
-
-/** Status pill — colored badge with a tooltip explaining the stage. */
+/** Status pill, colored badge with a tooltip explaining the stage. */
 function StatusPill({ status }: { status: StatusKey }) {
   const meta = STATUS_META[status];
   return (

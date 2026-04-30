@@ -22,51 +22,84 @@ export const maxDuration = 300; // Fluid Compute ceiling; bigger drops live in i
 /**
  * POST /api/admin/content-tools/quick-schedule/start
  *
- * Per-row "Schedule" action behind the Quick Schedule tab. Takes a
- * Monday Content-Calendar item id, resolves the Cortex client, walks
- * the linked edited-folder, and runs the existing calendar pipeline
- * (ingest → analyze → captions → schedule) against the brand. On
- * success the Monday row gets the share link + status=Scheduled
- * written back, mirroring `scripts/queue-from-monday.ts`.
+ * Per-row "Schedule" action behind the Quick Schedule tab. Dispatches
+ * on `source` so the same endpoint handles both pipelines:
  *
- * Iter 15.1 ships this synchronously. The browser holds the request
+ *   source: 'monday'    -> Monday Content-Calendar item (legacy path).
+ *                          Resolves brand by item name, walks the linked
+ *                          Drive folder, runs the calendar pipeline,
+ *                          writes the share link + status=Scheduled
+ *                          back to Monday on success.
+ *
+ *   source: 'internal'  -> editing_projects row (Cortex-native path).
+ *                          Brand is already known via project.client_id.
+ *                          Requires the project to have a
+ *                          drive_folder_url set (so we can pick up the
+ *                          editor's master cuts). Marks the project
+ *                          status=scheduled + stamps the drop_id link
+ *                          on success. No Monday writeback.
+ *
+ * Iter 15.1 ships this synchronously; the browser holds the request
  * open for the duration of the pipeline (Vercel Fluid Compute caps at
- * 300s). For big drops the route returns 504 and the row stays
- * EM-Approved on Monday so a retry is safe. Iter 15.2+ moves the
+ * 300s). For big drops the route returns 504 and the source row stays
+ * approved / EM-Approved so a retry is safe. Iter 15.2+ moves the
  * pipeline behind a job + status poller so the UI doesn't block.
  *
  * Auth: admin only. The route bypasses RLS via the admin client to
  * write into content_drops and read every brand's saved captions.
  *
- * Request body: { itemId: string }
+ * Request body:
+ *   { source: 'monday' | 'internal', id: string }
+ *   (legacy `{ itemId }` is still accepted and treated as Monday)
  *
  * Response shape (success):
  *   { dropId: string, shareUrl: string | null, scheduled: number,
- *     failed: number, mondayWriteback: 'ok' | 'skipped' | 'failed' }
+ *     failed: number, mondayWriteback: 'ok' | 'skipped' | 'failed',
+ *     mondayDetail: string | null, clientName: string }
  *
  * Failure modes:
- *   400 → bad body / no folder URL on Monday row
+ *   400 → bad body / no folder URL on source row
  *   401 → not signed in
  *   403 → not an admin
- *   404 → Monday item not found / not EM-Approved anymore
+ *   404 → source row not found / not approved anymore
  *   422 → client resolution failed (no slug, inactive, no platforms…)
  *   502 → Drive list / pipeline / Monday writeback failed
- *   503 → MONDAY_API_TOKEN missing on this env
+ *   503 → MONDAY_API_TOKEN missing on this env (Monday source only)
  */
 
-const StartSchema = z.object({
-  itemId: z.string().min(1),
-  /** Optional override window. Defaults to "next 30 days starting
-   *  tomorrow" so the admin doesn't need to think about dates for the
-   *  fast path. Iter 15.2 surfaces a date picker in the UI. */
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  postTimeCt: z.string().regex(/^\d{2}:\d{2}$/).optional(),
-});
+const StartSchema = z
+  .object({
+    source: z.enum(['monday', 'internal']).optional(),
+    id: z.string().min(1).optional(),
+    /** Legacy. Older clients only know about Monday. */
+    itemId: z.string().min(1).optional(),
+    /** Optional override window. Defaults to "next 30 days starting
+     *  tomorrow" so the admin doesn't need to think about dates for the
+     *  fast path. Iter 15.2 surfaces a date picker in the UI. */
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    postTimeCt: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  })
+  .refine((v) => v.id || v.itemId, {
+    message: 'id (or legacy itemId) is required',
+  });
 
 function plus(days: number, base = new Date()): string {
   const d = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
+interface ResolvedSource {
+  label: string;
+  folderUrl: string;
+  clientId: string;
+  clientName: string;
+  clientAgency: string | null;
+  platforms: import('@/lib/posting').SocialPlatform[];
+  /** Set on Monday source only; used for status writeback. */
+  mondayItemId: string | null;
+  /** Set on internal source only; used to mark project as scheduled. */
+  editingProjectId: string | null;
 }
 
 export async function POST(req: Request) {
@@ -87,72 +120,16 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  const { itemId } = parsed.data;
 
-  let token: string;
-  try {
-    token = getMondayToken();
-  } catch {
-    return NextResponse.json(
-      { error: 'monday_unconfigured', detail: 'MONDAY_API_TOKEN not set' },
-      { status: 503 },
-    );
-  }
+  // Normalise legacy `itemId` payloads into the new shape so the rest
+  // of the route only thinks in terms of {source, id}.
+  const source: 'monday' | 'internal' =
+    parsed.data.source ?? (parsed.data.id ? 'monday' : 'monday');
+  const id = parsed.data.id ?? parsed.data.itemId!;
 
   const admin = createAdminClient();
 
-  // 1. Pull the row off Monday so we have a fresh folder URL + status
-  //    snapshot. We don't trust whatever the queue UI sent; the row may
-  //    have been edited or unflagged in the seconds between page render
-  //    and click.
-  let row;
-  try {
-    row = await fetchItemById(token, itemId);
-  } catch (err) {
-    return NextResponse.json(
-      {
-        error: 'monday_upstream',
-        detail: err instanceof Error ? err.message : 'monday fetch failed',
-      },
-      { status: 502 },
-    );
-  }
-  if (!row) {
-    return NextResponse.json(
-      { error: 'monday_item_missing', detail: `Item ${itemId} not on the board` },
-      { status: 404 },
-    );
-  }
-  if (row.status !== STATUS_EM_APPROVED) {
-    return NextResponse.json(
-      {
-        error: 'not_em_approved',
-        detail: `Row "${row.itemName}" is "${row.status || 'no status'}", not "${STATUS_EM_APPROVED}". Refresh the queue.`,
-      },
-      { status: 404 },
-    );
-  }
-  if (!row.folderUrl) {
-    return NextResponse.json(
-      {
-        error: 'no_folder_url',
-        detail: `Row "${row.itemName}" doesn't have an Edited Videos Folder link set on Monday.`,
-      },
-      { status: 400 },
-    );
-  }
-
-  // 2. Resolve the Cortex client + connected platforms by Monday name.
-  const resolved = await resolveCortexClientFromMondayName(admin, row.itemName);
-  if (!resolved.ok) {
-    return NextResponse.json(
-      { error: resolved.error.code, detail: resolved.error.detail },
-      { status: 422 },
-    );
-  }
-  const client = resolved.client;
-
-  // 3. Make sure we have a Cortex user record for the admin (used as
+  // 1. Make sure we have a Cortex user record for the admin (used as
   //    `created_by` on content_drops + as the impersonation identity for
   //    Drive). The auth user id is canonical; email is just for log lines.
   const { data: cortexUser } = await admin
@@ -167,12 +144,35 @@ export async function POST(req: Request) {
     );
   }
 
-  // 4. List the Drive folder so we know how many videos we're scheduling
+  // 2. Resolve the source-specific row into a unified `ResolvedSource`
+  //    so the pipeline call below doesn't care which queue we came
+  //    from. Each branch handles its own auth + freshness checks.
+  let resolved: ResolvedSource;
+  let mondayToken: string | null = null;
+  if (source === 'monday') {
+    try {
+      mondayToken = getMondayToken();
+    } catch {
+      return NextResponse.json(
+        { error: 'monday_unconfigured', detail: 'MONDAY_API_TOKEN not set' },
+        { status: 503 },
+      );
+    }
+    const monday = await resolveMondaySource(admin, mondayToken, id);
+    if ('error' in monday) return monday.error;
+    resolved = monday.value;
+  } else {
+    const internal = await resolveInternalSource(admin, id);
+    if ('error' in internal) return internal.error;
+    resolved = internal.value;
+  }
+
+  // 3. List the Drive folder so we know how many videos we're scheduling
   //    BEFORE we cut the content_drops row. Empty folder = explicit error,
   //    not a 0-video drop.
   let videos;
   try {
-    const list = await listVideosInFolder(cortexUser.id, row.folderUrl);
+    const list = await listVideosInFolder(cortexUser.id, resolved.folderUrl);
     videos = list.videos
       .filter((v) => v.size > 0)
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -189,15 +189,13 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error: 'empty_folder',
-        detail: `Drive folder for "${row.itemName}" has no usable videos.`,
+        detail: `Drive folder for "${resolved.label}" has no usable videos.`,
       },
       { status: 422 },
     );
   }
 
-  // 5. Default schedule window: tomorrow → +30 days, 12:00 CT. The script
-  //    versions hard-code calendar months; for a per-row Quick Schedule
-  //    the admin almost always wants "spread these over the next month".
+  // 4. Default schedule window: tomorrow → +30 days, 12:00 CT.
   const startDate = parsed.data.startDate ?? plus(1);
   const endDate = parsed.data.endDate ?? plus(30);
   const postTimeCt = parsed.data.postTimeCt ?? '12:00';
@@ -213,25 +211,25 @@ export async function POST(req: Request) {
   }
   const perVideoDates = pickEven(days, videos.length);
 
-  const brand = getBrandFromAgency(client.agency);
+  const brand = getBrandFromAgency(resolved.clientAgency);
   const appUrl = getCortexAppUrl(brand);
 
-  // 6. Run the pipeline. mintShareLink=true + draftMode=true matches the
-  //    bulk queue-from-monday behavior: every EM-Approved row gets a
+  // 5. Run the pipeline. mintShareLink=true + draftMode=true matches the
+  //    bulk queue-from-monday behavior: every approved row gets a
   //    public review link, posts stay drafts until the client approves.
   const result = await runCalendarPipeline(admin, {
-    label: `${client.clientName} (Quick Schedule, item ${row.itemId})`,
-    folderUrl: row.folderUrl,
+    label: `${resolved.clientName} (Quick Schedule, ${source} ${id})`,
+    folderUrl: resolved.folderUrl,
     videos,
     perVideoDates,
     defaultPostTimeCt: postTimeCt,
     startDate,
     endDate,
-    platforms: client.platforms,
+    platforms: resolved.platforms,
     mintShareLink: true,
     draftMode: true,
     appUrl,
-    clientId: client.clientId,
+    clientId: resolved.clientId,
     userId: cortexUser.id,
     userEmail: cortexUser.email,
   });
@@ -248,22 +246,33 @@ export async function POST(req: Request) {
     );
   }
 
-  // 7. Monday writeback. Failure here doesn't fail the whole call (the
-  //    drop already landed), but we surface it so the UI can show an
-  //    inline warning + retry button. The Monday row stays EM-Approved
-  //    in that case, which is safe: a retry just no-ops on duplicate
-  //    drops because content_drops is keyed by drive_folder_id.
+  // 6. Source-specific writeback. Failure here doesn't fail the whole
+  //    call (the drop already landed) but we surface it so the UI can
+  //    show an inline warning + retry button.
   let mondayWriteback: 'ok' | 'skipped' | 'failed' = 'skipped';
   let mondayDetail: string | null = null;
-  if (result.shareUrl) {
+  if (source === 'monday' && result.shareUrl && resolved.mondayItemId && mondayToken) {
     try {
-      await setLaterCalendarLink(token, row.itemId, result.shareUrl);
-      await setStatusScheduled(token, row.itemId);
+      await setLaterCalendarLink(mondayToken, resolved.mondayItemId, result.shareUrl);
+      await setStatusScheduled(mondayToken, resolved.mondayItemId);
       mondayWriteback = 'ok';
     } catch (err) {
       mondayWriteback = 'failed';
       mondayDetail = err instanceof Error ? err.message : 'monday writeback failed';
     }
+  }
+  if (source === 'internal' && resolved.editingProjectId && result.dropId) {
+    // No Monday board to update; we just stamp the project so it
+    // disappears from the Quick Schedule queue and shows up under
+    // "Scheduled" in the editing kanban.
+    await admin
+      .from('editing_projects')
+      .update({
+        status: 'scheduled',
+        scheduled_at: new Date().toISOString(),
+        drop_id: result.dropId,
+      })
+      .eq('id', resolved.editingProjectId);
   }
 
   return NextResponse.json({
@@ -273,6 +282,193 @@ export async function POST(req: Request) {
     failed: result.failed,
     mondayWriteback,
     mondayDetail,
-    clientName: client.clientName,
+    clientName: resolved.clientName,
   });
+}
+
+/* -------------------------------------------------------------------------
+ * Source resolvers
+ * ----------------------------------------------------------------------- */
+
+type SourceResolution =
+  | { value: ResolvedSource }
+  | { error: NextResponse };
+
+async function resolveMondaySource(
+  admin: ReturnType<typeof createAdminClient>,
+  token: string,
+  itemId: string,
+): Promise<SourceResolution> {
+  let row;
+  try {
+    row = await fetchItemById(token, itemId);
+  } catch (err) {
+    return {
+      error: NextResponse.json(
+        {
+          error: 'monday_upstream',
+          detail: err instanceof Error ? err.message : 'monday fetch failed',
+        },
+        { status: 502 },
+      ),
+    };
+  }
+  if (!row) {
+    return {
+      error: NextResponse.json(
+        { error: 'monday_item_missing', detail: `Item ${itemId} not on the board` },
+        { status: 404 },
+      ),
+    };
+  }
+  if (row.status !== STATUS_EM_APPROVED) {
+    return {
+      error: NextResponse.json(
+        {
+          error: 'not_em_approved',
+          detail: `Row "${row.itemName}" is "${row.status || 'no status'}", not "${STATUS_EM_APPROVED}". Refresh the queue.`,
+        },
+        { status: 404 },
+      ),
+    };
+  }
+  if (!row.folderUrl) {
+    return {
+      error: NextResponse.json(
+        {
+          error: 'no_folder_url',
+          detail: `Row "${row.itemName}" doesn't have an Edited Videos Folder link set on Monday.`,
+        },
+        { status: 400 },
+      ),
+    };
+  }
+
+  const resolved = await resolveCortexClientFromMondayName(admin, row.itemName);
+  if (!resolved.ok) {
+    return {
+      error: NextResponse.json(
+        { error: resolved.error.code, detail: resolved.error.detail },
+        { status: 422 },
+      ),
+    };
+  }
+
+  return {
+    value: {
+      label: row.itemName,
+      folderUrl: row.folderUrl,
+      clientId: resolved.client.clientId,
+      clientName: resolved.client.clientName,
+      clientAgency: resolved.client.agency ?? null,
+      platforms: resolved.client.platforms,
+      mondayItemId: row.itemId,
+      editingProjectId: null,
+    },
+  };
+}
+
+async function resolveInternalSource(
+  admin: ReturnType<typeof createAdminClient>,
+  projectId: string,
+): Promise<SourceResolution> {
+  const { data: project, error } = await admin
+    .from('editing_projects')
+    .select(
+      `id, name, status, drive_folder_url, client_id,
+       client:clients!editing_projects_client_id_fkey(id, name, agency, social_profiles(platform))`,
+    )
+    .eq('id', projectId)
+    .maybeSingle<{
+      id: string;
+      name: string;
+      status: string;
+      drive_folder_url: string | null;
+      client_id: string;
+      client: {
+        id: string;
+        name: string;
+        agency: string | null;
+        social_profiles: { platform: string }[];
+      } | null;
+    }>();
+  if (error) {
+    return {
+      error: NextResponse.json(
+        { error: 'db_error', detail: error.message },
+        { status: 502 },
+      ),
+    };
+  }
+  if (!project) {
+    return {
+      error: NextResponse.json(
+        { error: 'project_missing', detail: `Editing project ${projectId} not found.` },
+        { status: 404 },
+      ),
+    };
+  }
+  if (project.status !== 'approved') {
+    return {
+      error: NextResponse.json(
+        {
+          error: 'not_approved',
+          detail: `Project "${project.name}" is "${project.status}", not "approved". Refresh the queue.`,
+        },
+        { status: 404 },
+      ),
+    };
+  }
+  if (!project.drive_folder_url) {
+    return {
+      error: NextResponse.json(
+        {
+          error: 'no_folder_url',
+          detail: `Project "${project.name}" doesn't have a Drive folder URL set. Open the project to add one before scheduling.`,
+        },
+        { status: 400 },
+      ),
+    };
+  }
+  if (!project.client) {
+    return {
+      error: NextResponse.json(
+        {
+          error: 'no_client',
+          detail: `Project "${project.name}" has no client record.`,
+        },
+        { status: 422 },
+      ),
+    };
+  }
+
+  const platforms = (project.client.social_profiles ?? [])
+    .map((p) => p.platform)
+    .filter((p): p is import('@/lib/posting').SocialPlatform =>
+      typeof p === 'string' && p.length > 0,
+    );
+  if (platforms.length === 0) {
+    return {
+      error: NextResponse.json(
+        {
+          error: 'no_platforms',
+          detail: `Brand "${project.client.name}" has no connected social platforms. Connect at least one before scheduling.`,
+        },
+        { status: 422 },
+      ),
+    };
+  }
+
+  return {
+    value: {
+      label: project.name,
+      folderUrl: project.drive_folder_url,
+      clientId: project.client_id,
+      clientName: project.client.name,
+      clientAgency: project.client.agency,
+      platforms,
+      mondayItemId: null,
+      editingProjectId: project.id,
+    },
+  };
 }

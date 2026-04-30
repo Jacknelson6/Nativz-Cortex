@@ -15,30 +15,40 @@ import {
   Wand2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ClientLogo } from '@/components/clients/client-logo';
 
 /**
- * Quick Schedule tab. Surfaces every Monday Content-Calendar item
- * flagged as "EM Approved" (editor-marked done), then walks the admin
- * through the standard pre-schedule polish per row:
+ * Quick Schedule tab. Surfaces every item flagged ready-to-schedule,
+ * regardless of whether it came from the Cortex-native editing
+ * pipeline (status=approved) or the legacy Monday Content-Calendar
+ * board (EM Approved label). The two sources are merged server-side
+ * so the editor sees one queue ordered by "ready since."
  *
+ * Each row shows a small source badge ("Cortex" or "Monday") so the
+ * editor knows which pipeline the row will follow when they hit
+ * Schedule. Internal rows surface their connected brand logo + name
+ * directly from the project's client record; Monday rows show the
+ * board group as the brand fallback (logos for Monday rows live in
+ * iter 16.5+).
+ *
+ * Pipeline:
  *   1. Pull a still frame at ~1s into the master video as the post
- *      thumbnail (we already do this in the scheduler; the API is
- *      reused here).
- *   2. Run the audio through Gemini transcribe to lift quotable lines
- *      out for caption seed text.
- *   3. Stamp captions from the brand's saved-caption snippets, leaving
- *      the editor a tight first draft instead of a blank sheet.
+ *      thumbnail.
+ *   2. Run audio through Gemini transcribe to seed caption draft.
+ *   3. Stamp captions from the brand's saved-caption snippets.
  *
- * The API surface for this pipeline isn't fully wired yet -- iteration
- * 14.4 ships the actual Monday pull + thumbnail/transcribe/caption
- * pipeline. This iteration paints the explainer + a refresh button so
- * the tab isn't blank, and so admins know what's coming.
+ * Monday connectivity is optional. When MONDAY_API_TOKEN is missing
+ * the API drops Monday rows + flags `monday_status: 'unconfigured'`;
+ * we surface that as a small inline notice so the internal queue
+ * still renders.
  */
 
-interface ApprovedItem {
-  itemId: string;
-  itemName: string;
-  groupName: string;
+interface ItemDTO {
+  source: 'internal' | 'monday';
+  id: string;
+  name: string;
+  brand: string;
+  brandLogoUrl?: string | null;
   approvedAt: string | null;
   folderUrl: string | null;
   shareLink: string | null;
@@ -48,15 +58,19 @@ interface ApprovedItem {
 type LoadState =
   | { kind: 'idle' }
   | { kind: 'loading' }
-  | { kind: 'ok'; items: ApprovedItem[] }
-  | { kind: 'unconfigured'; detail: string }
+  | {
+      kind: 'ok';
+      items: ItemDTO[];
+      mondayStatus: 'ok' | 'unconfigured' | 'error';
+      mondayError?: string;
+    }
   | { kind: 'error'; detail: string };
 
-/** Per-row scheduling state. Held in a Record<itemId, RowState> on the
+/** Per-row scheduling state. Held in a Record<rowKey, RowState> on the
  *  parent so the row UI survives queue refreshes (the API call can take
  *  several minutes; we don't want a manual refresh to drop the spinner).
- *  `done` keeps the share link visible until the next full reload swaps
- *  the row off the EM-Approved queue (Monday writeback flips status). */
+ *  Row key is `${source}:${id}` so an internal project and a Monday
+ *  item with the same numeric id never collide. */
 type RowState =
   | { kind: 'idle' }
   | { kind: 'busy' }
@@ -69,6 +83,8 @@ type RowState =
     }
   | { kind: 'error'; detail: string };
 
+const rowKey = (it: ItemDTO) => `${it.source}:${it.id}`;
+
 export function QuickScheduleTab() {
   const [state, setState] = useState<LoadState>({ kind: 'idle' });
   const [rowStates, setRowStates] = useState<Record<string, RowState>>({});
@@ -80,20 +96,6 @@ export function QuickScheduleTab() {
         cache: 'no-store',
       });
 
-      // 503 = MONDAY_API_TOKEN missing on this env. Distinct from a
-      // generic upstream error so the tab can paint a "coming online"
-      // placeholder rather than a scary banner.
-      if (res.status === 503) {
-        const body = (await res.json().catch(() => null)) as
-          | { detail?: string }
-          | null;
-        setState({
-          kind: 'unconfigured',
-          detail: body?.detail ?? 'MONDAY_API_TOKEN not set',
-        });
-        return;
-      }
-
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as
           | { detail?: string; error?: string }
@@ -103,8 +105,17 @@ export function QuickScheduleTab() {
         );
       }
 
-      const data = (await res.json()) as { items: ApprovedItem[] };
-      setState({ kind: 'ok', items: data.items ?? [] });
+      const data = (await res.json()) as {
+        items: ItemDTO[];
+        monday_status: 'ok' | 'unconfigured' | 'error';
+        monday_error?: string;
+      };
+      setState({
+        kind: 'ok',
+        items: data.items ?? [],
+        mondayStatus: data.monday_status ?? 'ok',
+        mondayError: data.monday_error,
+      });
     } catch (err) {
       const detail = err instanceof Error ? err.message : 'Failed to load queue';
       if (silent) toast.error(detail);
@@ -116,18 +127,16 @@ export function QuickScheduleTab() {
     void load();
   }, []);
 
-  /** Click handler for a row's Schedule button. Calls /start, which is
-   *  synchronous in iter 15.1 (the request can hold for minutes). The
-   *  per-row state machine in `rowStates` is the single place we track
-   *  in-flight + done + failed so a manual queue refresh mid-call
-   *  doesn't blow away the spinner. */
-  async function schedule(itemId: string, itemName: string) {
-    setRowStates((s) => ({ ...s, [itemId]: { kind: 'busy' } }));
+  /** Click handler for a row's Schedule button. Calls /start with the
+   *  unified {source, id} payload; the route dispatches internally. */
+  async function schedule(item: ItemDTO) {
+    const key = rowKey(item);
+    setRowStates((s) => ({ ...s, [key]: { kind: 'busy' } }));
     try {
       const res = await fetch('/api/admin/content-tools/quick-schedule/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemId }),
+        body: JSON.stringify({ source: item.source, id: item.id }),
       });
       const body = (await res.json().catch(() => null)) as
         | {
@@ -145,8 +154,8 @@ export function QuickScheduleTab() {
 
       if (!res.ok) {
         const detail = body?.detail ?? body?.error ?? `HTTP ${res.status}`;
-        setRowStates((s) => ({ ...s, [itemId]: { kind: 'error', detail } }));
-        toast.error(`Schedule failed for ${itemName}: ${detail}`);
+        setRowStates((s) => ({ ...s, [key]: { kind: 'error', detail } }));
+        toast.error(`Schedule failed for ${item.name}: ${detail}`);
         return;
       }
 
@@ -155,7 +164,7 @@ export function QuickScheduleTab() {
       const writeback = body?.mondayWriteback ?? 'skipped';
       setRowStates((s) => ({
         ...s,
-        [itemId]: {
+        [key]: {
           kind: 'done',
           shareUrl,
           dropId,
@@ -165,17 +174,19 @@ export function QuickScheduleTab() {
       }));
       const scheduled = body?.scheduled ?? 0;
       toast.success(
-        `${body?.clientName ?? itemName} scheduled (${scheduled} post${scheduled === 1 ? '' : 's'})`,
+        `${body?.clientName ?? item.name} scheduled (${scheduled} post${scheduled === 1 ? '' : 's'})`,
       );
     } catch (err) {
       const detail = err instanceof Error ? err.message : 'request failed';
-      setRowStates((s) => ({ ...s, [itemId]: { kind: 'error', detail } }));
-      toast.error(`Schedule failed for ${itemName}: ${detail}`);
+      setRowStates((s) => ({ ...s, [key]: { kind: 'error', detail } }));
+      toast.error(`Schedule failed for ${item.name}: ${detail}`);
     }
   }
 
   const items = state.kind === 'ok' ? state.items : [];
   const loading = state.kind === 'loading' || state.kind === 'idle';
+  const mondayStatus = state.kind === 'ok' ? state.mondayStatus : null;
+  const mondayError = state.kind === 'ok' ? state.mondayError : undefined;
 
   return (
     <div className="space-y-4">
@@ -185,6 +196,8 @@ export function QuickScheduleTab() {
         loading={loading}
         state={state}
         rowStates={rowStates}
+        mondayStatus={mondayStatus}
+        mondayError={mondayError}
         onSchedule={schedule}
         onRefresh={() => void load(true)}
       />
@@ -251,28 +264,37 @@ function ApprovedQueue({
   loading,
   state,
   rowStates,
+  mondayStatus,
+  mondayError,
   onSchedule,
   onRefresh,
 }: {
-  items: ApprovedItem[];
+  items: ItemDTO[];
   loading: boolean;
   state: LoadState;
   rowStates: Record<string, RowState>;
-  onSchedule: (itemId: string, itemName: string) => void | Promise<void>;
+  mondayStatus: 'ok' | 'unconfigured' | 'error' | null;
+  mondayError?: string;
+  onSchedule: (item: ItemDTO) => void | Promise<void>;
   onRefresh: () => void;
 }) {
   const subtitle = (() => {
-    if (loading) return 'Pulling EM-Approved items from Monday...';
-    if (state.kind === 'unconfigured') {
-      return 'Monday integration not configured on this environment';
-    }
-    if (state.kind === 'error') return 'Monday queue unreachable';
+    if (loading) return 'Pulling editor-approved items...';
+    if (state.kind === 'error') return 'Queue unreachable';
     if (state.kind === 'ok') {
-      return items.length === 0
-        ? 'No editor-approved items right now'
-        : `${items.length} editor-approved item${items.length === 1 ? '' : 's'} ready to schedule`;
+      const internalCount = items.filter((i) => i.source === 'internal').length;
+      const mondayCount = items.filter((i) => i.source === 'monday').length;
+      if (items.length === 0) return 'No editor-approved items right now';
+      const parts: string[] = [];
+      if (internalCount > 0) {
+        parts.push(`${internalCount} internal`);
+      }
+      if (mondayCount > 0) {
+        parts.push(`${mondayCount} from Monday`);
+      }
+      return `${items.length} ready to schedule (${parts.join(', ')})`;
     }
-    return 'Pulled from Monday Content Calendars where the EM Approved label is set';
+    return 'Pulled from the editing pipeline + Monday EM-Approved board';
   })();
 
   return (
@@ -299,76 +321,109 @@ function ApprovedQueue({
         <div className="flex items-start gap-2 border-b border-status-danger/20 bg-status-danger/5 px-5 py-3 text-xs text-status-danger">
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
           <div className="min-w-0">
-            <div className="font-medium">Couldn&apos;t reach Monday.</div>
+            <div className="font-medium">Couldn&apos;t load the queue.</div>
             <div className="mt-0.5 text-status-danger/80">{state.detail}</div>
+          </div>
+        </div>
+      )}
+
+      {mondayStatus === 'unconfigured' && (
+        <div className="flex items-start gap-2 border-b border-nativz-border bg-background/40 px-5 py-2.5 text-xs text-text-muted">
+          <Wand2 className="mt-0.5 size-3 shrink-0" />
+          <div className="min-w-0">
+            Monday integration not configured on this environment. Internal
+            projects still appear; set MONDAY_API_TOKEN to surface the legacy
+            queue.
+          </div>
+        </div>
+      )}
+
+      {mondayStatus === 'error' && (
+        <div className="flex items-start gap-2 border-b border-status-warning/20 bg-status-warning/5 px-5 py-2.5 text-xs text-status-warning">
+          <AlertTriangle className="mt-0.5 size-3 shrink-0" />
+          <div className="min-w-0">
+            <span className="font-medium">Monday upstream is unhappy.</span>{' '}
+            <span className="text-status-warning/80">
+              {mondayError ?? 'Internal projects still load below.'}
+            </span>
           </div>
         </div>
       )}
 
       {loading ? (
         <QueueSkeleton />
-      ) : state.kind === 'unconfigured' ? (
-        <UnconfiguredState detail={state.detail} />
       ) : items.length === 0 ? (
-        <EmptyQueue />
+        <EmptyQueue mondayStatus={mondayStatus} />
       ) : (
         <ul className="divide-y divide-nativz-border/60">
           {items.map((it) => {
-            const rowState = rowStates[it.itemId] ?? { kind: 'idle' };
+            const key = rowKey(it);
+            const rowState = rowStates[key] ?? { kind: 'idle' };
             return (
               <li
-                key={it.itemId}
-                className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:justify-between"
+                key={key}
+                className="flex flex-col gap-3 px-5 py-3 sm:flex-row sm:items-center sm:justify-between"
               >
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-text-primary">
-                    {it.itemName}
-                  </div>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-text-muted">
-                    <span className="truncate">{it.groupName}</span>
-                    {it.approvedAt && (
-                      <>
-                        <span>·</span>
-                        <span className="inline-flex items-center gap-1 shrink-0">
-                          <Clock3 className="size-3" />
-                          {formatRelative(it.approvedAt)}
-                        </span>
-                      </>
-                    )}
-                    {it.folderUrl && (
-                      <>
-                        <span>·</span>
-                        <a
-                          href={it.folderUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex shrink-0 items-center gap-1 text-accent-text hover:underline"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <ExternalLink className="size-3" />
-                          Folder
-                        </a>
-                      </>
-                    )}
-                  </div>
-                  {rowState.kind === 'error' && (
-                    <div className="mt-1.5 flex items-start gap-1.5 text-xs text-status-danger">
-                      <AlertTriangle className="mt-0.5 size-3 shrink-0" />
-                      <span className="break-words">{rowState.detail}</span>
-                    </div>
-                  )}
-                  {rowState.kind === 'done' && rowState.mondayWriteback === 'failed' && (
-                    <div className="mt-1.5 flex items-start gap-1.5 text-xs text-status-warning">
-                      <AlertTriangle className="mt-0.5 size-3 shrink-0" />
-                      <span className="break-words">
-                        Drop landed but Monday writeback failed: {rowState.mondayDetail ?? 'unknown error'}
+                <div className="flex min-w-0 items-center gap-3">
+                  <ClientLogo
+                    src={it.brandLogoUrl ?? null}
+                    name={it.brand}
+                    size="sm"
+                  />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium text-text-primary">
+                        {it.name}
                       </span>
+                      <SourceBadge source={it.source} />
                     </div>
-                  )}
+                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-text-muted">
+                      <span className="truncate">{it.brand}</span>
+                      {it.approvedAt && (
+                        <>
+                          <span>·</span>
+                          <span className="inline-flex items-center gap-1 shrink-0">
+                            <Clock3 className="size-3" />
+                            {formatRelative(it.approvedAt)}
+                          </span>
+                        </>
+                      )}
+                      {it.folderUrl && (
+                        <>
+                          <span>·</span>
+                          <a
+                            href={it.folderUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex shrink-0 items-center gap-1 text-accent-text hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <ExternalLink className="size-3" />
+                            Folder
+                          </a>
+                        </>
+                      )}
+                    </div>
+                    {rowState.kind === 'error' && (
+                      <div className="mt-1.5 flex items-start gap-1.5 text-xs text-status-danger">
+                        <AlertTriangle className="mt-0.5 size-3 shrink-0" />
+                        <span className="break-words">{rowState.detail}</span>
+                      </div>
+                    )}
+                    {rowState.kind === 'done' && rowState.mondayWriteback === 'failed' && (
+                      <div className="mt-1.5 flex items-start gap-1.5 text-xs text-status-warning">
+                        <AlertTriangle className="mt-0.5 size-3 shrink-0" />
+                        <span className="break-words">
+                          Drop landed but Monday writeback failed:{' '}
+                          {rowState.mondayDetail ?? 'unknown error'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <RowAction
                   rowState={rowState}
-                  onSchedule={() => void onSchedule(it.itemId, it.itemName)}
+                  onSchedule={() => void onSchedule(it)}
                 />
               </li>
             );
@@ -376,6 +431,21 @@ function ApprovedQueue({
         </ul>
       )}
     </div>
+  );
+}
+
+function SourceBadge({ source }: { source: 'internal' | 'monday' }) {
+  const label = source === 'internal' ? 'Cortex' : 'Monday';
+  const tone =
+    source === 'internal'
+      ? 'border-accent/30 bg-accent-surface text-accent-text'
+      : 'border-nativz-border bg-background text-text-muted';
+  return (
+    <span
+      className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${tone}`}
+    >
+      {label}
+    </span>
   );
 }
 
@@ -436,6 +506,7 @@ function QueueSkeleton() {
     <div className="divide-y divide-nativz-border/60">
       {Array.from({ length: 3 }).map((_, i) => (
         <div key={i} className="flex items-center gap-3 px-5 py-4">
+          <div className="size-8 shrink-0 animate-pulse rounded-md bg-nativz-border" />
           <div className="h-4 w-44 animate-pulse rounded bg-nativz-border" />
           <div className="ml-auto h-6 w-20 animate-pulse rounded bg-nativz-border" />
         </div>
@@ -444,25 +515,19 @@ function QueueSkeleton() {
   );
 }
 
-function EmptyQueue() {
+function EmptyQueue({
+  mondayStatus,
+}: {
+  mondayStatus: 'ok' | 'unconfigured' | 'error' | null;
+}) {
   return (
     <div className="px-5 py-10 text-center">
       <CheckCircle2 className="mx-auto mb-3 h-7 w-7 text-text-tertiary" />
       <p className="text-sm text-text-secondary">Nothing in the queue.</p>
       <p className="mt-1 text-xs text-text-muted">
-        Editor-approved videos will land here as soon as Monday flips the label.
-      </p>
-    </div>
-  );
-}
-
-function UnconfiguredState({ detail }: { detail: string }) {
-  return (
-    <div className="px-5 py-10 text-center">
-      <Wand2 className="mx-auto mb-3 h-7 w-7 text-text-tertiary" />
-      <p className="text-sm text-text-secondary">Monday not configured.</p>
-      <p className="mt-1 text-xs text-text-muted">
-        {detail}. Set the env var and redeploy to light up the queue.
+        {mondayStatus === 'unconfigured'
+          ? 'Approve an editing project or wire up Monday to surface its queue here.'
+          : 'Editor-approved videos land here as soon as a project flips to Approved.'}
       </p>
     </div>
   );

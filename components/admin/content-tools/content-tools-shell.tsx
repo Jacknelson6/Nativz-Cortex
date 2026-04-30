@@ -135,6 +135,28 @@ export function ContentToolsShell() {
     setLinks((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   }
 
+  /**
+   * Archive a project (soft-delete via `archived_at`). The row vanishes
+   * from local state immediately so the UI feels instant; on failure we
+   * pull the snapshot back so the row reappears with everything intact.
+   */
+  async function archiveLink(id: string) {
+    const snapshot = links;
+    setLinks((prev) => prev.filter((l) => l.id !== id));
+    try {
+      const res = await fetch(`/api/calendar/review/${id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ archived: true }),
+      });
+      if (!res.ok) throw new Error('Archive failed');
+      toast.success('Project archived');
+    } catch (err) {
+      setLinks(snapshot);
+      toast.error(err instanceof Error ? err.message : 'Archive failed');
+    }
+  }
+
   const subtitle = describeSubtitle(tab, links.length);
 
   return (
@@ -183,6 +205,7 @@ export function ContentToolsShell() {
               rows={sortedLinks}
               showBrand
               onPatchLink={patchLink}
+              onArchiveLink={archiveLink}
               title="Projects"
             />
           ))}
