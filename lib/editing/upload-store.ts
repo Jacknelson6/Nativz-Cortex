@@ -1,9 +1,9 @@
 /**
  * Module-scoped upload store for editing project videos.
  *
- * Lives outside React so the XHR PUTs keep running after the detail
+ * Lives outside React so the uploads keep running after the detail
  * dialog unmounts. Jack closes the dialog while a 10-file batch is
- * uploading? The XHRs keep going against this singleton; when he
+ * uploading? The TUS uploads keep going against this singleton; when he
  * reopens the dialog, the same in-flight jobs are still there with
  * up-to-date progress because the dialog reads via
  * `useSyncExternalStore`.
@@ -14,7 +14,16 @@
  * Also surfaces a global "all uploads finished for project X" event so
  * the editing board can refetch its list to show the new video count
  * without needing the dialog to be open.
+ *
+ * Transport: TUS resumable uploads against
+ * `<supabase>/storage/v1/upload/resumable` so big edited cuts (>50MB)
+ * don't bounce off the project's single-request body cap on the regular
+ * /object endpoint. Auth uses the browser session's access token.
  */
+
+import * as tus from 'tus-js-client';
+import { createClient } from '@/lib/supabase/client';
+import { getSupabaseUrl } from '@/lib/supabase/public-env';
 
 export interface UploadJob {
   id: string;
@@ -115,53 +124,66 @@ function appendJobs(projectId: string, jobs: UploadJob[]): void {
 }
 
 /**
- * Real XHR PUT to the Supabase signed-upload URL. Bypasses the SDK
- * helper because that one was hanging silently on transient failures
- * and didn't expose progress events.
+ * TUS resumable upload to Supabase Storage. Used instead of a plain
+ * signed-URL PUT because the regular `/object` endpoint enforces the
+ * project's "Global file size limit" (50MB by default), which silently
+ * 413s on edited cuts that are routinely 50-200MB. The TUS endpoint at
+ * `/storage/v1/upload/resumable` bypasses that cap and chunks the body.
+ *
+ * Auth: needs the browser user's bearer token. Anon key alone gets
+ * 401'd by storage RLS, and the signed-upload token can't be wired
+ * through TUS metadata.
  */
 function uploadWithProgress(opts: {
-  signedUrl: string;
+  bucket: string;
+  storagePath: string;
   file: File;
+  accessToken: string;
   onProgress: (pct: number) => void;
 }): Promise<void> {
+  const supabaseUrl = getSupabaseUrl();
   return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('PUT', opts.signedUrl, true);
-    xhr.setRequestHeader(
-      'Content-Type',
-      opts.file.type || 'application/octet-stream',
-    );
-    xhr.setRequestHeader('x-upsert', 'true');
-
-    xhr.upload.onprogress = (e) => {
-      if (!e.lengthComputable) return;
-      const pct = Math.min(99, Math.floor((e.loaded / e.total) * 100));
-      opts.onProgress(pct);
-    };
-
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
+    const upload = new tus.Upload(opts.file, {
+      endpoint: `${supabaseUrl}/storage/v1/upload/resumable`,
+      retryDelays: [0, 1500, 3000, 5000, 10000],
+      headers: {
+        authorization: `Bearer ${opts.accessToken}`,
+        'x-upsert': 'true',
+      },
+      uploadDataDuringCreation: true,
+      removeFingerprintOnSuccess: true,
+      metadata: {
+        bucketName: opts.bucket,
+        objectName: opts.storagePath,
+        contentType: opts.file.type || 'application/octet-stream',
+        cacheControl: '3600',
+      },
+      // 6MB matches the calendar uploader and is well above Supabase's
+      // 5MB minimum chunk requirement.
+      chunkSize: 6 * 1024 * 1024,
+      onProgress: (bytesUploaded, bytesTotal) => {
+        if (!bytesTotal) return;
+        const pct = Math.min(99, Math.floor((bytesUploaded / bytesTotal) * 100));
+        opts.onProgress(pct);
+      },
+      onSuccess: () => {
         opts.onProgress(100);
         resolve();
-      } else {
-        reject(
-          new Error(
-            `upload http ${xhr.status}: ${xhr.responseText?.slice(0, 200) || xhr.statusText}`,
-          ),
-        );
-      }
-    };
-    xhr.onerror = () => reject(new Error('network error during upload'));
-    xhr.onabort = () => reject(new Error('upload aborted'));
-    xhr.ontimeout = () => reject(new Error('upload timed out'));
-
-    xhr.send(opts.file);
+      },
+      onError: (err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        reject(new Error(`tus upload failed: ${message}`));
+      },
+    });
+    upload.start();
   });
 }
 
 async function runOne(projectId: string, file: File, jobId: string): Promise<void> {
   try {
     patchJob(projectId, jobId, { state: 'signing' });
+
+    // Step 1: insert placeholder row + reserve storage path on the server.
     const signRes = await fetch(
       `/api/admin/editing/projects/${projectId}/videos`,
       {
@@ -183,15 +205,25 @@ async function runOne(projectId: string, file: File, jobId: string): Promise<voi
     }
     const signed = (await signRes.json()) as {
       storage_path: string;
-      upload_token: string;
-      signed_url: string;
+      bucket?: string;
     };
+
+    // Step 2: pull the user's session token so TUS can authenticate.
+    const supabase = createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      throw new Error('no active session — please sign back in');
+    }
 
     patchJob(projectId, jobId, { state: 'uploading' });
 
     await uploadWithProgress({
-      signedUrl: signed.signed_url,
+      bucket: signed.bucket ?? 'editing-media',
+      storagePath: signed.storage_path,
       file,
+      accessToken: session.access_token,
       onProgress: (pct) => patchJob(projectId, jobId, { progress: pct }),
     });
 

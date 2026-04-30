@@ -13,7 +13,9 @@ import {
 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { SubNav } from '@/components/ui/sub-nav';
 import { ClientLogo } from '@/components/clients/client-logo';
+import { ShareHistoryPanel } from './share-history-panel';
 import type {
   ReviewLinkRow,
   ReviewLinkStatus,
@@ -52,10 +54,14 @@ export function CalendarLinkDetail({
   const open = !!link;
   const [revoking, setRevoking] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [tab, setTab] = useState<'details' | 'history'>('details');
 
   // Reset transient UI state when a new link is opened.
   useEffect(() => {
-    if (open) setCopied(false);
+    if (open) {
+      setCopied(false);
+      setTab('details');
+    }
   }, [open, link?.id]);
 
   const shareUrl = useMemo(() => {
@@ -128,7 +134,29 @@ export function CalendarLinkDetail({
           </div>
         </div>
 
+        {/* Tabs: Details (default) vs History. History mirrors the
+            editing-project dialog and feeds off the drop activity API. */}
+        <div className="px-6 pt-3">
+          <SubNav
+            items={[
+              { slug: 'details', label: 'Details' },
+              { slug: 'history', label: 'History' },
+            ] as const}
+            active={tab}
+            onChange={(s) => setTab(s)}
+            ariaLabel="Calendar link sections"
+          />
+        </div>
+
         {/* Body */}
+        {tab === 'history' ? (
+          <div className="flex-1 overflow-y-auto p-6">
+            <ShareHistoryPanel
+              endpoint={`/api/calendar/drops/${link.drop_id}/activity`}
+              emptyMessage="No activity yet. Mint a share link or send a notification to get started."
+            />
+          </div>
+        ) : (
         <div className="flex-1 space-y-5 overflow-y-auto p-6">
           {/* Share link — primary affordance. Sits up top so copying
               the URL takes one click from the table click. */}
@@ -261,6 +289,7 @@ export function CalendarLinkDetail({
             </div>
           )}
         </div>
+        )}
       </div>
     </Dialog>
   );

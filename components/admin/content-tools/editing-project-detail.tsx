@@ -21,6 +21,7 @@ import {
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
+import { SubNav } from '@/components/ui/sub-nav';
 import { ClientLogo } from '@/components/clients/client-logo';
 import {
   EDITING_STATUS_LABEL,
@@ -32,6 +33,7 @@ import {
 } from '@/lib/editing/types';
 import { AssigneePicker } from './assignee-picker';
 import { EditingShareButton } from './editing-share-button';
+import { ShareHistoryPanel } from './share-history-panel';
 import {
   enqueueUploads,
   getProjectUploads,
@@ -93,6 +95,7 @@ export function EditingProjectDetail({
   const [type, setType] = useState<EditingProjectType>('organic_content');
   const [status, setStatus] = useState<EditingProjectStatus>('editing');
   const [dragActive, setDragActive] = useState(false);
+  const [tab, setTab] = useState<'details' | 'history'>('details');
 
   const projectId = project?.id ?? null;
 
@@ -100,10 +103,20 @@ export function EditingProjectDetail({
   // running XHRs even if this dialog unmounts, so closing the dialog
   // mid-upload doesn't cancel anything; reopening picks up where we
   // left off.
+  // `getProjectUploads` returns a stable EMPTY singleton when no entry
+  // exists for the key, so passing '' for a closed dialog still gives us
+  // a referentially-stable snapshot, satisfying React's `Object.is`
+  // equality check and avoiding the infinite-render loop that a fresh
+  // `[]` literal would cause.
+  const uploadsKey = projectId ?? '';
+  const getSnapshot = useCallback(
+    () => getProjectUploads(uploadsKey),
+    [uploadsKey],
+  );
   const uploads = useSyncExternalStore(
     subscribeUploads,
-    () => (projectId ? getProjectUploads(projectId) : []),
-    () => [],
+    getSnapshot,
+    getSnapshot,
   );
 
   const load = useCallback(async () => {
@@ -132,6 +145,7 @@ export function EditingProjectDetail({
     if (open) void load();
     else {
       setData(null);
+      setTab('details'); // reset to default tab on close
       // Don't clear uploads on close — they live in the module-scoped
       // store and continue running in the background. The user can
       // reopen the dialog to check progress; the store survives.
@@ -253,7 +267,29 @@ export function EditingProjectDetail({
           </div>
         </div>
 
+        {/* Tabs */}
+        <div className="px-6 pt-2">
+          <SubNav
+            ariaLabel="Project sections"
+            items={[
+              { slug: 'details', label: 'Details' },
+              { slug: 'history', label: 'History' },
+            ] as const}
+            active={tab}
+            onChange={(s) => setTab(s)}
+          />
+        </div>
+
         {/* Body */}
+        {tab === 'history' ? (
+          <div className="flex-1 overflow-y-auto p-6">
+            {projectId && (
+              <ShareHistoryPanel
+                endpoint={`/api/admin/editing/projects/${projectId}/activity`}
+              />
+            )}
+          </div>
+        ) : (
         <div className="grid flex-1 grid-cols-1 gap-6 overflow-y-auto p-6 lg:grid-cols-[1fr_320px]">
           {/* Main column: raw footage link + edited videos */}
           <div className="space-y-5">
@@ -379,10 +415,12 @@ export function EditingProjectDetail({
             </div>
           </div>
         </div>
+        )}
       </div>
     </Dialog>
   );
 }
+
 
 function Section({
   label,
