@@ -1,15 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Eye, Link2, Loader2, Mail, MailX } from 'lucide-react';
+import { Eye, Film, Link2, Loader2, Mail, MailX } from 'lucide-react';
 
 /**
  * Shared "History" tab panel used by both EditingProjectDetail and
  * CalendarLinkDetail. Both endpoints return the same activity shape:
  *
- *   - share_link       ← someone minted a share link
- *   - share_link_view  ← someone opened /c/<token>
- *   - email_sent       ← outbound notification email (sent or failed)
+ *   - share_link        ← someone minted a share link
+ *   - share_link_view   ← someone opened /c/<token>
+ *   - email_sent        ← outbound notification email (sent or failed)
+ *   - revision_uploaded ← editor uploaded a revised cut (version > 1)
  *
  * The caller passes `endpoint` (the GET url) so the panel doesn't need
  * to know the difference between an editing project and a content drop.
@@ -34,6 +35,21 @@ export type ShareHistoryEvent =
         subject: string | null;
         status: string | null;
         failure_reason: string | null;
+        /**
+         * Lets us distinguish a delivery (`editing_deliverable`), re-review
+         * (`editing_rereview`), or calendar followup (`content_drop_followup`)
+         * row when it lands in the same feed.
+         */
+        type_key?: string | null;
+      };
+    }
+  | {
+      kind: 'revision_uploaded';
+      at: string;
+      detail: {
+        version: number;
+        title: string | null;
+        position: number;
       };
     };
 
@@ -134,8 +150,28 @@ function HistoryRow({ event }: { event: ShareHistoryEvent }) {
     );
   }
 
+  if (event.kind === 'revision_uploaded') {
+    const cutLabel =
+      event.detail.title?.trim() || `Cut #${event.detail.position + 1}`;
+    return (
+      <li className="flex items-start gap-3 rounded-lg border border-nativz-border bg-surface p-3">
+        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-accent-surface text-accent-text">
+          <Film size={13} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm text-text-primary">
+            Revision uploaded: {cutLabel}{' '}
+            <span className="text-text-muted">v{event.detail.version}</span>
+          </p>
+        </div>
+        <span className="shrink-0 text-[11px] text-text-muted">{ts}</span>
+      </li>
+    );
+  }
+
   // email_sent
   const failed = event.detail.status === 'failed';
+  const verb = emailVerb(event.detail.type_key, failed);
   return (
     <li className="flex items-start gap-3 rounded-lg border border-nativz-border bg-surface p-3">
       <span
@@ -150,7 +186,7 @@ function HistoryRow({ event }: { event: ShareHistoryEvent }) {
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm text-text-primary">
-          {failed ? 'Notification failed' : 'Notification sent'} to {event.detail.to}
+          {verb} to {event.detail.to}
         </p>
         {event.detail.subject && (
           <p className="truncate text-xs text-text-muted">{event.detail.subject}</p>
@@ -164,6 +200,19 @@ function HistoryRow({ event }: { event: ShareHistoryEvent }) {
       <span className="shrink-0 text-[11px] text-text-muted">{ts}</span>
     </li>
   );
+}
+
+function emailVerb(typeKey: string | null | undefined, failed: boolean): string {
+  if (failed) {
+    if (typeKey === 'editing_rereview') return 'Re-review email failed';
+    if (typeKey === 'editing_deliverable') return 'Delivery email failed';
+    if (typeKey === 'content_drop_followup') return 'Follow-up email failed';
+    return 'Notification failed';
+  }
+  if (typeKey === 'editing_rereview') return 'Re-review email sent';
+  if (typeKey === 'editing_deliverable') return 'Delivery email sent';
+  if (typeKey === 'content_drop_followup') return 'Follow-up email sent';
+  return 'Notification sent';
 }
 
 function formatTimestamp(iso: string): string {

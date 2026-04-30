@@ -1533,3 +1533,90 @@ export async function sendEditingDeliverableEmail(opts: {
     },
   });
 }
+
+// ── Editing re-review email ─────────────────────────────────────────────────
+//
+// After a client requests changes, the editor uploads new revisions, then
+// asks Cortex to ping the same POCs again with a fresh subject + body so the
+// inbox thread reads "v2 ready for review" rather than another delivery
+// notice. Identical mechanics to the deliverable email (same recipient list,
+// same share URL, same branded layout) — only the default subject + body
+// copy + the metadata `kind` differ. Logged through `sendAndLog` so the Email
+// Hub still groups by client + project, and the History tab can surface
+// re-review sends as a distinct event.
+
+export function buildEditingRereviewDraft(opts: {
+  pocFirstNames: string[];
+  clientName: string;
+  projectName: string;
+  pendingCount: number;
+}): { subject: string; message: string } {
+  const greetingNames = opts.pocFirstNames.length
+    ? opts.pocFirstNames.join(', ')
+    : opts.clientName;
+  const cutWord = opts.pendingCount === 1 ? 'cut' : 'cuts';
+  const subject =
+    opts.pendingCount > 0
+      ? `Revised ${opts.projectName} ${cutWord} ready for re-review`
+      : `Re-review ready for ${opts.projectName}`;
+  const body =
+    opts.pendingCount > 0
+      ? `Hey ${greetingNames}, we worked through the notes and re-uploaded ${opts.pendingCount} revised ${cutWord} for ${opts.projectName}. ` +
+        `Tap the button below to watch the new versions and either approve them or drop more comments.\n\n` +
+        `Thanks for the quick turn on the last round.`
+      : `Hey ${greetingNames}, the revised ${opts.projectName} cuts are ready for another look. ` +
+        `Tap the button below to watch the new versions and either approve them or drop more comments.`;
+  return { subject, message: body };
+}
+
+export async function sendEditingRereviewEmail(opts: {
+  to: string | string[];
+  pocFirstNames: string[];
+  clientName: string;
+  projectName: string;
+  shareUrl: string;
+  pendingCount: number;
+  agency?: AgencyBrand;
+  clientId?: string;
+  projectId?: string;
+  /** Admin-edited subject from the draft dialog. Falls back to the default. */
+  subjectOverride?: string;
+  /** Admin-edited body (plain text, blank-line separated paragraphs). */
+  messageOverride?: string;
+}) {
+  const agency = opts.agency ?? 'nativz';
+  const draft = buildEditingRereviewDraft({
+    pocFirstNames: opts.pocFirstNames,
+    clientName: opts.clientName,
+    projectName: opts.projectName,
+    pendingCount: opts.pendingCount,
+  });
+  const subject = opts.subjectOverride?.trim() || draft.subject;
+  const messageText = opts.messageOverride?.trim() || draft.message;
+  const bodyHtml = messageToHtmlParagraphs(messageText);
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: 'editing_rereview',
+    agency,
+    to: opts.to,
+    clientId: opts.clientId,
+    subject,
+    html: layout(`
+      <div class="card">
+        <h1 class="heading">Revisions ready for re-review</h1>
+        ${bodyHtml}
+        <div style="margin-top:18px;">
+          <a href="${opts.shareUrl}" class="btn">Watch the revised cuts</a>
+        </div>
+      </div>
+    `, agency),
+    metadata: {
+      clientName: opts.clientName,
+      projectName: opts.projectName,
+      projectId: opts.projectId,
+      pocFirstNames: opts.pocFirstNames,
+      pendingCount: opts.pendingCount,
+      edited: !!(opts.subjectOverride || opts.messageOverride),
+    },
+  });
+}

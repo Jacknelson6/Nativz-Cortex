@@ -7,7 +7,9 @@ import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 import {
   buildEditingDeliverableDraft,
+  buildEditingRereviewDraft,
   sendEditingDeliverableEmail,
+  sendEditingRereviewEmail,
 } from '@/lib/email/resend';
 
 export const dynamic = 'force-dynamic';
@@ -42,6 +44,13 @@ interface ShareLinkRow {
   token: string;
   expires_at: string;
   archived_at: string | null;
+  last_review_email_sent_at: string | null;
+}
+
+interface VideoRevisionRow {
+  id: string;
+  version: number;
+  created_at: string;
 }
 
 interface ProjectRow {
@@ -81,7 +90,7 @@ async function loadEmailContext(projectId: string, linkId: string) {
 
   const { data: link } = await admin
     .from('editing_project_share_links')
-    .select('id, project_id, token, expires_at, archived_at')
+    .select('id, project_id, token, expires_at, archived_at, last_review_email_sent_at')
     .eq('id', linkId)
     .eq('project_id', projectId)
     .single<ShareLinkRow>();
@@ -131,6 +140,26 @@ async function loadEmailContext(projectId: string, linkId: string) {
   const appUrl = resolveAppUrl(project.clients?.agency);
   const shareUrl = `${appUrl}/c/edit/${link.token}`;
 
+  // Compute "videos uploaded since the last send" so the dialog can switch
+  // between Send delivery vs Send re-review and surface a count badge. Null
+  // last_review_email_sent_at = no review email ever sent (treated as
+  // delivery). Otherwise pending = videos with version > 1 created after the
+  // bookmark.
+  let pendingRevisionCount = 0;
+  if (link.last_review_email_sent_at) {
+    const { data: revs } = await admin
+      .from('editing_project_videos')
+      .select('id, version, created_at')
+      .eq('project_id', project.id)
+      .gt('version', 1)
+      .gt('created_at', link.last_review_email_sent_at)
+      .returns<VideoRevisionRow[]>();
+    pendingRevisionCount = revs?.length ?? 0;
+  }
+  const kind: 'delivery' | 'rereview' = link.last_review_email_sent_at
+    ? 'rereview'
+    : 'delivery';
+
   return {
     admin,
     link,
@@ -141,6 +170,8 @@ async function loadEmailContext(projectId: string, linkId: string) {
     agency,
     eligible,
     shareUrl,
+    kind,
+    pendingRevisionCount,
   } as const;
 }
 
@@ -152,7 +183,14 @@ export async function GET(
   const ctxResult = await loadEmailContext(id, linkId);
   if ('error' in ctxResult) return ctxResult.error;
 
-  const { eligible, clientName, projectName, shareUrl } = ctxResult;
+  const {
+    eligible,
+    clientName,
+    projectName,
+    shareUrl,
+    kind,
+    pendingRevisionCount,
+  } = ctxResult;
   if (eligible.length === 0) {
     return NextResponse.json(
       {
@@ -164,11 +202,19 @@ export async function GET(
   }
 
   const pocFirstNames = eligible.map((c) => firstName(c.name));
-  const draft = buildEditingDeliverableDraft({
-    pocFirstNames,
-    clientName,
-    projectName,
-  });
+  const draft =
+    kind === 'rereview'
+      ? buildEditingRereviewDraft({
+          pocFirstNames,
+          clientName,
+          projectName,
+          pendingCount: pendingRevisionCount,
+        })
+      : buildEditingDeliverableDraft({
+          pocFirstNames,
+          clientName,
+          projectName,
+        });
 
   return NextResponse.json({
     subject: draft.subject,
@@ -177,6 +223,8 @@ export async function GET(
     client_name: clientName,
     project_name: projectName,
     share_url: shareUrl,
+    kind,
+    pending_count: pendingRevisionCount,
   });
 }
 
@@ -206,6 +254,8 @@ export async function POST(
   if ('error' in ctxResult) return ctxResult.error;
 
   const {
+    admin,
+    link,
     clientId,
     clientName,
     projectId,
@@ -213,6 +263,8 @@ export async function POST(
     agency,
     eligible,
     shareUrl,
+    kind,
+    pendingRevisionCount,
   } = ctxResult;
 
   if (eligible.length === 0) {
@@ -228,18 +280,33 @@ export async function POST(
   const recipients = eligible.map((c) => c.email);
   const pocFirstNames = eligible.map((c) => firstName(c.name));
 
-  const result = await sendEditingDeliverableEmail({
-    to: recipients,
-    pocFirstNames,
-    clientName,
-    projectName,
-    shareUrl,
-    agency,
-    clientId,
-    projectId,
-    subjectOverride: parsed.data.subject,
-    messageOverride: parsed.data.message,
-  });
+  const result =
+    kind === 'rereview'
+      ? await sendEditingRereviewEmail({
+          to: recipients,
+          pocFirstNames,
+          clientName,
+          projectName,
+          shareUrl,
+          pendingCount: pendingRevisionCount,
+          agency,
+          clientId,
+          projectId,
+          subjectOverride: parsed.data.subject,
+          messageOverride: parsed.data.message,
+        })
+      : await sendEditingDeliverableEmail({
+          to: recipients,
+          pocFirstNames,
+          clientName,
+          projectName,
+          shareUrl,
+          agency,
+          clientId,
+          projectId,
+          subjectOverride: parsed.data.subject,
+          messageOverride: parsed.data.message,
+        });
 
   if (!result.ok) {
     return NextResponse.json(
@@ -248,10 +315,20 @@ export async function POST(
     );
   }
 
+  // Stamp the bookmark so the next send computes pending revisions from this
+  // moment forward and switches the dialog into "Send re-review" mode.
+  const sentAt = new Date().toISOString();
+  await admin
+    .from('editing_project_share_links')
+    .update({ last_review_email_sent_at: sentAt })
+    .eq('id', link.id);
+
   return NextResponse.json({
     ok: true,
+    kind,
+    pending_count: pendingRevisionCount,
     recipients_count: recipients.length,
-    sent_at: new Date().toISOString(),
+    sent_at: sentAt,
   });
 }
 

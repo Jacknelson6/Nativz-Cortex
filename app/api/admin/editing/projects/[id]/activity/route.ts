@@ -11,9 +11,10 @@ export const dynamic = 'force-dynamic';
  * Powers the "History" tab on the editing project detail dialog.
  * Returns a single time-ordered feed combining:
  *
- *   - share_link_view  ← someone (possibly named via ?as=...) opened a /c/edit/<token> page
- *   - email_sent       ← an editing_deliverable email was sent / failed for this project
- *   - share_link       ← a new share link was minted
+ *   - share_link_view   ← someone opened a /c/edit/<token> page
+ *   - email_sent        ← editing_deliverable / editing_rereview email send
+ *   - share_link        ← a new share link was minted
+ *   - revision_uploaded ← a new revision (version > 1) was uploaded
  *
  * Newest first. Cap at 200 events so the panel stays snappy. The dialog
  * decides how to render each event type by switching on `kind`.
@@ -38,6 +39,17 @@ type Activity =
         subject: string | null;
         status: string | null;
         failure_reason: string | null;
+        /** `editing_deliverable` or `editing_rereview` so the panel can label it. */
+        type_key: string | null;
+      };
+    }
+  | {
+      kind: 'revision_uploaded';
+      at: string;
+      detail: {
+        version: number;
+        title: string | null;
+        position: number;
       };
     };
 
@@ -70,8 +82,8 @@ export async function GET(
     .eq('project_id', id);
   const linkIds = (links ?? []).map((l) => l.id as string);
 
-  // Fan out the three queries in parallel — all read-only.
-  const [viewsRes, emailsRes] = await Promise.all([
+  // Fan out the four queries in parallel — all read-only.
+  const [viewsRes, emailsRes, revisionsRes] = await Promise.all([
     linkIds.length
       ? admin
           .from('editing_project_share_link_views')
@@ -81,12 +93,23 @@ export async function GET(
           .limit(200)
       : Promise.resolve({ data: [] as Array<{ share_link_id: string; viewed_at: string; viewer_name: string | null }> }),
     // email_messages doesn't have a direct project FK; the editing
-    // deliverable send stores `projectId` in metadata. Filter on
-    // type_key + JSONB equality.
+    // deliverable + rereview senders both stamp `projectId` in metadata so
+    // we filter on type_key membership and a metadata equality below.
     admin
       .from('email_messages')
-      .select('id, recipient_email, subject, status, failure_reason, sent_at, created_at, metadata')
-      .eq('type_key', 'editing_deliverable')
+      .select('id, recipient_email, subject, status, failure_reason, sent_at, created_at, metadata, type_key')
+      .in('type_key', ['editing_deliverable', 'editing_rereview'])
+      .order('created_at', { ascending: false })
+      .limit(200),
+    // Revisions = videos with version > 1. Each upload bumps version (see
+    // editing/projects/[id]/videos POST `replace_video_id`) and reuses the
+    // position, so we can show "v3 of cut #1 uploaded" without a separate
+    // events table.
+    admin
+      .from('editing_project_videos')
+      .select('id, version, position, title, created_at')
+      .eq('project_id', id)
+      .gt('version', 1)
       .order('created_at', { ascending: false })
       .limit(200),
   ]);
@@ -128,6 +151,7 @@ export async function GET(
     sent_at: string | null;
     created_at: string | null;
     metadata: Record<string, unknown> | null;
+    type_key: string | null;
   };
   for (const e of (emailsRes.data ?? []) as EmailRow[]) {
     const meta = e.metadata ?? {};
@@ -140,6 +164,25 @@ export async function GET(
         subject: e.subject,
         status: e.status,
         failure_reason: e.failure_reason,
+        type_key: e.type_key,
+      },
+    });
+  }
+
+  type RevisionRow = {
+    version: number;
+    position: number;
+    title: string | null;
+    created_at: string;
+  };
+  for (const r of (revisionsRes.data ?? []) as RevisionRow[]) {
+    events.push({
+      kind: 'revision_uploaded',
+      at: r.created_at,
+      detail: {
+        version: r.version,
+        title: r.title,
+        position: r.position,
       },
     });
   }

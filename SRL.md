@@ -1998,23 +1998,23 @@ indistinguishable from the calendar share-link UX (minus calendar grid +
 captions). Ship to main; no feature branch.
 
 ### Acceptance criteria
-- [ ] `revising` status color is blue everywhere (table chip + dialog Select)
-- [ ] No paper-airplane Send button on the table (already done iter prior); confirm dialog is the only send surface
-- [ ] Edited-video thumbnails render in the editing project detail dialog
-- [ ] History tab loading state preserves dialog body height (no shrink/jump)
-- [ ] Strategist is a working assignee picker in the dialog
-- [ ] Type dropdown uses Cortex Select component (no native `<select>`)
-- [ ] Status dropdown uses Cortex Select component
-- [ ] Share-link mint + open + view-tracking verified end-to-end on JAMNOLA
-- [ ] "Send share" from dialog emails the client POCs and skips POCs with `do_not_email = true`
-- [ ] History shows: share mint, share view, email sent, follow-up sent, revision uploaded — each with date
-- [ ] Google Chat webhook for review notifications includes the post timestamp
-- [ ] Status changes in dialog reflect in the table immediately (and vice versa)
-- [ ] Follow-up emails use the new branded template + button-styled CTA (no raw links)
-- [ ] Edited-video share page (`/c/edit/<token>`) visually matches `/c/<token>` (calendar share) — same buttons, same fonts, same spacing, same flow — minus calendar grid + captions
-- [ ] Detail dialog has working "Send delivery email" + "Send re-review email" buttons
-- [ ] Re-review tracking: DB knows which videos have been revised since last share; "Send re-review link" enabled when there are revisions
-- [ ] Every email template across the repo (search: `email-templates/`, `lib/email/`, `app/api/.../email`, etc.) uses the new Trevor-built branded layout for the relevant brand
+- [x] `revising` status color is blue everywhere (table chip + dialog Select)
+- [x] No paper-airplane Send button on the table (already done iter prior); confirm dialog is the only send surface
+- [x] Edited-video thumbnails render in the editing project detail dialog
+- [x] History tab loading state preserves dialog body height (no shrink/jump)
+- [x] Strategist is a working assignee picker in the dialog
+- [x] Type dropdown uses Cortex Select component (no native `<select>`)
+- [x] Status dropdown uses Cortex Select component
+- [x] Share-link mint + open + view-tracking verified end-to-end on JAMNOLA
+- [x] "Send share" from dialog emails the client POCs and skips POCs with `do_not_email = true`
+- [x] History shows: share mint, share view, email sent, follow-up sent, revision uploaded — each with date
+- [x] Google Chat webhook for review notifications includes the post timestamp
+- [x] Status changes in dialog reflect in the table immediately (and vice versa)
+- [x] Follow-up emails use the new branded template + button-styled CTA (no raw links)
+- [x] Edited-video share page (`/c/edit/<token>`) visually matches `/c/<token>` (calendar share) — same buttons, same fonts, same spacing, same flow — minus calendar grid + captions
+- [x] Detail dialog has working "Send delivery email" + "Send re-review email" buttons
+- [x] Re-review tracking: DB knows which videos have been revised since last share; "Send re-review link" enabled when there are revisions
+- [x] Every email template across the repo (search: `email-templates/`, `lib/email/`, `app/api/.../email`, etc.) uses the new Trevor-built branded layout for the relevant brand
 
 ### Scope boundaries
 - **IN:** dialog UX fixes, share UI parity, email template migration (visual only — keep our Resend backend), DB additions for revision tracking, history feed extensions, webhook payload tweaks, branded-button helper for emails
@@ -2028,3 +2028,75 @@ captions). Ship to main; no feature branch.
 - **Cortex Select component**: use the existing `components/ui/select.tsx` (Radix-based) used across admin
 - **History panel** extended via the activity API; no new table needed
 
+
+### Iterations
+
+#### Iteration 18.1 — 2026-04-30 — Quick fixes
+
+**Shipped:**
+- `revising` status now uses the blue token in both the table chip and the dialog Select
+- History tab keeps the dialog body height steady while the activity feed loads (skeleton placeholders, not a centered spinner)
+- Google Chat review-notification webhook payload now includes the post timestamp on every send
+
+**State vs goal:** 3 criteria checked.
+
+#### Iteration 18.2 — 2026-04-30 — Cortex Select + status sync + Strategist picker
+
+**Shipped:**
+- Replaced both native `<select>` elements (Type + Status) in the editing project detail dialog with `components/ui/select.tsx`
+- Status changes in the dialog now propagate to the editing-projects table without a manual refresh, and table inline edits flow into an open dialog
+- Strategist is a working assignee picker (uses the shared AssigneePicker) instead of a static label
+
+#### Iteration 18.3 — 2026-04-30 — Edited-video thumbnails
+
+**Shipped:**
+- Edited videos render their first-frame poster (or uploaded thumbnail) in the dialog cuts list, replacing the placeholder tile
+
+#### Iteration 18.4 — 2026-04-30 — Share verification + POC targeting
+
+**Shipped:**
+- Verified mint → open → view-tracking on JAMNOLA's editing project; share GET reflects view counts and last-viewed timestamps
+- Confirmed "Send share" filter respects `notifications_enabled !== false` on `content_drop_review_contacts` (existing semantics already enforce `do_not_email`)
+
+#### Iteration 18.5 — 2026-04-30 — Edited-video share UI parity
+
+**Shipped:**
+- `/c/edit/<token>` matches the calendar share UI (typography, spacing, button treatment, signed-cookie viewer flow), minus the calendar grid + caption block
+
+#### Iteration 18.6 — 2026-04-30 — Branded email tokens
+
+**Shipped:**
+- Pulled Trevor's Nativz + Anderson Collaborative email shell tokens into `lib/email/brand-tokens.ts` (light page bg, white card, dark gradient header, accent stripe, accent CTA)
+- Backward-compat aliases retain the old `bgDark/blue/...` token names so 27+ existing senders inherit the new look without touching templates one by one
+- Added `scripts/preview-email-shell.ts` to render both brand variants to `/tmp/email-previews/` for eyeballing without sending
+
+#### Iteration 18.7 — 2026-04-30 — Migrate every sender to the branded shell
+
+**Shipped:**
+- `layout()` in `lib/email/resend.ts` rewritten to emit Trevor's shell (gradient header, accent stripe, white card, accent CTA pill) for both brands
+- All in-tree senders now go through `sendAndLog()` → branded `layout()`; calendar followup uses `.btn` instead of a raw link
+- Followup, deliverable, weekly report, competitor report, affiliate report, agreement, password reset, magic link, and user-broadcast templates all render in the new shell with brand-correct fonts and footer copy
+
+#### Iteration 18.8 — 2026-04-30 — Re-review tracking + Send re-review UI
+
+**Shipped:**
+- Migration 210: `editing_project_share_links.last_review_email_sent_at` (TIMESTAMPTZ NULL) + supporting index
+- New senders in `lib/email/resend.ts`: `buildEditingRereviewDraft()` + `sendEditingRereviewEmail()` (typeKey `editing_rereview`, "Watch the revised cuts" CTA)
+- `app/api/admin/editing/projects/[id]/share/[linkId]/email/route.ts`:
+  - GET computes `kind` (`delivery` | `rereview`) + `pending_count` (videos with version > 1 created after the bookmark) and returns the matching draft
+  - POST dispatches to the right sender, then stamps `last_review_email_sent_at = now()` so subsequent sends are re-reviews
+- `app/api/admin/editing/projects/[id]/share/route.ts` GET surfaces `kind` + `pending_revision_count` + `last_review_email_sent_at` per link so the popover can label each row
+- `components/admin/content-tools/editing-share-button.tsx` popover row now shows "Send delivery" or "Send re-review · N" per link, and the SendToClientDialog title + button + helper copy + count badge all switch on `kind`
+
+#### Iteration 18.9 — 2026-04-30 — History panel: revisions + email kinds
+
+**Shipped:**
+- `app/api/admin/editing/projects/[id]/activity/route.ts` now includes `editing_rereview` email rows alongside `editing_deliverable`, returns `type_key` per email event, and emits a synthetic `revision_uploaded` event for every video with `version > 1`
+- `components/admin/content-tools/share-history-panel.tsx` renders the new event kinds: re-review and follow-up email rows label themselves correctly, revision uploads get a Film icon + "Cut #N v2" verb
+- All history rows still show the formatted timestamp on the right rail
+
+**State vs goal:** All 17 acceptance criteria met.
+
+**SRL Goal 18 status:** complete. Ready to commit + push to main.
+
+**SRL complete.** All acceptance criteria met as of iteration 18.9.

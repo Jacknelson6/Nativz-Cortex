@@ -90,7 +90,9 @@ export async function GET(
 
   const { data: links } = await admin
     .from('editing_project_share_links')
-    .select('id, token, expires_at, created_at, last_viewed_at, archived_at')
+    .select(
+      'id, token, expires_at, created_at, last_viewed_at, archived_at, last_review_email_sent_at',
+    )
     .eq('project_id', id)
     .is('archived_at', null)
     .order('created_at', { ascending: false });
@@ -116,20 +118,40 @@ export async function GET(
     (viewsByLink[v.share_link_id] ||= []).push(v);
   }
 
+  // Pull every revision (version > 1) for the project once so we can compute
+  // each link's "videos uploaded since the last review email" count without N
+  // round-trips.
+  type VideoRow = { id: string; version: number; created_at: string };
+  const { data: revisionRows } = await admin
+    .from('editing_project_videos')
+    .select('id, version, created_at')
+    .eq('project_id', id)
+    .gt('version', 1)
+    .returns<VideoRow[]>();
+
   const appUrl = resolveAppUrl(project.clients?.agency);
   const now = Date.now();
   const history = (links ?? []).map((row) => {
     const expires = new Date(row.expires_at as string).getTime();
     const isExpired = Number.isFinite(expires) && expires < now;
     const allViews = viewsByLink[row.id as string] ?? [];
+    const lastSent = (row.last_review_email_sent_at as string | null) ?? null;
+    const pending =
+      lastSent && revisionRows
+        ? revisionRows.filter((v) => v.created_at > lastSent).length
+        : 0;
+    const kind: 'delivery' | 'rereview' = lastSent ? 'rereview' : 'delivery';
     return {
       id: row.id,
       url: `${appUrl}/c/edit/${row.token}`,
       created_at: row.created_at,
       expires_at: row.expires_at,
       last_viewed_at: row.last_viewed_at,
+      last_review_email_sent_at: lastSent,
       revoked: isExpired,
       view_count: allViews.length,
+      pending_revision_count: pending,
+      kind,
       views: allViews.slice(0, 50).map((v) => ({
         viewed_at: v.viewed_at,
         viewer_name: v.viewer_name,

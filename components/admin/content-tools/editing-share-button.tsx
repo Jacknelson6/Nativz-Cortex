@@ -36,8 +36,14 @@ interface ShareLink {
   created_at: string;
   expires_at: string;
   last_viewed_at: string | null;
+  /** Most recent delivery/re-review email send. Null = never sent. */
+  last_review_email_sent_at: string | null;
   revoked: boolean;
   view_count: number;
+  /** Videos with version > 1 uploaded after `last_review_email_sent_at`. */
+  pending_revision_count: number;
+  /** `delivery` for the first send, `rereview` once a delivery has gone out. */
+  kind: 'delivery' | 'rereview';
   views: { viewed_at: string; viewer_name: string | null }[];
 }
 
@@ -236,7 +242,11 @@ export function EditingShareButton({
                         className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-text-muted transition-colors hover:bg-accent/10 hover:text-accent-text"
                       >
                         <Send size={11} />
-                        Send to client
+                        {link.kind === 'rereview'
+                          ? link.pending_revision_count > 0
+                            ? `Send re-review · ${link.pending_revision_count}`
+                            : 'Send re-review'
+                          : 'Send delivery'}
                       </button>
                       <button
                         type="button"
@@ -277,6 +287,16 @@ interface DeliverableDraft {
   client_name: string;
   project_name: string;
   share_url: string;
+  /**
+   * `delivery` for the first send on a link, `rereview` once a previous
+   * delivery has gone out (so the dialog title + button + body switch).
+   */
+  kind: 'delivery' | 'rereview';
+  /**
+   * Number of `version > 1` videos uploaded since the last review email.
+   * Surfaced in the dialog header so the admin sees what they're sending.
+   */
+  pending_count: number;
 }
 
 /**
@@ -381,8 +401,15 @@ function SendToClientDialog({
     subject.trim().length > 0 &&
     message.trim().length > 0;
 
+  const isRereview = draft?.kind === 'rereview';
+  const dialogTitle = isRereview ? 'Send re-review email' : 'Send cuts for review';
+  const sendLabel = isRereview ? 'Send re-review' : 'Send';
+  const helperCopy = isRereview
+    ? 'Blank lines start a new paragraph. The branded layout and the “Watch the revised cuts” button are added automatically.'
+    : 'Blank lines start a new paragraph. The branded layout and the “Watch the cuts” button are added automatically.';
+
   return (
-    <Dialog open onClose={onClose} title="Send cuts for review" maxWidth="xl">
+    <Dialog open onClose={onClose} title={dialogTitle} maxWidth="xl">
       {loading ? (
         <div className="flex items-center justify-center py-10 text-text-muted">
           <Loader2 className="size-4 animate-spin" />
@@ -399,6 +426,16 @@ function SendToClientDialog({
         </div>
       ) : (
         <div className="space-y-4" onClick={(e) => e.stopPropagation()}>
+          {isRereview && draft ? (
+            <div className="rounded-md border border-accent-text/30 bg-accent-text/5 px-3 py-2 text-sm text-text-secondary">
+              {draft.pending_count > 0
+                ? `Sending re-review for ${draft.pending_count} revised ${
+                    draft.pending_count === 1 ? 'cut' : 'cuts'
+                  } uploaded since the last email.`
+                : 'Sending another re-review on this link.'}
+            </div>
+          ) : null}
+
           <div>
             <div className="text-xs font-medium uppercase tracking-wider text-text-muted">
               To
@@ -433,7 +470,7 @@ function SendToClientDialog({
               maxLength={5000}
             />
             <span className="mt-1 block text-xs text-text-muted">
-              Blank lines start a new paragraph. The branded layout and the &ldquo;Watch the cuts&rdquo; button are added automatically.
+              {helperCopy}
             </span>
           </label>
 
@@ -450,7 +487,7 @@ function SendToClientDialog({
               ) : (
                 <>
                   <Send className="size-4" />
-                  Send
+                  {sendLabel}
                 </>
               )}
             </Button>
