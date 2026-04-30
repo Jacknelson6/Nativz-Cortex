@@ -1390,3 +1390,24 @@ right now across every brand" page.
 **Next iteration:**
 - 14.3: Notifications tab polish — primarily a styling pass since the data layer shipped in 14.1. Goal is to harden the empty / error states and surface a "fetch failed" banner instead of a silent toast for the activity feed.
 
+### Iteration 14.3 — 2026-04-29 · Drive JWT probe + Notifications error banners
+
+**Shipped:**
+- `feat(content-tools): real Drive probe + persistent error banners on Notifications` (ba8a29ca)
+
+**State vs goal:**
+| Criterion | Status |
+|-----------|--------|
+| Replace Drive presence-only check with real JWT exchange (`drive/v3/about` as impersonated user, surfaces email + latency) | done |
+| Notifications activity feed: persistent error banner instead of silent toast | done |
+| Activity-empty + activity-error states distinguished (separate copy + icon for "no emails yet" vs "feed unreachable") | done |
+| Contacts overview: same persistent error banner pattern | done |
+| Toast still fires on manual refresh so the click feels acknowledged | done |
+
+**Gaps or regressions:**
+- Latency is still encoded in the detail string rather than a dedicated UI column. Acceptable trade-off; revisit only if Jack wants a sortable dashboard.
+- Zernio still presence-only (no public health endpoint). Not worth a dedicated probe.
+
+**Next iteration:**
+- 14.4: Quick Schedule MVP. Wire the actual Monday pull (Content Calendars board, EM Approved label filter), thumbnail extraction from the linked Drive folder, and caption pre-fill from the brand's saved-snippets table. This is the largest remaining lift on Goal 14 and the only criterion that's still flagged "partial".
+
