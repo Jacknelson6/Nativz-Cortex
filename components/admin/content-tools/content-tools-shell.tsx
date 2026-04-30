@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
+  BadgeDollarSign,
   Bell,
   Cable,
-  Camera,
   FileText,
+  Layers,
+  Megaphone,
   RefreshCcw,
-  Scissors,
+  Tv,
   Wand2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -29,16 +31,17 @@ import { ProjectsTableSkeleton } from './projects-table-skeleton';
 import { QuickScheduleTab } from './quick-schedule-tab';
 import { ConnectionsTab } from './connections-tab';
 import { NotificationsTab } from './notifications-tab';
-import { EditingTab } from './editing-tab';
-import { VideographerTab } from './videographer-tab';
 
 /**
- * `/admin/content-tools` shell. Replaces the old single-purpose
- * "Share Links" page with a 4-tab operations console:
+ * `/admin/content-tools` shell. Reorganised around project type so
+ * Jack can pivot between the cross-brand "everything in flight" view
+ * and a single-type breakdown without reaching for filters.
  *
- *   Projects        - cross-brand share-link inventory (the original
- *                     share-links table; everything pending across the
- *                     agency right now).
+ *   All projects    - every share-link the agency has out (default).
+ *   Organic social  - filtered to project_type = organic_content.
+ *   Paid social     - filtered to project_type = social_ads.
+ *   CTV             - filtered to project_type = ctv_ads.
+ *   Other           - everything else (untyped or explicitly other).
  *   Quick schedule  - Monday "EM Approved" videos -> thumbnail extract
  *                     + transcribe + caption write -> kick off scheduler.
  *   Connections     - integration health (Drive / Monday / Resend /
@@ -47,40 +50,99 @@ import { VideographerTab } from './videographer-tab';
  *   Notifications   - POC contacts panel + recent transactional email
  *                     activity feed. The "what just went out" view.
  *
- * The Projects tab owns the same data the legacy `/admin/share-links`
- * page rendered. We load it from `/api/calendar/review` (no clientId
- * filter, isAdmin server-side) and feed it into the existing
- * `<ReviewTableCard>` primitive so styling stays identical.
+ * Every project tab feeds the same `<ReviewTableCard>` primitive with
+ * a different filter + column visibility set. Type-specific tabs hide
+ * the now-redundant "Project type" column since the tab itself is
+ * the answer. We load the underlying roster once from
+ * `/api/calendar/review` and slice it locally so cross-tab navigation
+ * is instant.
  *
- * Other tabs are independent panes - no cross-coupled state, no shared
- * fetches. Each pane handles its own loading + error rendering so a
- * Connections probe failure can't block the Projects table from
- * rendering.
+ * Other tabs (Quick schedule / Connections / Notifications) are
+ * independent panes - no cross-coupled state, no shared fetches. Each
+ * pane handles its own loading + error rendering so a Connections
+ * probe failure can't block the Projects table from rendering.
  */
 
-type ContentToolsTab =
+type ProjectTabSlug =
   | 'projects'
-  | 'videographer'
-  | 'editing'
+  | 'organic_social'
+  | 'paid_social'
+  | 'ctv'
+  | 'other';
+
+type ContentToolsTab =
+  | ProjectTabSlug
   | 'quick-schedule'
   | 'connections'
   | 'notifications';
+
+/**
+ * Maps each project-type tab to the underlying `ReviewProjectType`
+ * filter. `null` means "no filter" (the All projects view).
+ */
+const PROJECT_TAB_FILTER: Record<ProjectTabSlug, ReviewProjectType | null> = {
+  projects: null,
+  organic_social: 'organic_content',
+  paid_social: 'social_ads',
+  ctv: 'ctv_ads',
+  other: 'other',
+};
+
+/**
+ * Per-tab column visibility. Type-specific tabs hide the "Project
+ * type" column because every row already shares the same type. Easy
+ * to extend later when we want different shapes per tab (e.g. drop
+ * "Last followup" on CTV because the cycle is longer there).
+ */
+const PROJECT_TAB_HIDE: Record<ProjectTabSlug, ReviewHideableColumn[]> = {
+  projects: [],
+  organic_social: ['project_type'],
+  paid_social: ['project_type'],
+  ctv: ['project_type'],
+  other: ['project_type'],
+};
+
+const PROJECT_TAB_LABEL: Record<ProjectTabSlug, string> = {
+  projects: 'All projects',
+  organic_social: 'Organic social',
+  paid_social: 'Paid social',
+  ctv: 'CTV',
+  other: 'Other',
+};
+
+function isProjectTab(tab: ContentToolsTab): tab is ProjectTabSlug {
+  return tab in PROJECT_TAB_FILTER;
+}
 
 const TABS: {
   slug: ContentToolsTab;
   label: string;
   icon: React.ReactNode;
 }[] = [
-  { slug: 'projects', label: 'Projects', icon: <FileText className="size-3.5" /> },
   {
-    slug: 'videographer',
-    label: 'Videographer',
-    icon: <Camera className="size-3.5" />,
+    slug: 'projects',
+    label: 'All projects',
+    icon: <FileText className="size-3.5" />,
   },
   {
-    slug: 'editing',
-    label: 'Editing',
-    icon: <Scissors className="size-3.5" />,
+    slug: 'organic_social',
+    label: 'Organic social',
+    icon: <Megaphone className="size-3.5" />,
+  },
+  {
+    slug: 'paid_social',
+    label: 'Paid social',
+    icon: <BadgeDollarSign className="size-3.5" />,
+  },
+  {
+    slug: 'ctv',
+    label: 'CTV',
+    icon: <Tv className="size-3.5" />,
+  },
+  {
+    slug: 'other',
+    label: 'Other',
+    icon: <Layers className="size-3.5" />,
   },
   {
     slug: 'quick-schedule',
@@ -99,50 +161,15 @@ const TABS: {
   },
 ];
 
-/**
- * Project-type filter for the Projects tab. Mirrors `ReviewProjectType`
- * from the scheduler with an extra `'all'` slot for the default view.
- * Each filter slug pairs with a customised column set so the table
- * reads cleanly without a redundant "Project type" column.
- */
-type ProjectTypeFilter = 'all' | ReviewProjectType;
-
-const PROJECT_TYPE_TABS: {
-  slug: ProjectTypeFilter;
-  label: string;
-}[] = [
-  { slug: 'all', label: 'All projects' },
-  { slug: 'organic_content', label: 'Organic social' },
-  { slug: 'social_ads', label: 'Paid social' },
-  { slug: 'ctv_ads', label: 'CTV' },
-  { slug: 'other', label: 'Other' },
-];
-
-/**
- * Per-tab column visibility. Type-specific tabs hide the "Project type"
- * column because every row already shares the same type. The "All
- * projects" tab keeps the full layout identical to the old behavior so
- * cross-type comparison stays one click away.
- */
-const PROJECT_TYPE_HIDE: Record<ProjectTypeFilter, ReviewHideableColumn[]> = {
-  all: [],
-  organic_content: ['project_type'],
-  social_ads: ['project_type'],
-  ctv_ads: ['project_type'],
-  other: ['project_type'],
-};
-
 export function ContentToolsShell() {
   const [tab, setTab] = useState<ContentToolsTab>('projects');
 
-  // Projects tab state lives at the shell level so the count badge in
-  // the header (and a future "X open" header chip) stays consistent
-  // even when the user clicks away to another tab.
+  // Projects state lives at the shell level so the same fetch backs
+  // every project-type tab. Cross-tab navigation is instant because
+  // we slice locally instead of refetching per tab.
   const [links, setLinks] = useState<ReviewLinkRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [projectTypeFilter, setProjectTypeFilter] =
-    useState<ProjectTypeFilter>('all');
   // Default sort is "Date sent, newest first" - same intent as the
   // previous SortMenu's default - but the user can now click any
   // column header to re-sort the whole table.
@@ -173,32 +200,48 @@ export function ContentToolsShell() {
     [links, sort],
   );
 
-  // Per-type counts feed the SubNav badges. Computed off the unsorted
-  // list since we only need totals.
-  const projectTypeCounts = useMemo(() => {
-    const counts: Record<ProjectTypeFilter, number> = {
-      all: links.length,
-      organic_content: 0,
-      social_ads: 0,
-      ctv_ads: 0,
+  // Per-tab counts feed the badges in the top-level tab strip so Jack
+  // can see "11 organic social, 4 paid social, 0 CTV" at a glance.
+  const projectTabCounts = useMemo(() => {
+    const counts: Record<ProjectTabSlug, number> = {
+      projects: links.length,
+      organic_social: 0,
+      paid_social: 0,
+      ctv: 0,
       other: 0,
     };
     for (const link of links) {
-      const key: ProjectTypeFilter = link.project_type ?? 'other';
-      counts[key] = (counts[key] ?? 0) + 1;
+      // Untyped rows fall into "Other" so nothing slips through the
+      // cracks when a project hasn't been classified yet.
+      const type: ReviewProjectType = link.project_type ?? 'other';
+      switch (type) {
+        case 'organic_content':
+          counts.organic_social += 1;
+          break;
+        case 'social_ads':
+          counts.paid_social += 1;
+          break;
+        case 'ctv_ads':
+          counts.ctv += 1;
+          break;
+        case 'other':
+          counts.other += 1;
+          break;
+      }
     }
     return counts;
   }, [links]);
 
+  const activeProjectTab: ProjectTabSlug | null = isProjectTab(tab) ? tab : null;
   const visibleProjects = useMemo(() => {
-    if (projectTypeFilter === 'all') return sortedLinks;
+    if (!activeProjectTab) return [] as ReviewLinkRow[];
+    const filter = PROJECT_TAB_FILTER[activeProjectTab];
+    if (filter === null) return sortedLinks;
     return sortedLinks.filter((link) => {
-      // Untyped rows fall into "Other" so nothing slips through the
-      // cracks when a project hasn't been classified yet.
-      const key: ProjectTypeFilter = link.project_type ?? 'other';
-      return key === projectTypeFilter;
+      const type: ReviewProjectType = link.project_type ?? 'other';
+      return type === filter;
     });
-  }, [sortedLinks, projectTypeFilter]);
+  }, [sortedLinks, activeProjectTab]);
 
   function patchLink(id: string, patch: Partial<ReviewLinkRow>) {
     setLinks((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
@@ -226,9 +269,14 @@ export function ContentToolsShell() {
     }
   }
 
-  const projectsHeaderCount =
-    projectTypeFilter === 'all' ? links.length : visibleProjects.length;
-  const subtitle = describeSubtitle(tab, projectsHeaderCount, projectTypeFilter);
+  const subtitle = describeSubtitle(tab, visibleProjects.length);
+
+  // Wire counts onto the project-tab entries so the strip shows
+  // "Organic social 4" / "Paid social 11" inline. Non-project tabs
+  // skip the count slot.
+  const tabsWithCounts = TABS.map((t) =>
+    isProjectTab(t.slug) ? { ...t, count: projectTabCounts[t.slug] } : t,
+  );
 
   return (
     <TooltipProvider>
@@ -240,7 +288,7 @@ export function ContentToolsShell() {
             </h1>
             <p className="mt-1 text-sm text-text-muted">{subtitle}</p>
           </div>
-          {tab === 'projects' && (
+          {activeProjectTab && (
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
@@ -259,45 +307,29 @@ export function ContentToolsShell() {
         </header>
 
         <SubNav<ContentToolsTab>
-          items={TABS}
+          items={tabsWithCounts}
           active={tab}
           onChange={setTab}
           ariaLabel="Content tools sections"
         />
 
-        {tab === 'projects' &&
+        {activeProjectTab &&
           (loading ? (
             <ProjectsTableSkeleton />
           ) : links.length === 0 ? (
             <ProjectsEmptyState />
           ) : (
-            <div className="space-y-3">
-              <SubNav<ProjectTypeFilter>
-                items={PROJECT_TYPE_TABS.map((t) => ({
-                  ...t,
-                  count: projectTypeCounts[t.slug],
-                }))}
-                active={projectTypeFilter}
-                onChange={setProjectTypeFilter}
-                ariaLabel="Project type"
-              />
-              <ReviewTableCard
-                rows={visibleProjects}
-                showBrand
-                onPatchLink={patchLink}
-                onArchiveLink={archiveLink}
-                title={
-                  PROJECT_TYPE_TABS.find((t) => t.slug === projectTypeFilter)
-                    ?.label ?? 'Projects'
-                }
-                sort={sort}
-                onSortChange={setSort}
-                hideColumns={PROJECT_TYPE_HIDE[projectTypeFilter]}
-              />
-            </div>
+            <ReviewTableCard
+              rows={visibleProjects}
+              showBrand
+              onPatchLink={patchLink}
+              onArchiveLink={archiveLink}
+              title={PROJECT_TAB_LABEL[activeProjectTab]}
+              sort={sort}
+              onSortChange={setSort}
+              hideColumns={PROJECT_TAB_HIDE[activeProjectTab]}
+            />
           ))}
-        {tab === 'videographer' && <VideographerTab />}
-        {tab === 'editing' && <EditingTab />}
         {tab === 'quick-schedule' && <QuickScheduleTab />}
         {tab === 'connections' && <ConnectionsTab />}
         {tab === 'notifications' && <NotificationsTab />}
@@ -306,29 +338,19 @@ export function ContentToolsShell() {
   );
 }
 
-function describeSubtitle(
-  tab: ContentToolsTab,
-  projectCount: number,
-  projectTypeFilter: ProjectTypeFilter,
-): string {
-  switch (tab) {
-    case 'projects': {
-      const word = projectCount === 1 ? 'project' : 'projects';
-      if (projectTypeFilter === 'all') {
-        return `${projectCount} ${word} across every brand`;
-      }
-      const raw = PROJECT_TYPE_TABS.find(
-        (t) => t.slug === projectTypeFilter,
-      )?.label;
-      // Preserve "CTV" casing; lowercase everything else so the
-      // sentence reads naturally ("5 organic social projects").
-      const label = raw === 'CTV' ? 'CTV' : raw?.toLowerCase();
-      return `${projectCount} ${label} ${word}`;
+function describeSubtitle(tab: ContentToolsTab, filteredCount: number): string {
+  if (isProjectTab(tab)) {
+    const word = filteredCount === 1 ? 'project' : 'projects';
+    if (tab === 'projects') {
+      return `${filteredCount} ${word} across every brand`;
     }
-    case 'videographer':
-      return 'Strategy briefs, shoot dates, and raw footage hand-offs';
-    case 'editing':
-      return 'Internal pipeline for short-form video projects';
+    // Preserve "CTV" casing; lowercase everything else so the
+    // sentence reads naturally ("5 organic social projects").
+    const raw = PROJECT_TAB_LABEL[tab];
+    const label = raw === 'CTV' ? 'CTV' : raw.toLowerCase();
+    return `${filteredCount} ${label} ${word}`;
+  }
+  switch (tab) {
     case 'quick-schedule':
       return 'Pull editor-approved videos out of Monday and queue them up';
     case 'connections':
