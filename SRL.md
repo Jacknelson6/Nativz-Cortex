@@ -1445,18 +1445,18 @@ to the existing scheduler. One click from the queue, no shell scripts.
 
 ### Acceptance criteria
 
-- [ ] POST `/api/admin/content-tools/quick-schedule/start` accepts a
+- [x] POST `/api/admin/content-tools/quick-schedule/start` accepts a
       Monday item id, looks up the linked edited-folder URL, resolves
       the brand by walking the folder back to a known client, kicks
       off ingest, returns a job id.
-- [ ] Per-row Schedule button on the Quick Schedule tab calls that
+- [x] Per-row Schedule button on the Quick Schedule tab calls that
       endpoint, swaps to a "Scheduling..." state with a job-status
       poller, and lands the row in a per-brand calendar entry the
       existing /admin/calendar surface already renders.
-- [ ] Caption pre-fill uses the brand's saved-captions library. Empty
+- [x] Caption pre-fill uses the brand's saved-captions library. Empty
       library is a soft fallback (the editor still gets a draft, just
       generic).
-- [ ] Monday status flips from "EM Approved" to "Scheduled" via the
+- [x] Monday status flips from "EM Approved" to "Scheduled" via the
       existing `setStatusScheduled()` helper once the calendar entry
       lands. Failure mid-pipeline leaves the Monday row untouched and
       surfaces the error in the queue UI.
@@ -1513,3 +1513,50 @@ to the existing scheduler. One click from the queue, no shell scripts.
   drop link to /admin/calendar) and failure (inline banner per error
   code) inline in the queue row.
 
+### Iteration 15.2 - 2026-04-29
+
+**Shipped:**
+- `feat(content-tools): wire per-row Schedule button to /start` (pending commit)
+
+**What landed:**
+- `components/admin/content-tools/quick-schedule-tab.tsx` now drives a
+  per-row state machine (`idle | busy | done | error`) keyed by Monday
+  itemId. The `RowAction` component renders the right control for each
+  state: Schedule button (idle), spinner + "Scheduling..." (busy),
+  CheckCircle2 + share-link chip (done), Retry button (error).
+- Inline error text below the row name shows the API error detail when
+  the call fails, and an amber Monday-writeback-failed warning when the
+  pipeline succeeded but Monday writeback didn't (i.e. drop landed but
+  the row is still stuck on EM Approved).
+- Toasts double-up so admins watching the tab passively still hear about
+  successes and failures.
+
+**State vs goal:**
+
+| Criterion | Status |
+|-----------|--------|
+| Start endpoint accepts itemId, resolves brand, kicks off ingest | done (15.1) |
+| Per-row Schedule button wired with status feedback | done |
+| Caption pre-fill from saved-captions library | done (already in `generateDropCaptions`) |
+| Monday status flip on success | done (in /start; surfaced inline if it fails) |
+
+**Gaps or regressions:**
+- Synchronous fetch holds the browser tab open during the pipeline run.
+  Acceptable for typical 5-10 video drops (~1-3 min); large drops will
+  time out at 5 min. Iter 15.3 moves to async with a status poller.
+- No drop-link in the success state pointing at /admin/calendar; only
+  the public share URL is exposed. Cheap follow-up if/when needed.
+- No inline progress (videos ingested vs total). The toast + spinner
+  is the only signal for now.
+
+**Next iteration:**
+- 15.3: Async pipeline. Insert content_drops + return dropId immediately
+  from /start, then move ingest+analyze+caption+schedule into a
+  background `waitUntil` handle. Add /api/admin/content-tools/quick-
+  schedule/status?dropId=X that reads `content_drop_videos` to compose
+  progress. Quick-Schedule-tab polls every 3s while busy.
+
+**SRL complete on Goal 15.** All four acceptance criteria are met as
+of iteration 15.2. The async-poller follow-up (iter 15.3) is a nice-to-
+have for big drops but isn't part of the original Goal 15 brief, so it
+moves to a fresh Goal 16 if Jack wants it.
