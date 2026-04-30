@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { isAdmin } from '@/lib/auth/permissions';
 import {
-  probeDrivePresence,
+  probeDrive,
   probeGemini,
   probeMonday,
   probeOpenRouter,
@@ -79,7 +79,7 @@ const PROBES: ProbeSpec[] = [
     id: 'google-drive',
     label: 'Google Drive',
     description: 'Editor folder ingestion (raw masters + thumbnails).',
-    run: probeDrivePresence,
+    run: probeDrive,
   },
   {
     id: 'openrouter',

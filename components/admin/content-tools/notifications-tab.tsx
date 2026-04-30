@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
+  AlertTriangle,
   Bell,
   Mail,
   RefreshCcw,
@@ -66,6 +67,7 @@ function ActivityFeed() {
   const [rows, setRows] = useState<ActivityRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function load(silent = false) {
     if (silent) setRefreshing(true);
@@ -75,13 +77,18 @@ function ActivityFeed() {
         '/api/admin/content-tools/email-activity',
         { cache: 'no-store' },
       );
-      if (!res.ok) throw new Error('Failed to load activity');
+      if (!res.ok) throw new Error(`Activity feed unreachable (HTTP ${res.status})`);
       const data = (await res.json()) as { rows: ActivityRow[] };
       setRows(data.rows ?? []);
+      setError(null);
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : 'Failed to load activity',
-      );
+      const message =
+        err instanceof Error ? err.message : 'Failed to load activity';
+      // Toast on a manual refresh so the click feels acknowledged; the
+      // inline banner survives across renders so the failure stays
+      // visible for the next admin who opens the tab.
+      if (silent) toast.error(message);
+      setError(message);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -122,8 +129,20 @@ function ActivityFeed() {
         </Button>
       </div>
 
+      {error && !loading && (
+        <div className="flex items-start gap-2 border-b border-status-danger/20 bg-status-danger/5 px-5 py-3 text-xs text-status-danger">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+          <div className="min-w-0">
+            <div className="font-medium">Couldn&apos;t reach the activity feed.</div>
+            <div className="mt-0.5 text-status-danger/80">{error}</div>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <ActivitySkeleton />
+      ) : error && rows.length === 0 ? (
+        <ActivityErrorEmpty />
       ) : rows.length === 0 ? (
         <ActivityEmpty />
       ) : (
@@ -166,6 +185,7 @@ function ActivityFeed() {
 function ContactsOverview() {
   const [rows, setRows] = useState<ContactsSummaryRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -174,13 +194,12 @@ function ContactsOverview() {
         '/api/admin/content-tools/contacts-summary',
         { cache: 'no-store' },
       );
-      if (!res.ok) throw new Error('Failed to load contacts');
+      if (!res.ok) throw new Error(`Contacts summary unreachable (HTTP ${res.status})`);
       const data = (await res.json()) as { rows: ContactsSummaryRow[] };
       setRows(data.rows ?? []);
+      setError(null);
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : 'Failed to load contacts',
-      );
+      setError(err instanceof Error ? err.message : 'Failed to load contacts');
     } finally {
       setLoading(false);
     }
@@ -211,6 +230,16 @@ function ContactsOverview() {
           </div>
         </div>
       </div>
+
+      {error && !loading && (
+        <div className="flex items-start gap-2 border-b border-status-danger/20 bg-status-danger/5 px-5 py-3 text-xs text-status-danger">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+          <div className="min-w-0">
+            <div className="font-medium">Couldn&apos;t reach the contacts API.</div>
+            <div className="mt-0.5 text-status-danger/80">{error}</div>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="divide-y divide-nativz-border/60">
@@ -323,6 +352,21 @@ function ActivityEmpty() {
       <p className="text-sm text-text-secondary">No emails sent yet.</p>
       <p className="mt-1 text-xs text-text-muted">
         Calendar shares, followups, and revision notifies will appear here.
+      </p>
+    </div>
+  );
+}
+
+function ActivityErrorEmpty() {
+  return (
+    <div className="px-5 py-10 text-center">
+      <AlertTriangle className="mx-auto mb-3 h-7 w-7 text-status-danger/70" />
+      <p className="text-sm text-text-secondary">
+        Activity feed temporarily unavailable.
+      </p>
+      <p className="mt-1 text-xs text-text-muted">
+        Try the refresh button. If it persists, check the email_messages
+        Supabase table for write activity.
       </p>
     </div>
   );

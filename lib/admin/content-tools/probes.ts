@@ -1,5 +1,9 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getSecret } from '@/lib/secrets/store';
+import {
+  getServiceAccountDriveToken,
+  isServiceAccountConfigured,
+} from '@/lib/google/service-account';
 
 /**
  * Reachability probes for the /admin/content-tools Connections tab.
@@ -197,28 +201,42 @@ export async function probeGemini(): Promise<ProbeResult> {
   }
 }
 
-/** Drive needs a service-account JWT exchange to actually probe; the
- *  cheapest reliable check is "did we configure a key at all + does the
- *  impersonation address look right". A real token round-trip lands
- *  with the Quick Schedule pipeline (iter 14.4) since the scheduler
- *  already has to hold a Drive client for the same window. */
-export function probeDrivePresence(): ProbeResult {
-  const hasKey =
-    !!process.env.GOOGLE_SERVICE_ACCOUNT_KEY ||
-    !!process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH;
-  const impersonate = process.env.GOOGLE_SERVICE_ACCOUNT_IMPERSONATE_EMAIL;
-  if (!hasKey || !impersonate) {
-    return missing(
-      !hasKey
-        ? 'GOOGLE_SERVICE_ACCOUNT_KEY not set'
-        : 'GOOGLE_SERVICE_ACCOUNT_IMPERSONATE_EMAIL not set',
-    );
+/** Drive: real probe via the Workspace JWT exchange + a `/about` ping
+ *  against the impersonated user. Catches three failure modes that
+ *  presence-only would miss: malformed SA key, domain-wide delegation
+ *  not allowlisted for the Drive scope, and impersonation email not
+ *  reachable. The token cache in service-account.ts means repeat
+ *  refreshes from the Connections tab cost ~one fetch per hour. */
+export async function probeDrive(): Promise<ProbeResult> {
+  if (!isServiceAccountConfigured()) {
+    return missing('GOOGLE_SERVICE_ACCOUNT_KEY not set');
   }
-  return {
-    status: 'connected',
-    detail: `${impersonate} (presence-only)`,
-    latencyMs: null,
-  };
+  const impersonate = process.env.GOOGLE_SERVICE_ACCOUNT_IMPERSONATE_EMAIL;
+  if (!impersonate) {
+    return missing('GOOGLE_SERVICE_ACCOUNT_IMPERSONATE_EMAIL not set');
+  }
+  try {
+    const { latencyMs, value } = await timed(async (signal) => {
+      const token = await getServiceAccountDriveToken(impersonate);
+      const res = await fetch(
+        'https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)',
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          signal,
+          cache: 'no-store',
+        },
+      );
+      const body = (await res.json().catch(() => null)) as
+        | { user?: { emailAddress?: string } }
+        | null;
+      return { ok: res.ok, status: res.status, body };
+    });
+    if (!value.ok) return unknown(`Drive HTTP ${value.status}`, latencyMs);
+    const email = value.body?.user?.emailAddress ?? impersonate;
+    return connected(`${email} · ${latencyMs}ms`, latencyMs);
+  } catch (err) {
+    return unknown(err instanceof Error ? err.message : 'probe failed');
+  }
 }
 
 /** Zernio uses a shared webhook secret + outbound notify recipients;
