@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -602,7 +603,10 @@ function ReviewTableRow({
     >
       {showBrand && (
         <TableCell className="whitespace-nowrap px-2.5">
-          <span className="text-sm text-text-secondary">{link.client_name ?? '—'}</span>
+          <BrandLabel
+            name={link.client_name}
+            logoUrl={link.client_logo_url}
+          />
         </TableCell>
       )}
       <TableCell className="px-2.5" onClick={(e) => e.stopPropagation()}>
@@ -1305,6 +1309,48 @@ function ReviewTableSkeleton() {
         ))}
       </div>
     </div>
+  );
+}
+
+/**
+ * Tiny brand chip used in the leftmost column of every project row
+ * when `showBrand` is on. Mirrors the favicon-or-initial pattern from
+ * `BrandIcon` in `admin-brand-pill.tsx` but at the smaller (16px) size
+ * the table needs. We don't share that component verbatim because the
+ * table doesn't have the full brand record handy — just `client_name`
+ * and `client_logo_url` projected onto the row.
+ */
+function BrandLabel({
+  name,
+  logoUrl,
+}: {
+  name: string | null;
+  logoUrl: string | null;
+}) {
+  const initial = name?.charAt(0).toUpperCase() ?? '?';
+  return (
+    <span className="inline-flex items-center gap-2">
+      {logoUrl ? (
+        <Image
+          src={logoUrl}
+          alt=""
+          width={16}
+          height={16}
+          className="shrink-0 rounded object-cover"
+          style={{ width: 16, height: 16 }}
+          unoptimized
+        />
+      ) : (
+        <span
+          className="inline-flex shrink-0 items-center justify-center rounded bg-accent-surface text-[9px] font-semibold leading-none text-accent-text"
+          style={{ width: 16, height: 16 }}
+          aria-hidden
+        >
+          {initial}
+        </span>
+      )}
+      <span className="text-sm text-text-secondary">{name ?? '—'}</span>
+    </span>
   );
 }
 

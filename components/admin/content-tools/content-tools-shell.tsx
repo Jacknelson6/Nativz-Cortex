@@ -7,7 +7,6 @@ import {
   Bell,
   Cable,
   FileText,
-  Layers,
   Megaphone,
   RefreshCcw,
   Tv,
@@ -75,8 +74,7 @@ type ProjectTabSlug =
   | 'projects'
   | 'organic_social'
   | 'paid_social'
-  | 'ctv'
-  | 'other';
+  | 'ctv';
 
 type ContentToolsTab =
   | ProjectTabSlug
@@ -93,7 +91,6 @@ const PROJECT_TAB_FILTER: Record<ProjectTabSlug, ReviewProjectType | null> = {
   organic_social: 'organic_content',
   paid_social: 'social_ads',
   ctv: 'ctv_ads',
-  other: 'other',
 };
 
 /**
@@ -107,7 +104,6 @@ const PROJECT_TAB_HIDE: Record<ProjectTabSlug, ReviewHideableColumn[]> = {
   organic_social: ['project_type'],
   paid_social: ['project_type'],
   ctv: ['project_type'],
-  other: ['project_type'],
 };
 
 const PROJECT_TAB_LABEL: Record<ProjectTabSlug, string> = {
@@ -115,7 +111,6 @@ const PROJECT_TAB_LABEL: Record<ProjectTabSlug, string> = {
   organic_social: 'Organic social',
   paid_social: 'Paid social',
   ctv: 'CTV',
-  other: 'Other',
 };
 
 function isProjectTab(tab: ContentToolsTab): tab is ProjectTabSlug {
@@ -186,6 +181,7 @@ function editingProjectToRow(p: EditingProject): ReviewLinkRow {
     drop_end: null,
     client_id: p.client_id,
     client_name: p.client_name,
+    client_logo_url: p.client_logo_url,
     post_count: p.video_count,
     approved_count: isApproved ? p.video_count : 0,
     changes_count: 0,
@@ -229,11 +225,6 @@ const TABS: {
     slug: 'ctv',
     label: 'CTV',
     icon: <Tv className="size-3.5" />,
-  },
-  {
-    slug: 'other',
-    label: 'Other',
-    icon: <Layers className="size-3.5" />,
   },
   {
     slug: 'quick-schedule',
@@ -348,11 +339,10 @@ export function ContentToolsShell() {
       organic_social: 0,
       paid_social: 0,
       ctv: 0,
-      other: 0,
     };
     for (const row of allRows) {
-      // Untyped rows fall into "Other" so nothing slips through the
-      // cracks when a project hasn't been classified yet.
+      // Untyped/"other" rows still land in `All projects` but no longer
+      // get their own tab. Skip the per-type counters for them.
       const type: ReviewProjectType = row.project_type ?? 'other';
       switch (type) {
         case 'organic_content':
@@ -365,7 +355,6 @@ export function ContentToolsShell() {
           counts.ctv += 1;
           break;
         case 'other':
-          counts.other += 1;
           break;
       }
     }
@@ -467,7 +456,7 @@ export function ContentToolsShell() {
 
   return (
     <TooltipProvider>
-      <div className="cortex-page-gutter mx-auto max-w-6xl space-y-5">
+      <div className="cortex-page-gutter mx-auto max-w-7xl space-y-5">
         <header className="flex items-end justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-xl font-semibold text-text-primary">

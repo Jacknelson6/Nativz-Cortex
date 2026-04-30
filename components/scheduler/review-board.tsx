@@ -45,6 +45,11 @@ export interface ReviewLinkRow {
   drop_end: string | null;
   client_id: string | null;
   client_name: string | null;
+  /** Brand logo / favicon URL. Rendered as a small icon next to the
+   *  brand name in the unified review table. May be a Supabase
+   *  storage URL (uploaded logo) or a Google s2 favicon URL.
+   *  NULL falls back to a single-letter avatar. */
+  client_logo_url: string | null;
   post_count: number;
   approved_count: number;
   changes_count: number;

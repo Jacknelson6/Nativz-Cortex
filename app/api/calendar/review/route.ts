@@ -84,7 +84,7 @@ export async function GET(req: Request) {
   const clientIds = Array.from(new Set(drops.map((d) => d.client_id)));
   const { data: clients } = await admin
     .from('clients')
-    .select('id, name, slug')
+    .select('id, name, slug, logo_url')
     .in('id', clientIds);
   const clientById = new Map((clients ?? []).map((c) => [c.id, c]));
 
@@ -182,6 +182,7 @@ export async function GET(req: Request) {
       drop_end: drop?.end_date ?? null,
       client_id: drop?.client_id ?? null,
       client_name: client?.name ?? null,
+      client_logo_url: client?.logo_url ?? null,
       post_count: link.included_post_ids?.length ?? 0,
       approved_count: approvedCount,
       changes_count: changesCount,
