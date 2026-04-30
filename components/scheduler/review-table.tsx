@@ -362,11 +362,17 @@ interface ReviewTableCardProps {
    */
   onArchiveLink?: (id: string) => void;
   /**
-   * Click handler for `kind: 'editing'` rows. Calendar rows always
-   * open `/c/<token>` in a new tab; editing rows route here so the
-   * parent can pop the editing-project detail dialog.
+   * Click handler for `kind: 'editing'` rows. Editing rows route here
+   * so the parent can pop the editing-project detail dialog.
    */
   onOpenEditingProject?: (editingProjectId: string) => void;
+  /**
+   * Click handler for `kind: 'calendar'` rows. When supplied, calendar
+   * rows pop the calendar-link detail dialog (which surfaces the share
+   * link as a copyable field). When omitted, calendar rows fall back
+   * to opening `/c/<token>` in a new tab.
+   */
+  onOpenCalendarLink?: (link: ReviewLinkRow) => void;
   /** Override the card's internal title block. Defaults to "Content". */
   title?: string;
   /**
@@ -392,6 +398,7 @@ export function ReviewTableCard({
   onPatchLink,
   onArchiveLink,
   onOpenEditingProject,
+  onOpenCalendarLink,
   title,
   sort,
   onSortChange,
@@ -550,6 +557,7 @@ export function ReviewTableCard({
             onPatch={(patch) => onPatchLink(link.id, patch)}
             onArchive={onArchiveLink ? () => onArchiveLink(link.id) : undefined}
             onOpenEditingProject={onOpenEditingProject}
+            onOpenCalendarLink={onOpenCalendarLink}
           />
         ))}
       </TableBody>
@@ -570,6 +578,13 @@ interface ReviewTableRowProps {
   onArchive?: () => void;
   /** Editing-project click handler. Used when `link.kind === 'editing'`. */
   onOpenEditingProject?: (editingProjectId: string) => void;
+  /**
+   * Calendar-link click handler. Used when `link.kind === 'calendar'`
+   * (or undefined for legacy callers). When supplied, the row pops
+   * the calendar-link detail dialog instead of opening the public
+   * share URL in a new tab.
+   */
+  onOpenCalendarLink?: (link: ReviewLinkRow) => void;
 }
 
 function ReviewTableRow({
@@ -583,6 +598,7 @@ function ReviewTableRow({
   onPatch,
   onArchive,
   onOpenEditingProject,
+  onOpenCalendarLink,
 }: ReviewTableRowProps) {
   const dim = link.status === 'abandoned' || link.status === 'expired';
 
@@ -591,6 +607,14 @@ function ReviewTableRow({
       if (link.editing_project_id && onOpenEditingProject) {
         onOpenEditingProject(link.editing_project_id);
       }
+      return;
+    }
+    // Calendar rows: prefer the detail-dialog handler when the parent
+    // wires one up. Fall back to opening the public share URL so
+    // older call sites (portal previews, share-links admin board) keep
+    // their original behaviour.
+    if (onOpenCalendarLink) {
+      onOpenCalendarLink(link);
       return;
     }
     window.open(`/c/${link.token}`, '_blank', 'noopener,noreferrer');

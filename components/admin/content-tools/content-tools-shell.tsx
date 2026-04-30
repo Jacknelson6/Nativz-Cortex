@@ -38,6 +38,7 @@ import { ConnectionsTab } from './connections-tab';
 import { NotificationsTab } from './notifications-tab';
 import { EditingNewProjectDialog } from './editing-new-project-dialog';
 import { EditingProjectDetail } from './editing-project-detail';
+import { CalendarLinkDetail } from './calendar-link-detail';
 
 /**
  * `/admin/content-tools` shell. Reorganised around project type so
@@ -261,6 +262,13 @@ export function ContentToolsShell() {
   // table can pop the detail dialog directly.
   const [activeEditingId, setActiveEditingId] = useState<string | null>(null);
   const [newEditingOpen, setNewEditingOpen] = useState(false);
+
+  // Calendar-link detail dialog. Holds the full row so the dialog can
+  // show counts + timestamps without re-fetching. Click on a calendar
+  // row in the unified table opens this; the dialog's "Open" button
+  // is the explicit way to load the public share page.
+  const [activeCalendarLink, setActiveCalendarLink] =
+    useState<ReviewLinkRow | null>(null);
 
   // Default sort is "Date sent, newest first" - same intent as the
   // previous SortMenu's default - but the user can now click any
@@ -511,6 +519,7 @@ export function ContentToolsShell() {
                 onSortChange={setSort}
                 hideColumns={PROJECT_TAB_HIDE[activeProjectTab]}
                 onOpenEditingProject={(id) => setActiveEditingId(id)}
+                onOpenCalendarLink={(link) => setActiveCalendarLink(link)}
               />
             )}
           </>
@@ -539,6 +548,11 @@ export function ContentToolsShell() {
             await loadProjects(true);
             setActiveEditingId(id);
           }}
+        />
+        <CalendarLinkDetail
+          link={activeCalendarLink}
+          onClose={() => setActiveCalendarLink(null)}
+          onRevoked={() => void loadProjects(true)}
         />
       </div>
     </TooltipProvider>
