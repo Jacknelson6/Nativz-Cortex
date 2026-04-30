@@ -39,6 +39,7 @@ import { NotificationsTab } from './notifications-tab';
 import { EditingNewProjectDialog } from './editing-new-project-dialog';
 import { EditingProjectDetail } from './editing-project-detail';
 import { CalendarLinkDetail } from './calendar-link-detail';
+import { subscribeToCompletion } from '@/lib/editing/upload-store';
 
 /**
  * `/admin/content-tools` shell. Reorganised around project type so
@@ -312,6 +313,16 @@ export function ContentToolsShell() {
 
   useEffect(() => {
     void loadProjects();
+  }, []);
+
+  // Refetch the project list whenever a background upload batch
+  // finishes anywhere (any project). The detail dialog can be closed
+  // and the user can still see updated video counts on the table.
+  useEffect(() => {
+    return subscribeToCompletion(() => {
+      void loadProjects(true);
+      toast.success('Uploads finished');
+    });
   }, []);
 
   // Editing-project rows are projected into ReviewLinkRow shape so

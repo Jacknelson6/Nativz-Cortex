@@ -109,7 +109,7 @@ export function CalendarLinkDetail({
     <Dialog open={open} onClose={onClose} title="" maxWidth="2xl" bodyClassName="p-0">
       <div className="flex h-full max-h-[80vh] flex-col">
         {/* Header */}
-        <div className="flex items-start gap-3 border-b border-nativz-border px-6 py-4">
+        <div className="flex items-start gap-3 border-b border-nativz-border py-4 pl-6 pr-14">
           <ClientLogo
             src={link.client_logo_url}
             name={link.client_name ?? 'Client'}

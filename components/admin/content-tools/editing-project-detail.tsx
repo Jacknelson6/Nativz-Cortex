@@ -1,6 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { toast } from 'sonner';
 import {
   Archive,
@@ -26,6 +32,13 @@ import {
 } from '@/lib/editing/types';
 import { AssigneePicker } from './assignee-picker';
 import { EditingShareButton } from './editing-share-button';
+import {
+  enqueueUploads,
+  getProjectUploads,
+  subscribe as subscribeUploads,
+  subscribeToCompletion,
+  type UploadJob,
+} from '@/lib/editing/upload-store';
 
 /**
  * Detail panel for a single editing project. Drives:
@@ -61,15 +74,6 @@ interface DetailResponse {
   raw_videos?: unknown[];
 }
 
-interface UploadJob {
-  id: string;
-  filename: string;
-  size: number;
-  progress: number;
-  state: 'queued' | 'signing' | 'uploading' | 'finalizing' | 'done' | 'error';
-  detail?: string;
-}
-
 export function EditingProjectDetail({
   project,
   onClose,
@@ -88,10 +92,19 @@ export function EditingProjectDetail({
   const [driveUrl, setDriveUrl] = useState('');
   const [type, setType] = useState<EditingProjectType>('organic_content');
   const [status, setStatus] = useState<EditingProjectStatus>('editing');
-  const [uploads, setUploads] = useState<UploadJob[]>([]);
   const [dragActive, setDragActive] = useState(false);
 
   const projectId = project?.id ?? null;
+
+  // Read upload state from the module-scoped store. The store keeps
+  // running XHRs even if this dialog unmounts, so closing the dialog
+  // mid-upload doesn't cancel anything; reopening picks up where we
+  // left off.
+  const uploads = useSyncExternalStore(
+    subscribeUploads,
+    () => (projectId ? getProjectUploads(projectId) : []),
+    () => [],
+  );
 
   const load = useCallback(async () => {
     if (!projectId) return;
@@ -119,9 +132,23 @@ export function EditingProjectDetail({
     if (open) void load();
     else {
       setData(null);
-      setUploads([]);
+      // Don't clear uploads on close — they live in the module-scoped
+      // store and continue running in the background. The user can
+      // reopen the dialog to check progress; the store survives.
     }
   }, [open, load]);
+
+  // When a background batch finishes for *this* project, refetch so
+  // the new videos show up on the next dialog open. Subscribe even
+  // while closed: the parent shell handles list refresh separately,
+  // but this keeps the dialog's local data fresh too.
+  useEffect(() => {
+    if (!projectId) return;
+    return subscribeToCompletion((finishedProjectId) => {
+      if (finishedProjectId !== projectId) return;
+      void load();
+    });
+  }, [projectId, load]);
 
   async function patch(body: Record<string, unknown>) {
     if (!projectId) return;
@@ -178,89 +205,14 @@ export function EditingProjectDetail({
     }
   }
 
-  async function startUploads(files: File[]) {
+  function startUploads(files: File[]) {
     if (!projectId || files.length === 0) return;
-    const queued: UploadJob[] = files.map((f) => ({
-      id: crypto.randomUUID(),
-      filename: f.name,
-      size: f.size,
-      progress: 0,
-      state: 'queued',
-    }));
-    setUploads((prev) => [...prev, ...queued]);
-
-    // Sequential so we don't saturate the user's pipe and progress
-    // bars feel deterministic (one moves at a time).
-    for (let i = 0; i < files.length; i += 1) {
-      await runUpload(projectId, files[i], queued[i]);
-    }
-
-    await load();
-    onChanged();
-  }
-
-  function runUpload(pid: string, file: File, job: UploadJob): Promise<void> {
-    return new Promise(async (resolve) => {
-      try {
-        setUploads((prev) =>
-          prev.map((j) => (j.id === job.id ? { ...j, state: 'signing' } : j)),
-        );
-        const signRes = await fetch(
-          `/api/admin/editing/projects/${pid}/videos`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              filename: file.name,
-              mime_type: file.type || 'application/octet-stream',
-              size_bytes: file.size,
-              position: 0,
-            }),
-          },
-        );
-        if (!signRes.ok) {
-          const err = (await signRes.json().catch(() => null)) as
-            | { detail?: string; error?: string }
-            | null;
-          throw new Error(err?.detail ?? err?.error ?? 'sign failed');
-        }
-        const signed = (await signRes.json()) as {
-          storage_path: string;
-          upload_token: string;
-          signed_url: string;
-        };
-
-        setUploads((prev) =>
-          prev.map((j) => (j.id === job.id ? { ...j, state: 'uploading' } : j)),
-        );
-
-        await uploadWithProgress({
-          signedUrl: signed.signed_url,
-          file,
-          onProgress: (pct) => {
-            setUploads((prev) =>
-              prev.map((j) => (j.id === job.id ? { ...j, progress: pct } : j)),
-            );
-          },
-        });
-
-        setUploads((prev) =>
-          prev.map((j) =>
-            j.id === job.id ? { ...j, state: 'done', progress: 100 } : j,
-          ),
-        );
-      } catch (err) {
-        const detail = err instanceof Error ? err.message : 'upload failed';
-        setUploads((prev) =>
-          prev.map((j) =>
-            j.id === job.id ? { ...j, state: 'error', detail } : j,
-          ),
-        );
-        toast.error(`Upload failed: ${file.name}, ${detail}`);
-      } finally {
-        resolve();
-      }
-    });
+    enqueueUploads(projectId, files);
+    toast.info(
+      files.length === 1
+        ? 'Upload started, you can close this dialog'
+        : `${files.length} uploads started, you can close this dialog`,
+    );
   }
 
   if (!open || !project) return null;
@@ -269,7 +221,7 @@ export function EditingProjectDetail({
     <Dialog open={open} onClose={onClose} title="" maxWidth="5xl" bodyClassName="p-0">
       <div className="flex h-full max-h-[80vh] flex-col">
         {/* Header */}
-        <div className="flex items-start gap-3 border-b border-nativz-border px-6 py-4">
+        <div className="flex items-start gap-3 border-b border-nativz-border py-4 pl-6 pr-14">
           <ClientLogo
             src={project.client_logo_url}
             name={project.client_name ?? 'Client'}
@@ -659,51 +611,6 @@ function VideoCard({
       </div>
     </li>
   );
-}
-
-// Real XHR PUT to the Supabase signed-upload URL. The signed URL is a
-// fully-resolvable https endpoint, so we don't need the SDK; PUT-ing
-// the bytes directly gives accurate progress + surfaces HTTP errors
-// (the SDK helper was hanging silently on transient failures, leaving
-// the progress bar pinned at the fake-progress 95% cap).
-function uploadWithProgress(opts: {
-  signedUrl: string;
-  file: File;
-  onProgress: (pct: number) => void;
-}): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('PUT', opts.signedUrl, true);
-    xhr.setRequestHeader(
-      'Content-Type',
-      opts.file.type || 'application/octet-stream',
-    );
-    xhr.setRequestHeader('x-upsert', 'true');
-
-    xhr.upload.onprogress = (e) => {
-      if (!e.lengthComputable) return;
-      const pct = Math.min(99, Math.floor((e.loaded / e.total) * 100));
-      opts.onProgress(pct);
-    };
-
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        opts.onProgress(100);
-        resolve();
-      } else {
-        reject(
-          new Error(
-            `upload http ${xhr.status}: ${xhr.responseText?.slice(0, 200) || xhr.statusText}`,
-          ),
-        );
-      }
-    };
-    xhr.onerror = () => reject(new Error('network error during upload'));
-    xhr.onabort = () => reject(new Error('upload aborted'));
-    xhr.ontimeout = () => reject(new Error('upload timed out'));
-
-    xhr.send(opts.file);
-  });
 }
 
 function formatBytes(n: number): string {
