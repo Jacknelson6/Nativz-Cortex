@@ -12,15 +12,17 @@ import { Button } from '@/components/ui/button';
 
 /**
  * Connections tab. Cross-checks every external integration the
- * content pipeline relies on. The shape is stable -- per-integration
- * cards laid out in a 2-column grid with a status dot, last-checked
- * timestamp where applicable, and a one-line "what it does" subtitle
- * so a non-engineer admin can read the row.
+ * content pipeline relies on. Per-integration cards laid out in a
+ * 2-column grid with a status dot, latency where the probe round-
+ * tripped, and a one-line "what it does" subtitle so a non-engineer
+ * admin can read the row.
  *
- * Iter 14.1 ships the layout backed by env-var presence checks (cheap
- * and accurate for a "is the secret even here" sanity probe). Iter
- * 14.2 layers in real reachability probes (Monday board ping, Resend
- * domain check, Supabase round-trip, Drive token refresh, etc.).
+ * Iter 14.2 ships real reachability probes (Resend /domains, Monday
+ * me{}, Supabase round-trip, OpenRouter /credits, Gemini models.list).
+ * Drive + Zernio stay presence-only because Drive needs a JWT exchange
+ * that lands with iter 14.4 and Zernio has no public health endpoint.
+ * Presence-only rows are tagged in the detail line so the distinction
+ * is legible without reading source.
  */
 
 export type ConnectionStatus = 'connected' | 'missing' | 'unknown';
@@ -32,6 +34,7 @@ export interface ConnectionRow {
   status: ConnectionStatus;
   lastCheckedAt?: string | null;
   detail?: string | null;
+  latencyMs?: number | null;
 }
 
 export function ConnectionsTab() {

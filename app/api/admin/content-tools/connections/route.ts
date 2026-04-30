@@ -1,7 +1,16 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { isAdmin } from '@/lib/auth/permissions';
-import { getSecret } from '@/lib/secrets/store';
+import {
+  probeDrivePresence,
+  probeGemini,
+  probeMonday,
+  probeOpenRouter,
+  probeResend,
+  probeSupabase,
+  probeZernioPresence,
+  type ProbeResult,
+} from '@/lib/admin/content-tools/probes';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,30 +18,82 @@ export const dynamic = 'force-dynamic';
  * GET /api/admin/content-tools/connections
  *
  * Powers the Connections tab on /admin/content-tools. Returns one row
- * per integration the content pipeline depends on, classified as
- * `connected` / `missing` / `unknown` based on a presence probe of
- * the underlying secret or env var.
+ * per integration the content pipeline depends on.
  *
- * Iter 14.1: presence checks only (does the env var or app_secrets
- * override exist?). Cheap, accurate, and good enough to flag the
- * agency-stopping "we forgot to set RESEND_API_KEY in this env" case.
+ * Iter 14.2: live reachability probes (Resend /domains, Monday me{},
+ * Supabase round-trip, OpenRouter /credits, Gemini models.list). Drive
+ * + Zernio stay presence-only because Drive needs a JWT exchange that
+ * lands with the Quick Schedule pipeline (iter 14.4) and Zernio has no
+ * public health endpoint to probe without paging the team channel.
  *
- * Iter 14.2 (next push) layers in real reachability probes -- e.g.
- * Resend `/domains` round-trip, Monday `me {}` query, Supabase
- * heartbeat. Done as a separate iteration because each probe has its
- * own failure modes and timing budget.
+ * All HTTP probes share a 5s budget via AbortController and run in
+ * parallel via Promise.all, so the slowest probe sets the route's wall
+ * time. Failures don't bubble up: a probe that times out or 500s lands
+ * in the `unknown` bucket and the row renders with the failure detail
+ * instead of blocking the rest of the dashboard.
  */
-
-type Status = 'connected' | 'missing' | 'unknown';
 
 interface ConnectionRow {
   id: string;
   label: string;
   description: string;
-  status: Status;
+  status: ProbeResult['status'];
   lastCheckedAt: string;
   detail: string | null;
+  latencyMs: number | null;
 }
+
+interface ProbeSpec {
+  id: string;
+  label: string;
+  description: string;
+  run: () => Promise<ProbeResult> | ProbeResult;
+}
+
+const PROBES: ProbeSpec[] = [
+  {
+    id: 'supabase',
+    label: 'Supabase',
+    description: 'Postgres, auth, RLS, storage. The agency database.',
+    run: probeSupabase,
+  },
+  {
+    id: 'resend',
+    label: 'Resend',
+    description: 'Outbound transactional email (calendar shares, followups).',
+    run: probeResend,
+  },
+  {
+    id: 'monday',
+    label: 'Monday',
+    description: 'Source of truth for editor approvals + content calendar items.',
+    run: probeMonday,
+  },
+  {
+    id: 'zernio',
+    label: 'Zernio',
+    description: 'Social posting webhook + scheduled-post lifecycle notifications.',
+    run: probeZernioPresence,
+  },
+  {
+    id: 'google-drive',
+    label: 'Google Drive',
+    description: 'Editor folder ingestion (raw masters + thumbnails).',
+    run: probeDrivePresence,
+  },
+  {
+    id: 'openrouter',
+    label: 'OpenRouter',
+    description: 'Claude Sonnet 4.5 routing for caption + topic AI calls.',
+    run: probeOpenRouter,
+  },
+  {
+    id: 'gemini',
+    label: 'Gemini',
+    description: 'Video analysis + thumbnail extraction + transcript pipeline.',
+    run: probeGemini,
+  },
+];
 
 export async function GET() {
   const supabase = await createServerSupabaseClient();
@@ -44,106 +105,33 @@ export async function GET() {
     return NextResponse.json({ error: 'admin only' }, { status: 403 });
   }
 
-  // Resend lives in app_secrets via the Setup UI, so we use getSecret
-  // (which falls back to process.env) instead of a bare env read.
-  const resendKey = await getSecret('RESEND_API_KEY').catch(() => undefined);
-
-  const checks: { row: Omit<ConnectionRow, 'lastCheckedAt'> }[] = [
-    {
-      row: {
-        id: 'supabase',
-        label: 'Supabase',
-        description: 'Postgres, auth, RLS, storage. The agency database.',
-        status: presenceStatus(
-          process.env.NEXT_PUBLIC_SUPABASE_URL,
-          process.env.SUPABASE_SERVICE_ROLE_KEY,
-        ),
-        detail: process.env.NEXT_PUBLIC_SUPABASE_URL ?? null,
-      },
-    },
-    {
-      row: {
-        id: 'resend',
-        label: 'Resend',
-        description: 'Outbound transactional email (calendar shares, followups).',
-        status: resendKey ? 'connected' : 'missing',
-        detail: resendKey ? null : 'RESEND_API_KEY not set',
-      },
-    },
-    {
-      row: {
-        id: 'monday',
-        label: 'Monday',
-        description: 'Source of truth for editor approvals + content calendar items.',
-        status: presenceStatus(process.env.MONDAY_API_TOKEN),
-        detail: process.env.MONDAY_CONTENT_CALENDARS_BOARD_ID
-          ? `Board ${process.env.MONDAY_CONTENT_CALENDARS_BOARD_ID}`
-          : 'MONDAY_CONTENT_CALENDARS_BOARD_ID not set',
-      },
-    },
-    {
-      row: {
-        id: 'zernio',
-        label: 'Zernio',
-        description: 'Social posting webhook + scheduled-post lifecycle notifications.',
-        status: presenceStatus(process.env.ZERNIO_WEBHOOK_SECRET),
-        detail: process.env.ZERNIO_WEBHOOK_NOTIFY_EMAILS
-          ? 'Webhook + notify configured'
-          : 'Webhook secret only -- no notify recipients',
-      },
-    },
-    {
-      row: {
-        id: 'google-drive',
-        label: 'Google Drive',
-        description: 'Editor folder ingestion (raw masters + thumbnails).',
-        status: presenceStatus(
-          process.env.GOOGLE_SERVICE_ACCOUNT_KEY ??
-            process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH,
-          process.env.GOOGLE_SERVICE_ACCOUNT_IMPERSONATE_EMAIL,
-        ),
-        detail: process.env.GOOGLE_SERVICE_ACCOUNT_IMPERSONATE_EMAIL ?? null,
-      },
-    },
-    {
-      row: {
-        id: 'openrouter',
-        label: 'OpenRouter',
-        description: 'Claude Sonnet 4.5 routing for caption + topic AI calls.',
-        status: presenceStatus(process.env.OPENROUTER_API_KEY),
-        detail: process.env.OPENROUTER_API_KEY ? null : 'OPENROUTER_API_KEY not set',
-      },
-    },
-    {
-      row: {
-        id: 'gemini',
-        label: 'Gemini',
-        description: 'Video analysis + thumbnail extraction + transcript pipeline.',
-        status: presenceStatus(process.env.GOOGLE_AI_STUDIO_KEY),
-        detail: process.env.GOOGLE_AI_STUDIO_KEY
-          ? null
-          : 'GOOGLE_AI_STUDIO_KEY not set',
-      },
-    },
-  ];
+  // Run every probe in parallel. allSettled so one bad probe can't
+  // tank the whole dashboard.
+  const settled = await Promise.allSettled(
+    PROBES.map(async (p) => ({ id: p.id, result: await p.run() })),
+  );
 
   const checkedAt = new Date().toISOString();
-  const rows: ConnectionRow[] = checks.map((c) => ({
-    ...c.row,
-    lastCheckedAt: checkedAt,
-  }));
+  const rows: ConnectionRow[] = PROBES.map((spec, i) => {
+    const s = settled[i];
+    const probe: ProbeResult =
+      s.status === 'fulfilled'
+        ? s.value.result
+        : {
+            status: 'unknown',
+            detail: s.reason instanceof Error ? s.reason.message : 'probe threw',
+            latencyMs: null,
+          };
+    return {
+      id: spec.id,
+      label: spec.label,
+      description: spec.description,
+      status: probe.status,
+      detail: probe.detail,
+      latencyMs: probe.latencyMs,
+      lastCheckedAt: checkedAt,
+    };
+  });
 
   return NextResponse.json({ rows });
-}
-
-/** All listed values must be non-empty strings for `connected`. Any
- *  missing -> `missing`. We don't currently have a path that returns
- *  `unknown` (presence is binary), but keeping the type exposed lets
- *  iter 14.2 reachability probes return it cleanly when a network
- *  probe times out without proving the upstream is dead. */
-function presenceStatus(...values: (string | undefined | null)[]): Status {
-  if (values.every((v) => typeof v === 'string' && v.trim().length > 0)) {
-    return 'connected';
-  }
-  return 'missing';
 }
