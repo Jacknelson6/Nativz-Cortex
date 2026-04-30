@@ -1854,25 +1854,25 @@ project row across every brand. The plan is to:
 
 ### Acceptance criteria
 
-- [ ] Projects table column headers (brand, project name, date sent,
+- [x] Projects table column headers (brand, project name, date sent,
       status, project type, creatives, last followup) are clickable to
       sort ascending / descending. Active column shows a directional
       arrow; other columns show a neutral indicator.
-- [ ] DB schema carries the production-pipeline fields: `project_briefs`
+- [x] DB schema carries the production-pipeline fields: `project_briefs`
       (long-form strategy text + assigned strategist), `raw_footage_uploads`
       (one or more uploads tied to a project), `assigned_editor_id`,
       `assigned_videographer_id`, `shoot_date`. Migration applied
       on production via Supabase MCP.
-- [ ] `/admin/content-tools` Editing tab is rebuilt against the same
+- [x] `/admin/content-tools` Editing tab is rebuilt against the same
       project rows. Shows assigned editor, strategy summary, raw
       footage status, and edited-video upload action. Old Editing
       placeholder content is removed.
-- [ ] New Videographer page (route TBD - probably `/admin/videographer`
+- [x] New Videographer page (route TBD - probably `/admin/videographer`
       or as another tab inside Content Tools) lets a strategist mark
       raw footage uploaded, attach a brief, and set a shoot date for
       each project.
-- [ ] Build clean: `npx tsc --noEmit` exits 0 on every iteration.
-- [ ] No em dashes (U+2013 / U+2014) introduced in new code or copy.
+- [x] Build clean: `npx tsc --noEmit` exits 0 on every iteration.
+- [x] No em dashes (U+2013 / U+2014) introduced in new code or copy.
 
 ### Scope boundaries
 
@@ -1892,3 +1892,96 @@ project row across every brand. The plan is to:
 - OUT: Filter chips on the Projects table. Sorting first, filters
   later if it stays useful.
 
+
+## Goal 17 Iterations
+
+### Iteration 17.1 - 2026-04-30 - Sortable column headers on Projects table
+
+**Shipped:**
+- `feat(projects): sortable column headers on Projects table` (64fb914a)
+
+Replaced the SortMenu dropdown with click-to-sort headers. The active
+column shows a directional arrow; inactive columns show a neutral
+chevron so it reads as Monday-style. Default still "date sent, newest
+first."
+
+**State vs goal:**
+| Criterion | Status |
+|-----------|--------|
+| Sortable headers | done |
+
+### Iteration 17.2 - 2026-04-30 - Pipeline schema + API plumbing
+
+**Shipped:**
+- `feat(editing): pipeline roles, project brief, shoot date, raw footage table` (ce806350)
+
+Migration 203 added `videographer_id`, `strategist_id`, `project_brief`,
+`shoot_date` to `editing_projects`, plus a new `editing_project_raw_videos`
+table mirroring the edited cuts table minus version/position (raw is
+append-only) plus an optional `label`. The list endpoint joins all three
+role emails via `users` so the UI can show prefixes without a second
+fetch. Project view returns `raw_videos` alongside `videos`. Two new
+endpoints (`/raw-videos`, `/raw-videos/[videoId]`) handle upload signing
+and delete with a separate `editing/<project_id>/raw/...` storage prefix.
+PATCH route accepts the new fields.
+
+**State vs goal:**
+| Criterion | Status |
+|-----------|--------|
+| Schema for pipeline roles + brief + shoot_date + raws | done |
+
+### Iteration 17.3 - 2026-04-30 - Editor + Videographer tabs against pipeline rows
+
+**Shipped:**
+- `feat(editing): videographer tab + pipeline table + brief/shoot_date` (9cc06687)
+
+Built `pipeline-table.tsx` as a sortable table over `EditingProject[]`
+that both Editing and Videographer tabs share. Columns are configurable
+per tab. Tie-break on `updated_at` desc; null `shoot_date` always sinks
+to the bottom regardless of sort direction so unscheduled projects don't
+drown the booked rows.
+
+Editing tab now uses the table with columns
+brand/name/status/shoot_date/strategist/editor/raws/edits, default sort
+`updated_at` desc.
+
+New Videographer tab (Camera icon, between Projects and Editing in the
+sub-nav) defaults to `shoot_date` asc and hides posted/archived behind a
+"Show N shipped" chip. Strategists see who is on the shoot, who is
+strategist of record, raw count, and shoot date at a glance.
+
+The detail panel grew dual upload zones (Raw footage + Edited cuts) with
+kind-aware drag state and routes to the right endpoint per drop. Raw
+clip grid sits above the edited cut grid. Side column gained `Shoot
+date` (`<input type="date">`) and `Project brief` (textarea) fields, both
+PATCHed on blur. Existing rename/notes/status/type/Drive-URL behaviour
+is unchanged.
+
+**State vs goal:**
+| Criterion | Status |
+|-----------|--------|
+| Sortable headers on Projects table | done (17.1) |
+| Schema for brief / shoot_date / raws / pipeline roles | done (17.2) |
+| Editing tab rebuilt against pipeline rows | done |
+| Videographer tab with brief / raw / shoot_date writes | done |
+| Build clean (`npx tsc --noEmit`) | done |
+| No em dashes in new code | done (audited touched files; one pre-existing comment in `lib/editing/types.ts` was scrubbed) |
+
+**Gaps or regressions:**
+- No assignee picker yet for strategist / videographer / editor: the
+  pipeline table renders the email user-prefix but there's no inline
+  way to swap. Strategists pick a sales POC via the sales picker on
+  the project, but the pipeline roles still need a UI surface.
+  Out-of-scope for this iter; tracked as a follow-up.
+- Raw-footage thumbnail / duration are still null on upload. The cron
+  to extract those is a wider follow-up shared with the edited side.
+- "Mark ready" / "Approve" status shortcuts didn't get re-added to the
+  detail panel in this rewrite. The status `<Select>` covers it, but a
+  one-click chip would be nicer.
+
+**SRL Goal 17 status:** All 6 acceptance criteria met. Editor view, raw
+upload surface, sortable headers, schema, brief / shoot date PATCH
+wiring, build clean, em-dash audit clean. The follow-up assignee
+picker is the obvious next iteration but not part of this goal.
+
+**SRL complete.** All acceptance criteria met as of iteration 17.3.
