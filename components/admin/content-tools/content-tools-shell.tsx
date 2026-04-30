@@ -17,9 +17,13 @@ import { SubNav } from '@/components/ui/sub-nav';
 import {
   ReviewTableCard,
   sortLinksBy,
+  type ReviewHideableColumn,
   type SortState,
 } from '@/components/scheduler/review-table';
-import type { ReviewLinkRow } from '@/components/scheduler/review-board';
+import type {
+  ReviewLinkRow,
+  ReviewProjectType,
+} from '@/components/scheduler/review-board';
 import { ProjectsEmptyState } from './projects-empty-state';
 import { ProjectsTableSkeleton } from './projects-table-skeleton';
 import { QuickScheduleTab } from './quick-schedule-tab';
@@ -95,6 +99,39 @@ const TABS: {
   },
 ];
 
+/**
+ * Project-type filter for the Projects tab. Mirrors `ReviewProjectType`
+ * from the scheduler with an extra `'all'` slot for the default view.
+ * Each filter slug pairs with a customised column set so the table
+ * reads cleanly without a redundant "Project type" column.
+ */
+type ProjectTypeFilter = 'all' | ReviewProjectType;
+
+const PROJECT_TYPE_TABS: {
+  slug: ProjectTypeFilter;
+  label: string;
+}[] = [
+  { slug: 'all', label: 'All projects' },
+  { slug: 'organic_content', label: 'Organic social' },
+  { slug: 'social_ads', label: 'Paid social' },
+  { slug: 'ctv_ads', label: 'CTV' },
+  { slug: 'other', label: 'Other' },
+];
+
+/**
+ * Per-tab column visibility. Type-specific tabs hide the "Project type"
+ * column because every row already shares the same type. The "All
+ * projects" tab keeps the full layout identical to the old behavior so
+ * cross-type comparison stays one click away.
+ */
+const PROJECT_TYPE_HIDE: Record<ProjectTypeFilter, ReviewHideableColumn[]> = {
+  all: [],
+  organic_content: ['project_type'],
+  social_ads: ['project_type'],
+  ctv_ads: ['project_type'],
+  other: ['project_type'],
+};
+
 export function ContentToolsShell() {
   const [tab, setTab] = useState<ContentToolsTab>('projects');
 
@@ -104,6 +141,8 @@ export function ContentToolsShell() {
   const [links, setLinks] = useState<ReviewLinkRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [projectTypeFilter, setProjectTypeFilter] =
+    useState<ProjectTypeFilter>('all');
   // Default sort is "Date sent, newest first" - same intent as the
   // previous SortMenu's default - but the user can now click any
   // column header to re-sort the whole table.
@@ -134,6 +173,33 @@ export function ContentToolsShell() {
     [links, sort],
   );
 
+  // Per-type counts feed the SubNav badges. Computed off the unsorted
+  // list since we only need totals.
+  const projectTypeCounts = useMemo(() => {
+    const counts: Record<ProjectTypeFilter, number> = {
+      all: links.length,
+      organic_content: 0,
+      social_ads: 0,
+      ctv_ads: 0,
+      other: 0,
+    };
+    for (const link of links) {
+      const key: ProjectTypeFilter = link.project_type ?? 'other';
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    return counts;
+  }, [links]);
+
+  const visibleProjects = useMemo(() => {
+    if (projectTypeFilter === 'all') return sortedLinks;
+    return sortedLinks.filter((link) => {
+      // Untyped rows fall into "Other" so nothing slips through the
+      // cracks when a project hasn't been classified yet.
+      const key: ProjectTypeFilter = link.project_type ?? 'other';
+      return key === projectTypeFilter;
+    });
+  }, [sortedLinks, projectTypeFilter]);
+
   function patchLink(id: string, patch: Partial<ReviewLinkRow>) {
     setLinks((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   }
@@ -160,7 +226,9 @@ export function ContentToolsShell() {
     }
   }
 
-  const subtitle = describeSubtitle(tab, links.length);
+  const projectsHeaderCount =
+    projectTypeFilter === 'all' ? links.length : visibleProjects.length;
+  const subtitle = describeSubtitle(tab, projectsHeaderCount, projectTypeFilter);
 
   return (
     <TooltipProvider>
@@ -203,15 +271,30 @@ export function ContentToolsShell() {
           ) : links.length === 0 ? (
             <ProjectsEmptyState />
           ) : (
-            <ReviewTableCard
-              rows={sortedLinks}
-              showBrand
-              onPatchLink={patchLink}
-              onArchiveLink={archiveLink}
-              title="Projects"
-              sort={sort}
-              onSortChange={setSort}
-            />
+            <div className="space-y-3">
+              <SubNav<ProjectTypeFilter>
+                items={PROJECT_TYPE_TABS.map((t) => ({
+                  ...t,
+                  count: projectTypeCounts[t.slug],
+                }))}
+                active={projectTypeFilter}
+                onChange={setProjectTypeFilter}
+                ariaLabel="Project type"
+              />
+              <ReviewTableCard
+                rows={visibleProjects}
+                showBrand
+                onPatchLink={patchLink}
+                onArchiveLink={archiveLink}
+                title={
+                  PROJECT_TYPE_TABS.find((t) => t.slug === projectTypeFilter)
+                    ?.label ?? 'Projects'
+                }
+                sort={sort}
+                onSortChange={setSort}
+                hideColumns={PROJECT_TYPE_HIDE[projectTypeFilter]}
+              />
+            </div>
           ))}
         {tab === 'videographer' && <VideographerTab />}
         {tab === 'editing' && <EditingTab />}
@@ -223,11 +306,24 @@ export function ContentToolsShell() {
   );
 }
 
-function describeSubtitle(tab: ContentToolsTab, projectCount: number): string {
+function describeSubtitle(
+  tab: ContentToolsTab,
+  projectCount: number,
+  projectTypeFilter: ProjectTypeFilter,
+): string {
   switch (tab) {
     case 'projects': {
       const word = projectCount === 1 ? 'project' : 'projects';
-      return `${projectCount} ${word} across every brand`;
+      if (projectTypeFilter === 'all') {
+        return `${projectCount} ${word} across every brand`;
+      }
+      const raw = PROJECT_TYPE_TABS.find(
+        (t) => t.slug === projectTypeFilter,
+      )?.label;
+      // Preserve "CTV" casing; lowercase everything else so the
+      // sentence reads naturally ("5 organic social projects").
+      const label = raw === 'CTV' ? 'CTV' : raw?.toLowerCase();
+      return `${projectCount} ${label} ${word}`;
     }
     case 'videographer':
       return 'Strategy briefs, shoot dates, and raw footage hand-offs';

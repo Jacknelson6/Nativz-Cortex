@@ -10,12 +10,14 @@ import {
   ChevronDown,
   ChevronRight,
   FileText,
+  Loader2,
   MessagesSquare,
   Pencil,
   RefreshCcw,
   Send,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
 import {
   Table,
   TableBody,
@@ -322,6 +324,19 @@ function TabStrip({
   );
 }
 
+/**
+ * Column keys the parent can hide on a per-tab basis. We deliberately
+ * skip `name` (always rendered) and `brand` (already gated by the
+ * `showBrand` flag) so callers can't accidentally produce an empty
+ * row.
+ */
+export type ReviewHideableColumn =
+  | 'date_sent'
+  | 'status'
+  | 'project_type'
+  | 'creatives'
+  | 'last_followup';
+
 interface ReviewTableCardProps {
   rows: ReviewLinkRow[];
   showBrand?: boolean;
@@ -342,6 +357,13 @@ interface ReviewTableCardProps {
    */
   sort?: SortState;
   onSortChange?: (next: SortState) => void;
+  /**
+   * Hide individual columns on a per-tab basis. Used by the project-
+   * type sub-tabs (Organic Social / Paid Social / CTV / Other) to
+   * drop the now-redundant "Project type" column without forking the
+   * whole table primitive.
+   */
+  hideColumns?: ReadonlyArray<ReviewHideableColumn>;
 }
 
 export function ReviewTableCard({
@@ -352,7 +374,24 @@ export function ReviewTableCard({
   title,
   sort,
   onSortChange,
+  hideColumns,
 }: ReviewTableCardProps) {
+  const hidden = new Set<ReviewHideableColumn>(hideColumns ?? []);
+  const showDateSent = !hidden.has('date_sent');
+  const showStatus = !hidden.has('status');
+  const showProjectType = !hidden.has('project_type');
+  const showCreatives = !hidden.has('creatives');
+  const showLastFollowup = !hidden.has('last_followup');
+  // Chrome row colSpan tracks how many rendered columns there are so
+  // the title bar always stretches the full width.
+  const visibleDataColumns =
+    (showBrand ? 1 : 0) +
+    1 /* name */ +
+    (showDateSent ? 1 : 0) +
+    (showStatus ? 1 : 0) +
+    (showProjectType ? 1 : 0) +
+    (showCreatives ? 1 : 0) +
+    (showLastFollowup ? 1 : 0);
   // When the parent doesn't pass a sort handler we render plain
   // header labels (read-only contexts, e.g. portal previews).
   const sortable = !!onSortChange;
@@ -372,7 +411,7 @@ export function ReviewTableCard({
       <thead>
         <tr>
           <th
-            colSpan={(showBrand ? 1 : 0) + 6}
+            colSpan={visibleDataColumns}
             className="border-b border-nativz-border px-5 py-4"
           >
             <div className="flex items-center gap-3">
@@ -413,56 +452,66 @@ export function ReviewTableCard({
               Project name
             </SortableHeader>
           </TableHead>
-          <TableHead className="whitespace-nowrap px-2.5 text-center">
-            <SortableHeader
-              field="date_sent"
-              sort={sort}
-              align="center"
-              onSortChange={sortable ? () => handleSort('date_sent') : undefined}
-            >
-              Date sent
-            </SortableHeader>
-          </TableHead>
-          <TableHead className="whitespace-nowrap px-2.5 text-center">
-            <SortableHeader
-              field="status"
-              sort={sort}
-              align="center"
-              onSortChange={sortable ? () => handleSort('status') : undefined}
-            >
-              Status
-            </SortableHeader>
-          </TableHead>
-          <TableHead className="whitespace-nowrap px-2.5 text-center">
-            <SortableHeader
-              field="project_type"
-              sort={sort}
-              align="center"
-              onSortChange={sortable ? () => handleSort('project_type') : undefined}
-            >
-              Project type
-            </SortableHeader>
-          </TableHead>
-          <TableHead className="whitespace-nowrap px-2.5 text-center">
-            <SortableHeader
-              field="creatives"
-              sort={sort}
-              align="center"
-              onSortChange={sortable ? () => handleSort('creatives') : undefined}
-            >
-              Creatives
-            </SortableHeader>
-          </TableHead>
-          <TableHead className="whitespace-nowrap px-2.5 text-center">
-            <SortableHeader
-              field="last_followup"
-              sort={sort}
-              align="center"
-              onSortChange={sortable ? () => handleSort('last_followup') : undefined}
-            >
-              Last followup
-            </SortableHeader>
-          </TableHead>
+          {showDateSent && (
+            <TableHead className="whitespace-nowrap px-2.5 text-center">
+              <SortableHeader
+                field="date_sent"
+                sort={sort}
+                align="center"
+                onSortChange={sortable ? () => handleSort('date_sent') : undefined}
+              >
+                Date sent
+              </SortableHeader>
+            </TableHead>
+          )}
+          {showStatus && (
+            <TableHead className="whitespace-nowrap px-2.5 text-center">
+              <SortableHeader
+                field="status"
+                sort={sort}
+                align="center"
+                onSortChange={sortable ? () => handleSort('status') : undefined}
+              >
+                Status
+              </SortableHeader>
+            </TableHead>
+          )}
+          {showProjectType && (
+            <TableHead className="whitespace-nowrap px-2.5 text-center">
+              <SortableHeader
+                field="project_type"
+                sort={sort}
+                align="center"
+                onSortChange={sortable ? () => handleSort('project_type') : undefined}
+              >
+                Project type
+              </SortableHeader>
+            </TableHead>
+          )}
+          {showCreatives && (
+            <TableHead className="whitespace-nowrap px-2.5 text-center">
+              <SortableHeader
+                field="creatives"
+                sort={sort}
+                align="center"
+                onSortChange={sortable ? () => handleSort('creatives') : undefined}
+              >
+                Creatives
+              </SortableHeader>
+            </TableHead>
+          )}
+          {showLastFollowup && (
+            <TableHead className="whitespace-nowrap px-2.5 text-center">
+              <SortableHeader
+                field="last_followup"
+                sort={sort}
+                align="center"
+                onSortChange={sortable ? () => handleSort('last_followup') : undefined}
+              >
+                Last followup
+              </SortableHeader>
+            </TableHead>
+          )}
           <TableHead className="w-8 px-2" aria-label="Open" />
         </TableRow>
       </TableHeader>
@@ -472,6 +521,11 @@ export function ReviewTableCard({
             key={link.id}
             link={link}
             showBrand={showBrand}
+            showDateSent={showDateSent}
+            showStatus={showStatus}
+            showProjectType={showProjectType}
+            showCreatives={showCreatives}
+            showLastFollowup={showLastFollowup}
             onPatch={(patch) => onPatchLink(link.id, patch)}
             onArchive={onArchiveLink ? () => onArchiveLink(link.id) : undefined}
           />
@@ -484,12 +538,27 @@ export function ReviewTableCard({
 interface ReviewTableRowProps {
   link: ReviewLinkRow;
   showBrand?: boolean;
+  showDateSent?: boolean;
+  showStatus?: boolean;
+  showProjectType?: boolean;
+  showCreatives?: boolean;
+  showLastFollowup?: boolean;
   onPatch: (patch: Partial<ReviewLinkRow>) => void;
   /** Right-click "Archive" handler. Hides the menu item when omitted. */
   onArchive?: () => void;
 }
 
-function ReviewTableRow({ link, showBrand = false, onPatch, onArchive }: ReviewTableRowProps) {
+function ReviewTableRow({
+  link,
+  showBrand = false,
+  showDateSent = true,
+  showStatus = true,
+  showProjectType = true,
+  showCreatives = true,
+  showLastFollowup = true,
+  onPatch,
+  onArchive,
+}: ReviewTableRowProps) {
   const dim = link.status === 'abandoned' || link.status === 'expired';
 
   function openReview() {
@@ -509,37 +578,47 @@ function ReviewTableRow({ link, showBrand = false, onPatch, onArchive }: ReviewT
       <TableCell className="px-2.5" onClick={(e) => e.stopPropagation()}>
         <ProjectNameCell link={link} onPatch={onPatch} />
       </TableCell>
-      <TableCell className="whitespace-nowrap px-2.5 text-center">
-        <span className="text-sm text-text-secondary tabular-nums">
-          {formatShortDate(link.created_at)}
-        </span>
-      </TableCell>
-      <TableCell className="whitespace-nowrap px-2.5 text-center">
-        <div className="flex justify-center">
-          <StatusPill status={link.status} />
-        </div>
-      </TableCell>
-      <TableCell
-        className="whitespace-nowrap px-2.5 text-center"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex justify-center">
-          <ProjectTypeCell link={link} onPatch={onPatch} />
-        </div>
-      </TableCell>
-      <TableCell className="whitespace-nowrap px-2.5 text-center">
-        <div className="flex justify-center">
-          <ApprovedCount link={link} />
-        </div>
-      </TableCell>
-      <TableCell
-        className="whitespace-nowrap px-2.5 text-center"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex justify-center">
-          <FollowupCell link={link} onPatch={onPatch} />
-        </div>
-      </TableCell>
+      {showDateSent && (
+        <TableCell className="whitespace-nowrap px-2.5 text-center">
+          <span className="text-sm text-text-secondary tabular-nums">
+            {formatShortDate(link.created_at)}
+          </span>
+        </TableCell>
+      )}
+      {showStatus && (
+        <TableCell className="whitespace-nowrap px-2.5 text-center">
+          <div className="flex justify-center">
+            <StatusPill status={link.status} />
+          </div>
+        </TableCell>
+      )}
+      {showProjectType && (
+        <TableCell
+          className="whitespace-nowrap px-2.5 text-center"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex justify-center">
+            <ProjectTypeCell link={link} onPatch={onPatch} />
+          </div>
+        </TableCell>
+      )}
+      {showCreatives && (
+        <TableCell className="whitespace-nowrap px-2.5 text-center">
+          <div className="flex justify-center">
+            <ApprovedCount link={link} />
+          </div>
+        </TableCell>
+      )}
+      {showLastFollowup && (
+        <TableCell
+          className="whitespace-nowrap px-2.5 text-center"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex justify-center">
+            <FollowupCell link={link} onPatch={onPatch} />
+          </div>
+        </TableCell>
+      )}
       <TableCell className="w-8 whitespace-nowrap px-2 text-right text-text-tertiary">
         <ChevronRight className="size-4 transition-transform group-hover/row:translate-x-0.5 group-hover/row:text-text-secondary" />
       </TableCell>
@@ -653,7 +732,15 @@ function ProjectNameCell({
     );
   }
 
-  return (
+  // Truncate at 20 chars so a long name can't push the table into
+  // horizontal scroll. Hover reveals the full name via tooltip.
+  const TRUNCATE_AT = 20;
+  const truncated = displayName.length > TRUNCATE_AT;
+  const visibleName = truncated
+    ? `${displayName.slice(0, TRUNCATE_AT).trimEnd()}…`
+    : displayName;
+
+  const trigger = (
     <button
       type="button"
       onClick={() => {
@@ -663,9 +750,20 @@ function ProjectNameCell({
       className="group/name -mx-1 flex max-w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left hover:bg-surface-hover"
       aria-label={`Rename ${displayName}`}
     >
-      <span className="whitespace-nowrap font-medium text-text-primary">{displayName}</span>
+      <span className="whitespace-nowrap font-medium text-text-primary">{visibleName}</span>
       <Pencil className="size-3 shrink-0 text-text-muted opacity-0 transition-opacity group-hover/name:opacity-100" />
     </button>
+  );
+
+  if (!truncated) return trigger;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+      <TooltipContent side="top" className="max-w-xs">
+        <span className="text-text-primary">{displayName}</span>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -762,7 +860,7 @@ function FollowupCell({
   link: ReviewLinkRow;
   onPatch: (patch: Partial<ReviewLinkRow>) => void;
 }) {
-  const [busy, setBusy] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   // Awaiting action = ready_for_review or revising. Once the calendar's
   // approved or dead, chasing the client doesn't make sense, so the
@@ -778,40 +876,6 @@ function FollowupCell({
   const days = stamp ? daysSince(stamp) : null;
   const tone = followupTone(days);
   const label = formatFollowupLabel(days);
-
-  async function send() {
-    if (busy) return;
-    setBusy(true);
-    try {
-      const res = await fetch(
-        `/api/calendar/share/${link.token}/followup`,
-        { method: 'POST' },
-      );
-      const data = (await res.json().catch(() => ({}))) as {
-        last_followup_at?: string;
-        followup_count?: number;
-        recipients_count?: number;
-        error?: string;
-      };
-      if (!res.ok) {
-        throw new Error(data.error || 'Followup failed');
-      }
-      onPatch({
-        last_followup_at: data.last_followup_at ?? new Date().toISOString(),
-        followup_count: data.followup_count ?? (link.followup_count ?? 0) + 1,
-      });
-      const recipientWord = data.recipients_count === 1 ? 'contact' : 'contacts';
-      toast.success(
-        data.recipients_count
-          ? `Followup sent to ${data.recipients_count} ${recipientWord}`
-          : 'Followup sent',
-      );
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Followup failed');
-    } finally {
-      setBusy(false);
-    }
-  }
 
   const tooltipBody =
     days === null
@@ -842,19 +906,220 @@ function FollowupCell({
         <TooltipTrigger asChild>
           <button
             type="button"
-            onClick={send}
-            disabled={busy}
-            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+            onClick={() => setDialogOpen(true)}
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
             aria-label="Send followup"
           >
             <Send className="size-3" />
           </button>
         </TooltipTrigger>
         <TooltipContent side="top">
-          <div className="text-text-primary">Send followup email</div>
+          <div className="text-text-primary">Preview &amp; send followup</div>
         </TooltipContent>
       </Tooltip>
+      {dialogOpen && (
+        <FollowupDraftDialog
+          link={link}
+          onClose={() => setDialogOpen(false)}
+          onSent={(data) => {
+            onPatch({
+              last_followup_at: data.last_followup_at,
+              followup_count: data.followup_count,
+            });
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+interface FollowupDraft {
+  subject: string;
+  message: string;
+  recipients: { email: string; name: string | null }[];
+  client_name: string;
+}
+
+interface FollowupSendResult {
+  last_followup_at: string;
+  followup_count: number;
+  recipients_count: number;
+}
+
+/**
+ * Preview + edit the auto-composed nudge before it goes out. Opens
+ * when the admin clicks the Send button. Pulls the default subject
+ * and body from `GET /api/calendar/share/[token]/followup`, lets the
+ * admin tweak both, then POSTs the overrides on confirm.
+ */
+function FollowupDraftDialog({
+  link,
+  onClose,
+  onSent,
+}: {
+  link: ReviewLinkRow;
+  onClose: () => void;
+  onSent: (data: FollowupSendResult) => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [draft, setDraft] = useState<FollowupDraft | null>(null);
+  const [subject, setSubject] = useState('');
+  const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch(`/api/calendar/share/${link.token}/followup`);
+        const data = (await res.json().catch(() => ({}))) as
+          | (FollowupDraft & { error?: never })
+          | { error: string };
+        if (cancelled) return;
+        if (!res.ok || 'error' in data) {
+          throw new Error(('error' in data && data.error) || 'Could not load draft');
+        }
+        setDraft(data);
+        setSubject(data.subject);
+        setMessage(data.message);
+      } catch (err) {
+        if (!cancelled) {
+          setLoadError(err instanceof Error ? err.message : 'Could not load draft');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [link.token]);
+
+  async function send() {
+    if (sending) return;
+    setSending(true);
+    try {
+      const res = await fetch(`/api/calendar/share/${link.token}/followup`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          subject: subject.trim(),
+          message: message.trim(),
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as Partial<FollowupSendResult> & {
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error || 'Followup failed');
+
+      const result: FollowupSendResult = {
+        last_followup_at: data.last_followup_at ?? new Date().toISOString(),
+        followup_count: data.followup_count ?? (link.followup_count ?? 0) + 1,
+        recipients_count: data.recipients_count ?? draft?.recipients.length ?? 0,
+      };
+      onSent(result);
+      const recipientWord = result.recipients_count === 1 ? 'contact' : 'contacts';
+      toast.success(
+        result.recipients_count
+          ? `Followup sent to ${result.recipients_count} ${recipientWord}`
+          : 'Followup sent',
+      );
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Followup failed');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const recipientsLine = draft?.recipients.length
+    ? draft.recipients
+        .map((r) => (r.name ? `${r.name} <${r.email}>` : r.email))
+        .join(', ')
+    : '';
+
+  const canSend = !sending && !loading && !loadError && subject.trim().length > 0 && message.trim().length > 0;
+
+  return (
+    <Dialog open onClose={onClose} title="Send followup email" maxWidth="xl">
+      {loading ? (
+        <div className="flex items-center justify-center py-10 text-text-muted">
+          <Loader2 className="size-4 animate-spin" />
+          <span className="ml-2 text-sm">Loading draft…</span>
+        </div>
+      ) : loadError ? (
+        <div className="space-y-3">
+          <p className="text-sm text-status-danger">{loadError}</p>
+          <div className="flex justify-end">
+            <Button variant="secondary" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div>
+            <div className="text-xs font-medium uppercase tracking-wider text-text-muted">
+              To
+            </div>
+            <div className="mt-1 text-sm text-text-secondary">
+              {recipientsLine || 'No recipients'}
+            </div>
+          </div>
+
+          <label className="block">
+            <span className="text-xs font-medium uppercase tracking-wider text-text-muted">
+              Subject
+            </span>
+            <input
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="mt-1 block w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:border-accent-text focus:outline-none focus:ring-1 focus:ring-accent-text"
+              maxLength={200}
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-xs font-medium uppercase tracking-wider text-text-muted">
+              Message
+            </span>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              rows={8}
+              className="mt-1 block w-full resize-y rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:border-accent-text focus:outline-none focus:ring-1 focus:ring-accent-text"
+              maxLength={5000}
+            />
+            <span className="mt-1 block text-xs text-text-muted">
+              Blank lines start a new paragraph. The branded layout and the
+              &ldquo;Open the calendar&rdquo; button are added automatically.
+            </span>
+          </label>
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <Button variant="secondary" onClick={onClose} disabled={sending}>
+              Cancel
+            </Button>
+            <Button onClick={send} disabled={!canSend}>
+              {sending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Sending…
+                </>
+              ) : (
+                <>
+                  <Send className="size-4" />
+                  Send
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+    </Dialog>
   );
 }
 
