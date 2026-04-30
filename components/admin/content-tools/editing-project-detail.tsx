@@ -597,6 +597,46 @@ function UploadRow({ job }: { job: UploadJob }) {
   );
 }
 
+/**
+ * Renders a small first-frame preview for an uploaded edit. We don't
+ * have a worker that pre-generates thumbnail_url yet, so the dialog
+ * was previously falling through to a generic file icon for every
+ * video. A muted <video> with #t=0.1 makes the browser fetch only
+ * the first ~100ms of the file and paint that frame, which is enough
+ * to recognize the cut at a glance. If a thumbnail_url is set later
+ * (future worker), we still prefer it because it's cheaper than
+ * fetching video metadata.
+ */
+function VideoThumb({ video }: { video: EditingProjectVideo }) {
+  const previewSrc = video.public_url
+    ? `${video.public_url}#t=0.1`
+    : null;
+  return (
+    <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-surface-hover">
+      {video.thumbnail_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={video.thumbnail_url}
+          alt=""
+          className="h-full w-full object-cover"
+        />
+      ) : previewSrc ? (
+        <video
+          src={previewSrc}
+          className="h-full w-full object-cover"
+          preload="metadata"
+          muted
+          playsInline
+          // Don't autoplay; the seek to 0.1s + first frame paint is
+          // enough to act as a poster.
+        />
+      ) : (
+        <FileVideo size={16} className="text-text-muted" />
+      )}
+    </div>
+  );
+}
+
 function VideoCard({
   video,
   onDelete,
@@ -607,18 +647,7 @@ function VideoCard({
   const sizeLabel = video.size_bytes ? formatBytes(video.size_bytes) : '';
   return (
     <li className="group flex items-center gap-3 rounded-lg border border-nativz-border bg-background p-3">
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-surface-hover">
-        {video.thumbnail_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={video.thumbnail_url}
-            alt=""
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <FileVideo size={16} className="text-text-muted" />
-        )}
-      </div>
+      <VideoThumb video={video} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm text-text-primary">{video.filename}</p>
         <p className="text-[11px] text-text-muted">

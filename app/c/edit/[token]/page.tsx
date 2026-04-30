@@ -240,6 +240,16 @@ function VideoTile({
           alt={label}
           className="absolute inset-0 h-full w-full object-cover"
         />
+      ) : video.public_url ? (
+        // No backend thumbnail worker yet: have the browser paint the
+        // first frame as a poster by seeking to 0.1s on metadata load.
+        <video
+          src={`${video.public_url}#t=0.1`}
+          className="absolute inset-0 h-full w-full object-cover"
+          preload="metadata"
+          muted
+          playsInline
+        />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center bg-surface-hover">
           <FileVideo className="h-10 w-10 text-text-muted" />
