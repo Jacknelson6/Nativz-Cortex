@@ -47,6 +47,19 @@ export interface EditingProject {
   status: EditingProjectStatus;
   assignee_id: string | null;
   assignee_email: string | null;
+  /**
+   * Pipeline role assignments (added in migration 203). All optional —
+   * not every project has all three roles wired the moment it lands.
+   * `assignee_id` is the legacy editor slot, kept for backward compat.
+   */
+  videographer_id: string | null;
+  videographer_email: string | null;
+  strategist_id: string | null;
+  strategist_email: string | null;
+  /** Strategist-authored brief, separate from internal `notes`. */
+  project_brief: string | null;
+  /** ISO date (YYYY-MM-DD) of the on-set capture day, or null. */
+  shoot_date: string | null;
   drive_folder_url: string | null;
   notes: string | null;
   drop_id: string | null;
@@ -58,6 +71,8 @@ export interface EditingProject {
   scheduled_at: string | null;
   archived_at: string | null;
   video_count: number;
+  /** Count of raw clips uploaded via editing_project_raw_videos. */
+  raw_video_count: number;
 }
 
 export const EDITING_STATUS_LABEL: Record<EditingProjectStatus, string> = {

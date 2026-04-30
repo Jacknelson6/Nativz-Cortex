@@ -25,6 +25,14 @@ const PatchBody = z
       .enum(['draft', 'in_review', 'approved', 'scheduled', 'posted', 'archived'])
       .optional(),
     assignee_id: z.string().uuid().nullable().optional(),
+    videographer_id: z.string().uuid().nullable().optional(),
+    strategist_id: z.string().uuid().nullable().optional(),
+    project_brief: z.string().max(8000).nullable().optional(),
+    shoot_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD')
+      .nullable()
+      .optional(),
     drive_folder_url: z.string().url().nullable().optional(),
     notes: z.string().max(2000).nullable().optional(),
   })
@@ -57,7 +65,9 @@ export async function GET(
     .select(
       `*,
        client:clients!editing_projects_client_id_fkey(id, name, slug, logo_url),
-       assignee:users!editing_projects_assignee_id_fkey(id, email)`,
+       assignee:users!editing_projects_assignee_id_fkey(id, email),
+       videographer:users!editing_projects_videographer_id_fkey(id, email),
+       strategist:users!editing_projects_strategist_id_fkey(id, email)`,
     )
     .eq('id', id)
     .maybeSingle();
@@ -65,14 +75,28 @@ export async function GET(
   if (error) return NextResponse.json({ error: 'db_error', detail: error.message }, { status: 500 });
   if (!project) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
-  const { data: videos } = await admin
-    .from('editing_project_videos')
-    .select('*')
-    .eq('project_id', id)
-    .order('position', { ascending: true })
-    .order('version', { ascending: false });
+  // Run the two child-row queries in parallel — they're independent and
+  // both feed the detail panel on the same render. Promise.all avoids
+  // the round-trip stacking flagged in MEMORY.md.
+  const [{ data: videos }, { data: rawVideos }] = await Promise.all([
+    admin
+      .from('editing_project_videos')
+      .select('*')
+      .eq('project_id', id)
+      .order('position', { ascending: true })
+      .order('version', { ascending: false }),
+    admin
+      .from('editing_project_raw_videos')
+      .select('*')
+      .eq('project_id', id)
+      .order('created_at', { ascending: false }),
+  ]);
 
-  return NextResponse.json({ project, videos: videos ?? [] });
+  return NextResponse.json({
+    project,
+    videos: videos ?? [],
+    raw_videos: rawVideos ?? [],
+  });
 }
 
 export async function PATCH(

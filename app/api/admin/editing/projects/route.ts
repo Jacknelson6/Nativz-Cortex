@@ -57,12 +57,17 @@ export async function GET(req: Request) {
   let query = admin
     .from('editing_projects')
     .select(
-      `id, client_id, name, project_type, status, assignee_id, drive_folder_url, notes,
+      `id, client_id, name, project_type, status, assignee_id,
+       videographer_id, strategist_id, project_brief, shoot_date,
+       drive_folder_url, notes,
        drop_id, created_by, created_at, updated_at, ready_at, approved_at,
        scheduled_at, archived_at,
        client:clients!editing_projects_client_id_fkey(name, slug, logo_url),
        assignee:users!editing_projects_assignee_id_fkey(email),
-       videos:editing_project_videos(count)`,
+       videographer:users!editing_projects_videographer_id_fkey(email),
+       strategist:users!editing_projects_strategist_id_fkey(email),
+       videos:editing_project_videos(count),
+       raw_videos:editing_project_raw_videos(count)`,
     )
     .order('updated_at', { ascending: false });
 
@@ -91,6 +96,12 @@ export async function GET(req: Request) {
     status: row.status,
     assignee_id: row.assignee_id,
     assignee_email: row.assignee?.email ?? null,
+    videographer_id: row.videographer_id ?? null,
+    videographer_email: row.videographer?.email ?? null,
+    strategist_id: row.strategist_id ?? null,
+    strategist_email: row.strategist?.email ?? null,
+    project_brief: row.project_brief ?? null,
+    shoot_date: row.shoot_date ?? null,
     drive_folder_url: row.drive_folder_url,
     notes: row.notes,
     drop_id: row.drop_id,
@@ -102,6 +113,7 @@ export async function GET(req: Request) {
     scheduled_at: row.scheduled_at,
     archived_at: row.archived_at,
     video_count: Array.isArray(row.videos) ? row.videos[0]?.count ?? 0 : 0,
+    raw_video_count: Array.isArray(row.raw_videos) ? row.raw_videos[0]?.count ?? 0 : 0,
   }));
 
   return NextResponse.json({ projects });
