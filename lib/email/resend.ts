@@ -1299,16 +1299,18 @@ export async function sendCombinedCalendarDeliveryEmail(opts: {
 
 // ── Manual share-link send (admin "Send share link" / "Resend revised") ──
 //
-// Fired from the calendar-link-detail dialog. Two variants:
-//   - 'initial': first time we ship this calendar to the client. Subject
-//                + body match sendCalendarDeliveryEmail's tone.
-//   - 'revised': we updated something post-send. Subject + body tell the
-//                client the calendar was revised and to re-review.
+// Fired from the calendar-link-detail dialog. Two variants, both rendered in
+// the EXACT same shell as their auto-send siblings so the manual button can
+// never produce a generic-looking email:
+//   - 'initial': matches sendCalendarDeliveryEmail (eyebrow `${month} Calendar`,
+//                hero `Your ${month} content calendar is ready`, CTA "Open
+//                content calendar")
+//   - 'revised': matches sendCalendarRevisionsCompleteEmail (eyebrow
+//                "Revisions Complete", hero "Revisions complete", CTA
+//                "Review the updated posts")
 //
-// Mirrors sendCalendarFollowupEmail: a build*Draft helper returns
-// { subject, message } so the GET /send preview can render it, and the
-// send function accepts subjectOverride/messageOverride from the modal so
-// admins can tweak copy before hitting send.
+// Admins can still override subject + message from the preview dialog. The
+// override only swaps the body paragraphs, the polished shell holds.
 
 export function buildCalendarShareSendDraft(opts: {
   variant: 'initial' | 'revised';
@@ -1331,19 +1333,25 @@ export function buildCalendarShareSendDraft(opts: {
   const postsWord = opts.postCount === 1 ? 'post' : 'posts';
 
   if (opts.variant === 'revised') {
+    // Default body matches sendCalendarRevisionsCompleteEmail verbatim so
+    // a no-edit admin send is visually + textually identical to the auto
+    // sender.
     return {
-      subject: `${opts.clientName}: revised content calendar ready for review`,
+      subject: 'Your revisions are ready to review',
       message:
-        `${greeting}, ${team} just made revisions to the ${monthLabel} content calendar.\n\n` +
-        `Tap the button below to re-review the ${opts.postCount} ${postsWord} scheduled across ${dateRange}, then approve or leave another comment if anything still needs to change.`,
+        `${greeting}, we've worked through every change you flagged. ` +
+        `Hop back in to take a final look and approve the posts you're happy with.`,
     };
   }
 
+  // Default body matches sendCalendarDeliveryEmail verbatim (sans the
+  // bold post-count span, which is added back at HTML render time).
   return {
     subject: `Your ${monthLabel} content calendar from ${brand} is ready`,
     message:
-      `${greeting}, ${team} just shipped ${opts.postCount} ${postsWord} for you to review, scheduled across ${dateRange}.\n\n` +
-      `Tap the button below to watch the videos, read the captions, and approve or request changes one post at a time.`,
+      `${greeting}, ${team} just shipped ${opts.postCount} ${postsWord} for you to review, ` +
+      `scheduled across ${dateRange}. Tap the button below to watch the videos, read the ` +
+      `captions, and approve or request changes one post at a time.`,
   };
 }
 
@@ -1353,30 +1361,55 @@ export function buildCalendarShareSendHtml(opts: {
   message: string;
   shareUrl: string;
   agency: AgencyBrand;
+  /** Used to derive `${monthLabel} Calendar` eyebrow + hero on initial sends. */
+  startDate: string;
+  /** Used to bold "${postCount} posts" highlight in the default initial body. */
+  postCount: number;
 }): string {
   const isAC = opts.agency === 'anderson';
   const replyTo = isAC ? 'jack@andersoncollaborative.com' : 'jack@nativz.io';
-  const buttonLabel = opts.variant === 'revised'
-    ? 'Re-review the calendar &rarr;'
-    : 'Open content calendar &rarr;';
-  const heading = opts.variant === 'revised'
-    ? 'Revised content calendar ready'
-    : 'Your content calendar is ready';
-  const eyebrow = opts.variant === 'revised'
-    ? 'Calendar Revised'
-    : 'Calendar Delivery';
-  const bodyHtml = messageToHtmlParagraphs(opts.message);
+  const monthLabel = new Date(`${opts.startDate}T00:00:00Z`).toLocaleString('en-US', {
+    month: 'long',
+    timeZone: 'UTC',
+  });
+
+  if (opts.variant === 'revised') {
+    // Mirror sendCalendarRevisionsCompleteEmail: single-paragraph subtext +
+    // "Review the updated posts" CTA. No reply-footer line because the
+    // polished sibling doesn't have one.
+    const bodyHtml = messageToHtmlParagraphs(opts.message);
+    return layout(`
+      ${bodyHtml}
+      <div class="button-wrap">
+        <a href="${opts.shareUrl}" class="btn">Review the updated posts</a>
+      </div>
+    `, opts.agency, {
+      eyebrow: 'Revisions Complete',
+      heroTitle: 'Revisions complete',
+    });
+  }
+
+  // Initial: mirror sendCalendarDeliveryEmail. Bold the "{postCount} posts"
+  // span when the body still contains the literal substring (it always does
+  // in the default; admin edits may strip it, in which case the highlight
+  // silently noops which is fine).
+  const postsWord = opts.postCount === 1 ? 'post' : 'posts';
+  const literal = `${opts.postCount} ${postsWord}`;
+  const highlighted = `<span class="highlight">${literal}</span>`;
+  const messageWithBold = opts.message.replace(literal, highlighted);
+  const bodyHtml = messageToHtmlParagraphs(messageWithBold);
+
   return layout(`
     ${bodyHtml}
-    <div class="button-wrap" style="margin-top:24px;text-align:center;">
-      <a href="${opts.shareUrl}" class="button">${buttonLabel}</a>
+    <div class="button-wrap">
+      <a href="${opts.shareUrl}" class="button">Open content calendar &rarr;</a>
     </div>
-    <p class="small" style="text-align:center;margin-top:24px;">
+    <p class="small" style="text-align:center; margin-top:24px;">
       Questions or want to chat about a post? Just reply to this email and it'll come straight to ${replyTo}.
     </p>
   `, opts.agency, {
-    eyebrow,
-    heroTitle: heading,
+    eyebrow: `${monthLabel} Calendar`,
+    heroTitle: `Your ${monthLabel} content calendar is ready`,
   });
 }
 
@@ -1418,6 +1451,8 @@ export async function sendCalendarShareSendEmail(opts: {
     message,
     shareUrl: opts.shareUrl,
     agency,
+    startDate: opts.startDate,
+    postCount: opts.postCount,
   });
   return sendAndLog({
     category: 'transactional',

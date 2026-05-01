@@ -218,6 +218,8 @@ export async function GET(
     message: draft.message,
     shareUrl,
     agency,
+    startDate,
+    postCount,
   });
 
   return NextResponse.json({
