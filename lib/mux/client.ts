@@ -18,7 +18,7 @@ export function getMux(): Mux {
   const tokenSecret = process.env.MUX_TOKEN_SECRET;
   if (!tokenId || !tokenSecret) {
     throw new Error(
-      'Mux is not configured — set MUX_TOKEN_ID and MUX_TOKEN_SECRET in .env.local',
+      'Video upload is temporarily unavailable. Please try again in a moment, and ping the team if it keeps failing.',
     );
   }
   _mux = new Mux({
