@@ -832,11 +832,19 @@ pushBoth('flow_stakeholder_milestone', 'Onboarding · Stakeholder milestone', (a
   const clientName = clientNameFor(agency);
   const flowUrl = 'https://cortex.nativz.io/admin/onboarding/SAMPLE-FLOW-ID';
   const kickoffShareUrl = 'https://cortex.nativz.io/schedule/SAMPLE-TOKEN';
-  const headline = `Schedule kickoff with ${clientName}`;
+  // Match the production builder in lib/onboarding/system-emails.ts:
+  // - headline drops the client name (the hero title already prefixes it)
+  // - secondary CTA is an outline button, not a text link
+  const headline = 'Schedule kickoff';
+  const brand = agency === 'anderson'
+    ? { accent: '#36D1C2', accentDark: '#1AAA9A' }
+    : { accent: '#00ADEF', accentDark: '#0090C7' };
   const inner = `
     <p class="subtext">Hi Jack, <strong>${clientName}</strong> finished onboarding. Pick a kickoff time when the team's free.</p>
     <div class="button-wrap"><a class="button" href="${kickoffShareUrl}">Schedule kickoff &rarr;</a></div>
-    <p class="subtext" style="margin-top:16px;font-size:13px;"><a href="${flowUrl}">Or open the onboarding tracker &rarr;</a></p>`;
+    <div class="button-wrap" style="margin-top:12px;">
+      <a href="${flowUrl}" style="display:inline-block;background:transparent;color:${brand.accentDark};text-decoration:none;font-weight:700;padding:13px 31px;border:1px solid ${brand.accent};border-radius:10px;font-size:15px;letter-spacing:0.01em;">Open the onboarding tracker &rarr;</a>
+    </div>`;
   const html = layout(inner, agency, {
     eyebrow: 'Onboarding Complete',
     heroTitle: `${clientName}: ${headline}`,
