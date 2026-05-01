@@ -59,6 +59,11 @@ export async function GET(req: Request) {
   if (!clientId) {
     return NextResponse.json({ error: 'clientId required' }, { status: 400 });
   }
+  // When set, falls back to the brand profile's POC roster (`contacts`
+  // table) if no review-specific contacts exist for the brand. Used by
+  // the calendar share-link dialog so admins don't have to re-enter the
+  // same people they already added to the brand profile.
+  const fallback = url.searchParams.get('fallback')?.trim() === 'brand';
 
   const access = await resolveClientAccess(user.id, clientId);
   if (!access.allowed) {
@@ -75,7 +80,37 @@ export async function GET(req: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ contacts: data ?? [] });
+
+  const reviewContacts = (data ?? []).map((c) => ({ ...c, source: 'review' as const }));
+  if (reviewContacts.length > 0 || !fallback) {
+    return NextResponse.json({ contacts: reviewContacts });
+  }
+
+  const { data: brand, error: brandError } = await admin
+    .from('contacts')
+    .select('id, name, email, role')
+    .eq('client_id', clientId)
+    .not('email', 'is', null);
+  if (brandError) {
+    return NextResponse.json({ contacts: reviewContacts });
+  }
+
+  const brandContacts = (brand ?? [])
+    .filter((c): c is { id: string; email: string; name: string | null; role: string | null } => !!c.email)
+    .map((c) => ({
+      id: c.id,
+      client_id: clientId,
+      email: c.email,
+      name: c.name,
+      role: c.role,
+      notifications_enabled: true,
+      followup_cadence: 'every_3_days' as const,
+      created_at: null,
+      updated_at: null,
+      source: 'brand' as const,
+    }));
+
+  return NextResponse.json({ contacts: brandContacts });
 }
 
 export async function POST(req: Request) {

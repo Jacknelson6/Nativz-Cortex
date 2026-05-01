@@ -146,49 +146,16 @@ export function CalendarLinkDetail({
     void (async () => {
       setContactsLoading(true);
       try {
+        // `fallback=brand` makes the endpoint mirror the /send route's
+        // resolution: review_contacts first, then brand profile contacts
+        // when none exist. Same source of truth as the actual email send.
         const res = await fetch(
-          `/api/calendar/review/contacts?clientId=${encodeURIComponent(clientId)}`,
+          `/api/calendar/review/contacts?clientId=${encodeURIComponent(clientId)}&fallback=brand`,
           { cache: 'no-store' },
         );
         if (!res.ok) throw new Error('failed');
         const data = (await res.json()) as { contacts: ContactRow[] };
-        const reviewContacts = (data.contacts ?? []).map<ContactRow>((c) => ({
-          ...c,
-          source: 'review',
-        }));
-
-        // Fall back to the brand profile's POC roster when no review-specific
-        // contacts are configured. Mirrors the server-side fallback in the
-        // /send route so the displayed list matches who the email actually
-        // goes to.
-        if (reviewContacts.length === 0) {
-          const brandRes = await fetch(
-            `/api/clients/${encodeURIComponent(clientId)}/contacts`,
-            { cache: 'no-store' },
-          );
-          if (brandRes.ok) {
-            const brand = (await brandRes.json()) as Array<{
-              id: string;
-              email: string | null;
-              name: string | null;
-              role: string | null;
-            }>;
-            const fallback: ContactRow[] = (brand ?? [])
-              .filter((c): c is { id: string; email: string; name: string | null; role: string | null } => !!c.email)
-              .map((c) => ({
-                id: c.id,
-                email: c.email,
-                name: c.name,
-                role: c.role,
-                notifications_enabled: true,
-                source: 'brand',
-              }));
-            if (!cancelled) setContacts(fallback);
-            return;
-          }
-        }
-
-        if (!cancelled) setContacts(reviewContacts);
+        if (!cancelled) setContacts(data.contacts ?? []);
       } catch {
         if (!cancelled) setContacts([]);
       } finally {
