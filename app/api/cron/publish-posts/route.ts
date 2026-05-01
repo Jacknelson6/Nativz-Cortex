@@ -246,7 +246,23 @@ async function handleGet(request: NextRequest) {
           lateIdToProfileId[p.lateAccountId] = p.profileId;
         });
 
-        // Publish via posting service
+        // Publish via posting service.
+        //
+        // Per-platform overrides (migration 218) live on the same
+        // `scheduled_posts` row. NULL means "use buildPublishBody's
+        // defaults", so we pass `?? undefined` to keep that fallthrough
+        // intact for posts that haven't customized anything.
+        const p = post as typeof post & {
+          youtube_title: string | null;
+          youtube_description: string | null;
+          youtube_tags: string[] | null;
+          youtube_privacy: 'public' | 'unlisted' | 'private' | null;
+          youtube_made_for_kids: boolean | null;
+          tiktok_allow_comment: boolean | null;
+          tiktok_allow_duet: boolean | null;
+          tiktok_allow_stitch: boolean | null;
+          instagram_share_to_feed: boolean | null;
+        };
         const result = await postingService.publishPost({
           videoUrl,
           caption: post.caption ?? '',
@@ -256,6 +272,15 @@ async function handleGet(request: NextRequest) {
           collaboratorHandles: post.collaborator_handles ?? [],
           platformProfileIds: platformProfiles.map((p: PlatformProfile) => p.lateAccountId),
           platformHints,
+          youtubeTitle: p.youtube_title ?? undefined,
+          youtubeDescription: p.youtube_description ?? undefined,
+          youtubeTags: p.youtube_tags ?? undefined,
+          youtubePrivacy: p.youtube_privacy ?? undefined,
+          youtubeMadeForKids: p.youtube_made_for_kids ?? undefined,
+          tiktokAllowComment: p.tiktok_allow_comment ?? undefined,
+          tiktokAllowDuet: p.tiktok_allow_duet ?? undefined,
+          tiktokAllowStitch: p.tiktok_allow_stitch ?? undefined,
+          instagramShareToFeed: p.instagram_share_to_feed ?? undefined,
         });
 
         // Update per-platform results

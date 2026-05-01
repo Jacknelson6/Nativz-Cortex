@@ -140,9 +140,11 @@ export async function POST(request: NextRequest) {
 
     // When client approves a draft post, promote it to scheduled and sync to Late
     if (parsed.data.status === 'approved') {
+      // Pull per-platform overrides (migration 218) so YouTube titles,
+      // TikTok interaction settings, etc. survive client approval.
       const { data: postRow } = await adminClient
         .from('scheduled_posts')
-        .select('id, status, caption, hashtags, scheduled_at, cover_image_url, tagged_people, collaborator_handles')
+        .select('id, status, caption, hashtags, scheduled_at, cover_image_url, tagged_people, collaborator_handles, youtube_title, youtube_description, youtube_tags, youtube_privacy, youtube_made_for_kids, tiktok_allow_comment, tiktok_allow_duet, tiktok_allow_stitch, instagram_share_to_feed')
         .eq('id', parsed.data.post_id)
         .single();
 
@@ -173,6 +175,17 @@ export async function POST(request: NextRequest) {
             const mediaUrl = ((mediaRows?.[0] as Record<string, unknown>)?.scheduler_media as Record<string, unknown> | null)?.late_media_url as string ?? '';
 
             const service = getPostingService();
+            const pr = postRow as typeof postRow & {
+              youtube_title: string | null;
+              youtube_description: string | null;
+              youtube_tags: string[] | null;
+              youtube_privacy: 'public' | 'unlisted' | 'private' | null;
+              youtube_made_for_kids: boolean | null;
+              tiktok_allow_comment: boolean | null;
+              tiktok_allow_duet: boolean | null;
+              tiktok_allow_stitch: boolean | null;
+              instagram_share_to_feed: boolean | null;
+            };
             const lateResult = await service.publishPost({
               videoUrl: mediaUrl,
               caption: postRow.caption ?? '',
@@ -185,6 +198,17 @@ export async function POST(request: NextRequest) {
               coverImageUrl: postRow.cover_image_url ?? undefined,
               taggedPeople: postRow.tagged_people ?? [],
               collaboratorHandles: postRow.collaborator_handles ?? [],
+              // Per-platform overrides (migration 218). Null → undefined so
+              // buildPublishBody applies its existing defaults.
+              youtubeTitle: pr.youtube_title ?? undefined,
+              youtubeDescription: pr.youtube_description ?? undefined,
+              youtubeTags: pr.youtube_tags ?? undefined,
+              youtubePrivacy: pr.youtube_privacy ?? undefined,
+              youtubeMadeForKids: pr.youtube_made_for_kids ?? undefined,
+              tiktokAllowComment: pr.tiktok_allow_comment ?? undefined,
+              tiktokAllowDuet: pr.tiktok_allow_duet ?? undefined,
+              tiktokAllowStitch: pr.tiktok_allow_stitch ?? undefined,
+              instagramShareToFeed: pr.instagram_share_to_feed ?? undefined,
             });
 
             await adminClient

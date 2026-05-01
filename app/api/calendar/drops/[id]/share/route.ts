@@ -73,6 +73,11 @@ export async function POST(
     link: { id: link.id, token: link.token, expires_at: link.expires_at },
     url: `${appUrl}/c/${link.token}`,
     refreshed: link.refreshed,
+    // Orphan stats let the calendar UI flash a "X posts pulled from
+    // Zernio queue" toast when refreshing a share link drops posts that
+    // were already approved + queued. See SafeStop incident write-up.
+    cancelled_orphans: link.cancelledOrphans,
+    unpublishable_orphans: link.unpublishableOrphans,
   });
 }
 

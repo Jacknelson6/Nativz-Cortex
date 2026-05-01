@@ -371,17 +371,39 @@ function buildPublishBody(input: PublishPostInput): Record<string, unknown> {
     if (platform === 'instagram') {
       entry.platformSpecificData = {
         contentType: 'reels',
-        shareToFeed: true,
+        // Default to true — most clients want the cross-post. Overrides
+        // only flip false when explicitly disabled (e.g. brands that
+        // gate the grid manually).
+        shareToFeed: input.instagramShareToFeed ?? true,
         ...(input.taggedPeople?.length ? { usersToTag: input.taggedPeople } : {}),
         ...(input.collaboratorHandles?.length ? { collaborators: input.collaboratorHandles } : {}),
       };
     } else if (platform === 'youtube') {
-      const title =
+      // Title precedence: explicit override → first line of caption →
+      // fallback string. YouTube rejects empty titles, so we always
+      // ship something. 100-char hard cap matches YouTube's API limit.
+      const fallbackTitle =
         caption.split('\n')[0]?.slice(0, 100)?.trim() || 'Video';
+      const title = (input.youtubeTitle?.trim().slice(0, 100)) || fallbackTitle;
+
+      const description = input.youtubeDescription?.trim() || caption;
+      const tagPool = input.youtubeTags?.length ? input.youtubeTags : input.hashtags;
+      const tags = tagPool
+        .map((t) => t.replace(/^#/, '').trim())
+        .filter(Boolean);
+
+      const visibilityMap: Record<NonNullable<PublishPostInput['youtubePrivacy']>, string> = {
+        public: 'public',
+        unlisted: 'unlisted',
+        private: 'private',
+      };
+
       entry.platformSpecificData = {
         title,
-        visibility: 'public',
-        madeForKids: false,
+        description,
+        ...(tags.length ? { tags } : {}),
+        visibility: visibilityMap[input.youtubePrivacy ?? 'public'],
+        madeForKids: input.youtubeMadeForKids ?? false,
       };
     }
 
@@ -395,11 +417,16 @@ function buildPublishBody(input: PublishPostInput): Record<string, unknown> {
   };
 
   if (hasTiktok) {
+    // privacy_level + content_preview_confirmed + express_consent_given
+    // are protocol requirements — Zernio rejects the call without them
+    // — so they stay hardcoded. The interaction toggles below ARE
+    // user-facing per migration 218; default to true to preserve
+    // existing behavior when the override is unset.
     body.tiktokSettings = {
       privacy_level: 'PUBLIC_TO_EVERYONE',
-      allow_comment: true,
-      allow_duet: true,
-      allow_stitch: true,
+      allow_comment: input.tiktokAllowComment ?? true,
+      allow_duet: input.tiktokAllowDuet ?? true,
+      allow_stitch: input.tiktokAllowStitch ?? true,
       ...(input.coverImageUrl ? { video_cover_image_url: input.coverImageUrl } : {}),
       content_preview_confirmed: true,
       express_consent_given: true,

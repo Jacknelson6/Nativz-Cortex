@@ -38,6 +38,32 @@ export interface PublishPostInput {
   captionByPlatform?: Partial<Record<SocialPlatform, string>>;
   /** Schedule for later (ISO 8601) or omit to publish immediately */
   scheduledAt?: string;
+
+  // ----- Per-platform overrides (added 2026-05-01) -----
+  // These map to columns on `scheduled_posts` (migration 218). NULL/undefined
+  // means "use the existing default" from buildPublishBody, so existing
+  // call-sites stay valid without changes.
+
+  /** YouTube video title (max 100 chars). Falls back to caption's first line. */
+  youtubeTitle?: string;
+  /** YouTube description. Falls back to the shared caption. */
+  youtubeDescription?: string;
+  /** YouTube tags (without # prefix). Falls back to shared hashtags. */
+  youtubeTags?: string[];
+  /** YouTube privacy. Defaults to 'public'. */
+  youtubePrivacy?: 'public' | 'unlisted' | 'private';
+  /** YouTube made-for-kids flag (COPPA). Defaults to false. */
+  youtubeMadeForKids?: boolean;
+
+  /** TikTok comments allowed. Defaults to true. */
+  tiktokAllowComment?: boolean;
+  /** TikTok duets allowed. Defaults to true. */
+  tiktokAllowDuet?: boolean;
+  /** TikTok stitches allowed. Defaults to true. */
+  tiktokAllowStitch?: boolean;
+
+  /** Cross-post Instagram Reel to feed. Defaults to true. */
+  instagramShareToFeed?: boolean;
 }
 
 export interface PublishResult {

@@ -237,7 +237,11 @@ export async function publishScheduledPost(
 ): Promise<{ alreadyPublished: boolean; externalPostId?: string }> {
   const { data: post, error: postErr } = await admin
     .from('scheduled_posts')
-    .select('id, client_id, caption, hashtags, scheduled_at, status, late_post_id, cover_image_url')
+    .select(
+      'id, client_id, caption, hashtags, scheduled_at, status, late_post_id, cover_image_url, ' +
+      'youtube_title, youtube_description, youtube_tags, youtube_privacy, youtube_made_for_kids, ' +
+      'tiktok_allow_comment, tiktok_allow_duet, tiktok_allow_stitch, instagram_share_to_feed',
+    )
     .eq('id', postId)
     .single<{
       id: string;
@@ -248,6 +252,15 @@ export async function publishScheduledPost(
       status: string;
       late_post_id: string | null;
       cover_image_url: string | null;
+      youtube_title: string | null;
+      youtube_description: string | null;
+      youtube_tags: string[] | null;
+      youtube_privacy: 'public' | 'unlisted' | 'private' | null;
+      youtube_made_for_kids: boolean | null;
+      tiktok_allow_comment: boolean | null;
+      tiktok_allow_duet: boolean | null;
+      tiktok_allow_stitch: boolean | null;
+      instagram_share_to_feed: boolean | null;
     }>();
   if (postErr || !post) throw new Error(`Post ${postId} not found`);
 
@@ -306,6 +319,18 @@ export async function publishScheduledPost(
     platformHints: Object.fromEntries(lateProfiles.map((p) => [p.late_account_id, p.platform])),
     captionByPlatform,
     scheduledAt: post.scheduled_at,
+    // Per-platform overrides — undefined fields fall through to
+    // buildPublishBody defaults (caption-derived YT title, share-to-feed=true,
+    // TikTok interactions=true). See migration 218.
+    youtubeTitle: post.youtube_title ?? undefined,
+    youtubeDescription: post.youtube_description ?? undefined,
+    youtubeTags: post.youtube_tags ?? undefined,
+    youtubePrivacy: post.youtube_privacy ?? undefined,
+    youtubeMadeForKids: post.youtube_made_for_kids ?? undefined,
+    tiktokAllowComment: post.tiktok_allow_comment ?? undefined,
+    tiktokAllowDuet: post.tiktok_allow_duet ?? undefined,
+    tiktokAllowStitch: post.tiktok_allow_stitch ?? undefined,
+    instagramShareToFeed: post.instagram_share_to_feed ?? undefined,
   });
 
   await admin
