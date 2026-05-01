@@ -98,8 +98,15 @@ async function handleGet(request: NextRequest) {
         // late_account_id) -- they'd 400 anyway. Keep an internal
         // map so we can reverse-lookup the spp row when Zernio echoes
         // accountId back in the publish response.
-        const platformProfiles = (post.scheduled_post_platforms ?? [])
-          .map((spp: Record<string, unknown>) => {
+        type PlatformProfile = {
+          profileId: string;
+          lateAccountId: string;
+          platform: SocialPlatform;
+        };
+        const platformProfiles: PlatformProfile[] = (
+          post.scheduled_post_platforms ?? []
+        )
+          .map((spp: Record<string, unknown>): PlatformProfile | null => {
             const profile = spp.social_profiles as Record<string, unknown> | null;
             const lateAccountId = (profile?.late_account_id ?? null) as string | null;
             if (!lateAccountId) return null;
@@ -110,8 +117,7 @@ async function handleGet(request: NextRequest) {
             };
           })
           .filter(
-            (p): p is { profileId: string; lateAccountId: string; platform: SocialPlatform } =>
-              p !== null,
+            (p: PlatformProfile | null): p is PlatformProfile => p !== null,
           );
 
         if (platformProfiles.length === 0) {
@@ -121,7 +127,7 @@ async function handleGet(request: NextRequest) {
         }
 
         const platformHints: Record<string, SocialPlatform> = {};
-        platformProfiles.forEach((p) => {
+        platformProfiles.forEach((p: PlatformProfile) => {
           platformHints[p.lateAccountId] = p.platform;
         });
 
@@ -129,7 +135,7 @@ async function handleGet(request: NextRequest) {
         // internal social_profile_id (UUID), so we can update the right
         // spp row from the publish response.
         const lateIdToProfileId: Record<string, string> = {};
-        platformProfiles.forEach((p) => {
+        platformProfiles.forEach((p: PlatformProfile) => {
           lateIdToProfileId[p.lateAccountId] = p.profileId;
         });
 
@@ -141,7 +147,7 @@ async function handleGet(request: NextRequest) {
           coverImageUrl: post.cover_image_url ?? undefined,
           taggedPeople: post.tagged_people ?? [],
           collaboratorHandles: post.collaborator_handles ?? [],
-          platformProfileIds: platformProfiles.map((p) => p.lateAccountId),
+          platformProfileIds: platformProfiles.map((p: PlatformProfile) => p.lateAccountId),
           platformHints,
         });
 
