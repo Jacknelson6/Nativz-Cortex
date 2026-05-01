@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { appendWiseSuffix } from '@/lib/accounting/wise';
 
 const entrySchema = z.object({
   entry_type: z.enum(['editing', 'smm', 'affiliate', 'blogging']),
@@ -23,6 +24,13 @@ const entrySchema = z.object({
 
 const bodySchema = z.object({
   entries: z.array(entrySchema).min(1).max(200),
+  wise_url: z
+    .string()
+    .trim()
+    .url()
+    .max(500)
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
 });
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
@@ -57,6 +65,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     );
   }
 
+  const wiseUrl = parsed.data.wise_url;
   const rows = parsed.data.entries.map((e) => ({
     period_id: tok.period_id,
     entry_type: e.entry_type,
@@ -67,7 +76,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     rate_cents: e.rate_cents ?? 0,
     amount_cents: e.amount_cents,
     margin_cents: 0, // margin is admin-set, never submitted
-    description: e.description ?? null,
+    description: wiseUrl
+      ? appendWiseSuffix(e.description, wiseUrl)
+      : (e.description ?? null),
     created_by: null,
   }));
 

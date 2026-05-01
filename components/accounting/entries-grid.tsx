@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Trash2, Sparkles, Check, Loader2, AlertCircle, X } from 'lucide-react';
+import { Plus, Trash2, Sparkles, Check, Loader2, AlertCircle, X, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { dollarsToCents } from '@/lib/accounting/periods';
 import { getPreset } from '@/lib/accounting/presets';
+import { extractWiseUrl } from '@/lib/accounting/wise';
 
 type EntryType = 'editing' | 'smm' | 'affiliate' | 'blogging';
 
@@ -749,9 +750,8 @@ function ExistingRow({
         </Cell>
       )}
       <Cell>
-        <TextInput
+        <DescriptionCell
           value={entry.description ?? ''}
-          placeholder="Optional"
           readonly={readonly}
           onCommit={(v) => v !== (entry.description ?? '') && onPatch({ description: v || null })}
         />
@@ -766,6 +766,42 @@ function ExistingRow({
         </Cell>
       )}
     </tr>
+  );
+}
+
+function DescriptionCell({
+  value,
+  readonly,
+  onCommit,
+}: {
+  value: string;
+  readonly: boolean;
+  onCommit: (v: string) => void;
+}) {
+  const wiseUrl = extractWiseUrl(value);
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="flex-1 min-w-0">
+        <TextInput
+          value={value}
+          placeholder="Optional"
+          readonly={readonly}
+          onCommit={onCommit}
+        />
+      </div>
+      {wiseUrl && (
+        <a
+          href={wiseUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`Wise: ${wiseUrl}`}
+          aria-label="Open Wise payout link"
+          className="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-nativz-border bg-background px-1.5 py-1 text-[10px] uppercase tracking-wide font-semibold text-text-secondary hover:border-accent hover:text-accent-text"
+        >
+          Wise <ExternalLink size={10} />
+        </a>
+      )}
+    </div>
   );
 }
 

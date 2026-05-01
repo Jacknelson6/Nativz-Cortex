@@ -1,10 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Sparkles, Loader2, Check, Trash2, CheckCircle2 } from 'lucide-react';
+import { Sparkles, Loader2, Check, Trash2, CheckCircle2, Link as LinkIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { centsToDollars } from '@/lib/accounting/periods';
+import { isLikelyWiseUrl } from '@/lib/accounting/wise';
 
 type EntryType = 'editing' | 'smm' | 'affiliate' | 'blogging';
 
@@ -49,10 +50,16 @@ export function SubmitPayrollClient({
 }: SubmitPayrollClientProps) {
   const [stage, setStage] = useState<Stage>('paste');
   const [text, setText] = useState('');
+  const [wiseUrl, setWiseUrl] = useState('');
   const [parsing, setParsing] = useState(false);
   const [proposals, setProposals] = useState<ProposedEntry[]>([]);
   const [created, setCreated] = useState(0);
   const [createdTotal, setCreatedTotal] = useState(0);
+
+  const wiseUrlTrimmed = wiseUrl.trim();
+  const wiseUrlValid =
+    wiseUrlTrimmed === '' || /^https?:\/\/\S+$/i.test(wiseUrlTrimmed);
+  const wiseUrlLooksWise = wiseUrlTrimmed === '' || isLikelyWiseUrl(wiseUrlTrimmed);
 
   const grandTotal = useMemo(
     () => proposals.reduce((s, p) => s + (p.amount_cents ?? 0), 0),
@@ -103,6 +110,10 @@ export function SubmitPayrollClient({
   }
 
   async function handleConfirm() {
+    if (!wiseUrlValid) {
+      toast.error('Wise link must start with http:// or https://');
+      return;
+    }
     setStage('submitting');
     try {
       const res = await fetch(`/api/submit-payroll/${token}/commit`, {
@@ -117,6 +128,7 @@ export function SubmitPayrollClient({
             amount_cents: p.amount_cents,
             description: p.description,
           })),
+          wise_url: wiseUrlTrimmed || undefined,
         }),
       });
       const data = await res.json();
@@ -174,13 +186,13 @@ export function SubmitPayrollClient({
             Hey {memberName}, log your work.
           </h1>
           <p className="text-base text-text-secondary mt-2">
-            Paste a list of what you did this period — any format works. We'll parse it, show you
+            Paste a list of what you did this period, any format works. We&apos;ll parse it, show you
             what we got, and you confirm before it goes through.
           </p>
           {previousSubmissionCount > 0 && (
             <p className="text-sm text-text-secondary mt-2">
-              You've submitted {previousSubmissionCount}{' '}
-              {previousSubmissionCount === 1 ? 'time' : 'times'} before for this period — new
+              You&apos;ve submitted {previousSubmissionCount}{' '}
+              {previousSubmissionCount === 1 ? 'time' : 'times'} before for this period. New
               entries get appended.
             </p>
           )}
@@ -188,6 +200,12 @@ export function SubmitPayrollClient({
 
         {stage === 'paste' ? (
           <div className="space-y-4">
+            <WiseUrlField
+              value={wiseUrl}
+              onChange={setWiseUrl}
+              valid={wiseUrlValid}
+              looksWise={wiseUrlLooksWise}
+            />
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -219,6 +237,12 @@ Rockpower: 3 revisions, $25 each
                 ← Edit my paste
               </Button>
             </div>
+            <WiseUrlField
+              value={wiseUrl}
+              onChange={setWiseUrl}
+              valid={wiseUrlValid}
+              looksWise={wiseUrlLooksWise}
+            />
             <div className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
               <table className="w-full text-sm table-fixed">
                 <colgroup>
@@ -353,7 +377,7 @@ Rockpower: 3 revisions, $25 each
               </p>
               <Button
                 onClick={handleConfirm}
-                disabled={stage === 'submitting' || proposals.length === 0}
+                disabled={stage === 'submitting' || proposals.length === 0 || !wiseUrlValid}
               >
                 {stage === 'submitting' ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                 Looks right — submit
@@ -362,6 +386,61 @@ Rockpower: 3 revisions, $25 each
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function WiseUrlField({
+  value,
+  onChange,
+  valid,
+  looksWise,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  valid: boolean;
+  looksWise: boolean;
+}) {
+  const trimmed = value.trim();
+  const showInvalid = trimmed !== '' && !valid;
+  const showWiseHint = trimmed !== '' && valid && !looksWise;
+
+  return (
+    <div className="rounded-xl border border-nativz-border bg-surface px-4 py-3 space-y-1.5">
+      <label
+        htmlFor="wise-url"
+        className="flex items-center gap-1.5 text-sm font-medium text-text-primary"
+      >
+        <LinkIcon size={14} className="text-text-secondary" />
+        Your Wise payment link
+      </label>
+      <input
+        id="wise-url"
+        type="url"
+        inputMode="url"
+        autoComplete="url"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="https://wise.com/pay/..."
+        className={`w-full rounded-md border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-1 ${
+          showInvalid
+            ? 'border-red-400/60 focus:border-red-400 focus:ring-red-400'
+            : 'border-nativz-border focus:border-accent focus:ring-accent'
+        }`}
+      />
+      {showInvalid ? (
+        <p className="text-xs text-red-400">
+          Needs to start with http:// or https://
+        </p>
+      ) : showWiseHint ? (
+        <p className="text-xs text-text-secondary">
+          Doesn&apos;t look like a Wise link. We&apos;ll save it anyway, but double-check the URL.
+        </p>
+      ) : (
+        <p className="text-xs text-text-secondary">
+          Optional. We&apos;ll attach it to each entry so Jack can pay you without asking.
+        </p>
+      )}
     </div>
   );
 }

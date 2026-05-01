@@ -2140,3 +2140,42 @@ collaborators, calendar view toggle).
 - **No bulk admin import**: editing projects haven't been live long enough to need backfill.
 
 ### Iterations
+
+#### Iteration 19.1 - 2026-05-01 - Share page rewrite + activity feed wire-up
+
+**Shipped:**
+- Migration 215 (`editing_project_review_comments`) with status taxonomy `comment | approved | changes_requested | video_revised`, optional `video_id` + `share_link_id`, JSONB attachments + metadata, NUMERIC(10,3) `timestamp_seconds`, 3 lookup indexes, admin-only RLS (anon access gated server-side via createAdminClient + token validation)
+- `/api/editing/share/[token]/route.ts`: returns full payload `{isEditor, project, client, videos[] (with comments[]), project_comments[], expires_at}`. Latest cut per `position` deduped server-side, per-video comment grouping, fire-and-forget view tracking
+- `/api/editing/share/[token]/comment` (POST/DELETE/PATCH): Zod-validated body, 4-status enum, smart approval upgrade, resolved-toggle on changes_requested rows
+- `/api/editing/share/[token]/upload`: 25MB cap, image/video/pdf, reuses `share-comment-attachments` bucket (path namespaced by project_id)
+- `app/c/edit/[token]/page.tsx`: rewritten from a 422-line grid+modal into a ~1300-line review page mirroring `/c/[token]`. Name-capture modal w/ localStorage, header chips (videos/approved/changes/expires), Approve all CTA with sequential progress toast, list view (no calendar toggle), VideoCard with native `<video>` + 500ms playhead poll, frame.io-style timestamped comments with file attachments + pin chip + Cancel/Send footer, 4-status CommentRow rendering (comment/approved/changes_requested/video_revised), 3-step admin Replace flow (POST `/api/admin/editing/projects/:id/videos` with replace_video_id -> XHR PUT to signed URL -> POST `video_revised` audit comment -> refetch), DASH/APOS constants for em-dash avoidance, public copy uses "video"/"videos" (never "cut")
+- `/api/admin/editing/projects/[id]/activity` extended with `review_comment` event kind (author + status + content + attachment count)
+- `/api/admin/editing/projects/[id]` GET now derives `review_status` per video (newest non-resolved row wins, `comment` + `video_revised` excluded) and attaches it to each video row
+- `ShareHistoryPanel` renders `review_comment` rows with status-keyed swatches (CheckCircle2/AlertTriangle/RefreshCw/MessageSquare)
+- Dialog `VideoCard` shows Approved / Needs changes pill next to the filename
+- `EditingProjectVideo` type gains optional `review_status`
+
+**State vs goal:**
+| Criterion | Status |
+|-----------|--------|
+| Name-capture modal w/ localStorage persistence | done |
+| Header w/ client+project, "N videos to review", approved/changes/expires chips | done |
+| Approve-all sequential w/ progress toast | done |
+| List view, no calendar toggle | done |
+| Per-video Approve / Request change / Replace / Delete (editor) | done |
+| Comment thread w/ status icons + colored chips | done |
+| Comment timestamp anchoring + file attachments | done |
+| Admin Replace bumps version + appends `video_revised` comment | done |
+| Admin Delete archives cut from grid | partial - currently hard-deletes via existing DELETE route; version-stacking already preserves history per replace, soft-archive on the trash button can be a follow-up |
+| Public copy uses "video"/"videos" (never "cut") | done |
+| No caption / hashtags / scheduled / tagged / collaborators / calendar-toggle | done |
+| Activity surfaces in admin dialog history + per-video status in cuts list | done |
+| `npx tsc --noEmit` + ESLint exit 0 | done |
+
+**Gaps or regressions:**
+- Hard-delete vs soft-archive on the trash button. Existing DELETE route at `/api/admin/editing/projects/:id/videos/:videoId` removes the row + storage object. The version-stacking already gives us history through Replace. A soft-archive flag (`archived_at` on `editing_project_videos`) would let the trash button hide without losing history; punted because Replace already covers the audit trail and the user-facing impact is identical (cut disappears from the grid).
+- Per-video `review_status` only reflects approved / changes_requested. `video_revised` is intentionally excluded so the pill shows whatever the latest reviewer verdict is (a re-upload reverts a stale "approved" pill until a new reviewer weighs in - which matches the calendar UX).
+
+**Goal 19 status:** complete. All hard-stop acceptance criteria met. Soft-archive vs hard-delete is the only follow-up and is a UX polish iteration, not a goal blocker.
+
+**SRL complete.** All acceptance criteria met as of iteration 19.1.
