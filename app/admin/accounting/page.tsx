@@ -14,7 +14,6 @@ import {
   ACCOUNTING_TAB_SLUGS,
   type AccountingTabSlug,
 } from '@/components/admin/accounting/accounting-tabs';
-import { AccountingOverviewTab } from '@/components/admin/accounting/overview-tab';
 import { RefreshButton } from '@/components/admin/shared/refresh-button';
 import { refreshAccounting } from './actions';
 
@@ -41,7 +40,7 @@ function resolveTab(raw: string | undefined): AccountingTabSlug {
   if (raw && (ACCOUNTING_TAB_SLUGS as readonly string[]).includes(raw)) {
     return raw as AccountingTabSlug;
   }
-  return 'overview';
+  return 'periods';
 }
 
 export default async function AccountingIndexPage({
@@ -82,7 +81,7 @@ export default async function AccountingIndexPage({
     <div className="cortex-page-gutter max-w-6xl mx-auto space-y-8">
       <SectionHeader
         title="Accounting"
-        description="Bi-monthly payroll periods. First half (1–15) and second half (16–end of month). Pick a tab to drill in."
+        description="Bi-monthly payroll periods. First half (1 to 15) and second half (16 to end of month)."
         action={<RefreshButton action={refreshAccounting} />}
       />
 
@@ -95,22 +94,6 @@ export default async function AccountingIndexPage({
 
 async function renderTab(slug: AccountingTabSlug, adminClient: ReturnType<typeof createAdminClient>): Promise<React.ReactNode> {
   switch (slug) {
-    case 'overview':
-      return <AccountingOverviewTab />;
-    case 'year':
-      return (
-        <SectionPanel
-          title="Year view"
-          description="Monthly payout + margin roll-up across the calendar year."
-        >
-          <Link
-            href="/admin/accounting/year"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-sm font-medium text-accent-text transition-colors hover:border-accent/60 hover:bg-accent/20"
-          >
-            Open year view →
-          </Link>
-        </SectionPanel>
-      );
     case 'periods':
       return <PeriodsTab adminClient={adminClient} />;
   }

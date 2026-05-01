@@ -1,10 +1,8 @@
-import { Activity, CalendarDays, BarChart3 } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
 import type { SectionTabDef } from '@/components/admin/section-tabs';
 
 export const ACCOUNTING_TABS = [
-  { slug: 'overview', label: 'Overview',  icon: <Activity size={13} /> },
-  { slug: 'periods',  label: 'Periods',   icon: <CalendarDays size={13} /> },
-  { slug: 'year',     label: 'Year view', icon: <BarChart3 size={13} /> },
+  { slug: 'periods', label: 'Periods', icon: <CalendarDays size={13} /> },
 ] as const satisfies readonly SectionTabDef[];
 
 export type AccountingTabSlug = (typeof ACCOUNTING_TABS)[number]['slug'];
