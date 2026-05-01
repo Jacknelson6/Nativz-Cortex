@@ -75,9 +75,9 @@ export async function POST(
     process.env.NEXT_PUBLIC_APP_URL ||
     new URL(req.url).origin;
 
-  const mux = getMux();
   let upload;
   try {
+    const mux = getMux();
     upload = await mux.video.uploads.create({
       cors_origin: origin,
       new_asset_settings: {
