@@ -349,39 +349,54 @@ async function handleGet(request: NextRequest) {
     // `content_drop_videos`) so non-drop drafts stay untouched.
     let recoveredCount = 0;
     try {
-      const { data: approvedComments } = await adminClient
-        .from('post_review_comments')
-        .select('review_link_id, post_review_links:review_link_id (post_id)')
-        .eq('status', 'approved');
+      // Find every drop post that's in 'draft', then check approval state.
+      const { data: draftPosts } = await adminClient
+        .from('scheduled_posts')
+        .select('id')
+        .eq('status', 'draft');
 
-      const approvedPostIds = new Set<string>();
-      for (const c of approvedComments ?? []) {
-        const raw = (c as unknown as { post_review_links: { post_id: string } | { post_id: string }[] | null }).post_review_links;
-        const links = Array.isArray(raw) ? raw : raw ? [raw] : [];
-        for (const link of links) {
-          if (link?.post_id) approvedPostIds.add(link.post_id);
-        }
-      }
+      const draftIds = (draftPosts ?? []).map((r) => (r as { id: string }).id);
 
-      if (approvedPostIds.size > 0) {
-        const { data: approvedDrafts } = await adminClient
-          .from('scheduled_posts')
-          .select('id')
-          .eq('status', 'draft')
-          .in('id', Array.from(approvedPostIds));
+      if (draftIds.length > 0) {
+        // Restrict to drop posts.
+        const { data: dropRows } = await adminClient
+          .from('content_drop_videos')
+          .select('scheduled_post_id')
+          .in('scheduled_post_id', draftIds);
+        const dropDraftIdList = (dropRows ?? []).map(
+          (r) => (r as { scheduled_post_id: string }).scheduled_post_id,
+        );
 
-        const draftIds = (approvedDrafts ?? []).map((r) => (r as { id: string }).id);
-        if (draftIds.length > 0) {
-          // Restrict to drop posts.
-          const { data: dropRows } = await adminClient
-            .from('content_drop_videos')
-            .select('scheduled_post_id')
-            .in('scheduled_post_id', draftIds);
-          const dropDraftIds = (dropRows ?? []).map(
-            (r) => (r as { scheduled_post_id: string }).scheduled_post_id,
-          );
+        if (dropDraftIdList.length > 0) {
+          // Find which of those have an approved review comment.
+          const { data: reviewLinks } = await adminClient
+            .from('post_review_links')
+            .select('id, post_id')
+            .in('post_id', dropDraftIdList);
+          const linkIdToPostId = new Map<string, string>();
+          for (const r of reviewLinks ?? []) {
+            linkIdToPostId.set(
+              (r as { id: string; post_id: string }).id,
+              (r as { id: string; post_id: string }).post_id,
+            );
+          }
 
-          for (const postId of dropDraftIds) {
+          const approvedPostIds = new Set<string>();
+          if (linkIdToPostId.size > 0) {
+            const { data: approvedComments } = await adminClient
+              .from('post_review_comments')
+              .select('review_link_id')
+              .in('review_link_id', Array.from(linkIdToPostId.keys()))
+              .eq('status', 'approved');
+            for (const c of approvedComments ?? []) {
+              const postId = linkIdToPostId.get(
+                (c as { review_link_id: string }).review_link_id,
+              );
+              if (postId) approvedPostIds.add(postId);
+            }
+          }
+
+          for (const postId of approvedPostIds) {
             try {
               const result = await publishScheduledPost(adminClient, postId);
               if (!result.alreadyPublished) {
