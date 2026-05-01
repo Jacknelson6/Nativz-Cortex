@@ -75,21 +75,124 @@ async function handleGet(request: NextRequest) {
 
     for (const post of pendingPosts) {
       try {
+        // APPROVAL GATE — defense in depth.
+        //
+        // Posts that came from a content calendar drop MUST have an explicit
+        // approval comment from the share link before we ship them. The
+        // upstream invariant (`scheduleDrop` only flips draft → scheduled
+        // through `publishScheduledPost`, which is only called from the
+        // share-link approval handler) has broken at least once and put
+        // unapproved posts into the publish queue. We refuse to publish
+        // them here regardless of how they got into 'scheduled' state.
+        //
+        // Non-drop posts (quick-schedule, social ads, etc.) are unaffected:
+        // those flows don't create a `content_drop_videos` row, so the
+        // `from_drop` check below is false and they proceed normally.
+        const { data: dropVideo } = await adminClient
+          .from('content_drop_videos')
+          .select('id')
+          .eq('scheduled_post_id', post.id)
+          .maybeSingle();
+        if (dropVideo) {
+          const { data: reviewLinkRows } = await adminClient
+            .from('post_review_links')
+            .select('id')
+            .eq('post_id', post.id);
+          const reviewLinkIds = (reviewLinkRows ?? []).map(
+            (r) => (r as { id: string }).id,
+          );
+          let approved = false;
+          if (reviewLinkIds.length > 0) {
+            const { count } = await adminClient
+              .from('post_review_comments')
+              .select('id', { count: 'exact', head: true })
+              .in('review_link_id', reviewLinkIds)
+              .eq('status', 'approved');
+            approved = (count ?? 0) > 0;
+          }
+          if (!approved) {
+            // Hard-fail (skip retry): no amount of retries fixes this.
+            // The post must be re-routed through approval.
+            await adminClient
+              .from('scheduled_posts')
+              .update({
+                status: 'failed',
+                failure_reason:
+                  'Approval gate: drop post was queued without an approved review comment. Re-route through the share link approval flow.',
+                retry_count: MAX_RETRIES,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', post.id);
+            console.error(
+              `[publish-cron] BLOCKED unapproved drop post ${post.id} (client ${post.client_id}). ` +
+                `Re-route through share link approval flow.`,
+            );
+            failedCount++;
+            try {
+              await sendFailureNotification(adminClient, {
+                ...post,
+                failure_reason:
+                  'Approval gate: drop post was queued without an approved review comment.',
+              } as Record<string, unknown>);
+            } catch (emailErr) {
+              console.error('Failed to send approval-gate notification:', emailErr);
+            }
+            continue;
+          }
+        }
+
         // Mark as publishing
         await adminClient
           .from('scheduled_posts')
           .update({ status: 'publishing', updated_at: new Date().toISOString() })
           .eq('id', post.id);
 
-        // Get video URL from media
-        const media = post.scheduled_post_media?.[0]?.scheduler_media;
-        if (!media?.storage_path) {
-          throw new Error('No media attached to post');
+        // Resolve which video URL to publish.
+        //
+        // The original cut sits in Supabase Storage (`scheduler-media`
+        // bucket, addressed via `scheduler_media.storage_path`). Revised cuts
+        // live in Mux only — uploaded by the client through the share-link
+        // revision flow, which writes to `content_drop_videos.revised_*`.
+        //
+        // Three cases:
+        //   1. No revision row, or revision never uploaded → publish the
+        //      original from Storage (legacy behaviour).
+        //   2. Revision uploaded AND the Mux MP4 rendition has landed
+        //      (`revised_mp4_url` is non-null) → publish the revision MP4.
+        //      Zernio/Late ingest can't read HLS manifests, so we MUST use
+        //      the static MP4 URL, not the .m3u8 in `revised_video_url`.
+        //   3. Revision uploaded but MP4 rendition still rendering
+        //      (`revised_mp4_url` is null) → throw, which bumps retry_count
+        //      and re-queues with exponential backoff. Mux's capped-1080p
+        //      pack typically lands within ~1 min of upload, so 3 retries
+        //      (2/4/8 min) covers it. We MUST NOT silently fall back to the
+        //      original — that's the bug that shipped unrevised content live.
+        const { data: revisionRow } = await adminClient
+          .from('content_drop_videos')
+          .select('revised_mp4_url, revised_video_uploaded_at')
+          .eq('scheduled_post_id', post.id)
+          .maybeSingle();
+        const revisionUploaded = revisionRow?.revised_video_uploaded_at != null;
+        const revisionReady = revisionRow?.revised_mp4_url != null;
+        if (revisionUploaded && !revisionReady) {
+          throw new Error(
+            'Revision pending: Mux MP4 rendition not ready yet. Cron will retry.',
+          );
         }
 
-        const { data: publicUrl } = adminClient.storage
-          .from('scheduler-media')
-          .getPublicUrl(media.storage_path);
+        let videoUrl: string;
+        if (revisionReady) {
+          videoUrl = revisionRow!.revised_mp4_url as string;
+        } else {
+          const media = post.scheduled_post_media?.[0]?.scheduler_media;
+          if (!media?.storage_path) {
+            throw new Error('No media attached to post');
+          }
+          const { data: publicUrl } = adminClient.storage
+            .from('scheduler-media')
+            .getPublicUrl(media.storage_path);
+          videoUrl = publicUrl.publicUrl;
+        }
 
         // Build platform profile map. Zernio expects its own MongoDB
         // ObjectId (`social_profiles.late_account_id`) as the platform
@@ -141,7 +244,7 @@ async function handleGet(request: NextRequest) {
 
         // Publish via posting service
         const result = await postingService.publishPost({
-          videoUrl: publicUrl.publicUrl,
+          videoUrl,
           caption: post.caption ?? '',
           hashtags: post.hashtags ?? [],
           coverImageUrl: post.cover_image_url ?? undefined,

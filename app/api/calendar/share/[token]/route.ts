@@ -56,6 +56,7 @@ interface DropVideoRow {
   drive_file_name: string | null;
   video_url: string | null;
   revised_video_url: string | null;
+  revised_mp4_url: string | null;
   revised_video_uploaded_at: string | null;
   revised_video_notify_pending: boolean | null;
   mux_upload_id: string | null;
@@ -134,7 +135,7 @@ export async function GET(
       .in('id', link.included_post_ids),
     admin
       .from('content_drop_videos')
-      .select('id, scheduled_post_id, drive_file_name, video_url, revised_video_url, revised_video_uploaded_at, revised_video_notify_pending, mux_upload_id, mux_asset_id, mux_playback_id, mux_status')
+      .select('id, scheduled_post_id, drive_file_name, video_url, revised_video_url, revised_mp4_url, revised_video_uploaded_at, revised_video_notify_pending, mux_upload_id, mux_asset_id, mux_playback_id, mux_status')
       .in('scheduled_post_id', link.included_post_ids),
   ]);
   if (!drop) return NextResponse.json({ error: 'content calendar missing' }, { status: 404 });
@@ -164,6 +165,7 @@ export async function GET(
       if (patch.mux_asset_id !== undefined) row.mux_asset_id = patch.mux_asset_id;
       if (patch.mux_playback_id !== undefined) row.mux_playback_id = patch.mux_playback_id;
       if (patch.revised_video_url !== undefined) row.revised_video_url = patch.revised_video_url;
+      if (patch.revised_mp4_url !== undefined) row.revised_mp4_url = patch.revised_mp4_url;
     });
   }
 

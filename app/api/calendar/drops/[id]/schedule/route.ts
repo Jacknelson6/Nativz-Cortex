@@ -12,6 +12,12 @@ const BodySchema = z.object({
   includedVideoIds: z.array(z.string().uuid()).optional(),
   overrides: z.record(z.string(), z.string()).optional(),
   platforms: z.array(PlatformSchema).optional(),
+  // Defaults to true: posts are inserted as 'draft' and require a share-link
+  // approval comment before they're handed to Zernio. The admin "Schedule"
+  // button always wants this — bypassing it shipped unapproved Weston Funding
+  // and Skibell content into the publish queue. Direct (non-draft) scheduling
+  // is reserved for the script-driven `runCalendarPipeline` callers.
+  draftMode: z.boolean().optional().default(true),
 });
 
 export async function POST(
@@ -25,7 +31,7 @@ export async function POST(
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
-  let body: z.infer<typeof BodySchema> = {};
+  let body: z.infer<typeof BodySchema>;
   try {
     const raw = await req.json().catch(() => ({}));
     body = BodySchema.parse(raw ?? {});
@@ -42,6 +48,7 @@ export async function POST(
       includedVideoIds: body.includedVideoIds,
       overrides: body.overrides,
       platforms: body.platforms,
+      draftMode: body.draftMode,
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {

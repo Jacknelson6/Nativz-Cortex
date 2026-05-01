@@ -141,6 +141,15 @@ export async function scheduleDrop(
         .single();
       if (mediaErr || !media) throw new Error(mediaErr?.message ?? 'Failed to insert media');
 
+      // Always insert as 'draft' first. `publishScheduledPost` is the only
+      // function that should ever flip a post to 'scheduled', and it requires
+      // status='draft' as its precondition. Inserting directly as 'scheduled'
+      // (the previous behaviour when draftMode was false) defeated the
+      // immediate publishScheduledPost call below: it returned early because
+      // status !== 'draft', so late_post_id never got stamped and the post
+      // sat in the queue waiting for the cron to publish it without ever
+      // having been routed through Zernio. That was the root cause of the
+      // unapproved-posts-going-live incident.
       const { data: post, error: postErr } = await admin
         .from('scheduled_posts')
         .insert({
@@ -149,7 +158,7 @@ export async function scheduleDrop(
           caption: video.draft_caption,
           hashtags: video.draft_hashtags ?? [],
           scheduled_at: slot.scheduledAt,
-          status: input.draftMode ? 'draft' : 'scheduled',
+          status: 'draft',
           cover_image_url: video.thumbnail_url,
           post_type: 'reel',
         })

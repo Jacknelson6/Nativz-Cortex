@@ -32,7 +32,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 async function main() {
   const { data: rows, error } = await supabase
     .from('content_drop_videos')
-    .select('id, mux_upload_id, mux_asset_id, mux_status, revised_video_uploaded_at')
+    .select('id, mux_upload_id, mux_asset_id, mux_status, revised_mp4_url, revised_video_uploaded_at')
     .in('mux_status', ['processing', 'uploading'])
     .not('mux_upload_id', 'is', null)
     .order('revised_video_uploaded_at', { ascending: false });
@@ -58,7 +58,7 @@ async function main() {
     console.log(
       `${label} → ${patch.mux_status ?? '(unchanged)'}${
         patch.mux_playback_id ? ` (${patch.mux_playback_id})` : ''
-      }`,
+      }${patch.revised_mp4_url ? ' [+mp4]' : ''}`,
     );
   }
 }

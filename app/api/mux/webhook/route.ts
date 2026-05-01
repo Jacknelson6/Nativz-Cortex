@@ -5,12 +5,17 @@ import { getMux } from '@/lib/mux/client';
 /**
  * POST /api/mux/webhook
  *
- * Receives Mux platform webhooks. The two we actually act on:
+ * Receives Mux platform webhooks. Events we act on:
  *   - video.upload.asset_created — fires when the upload finishes; payload
  *     carries the upload id (top-level `data.id`) and the new asset id
  *     (`data.asset_id`). We use this to attach mux_asset_id to our row.
- *   - video.asset.ready — fires when the asset is fully packaged for
+ *   - video.asset.ready — fires when the asset is fully packaged for HLS
  *     playback; we read the public playback id and flip mux_status='ready'.
+ *   - video.asset.static_renditions.ready — fires when the capped-1080p MP4
+ *     rendition is packaged. We stamp revised_mp4_url so the publish cron has
+ *     a downloadable file (Zernio / Late ingest can't read HLS manifests).
+ *     This event can land BEFORE or AFTER asset.ready, so the handler is
+ *     idempotent and pulls the playback id from the event payload directly.
  *
  * Everything else is logged + ignored. Verification uses
  * `MUX_WEBHOOK_SECRET` (set in .env.local once the webhook is created in the
@@ -118,6 +123,75 @@ export async function POST(req: Request) {
       }
     } else if (!matchedAsset) {
       console.warn('[mux-webhook] asset.ready matched no row and no upload_id fallback', {
+        assetId,
+      });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (eventType === 'video.asset.static_renditions.ready') {
+    // MP4 rendition pack landed. Stamp revised_mp4_url with the stable
+    // capped-1080p URL Mux exposes. The publish cron treats a populated
+    // revised_video_uploaded_at + null revised_mp4_url as "still rendering"
+    // and refuses to publish — so this stamp is what unblocks it.
+    const assetId = typeof data.id === 'string' ? data.id : null;
+    const uploadId = typeof data.upload_id === 'string' ? data.upload_id : null;
+    if (!assetId) {
+      console.warn('[mux-webhook] static_renditions.ready missing asset id');
+      return NextResponse.json({ ok: true });
+    }
+
+    // Pull playback id from the payload (data is the asset object). If it's
+    // not there for some reason, retrieve the asset directly so we don't
+    // silently miss the URL.
+    const playbackIds = Array.isArray(data.playback_ids)
+      ? (data.playback_ids as Array<Record<string, unknown>>)
+      : [];
+    let publicId = playbackIds.find((p) => p.policy === 'public');
+    let playbackId = typeof publicId?.id === 'string' ? publicId.id : null;
+    if (!playbackId) {
+      try {
+        const asset = await mux.video.assets.retrieve(assetId);
+        publicId = asset.playback_ids?.find((p) => p.policy === 'public') as
+          | Record<string, unknown>
+          | undefined;
+        playbackId = typeof publicId?.id === 'string' ? publicId.id : null;
+      } catch (err) {
+        console.warn('[mux-webhook] static_renditions.ready asset retrieve failed', {
+          assetId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    if (!playbackId) {
+      console.warn('[mux-webhook] static_renditions.ready no public playback id', { assetId });
+      return NextResponse.json({ ok: true });
+    }
+
+    const update = {
+      revised_mp4_url: `https://stream.mux.com/${playbackId}/capped-1080p.mp4`,
+    };
+
+    const byAsset = await admin
+      .from('content_drop_videos')
+      .update(update)
+      .eq('mux_asset_id', assetId)
+      .select('id');
+    const matchedAsset = (byAsset.data ?? []).length > 0;
+    if (!matchedAsset && uploadId) {
+      const byUpload = await admin
+        .from('content_drop_videos')
+        .update(update)
+        .eq('mux_upload_id', uploadId)
+        .select('id');
+      if ((byUpload.data ?? []).length === 0) {
+        console.warn('[mux-webhook] static_renditions.ready matched no row', {
+          assetId,
+          uploadId,
+        });
+      }
+    } else if (!matchedAsset) {
+      console.warn('[mux-webhook] static_renditions.ready matched no row, no upload_id', {
         assetId,
       });
     }

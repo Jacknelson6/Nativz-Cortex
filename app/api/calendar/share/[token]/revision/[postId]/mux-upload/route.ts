@@ -85,6 +85,13 @@ export async function POST(
         // Reasonable defaults for short-form vertical video. Mux figures out
         // resolution from the source.
         video_quality: 'basic',
+        // Static MP4 rendition is REQUIRED for the publish cron — Zernio /
+        // Late ingest expects a downloadable mp4, not an HLS manifest. Without
+        // this, mux_status flips to 'ready' but no MP4 ever gets generated, so
+        // revised_mp4_url stays null and the cron correctly refuses to fall
+        // back to the unrevised storage_path. capped-1080p keeps the renditions
+        // small enough for fast TikTok/Reels ingest.
+        mp4_support: 'capped-1080p',
       },
     });
   } catch (err) {

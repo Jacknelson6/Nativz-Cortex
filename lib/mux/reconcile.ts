@@ -16,6 +16,7 @@ export type ReconcileTarget = {
   mux_upload_id: string | null;
   mux_asset_id: string | null;
   mux_status: string | null;
+  revised_mp4_url?: string | null;
 };
 
 export type ReconcilePatch = {
@@ -23,6 +24,7 @@ export type ReconcilePatch = {
   mux_asset_id?: string;
   mux_playback_id?: string;
   revised_video_url?: string;
+  revised_mp4_url?: string;
 };
 
 export async function reconcileMuxRow(
@@ -75,12 +77,22 @@ export async function reconcileMuxRow(
     patch.mux_status = 'processing';
   }
 
+  // Static MP4 rendition. The publish cron requires this — Zernio / Late
+  // ingest can't read HLS manifests. Mux exposes it at a stable URL once
+  // static_renditions.status flips to 'ready'. We stamp it independently of
+  // mux_status so a partial state (HLS ready, MP4 still rendering) is
+  // observable instead of being collapsed into a single boolean.
+  if (playbackId && asset.static_renditions?.status === 'ready' && !row.revised_mp4_url) {
+    patch.revised_mp4_url = `https://stream.mux.com/${playbackId}/capped-1080p.mp4`;
+  }
+
   // Skip the write if every field already matches — avoids needless
   // contention on hot rows.
   const noChange =
     patch.mux_status === row.mux_status &&
     patch.mux_asset_id === row.mux_asset_id &&
-    patch.mux_playback_id === undefined;
+    patch.mux_playback_id === undefined &&
+    patch.revised_mp4_url === undefined;
   if (noChange) return null;
 
   const { error } = await admin

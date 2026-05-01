@@ -12,6 +12,8 @@ import {
   MessagesSquare,
   Send,
   RefreshCcw,
+  Users,
+  BellOff,
 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -40,6 +42,14 @@ interface SendPreview {
   first_sent_at: string | null;
   last_sent_at: string | null;
   send_count: number;
+}
+
+interface ContactRow {
+  id: string;
+  email: string;
+  name: string | null;
+  role: string | null;
+  notifications_enabled: boolean;
 }
 
 /**
@@ -87,6 +97,12 @@ export function CalendarLinkDetail({
   const [revoking, setRevoking] = useState(false);
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState<'details' | 'history'>('details');
+  // Recipients live on the detail panel itself (not just the send preview)
+  // so admins see who'll receive the email *before* clicking send. Empty
+  // state matters: if a brand has zero contacts the underlying /send route
+  // returns 400, which previously surfaced as a silently-failing button.
+  const [contacts, setContacts] = useState<ContactRow[] | null>(null);
+  const [contactsLoading, setContactsLoading] = useState(false);
 
   // Send preview / dialog state. `null` = closed; setting to a variant
   // pops the modal and kicks off the GET preview fetch.
@@ -112,6 +128,35 @@ export function CalendarLinkDetail({
       setPreviewError(null);
     }
   }, [open, link?.id]);
+
+  // Fetch the brand's review contacts so the Recipients section reflects
+  // the same eligibility filter the /send route uses on the server.
+  const clientId = link?.client_id ?? null;
+  useEffect(() => {
+    if (!open || !clientId) {
+      setContacts(null);
+      return;
+    }
+    let cancelled = false;
+    setContactsLoading(true);
+    fetch(
+      `/api/calendar/review/contacts?clientId=${encodeURIComponent(clientId)}`,
+      { cache: 'no-store' },
+    )
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('failed'))))
+      .then((data: { contacts: ContactRow[] }) => {
+        if (!cancelled) setContacts(data.contacts ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setContacts([]);
+      })
+      .finally(() => {
+        if (!cancelled) setContactsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, clientId]);
 
   const shareUrl = useMemo(() => {
     if (!link?.token) return '';
@@ -243,6 +288,19 @@ export function CalendarLinkDetail({
   // Hide send actions on terminal links — there's nothing to chase, and
   // clicking through would burn an email on a closed loop.
   const canSend = !isExpired && !isAbandoned && link.post_count > 0;
+  // Mirror the server filter in /api/calendar/share/[token]/send so the
+  // count + disabled-state match what the route will accept.
+  const eligibleContacts = (contacts ?? []).filter(
+    (c) => !!c.email && c.notifications_enabled !== false,
+  );
+  const sendDisabledReason =
+    contactsLoading
+      ? null
+      : !contacts || contacts.length === 0
+        ? 'Add a review contact to send the calendar.'
+        : eligibleContacts.length === 0
+          ? 'Every contact has notifications muted.'
+          : null;
 
   return (
     <>
@@ -262,7 +320,13 @@ export function CalendarLinkDetail({
         onClose={closeSendPreview}
         onSend={confirmSend}
       />
-    <Dialog open={open && !previewVariant} onClose={onClose} title="" maxWidth="2xl" bodyClassName="p-0">
+    {/* Both dialogs render at once when the preview is open. The native
+        <dialog> top-layer stack handles ordering, which avoids the
+        old bug where toggling open=false on this parent fired a
+        programmatic close event — that cascaded into the parent's
+        onClose prop, unmounted the whole tree, and dropped the preview
+        state before SendPreviewDialog could render. */}
+    <Dialog open={open} onClose={onClose} title="" maxWidth="2xl" bodyClassName="p-0">
       <div className="flex h-full max-h-[80vh] flex-col">
         {/* Header */}
         <div className="flex items-start gap-3 border-b border-nativz-border py-4 pl-6 pr-14">
@@ -347,39 +411,80 @@ export function CalendarLinkDetail({
                 </p>
               )}
             </div>
-
-            {/* Send affordances. Hidden once the link is terminal (expired
-                or abandoned) or when the project has zero posts — sending
-                an empty calendar isn't a real workflow. */}
-            {canSend && (
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                {!hasBeenSent ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => openSendPreview('initial')}
-                  >
-                    <Send size={13} />
-                    Send share link
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => openSendPreview('revised')}
-                  >
-                    <RefreshCcw size={13} />
-                    Resend (revised)
-                  </Button>
-                )}
-                {hasBeenSent && link.last_sent_at && (
-                  <span className="text-[11px] text-text-muted">
-                    Last sent {formatRelative(link.last_sent_at)}
-                    {link.send_count > 1 ? ` · ${link.send_count} sends` : ''}
-                  </span>
-                )}
-              </div>
+            {hasBeenSent && link.last_sent_at && (
+              <p className="text-[11px] text-text-muted">
+                Last sent {formatRelative(link.last_sent_at)}
+                {link.send_count > 1 ? ` · ${link.send_count} sends` : ''}
+              </p>
             )}
+          </Section>
+
+          {/* Recipients. Pulls from `content_drop_review_contacts` so the
+              admin sees who'll get the email *before* clicking Send. The
+              empty state surfaces the actual reason a send would fail
+              (no contacts) instead of the previous silent-fail UX. */}
+          <Section
+            label={
+              eligibleContacts.length > 0
+                ? `Recipients (${eligibleContacts.length})`
+                : 'Recipients'
+            }
+          >
+            <div className="rounded-lg border border-nativz-border bg-surface p-3">
+              {contactsLoading ? (
+                <p className="text-[12px] text-text-muted">Loading recipients…</p>
+              ) : !contacts || contacts.length === 0 ? (
+                <div className="flex items-start gap-3">
+                  <Users size={14} className="mt-0.5 shrink-0 text-text-muted" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12px] text-text-secondary">
+                      No review contacts yet for {link.client_name ?? 'this brand'}.
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-text-muted">
+                      Add at least one in Review → Notifications before sending.
+                    </p>
+                  </div>
+                  <a
+                    href="/review"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md bg-accent-surface/40 px-2.5 text-[11px] font-medium text-accent-text hover:bg-accent-surface/60"
+                  >
+                    Manage
+                    <ExternalLink size={10} />
+                  </a>
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {contacts.map((c) => (
+                    <li
+                      key={c.id}
+                      className="flex items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] text-text-primary">
+                          {c.name?.trim() ? c.name : c.email}
+                        </p>
+                        {c.name?.trim() && (
+                          <p className="truncate text-[11px] text-text-muted">
+                            {c.email}
+                          </p>
+                        )}
+                      </div>
+                      {!c.notifications_enabled && (
+                        <span
+                          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-text-muted/20 bg-text-muted/10 px-2 py-0.5 text-[10px] font-medium text-text-muted"
+                          title="Notifications muted for this contact"
+                        >
+                          <BellOff size={10} />
+                          muted
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </Section>
 
           {/* Counts: approved / revising / pending. Skipped when the
@@ -454,11 +559,15 @@ export function CalendarLinkDetail({
             </dl>
           </Section>
 
-          {/* Footer actions. Revoke lives down here on purpose — it's
-              destructive enough that putting it in the header next to
-              Close would invite mis-clicks. */}
-          {!isExpired && (
-            <div className="flex justify-end border-t border-nativz-border pt-4">
+        </div>
+        )}
+
+        {/* Footer actions. Revoke (destructive) sits to the left of the
+            primary Send/Resend CTA. Both are right-aligned so the
+            destructive button never lands closest to the close X. */}
+        {tab === 'details' && (canSend || !isExpired) && (
+          <div className="flex items-center justify-end gap-2 border-t border-nativz-border px-6 py-4">
+            {!isExpired && (
               <Button
                 type="button"
                 variant="ghost"
@@ -469,9 +578,22 @@ export function CalendarLinkDetail({
               >
                 {revoking ? 'Revoking...' : 'Revoke link'}
               </Button>
-            </div>
-          )}
-        </div>
+            )}
+            {canSend && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() =>
+                  openSendPreview(hasBeenSent ? 'revised' : 'initial')
+                }
+                disabled={!!sendDisabledReason}
+                title={sendDisabledReason ?? undefined}
+              >
+                {hasBeenSent ? <RefreshCcw size={13} /> : <Send size={13} />}
+                {hasBeenSent ? 'Resend (revised)' : 'Send share link'}
+              </Button>
+            )}
+          </div>
         )}
       </div>
     </Dialog>
