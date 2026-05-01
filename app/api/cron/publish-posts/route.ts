@@ -488,9 +488,48 @@ async function handleGet(request: NextRequest) {
           ),
         );
 
-        const staleDropPosts = candidates.filter((p) =>
+        const staleDropPostsAll = candidates.filter((p) =>
           dropPostIds.has((p as { id: string }).id),
         );
+
+        // Skip drop posts that already have an approved review comment.
+        // Those are recovery-sweep candidates that haven't transitioned yet
+        // (e.g. transient publish error); don't false-alarm Jack as if the
+        // client never approved.
+        let staleDropPosts = staleDropPostsAll;
+        if (staleDropPostsAll.length > 0) {
+          const staleIds = staleDropPostsAll.map(
+            (p) => (p as { id: string }).id,
+          );
+          const { data: linkRows } = await adminClient
+            .from('post_review_links')
+            .select('id, post_id')
+            .in('post_id', staleIds);
+          const linkIdToPostId = new Map<string, string>();
+          for (const r of linkRows ?? []) {
+            linkIdToPostId.set(
+              (r as { id: string; post_id: string }).id,
+              (r as { id: string; post_id: string }).post_id,
+            );
+          }
+          const approvedPostIds = new Set<string>();
+          if (linkIdToPostId.size > 0) {
+            const { data: approvedComments } = await adminClient
+              .from('post_review_comments')
+              .select('review_link_id')
+              .in('review_link_id', Array.from(linkIdToPostId.keys()))
+              .eq('status', 'approved');
+            for (const c of approvedComments ?? []) {
+              const postId = linkIdToPostId.get(
+                (c as { review_link_id: string }).review_link_id,
+              );
+              if (postId) approvedPostIds.add(postId);
+            }
+          }
+          staleDropPosts = staleDropPostsAll.filter(
+            (p) => !approvedPostIds.has((p as { id: string }).id),
+          );
+        }
 
         for (const post of staleDropPosts) {
           const row = post as {
