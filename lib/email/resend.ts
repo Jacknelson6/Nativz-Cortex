@@ -1392,12 +1392,14 @@ export function buildCalendarShareSendHtml(opts: {
   // Initial: mirror sendCalendarDeliveryEmail. Bold the "{postCount} posts"
   // span when the body still contains the literal substring (it always does
   // in the default; admin edits may strip it, in which case the highlight
-  // silently noops which is fine).
+  // silently noops which is fine). Apply the wrap AFTER paragraphizing so
+  // `escapeHtml` inside `messageToHtmlParagraphs` doesn't escape our `<span>`
+  // tags into literal `&lt;span...&gt;` text in the rendered email.
   const postsWord = opts.postCount === 1 ? 'post' : 'posts';
   const literal = `${opts.postCount} ${postsWord}`;
   const highlighted = `<span class="highlight">${literal}</span>`;
-  const messageWithBold = opts.message.replace(literal, highlighted);
-  const bodyHtml = messageToHtmlParagraphs(messageWithBold);
+  const paragraphHtml = messageToHtmlParagraphs(opts.message);
+  const bodyHtml = paragraphHtml.replace(literal, highlighted);
 
   return layout(`
     ${bodyHtml}

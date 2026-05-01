@@ -105,26 +105,12 @@ async function loadSendContext(token: string) {
   const clientName = drop.clients?.name ?? 'your brand';
   const agency = getBrandFromAgency(drop.clients?.agency ?? null);
 
-  // Date range scoped to the share link's included posts. Falls back to
-  // the parent drop's range when posts have no scheduled_at yet.
+  // Use the drop's date range so the email matches the date shown in the
+  // share-link dialog header (`drop.start_date`/`end_date` are Postgres
+  // DATE columns, immune to the UTC-slice drift that bit scheduled_at).
   const includedIds = link.included_post_ids ?? [];
-  let startDate = drop.start_date ?? new Date().toISOString().slice(0, 10);
-  let endDate = drop.end_date ?? startDate;
-  if (includedIds.length > 0) {
-    const { data: posts } = await admin
-      .from('scheduled_posts')
-      .select('scheduled_at')
-      .in('id', includedIds);
-    const dates = (posts ?? [])
-      .map((p) => p.scheduled_at)
-      .filter((d): d is string => !!d)
-      .map((d) => d.slice(0, 10))
-      .sort();
-    if (dates.length > 0) {
-      startDate = dates[0];
-      endDate = dates[dates.length - 1];
-    }
-  }
+  const startDate = drop.start_date ?? new Date().toISOString().slice(0, 10);
+  const endDate = drop.end_date ?? startDate;
 
   const eligible = await getClientNotificationRecipients(admin, clientId);
 

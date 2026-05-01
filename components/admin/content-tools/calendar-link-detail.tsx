@@ -613,10 +613,21 @@ function SendPreviewDialog({
 }) {
   const title =
     variant === 'initial' ? 'Send share link' : 'Resend (revised)';
+  const subtitle =
+    variant === 'initial'
+      ? 'Review the recipients and copy before the calendar goes out.'
+      : 'Send an updated link with the latest revisions and posts.';
 
   return (
-    <Dialog open={open} onClose={onClose} title={title} maxWidth="2xl" bodyClassName="p-0">
+    <Dialog open={open} onClose={onClose} title="" maxWidth="2xl" bodyClassName="p-0">
       <div className="flex h-full max-h-[80vh] flex-col">
+        {/* Header — match parent dialog padding so the title clears the
+            close button on the right and the dialog edge on the left. */}
+        <div className="border-b border-nativz-border py-4 pl-6 pr-14">
+          <p className="text-lg font-semibold text-text-primary">{title}</p>
+          <p className="mt-0.5 text-xs text-text-muted">{subtitle}</p>
+        </div>
+
         {loading ? (
           <div className="flex-1 p-8 text-sm text-text-muted">Loading preview…</div>
         ) : error ? (
