@@ -59,11 +59,15 @@ export async function GET(req: Request) {
   if (!clientId) {
     return NextResponse.json({ error: 'clientId required' }, { status: 400 });
   }
-  // When set, falls back to the brand profile's POC roster (`contacts`
-  // table) if no review-specific contacts exist for the brand. Used by
-  // the calendar share-link dialog so admins don't have to re-enter the
-  // same people they already added to the brand profile.
+  // `fallback=brand` → return brand-profile POCs only when there are
+  // zero review-specific overrides (used by the share-link dialog so
+  // admins don't have to re-enter the same people).
+  // `include=brand`  → always merge brand-profile POCs alongside any
+  // review overrides, deduped by email (review wins). Used by the
+  // `/review` Notifications panel so users can see who'll be emailed
+  // by default and choose to customize per-contact.
   const fallback = url.searchParams.get('fallback')?.trim() === 'brand';
+  const include = url.searchParams.get('include')?.trim() === 'brand';
 
   const access = await resolveClientAccess(user.id, clientId);
   if (!access.allowed) {
@@ -82,7 +86,11 @@ export async function GET(req: Request) {
   }
 
   const reviewContacts = (data ?? []).map((c) => ({ ...c, source: 'review' as const }));
-  if (reviewContacts.length > 0 || !fallback) {
+
+  if (!include && reviewContacts.length > 0) {
+    return NextResponse.json({ contacts: reviewContacts });
+  }
+  if (!include && !fallback) {
     return NextResponse.json({ contacts: reviewContacts });
   }
 
@@ -95,8 +103,10 @@ export async function GET(req: Request) {
     return NextResponse.json({ contacts: reviewContacts });
   }
 
+  const reviewEmails = new Set(reviewContacts.map((c) => c.email.toLowerCase()));
   const brandContacts = (brand ?? [])
     .filter((c): c is { id: string; email: string; name: string | null; role: string | null } => !!c.email)
+    .filter((c) => !reviewEmails.has(c.email.toLowerCase()))
     .map((c) => ({
       id: c.id,
       client_id: clientId,
@@ -110,6 +120,9 @@ export async function GET(req: Request) {
       source: 'brand' as const,
     }));
 
+  if (include) {
+    return NextResponse.json({ contacts: [...reviewContacts, ...brandContacts] });
+  }
   return NextResponse.json({ contacts: brandContacts });
 }
 

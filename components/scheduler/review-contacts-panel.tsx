@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, Mail, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, Mail, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -38,8 +38,12 @@ interface ContactRow {
   role: string | null;
   notifications_enabled: boolean;
   followup_cadence: Cadence;
-  created_at: string;
-  updated_at: string;
+  created_at: string | null;
+  updated_at: string | null;
+  /** 'brand' rows come from the brand-profile POC roster as informational
+   *  defaults. They aren't editable in place; the user has to click
+   *  "Customize" first to promote them into `content_drop_review_contacts`. */
+  source?: 'review' | 'brand';
 }
 
 interface ReviewContactsPanelProps {
@@ -69,7 +73,7 @@ export function ReviewContactsPanel({
     setLoading(true);
     try {
       const res = await fetch(
-        `/api/calendar/review/contacts?clientId=${encodeURIComponent(clientId)}`,
+        `/api/calendar/review/contacts?clientId=${encodeURIComponent(clientId)}&include=brand`,
         { cache: 'no-store' },
       );
       if (!res.ok) throw new Error('Failed to load contacts');
@@ -88,14 +92,22 @@ export function ReviewContactsPanel({
   }, [clientId]);
 
   // Bubble up the "all off" signal so the parent can show a brand-wide
-  // banner if needed (and so external send flows can decide what to do).
+  // banner. Brand-sourced rows are always treated as enabled (the send
+  // route uses them as fallback recipients), so the brand is only
+  // "effectively muted" when there are no brand fallbacks AND every
+  // review override is off.
   useEffect(() => {
     if (loading || contacts.length === 0) {
       onAllOffChange?.(false);
       return;
     }
-    const allOff = contacts.every((c) => !c.notifications_enabled);
-    onAllOffChange?.(allOff);
+    const hasBrandFallback = contacts.some((c) => c.source === 'brand');
+    const reviewRows = contacts.filter((c) => c.source !== 'brand');
+    if (hasBrandFallback || reviewRows.length === 0) {
+      onAllOffChange?.(false);
+      return;
+    }
+    onAllOffChange?.(reviewRows.every((c) => !c.notifications_enabled));
   }, [contacts, loading, onAllOffChange]);
 
   async function commitToggle(id: string, enabled: boolean) {
@@ -164,6 +176,38 @@ export function ReviewContactsPanel({
     } catch (err) {
       setContacts(prev);
       toast.error(err instanceof Error ? err.message : 'Delete failed');
+    }
+  }
+
+  // "Customize" on a brand-sourced row promotes it into a real
+  // review_contacts row so the user can toggle notifications, change
+  // cadence, or remove it. The brand profile entry stays untouched —
+  // this only adds an override.
+  async function customizeBrandContact(brandRow: ContactRow) {
+    try {
+      const res = await fetch('/api/calendar/review/contacts', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          clientId,
+          email: brandRow.email,
+          name: brandRow.name,
+          role: brandRow.role,
+          notifications_enabled: true,
+          followup_cadence: brandRow.followup_cadence,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? 'Failed to customize contact');
+      const promoted = data.contact as ContactRow;
+      setContacts((prev) => [
+        ...prev.filter(
+          (c) => !(c.source === 'brand' && c.email.toLowerCase() === brandRow.email.toLowerCase()),
+        ),
+        { ...promoted, source: 'review' },
+      ]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to customize contact');
     }
   }
 
@@ -241,47 +285,74 @@ export function ReviewContactsPanel({
           </div>
         ) : (
           <ul className="divide-y divide-nativz-border/60">
-            {contacts.map((c) => (
-              <li
-                key={c.id}
-                className="flex flex-wrap items-center gap-3 px-5 py-3.5 sm:flex-nowrap"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-text-primary">
-                    {c.name || c.email}
-                  </div>
-                  <div className="truncate text-xs text-text-muted">
-                    {c.name ? `${c.email}${c.role ? ' · ' + c.role : ''}` : c.role || '—'}
-                  </div>
-                </div>
-
-                <Select
-                  value={c.followup_cadence}
-                  onChange={(e) => updateCadence(c.id, e.target.value as Cadence)}
-                  className="h-9 w-44 py-0"
-                  aria-label="Follow-up cadence"
-                  options={(Object.keys(CADENCE_LABELS) as Cadence[]).map((k) => ({
-                    value: k,
-                    label: CADENCE_LABELS[k],
-                  }))}
-                />
-
-                <ToggleSwitch
-                  checked={c.notifications_enabled}
-                  onChange={(v) => onToggleClick(c, v)}
-                  ariaLabel={`Notifications for ${c.email}`}
-                />
-
-                <button
-                  type="button"
-                  onClick={() => deleteContact(c.id)}
-                  className="inline-flex size-8 items-center justify-center rounded-md text-text-muted hover:bg-status-danger/10 hover:text-status-danger"
-                  aria-label={`Remove ${c.email}`}
+            {contacts.map((c) => {
+              const isBrand = c.source === 'brand';
+              return (
+                <li
+                  key={`${c.source ?? 'review'}-${c.id}`}
+                  className="flex flex-wrap items-center gap-3 px-5 py-3.5 sm:flex-nowrap"
                 >
-                  <Trash2 className="size-3.5" />
-                </button>
-              </li>
-            ))}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium text-text-primary">
+                        {c.name || c.email}
+                      </span>
+                      {isBrand && (
+                        <span
+                          title="Coming from this brand's profile contacts. Click Customize to override notification settings just for content review."
+                          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-accent-text/25 bg-accent-text/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent-text"
+                        >
+                          From brand profile
+                        </span>
+                      )}
+                    </div>
+                    <div className="truncate text-xs text-text-muted">
+                      {c.name ? `${c.email}${c.role ? ' · ' + c.role : ''}` : c.role || '—'}
+                    </div>
+                  </div>
+
+                  <Select
+                    value={c.followup_cadence}
+                    onChange={(e) => updateCadence(c.id, e.target.value as Cadence)}
+                    className="h-9 w-44 py-0"
+                    aria-label="Follow-up cadence"
+                    disabled={isBrand}
+                    options={(Object.keys(CADENCE_LABELS) as Cadence[]).map((k) => ({
+                      value: k,
+                      label: CADENCE_LABELS[k],
+                    }))}
+                  />
+
+                  <ToggleSwitch
+                    checked={c.notifications_enabled}
+                    onChange={(v) => (isBrand ? void customizeBrandContact(c) : onToggleClick(c, v))}
+                    ariaLabel={`Notifications for ${c.email}`}
+                    disabled={isBrand}
+                  />
+
+                  {isBrand ? (
+                    <button
+                      type="button"
+                      onClick={() => void customizeBrandContact(c)}
+                      className="inline-flex h-8 items-center gap-1 rounded-md border border-nativz-border px-2.5 text-xs font-medium text-text-secondary hover:border-accent-text/40 hover:bg-accent-text/10 hover:text-accent-text"
+                      aria-label={`Customize notification settings for ${c.email}`}
+                    >
+                      <Sparkles className="size-3.5" />
+                      Customize
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => deleteContact(c.id)}
+                      className="inline-flex size-8 items-center justify-center rounded-md text-text-muted hover:bg-status-danger/10 hover:text-status-danger"
+                      aria-label={`Remove ${c.email}`}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
 
@@ -339,10 +410,12 @@ function ToggleSwitch({
   checked,
   onChange,
   ariaLabel,
+  disabled = false,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   ariaLabel: string;
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -353,7 +426,8 @@ function ToggleSwitch({
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
         checked ? 'bg-accent-text' : 'bg-nativz-border'
-      }`}
+      } ${disabled ? 'opacity-60' : ''}`}
+      title={disabled ? 'Click Customize first to change this' : undefined}
     >
       <span
         className={`inline-block size-3.5 transform rounded-full bg-background transition-transform ${
