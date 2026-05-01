@@ -348,31 +348,43 @@ async function handleGet(request: NextRequest) {
     // double-firing is safe. We only touch drop posts (rows linked from
     // `content_drop_videos`) so non-drop drafts stay untouched.
     let recoveredCount = 0;
+    const sweepDiag = {
+      draftCount: 0,
+      dropDraftCount: 0,
+      reviewLinkCount: 0,
+      approvedPostCount: 0,
+      attemptErrors: [] as string[],
+    };
     try {
       // Find every drop post that's in 'draft', then check approval state.
-      const { data: draftPosts } = await adminClient
+      const { data: draftPosts, error: draftErr } = await adminClient
         .from('scheduled_posts')
         .select('id')
         .eq('status', 'draft');
+      if (draftErr) sweepDiag.attemptErrors.push(`drafts: ${draftErr.message}`);
 
       const draftIds = (draftPosts ?? []).map((r) => (r as { id: string }).id);
+      sweepDiag.draftCount = draftIds.length;
 
       if (draftIds.length > 0) {
         // Restrict to drop posts.
-        const { data: dropRows } = await adminClient
+        const { data: dropRows, error: dropErr } = await adminClient
           .from('content_drop_videos')
           .select('scheduled_post_id')
           .in('scheduled_post_id', draftIds);
+        if (dropErr) sweepDiag.attemptErrors.push(`drops: ${dropErr.message}`);
         const dropDraftIdList = (dropRows ?? []).map(
           (r) => (r as { scheduled_post_id: string }).scheduled_post_id,
         );
+        sweepDiag.dropDraftCount = dropDraftIdList.length;
 
         if (dropDraftIdList.length > 0) {
           // Find which of those have an approved review comment.
-          const { data: reviewLinks } = await adminClient
+          const { data: reviewLinks, error: linkErr } = await adminClient
             .from('post_review_links')
             .select('id, post_id')
             .in('post_id', dropDraftIdList);
+          if (linkErr) sweepDiag.attemptErrors.push(`links: ${linkErr.message}`);
           const linkIdToPostId = new Map<string, string>();
           for (const r of reviewLinks ?? []) {
             linkIdToPostId.set(
@@ -380,14 +392,16 @@ async function handleGet(request: NextRequest) {
               (r as { id: string; post_id: string }).post_id,
             );
           }
+          sweepDiag.reviewLinkCount = linkIdToPostId.size;
 
           const approvedPostIds = new Set<string>();
           if (linkIdToPostId.size > 0) {
-            const { data: approvedComments } = await adminClient
+            const { data: approvedComments, error: approvedErr } = await adminClient
               .from('post_review_comments')
               .select('review_link_id')
               .in('review_link_id', Array.from(linkIdToPostId.keys()))
               .eq('status', 'approved');
+            if (approvedErr) sweepDiag.attemptErrors.push(`approved: ${approvedErr.message}`);
             for (const c of approvedComments ?? []) {
               const postId = linkIdToPostId.get(
                 (c as { review_link_id: string }).review_link_id,
@@ -395,6 +409,7 @@ async function handleGet(request: NextRequest) {
               if (postId) approvedPostIds.add(postId);
             }
           }
+          sweepDiag.approvedPostCount = approvedPostIds.size;
 
           for (const postId of approvedPostIds) {
             try {
@@ -404,12 +419,16 @@ async function handleGet(request: NextRequest) {
                 console.log(`[publish-cron] recovered approved draft ${postId} → Zernio ${result.externalPostId}`);
               }
             } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              sweepDiag.attemptErrors.push(`${postId}: ${msg}`);
               console.error(`[publish-cron] failed to recover approved draft ${postId}:`, err);
             }
           }
         }
       }
     } catch (recoverErr) {
+      const msg = recoverErr instanceof Error ? recoverErr.message : String(recoverErr);
+      sweepDiag.attemptErrors.push(`outer: ${msg}`);
       console.error('[publish-cron] approved-draft recovery sweep failed:', recoverErr);
     }
 
@@ -495,6 +514,7 @@ async function handleGet(request: NextRequest) {
       failed: failedCount,
       recovered_approved: recoveredCount,
       stale_alerted: staleAlertedCount,
+      _diag: sweepDiag,
     });
   } catch (error) {
     console.error('POST /api/cron/publish-posts error:', error);
