@@ -190,11 +190,21 @@ export function YearMatrixClient({ year, periods, members, entries }: YearMatrix
                 <th className="text-left font-medium px-3 py-2 w-24">Half</th>
                 {columns.map((col) => (
                   <th key={col.key} className="text-right font-medium px-3 py-2 whitespace-nowrap">
-                    {col.label}
-                    {col.kind === 'other' && (
-                      <span className="ml-1 text-[9px] uppercase tracking-wide text-text-muted">
-                        ext
-                      </span>
+                    {col.kind === 'member' ? (
+                      <Link
+                        href={`/admin/accounting/editor/${col.key}`}
+                        className="hover:text-accent-text"
+                        title={`All-time payroll for ${col.label}`}
+                      >
+                        {col.label}
+                      </Link>
+                    ) : (
+                      <>
+                        {col.label}
+                        <span className="ml-1 text-[9px] uppercase tracking-wide text-text-muted">
+                          ext
+                        </span>
+                      </>
                     )}
                   </th>
                 ))}

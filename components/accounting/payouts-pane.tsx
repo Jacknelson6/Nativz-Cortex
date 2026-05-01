@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   ChevronDown,
   ChevronRight,
@@ -8,6 +9,7 @@ import {
   ExternalLink,
   Loader2,
   Check,
+  ArrowUpRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -255,16 +257,27 @@ export function PayoutsPane({ periodId, periodLabel, entries, clients }: Payouts
                   >
                     {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => toggleExpand(key)}
-                    className="truncate text-left text-sm font-medium text-text-primary hover:text-accent"
-                  >
-                    {row.display_name}
-                    <span className="ml-2 text-xs font-normal text-text-muted">
-                      {row.entry_count} {row.entry_count === 1 ? 'entry' : 'entries'}
-                    </span>
-                  </button>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(key)}
+                      className="truncate text-left text-sm font-medium text-text-primary hover:text-accent"
+                    >
+                      {row.display_name}
+                      <span className="ml-2 text-xs font-normal text-text-muted">
+                        {row.entry_count} {row.entry_count === 1 ? 'entry' : 'entries'}
+                      </span>
+                    </button>
+                    {row.team_member_id && (
+                      <Link
+                        href={`/admin/accounting/editor/${row.team_member_id}`}
+                        className="shrink-0 text-text-muted hover:text-accent-text"
+                        title="Open editor's cross-period view"
+                      >
+                        <ArrowUpRight size={14} />
+                      </Link>
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-1">
                     {row.entry_types.map((t) => (
                       <span
