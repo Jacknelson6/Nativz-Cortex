@@ -44,7 +44,8 @@ async function handleGet(request: NextRequest) {
             id,
             platform,
             username,
-            access_token_ref
+            access_token_ref,
+            late_account_id
           )
         ),
         scheduled_post_media (
@@ -90,20 +91,46 @@ async function handleGet(request: NextRequest) {
           .from('scheduler-media')
           .getPublicUrl(media.storage_path);
 
-        // Build platform profile map
-        const platformProfiles = (post.scheduled_post_platforms ?? []).map(
-          (spp: Record<string, unknown>) => {
+        // Build platform profile map. Zernio expects its own MongoDB
+        // ObjectId (`social_profiles.late_account_id`) as the platform
+        // accountId, NOT our internal UUID. Drop any spp rows whose
+        // social profile hasn't been connected to Zernio yet (no
+        // late_account_id) -- they'd 400 anyway. Keep an internal
+        // map so we can reverse-lookup the spp row when Zernio echoes
+        // accountId back in the publish response.
+        const platformProfiles = (post.scheduled_post_platforms ?? [])
+          .map((spp: Record<string, unknown>) => {
             const profile = spp.social_profiles as Record<string, unknown> | null;
+            const lateAccountId = (profile?.late_account_id ?? null) as string | null;
+            if (!lateAccountId) return null;
             return {
               profileId: spp.social_profile_id as string,
+              lateAccountId,
               platform: (profile?.platform ?? 'instagram') as SocialPlatform,
             };
-          }
-        );
+          })
+          .filter(
+            (p): p is { profileId: string; lateAccountId: string; platform: SocialPlatform } =>
+              p !== null,
+          );
+
+        if (platformProfiles.length === 0) {
+          throw new Error(
+            'No connected social profiles to publish to (missing late_account_id). Reconnect the social profile via Zernio.',
+          );
+        }
 
         const platformHints: Record<string, SocialPlatform> = {};
-        platformProfiles.forEach((p: { profileId: string; platform: SocialPlatform }) => {
-          platformHints[p.profileId] = p.platform;
+        platformProfiles.forEach((p) => {
+          platformHints[p.lateAccountId] = p.platform;
+        });
+
+        // Reverse map: late_account_id (what Zernio echoes back) -> our
+        // internal social_profile_id (UUID), so we can update the right
+        // spp row from the publish response.
+        const lateIdToProfileId: Record<string, string> = {};
+        platformProfiles.forEach((p) => {
+          lateIdToProfileId[p.lateAccountId] = p.profileId;
         });
 
         // Publish via posting service
@@ -114,7 +141,7 @@ async function handleGet(request: NextRequest) {
           coverImageUrl: post.cover_image_url ?? undefined,
           taggedPeople: post.tagged_people ?? [],
           collaboratorHandles: post.collaborator_handles ?? [],
-          platformProfileIds: platformProfiles.map((p: { profileId: string }) => p.profileId),
+          platformProfileIds: platformProfiles.map((p) => p.lateAccountId),
           platformHints,
         });
 
@@ -123,8 +150,12 @@ async function handleGet(request: NextRequest) {
         let anyFailed = false;
 
         for (const platformResult of result.platforms) {
+          // Zernio returns the late_account_id we sent it; translate
+          // back to our internal UUID before matching the spp row.
+          const internalProfileId =
+            lateIdToProfileId[platformResult.profileId] ?? platformResult.profileId;
           const spp = (post.scheduled_post_platforms ?? []).find(
-            (s: Record<string, unknown>) => s.social_profile_id === platformResult.profileId
+            (s: Record<string, unknown>) => s.social_profile_id === internalProfileId,
           );
           if (spp) {
             await adminClient
