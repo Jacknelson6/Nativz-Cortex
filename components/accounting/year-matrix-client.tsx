@@ -15,8 +15,12 @@ interface Entry {
   team_member_id: string | null;
   payee_label: string | null;
   amount_cents: number;
+  margin_cents: number;
+  video_count: number;
   period_id: string;
 }
+
+type Metric = 'payout' | 'margin' | 'videos';
 interface Period {
   id: string;
   start_date: string;
@@ -44,6 +48,12 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
+function formatCell(v: number, metric: Metric): string {
+  if (metric === 'videos') return v > 0 ? v.toLocaleString() : '—';
+  if (v === 0) return '—';
+  return centsToDollars(v);
+}
+
 /**
  * Displays a 24-row matrix — 12 months × two halves — with every active
  * team member as a column and an "Other payees" column for freelancer /
@@ -53,6 +63,11 @@ const MONTHS = [
  */
 export function YearMatrixClient({ year, periods, members, entries }: YearMatrixClientProps) {
   const [service, setService] = useState<ServiceFilter>('all');
+  const [metric, setMetric] = useState<Metric>('payout');
+
+  // Margin/Videos only meaningful for editing — auto-snap back to payout
+  // when the user leaves the editing filter so the cells stay coherent.
+  const effectiveMetric: Metric = service === 'editing' ? metric : 'payout';
 
   // Reduce entries to cell totals keyed (monthIndex, half, columnKey).
   // columnKey = member id OR "other:<label>" for non-member payees.
@@ -67,6 +82,12 @@ export function YearMatrixClient({ year, periods, members, entries }: YearMatrix
       periodByKey.set(`${m - 1}:${p.half}`, p.id);
     }
 
+    const valueOf = (e: Entry): number => {
+      if (effectiveMetric === 'margin') return e.margin_cents ?? 0;
+      if (effectiveMetric === 'videos') return e.video_count ?? 0;
+      return e.amount_cents ?? 0;
+    };
+
     for (const e of entries) {
       // Skip legacy override/misc rows entirely — they no longer surface.
       if (e.entry_type === 'override' || e.entry_type === 'misc') continue;
@@ -76,7 +97,8 @@ export function YearMatrixClient({ year, periods, members, entries }: YearMatrix
       const [, m] = period.start_date.split('-').map(Number);
       const col = e.team_member_id ?? `other:${(e.payee_label ?? 'Unassigned').trim()}`;
       const key = `${m - 1}:${period.half}:${col}`;
-      cells.set(key, (cells.get(key) ?? 0) + (e.amount_cents ?? 0));
+      const value = valueOf(e);
+      cells.set(key, (cells.get(key) ?? 0) + value);
 
       if (!e.team_member_id) {
         otherPayees.set(col, (otherPayees.get(col) ?? 0) + (e.amount_cents ?? 0));
@@ -91,7 +113,7 @@ export function YearMatrixClient({ year, periods, members, entries }: YearMatrix
       .sort();
 
     return { cells, periodByKey, otherPayeeColumns };
-  }, [entries, periods, service]);
+  }, [entries, periods, service, effectiveMetric]);
 
   // Column list: active members + other-payee buckets.
   const columns: Array<{ key: string; label: string; kind: 'member' | 'other' }> = useMemo(() => {
@@ -155,26 +177,55 @@ export function YearMatrixClient({ year, periods, members, entries }: YearMatrix
 
   return (
     <div className="space-y-4">
-      {/* Service tabs */}
-      <div className="flex flex-wrap items-center gap-1 border-b border-nativz-border">
-        {SERVICES.map((s) => {
-          const active = s.key === service;
-          return (
-            <button
-              key={s.key}
-              type="button"
-              onClick={() => setService(s.key)}
-              className={`relative px-3 py-2 text-sm font-medium transition-colors cursor-pointer ${
-                active ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary'
-              }`}
-            >
-              {s.label}
-              {active && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent rounded-full" />
-              )}
-            </button>
-          );
-        })}
+      {/* Service tabs + metric toggle */}
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-nativz-border">
+        <div className="flex flex-wrap items-center gap-1">
+          {SERVICES.map((s) => {
+            const active = s.key === service;
+            return (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => setService(s.key)}
+                className={`relative px-3 py-2 text-sm font-medium transition-colors cursor-pointer ${
+                  active ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary'
+                }`}
+              >
+                {s.label}
+                {active && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent rounded-full" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+        {service === 'editing' && (
+          <div className="mb-1 inline-flex rounded-lg border border-nativz-border bg-surface p-0.5 text-xs">
+            {(['payout', 'margin', 'videos'] as const).map((m) => {
+              const active = m === metric;
+              const label = m === 'payout' ? 'Payouts' : m === 'margin' ? 'Margin' : 'Videos';
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setMetric(m)}
+                  className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
+                    active ? 'bg-accent text-white' : 'text-text-muted hover:text-text-secondary'
+                  }`}
+                  title={
+                    m === 'payout'
+                      ? 'Editor payouts per period'
+                      : m === 'margin'
+                      ? "Jack's margin = revenue − payout"
+                      : 'Videos delivered per period'
+                  }
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {columns.length === 0 ? (
@@ -235,16 +286,22 @@ export function YearMatrixClient({ year, periods, members, entries }: YearMatrix
                   </td>
                   {columns.map((col) => {
                     const v = row.values[col.key] ?? 0;
-                    const content = v > 0 ? centsToDollars(v) : '—';
+                    const content = formatCell(v, effectiveMetric);
                     const muted = v === 0;
+                    const tone =
+                      effectiveMetric === 'margin' && v < 0
+                        ? 'text-red-400'
+                        : effectiveMetric === 'margin' && v > 0
+                        ? 'text-emerald-400'
+                        : muted
+                        ? 'text-text-muted'
+                        : 'text-text-primary';
                     return (
                       <td
                         key={col.key}
-                        className={`px-3 py-2 text-right tabular-nums ${
-                          muted ? 'text-text-muted' : 'text-text-primary'
-                        }`}
+                        className={`px-3 py-2 text-right tabular-nums ${tone}`}
                       >
-                        {row.periodId && v > 0 ? (
+                        {row.periodId && v !== 0 ? (
                           <Link
                             href={`/admin/accounting/${row.periodId}`}
                             className="hover:text-accent-text"
@@ -257,27 +314,50 @@ export function YearMatrixClient({ year, periods, members, entries }: YearMatrix
                       </td>
                     );
                   })}
-                  <td className="px-3 py-2 text-right tabular-nums text-text-secondary font-medium">
-                    {row.total > 0 ? centsToDollars(row.total) : '—'}
+                  <td
+                    className={`px-3 py-2 text-right tabular-nums font-medium ${
+                      effectiveMetric === 'margin' && row.total < 0
+                        ? 'text-red-400'
+                        : effectiveMetric === 'margin' && row.total > 0
+                        ? 'text-emerald-400'
+                        : 'text-text-secondary'
+                    }`}
+                  >
+                    {formatCell(row.total, effectiveMetric)}
                   </td>
                 </tr>
               ))}
               <tr className="border-t-2 border-nativz-border bg-background/30">
                 <td className="px-3 py-2 font-semibold text-text-primary" colSpan={2}>
-                  {year} total
+                  {year} {effectiveMetric === 'videos' ? 'videos' : effectiveMetric === 'margin' ? 'margin' : 'total'}
                 </td>
-                {columns.map((col) => (
-                  <td
-                    key={col.key}
-                    className="px-3 py-2 text-right tabular-nums font-semibold text-text-primary"
-                  >
-                    {columnTotals[col.key] > 0
-                      ? centsToDollars(columnTotals[col.key])
-                      : '—'}
-                  </td>
-                ))}
-                <td className="px-3 py-2 text-right tabular-nums font-semibold text-text-primary">
-                  {centsToDollars(grandTotal)}
+                {columns.map((col) => {
+                  const v = columnTotals[col.key];
+                  const tone =
+                    effectiveMetric === 'margin' && v < 0
+                      ? 'text-red-400'
+                      : effectiveMetric === 'margin' && v > 0
+                      ? 'text-emerald-400'
+                      : 'text-text-primary';
+                  return (
+                    <td
+                      key={col.key}
+                      className={`px-3 py-2 text-right tabular-nums font-semibold ${tone}`}
+                    >
+                      {formatCell(v, effectiveMetric)}
+                    </td>
+                  );
+                })}
+                <td
+                  className={`px-3 py-2 text-right tabular-nums font-semibold ${
+                    effectiveMetric === 'margin' && grandTotal < 0
+                      ? 'text-red-400'
+                      : effectiveMetric === 'margin' && grandTotal > 0
+                      ? 'text-emerald-400'
+                      : 'text-text-primary'
+                  }`}
+                >
+                  {formatCell(grandTotal, effectiveMetric)}
                 </td>
               </tr>
             </tbody>
