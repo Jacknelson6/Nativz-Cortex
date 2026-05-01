@@ -2100,3 +2100,43 @@ captions). Ship to main; no feature branch.
 **SRL Goal 18 status:** complete. Ready to commit + push to main.
 
 **SRL complete.** All acceptance criteria met as of iteration 18.9.
+
+
+## Goal 19 (set 2026-05-01) - Editing review page parity with content calendar review
+
+Bring `/c/edit/<token>` to feature + visual parity with `/c/<token>` (the content
+calendar review page). Same name-capture, same per-item review affordances, same
+frame.io-style timestamped comments, same activity history, same
+approved/changes-requested counts in header, same expiry chip, same Approve-all
+flow, minus calendar-specific bits (caption, hashtags, scheduled date, tagged,
+collaborators, calendar view toggle).
+
+### Acceptance criteria
+
+- [ ] First visit shows a name-capture modal; name persists in localStorage per token (mirrors `cortex_share_name_<token>`)
+- [ ] Header shows: client + project title, "N videos to review" copy, approved-count chip, changes-requested-count chip, link-expiry chip
+- [ ] "Approve all" button (header CTA) approves every still-pending video sequentially with a progress toast (mirrors calendar)
+- [ ] List view (single, no calendar toggle) renders one row per video with thumbnail, title, duration, version label
+- [ ] Per-video buttons: **Approve**, **Request change**, **Replace** (signed-in admin only), **Delete** (signed-in admin only). Approving toggles back to "Approved" pill.
+- [ ] Comment thread renders under each video. Renders status icons + colored chips per row (approved / changes_requested / comment / video_revised)
+- [ ] Adding a comment supports timestamp anchoring (clicking the thread chip seeks the player to that timestamp) and file attachments (uploaded to share-bucket)
+- [ ] Admin "Replace" re-uploads a new version (`editing_project_videos` row with `version = max+1`); appends a `video_revised` comment automatically
+- [ ] Admin "Delete" archives the cut so it's no longer shown in the share grid (does not hard-delete history)
+- [ ] Public copy uses "video"/"videos" (never "cut"/"cuts")
+- [ ] No caption block, no hashtags, no scheduled-time pill, no Tagged section, no Collaborators section, no Calendar view toggle anywhere on the page
+- [ ] Activity shows in the admin editing project detail dialog history panel (reuses /activity feed); per-video status reflects in the dialog cuts list
+- [ ] `npx tsc --noEmit` exits 0 and `npx eslint --no-warn-ignored` on touched files exits 0
+
+### Scope boundaries
+- **IN:** new comments table, new comment + replace API routes, public review-page rewrite, activity-feed surfacing into admin dialog, light schema additions for comment status taxonomy
+- **OUT:** Mux pipeline for editing videos (existing bucket/storage flow stays), drag-drop ordering, in-page nudge cron, e-mail rendering changes, Monday writeback for editing reviews
+
+### Decisions made (no user prompt)
+- **Comment table** is dedicated (`editing_project_review_comments`) keyed by `project_id` + `video_id` + optional `share_link_id`. Reusing `post_review_comments` would force fake `review_link_id` rows; isolating is cheaper.
+- **Approval scope** is per-video. "Approve all" iterates every video missing an approved row — same UX semantics as the calendar.
+- **Admin replace** keeps the existing version-bump pattern (new row at `version = max + 1`), and emits a synthetic `video_revised` comment so the public history shows what happened.
+- **Anonymous reviewers** are allowed to insert/select comments, scoped through the share-link gate (mirrors calendar `anon` policy). Admin RLS gives full access.
+- **Bucket** for comment attachments: reuses the existing share comment attachment bucket from the calendar pipeline (`share-comments`); same upload route is wired so reviewers don't bring auth.
+- **No bulk admin import**: editing projects haven't been live long enough to need backfill.
+
+### Iterations
