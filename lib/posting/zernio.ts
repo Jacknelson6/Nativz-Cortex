@@ -311,10 +311,41 @@ async function fetchMergedAnalytics(): Promise<LateAnalyticsResponse> {
   };
 }
 
+/**
+ * Instagram silently drops captions with >30 hashtags. Zernio rejects them
+ * pre-flight with a 400 (this is the message Skibell hit for 5 of 6 stuck
+ * recovered drafts). Cap the appended hashtag list so the total (inline #word
+ * tokens in the caption + appended) stays at or below `limit`. Inline tokens
+ * include things like address suite numbers ("#110") which IG counts.
+ */
+function capHashtagsForCaption(
+  caption: string,
+  hashtags: string[],
+  limit = 30,
+): string[] {
+  const inline = (caption.match(/(^|[\s.,;:!?\-])#[A-Za-z0-9_]+/g) ?? []).length;
+  const room = Math.max(0, limit - inline);
+  return hashtags.slice(0, room);
+}
+
+/** Parse a Zernio 409 dup-detection error and return the existing post ID, if any. */
+function parseZernioDuplicate(err: unknown): string | null {
+  if (!(err instanceof Error)) return null;
+  const m = err.message.match(/Zernio API error \(409\): (\{[\s\S]*)/);
+  if (!m) return null;
+  try {
+    const parsed = JSON.parse(m[1]) as { details?: { existingPostId?: string } };
+    return parsed.details?.existingPostId ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function buildPublishBody(input: PublishPostInput): Record<string, unknown> {
+  const cappedHashtags = capHashtagsForCaption(input.caption, input.hashtags);
   const caption =
-    input.hashtags.length > 0
-      ? `${input.caption}\n\n${input.hashtags.map((h) => `#${h}`).join(' ')}`
+    cappedHashtags.length > 0
+      ? `${input.caption}\n\n${cappedHashtags.map((h) => `#${h}`).join(' ')}`
       : input.caption;
 
   const hasTiktok = input.platformProfileIds.some(
@@ -441,10 +472,23 @@ function mapPlatformRow(r: {
 export class ZernioPostingService implements PostingService {
   async publishPost(input: PublishPostInput): Promise<PublishResult> {
     const body = buildPublishBody(input);
-    const raw = await zernioRequest<unknown>('/posts', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
+    let raw: unknown;
+    try {
+      raw = await zernioRequest<unknown>('/posts', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+    } catch (err) {
+      // Zernio dedup: if the same content is already scheduled / published on
+      // this account in the last 24h, it returns 409 with `details.existingPostId`.
+      // That post IS in Zernio, so the caller's draft is effectively recovered:
+      // adopt the existing ID instead of re-throwing.
+      const reused = parseZernioDuplicate(err);
+      if (reused) {
+        return { externalPostId: reused, platforms: [] };
+      }
+      throw err;
+    }
     const post = unwrapPostPayload(raw);
     const externalPostId = pickString(post, '_id', 'id') ?? '';
     const rows = mapPublishPlatforms(raw);
