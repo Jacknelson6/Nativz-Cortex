@@ -75,8 +75,8 @@ export default async function AdminLayout({
 
   const userRow = userRowRes.data;
   const role = userRow?.role ?? null;
-  const isAdmin =
-    userRow?.is_super_admin === true || role === 'admin' || role === 'super_admin';
+  const isSuperAdmin = userRow?.is_super_admin === true;
+  const isAdmin = isSuperAdmin || role === 'admin' || role === 'super_admin';
 
   // Phase 1 of the brand-root migration: any non-admin hitting /admin/* bounces
   // to the portal. Phase 2 unifies this behind a single /login → / entry point.
@@ -106,7 +106,7 @@ export default async function AdminLayout({
             <EasterEgg />
             <CommandPalette />
             <OnboardingFlowToasts initial={pendingFlowToasts} />
-            <AdminSidebar userName={userName} avatarUrl={avatarUrl} hiddenSidebarItems={hiddenSidebarItems} />
+            <AdminSidebar userName={userName} avatarUrl={avatarUrl} hiddenSidebarItems={hiddenSidebarItems} isSuperAdmin={isSuperAdmin} />
             <SidebarInset>
               <BannerStrip />
               <PageTransition>{children}</PageTransition>

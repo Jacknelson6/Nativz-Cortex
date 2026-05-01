@@ -1,11 +1,19 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Sparkles, Loader2, Check, Trash2, AlertCircle } from 'lucide-react';
+import {
+  Sparkles,
+  Loader2,
+  Check,
+  Trash2,
+  AlertCircle,
+  Link as LinkIcon,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { centsToDollars } from '@/lib/accounting/periods';
+import { isLikelyWiseUrl } from '@/lib/accounting/wise';
 
 type EntryType = 'editing' | 'smm' | 'affiliate' | 'blogging';
 
@@ -32,6 +40,10 @@ interface ImportDialogProps {
   teamMembers: TeamMember[];
   clients: Client[];
   onImported: () => void;
+  // When the dialog is opened from a per-editor sub-tab in
+  // PeriodDetailClient, pre-select that editor so unmatched rows fall
+  // back to them instead of becoming amber "pick a payee" warnings.
+  defaultTeamMemberId?: string | null;
 }
 
 type Stage = 'paste' | 'preview' | 'submitting';
@@ -63,10 +75,13 @@ export function ImportDialog({
   teamMembers,
   clients,
   onImported,
+  defaultTeamMemberId = null,
 }: ImportDialogProps) {
   const [stage, setStage] = useState<Stage>('paste');
   const [text, setText] = useState('');
   const [defaultType, setDefaultType] = useState<EntryType>('editing');
+  const [defaultMember, setDefaultMember] = useState<string>('');
+  const [wiseUrl, setWiseUrl] = useState('');
   const [parsing, setParsing] = useState(false);
   const [proposals, setProposals] = useState<ProposedEntry[]>([]);
 
@@ -77,8 +92,20 @@ export function ImportDialog({
       setText('');
       setProposals([]);
       setParsing(false);
+      setWiseUrl('');
+      setDefaultMember('');
+    } else {
+      // Re-seed the editor pre-selection every time the dialog opens so
+      // bouncing between per-editor sub-tabs without a hard reset still
+      // picks the right default.
+      setDefaultMember(defaultTeamMemberId ?? '');
     }
-  }, [open]);
+  }, [open, defaultTeamMemberId]);
+
+  const wiseUrlTrimmed = wiseUrl.trim();
+  const wiseUrlValid =
+    wiseUrlTrimmed === '' || /^https?:\/\/\S+$/i.test(wiseUrlTrimmed);
+  const wiseUrlLooksWise = wiseUrlTrimmed === '' || isLikelyWiseUrl(wiseUrlTrimmed);
 
   const memberOptions = useMemo(
     () => teamMembers.filter((m) => m.full_name).map((m) => ({ id: m.id, label: m.full_name! })),
@@ -91,6 +118,10 @@ export function ImportDialog({
 
   async function handleParse() {
     if (!text.trim()) return;
+    if (!wiseUrlValid) {
+      toast.error('Wise link needs to start with http:// or https://');
+      return;
+    }
     setParsing(true);
     try {
       const res = await fetch('/api/accounting/import', {
@@ -100,6 +131,7 @@ export function ImportDialog({
           period_id: periodId,
           text: text.trim(),
           default_entry_type: defaultType,
+          default_team_member_id: defaultMember || undefined,
         }),
       });
       const data = await res.json();
@@ -140,6 +172,10 @@ export function ImportDialog({
   }
 
   async function handleConfirm() {
+    if (!wiseUrlValid) {
+      toast.error('Wise link needs to start with http:// or https://');
+      return;
+    }
     setStage('submitting');
     try {
       const res = await fetch('/api/accounting/entries/bulk', {
@@ -147,6 +183,7 @@ export function ImportDialog({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           period_id: periodId,
+          wise_url: wiseUrlTrimmed || undefined,
           entries: proposals.map((p) => ({
             entry_type: p.entry_type,
             team_member_id: p.team_member_id,
@@ -209,22 +246,50 @@ export function ImportDialog({
         <div className="flex-1 overflow-y-auto">
           {stage === 'paste' ? (
             <div className="p-6 space-y-4">
-              <div className="flex items-center gap-3">
-                <label className="text-sm text-text-secondary">Default service:</label>
-                <select
-                  value={defaultType}
-                  onChange={(e) => setDefaultType(e.target.value as EntryType)}
-                  className="rounded-lg border border-nativz-border bg-background px-3 py-1.5 text-sm text-text-primary"
-                >
-                  <option value="editing">Editing</option>
-                  <option value="smm">SMM</option>
-                  <option value="affiliate">Affiliate</option>
-                  <option value="blogging">Blogging</option>
-                </select>
-                <span className="text-xs text-text-secondary">
-                  Applied when the text doesn&apos;t specify a service per row.
-                </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs uppercase tracking-wide text-text-secondary font-medium">
+                    Default service
+                  </label>
+                  <select
+                    value={defaultType}
+                    onChange={(e) => setDefaultType(e.target.value as EntryType)}
+                    className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary"
+                  >
+                    <option value="editing">Editing</option>
+                    <option value="smm">SMM</option>
+                    <option value="affiliate">Affiliate</option>
+                    <option value="blogging">Blogging</option>
+                  </select>
+                  <p className="text-[11px] text-text-secondary">
+                    Applied when the text doesn&apos;t specify a service per row.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs uppercase tracking-wide text-text-secondary font-medium">
+                    Default editor
+                  </label>
+                  <select
+                    value={defaultMember}
+                    onChange={(e) => setDefaultMember(e.target.value)}
+                    className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary"
+                  >
+                    <option value="">— none, parse names from the text —</option>
+                    {memberOptions.map((m) => (
+                      <option key={m.id} value={m.id}>{m.label}</option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-text-secondary">
+                    Pick when every row is for the same editor (Wise drop, single-editor batch).
+                  </p>
+                </div>
               </div>
+              <WiseUrlField
+                value={wiseUrl}
+                onChange={setWiseUrl}
+                valid={wiseUrlValid}
+                looksWise={wiseUrlLooksWise}
+              />
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
@@ -235,7 +300,15 @@ export function ImportDialog({
               <PasteHints />
             </div>
           ) : (
-            <div className="p-4">
+            <div className="p-4 space-y-3">
+              {wiseUrlTrimmed && (
+                <div className="flex items-center gap-2 rounded-lg border border-nativz-border bg-surface px-3 py-2 text-xs text-text-secondary">
+                  <LinkIcon size={12} className="text-accent-text shrink-0" />
+                  <span className="truncate">
+                    Wise link <span className="text-text-primary font-mono">{wiseUrlTrimmed}</span> will be attached to every entry below.
+                  </span>
+                </div>
+              )}
               <table className="w-full text-sm table-fixed">
                 {/* Fixed column widths so header cells line up exactly with
                     the input cells underneath. Units/Rate get modest widths;
@@ -464,6 +537,61 @@ export function ImportDialog({
           )}
         </div>
     </Dialog>
+  );
+}
+
+function WiseUrlField({
+  value,
+  onChange,
+  valid,
+  looksWise,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  valid: boolean;
+  looksWise: boolean;
+}) {
+  const trimmed = value.trim();
+  const showInvalid = trimmed !== '' && !valid;
+  const showWiseHint = trimmed !== '' && valid && !looksWise;
+
+  return (
+    <div className="rounded-xl border border-nativz-border bg-surface px-4 py-3 space-y-1.5">
+      <label
+        htmlFor="import-wise-url"
+        className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-text-secondary font-medium"
+      >
+        <LinkIcon size={12} className="text-text-secondary" />
+        Wise payment link <span className="text-text-secondary normal-case lowercase">(optional)</span>
+      </label>
+      <input
+        id="import-wise-url"
+        type="url"
+        inputMode="url"
+        autoComplete="off"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="https://wise.com/pay/..."
+        className={`w-full rounded-md border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-1 ${
+          showInvalid
+            ? 'border-red-400/60 focus:border-red-400 focus:ring-red-400'
+            : 'border-nativz-border focus:border-accent focus:ring-accent'
+        }`}
+      />
+      {showInvalid ? (
+        <p className="text-xs text-red-400">
+          Needs to start with http:// or https://
+        </p>
+      ) : showWiseHint ? (
+        <p className="text-xs text-text-secondary">
+          Doesn&apos;t look like a Wise link. We&apos;ll save it anyway, but double-check the URL.
+        </p>
+      ) : (
+        <p className="text-[11px] text-text-secondary">
+          Stamped onto every imported entry so the period grid&apos;s payout link is ready.
+        </p>
+      )}
+    </div>
   );
 }
 

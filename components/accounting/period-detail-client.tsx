@@ -434,7 +434,7 @@ function EditingPane({
 
   return (
     <div className="space-y-4">
-      {editorGroups.length > 1 && (
+      {editorGroups.length > 0 && (
         <SubNav
           items={subNavItems}
           active={activeEditor}

@@ -23,7 +23,7 @@ export default async function AccountingPeriodPage({ params }: { params: Promise
     { data: team },
     { data: clients },
   ] = await Promise.all([
-    adminClient.from('users').select('role').eq('id', user.id).single(),
+    adminClient.from('users').select('is_super_admin').eq('id', user.id).single(),
     adminClient
       .from('payroll_periods')
       .select('id, start_date, end_date, half, status, notes, locked_at, paid_at')
@@ -44,7 +44,7 @@ export default async function AccountingPeriodPage({ params }: { params: Promise
       .select('id, name, services, editing_rate_per_video_cents')
       .order('name'),
   ]);
-  if (userRow?.role !== 'admin') redirect('/admin/dashboard');
+  if (!userRow?.is_super_admin) redirect('/admin/dashboard');
   if (!period) notFound();
 
   return (

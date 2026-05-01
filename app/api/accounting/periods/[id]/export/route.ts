@@ -23,10 +23,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const adminClient = createAdminClient();
   const { data: userRow } = await adminClient
     .from('users')
-    .select('role')
+    .select('is_super_admin')
     .eq('id', user.id)
     .single();
-  if (userRow?.role !== 'admin') {
+  if (!userRow?.is_super_admin) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

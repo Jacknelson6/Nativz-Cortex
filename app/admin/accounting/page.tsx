@@ -54,10 +54,10 @@ export default async function AccountingIndexPage({
 
   const adminClient = createAdminClient();
   const [{ data: userRow }, params] = await Promise.all([
-    adminClient.from('users').select('role').eq('id', user.id).single(),
+    adminClient.from('users').select('is_super_admin').eq('id', user.id).single(),
     searchParams,
   ]);
-  if (userRow?.role !== 'admin') redirect('/admin/dashboard');
+  if (!userRow?.is_super_admin) redirect('/admin/dashboard');
 
   // Period upsert runs off the critical path — it was adding a round-trip
   // to every page load even though its result doesn't feed the render.

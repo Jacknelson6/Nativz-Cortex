@@ -69,9 +69,9 @@ async function requireAdmin() {
   const adminClient = createAdminClient();
   const { data: userRow } = await adminClient
     .from('users')
-    .select('role')
+    .select('is_super_admin')
     .eq('id', user.id)
     .single();
-  if (userRow?.role !== 'admin') return { error: 'Forbidden', status: 403 as const };
+  if (!userRow?.is_super_admin) return { error: 'Forbidden', status: 403 as const };
   return { user, adminClient };
 }

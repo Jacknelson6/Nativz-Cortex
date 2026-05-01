@@ -55,8 +55,8 @@ export default async function AppLayout({
     .single();
 
   const role = userRow?.role ?? null;
-  const isAdmin =
-    userRow?.is_super_admin === true || role === 'admin' || role === 'super_admin';
+  const isSuperAdmin = userRow?.is_super_admin === true;
+  const isAdmin = isSuperAdmin || role === 'admin' || role === 'super_admin';
   const isViewer = role === 'viewer';
 
   // Anything other than admin or viewer (deactivated, missing row) gets
@@ -141,6 +141,7 @@ export default async function AppLayout({
               hiddenSidebarItems={hiddenSidebarItems}
               role={sidebarRole}
               routePrefix=""
+              isSuperAdmin={showAdminAffordances && isSuperAdmin}
             />
             <SidebarInset>
               <BannerStrip />

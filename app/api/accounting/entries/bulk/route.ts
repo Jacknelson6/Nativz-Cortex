@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { appendWiseSuffix } from '@/lib/accounting/wise';
 
 const entryTypes = ['editing', 'smm', 'affiliate', 'blogging'] as const;
 
@@ -20,6 +21,10 @@ const entrySchema = z.object({
 const bodySchema = z.object({
   period_id: z.string().uuid(),
   entries: z.array(entrySchema).min(1).max(200),
+  // When the importer captures a single Wise URL once at the top of the
+  // dialog we stamp it onto every entry's description via the same
+  // appendWiseSuffix helper that the public submit-payroll flow uses.
+  wise_url: z.string().url().max(500).optional(),
 });
 
 /**
@@ -34,10 +39,10 @@ export async function POST(request: NextRequest) {
   const adminClient = createAdminClient();
   const { data: userRow } = await adminClient
     .from('users')
-    .select('role')
+    .select('is_super_admin')
     .eq('id', user.id)
     .single();
-  if (userRow?.role !== 'admin') {
+  if (!userRow?.is_super_admin) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -81,6 +86,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const wiseUrl = parsed.data.wise_url?.trim();
   const rows = parsed.data.entries.map((e) => ({
     period_id: parsed.data.period_id,
     entry_type: e.entry_type,
@@ -91,7 +97,9 @@ export async function POST(request: NextRequest) {
     rate_cents: e.rate_cents ?? 0,
     amount_cents: e.amount_cents,
     margin_cents: e.margin_cents ?? 0,
-    description: e.description ?? null,
+    description: wiseUrl
+      ? appendWiseSuffix(e.description ?? null, wiseUrl)
+      : e.description ?? null,
     created_by: user.id,
   }));
 

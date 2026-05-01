@@ -103,7 +103,7 @@ export default async function EditorCrossPeriodPage({
     { data: periods },
     { data: clients },
   ] = await Promise.all([
-    adminClient.from('users').select('role').eq('id', user.id).single(),
+    adminClient.from('users').select('is_super_admin').eq('id', user.id).single(),
     adminClient
       .from('team_members')
       .select('id, full_name, role, editing_roles, is_active, avatar_url')
@@ -124,7 +124,7 @@ export default async function EditorCrossPeriodPage({
     adminClient.from('clients').select('id, name'),
   ]);
 
-  if (userRow?.role !== 'admin') redirect('/admin/dashboard');
+  if (!userRow?.is_super_admin) redirect('/admin/dashboard');
   if (!member) notFound();
 
   const entriesArr = (entries ?? []) as RawEntry[];

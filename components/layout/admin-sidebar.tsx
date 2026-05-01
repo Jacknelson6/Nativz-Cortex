@@ -49,13 +49,21 @@ interface NavItem {
   href: string;
   label: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
-  children?: { href: string; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }[];
+  children?: {
+    href: string;
+    label: string;
+    icon: React.ComponentType<{ size?: number; className?: string }>;
+    /** Hide from non-super-admins. Page also redirects server-side. */
+    superAdminOnly?: boolean;
+  }[];
   /** When true, item is grayed out and non-clickable with "Coming soon" tooltip */
   comingSoon?: boolean;
   /** Stable identifier for hide-preferences and tests — survives portal
    *  href remapping. Defaults to the admin href, carried through when a
    *  viewer renders the same item at a different URL. */
   navKey?: string;
+  /** Hide from non-super-admins. Page also redirects server-side. */
+  superAdminOnly?: boolean;
 }
 
 interface NavSection {
@@ -157,7 +165,7 @@ const NAV_SECTIONS: NavSection[] = [
           { href: '/admin/sales', label: 'Sales', icon: Workflow },
           { href: '/admin/users', label: 'Users', icon: Users },
           { href: '/admin/scheduling', label: 'Scheduling', icon: Calendar },
-          { href: '/admin/accounting', label: 'Accounting', icon: Receipt },
+          { href: '/admin/accounting', label: 'Accounting', icon: Receipt, superAdminOnly: true },
           { href: '/admin/revenue', label: 'Revenue', icon: CreditCard },
           { href: '/admin/notifications', label: 'Notifications', icon: Bell },
           { href: '/admin/usage', label: 'Usage', icon: Gauge },
@@ -346,6 +354,9 @@ interface AdminSidebarProps {
    *  when an admin impersonates a viewer. Unused now that Client view has
    *  been removed from the avatar popover; kept to avoid churning callers. */
   isAdmin?: boolean;
+  /** Gate for super-admin-only nav items (Accounting). When false/undefined,
+   *  items flagged `superAdminOnly` are filtered out in the render loop. */
+  isSuperAdmin?: boolean;
 }
 
 /** Items that can never be hidden — there'd be no way back to Settings otherwise. */
@@ -371,6 +382,7 @@ export function AdminSidebar({
   activeBrandId,
   hiddenSidebarItems = [],
   isAdmin: _isAdmin,
+  isSuperAdmin = false,
 }: AdminSidebarProps) {
   const hiddenSet = new Set(
     hiddenSidebarItems.filter((href) => !UNHIDABLE_HREFS.has(href)),
@@ -494,7 +506,15 @@ export function AdminSidebar({
         {getNavSectionsForRole(role, routePrefix)
           .map((section) => ({
             ...section,
-            items: section.items.filter((item) => !hiddenSet.has(item.navKey ?? item.href)),
+            items: section.items
+              .filter((item) => !hiddenSet.has(item.navKey ?? item.href))
+              .filter((item) => !item.superAdminOnly || isSuperAdmin)
+              .map((item) => ({
+                ...item,
+                children: item.children?.filter(
+                  (c) => !c.superAdminOnly || isSuperAdmin,
+                ),
+              })),
           }))
           .filter((section) => section.items.length > 0)
           .map((section, idx) => (

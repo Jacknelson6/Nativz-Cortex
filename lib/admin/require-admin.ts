@@ -57,3 +57,50 @@ export async function requireAdminRoute(): Promise<
   }
   return { user, isSuperAdmin: Boolean(me?.is_super_admin) };
 }
+
+/**
+ * Server-action variant of the super-admin gate. Use for accounting/payroll
+ * server actions where only Jack/Cole/Trevor should be allowed in.
+ */
+export async function requireSuperAdmin(): Promise<
+  { ok: true } | { ok: false; error: 'unauthenticated' | 'forbidden' }
+> {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: 'unauthenticated' };
+
+  const admin = createAdminClient();
+  const { data: me } = await admin
+    .from('users')
+    .select('is_super_admin')
+    .eq('id', user.id)
+    .single();
+
+  if (!me?.is_super_admin) return { ok: false, error: 'forbidden' };
+  return { ok: true };
+}
+
+/**
+ * Route-handler variant. Returns the user on success or a NextResponse the
+ * caller can short-circuit on (401 or 403). Use this for accounting and
+ * payroll API routes that hold sensitive financial data.
+ */
+export async function requireSuperAdminRoute(): Promise<
+  { user: User } | NextResponse
+> {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+
+  const admin = createAdminClient();
+  const { data: me } = await admin
+    .from('users')
+    .select('is_super_admin')
+    .eq('id', user.id)
+    .single();
+
+  if (!me?.is_super_admin) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
+  return { user };
+}

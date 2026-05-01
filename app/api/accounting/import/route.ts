@@ -26,6 +26,10 @@ const bodySchema = z.object({
   period_id: z.string().uuid(),
   text: z.string().min(1).max(20_000),
   default_entry_type: z.enum(['editing', 'smm', 'affiliate', 'blogging']).optional(),
+  // When the importer is opened from a per-editor sub-tab we want every
+  // unmatched row to default to that editor instead of becoming an
+  // amber "unmatched payee" warning the admin has to manually resolve.
+  default_team_member_id: z.string().uuid().optional(),
 });
 
 interface LlmRow {
@@ -45,10 +49,10 @@ async function requireAdmin() {
   const adminClient = createAdminClient();
   const { data: userRow } = await adminClient
     .from('users')
-    .select('role')
+    .select('is_super_admin')
     .eq('id', user.id)
     .single();
-  if (userRow?.role !== 'admin') return { error: 'Forbidden', status: 403 as const };
+  if (!userRow?.is_super_admin) return { error: 'Forbidden', status: 403 as const };
   return { user, adminClient };
 }
 
@@ -146,6 +150,16 @@ Rules:
     (clients ?? []).map((c) => [normaliseName(c.name), c.id]),
   );
 
+  // When the importer was opened from a per-editor sub-tab, every row
+  // that the LLM couldn't pin to a known team member falls back to that
+  // editor. Verify the id is actually one of the active members so we
+  // never trust a bogus uuid from the client.
+  const fallbackMemberId =
+    parsed.data.default_team_member_id &&
+    members.some((m) => m.id === parsed.data.default_team_member_id)
+      ? parsed.data.default_team_member_id
+      : null;
+
   const proposals = llmRows.map((row) => {
     const payeeName = (row.payee_name ?? '').trim();
     const clientName = (row.client_name ?? '').trim();
@@ -157,7 +171,8 @@ Rules:
     }
     const entryType = allowedType(row.entry_type, defaultType);
 
-    const memberId = payeeName ? memberByName.get(normaliseName(payeeName)) ?? null : null;
+    const matchedMemberId = payeeName ? memberByName.get(normaliseName(payeeName)) ?? null : null;
+    const memberId = matchedMemberId ?? fallbackMemberId;
     const clientId = clientName ? clientByName.get(normaliseName(clientName)) ?? null : null;
 
     return {
