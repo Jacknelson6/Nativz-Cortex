@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     const adminClient = createAdminClient();
 
     // Find all draft posts with a scheduled date for this client
-    const { data: drafts, error: fetchError } = await adminClient
+    const { data: allDrafts, error: fetchError } = await adminClient
       .from('scheduled_posts')
       .select('id, caption, hashtags, scheduled_at, cover_image_url, tagged_people, collaborator_handles')
       .eq('client_id', parsed.data.client_id)
@@ -49,11 +49,77 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch drafts' }, { status: 500 });
     }
 
-    if (!drafts?.length) {
+    if (!allDrafts?.length) {
       return NextResponse.json({ published: 0, message: 'No drafts to publish' });
     }
 
-    const postIds = drafts.map(d => d.id);
+    // APPROVAL GATE — see the publish-cron's gate for context.
+    //
+    // Drop-derived posts (rows linked from `content_drop_videos`) MUST have
+    // an approved `post_review_comments` row before we ship them. The
+    // calendar scheduler shares this UI's "Publish all drafts" button for
+    // admin-initiated publishes, but that button MUST NOT bypass the
+    // share-link approval flow. Anything without approval is filtered out
+    // here — non-drop drafts (quick-schedule, social ads, etc.) pass
+    // through unchanged.
+    const draftIds = allDrafts.map((d) => d.id);
+    const { data: dropVideoRows } = await adminClient
+      .from('content_drop_videos')
+      .select('scheduled_post_id')
+      .in('scheduled_post_id', draftIds);
+    const dropDraftIds = new Set(
+      (dropVideoRows ?? []).map(
+        (r) => (r as { scheduled_post_id: string }).scheduled_post_id,
+      ),
+    );
+
+    const dropDraftIdList = Array.from(dropDraftIds);
+    const approvedDropDraftIds = new Set<string>();
+    if (dropDraftIdList.length > 0) {
+      const { data: reviewLinks } = await adminClient
+        .from('post_review_links')
+        .select('id, post_id')
+        .in('post_id', dropDraftIdList);
+      const linkIdToPostId = new Map<string, string>();
+      for (const r of reviewLinks ?? []) {
+        linkIdToPostId.set(
+          (r as { id: string; post_id: string }).id,
+          (r as { id: string; post_id: string }).post_id,
+        );
+      }
+      if (linkIdToPostId.size > 0) {
+        const { data: approvedComments } = await adminClient
+          .from('post_review_comments')
+          .select('review_link_id')
+          .in('review_link_id', Array.from(linkIdToPostId.keys()))
+          .eq('status', 'approved');
+        for (const c of approvedComments ?? []) {
+          const postId = linkIdToPostId.get(
+            (c as { review_link_id: string }).review_link_id,
+          );
+          if (postId) approvedDropDraftIds.add(postId);
+        }
+      }
+    }
+
+    const drafts = allDrafts.filter((d) => {
+      if (!dropDraftIds.has(d.id)) return true;
+      return approvedDropDraftIds.has(d.id);
+    });
+    const skippedUnapprovedCount = allDrafts.length - drafts.length;
+
+    if (drafts.length === 0) {
+      return NextResponse.json({
+        published: 0,
+        skipped_unapproved: skippedUnapprovedCount,
+        message:
+          skippedUnapprovedCount > 0
+            ? `${skippedUnapprovedCount} drop post${skippedUnapprovedCount === 1 ? '' : 's'} skipped (no approval comment).`
+            : 'No drafts to publish',
+      });
+    }
+
+    const postIds = drafts.map((d) => d.id);
 
     // Update all to scheduled
     await adminClient
@@ -114,7 +180,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       published: postIds.length,
       synced,
-      message: `${postIds.length} draft${postIds.length === 1 ? '' : 's'} set to publish`,
+      skipped_unapproved: skippedUnapprovedCount,
+      message:
+        skippedUnapprovedCount > 0
+          ? `${postIds.length} draft${postIds.length === 1 ? '' : 's'} set to publish; ${skippedUnapprovedCount} drop post${skippedUnapprovedCount === 1 ? '' : 's'} skipped (no approval comment).`
+          : `${postIds.length} draft${postIds.length === 1 ? '' : 's'} set to publish`,
     });
   } catch (error) {
     console.error('POST /api/scheduler/posts/publish-drafts error:', error);
