@@ -202,9 +202,23 @@ export function getReplyTo(agency: AgencyBrand): string {
 // dark-on-dark palette to the new light-card palette so existing senders
 // inherit the Trevor look without per-template edits.
 
-export function layout(content: string, agency: AgencyBrand = 'nativz') {
+export function layout(
+  content: string,
+  agency: AgencyBrand = 'nativz',
+  options: { eyebrow?: string | false } = {},
+) {
   const BRAND = getEmailBrand(agency);
   const logoSrc = getEmailLogoUrl(agency);
+
+  // Eyebrow: explicit string overrides the default; `false` suppresses
+  // entirely (used by Nativz where the logo PNG already includes the
+  // wordmark, so reprinting "NATIVZ" reads as redundant). When omitted,
+  // fall back to the brand name so the existing Trevor pattern still
+  // renders for AC.
+  const eyebrowText =
+    options.eyebrow === false
+      ? null
+      : options.eyebrow ?? BRAND.brandName;
 
   const cortexUrl =
     agency === 'anderson'
@@ -226,7 +240,7 @@ export function layout(content: string, agency: AgencyBrand = 'nativz') {
     .nz-shell { background: ${BRAND.cardBg}; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 24px rgba(10, 22, 40, 0.08); }
     .nz-shell-header { background: linear-gradient(135deg, ${BRAND.headerGradStart} 0%, ${BRAND.headerGradEnd} 100%); padding: 32px 32px 28px; position: relative; }
     .nz-shell-header::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(to right, ${BRAND.accent}, ${BRAND.accentDark}); }
-    .logo { display: block; height: 28px; width: auto; margin-bottom: 18px; }
+    .logo { display: block; height: 40px; width: auto; margin-bottom: 20px; }
     .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: ${BRAND.accent}; margin: 0; }
     .nz-shell-body { padding: 32px 32px 28px; background: ${BRAND.cardBg}; }
     /* Strip any nested <div class="card"> styling so legacy templates passthrough. */
@@ -290,7 +304,7 @@ export function layout(content: string, agency: AgencyBrand = 'nativz') {
           <div class="nz-shell">
             <div class="nz-shell-header">
               <img class="logo" src="${logoSrc}" alt="${BRAND.brandName}" />
-              <p class="eyebrow">${BRAND.brandName}</p>
+              ${eyebrowText ? `<p class="eyebrow">${eyebrowText}</p>` : ''}
             </div>
             <div class="nz-shell-body">
               ${content}

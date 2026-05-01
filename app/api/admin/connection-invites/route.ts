@@ -95,29 +95,43 @@ function inviteHtml(opts: {
   platforms: string[];
   brand: 'nativz' | 'anderson';
 }): string {
-  const platformList = opts.platforms
-    .map((p) => `<li>${PLATFORM_LABEL[p as keyof typeof PLATFORM_LABEL] ?? p}</li>`)
+  const platformRows = opts.platforms
+    .map((p) => {
+      const label = PLATFORM_LABEL[p as keyof typeof PLATFORM_LABEL] ?? p;
+      return `
+        <tr>
+          <td class="k">${esc(label)}</td>
+          <td class="v" style="text-align:right;">Reconnect</td>
+        </tr>`;
+    })
     .join('');
+
+  const accountWord = opts.platforms.length === 1 ? 'account' : 'accounts';
+  const eyebrow =
+    opts.platforms.length === 1
+      ? 'Account reconnect'
+      : 'Account reconnects';
+
   const inner = `
     <div class="card">
       <h1 class="heading">Let's reconnect ${esc(opts.clientName)}.</h1>
       <p class="subtext">
-        We need a quick reconnect on the accounts below so we can keep
-        publishing on your behalf. The link opens a single page where you
-        can reconnect each one in a few taps. No password screens on
-        our side.
+        Your ${accountWord} below ${opts.platforms.length === 1 ? 'needs' : 'need'} a quick reconnect so we can keep publishing on your behalf. Tap the button to open one page where you can knock them out in a few taps.
       </p>
-      <ul class="features">${platformList}</ul>
-      <div class="button-wrap">
-        <a class="button" href="${esc(opts.url)}">Connect accounts &rarr;</a>
+      <div class="stats">
+        <table>${platformRows}</table>
+      </div>
+      <div class="button-wrap" style="text-align:center;margin:28px 0 12px;">
+        <a class="button" href="${esc(opts.url)}" style="color:#ffffff !important;padding:16px 36px;font-size:15px;letter-spacing:0.02em;">
+          Reconnect ${accountWord} &rarr;
+        </a>
       </div>
       <hr class="divider" />
       <p class="small">
-        This link is valid for 30 days. Reply to this email if anything
-        looks off and we'll sort it out.
+        This link is valid for 30 days. Reply to this email if anything looks off and we'll sort it out.
       </p>
     </div>`;
-  return layout(inner, opts.brand);
+  return layout(inner, opts.brand, { eyebrow });
 }
 
 function esc(s: string): string {
