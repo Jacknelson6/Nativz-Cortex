@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { getFromAddress, getReplyTo, layout } from '@/lib/email/resend';
-import { getEmailLogoUrl } from '@/lib/email/brand-tokens';
+import { getEmailBrand, getEmailLogoUrl } from '@/lib/email/brand-tokens';
 import { getSecret } from '@/lib/secrets/store';
 import type { AgencyBrand } from '@/lib/agency/detect';
 import { SEGMENT_KIND_LABEL, type SegmentKind } from '@/lib/onboarding/flows';
@@ -368,9 +368,13 @@ function milestoneHeadline(
     return `${seg} completed`;
   }
   // onboarding_complete: when we have a kickoff picker URL, lead with the
-  // action. Otherwise fall back to a status note.
+  // action. Otherwise fall back to a status note. Don't repeat the client
+  // name here, the hero title already prefixes "${clientName}: ..." so
+  // "Schedule kickoff with Riverwalk Hotel" would render as
+  // "Riverwalk Hotel: Schedule kickoff with Riverwalk Hotel".
+  void clientName;
   if (hasKickoffUrl) {
-    return clientName ? `Schedule kickoff with ${clientName}` : 'Schedule kickoff';
+    return 'Schedule kickoff';
   }
   return 'Onboarding complete, kickoff time';
 }
@@ -413,8 +417,15 @@ function stakeholderMilestoneHtml({
   const primaryCta = kickoffShareUrl
     ? `<a class="button" href="${esc(kickoffShareUrl)}">Schedule kickoff &rarr;</a>`
     : `<a class="button" href="${esc(flowUrl)}">Open the flow &rarr;</a>`;
+  // Outline-style secondary button. There's no `.button.secondary` token in
+  // the shell so the styling is inlined: matches primary button dimensions
+  // (14px/32px padding, 10px radius, 15px/700) but transparent background +
+  // accent border + accent text. Reads as a proper button, not a text link.
+  const brand = getEmailBrand(agency);
   const secondaryCta = kickoffShareUrl
-    ? `<p class="subtext" style="margin-top:16px;font-size:13px;"><a href="${esc(flowUrl)}">Or open the onboarding tracker &rarr;</a></p>`
+    ? `<div class="button-wrap" style="margin-top:12px;">
+        <a href="${esc(flowUrl)}" style="display:inline-block;background:transparent;color:${brand.accentDark};text-decoration:none;font-weight:700;padding:13px 31px;border:1px solid ${brand.accent};border-radius:10px;font-size:15px;letter-spacing:0.01em;">Open the onboarding tracker &rarr;</a>
+      </div>`
     : '';
   const inner = `
     <p class="subtext">${subtext}</p>

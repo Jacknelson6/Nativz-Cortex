@@ -594,6 +594,12 @@ export async function sendSearchCompletedEmail(opts: {
   to: string;
   query: string;
   clientName: string | null;
+  /**
+   * One-paragraph teaser describing what's in the report. Keep it short,
+   * punchy, and human. **Do NOT include the source/result count** ("across
+   * 47 sources..." etc.) - the recipient is here for the angles, not the
+   * scrape stats. Lead with the takeaways.
+   */
   summaryPreview: string;
   resultsUrl: string;
   agency?: AgencyBrand;
