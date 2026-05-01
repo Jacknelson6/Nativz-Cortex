@@ -1620,3 +1620,81 @@ export async function sendEditingRereviewEmail(opts: {
     },
   });
 }
+
+// ── Shoot brief reminder (48h pre-shoot internal nudge) ──────────────────
+
+function formatShootDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const datePart = d.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+  const timePart = d.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  return `${datePart} at ${timePart}`;
+}
+
+export async function sendShootBriefReminderEmail(opts: {
+  to: string;
+  memberFirstName: string;
+  clientName: string | null;
+  shootTitle: string;
+  shootDateISO: string;
+  location: string | null;
+  contentLabUrl: string;
+  agency?: AgencyBrand;
+  clientId?: string | null;
+  shootId?: string | null;
+}) {
+  const agency = opts.agency ?? 'nativz';
+  const safeName = escapeHtml(opts.memberFirstName.trim() || 'team');
+  const when = escapeHtml(formatShootDateTime(opts.shootDateISO));
+  const safeTitle = escapeHtml(opts.shootTitle);
+  const safeLocation = opts.location ? escapeHtml(opts.location) : null;
+
+  const subject = opts.clientName
+    ? `Shoot in 48 hours: ${opts.clientName}, send a brief`
+    : `Shoot in 48 hours: ${opts.shootTitle}`;
+
+  const heading = opts.clientName
+    ? `${safeName}, you have a ${escapeHtml(opts.clientName)} shoot in 48 hours.`
+    : `${safeName}, you have a shoot in 48 hours.`;
+
+  const subtext = opts.clientName
+    ? `<span class="highlight">${escapeHtml(opts.clientName)}</span> is on the calendar for <strong>${when}</strong>${safeLocation ? ` at ${safeLocation}` : ''}. Open Content Lab, switch to ${escapeHtml(opts.clientName)} in the brand pill, and put together a brief: script ideas, video angles, anything the crew needs to walk on set with.`
+    : `<strong>${safeTitle}</strong> is on the calendar for <strong>${when}</strong>${safeLocation ? ` at ${safeLocation}` : ''}. We couldn't auto-match a client to this event. Take a look at the shoot and write a brief in Content Lab so the crew shows up ready.`;
+
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: 'shoot_brief_reminder',
+    agency,
+    to: opts.to,
+    recipientName: opts.memberFirstName,
+    clientId: opts.clientId ?? null,
+    subject,
+    html: layout(`
+      <div class="card">
+        <h1 class="heading">${heading}</h1>
+        <p class="subtext">${subtext}</p>
+        <div class="button-wrap">
+          <a href="${opts.contentLabUrl}" class="button">Open Content Lab &rarr;</a>
+        </div>
+        <hr class="divider" />
+        <p class="small">
+          This is an internal heads-up, no client sees it. Fired 48 hours before every shoot on the team calendar.
+        </p>
+      </div>
+    `, agency),
+    metadata: {
+      shootId: opts.shootId,
+      shootTitle: opts.shootTitle,
+      shootDate: opts.shootDateISO,
+      clientName: opts.clientName,
+      hadLocation: !!opts.location,
+    },
+  });
+}

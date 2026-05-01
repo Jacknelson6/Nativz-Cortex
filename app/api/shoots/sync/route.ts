@@ -13,6 +13,28 @@ interface GoogleCalendarEvent {
   start: { dateTime?: string; date?: string };
   end: { dateTime?: string; date?: string };
   status: string;
+  attendees?: Array<{
+    email?: string;
+    responseStatus?: 'accepted' | 'declined' | 'tentative' | 'needsAction';
+    self?: boolean;
+    resource?: boolean;
+  }>;
+}
+
+function extractAttendeeEmails(event: GoogleCalendarEvent): string[] {
+  const list = event.attendees ?? [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const a of list) {
+    if (!a.email) continue;
+    if (a.resource) continue; // Conference rooms / shared resources, not people.
+    if (a.responseStatus === 'declined') continue; // They said no; don't nudge them.
+    const email = a.email.trim().toLowerCase();
+    if (!email || seen.has(email)) continue;
+    seen.add(email);
+    out.push(email);
+  }
+  return out;
 }
 
 async function fetchCalendarEvents(
@@ -132,6 +154,7 @@ export async function POST() {
 
       const shootDate = new Date(startStr);
       const clientId = matchClient(event.summary ?? '');
+      const attendeeEmails = extractAttendeeEmails(event);
 
       // Check if this event already exists
       const { data: existing } = await adminClient
@@ -149,6 +172,7 @@ export async function POST() {
             shoot_date: shootDate.toISOString(),
             location: event.location ?? null,
             notes: event.description ?? null,
+            attendee_emails: attendeeEmails,
             ...(clientId ? { client_id: clientId } : {}),
           })
           .eq('id', existing.id);
@@ -161,6 +185,7 @@ export async function POST() {
             shoot_date: shootDate.toISOString(),
             location: event.location ?? null,
             notes: event.description ?? null,
+            attendee_emails: attendeeEmails,
             client_id: clientId,
             google_event_id: googleEventId,
             google_calendar_event_created: true,

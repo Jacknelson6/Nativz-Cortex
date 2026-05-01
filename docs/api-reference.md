@@ -2,7 +2,7 @@
 
 > **For AI agents:** This document describes every API endpoint that exists on disk. Auto-generated from `app/api/**/route.ts` by `scripts/generate-api-docs.ts` — do not edit by hand. Re-run the script after adding/removing routes or tweaking a JSDoc block.
 
-**646 endpoints across 32 sections.**
+**702 endpoints across 32 sections.**
 
 ## Authentication
 
@@ -2256,6 +2256,8 @@ _Shoot scheduling, planning, Google Calendar integration._
 
 ### `GET /api/calendar/drops/:id`
 
+### `GET /api/calendar/drops/:id/activity`
+
 ### `POST /api/calendar/drops/:id/posts/:postId/revision/complete`
 
 Admin-only. Stamps `revisions_completed_at` on every `post_review_links` row tied to this post (across all share links for the drop). When this resolves the last open `changes_requested` in the drop, fires the `calendar_revisions_complete` event email to portal users for the client.
@@ -2320,13 +2322,63 @@ Soft-delete: flips is_active=false instead of removing the row, so any historica
 
 Update one person's attributes and optionally replace their email aliases. Email replacement is atomic: we delete the existing rows then insert the new set inside a best-effort sequence — if the insert fails we re-insert the old list so we don't strand a person with no emails.
 
+### `GET /api/calendar/review`
+
+Returns the share-link inventory powering the new "Review" subpage. One row per share link, with enough aggregates to render a status pill on the bento card (counts of approved / changes-requested per included post). Heavy lifting happens server-side so the client just renders. Scoping: - admins: optionally narrowed to ?clientId= (defaults to all visible brands). No org filter — admin already sees every brand they have access to via the active brand pill upstream. - viewers: scoped to clients in their `user_client_access` rows. Pure server-side filter, no trusting of the request body.
+
+### `PATCH /api/calendar/review/:id`
+
+### `GET /api/calendar/review/contacts`
+
+### `POST /api/calendar/review/contacts`
+
+### `DELETE /api/calendar/review/contacts/:id`
+
+### `PATCH /api/calendar/review/contacts/:id`
+
 ### `GET /api/calendar/share/:token`
 
 ### `POST /api/calendar/share/:token/caption`
 
 ### `DELETE /api/calendar/share/:token/comment`
 
+### `PATCH /api/calendar/share/:token/comment`
+
+Detect natural-language approval inside a "comment" / "changes_requested" payload. Some clients submit the revision form with text like "approved" or "love this, change nothing" — the smart move is to treat those as an approval rather than a vague request for changes. Heuristic: 1. Trimmed message must be ≤80 chars (long, nuanced messages are not blanket approvals). 2. Must match an approval phrase. 3. Must not contain a hedging conjunction ("but", "however", …) that signals a follow-up request. Conservative on purpose. Better to miss a fuzzy approval than to publish a post the client wanted to tweak. / function looksLikeApproval(content: string): boolean { const trimmed = content.trim(); if (!trimmed || trimmed.length > 80) return false; const APPROVAL_RE = /\b(approved?|approving|lgtm|sgtm|ship ?it|good to go|all good|love (this|it|them)|nothing to change|change nothing|no (changes?|edits|notes|revisions?)|leave (as is|it)|perfect|looks (good|great|amazing|perfect|fantastic)|sounds (good|great)|green ?light)\b/i; if (!APPROVAL_RE.test(trimmed)) return false; if (/\b(but|except|however|though|other than|aside from)\b/i.test(trimmed)) return false; return true; } const TITLE_BY_STATUS: Record<'approved' | 'changes_requested' | 'comment', (a: string, c: string) => string> = { approved: (a, c) => `${a} approved a post in ${c}`, changes_requested: (a, c) => `${a} requested changes in ${c}`, comment: (a, c) => `${a} left a comment on ${c}`, }; export async function POST( req: Request, ctx: { params: Promise<{ token: string }> }, ) { const { token } = await ctx.params; const body = await req.json().catch(() => null); const parsed = BodySchema.safeParse(body); if (!parsed.success) { return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 }); } const admin = createAdminClient(); const { data: link } = await admin .from('content_drop_share_links') .select('drop_id, post_review_link_map, expires_at') .eq('token', token) .single<{ drop_id: string; post_review_link_map: Record<string, string>; expires_at: string }>(); if (!link) return NextResponse.json({ error: 'not found' }, { status: 404 }); if (new Date(link.expires_at) < new Date()) { return NextResponse.json({ error: 'link expired' }, { status: 410 }); } const reviewLinkMap = link.post_review_link_map ?? {}; const reviewLinkId = reviewLinkMap[parsed.data.postId]; if (!reviewLinkId) { return NextResponse.json({ error: 'post is not part of this share link' }, { status: 400 }); } // Smart approval: if the user submitted via "Add revision" (or as a plain // comment) but the body reads like an approval, upgrade the status. We // attach a metadata flag so the audit trail still shows it was inferred, // not a button-press, and the public UI can surface that nuance. const submittedStatus = parsed.data.status; const trimmedContent = parsed.data.content.trim(); const inferredApproval = submittedStatus !== 'approved' && looksLikeApproval(trimmedContent); const finalStatus: 'approved' | 'changes_requested' | 'comment' = inferredApproval ? 'approved' : submittedStatus; const insertMetadata: Record<string, unknown> = inferredApproval ? { auto_approved: true, original_status: submittedStatus } : {}; // Only honor a timestamp on plain comments and change requests — anchoring // an "approved" stamp to a specific moment doesn't carry meaning. const timestampSeconds = finalStatus === 'comment' || finalStatus === 'changes_requested' ? parsed.data.timestampSeconds ?? null : null; const { data, error } = await admin .from('post_review_comments') .insert({ review_link_id: reviewLinkId, author_name: parsed.data.authorName.trim(), content: trimmedContent, status: finalStatus, attachments: parsed.data.attachments ?? [], metadata: insertMetadata, timestamp_seconds: timestampSeconds, }) .select('id, review_link_id, author_name, content, status, created_at, attachments, metadata, timestamp_seconds') .single(); if (error || !data) { return NextResponse.json({ error: error?.message ?? 'failed' }, { status: 500 }); } // Run notifications + Monday sync + Zernio publish AFTER the response. // `after()` keeps the function alive past the response on Vercel, so // multi-step work (Monday writeback, Zernio publish) doesn't get cut off // mid-flight. Bare fire-and-forget would race against serverless shutdown — // that's how the Monday sync was silently dropping while chat 🎉 messages // still landed. after(async () => { try { await notifyAdminsOfComment(admin, link.drop_id, token, reviewLinkMap, { postId: parsed.data.postId, authorName: parsed.data.authorName.trim(), content: trimmedContent, status: finalStatus, attachments: parsed.data.attachments ?? [], }); } catch (err) { console.error('Comment notification failed:', err); } // Recompute drop-level approval state and push to Monday. State-derived // (not event-driven), so a single approval that doesn't yet make // everything approved still leaves Monday at "Waiting on approval", and // the next event re-syncs. try { await syncMondayApprovalForDrop(admin, link.drop_id); } catch (err) { console.error('Monday calendar approval sync failed:', err); } if (finalStatus === 'approved') { // publishScheduledPost is idempotent (returns alreadyPublished=true if // already scheduled), so re-approval / multiple approvers won't double-post. try { await publishScheduledPost(admin, parsed.data.postId); } catch (err) { console.error(`Approval → Zernio publish failed for post ${parsed.data.postId}:`, err); } } }); return NextResponse.json({ comment: data }); } export async function DELETE( req: Request, ctx: { params: Promise<{ token: string }> }, ) { const { token } = await ctx.params; const body = await req.json().catch(() => null); const parsed = DeleteSchema.safeParse(body); if (!parsed.success) { return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 }); } const admin = createAdminClient(); const { data: link } = await admin .from('content_drop_share_links') .select('drop_id, post_review_link_map, expires_at') .eq('token', token) .single<{ drop_id: string; post_review_link_map: Record<string, string>; expires_at: string }>(); if (!link) return NextResponse.json({ error: 'not found' }, { status: 404 }); if (new Date(link.expires_at) < new Date()) { return NextResponse.json({ error: 'link expired' }, { status: 410 }); } const { data: comment } = await admin .from('post_review_comments') .select('id, review_link_id, status') .eq('id', parsed.data.commentId) .single<{ id: string; review_link_id: string; status: string }>(); if (!comment) return NextResponse.json({ error: 'not found' }, { status: 404 }); const allowedReviewIds = new Set(Object.values(link.post_review_link_map ?? {})); if (!allowedReviewIds.has(comment.review_link_id)) { return NextResponse.json({ error: 'comment is not part of this share link' }, { status: 400 }); } const { error: delErr } = await admin .from('post_review_comments') .delete() .eq('id', comment.id); if (delErr) { return NextResponse.json({ error: delErr.message }, { status: 500 }); } // Only approval deletions affect the Monday-side state ("Client approved" → // "Waiting on approval"). Other history rows (caption_edit, tag_edit, // schedule_change, video_revised, plain comments) are pure audit trail — // skip the sync to avoid a needless Monday round-trip. if (comment.status === 'approved') { after(async () => { try { await syncMondayApprovalForDrop(admin, link.drop_id); } catch (err) { console.error('Monday calendar approval sync failed (delete):', err); } }); } return NextResponse.json({ ok: true, commentId: comment.id }); } /** Toggle the "resolved" flag on a `changes_requested` history row. Editors use this to mark a revision request as handled — the icon flips from a warning to a green check and the label changes to "Revised". Stored as a metadata flag rather than a status change so the comment still threads correctly with other change-request rows in the audit trail.
+
 ### `POST /api/calendar/share/:token/comment`
+
+### `GET /api/calendar/share/:token/followup`
+
+### `POST /api/calendar/share/:token/followup`
+
+### `POST /api/calendar/share/:token/notify-revisions`
+
+### `DELETE /api/calendar/share/:token/revision/:postId`
+
+Admin-only "remove from calendar" — drops the post from this share link's `included_post_ids` and `post_review_link_map`. Intentionally non-destructive: the underlying `scheduled_posts` row and `content_drop_videos` row stay intact, so an editor who hits this by mistake can re-include the post from admin UI without losing the caption / media / comments. Use this when a client says "actually, pull that one" or when the editor decides a post shouldn't be in the calendar going to the brand.
+
+### `POST /api/calendar/share/:token/revision/:postId`
+
+Admin-only re-upload of a revised cut from inside the share link. Mirrors /api/calendar/drops/[id]/posts/[postId]/revision/upload but resolves the drop id from the share token so the editor doesn't need to know it. On success, stamps revised_video_notify_pending=true so the floating "notify client?" toast persists across renders.
+
+### `POST /api/calendar/share/:token/revision/:postId/mux-finalize`
+
+Admin-only. Called by the share-page client after the Mux uploader widget reports success. Stamps the revision metadata that the toast + sync logic downstream rely on: - revised_video_uploaded_at = now - revised_video_uploaded_by = the editor - revised_video_notify_pending = true (so the floating "notify client?" toast persists across renders) - mux_status = 'processing' (Mux is now packaging the asset) The actual playback id arrives later via the asset.ready webhook. The client polls the share endpoint for that.
+
+### `POST /api/calendar/share/:token/revision/:postId/mux-upload`
+
+Admin-only. Mints a Mux direct-upload URL the browser can PUT bytes to — bypassing Vercel's 4.5MB body limit (the reason multipart uploads to our own function were 413-ing on real videos). We persist the upload id immediately so the webhook handler can match it back to the right row when Mux pings us with the eventual asset/playback id. Companion endpoints: - mux-finalize: client calls after the uploader widget reports success, so we can stamp revised_video_uploaded_at + flip notify-pending in the same way the legacy upload route did. - /api/mux/webhook: receives video.asset.created / video.asset.ready and fills in mux_asset_id + mux_playback_id.
+
+### `POST /api/calendar/share/:token/revoke`
+
+Admin-only "revoke link" — sets `expires_at` to now so the next visitor gets the 410 expired-link page. Non-destructive: the link row, comments, and underlying drop are all kept intact, so an admin who hits revoke by mistake can extend the link from elsewhere if needed.
+
+### `POST /api/calendar/share/:token/schedule`
+
+### `POST /api/calendar/share/:token/tags`
+
+### `POST /api/calendar/share/:token/title`
 
 ### `POST /api/calendar/share/:token/upload`
 
@@ -4113,7 +4165,7 @@ id - Scheduled post UUID
 
 ### `PUT /api/scheduler/posts/:id`
 
-Update a scheduled post's fields, platform links, and/or media attachments. When media is replaced, old media items are unmarked as used. Platform links are replaced atomically (delete then insert) if platform_profile_ids is provided.
+Resolve the client_id a scheduled post belongs to and assert that the given user is allowed to mutate it. Admins skip the access check; viewers must have a row in `user_client_access` for the owning brand. Returns `{ ok: true }` when the user is allowed, or a NextResponse with the appropriate 403/404 to bail out with. / async function assertPostAccess( postId: string, userId: string, ): Promise<{ ok: true } | { ok: false; response: NextResponse }> { const admin = createAdminClient(); const { data: post } = await admin .from('scheduled_posts') .select('client_id') .eq('id', postId) .maybeSingle(); if (!post) { return { ok: false, response: NextResponse.json({ error: 'Not found' }, { status: 404 }), }; } if (await isAdmin(userId)) return { ok: true }; const { data: access } = await admin .from('user_client_access') .select('client_id') .eq('user_id', userId) .eq('client_id', post.client_id) .maybeSingle(); if (!access) { return { ok: false, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }), }; } return { ok: true }; } const UpdatePostSchema = z.object({ caption: z.string().optional(), hashtags: z.array(z.string()).optional(), scheduled_at: z.string().nullable().optional(), status: z.enum(['draft', 'scheduled']).optional(), platform_profile_ids: z.array(z.string()).optional(), media_ids: z.array(z.string()).optional(), cover_image_url: z.string().nullable().optional(), tagged_people: z.array(z.string()).optional(), collaborator_handles: z.array(z.string()).optional(), }); /** PUT /api/scheduler/posts/[id] Update a scheduled post's fields, platform links, and/or media attachments. When media is replaced, old media items are unmarked as used. Platform links are replaced atomically (delete then insert) if platform_profile_ids is provided.
 
 **Auth:** Required (any authenticated user)
 
@@ -5270,6 +5322,10 @@ by the import preview ("does this look right? confirm") flow.
 
 ### `POST /api/accounting/import`
 
+### `PATCH /api/accounting/payouts/:id`
+
+Updates the Wise URL, status, or notes on a single payout row. Marking status=paid stamps paid_at; flipping back to anything else clears it so the audit trail stays accurate.
+
 ### `GET /api/accounting/periods`
 
 ### `POST /api/accounting/periods`
@@ -5282,7 +5338,11 @@ by the import preview ("does this look right? confirm") flow.
 
 ### `GET /api/accounting/periods/:id/export`
 
-the period. Columns are ordered for the "drop into a spreadsheet and paste into bookkeeping" workflow, with headers the tax person can read.
+the period. ?format=quickbooks (default) — five-column Bills shape that QuickBooks Online imports cleanly: Date, Vendor, Account, Memo, Amount. ?format=detailed — long-form columns for spreadsheet review.
+
+### `GET /api/accounting/periods/:id/payouts`
+
+Aggregates every payroll_entry in the period by payee identity (either team_member_id or normalised payee_label), joins to the matching payroll_payouts row (Wise URL + status), and returns the controller-facing roll-up. Auto-creates payout rows on first read so the UI always has a stable id to PATCH against.
 
 ### `GET /api/accounting/periods/:id/submit-tokens`
 
@@ -5303,6 +5363,64 @@ the period. Columns are ordered for the "drop into a spreadsheet and paste into 
 ### `DELETE /api/admin/banners/:id`
 
 ### `PATCH /api/admin/banners/:id`
+
+### `POST /api/admin/connection-invites`
+
+### `GET /api/admin/connection-invites/context`
+
+Sidekick endpoint for the InviteBuilderModal. Returns the brand's `contacts` rows (id / name / email / is_primary) so the admin can pick recipients, plus a flag for whether `clients.chat_webhook_url` is a real Google Chat webhook (drives whether the "ping the team room" toggle is enabled). Auth: admin only.
+
+### `GET /api/admin/content-tools/connections`
+
+### `GET /api/admin/content-tools/connections-matrix`
+
+### `POST /api/admin/content-tools/connections-matrix/sync`
+
+### `GET /api/admin/content-tools/contacts-summary`
+
+### `GET /api/admin/content-tools/email-activity`
+
+### `GET /api/admin/content-tools/quick-schedule`
+
+### `POST /api/admin/content-tools/quick-schedule/start`
+
+### `GET /api/admin/editing/projects`
+
+### `POST /api/admin/editing/projects`
+
+### `DELETE /api/admin/editing/projects/:id`
+
+### `GET /api/admin/editing/projects/:id`
+
+### `PATCH /api/admin/editing/projects/:id`
+
+### `GET /api/admin/editing/projects/:id/activity`
+
+### `POST /api/admin/editing/projects/:id/raw-videos`
+
+### `DELETE /api/admin/editing/projects/:id/raw-videos/:videoId`
+
+Hard delete: drops the row and best-effort removes the underlying storage object. No soft-delete flag on raw footage; if the videographer says "this clip shouldn't be here" we want it gone so the editor doesn't waste time scrubbing it.
+
+### `DELETE /api/admin/editing/projects/:id/share`
+
+### `GET /api/admin/editing/projects/:id/share`
+
+### `POST /api/admin/editing/projects/:id/share`
+
+Mints a fresh share token. Returns the public review URL the editor pastes into the client email. No body — every call creates a new link (lets the editor revoke an old one by ignoring it; matches the social drops flow). GET /api/admin/editing/projects/:id/share Lists past links for this project + view counts so the detail panel can show "shared 3 times, last opened yesterday."
+
+### `GET /api/admin/editing/projects/:id/share/:linkId/email`
+
+### `POST /api/admin/editing/projects/:id/share/:linkId/email`
+
+### `POST /api/admin/editing/projects/:id/videos`
+
+### `DELETE /api/admin/editing/projects/:id/videos/:videoId`
+
+### `PATCH /api/admin/editing/projects/:id/videos/:videoId`
+
+### `GET /api/admin/editing/team`
 
 ### `GET /api/admin/email-hub/contacts`
 
@@ -5432,7 +5550,7 @@ image file (multipart form, field name 'file'), stores it in the 'proposal-draft
 
 ### `GET /api/admin/topic-search-llm-cost`
 
-Estimated LLM cost for one topic search: - currently configured topic-search model (from agency_settings) - that model's per-1M-token pricing (cached OpenRouter catalog) - empirical avg input/output tokens per search over the last 30 days - resulting estimated $/search Token averages come from `api_usage_logs` rows where `feature` starts with `topic_search`, divided by the number of completed `topic_searches` in the same window. If the sample is empty we fall back to coarse defaults so the card never blanks out — `sampleSize` lets the UI flag low-confidence math.
+A topic search fires ~8 LLM calls in <100ms; group rows that share user_id + this bucket into one session. 1-minute is generous enough to cover the slowest pipeline runs without colliding with a follow-up search. */ const SESSION_BUCKET_MS = 60_000; /** GET /api/admin/topic-search-llm-cost Estimated LLM cost for one topic search: - currently configured topic-search model (from agency_settings) - that model's per-1M-token pricing (cached OpenRouter catalog) - empirical avg input/output tokens per search over the last 30 days - resulting estimated $/search The pipeline fires multiple LLM calls per search (planner + per-subtopic research + merger) and `api_usage_logs` doesn't carry a `search_id`, so we infer sessions by bucketing rows by `(user_id, minute)`. This matches what an operator means by "one search" and avoids the old bug where we divided total tokens by `topic_searches.count` — which over-counts because many searches in the window pre-date the LLM pipeline (zero log rows) and dilute the average to ~5% of reality.
 
 ### `DELETE /api/admin/users`
 
@@ -6079,7 +6197,23 @@ Delete a group. ON DELETE SET NULL on clients.group_id means members fall back t
 
 Rename, recolor, or reorder a group.
 
+### `GET /api/editing/share/:token`
+
+### `DELETE /api/editing/share/:token/comment`
+
+### `PATCH /api/editing/share/:token/comment`
+
+Public comment endpoints for the editing-project review page. Mirrors `/api/calendar/share/[token]/comment` but is significantly smaller because editing projects have no Monday board / no Zernio publish flow / no per-client chat webhooks (yet). All we need is: - POST add a comment / approve / request-changes on a video (or the project as a whole if `videoId` is omitted). - DELETE remove a comment that this share link authored. - PATCH toggle `metadata.resolved` on a `changes_requested` row so the editor can mark a revision as handled. Auth model: anyone with the share token can post. We re-validate the token on every call (against `expires_at` + `archived_at`) so a stale client can't keep posting after revocation. / const AttachmentSchema = z.object({ url: z.string().url(), filename: z.string().min(1).max(200), mime_type: z.string().min(1).max(120), size_bytes: z.number().int().nonnegative(), }); const BodySchema = z .object({ // Optional. When omitted the comment is project-level (e.g. an // "approve all" stamp). Required when status === 'video_revised' // since that event always belongs to a specific clip. videoId: z.string().uuid().nullable().optional(), authorName: z.string().min(1).max(80), content: z.string().max(2000).default(''), // 'video_revised' is an audit-trail row written after an admin // replaces a clip via the public review page. We accept it from // the same endpoint instead of standing up a parallel "events" // route so the activity feed has one source. status: z.enum([ 'approved', 'changes_requested', 'comment', 'video_revised', ]), attachments: z.array(AttachmentSchema).max(10).optional(), // Frame-anchor in seconds (for change requests / plain comments). timestampSeconds: z.number().min(0).max(86400).nullable().optional(), }) .refine( (v) => v.status === 'approved' || v.status === 'video_revised' || v.content.trim().length > 0 || (v.attachments?.length ?? 0) > 0, { message: 'comment must have text or at least one attachment', path: ['content'], }, ) .refine((v) => v.status !== 'video_revised' || Boolean(v.videoId), { message: 'video_revised events must include a videoId', path: ['videoId'], }); const DeleteSchema = z.object({ commentId: z.string().uuid() }); const PatchSchema = z.object({ commentId: z.string().uuid(), resolved: z.boolean(), }); /** Smart approval detection — same heuristic as the calendar route. If a reviewer types "approved" or "perfect, no changes" but submits via the comment / change-request form, we infer an approval rather than making them re-click. Conservative on purpose; long, hedging text stays a comment. / function looksLikeApproval(content: string): boolean { const trimmed = content.trim(); if (!trimmed || trimmed.length > 80) return false; const APPROVAL_RE = /\b(approved?|approving|lgtm|sgtm|ship ?it|good to go|all good|love (this|it|them)|nothing to change|change nothing|no (changes?|edits|notes|revisions?)|leave (as is|it)|perfect|looks (good|great|amazing|perfect|fantastic)|sounds (good|great)|green ?light)\b/i; if (!APPROVAL_RE.test(trimmed)) return false; if (/\b(but|except|however|though|other than|aside from)\b/i.test(trimmed)) return false; return true; } const TITLE_BY_STATUS: Record< 'approved' | 'changes_requested' | 'comment', (a: string, c: string) => string > = { approved: (a, c) => `${a} approved an edit on ${c}`, changes_requested: (a, c) => `${a} requested changes on ${c}`, comment: (a, c) => `${a} left a comment on ${c}`, }; interface ShareLinkRow { id: string; project_id: string; expires_at: string; archived_at: string | null; } async function loadShareLink( admin: ReturnType<typeof createAdminClient>, token: string, ): Promise< | { ok: true; link: ShareLinkRow } | { ok: false; error: string; status: number } > { const { data: link } = await admin .from('editing_project_share_links') .select('id, project_id, expires_at, archived_at') .eq('token', token) .maybeSingle<ShareLinkRow>(); if (!link) return { ok: false, error: 'not_found', status: 404 }; if (link.archived_at) return { ok: false, error: 'revoked', status: 410 }; if (new Date(link.expires_at).getTime() < Date.now()) { return { ok: false, error: 'expired', status: 410 }; } return { ok: true, link }; } export async function POST( req: Request, ctx: { params: Promise<{ token: string }> }, ) { const { token } = await ctx.params; const body = await req.json().catch(() => null); const parsed = BodySchema.safeParse(body); if (!parsed.success) { return NextResponse.json( { error: parsed.error.flatten() }, { status: 400 }, ); } const admin = createAdminClient(); const linkResult = await loadShareLink(admin, token); if (!linkResult.ok) { return NextResponse.json( { error: linkResult.error }, { status: linkResult.status }, ); } const link = linkResult.link; // If a video id is supplied, make sure it actually belongs to this // project — otherwise a malicious client could pin comments onto // someone else's videos by guessing UUIDs. if (parsed.data.videoId) { const { data: video } = await admin .from('editing_project_videos') .select('id') .eq('id', parsed.data.videoId) .eq('project_id', link.project_id) .maybeSingle<{ id: string }>(); if (!video) { return NextResponse.json( { error: 'video_not_in_project' }, { status: 400 }, ); } } // Smart approval upgrade: same rule as calendar. We tag the metadata // so the audit trail surfaces "auto approved from text" later. The // upgrade only fires on reviewer-typed statuses; system-generated // `video_revised` events never get auto-approved. const submittedStatus = parsed.data.status; const trimmedContent = parsed.data.content.trim(); const inferredApproval = submittedStatus !== 'approved' && submittedStatus !== 'video_revised' && looksLikeApproval(trimmedContent); const finalStatus: | 'approved' | 'changes_requested' | 'comment' | 'video_revised' = inferredApproval ? 'approved' : submittedStatus; const insertMetadata: Record<string, unknown> = inferredApproval ? { auto_approved: true, original_status: submittedStatus } : {}; // Only honour timestamps on plain comments + change requests. const timestampSeconds = finalStatus === 'comment' || finalStatus === 'changes_requested' ? parsed.data.timestampSeconds ?? null : null; const { data: inserted, error } = await admin .from('editing_project_review_comments') .insert({ project_id: link.project_id, video_id: parsed.data.videoId ?? null, share_link_id: link.id, author_name: parsed.data.authorName.trim(), content: trimmedContent, status: finalStatus, attachments: parsed.data.attachments ?? [], metadata: insertMetadata, timestamp_seconds: timestampSeconds, }) .select( 'id, video_id, share_link_id, author_name, author_user_id, content, status, attachments, metadata, timestamp_seconds, created_at', ) .single(); if (error || !inserted) { return NextResponse.json( { error: error?.message ?? 'failed' }, { status: 500 }, ); } // Notify Jack (admin) so they can pull up the project. Mirrors the // calendar share notification pattern, minus the Monday + Zernio // legs that don't apply here. We skip notifications for the // synthesised `video_revised` audit row — that event is always // authored by an admin who's already on the page. if (finalStatus !== 'video_revised') { after(async () => { try { await notifyAdminsOfComment(admin, link.project_id, { authorName: parsed.data.authorName.trim(), content: trimmedContent, status: finalStatus, attachments: parsed.data.attachments ?? [], }); } catch (err) { console.error('Editing comment notification failed:', err); } }); } return NextResponse.json({ comment: inserted }); } export async function DELETE( req: Request, ctx: { params: Promise<{ token: string }> }, ) { const { token } = await ctx.params; const body = await req.json().catch(() => null); const parsed = DeleteSchema.safeParse(body); if (!parsed.success) { return NextResponse.json( { error: parsed.error.flatten() }, { status: 400 }, ); } const admin = createAdminClient(); const linkResult = await loadShareLink(admin, token); if (!linkResult.ok) { return NextResponse.json( { error: linkResult.error }, { status: linkResult.status }, ); } const link = linkResult.link; const { data: comment } = await admin .from('editing_project_review_comments') .select('id, project_id') .eq('id', parsed.data.commentId) .maybeSingle<{ id: string; project_id: string }>(); if (!comment) { return NextResponse.json({ error: 'not_found' }, { status: 404 }); } if (comment.project_id !== link.project_id) { return NextResponse.json( { error: 'comment_not_in_project' }, { status: 400 }, ); } const { error: delErr } = await admin .from('editing_project_review_comments') .delete() .eq('id', comment.id); if (delErr) { return NextResponse.json({ error: delErr.message }, { status: 500 }); } return NextResponse.json({ ok: true, commentId: comment.id }); } /** Toggle `metadata.resolved` on a `changes_requested` row so editors can mark a revision as handled. Mirrors the calendar PATCH but skips the "all revisions complete" Google Chat ping (no per-client webhook configured for editing projects yet).
+
+### `POST /api/editing/share/:token/comment`
+
+### `POST /api/editing/share/:token/upload`
+
 ### `POST /api/email/preview`
+
+### `POST /api/mux/webhook`
+
+Receives Mux platform webhooks. The two we actually act on: - video.upload.asset_created — fires when the upload finishes; payload carries the upload id (top-level `data.id`) and the new asset id (`data.asset_id`). We use this to attach mux_asset_id to our row. - video.asset.ready — fires when the asset is fully packaged for playback; we read the public playback id and flip mux_status='ready'. Everything else is logged + ignored. Verification uses `MUX_WEBHOOK_SECRET` (set in .env.local once the webhook is created in the Mux dashboard). Without the secret we still process events in dev so the happy path can be exercised locally — production deploys MUST set it.
 
 ### `POST /api/offer/:slug/sign`
 
@@ -6208,6 +6342,12 @@ Returns a short-lived signed URL for the admin to download the file.
 ### `POST /api/proposals/public/:slug/sign`
 
 ### `PATCH /api/proposals/templates/:id/payment-links`
+
+### `POST /api/public/clients/:slug/connect/:platform`
+
+### `GET /api/public/connection-invites/:token`
+
+### `POST /api/public/connection-invites/:token/connect/:platform`
 
 ### `GET /api/public/onboarding/:token`
 
