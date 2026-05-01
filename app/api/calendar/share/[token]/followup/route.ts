@@ -8,6 +8,7 @@ import {
   buildCalendarFollowupDraft,
   sendCalendarFollowupEmail,
 } from '@/lib/email/resend';
+import { getClientNotificationRecipients } from '@/lib/email/notification-recipients';
 
 /**
  * GET /api/calendar/share/[token]/followup
@@ -16,11 +17,10 @@ import {
  *
  * POST /api/calendar/share/[token]/followup
  *   Admin-only manual nudge. Optionally accepts `{ subject, message }`
- *   overrides from the draft dialog. Emails every POC with
- *   notifications enabled on `content_drop_review_contacts`, stamps
- *   the share-link's `last_followup_at` to now, and increments
- *   `followup_count`. Returns the new timestamp + count so the table
- *   can update optimistically without a full refetch.
+ *   overrides from the draft dialog. Emails every POC on the brand
+ *   profile, stamps the share-link's `last_followup_at` to now, and
+ *   increments `followup_count`. Returns the new timestamp + count so
+ *   the table can update optimistically without a full refetch.
  */
 
 function firstName(full: string | null | undefined): string {
@@ -45,12 +45,6 @@ interface DropRow {
     name: string;
     agency: string | null;
   } | null;
-}
-
-interface ReviewContactRow {
-  email: string | null;
-  name: string | null;
-  notifications_enabled: boolean | null;
 }
 
 async function loadFollowupContext(token: string) {
@@ -91,16 +85,7 @@ async function loadFollowupContext(token: string) {
   const clientName = drop.clients?.name ?? 'your brand';
   const agency = getBrandFromAgency(drop.clients?.agency ?? null);
 
-  const { data: contacts } = await admin
-    .from('content_drop_review_contacts')
-    .select('email, name, notifications_enabled')
-    .eq('client_id', clientId)
-    .returns<ReviewContactRow[]>();
-
-  const eligible = (contacts ?? []).filter(
-    (c): c is { email: string; name: string | null; notifications_enabled: boolean } =>
-      !!c.email && c.notifications_enabled !== false,
-  );
+  const eligible = await getClientNotificationRecipients(admin, clientId);
 
   return {
     admin,
@@ -123,7 +108,7 @@ export async function GET(
   const { eligible, clientName } = ctxResult;
   if (eligible.length === 0) {
     return NextResponse.json(
-      { error: 'no review contacts with notifications enabled for this brand' },
+      { error: 'no contacts on the brand profile to email' },
       { status: 400 },
     );
   }
@@ -170,7 +155,7 @@ export async function POST(
 
   if (eligible.length === 0) {
     return NextResponse.json(
-      { error: 'no review contacts with notifications enabled for this brand' },
+      { error: 'no contacts on the brand profile to email' },
       { status: 400 },
     );
   }

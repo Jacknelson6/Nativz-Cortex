@@ -19,10 +19,11 @@ import { Button } from '@/components/ui/button';
  *      content pipeline has fired (followups, revision notifies,
  *      final-call nudges). Pulled from `email_log` filtered by the
  *      calendar-related type keys; one row per send.
- *   2. POC contacts list -- "who gets notified when". This used to
- *      live on the per-brand /review page; the cross-brand view here
- *      summarizes how many POCs each brand has registered, so an
- *      admin can spot brands with notifications turned off entirely.
+ *   2. POC contacts list -- "who gets notified when". Brand profile
+ *      is the single source of truth for notification recipients;
+ *      the cross-brand view here summarizes how many POCs each brand
+ *      has registered, so an admin can spot brands with no contacts
+ *      (which would skip all notifications).
  *
  * Each panel owns its own loading / error state so a contacts-API
  * regression can't block the activity feed from rendering, and vice
@@ -51,7 +52,6 @@ interface ContactsSummaryRow {
   clientId: string;
   clientName: string;
   total: number;
-  notifyEnabled: number;
 }
 
 export function NotificationsTab() {
@@ -209,8 +209,6 @@ function ContactsOverview() {
     void load();
   }, []);
 
-  const brandsWithoutNotify = rows.filter((r) => r.notifyEnabled === 0).length;
-
   return (
     <div className="overflow-hidden rounded-xl border border-nativz-border bg-surface">
       <div className="flex items-center gap-3 border-b border-nativz-border px-5 py-4">
@@ -219,14 +217,12 @@ function ContactsOverview() {
         </span>
         <div className="min-w-0">
           <div className="text-sm font-semibold text-text-primary">
-            Review contacts
+            Brand profile contacts
           </div>
           <div className="mt-0.5 text-xs text-text-muted">
             {loading
               ? 'Loading...'
-              : brandsWithoutNotify === 0
-                ? `${rows.length} brand${rows.length === 1 ? '' : 's'} with at least one POC`
-                : `${brandsWithoutNotify} brand${brandsWithoutNotify === 1 ? ' has' : 's have'} notifications off`}
+              : `${rows.length} brand${rows.length === 1 ? '' : 's'} with at least one POC`}
           </div>
         </div>
       </div>
@@ -254,10 +250,10 @@ function ContactsOverview() {
         <div className="px-5 py-10 text-center">
           <Mail className="mx-auto mb-3 h-7 w-7 text-text-tertiary" />
           <p className="text-sm text-text-secondary">
-            No review POCs registered.
+            No brand POCs registered.
           </p>
           <p className="mt-1 text-xs text-text-muted">
-            Add review contacts on each brand from /review.
+            Add contacts to each brand from its brand profile.
           </p>
         </div>
       ) : (
@@ -272,19 +268,12 @@ function ContactsOverview() {
                   {row.clientName}
                 </div>
                 <div className="mt-0.5 text-xs text-text-muted">
-                  {row.total} contact{row.total === 1 ? '' : 's'} ·{' '}
-                  {row.notifyEnabled} notified on send
+                  {row.total} contact{row.total === 1 ? '' : 's'} on the brand profile
                 </div>
               </div>
-              {row.notifyEnabled === 0 ? (
-                <span className="inline-flex items-center gap-1 rounded-full border border-status-warning/30 bg-status-warning/10 px-2 py-0.5 text-[11px] font-medium text-status-warning">
-                  Notifications off
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 rounded-full border border-status-success/30 bg-status-success/10 px-2 py-0.5 text-[11px] font-medium text-status-success">
-                  Live
-                </span>
-              )}
+              <span className="inline-flex items-center gap-1 rounded-full border border-status-success/30 bg-status-success/10 px-2 py-0.5 text-[11px] font-medium text-status-success">
+                Live
+              </span>
             </li>
           ))}
         </ul>

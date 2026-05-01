@@ -8,26 +8,24 @@ export const dynamic = 'force-dynamic';
 /**
  * GET /api/admin/content-tools/contacts-summary
  *
- * One row per brand that has at least one POC registered for content
- * review. Used by the Notifications tab on /admin/content-tools to
- * surface "which brands currently have notifications turned off
- * entirely" so an admin can spot a misconfigured client at a glance.
+ * One row per brand that has at least one POC on the brand profile.
+ * Used by the Notifications tab on /admin/content-tools so an admin
+ * can spot a brand with no contacts (won't get notified) at a glance.
  *
- * Aggregates `content_drop_review_contacts` (per-contact rows scoped to
- * a client) into one summary row per `client_id`, joined to `clients`
- * for display name. Sort: most-contacts first, then alphabetical.
+ * Aggregates the `contacts` table (brand profile POC roster) into one
+ * summary row per `client_id`, joined to `clients` for display name.
+ * Sort: most-contacts first, then alphabetical.
  */
 
 interface ContactRow {
   client_id: string;
-  notifications_enabled: boolean | null;
+  email: string | null;
 }
 
 interface SummaryRow {
   clientId: string;
   clientName: string;
   total: number;
-  notifyEnabled: number;
 }
 
 export async function GET() {
@@ -43,20 +41,17 @@ export async function GET() {
   const admin = createAdminClient();
 
   const { data: contacts } = await admin
-    .from('content_drop_review_contacts')
-    .select('client_id, notifications_enabled')
+    .from('contacts')
+    .select('client_id, email')
+    .not('email', 'is', null)
     .returns<ContactRow[]>();
 
   const list = contacts ?? [];
 
-  // Roll up per client_id.
-  const byClient = new Map<string, { total: number; notifyEnabled: number }>();
+  const byClient = new Map<string, number>();
   for (const c of list) {
     if (!c.client_id) continue;
-    const cur = byClient.get(c.client_id) ?? { total: 0, notifyEnabled: 0 };
-    cur.total += 1;
-    if (c.notifications_enabled) cur.notifyEnabled += 1;
-    byClient.set(c.client_id, cur);
+    byClient.set(c.client_id, (byClient.get(c.client_id) ?? 0) + 1);
   }
 
   const clientIds = Array.from(byClient.keys());
@@ -73,8 +68,7 @@ export async function GET() {
     .map((id) => ({
       clientId: id,
       clientName: nameById.get(id) ?? 'Unknown brand',
-      total: byClient.get(id)?.total ?? 0,
-      notifyEnabled: byClient.get(id)?.notifyEnabled ?? 0,
+      total: byClient.get(id) ?? 0,
     }))
     .sort((a, b) => {
       if (b.total !== a.total) return b.total - a.total;

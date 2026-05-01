@@ -11,6 +11,7 @@ import {
   sendEditingDeliverableEmail,
   sendEditingRereviewEmail,
 } from '@/lib/email/resend';
+import { getClientNotificationRecipients } from '@/lib/email/notification-recipients';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,13 +23,12 @@ export const dynamic = 'force-dynamic';
  * POST /api/admin/editing/projects/:id/share/:linkId/email
  *   Admin-only manual send. Optionally accepts `{ subject, message }`
  *   overrides from the draft dialog. Emails every POC on the project's
- *   client with `notifications_enabled` on `content_drop_review_contacts`
- *   and links to the public `/c/edit/<token>` review page.
+ *   client (brand profile contacts) and links to the public
+ *   `/c/edit/<token>` review page.
  *
  * Mirrors the calendar followup flow but keyed on the editing share-link
- * instead of a calendar drop. Recipients live in the shared review
- * contacts table (keyed on `client_id`) so the same POC list that
- * approves calendars also approves edits.
+ * instead of a calendar drop. Recipients are the brand profile POC
+ * roster so the same people who approve calendars also approve edits.
  */
 
 function firstName(full: string | null | undefined): string {
@@ -62,12 +62,6 @@ interface ProjectRow {
     name: string;
     agency: string | null;
   } | null;
-}
-
-interface ReviewContactRow {
-  email: string | null;
-  name: string | null;
-  notifications_enabled: boolean | null;
 }
 
 async function loadEmailContext(projectId: string, linkId: string) {
@@ -126,16 +120,7 @@ async function loadEmailContext(projectId: string, linkId: string) {
   const projectName = project.name?.trim() || clientName;
   const agency = getBrandFromAgency(project.clients?.agency ?? null);
 
-  const { data: contacts } = await admin
-    .from('content_drop_review_contacts')
-    .select('email, name, notifications_enabled')
-    .eq('client_id', clientId)
-    .returns<ReviewContactRow[]>();
-
-  const eligible = (contacts ?? []).filter(
-    (c): c is { email: string; name: string | null; notifications_enabled: boolean } =>
-      !!c.email && c.notifications_enabled !== false,
-  );
+  const eligible = await getClientNotificationRecipients(admin, clientId);
 
   const appUrl = resolveAppUrl(project.clients?.agency);
   const shareUrl = `${appUrl}/c/edit/${link.token}`;
@@ -195,7 +180,7 @@ export async function GET(
     return NextResponse.json(
       {
         error:
-          'no review contacts with notifications enabled for this brand. Add a POC under Review contacts on the brand profile.',
+          'no contacts on the brand profile to email. Add a POC on the brand profile.',
       },
       { status: 400 },
     );
@@ -271,7 +256,7 @@ export async function POST(
     return NextResponse.json(
       {
         error:
-          'no review contacts with notifications enabled for this brand. Add a POC under Review contacts on the brand profile.',
+          'no contacts on the brand profile to email. Add a POC on the brand profile.',
       },
       { status: 400 },
     );

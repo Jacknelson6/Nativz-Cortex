@@ -10,6 +10,7 @@ import {
   buildCalendarShareSendHtml,
   sendCalendarShareSendEmail,
 } from '@/lib/email/resend';
+import { getClientNotificationRecipients } from '@/lib/email/notification-recipients';
 
 /**
  * GET /api/calendar/share/[token]/send?variant=initial|revised
@@ -62,12 +63,6 @@ interface DropRow {
     name: string;
     agency: string | null;
   } | null;
-}
-
-interface ReviewContactRow {
-  email: string | null;
-  name: string | null;
-  notifications_enabled: boolean | null;
 }
 
 async function loadSendContext(token: string) {
@@ -131,30 +126,7 @@ async function loadSendContext(token: string) {
     }
   }
 
-  const { data: contacts } = await admin
-    .from('content_drop_review_contacts')
-    .select('email, name, notifications_enabled')
-    .eq('client_id', clientId)
-    .returns<ReviewContactRow[]>();
-
-  let eligible = (contacts ?? []).filter(
-    (c): c is { email: string; name: string | null; notifications_enabled: boolean } =>
-      !!c.email && c.notifications_enabled !== false,
-  );
-
-  // Fallback to the brand's POC roster (`contacts` table) when no review-
-  // specific contacts have been set up. Avoids forcing admins to re-enter
-  // the same people they already added to the brand profile.
-  if (eligible.length === 0) {
-    const { data: brandContacts } = await admin
-      .from('contacts')
-      .select('email, name')
-      .eq('client_id', clientId)
-      .not('email', 'is', null);
-    eligible = (brandContacts ?? [])
-      .filter((c): c is { email: string; name: string | null } => !!c.email)
-      .map((c) => ({ email: c.email, name: c.name, notifications_enabled: true }));
-  }
+  const eligible = await getClientNotificationRecipients(admin, clientId);
 
   return {
     admin,
@@ -189,7 +161,7 @@ export async function GET(
 
   if (eligible.length === 0) {
     return NextResponse.json(
-      { error: 'no review contacts with notifications enabled for this brand' },
+      { error: 'no contacts on the brand profile to email' },
       { status: 400 },
     );
   }
@@ -270,7 +242,7 @@ export async function POST(
 
   if (eligible.length === 0) {
     return NextResponse.json(
-      { error: 'no review contacts with notifications enabled for this brand' },
+      { error: 'no contacts on the brand profile to email' },
       { status: 400 },
     );
   }

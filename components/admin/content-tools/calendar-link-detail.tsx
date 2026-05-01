@@ -13,7 +13,6 @@ import {
   Send,
   RefreshCcw,
   Users,
-  BellOff,
 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -49,12 +48,6 @@ interface ContactRow {
   email: string;
   name: string | null;
   role: string | null;
-  notifications_enabled: boolean;
-  // 'review' = explicit entry on /review notifications page.
-  // 'brand'  = fallback pulled from the brand profile's POC roster
-  //           when no review-specific contacts exist. Mirrors the
-  //           same fallback the /send route applies server-side.
-  source?: 'review' | 'brand';
 }
 
 /**
@@ -134,8 +127,8 @@ export function CalendarLinkDetail({
     }
   }, [open, link?.id]);
 
-  // Fetch the brand's review contacts so the Recipients section reflects
-  // the same eligibility filter the /send route uses on the server.
+  // Fetch the brand's POC contacts so the Recipients section shows who
+  // will receive the email. Brand profile is the single source of truth.
   const clientId = link?.client_id ?? null;
   useEffect(() => {
     if (!open || !clientId) {
@@ -146,11 +139,8 @@ export function CalendarLinkDetail({
     void (async () => {
       setContactsLoading(true);
       try {
-        // `fallback=brand` makes the endpoint mirror the /send route's
-        // resolution: review_contacts first, then brand profile contacts
-        // when none exist. Same source of truth as the actual email send.
         const res = await fetch(
-          `/api/calendar/review/contacts?clientId=${encodeURIComponent(clientId)}&fallback=brand`,
+          `/api/calendar/review/contacts?clientId=${encodeURIComponent(clientId)}`,
           { cache: 'no-store' },
         );
         if (!res.ok) throw new Error('failed');
@@ -297,19 +287,12 @@ export function CalendarLinkDetail({
   // Hide send actions on terminal links — there's nothing to chase, and
   // clicking through would burn an email on a closed loop.
   const canSend = !isExpired && !isAbandoned && link.post_count > 0;
-  // Mirror the server filter in /api/calendar/share/[token]/send so the
-  // count + disabled-state match what the route will accept.
-  const eligibleContacts = (contacts ?? []).filter(
-    (c) => !!c.email && c.notifications_enabled !== false,
-  );
   const sendDisabledReason =
     contactsLoading
       ? null
       : !contacts || contacts.length === 0
-        ? 'Add a review contact to send the calendar.'
-        : eligibleContacts.length === 0
-          ? 'Every contact has notifications muted.'
-          : null;
+        ? 'Add a contact to the brand profile to send the calendar.'
+        : null;
 
   return (
     <>
@@ -428,14 +411,14 @@ export function CalendarLinkDetail({
             )}
           </Section>
 
-          {/* Recipients. Pulls from `content_drop_review_contacts` so the
-              admin sees who'll get the email *before* clicking Send. The
-              empty state surfaces the actual reason a send would fail
-              (no contacts) instead of the previous silent-fail UX. */}
+          {/* Recipients. Brand profile is the single source of truth, so
+              this list mirrors the brand's POC roster directly. The empty
+              state surfaces the actual reason a send would fail (no
+              contacts) instead of the previous silent-fail UX. */}
           <Section
             label={
-              eligibleContacts.length > 0
-                ? `Recipients (${eligibleContacts.length})`
+              contacts && contacts.length > 0
+                ? `Recipients (${contacts.length})`
                 : 'Recipients'
             }
           >
@@ -447,40 +430,15 @@ export function CalendarLinkDetail({
                   <Users size={14} className="mt-0.5 shrink-0 text-text-muted" />
                   <div className="min-w-0 flex-1">
                     <p className="text-[12px] text-text-secondary">
-                      No review contacts yet for {link.client_name ?? 'this brand'}.
+                      No contacts on the brand profile for {link.client_name ?? 'this brand'}.
                     </p>
                     <p className="mt-0.5 text-[11px] text-text-muted">
-                      Add at least one in Review → Notifications before sending.
+                      Add a POC on the brand profile before sending.
                     </p>
                   </div>
-                  <a
-                    href="/review"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md bg-accent-surface/40 px-2.5 text-[11px] font-medium text-accent-text hover:bg-accent-surface/60"
-                  >
-                    Manage
-                    <ExternalLink size={10} />
-                  </a>
                 </div>
               ) : (
-                <>
-                  {contacts[0]?.source === 'brand' && (
-                    <p className="mb-2 flex items-center gap-1.5 text-[11px] text-text-muted">
-                      <Users size={11} />
-                      Pulled from brand profile contacts. Override per brand in{' '}
-                      <a
-                        href="/review"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-accent-text hover:underline"
-                      >
-                        Review → Notifications
-                      </a>
-                      .
-                    </p>
-                  )}
-                  <ul className="space-y-2">
+                <ul className="space-y-2">
                   {contacts.map((c) => (
                     <li
                       key={c.id}
@@ -496,19 +454,14 @@ export function CalendarLinkDetail({
                           </p>
                         )}
                       </div>
-                      {!c.notifications_enabled && (
-                        <span
-                          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-text-muted/20 bg-text-muted/10 px-2 py-0.5 text-[10px] font-medium text-text-muted"
-                          title="Notifications muted for this contact"
-                        >
-                          <BellOff size={10} />
-                          muted
+                      {c.role?.trim() && (
+                        <span className="shrink-0 text-[11px] text-text-muted">
+                          {c.role}
                         </span>
                       )}
                     </li>
                   ))}
-                  </ul>
-                </>
+                </ul>
               )}
             </div>
           </Section>
