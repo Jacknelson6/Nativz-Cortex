@@ -133,7 +133,7 @@ export function buildWeeklySocialReportCardHtml(opts: {
               });
               return `<tr>
             <td style="padding:8px 0;border-bottom:1px solid ${BRAND.borderCard};color:${BRAND.textPrimary};font-size:13px;font-weight:600;width:140px;">${escapeHtml(dateStr)}</td>
-            <td style="padding:8px 0;border-bottom:1px solid ${BRAND.borderCard};color:${BRAND.textBody};font-size:13px;">${escapeHtml(clip(u.notes, 120)) || '—'}</td>
+            <td style="padding:8px 0;border-bottom:1px solid ${BRAND.borderCard};color:${BRAND.textBody};font-size:13px;">${escapeHtml(clip(u.notes, 120)) || '-'}</td>
           </tr>`;
             })
             .join('')}
@@ -141,9 +141,7 @@ export function buildWeeklySocialReportCardHtml(opts: {
     : '';
 
   return `
-      <div class="card">
-        <h1 class="heading">Weekly recap</h1>
-        <p class="subtext">${safeClient} &middot; ${safeRange}</p>
+      <p class="subtext">${safeClient} &middot; ${safeRange}</p>
         ${kpiRow}
 
         <p class="detail-label">Followers by platform</p>
@@ -164,6 +162,5 @@ export function buildWeeklySocialReportCardHtml(opts: {
           <tbody>${topPostsRows}</tbody>
         </table>
 
-        ${upcomingBlock}
-      </div>`;
+        ${upcomingBlock}`;
 }

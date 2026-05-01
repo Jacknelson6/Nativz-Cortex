@@ -46,8 +46,6 @@ export async function sendProposal(
   const brandName = agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz';
 
   const cardHtml = `
-    <div class="card">
-      <h1 class="heading">Your proposal is ready, ${escapeHtml(firstName)}.</h1>
       <p class="subtext">
         <strong>${escapeHtml(proposal.title)}</strong> is ready for your review and signature.
         Pick your tier, fill in a few details, and sign. Payment runs on Stripe at the end.
@@ -60,14 +58,16 @@ export async function sendProposal(
         Or open: <a href="${proposal.external_url}" style="color:inherit;text-decoration:underline;">${proposal.external_url}</a>
       </p>
       <p class="small" style="margin-top:16px;">
-        Questions? Reply to this email — it comes straight to the ${escapeHtml(brandName)} team.
-      </p>
-    </div>`;
+        Questions? Reply to this email, it comes straight to the ${escapeHtml(brandName)} team.
+      </p>`;
 
   const sendResult = await sendOnboardingEmail({
     to: proposal.signer_email,
-    subject: `Proposal — ${proposal.title}`,
-    html: layout(cardHtml, agency),
+    subject: `Proposal · ${proposal.title}`,
+    html: layout(cardHtml, agency, {
+      eyebrow: 'Proposal',
+      heroTitle: `Your proposal is ready, ${firstName}.`,
+    }),
     agency,
   });
   if (!sendResult.ok) {

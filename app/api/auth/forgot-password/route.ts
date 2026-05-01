@@ -84,16 +84,17 @@ export async function POST(req: NextRequest) {
       to: email,
       subject: 'Reset your password',
       html: layout(
-        `<div class="card">
-          <h1 class="heading">Reset your password.</h1>
-          <p class="subtext">
-            We received a request to reset the password for your Cortex account. Click the button below to choose a new password.
-          </p>
-          <div class="button-wrap"><a href="${resetUrl}" class="button">Reset password &rarr;</a></div>
-          <hr class="divider" />
-          <p class="small">This link expires in 1 hour. If you didn&rsquo;t request a password reset, you can safely ignore this email.</p>
-        </div>`,
+        `<p class="subtext">
+          We received a request to reset the password for your Cortex account. Click the button below to choose a new password.
+        </p>
+        <div class="button-wrap"><a href="${resetUrl}" class="button">Reset password &rarr;</a></div>
+        <hr class="divider" />
+        <p class="small">This link expires in 1 hour. If you didn&rsquo;t request a password reset, you can safely ignore this email.</p>`,
         agency,
+        {
+          eyebrow: 'Password Reset',
+          heroTitle: 'Reset your password',
+        },
       ),
     });
 

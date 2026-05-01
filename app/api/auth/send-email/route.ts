@@ -29,16 +29,17 @@ function buildEmailHtml(
       return {
         subject: 'Confirm your email',
         html: layout(
-          `<div class="card">
-            <h1 class="heading">Confirm your email address.</h1>
-            <p class="subtext">
-              Thanks for signing up for Cortex. Click the button below to confirm your email and activate your account.
-            </p>
-            ${url ? `<div class="button-wrap"><a href="${url}" class="button">Confirm email &rarr;</a></div>` : ''}
-            <hr class="divider" />
-            <p class="small">If you didn&rsquo;t create a Cortex account, you can safely ignore this email.</p>
-          </div>`,
+          `<p class="subtext">
+            Thanks for signing up for Cortex. Click the button below to confirm your email and activate your account.
+          </p>
+          ${url ? `<div class="button-wrap"><a href="${url}" class="button">Confirm email &rarr;</a></div>` : ''}
+          <hr class="divider" />
+          <p class="small">If you didn&rsquo;t create a Cortex account, you can safely ignore this email.</p>`,
           agency,
+          {
+            eyebrow: 'Confirm Email',
+            heroTitle: 'Confirm your email address',
+          },
         ),
       };
     }
@@ -48,16 +49,17 @@ function buildEmailHtml(
       return {
         subject: 'Reset your password',
         html: layout(
-          `<div class="card">
-            <h1 class="heading">Reset your password.</h1>
-            <p class="subtext">
-              We received a request to reset the password for your Cortex account. Click the button below to choose a new password.
-            </p>
-            ${url ? `<div class="button-wrap"><a href="${url}" class="button">Reset password &rarr;</a></div>` : ''}
-            <hr class="divider" />
-            <p class="small">This link expires in 1 hour. If you didn&rsquo;t request a password reset, you can safely ignore this email.</p>
-          </div>`,
+          `<p class="subtext">
+            We received a request to reset the password for your Cortex account. Click the button below to choose a new password.
+          </p>
+          ${url ? `<div class="button-wrap"><a href="${url}" class="button">Reset password &rarr;</a></div>` : ''}
+          <hr class="divider" />
+          <p class="small">This link expires in 1 hour. If you didn&rsquo;t request a password reset, you can safely ignore this email.</p>`,
           agency,
+          {
+            eyebrow: 'Password Reset',
+            heroTitle: 'Reset your password',
+          },
         ),
       };
     }
@@ -67,16 +69,17 @@ function buildEmailHtml(
       return {
         subject: "You're invited to Cortex",
         html: layout(
-          `<div class="card">
-            <h1 class="heading">You&rsquo;re invited.</h1>
-            <p class="subtext">
-              You&rsquo;ve been invited to Cortex. Click below to set up your account.
-            </p>
-            ${url ? `<div class="button-wrap"><a href="${url}" class="button">Accept invitation &rarr;</a></div>` : ''}
-            <hr class="divider" />
-            <p class="small">This link expires in 7 days. If you weren&rsquo;t expecting this, you can safely ignore it.</p>
-          </div>`,
+          `<p class="subtext">
+            You&rsquo;ve been invited to Cortex. Click below to set up your account.
+          </p>
+          ${url ? `<div class="button-wrap"><a href="${url}" class="button">Accept invitation &rarr;</a></div>` : ''}
+          <hr class="divider" />
+          <p class="small">This link expires in 7 days. If you weren&rsquo;t expecting this, you can safely ignore it.</p>`,
           agency,
+          {
+            eyebrow: 'Invitation',
+            heroTitle: 'You&rsquo;re invited to Cortex',
+          },
         ),
       };
     }
@@ -86,16 +89,17 @@ function buildEmailHtml(
       return {
         subject: 'Confirm your email change',
         html: layout(
-          `<div class="card">
-            <h1 class="heading">Confirm your email change.</h1>
-            <p class="subtext">
-              We received a request to change the email address on your Cortex account. Click the button below to confirm.
-            </p>
-            ${url ? `<div class="button-wrap"><a href="${url}" class="button">Confirm email change &rarr;</a></div>` : ''}
-            <hr class="divider" />
-            <p class="small">If you didn&rsquo;t request this change, please contact support immediately.</p>
-          </div>`,
+          `<p class="subtext">
+            We received a request to change the email address on your Cortex account. Click the button below to confirm.
+          </p>
+          ${url ? `<div class="button-wrap"><a href="${url}" class="button">Confirm email change &rarr;</a></div>` : ''}
+          <hr class="divider" />
+          <p class="small">If you didn&rsquo;t request this change, please contact support immediately.</p>`,
           agency,
+          {
+            eyebrow: 'Email Change',
+            heroTitle: 'Confirm your email change',
+          },
         ),
       };
     }
@@ -105,20 +109,21 @@ function buildEmailHtml(
       return {
         subject: 'Confirm reauthentication',
         html: layout(
-          `<div class="card">
-            <h1 class="heading">Reauthentication required.</h1>
-            <p class="subtext">
-              To complete this action, please enter the one-time code below.
-            </p>
-            ${otp
-              ? `<div class="button-wrap" style="margin: 28px 0;">
-                   <span style="display:inline-block;background:#01151D;border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:14px 36px;font-size:28px;font-weight:700;letter-spacing:0.15em;color:#FFFFFF;font-family:monospace;">${otp}</span>
-                 </div>`
-              : ''}
-            <hr class="divider" />
-            <p class="small">This code expires in 10 minutes. If you didn&rsquo;t request reauthentication, you can safely ignore this email.</p>
-          </div>`,
+          `<p class="subtext">
+            To complete this action, please enter the one-time code below.
+          </p>
+          ${otp
+            ? `<div class="button-wrap" style="margin: 28px 0;">
+                 <span style="display:inline-block;background:#01151D;border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:14px 36px;font-size:28px;font-weight:700;letter-spacing:0.15em;color:#FFFFFF;font-family:monospace;">${otp}</span>
+               </div>`
+            : ''}
+          <hr class="divider" />
+          <p class="small">This code expires in 10 minutes. If you didn&rsquo;t request reauthentication, you can safely ignore this email.</p>`,
           agency,
+          {
+            eyebrow: 'Verification',
+            heroTitle: 'Reauthentication required',
+          },
         ),
       };
     }

@@ -56,9 +56,7 @@ export function buildAffiliateWeeklyReportCardHtml(opts: {
     .join('');
 
   return `
-      <div class="card">
-        <h1 class="heading">Affiliate performance</h1>
-        <p class="subtext">${safeClient} &middot; ${safeRange}</p>
+      <p class="subtext">${safeClient} &middot; ${safeRange}</p>
         <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:8px;">
           <tr>
             <td style="padding:8px 12px 8px 0;vertical-align:top;">
@@ -102,6 +100,5 @@ export function buildAffiliateWeeklyReportCardHtml(opts: {
             </tr>
           </thead>
           <tbody>${topRows || `<tr><td colspan="3" style="padding:16px 0;color:${BRAND.textMuted};font-size:13px;">No attributed sales in this range.</td></tr>`}</tbody>
-        </table>
-      </div>`;
+        </table>`;
 }

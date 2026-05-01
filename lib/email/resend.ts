@@ -388,20 +388,20 @@ export async function sendTeamInviteEmail(opts: {
     recipientName: opts.memberName,
     subject: `You're invited to ${brandName} Cortex`,
     html: layout(`
-      <div class="card">
-        <h1 class="heading">You're invited, ${opts.memberName}.</h1>
-        <p class="subtext">
-          ${opts.invitedBy} has invited you to <span class="highlight">${brandName} Cortex</span>, your team's content intelligence platform.
-        </p>
-        <div class="button-wrap">
-          <a href="${opts.inviteUrl}" class="button">Create your account &rarr;</a>
-        </div>
-        <hr class="divider" />
-        <p class="small">
-          This link expires in 7 days. If it expires, ask your admin for a new one.
-        </p>
+      <p class="subtext">
+        ${opts.invitedBy} has invited you to <span class="highlight">${brandName} Cortex</span>, your team's content intelligence platform.
+      </p>
+      <div class="button-wrap">
+        <a href="${opts.inviteUrl}" class="button">Create your account &rarr;</a>
       </div>
-    `, agency),
+      <hr class="divider" />
+      <p class="small">
+        This link expires in 7 days. If it expires, ask your admin for a new one.
+      </p>
+    `, agency, {
+      eyebrow: 'Team Invite',
+      heroTitle: `You're invited, ${opts.memberName}.`,
+    }),
     metadata: { invitedBy: opts.invitedBy },
   });
 }
@@ -420,24 +420,24 @@ export function buildClientInviteEmailHtml(opts: {
   // headline reads naturally. Used when we can't auto-derive a real first
   // name from the email (e.g. group inboxes, shared aliases).
   const trimmedName = opts.contactName.trim();
-  const heading = trimmedName
+  const heroTitle = trimmedName
     ? `Your portal is ready, ${trimmedName}.`
     : 'Your portal is ready.';
   return layout(`
-      <div class="card">
-        <h1 class="heading">${heading}</h1>
-        <p class="subtext">
-          Your team at <span class="highlight">${agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz'}</span> has set up a dedicated Cortex portal for <strong>${opts.clientName}</strong>. Set up your account to get started.
-        </p>
-        <div class="button-wrap">
-          <a href="${opts.inviteUrl}" class="button">Set up your account &rarr;</a>
-        </div>
-        <hr class="divider" />
-        <p class="small">
-          This link expires in 7 days. Contact ${opts.invitedBy} if you need a new one.
-        </p>
+      <p class="subtext">
+        Your team at <span class="highlight">${agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz'}</span> has set up a dedicated Cortex portal for <strong>${opts.clientName}</strong>. Set up your account to get started.
+      </p>
+      <div class="button-wrap">
+        <a href="${opts.inviteUrl}" class="button">Set up your account &rarr;</a>
       </div>
-    `, agency);
+      <hr class="divider" />
+      <p class="small">
+        This link expires in 7 days. Contact ${opts.invitedBy} if you need a new one.
+      </p>
+    `, agency, {
+      eyebrow: 'Portal Invite',
+      heroTitle,
+    });
 }
 
 export async function sendClientInviteEmail(opts: {
@@ -485,20 +485,20 @@ export async function sendWelcomeEmail(opts: {
     recipientName: opts.name,
     subject: `Welcome to Cortex`,
     html: layout(`
-      <div class="card">
-        <h1 class="heading">You're all set, ${opts.name}.</h1>
-        <p class="subtext">
-          Your Cortex account is ready. Sign in to get started.
-        </p>
-        <div class="button-wrap">
-          <a href="${opts.loginUrl}" class="button">Sign in &rarr;</a>
-        </div>
-        <hr class="divider" />
-        <p class="small">
-          Signed up as <strong>${opts.to}</strong>
-        </p>
+      <p class="subtext">
+        Your Cortex account is ready. Sign in to get started.
+      </p>
+      <div class="button-wrap">
+        <a href="${opts.loginUrl}" class="button">Sign in &rarr;</a>
       </div>
-    `, agency),
+      <hr class="divider" />
+      <p class="small">
+        Signed up as <strong>${opts.to}</strong>
+      </p>
+    `, agency, {
+      eyebrow: 'Welcome',
+      heroTitle: `You're all set, ${opts.name}.`,
+    }),
     metadata: { role: opts.role },
   });
 }
@@ -539,7 +539,10 @@ export async function sendAffiliateWeeklyReportEmail(opts: {
     agency,
     to: opts.to,
     subject,
-    html: layout(cardHtml, agency),
+    html: layout(cardHtml, agency, {
+      eyebrow: `Weekly affiliate report · ${opts.rangeLabel}`,
+      heroTitle: `${opts.clientName} affiliates`,
+    }),
     metadata: {
       clientName: opts.clientName,
       rangeLabel: opts.rangeLabel,
@@ -573,7 +576,10 @@ export async function sendWeeklySocialReportEmail(opts: {
     agency,
     to: opts.to,
     subject,
-    html: layout(cardHtml, agency),
+    html: layout(cardHtml, agency, {
+      eyebrow: `Weekly recap · ${opts.rangeLabel}`,
+      heroTitle: `${opts.report.clientName} performance`,
+    }),
     metadata: {
       clientName: opts.report.clientName,
       rangeLabel: opts.rangeLabel,
@@ -604,20 +610,20 @@ export async function sendSearchCompletedEmail(opts: {
     to: opts.to,
     subject: `Research ready, ${opts.query}`,
     html: layout(`
-      <div class="card">
-        <h1 class="heading">Your research is ready.</h1>
-        <p class="subtext">
-          Results for <span class="highlight">&ldquo;${opts.query}&rdquo;</span> are in.
-        </p>
-        <p class="small" style="margin-bottom: 24px;">
-          ${opts.summaryPreview}${opts.summaryPreview.length >= 200 ? '&hellip;' : ''}
-        </p>
-        ${clientLine}
-        <div class="button-wrap">
-          <a href="${opts.resultsUrl}" class="button">View report &rarr;</a>
-        </div>
+      <p class="subtext">
+        Results for <span class="highlight">&ldquo;${opts.query}&rdquo;</span> are in.
+      </p>
+      <p class="small" style="margin-bottom: 24px;">
+        ${opts.summaryPreview}${opts.summaryPreview.length >= 200 ? '&hellip;' : ''}
+      </p>
+      ${clientLine}
+      <div class="button-wrap">
+        <a href="${opts.resultsUrl}" class="button">View report &rarr;</a>
       </div>
-    `, agency),
+    `, agency, {
+      eyebrow: 'Research Complete',
+      heroTitle: 'Your research is ready.',
+    }),
     metadata: { query: opts.query, clientName: opts.clientName },
   });
 }
@@ -684,7 +690,10 @@ export async function sendCompetitorReportEmail(opts: {
     agency,
     analyticsUrl: opts.analyticsUrl,
   });
-  const html = layout(cardHtml, agency);
+  const html = layout(cardHtml, agency, {
+    eyebrow: `Competitor update · ${rangeLabel}`,
+    heroTitle: `${opts.data.client_name} vs. competitors`,
+  });
 
   const result = await sendAndLog({
     category: 'system',
@@ -728,9 +737,14 @@ export async function sendDropCommentEmail(opts: {
     comment: 'left a comment',
   } as const;
   const headlineByStatus = {
-    approved: 'Approved.',
-    changes_requested: 'Changes requested.',
-    comment: 'New comment.',
+    approved: `${opts.authorName} approved a post.`,
+    changes_requested: `${opts.authorName} requested changes.`,
+    comment: `New comment from ${opts.authorName}.`,
+  } as const;
+  const eyebrowByStatus = {
+    approved: 'Calendar Approved',
+    changes_requested: 'Changes Requested',
+    comment: 'New Comment',
   } as const;
   const subject = `${opts.authorName} ${verbBySubject[opts.status]} on ${opts.clientName}`;
 
@@ -743,19 +757,19 @@ export async function sendDropCommentEmail(opts: {
     dropId: opts.dropId,
     subject,
     html: layout(`
-      <div class="card">
-        <h1 class="heading">${headlineByStatus[opts.status]}</h1>
-        <p class="subtext">
-          <span class="highlight">${opts.authorName}</span> ${verbBySubject[opts.status]} on the ${opts.clientName} content calendar.
-        </p>
-        <p class="small" style="margin-bottom: 24px;">
-          &ldquo;${opts.contentPreview}&rdquo;
-        </p>
-        <div class="button-wrap">
-          <a href="${opts.dropUrl}" class="button">Open content calendar &rarr;</a>
-        </div>
+      <p class="subtext">
+        <span class="highlight">${opts.authorName}</span> ${verbBySubject[opts.status]} on the ${opts.clientName} content calendar.
+      </p>
+      <p class="small" style="margin-bottom: 24px;">
+        &ldquo;${opts.contentPreview}&rdquo;
+      </p>
+      <div class="button-wrap">
+        <a href="${opts.dropUrl}" class="button">Open content calendar &rarr;</a>
       </div>
-    `, agency),
+    `, agency, {
+      eyebrow: eyebrowByStatus[opts.status],
+      heroTitle: headlineByStatus[opts.status],
+    }),
     metadata: {
       authorName: opts.authorName,
       clientName: opts.clientName,
@@ -824,14 +838,14 @@ export async function sendCalendarCommentDigestEmail(opts: {
     to: opts.to,
     subject,
     html: layout(`
-      <div class="card">
-        <h1 class="heading">Yesterday's calendar activity</h1>
-        <p class="subtext">
-          ${totalComments} ${totalComments === 1 ? 'comment' : 'comments'} across ${opts.groups.length} ${opts.groups.length === 1 ? 'client' : 'clients'}, ${opts.windowLabel}.
-        </p>
-        ${sections}
-      </div>
-    `, agency),
+      <p class="subtext">
+        ${totalComments} ${totalComments === 1 ? 'comment' : 'comments'} across ${opts.groups.length} ${opts.groups.length === 1 ? 'client' : 'clients'}, ${opts.windowLabel}.
+      </p>
+      ${sections}
+    `, agency, {
+      eyebrow: `Calendar Digest · ${opts.windowLabel}`,
+      heroTitle: 'Yesterday’s calendar activity',
+    }),
     metadata: {
       totalComments,
       windowLabel: opts.windowLabel,
@@ -865,14 +879,14 @@ export async function sendCalendarNoOpenReminderEmail(opts: {
     dropId: opts.dropId,
     subject,
     html: layout(`
-      <div class="card">
-        <h1 class="heading">${opts.pending} of ${opts.total} ${opts.pending === 1 ? 'post' : 'posts'} still need your review</h1>
-        <p class="subtext">Hey ${opts.clientName}, we sent over your latest content calendar about ${opts.hours} hours ago and haven't seen anyone open it yet. Take a quick look and either approve the posts or drop comments where anything needs to change.</p>
-        <div style="margin-top:18px;">
-          <a href="${opts.shareUrl}" class="btn">Open your calendar</a>
-        </div>
+      <p class="subtext">Hey ${opts.clientName}, we sent over your latest content calendar about ${opts.hours} hours ago and haven't seen anyone open it yet. Take a quick look and either approve the posts or drop comments where anything needs to change.</p>
+      <div class="button-wrap">
+        <a href="${opts.shareUrl}" class="btn">Open your calendar</a>
       </div>
-    `, agency),
+    `, agency, {
+      eyebrow: 'Calendar Reminder',
+      heroTitle: `${opts.pending} of ${opts.total} ${opts.pending === 1 ? 'post' : 'posts'} still need your review`,
+    }),
     metadata: { clientName: opts.clientName, hours: opts.hours, pending: opts.pending, total: opts.total },
   });
 }
@@ -906,14 +920,14 @@ export async function sendCalendarNoActionReminderEmail(opts: {
     dropId: opts.dropId,
     subject,
     html: layout(`
-      <div class="card">
-        <h1 class="heading">${opts.pending} of ${opts.total} ${noun} still need your review</h1>
-        <p class="subtext">${body}</p>
-        <div style="margin-top:18px;">
-          <a href="${opts.shareUrl}" class="btn">Review the posts</a>
-        </div>
+      <p class="subtext">${body}</p>
+      <div class="button-wrap">
+        <a href="${opts.shareUrl}" class="btn">Review the posts</a>
       </div>
-    `, agency),
+    `, agency, {
+      eyebrow: 'Calendar Reminder',
+      heroTitle: `${opts.pending} of ${opts.total} ${noun} still need your review`,
+    }),
     metadata: { clientName: opts.clientName, hours: opts.hours, pending: opts.pending, total: opts.total },
   });
 }
@@ -1000,14 +1014,14 @@ export async function sendCalendarFollowupEmail(opts: {
     dropId: opts.dropId,
     subject,
     html: layout(`
-      <div class="card">
-        <h1 class="heading">Quick check-in</h1>
-        ${bodyHtml}
-        <div style="margin-top:18px;">
-          <a href="${opts.shareUrl}" class="btn">Open the calendar</a>
-        </div>
+      ${bodyHtml}
+      <div class="button-wrap">
+        <a href="${opts.shareUrl}" class="btn">Open the calendar</a>
       </div>
-    `, agency),
+    `, agency, {
+      eyebrow: 'Calendar Check-In',
+      heroTitle: `Checking in on ${opts.clientName}'s calendar`,
+    }),
     metadata: {
       clientName: opts.clientName,
       pocFirstNames: opts.pocFirstNames,
@@ -1039,15 +1053,15 @@ export async function sendCalendarFinalCallEmail(opts: {
     dropId: opts.dropId,
     subject,
     html: layout(`
-      <div class="card">
-        <h1 class="heading">Final call before we publish</h1>
-        <p class="subtext">Hey ${opts.clientName}, your first scheduled post goes live ${opts.firstPostAt}. ${opts.pending} of ${opts.total} ${noun} still ${opts.pending === 1 ? 'needs' : 'need'} your sign-off, so unless you flag something we'll publish on the dates you saw in the calendar.</p>
-        <p class="subtext" style="margin-top:10px;">If anything needs to change, drop a comment on the post or hit reply now.</p>
-        <div style="margin-top:18px;">
-          <a href="${opts.shareUrl}" class="btn">Open the calendar</a>
-        </div>
+      <p class="subtext">Hey ${opts.clientName}, your first scheduled post goes live ${opts.firstPostAt}. ${opts.pending} of ${opts.total} ${noun} still ${opts.pending === 1 ? 'needs' : 'need'} your sign-off, so unless you flag something we'll publish on the dates you saw in the calendar.</p>
+      <p class="subtext" style="margin-top:10px;">If anything needs to change, drop a comment on the post or hit reply now.</p>
+      <div class="button-wrap">
+        <a href="${opts.shareUrl}" class="btn">Open the calendar</a>
       </div>
-    `, agency),
+    `, agency, {
+      eyebrow: 'Final Call',
+      heroTitle: 'Final call before we publish',
+    }),
     metadata: { clientName: opts.clientName, firstPostAt: opts.firstPostAt, pending: opts.pending, total: opts.total },
   });
 }
@@ -1101,23 +1115,23 @@ export async function sendCalendarDeliveryEmail(opts: {
   const subject = `Your ${monthLabel} content calendar from ${isAC ? 'Anderson Collaborative' : 'Nativz'} is ready`;
 
   const html = layout(`
-    <div class="card">
-      <h1 class="heading" style="text-align:center;">Your ${monthLabel} content calendar is ready</h1>
-      <p class="subtext" style="text-align:center;">
-        ${greeting}, ${teamShort} just dropped <span class="highlight">${opts.postCount} posts</span>
-        for you to review, scheduled across ${formatDateLabel(opts.startDate)} to ${formatDateLabel(opts.endDate)}.
-        Tap the button below to watch the videos, read the captions, and approve or
-        request changes one post at a time.
-      </p>
-      ${introBlock}
-      <div class="button-wrap">
-        <a href="${opts.shareUrl}" class="button">Open content calendar &rarr;</a>
-      </div>
-      <p class="small" style="text-align:center; margin-top:24px;">
-        Questions or want to chat about a post? Just reply to this email and it'll come straight to ${replyTo}.
-      </p>
+    <p class="subtext">
+      ${greeting}, ${teamShort} just shipped <span class="highlight">${opts.postCount} posts</span>
+      for you to review, scheduled across ${formatDateLabel(opts.startDate)} to ${formatDateLabel(opts.endDate)}.
+      Tap the button below to watch the videos, read the captions, and approve or
+      request changes one post at a time.
+    </p>
+    ${introBlock}
+    <div class="button-wrap">
+      <a href="${opts.shareUrl}" class="button">Open content calendar &rarr;</a>
     </div>
-  `, agency);
+    <p class="small" style="text-align:center; margin-top:24px;">
+      Questions or want to chat about a post? Just reply to this email and it'll come straight to ${replyTo}.
+    </p>
+  `, agency, {
+    eyebrow: `${monthLabel} Calendar`,
+    heroTitle: `Your ${monthLabel} content calendar is ready`,
+  });
 
   return sendAndLog({
     category: 'transactional',
@@ -1187,13 +1201,13 @@ export async function sendCombinedCalendarDeliveryEmail(opts: {
   const calendarSections = opts.calendars
     .map(
       (c) => `
-        <div class="card" style="margin-top:16px;">
-          <h2 class="heading" style="text-align:center; font-size:20px;">${c.clientName}</h2>
-          <p class="subtext" style="text-align:center;">
+        <div style="margin-top:18px;padding:18px 20px;border:1px solid #e8ecf0;border-radius:10px;background:#f7f9fb;">
+          <h2 style="font-family:inherit;font-size:18px;font-weight:700;color:inherit;margin:0 0 6px;">${c.clientName}</h2>
+          <p class="small" style="margin:0 0 12px;">
             <span class="highlight">${c.postCount} posts</span>
             scheduled ${formatDateLabel(c.startDate)} to ${formatDateLabel(c.endDate)}.
           </p>
-          <div class="button-wrap">
+          <div>
             <a href="${c.shareUrl}" class="button">Open ${c.clientName} calendar &rarr;</a>
           </div>
         </div>
@@ -1204,22 +1218,20 @@ export async function sendCombinedCalendarDeliveryEmail(opts: {
   const subject = `Your ${monthLabel} content calendars from ${isAC ? 'Anderson Collaborative' : 'Nativz'} are ready`;
 
   const html = layout(`
-    <div class="card">
-      <h1 class="heading" style="text-align:center;">Your ${monthLabel} content calendars are ready</h1>
-      <p class="subtext" style="text-align:center;">
-        ${greeting}, ${teamShort} just dropped fresh calendars for ${brandList}.
-        Each one has its own button below, tap in to watch the videos, read the
-        captions, and approve or request changes one post at a time.
-      </p>
-      ${introBlock}
-    </div>
+    <p class="subtext">
+      ${greeting}, ${teamShort} just shipped fresh calendars for ${brandList}.
+      Each one has its own button below, tap in to watch the videos, read the
+      captions, and approve or request changes one post at a time.
+    </p>
+    ${introBlock}
     ${calendarSections}
-    <div class="card" style="margin-top:16px;">
-      <p class="small" style="text-align:center;">
-        Questions or want to chat about a post? Just reply to this email and it'll come straight to ${replyTo}.
-      </p>
-    </div>
-  `, agency);
+    <p class="small" style="text-align:center;margin-top:24px;">
+      Questions or want to chat about a post? Just reply to this email and it'll come straight to ${replyTo}.
+    </p>
+  `, agency, {
+    eyebrow: `${monthLabel} Calendars`,
+    heroTitle: `Your ${monthLabel} content calendars are ready`,
+  });
 
   return sendAndLog({
     category: 'transactional',
@@ -1278,14 +1290,14 @@ export function buildCalendarShareSendDraft(opts: {
       subject: `${opts.clientName}: revised content calendar ready for review`,
       message:
         `Hey ${greetingNames}, ${team} just made revisions to the ${monthLabel} content calendar.\n\n` +
-        `Tap the button below to re-review the ${opts.postCount} ${postsWord} scheduled across ${dateRange}, then approve or drop another comment if anything still needs to change.`,
+        `Tap the button below to re-review the ${opts.postCount} ${postsWord} scheduled across ${dateRange}, then approve or leave another comment if anything still needs to change.`,
     };
   }
 
   return {
     subject: `Your ${monthLabel} content calendar from ${brand} is ready`,
     message:
-      `Hey ${greetingNames}, ${team} just dropped ${opts.postCount} ${postsWord} for you to review, scheduled across ${dateRange}.\n\n` +
+      `Hey ${greetingNames}, ${team} just shipped ${opts.postCount} ${postsWord} for you to review, scheduled across ${dateRange}.\n\n` +
       `Tap the button below to watch the videos, read the captions, and approve or request changes one post at a time.`,
   };
 }
@@ -1305,19 +1317,22 @@ export function buildCalendarShareSendHtml(opts: {
   const heading = opts.variant === 'revised'
     ? 'Revised content calendar ready'
     : 'Your content calendar is ready';
+  const eyebrow = opts.variant === 'revised'
+    ? 'Calendar Revised'
+    : 'Calendar Delivery';
   const bodyHtml = messageToHtmlParagraphs(opts.message);
   return layout(`
-    <div class="card" style="text-align:center;">
-      <h1 class="heading" style="text-align:center;">${escapeHtml(heading)}</h1>
-      <div style="text-align:left;">${bodyHtml}</div>
-      <div class="button-wrap" style="margin-top:24px;text-align:center;">
-        <a href="${opts.shareUrl}" class="button">${buttonLabel}</a>
-      </div>
-      <p class="small" style="text-align:center;margin-top:24px;">
-        Questions or want to chat about a post? Just reply to this email and it'll come straight to ${replyTo}.
-      </p>
+    ${bodyHtml}
+    <div class="button-wrap" style="margin-top:24px;text-align:center;">
+      <a href="${opts.shareUrl}" class="button">${buttonLabel}</a>
     </div>
-  `, opts.agency);
+    <p class="small" style="text-align:center;margin-top:24px;">
+      Questions or want to chat about a post? Just reply to this email and it'll come straight to ${replyTo}.
+    </p>
+  `, opts.agency, {
+    eyebrow,
+    heroTitle: heading,
+  });
 }
 
 export async function sendCalendarShareSendEmail(opts: {
@@ -1409,14 +1424,14 @@ export async function sendCalendarRevisionsCompleteEmail(opts: {
   const agency = opts.agency ?? 'nativz';
   const subject = 'Your revisions are ready to review';
   const html = layout(`
-    <div class="card">
-      <h1 class="heading">Revisions complete</h1>
-      <p class="subtext">Hey ${opts.clientName}, we've worked through every change you flagged. Hop back in to take a final look and approve the posts you're happy with.</p>
-      <div style="margin-top:18px;">
-        <a href="${opts.shareUrl}" class="btn">Review the updated posts</a>
-      </div>
+    <p class="subtext">Hey ${opts.clientName}, we've worked through every change you flagged. Hop back in to take a final look and approve the posts you're happy with.</p>
+    <div class="button-wrap">
+      <a href="${opts.shareUrl}" class="btn">Review the updated posts</a>
     </div>
-  `, agency);
+  `, agency, {
+    eyebrow: 'Revisions Complete',
+    heroTitle: 'Revisions complete',
+  });
 
   return sendAndLog({
     category: 'transactional',
@@ -1499,28 +1514,28 @@ export async function sendCalendarRevisedVideosEmail(opts: {
     : '';
 
   const html = layout(`
-    <div class="card" style="text-align:center;">
-      <h1 class="heading" style="text-align:center;">Revised ${word} ready for review</h1>
-      <p class="subtext" style="text-align:center;">
-        ${greeting},
-      </p>
-      <p class="subtext" style="text-align:center;">
-        The ${teamLabel} has implemented the requested changes and the revised
-        calendar is ready for review!
-      </p>
-      ${summarySection}
-      <div class="button-wrap" style="margin-top:24px;text-align:center;">
-        <a href="${opts.shareUrl}" class="button">Re-review the calendar &rarr;</a>
-      </div>
-      <p class="subtext" style="margin-top:24px;text-align:center;">
-        If there's any more feedback please let us know, or mark each post as
-        approved if it matches what you were looking for.
-      </p>
-      <p class="small" style="text-align:center; margin-top:24px;">
-        Questions or want to chat about a post? Just reply to this email and it'll come straight to ${replyTo}.
-      </p>
+    <p class="subtext">
+      ${greeting},
+    </p>
+    <p class="subtext">
+      The ${teamLabel} has implemented the requested changes and the revised
+      calendar is ready for review.
+    </p>
+    ${summarySection}
+    <div class="button-wrap" style="margin-top:24px;text-align:center;">
+      <a href="${opts.shareUrl}" class="button">Re-review the calendar &rarr;</a>
     </div>
-  `, agency);
+    <p class="subtext" style="margin-top:24px;">
+      If there's any more feedback please let us know, or mark each post as
+      approved if it matches what you were looking for.
+    </p>
+    <p class="small" style="text-align:center;margin-top:24px;">
+      Questions or want to chat about a post? Just reply to this email and it'll come straight to ${replyTo}.
+    </p>
+  `, agency, {
+    eyebrow: 'Revised Cuts Ready',
+    heroTitle: `Revised ${word} ready for review`,
+  });
 
   return sendAndLog({
     category: 'transactional',
@@ -1613,18 +1628,18 @@ export async function sendPostHealthAlertEmail(opts: {
   const subject = `[Cortex] ${subjectParts.join(' · ')}`;
 
   const html = layout(`
-    <div class="card">
-      <h1 class="heading">Posting health alert</h1>
-      <p class="subtext">
-        The post-health cron picked up new issues. Each row fires once, re-posts and reconnects clear automatically.
-      </p>
-      ${failedSection}
-      ${disconnectSection}
-      <div class="button-wrap">
-        <a href="https://cortex.nativz.io/admin/calendar" class="button">Open the calendar &rarr;</a>
-      </div>
+    <p class="subtext">
+      The post-health cron picked up new issues. Each row fires once, re-posts and reconnects clear automatically.
+    </p>
+    ${failedSection}
+    ${disconnectSection}
+    <div class="button-wrap">
+      <a href="https://cortex.nativz.io/admin/calendar" class="button">Open the calendar &rarr;</a>
     </div>
-  `, 'nativz');
+  `, 'nativz', {
+    eyebrow: `Health Alert · ${subjectParts.join(' · ')}`,
+    heroTitle: 'Posting health alert',
+  });
 
   return sendAndLog({
     category: 'system',
@@ -1719,14 +1734,14 @@ export async function sendEditingDeliverableEmail(opts: {
     clientId: opts.clientId,
     subject,
     html: layout(`
-      <div class="card">
-        <h1 class="heading">Cuts ready for review</h1>
-        ${bodyHtml}
-        <div style="margin-top:18px;">
-          <a href="${opts.shareUrl}" class="btn">Watch the cuts</a>
-        </div>
+      ${bodyHtml}
+      <div class="button-wrap">
+        <a href="${opts.shareUrl}" class="btn">Watch the cuts</a>
       </div>
-    `, agency),
+    `, agency, {
+      eyebrow: 'Cuts Delivered',
+      heroTitle: `${opts.projectName} cuts ready for review`,
+    }),
     metadata: {
       clientName: opts.clientName,
       projectName: opts.projectName,
@@ -1805,14 +1820,14 @@ export async function sendEditingRereviewEmail(opts: {
     clientId: opts.clientId,
     subject,
     html: layout(`
-      <div class="card">
-        <h1 class="heading">Revisions ready for re-review</h1>
-        ${bodyHtml}
-        <div style="margin-top:18px;">
-          <a href="${opts.shareUrl}" class="btn">Watch the revised cuts</a>
-        </div>
+      ${bodyHtml}
+      <div class="button-wrap">
+        <a href="${opts.shareUrl}" class="btn">Watch the revised cuts</a>
       </div>
-    `, agency),
+    `, agency, {
+      eyebrow: 'Revised Cuts Ready',
+      heroTitle: `${opts.projectName} revisions ready`,
+    }),
     metadata: {
       clientName: opts.clientName,
       projectName: opts.projectName,
@@ -1880,18 +1895,18 @@ export async function sendShootBriefReminderEmail(opts: {
     clientId: opts.clientId ?? null,
     subject,
     html: layout(`
-      <div class="card">
-        <h1 class="heading">${heading}</h1>
-        <p class="subtext">${subtext}</p>
-        <div class="button-wrap">
-          <a href="${opts.contentLabUrl}" class="button">Open Content Lab &rarr;</a>
-        </div>
-        <hr class="divider" />
-        <p class="small">
-          This is an internal heads-up, no client sees it. Fired 48 hours before every shoot on the team calendar.
-        </p>
+      <p class="subtext">${subtext}</p>
+      <div class="button-wrap">
+        <a href="${opts.contentLabUrl}" class="button">Open Content Lab &rarr;</a>
       </div>
-    `, agency),
+      <hr class="divider" />
+      <p class="small">
+        This is an internal heads-up, no client sees it. Fired 48 hours before every shoot on the team calendar.
+      </p>
+    `, agency, {
+      eyebrow: 'Shoot in 48 Hours',
+      heroTitle: heading,
+    }),
     metadata: {
       shootId: opts.shootId,
       shootTitle: opts.shootTitle,

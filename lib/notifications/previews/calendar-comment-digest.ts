@@ -46,7 +46,7 @@ export async function previewCalendarCommentDigest(
   };
 
   const totalComments = sample.groups.reduce((sum, g) => sum + g.comments.length, 0);
-  const subject = `${totalComments} content calendar ${totalComments === 1 ? 'comment' : 'comments'} — ${sample.windowLabel}`;
+  const subject = `${totalComments} content calendar ${totalComments === 1 ? 'comment' : 'comments'} · ${sample.windowLabel}`;
   const verbByStatus = {
     approved: 'approved',
     changes_requested: 'requested changes',
@@ -74,15 +74,17 @@ export async function previewCalendarCommentDigest(
     })
     .join('');
 
-  const html = layout(`
-    <div class="card">
-      <h1 class="heading">Yesterday's calendar activity</h1>
-      <p class="subtext">
-        ${totalComments} ${totalComments === 1 ? 'comment' : 'comments'} across ${sample.groups.length} ${sample.groups.length === 1 ? 'client' : 'clients'} — ${sample.windowLabel}.
-      </p>
-      ${sections}
-    </div>
-  `, agency);
+  const html = layout(
+    `<p class="subtext">
+      ${totalComments} ${totalComments === 1 ? 'comment' : 'comments'} across ${sample.groups.length} ${sample.groups.length === 1 ? 'client' : 'clients'} · ${sample.windowLabel}.
+    </p>
+    ${sections}`,
+    agency,
+    {
+      eyebrow: `Calendar Digest · ${sample.windowLabel}`,
+      heroTitle: "Yesterday's calendar activity",
+    },
+  );
 
   return { subject, html };
 }

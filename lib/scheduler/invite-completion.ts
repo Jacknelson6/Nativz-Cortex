@@ -143,20 +143,20 @@ async function sendCreatorEmail(opts: {
         'https://cortex.nativz.io';
   const matrixUrl = `${matrixHost.replace(/\/+$/, '')}/admin/content-tools`;
   const inner = `
-    <div class="card">
-      <h1 class="heading">Reconnect just landed.</h1>
-      <p class="subtext">
-        ${opts.brandName} just reconnected ${opts.platformLabel} as ${opts.handle}. The Connections matrix should now show this slot in green.
-      </p>
-      <div class="button-wrap">
-        <a class="button" href="${matrixUrl}">Open the matrix &rarr;</a>
-      </div>
+    <p class="subtext">
+      <strong>${opts.brandName}</strong> just reconnected ${opts.platformLabel} as ${opts.handle}. The Connections matrix should now show this slot in green.
+    </p>
+    <div class="button-wrap">
+      <a class="button" href="${matrixUrl}">Open the matrix &rarr;</a>
     </div>`;
   await resend.emails.send({
     from: getFromAddress(opts.brand),
     replyTo: getReplyTo(opts.brand),
     to: opts.to,
     subject,
-    html: layout(inner, opts.brand),
+    html: layout(inner, opts.brand, {
+      eyebrow: 'Reconnected',
+      heroTitle: `${opts.brandName} is back online`,
+    }),
   });
 }

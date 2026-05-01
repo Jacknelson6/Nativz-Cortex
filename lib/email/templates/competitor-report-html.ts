@@ -26,19 +26,19 @@ function escapeHtml(s: string | null | undefined): string {
 }
 
 function compactNumber(n: number | null | undefined): string {
-  if (n == null || !Number.isFinite(n)) return '—';
+  if (n == null || !Number.isFinite(n)) return '-';
   if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (Math.abs(n) >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
 }
 
 function percent(n: number | null | undefined): string {
-  if (n == null || !Number.isFinite(n)) return '—';
+  if (n == null || !Number.isFinite(n)) return '-';
   return `${(n * 100).toFixed(1)}%`;
 }
 
 function delta(n: number | null | undefined, fractional = false): string {
-  if (n == null || !Number.isFinite(n) || n === 0) return '—';
+  if (n == null || !Number.isFinite(n) || n === 0) return '-';
   const sign = n > 0 ? '+' : '';
   return fractional
     ? `${sign}${(n * 100).toFixed(1)}%`
@@ -62,7 +62,7 @@ function dateLabel(iso: string): string {
 }
 
 function rangeLabel(startIso: string, endIso: string): string {
-  return `${dateLabel(startIso)} – ${dateLabel(endIso)}`;
+  return `${dateLabel(startIso)} to ${dateLabel(endIso)}`;
 }
 
 function renderCompetitor(
@@ -154,19 +154,16 @@ export function buildCompetitorReportCardHtml(opts: {
         .join('')
     : `<p style="margin:20px 0;padding:16px;border:1px dashed ${brand.borderCard};border-radius:10px;color:${brand.textMuted};font-size:13px;text-align:center;">
         No competitor snapshots captured this period. Benchmark rows exist but the scraper
-        hasn't refreshed yet — expect data on the next cron tick.
+        hasn't refreshed yet, expect data on the next cron tick.
       </p>`;
 
   return `
-      <div class="card">
-        <h1 class="heading">Competitor update</h1>
-        <p class="subtext">${safeClient} · ${escapeHtml(range)} · watching ${opts.data.competitors.length} competitor${opts.data.competitors.length === 1 ? '' : 's'}</p>
+      <p class="subtext">${safeClient} · ${escapeHtml(range)} · watching ${opts.data.competitors.length} competitor${opts.data.competitors.length === 1 ? '' : 's'}</p>
         ${competitorsHtml}
         <p style="margin-top:24px;text-align:center;">
           <a href="${escapeHtml(opts.analyticsUrl)}"
              style="display:inline-block;padding:10px 20px;border-radius:999px;background:${brand.blueCta};color:#fff;text-decoration:none;font-size:13px;font-weight:600;letter-spacing:0.5px;">
-            Open benchmarking →
+            Open benchmarking &rarr;
           </a>
-        </p>
-      </div>`;
+        </p>`;
 }

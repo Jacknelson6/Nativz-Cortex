@@ -8,7 +8,6 @@ import { writeFileSync } from 'node:fs';
 import { layout } from '@/lib/email/resend';
 
 const sample = `
-  <h1 class="heading">Hi Trevor</h1>
   <p class="subtext">Your edits for the JAMNOLA project are ready to review. We delivered 6 new cuts and need your sign-off before we schedule them.</p>
   <div class="stats"><table>
     <tr><td class="k">Project</td><td class="v">JAMNOLA April Wave 1</td></tr>
@@ -22,7 +21,10 @@ const sample = `
 `;
 
 for (const agency of ['nativz', 'anderson'] as const) {
-  const html = layout(sample, agency);
+  const html = layout(sample, agency, {
+    eyebrow: 'Edit Review',
+    heroTitle: 'Hi Trevor',
+  });
   const path = `/tmp/email-previews/${agency}.html`;
   writeFileSync(path, html, 'utf-8');
   console.log(`Wrote ${path} (${html.length} bytes)`);

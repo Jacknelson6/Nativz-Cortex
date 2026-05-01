@@ -161,23 +161,23 @@ function pocInviteHtml({
   agency: AgencyBrand;
 }): string {
   const inner = `
-    <div class="card">
-      <h1 class="heading">Welcome aboard, ${esc(clientName)}.</h1>
-      <p class="subtext">
-        Your agreement is signed and the deposit cleared — thank you. The next
-        step is a short setup checklist. It takes about 15 minutes and unlocks
-        every single thing we'll do together.
-      </p>
-      <div class="button-wrap">
-        <a class="button" href="${esc(url)}">Open your setup checklist &rarr;</a>
-      </div>
-      <hr class="divider" />
-      <p class="small">
-        Questions? Just reply to this email. We are watching — every box you
-        tick lights up our dashboard in real time.
-      </p>
-    </div>`;
-  return layout(inner, agency);
+    <p class="subtext">
+      Your agreement is signed and the deposit cleared, thank you. The next
+      step is a short setup checklist. It takes about 15 minutes and unlocks
+      every single thing we'll do together.
+    </p>
+    <div class="button-wrap">
+      <a class="button" href="${esc(url)}">Open your setup checklist &rarr;</a>
+    </div>
+    <hr class="divider" />
+    <p class="small">
+      Questions? Just reply to this email. We are watching, every box you
+      tick lights up our dashboard in real time.
+    </p>`;
+  return layout(inner, agency, {
+    eyebrow: 'Onboarding Kickoff',
+    heroTitle: `Welcome aboard, ${esc(clientName)}.`,
+  });
 }
 
 // ────────────────────────────────────────────────────────────────────────
@@ -244,23 +244,23 @@ function pocReminderHtml({
   agency: AgencyBrand;
 }): string {
   const inner = `
-    <div class="card">
-      <h1 class="heading">Hey ${esc(clientName)} — quick nudge.</h1>
-      <p class="subtext">
-        Just bumping this to the top of your inbox. Your setup checklist
-        still has a few open items. The faster you get them in, the
-        faster we start producing for you.
-      </p>
-      <div class="button-wrap">
-        <a class="button" href="${esc(url)}">Pick up where you left off &rarr;</a>
-      </div>
-      <hr class="divider" />
-      <p class="small">
-        Stuck on a step? Reply to this email — we will jump on a call or
-        screen-share whatever's blocking you.
-      </p>
-    </div>`;
-  return layout(inner, agency);
+    <p class="subtext">
+      Just bumping this to the top of your inbox. Your setup checklist
+      still has a few open items. The faster you get them in, the
+      faster we start producing for you.
+    </p>
+    <div class="button-wrap">
+      <a class="button" href="${esc(url)}">Pick up where you left off &rarr;</a>
+    </div>
+    <hr class="divider" />
+    <p class="small">
+      Stuck on a step? Reply to this email and we'll jump on a call or
+      screen-share whatever's blocking you.
+    </p>`;
+  return layout(inner, agency, {
+    eyebrow: 'Quick Nudge',
+    heroTitle: `Hey ${esc(clientName)}, quick nudge.`,
+  });
 }
 
 // ────────────────────────────────────────────────────────────────────────
@@ -333,6 +333,7 @@ export async function sendFlowStakeholderMilestone(
       stakeholderName: s.display_name ?? '',
       clientName: c?.name ?? 'this client',
       headline,
+      milestone,
       flowUrl: flowAdminUrl,
       kickoffShareUrl,
       agency,
@@ -371,7 +372,13 @@ function milestoneHeadline(
   if (hasKickoffUrl) {
     return clientName ? `Schedule kickoff with ${clientName}` : 'Schedule kickoff';
   }
-  return 'Onboarding complete — kickoff time';
+  return 'Onboarding complete, kickoff time';
+}
+
+function milestoneEyebrow(milestone: Milestone): string {
+  if (milestone === 'invoice_paid') return 'Invoice Paid';
+  if (milestone === 'segment_completed') return 'Segment Completed';
+  return 'Onboarding Complete';
 }
 
 function flowAdminUrlFor(_agency: AgencyBrand, flowId: string): string {
@@ -386,6 +393,7 @@ function stakeholderMilestoneHtml({
   stakeholderName,
   clientName,
   headline,
+  milestone,
   flowUrl,
   kickoffShareUrl,
   agency,
@@ -393,14 +401,15 @@ function stakeholderMilestoneHtml({
   stakeholderName: string;
   clientName: string;
   headline: string;
+  milestone: Milestone;
   flowUrl: string;
   kickoffShareUrl: string | null;
   agency: AgencyBrand;
 }): string {
-  const greeting = stakeholderName ? `Hi ${esc(stakeholderName.split(' ')[0])}` : 'FYI';
+  const firstName = stakeholderName ? esc(stakeholderName.split(' ')[0]) : '';
   const subtext = kickoffShareUrl
-    ? `<strong>${esc(clientName)}</strong> finished onboarding — pick a kickoff time when the team's free.`
-    : `<strong>${esc(clientName)}</strong> just hit a milestone you opted into.`;
+    ? `${firstName ? `Hi ${firstName}, ` : ''}<strong>${esc(clientName)}</strong> finished onboarding. Pick a kickoff time when the team's free.`
+    : `${firstName ? `Hi ${firstName}, ` : ''}<strong>${esc(clientName)}</strong> just hit a milestone you opted into.`;
   const primaryCta = kickoffShareUrl
     ? `<a class="button" href="${esc(kickoffShareUrl)}">Schedule kickoff &rarr;</a>`
     : `<a class="button" href="${esc(flowUrl)}">Open the flow &rarr;</a>`;
@@ -408,13 +417,13 @@ function stakeholderMilestoneHtml({
     ? `<p class="subtext" style="margin-top:16px;font-size:13px;"><a href="${esc(flowUrl)}">Or open the onboarding tracker &rarr;</a></p>`
     : '';
   const inner = `
-    <div class="card">
-      <h1 class="heading">${greeting} — ${esc(headline)}.</h1>
-      <p class="subtext">${subtext}</p>
-      <div class="button-wrap">${primaryCta}</div>
-      ${secondaryCta}
-    </div>`;
-  return layout(inner, agency);
+    <p class="subtext">${subtext}</p>
+    <div class="button-wrap">${primaryCta}</div>
+    ${secondaryCta}`;
+  return layout(inner, agency, {
+    eyebrow: milestoneEyebrow(milestone),
+    heroTitle: `${esc(clientName)}: ${esc(headline)}`,
+  });
 }
 
 // ────────────────────────────────────────────────────────────────────────
@@ -488,18 +497,18 @@ function stakeholderNoProgressHtml({
   agency: AgencyBrand;
 }): string {
   const inner = `
-    <div class="card">
-      <h1 class="heading">Heads up — ${esc(clientName)} has gone quiet.</h1>
-      <p class="subtext">
-        No POC activity on this onboarding flow for 5 days. Worth a personal
-        nudge — the auto-reminders have already fired, but a real human
-        message moves the needle.
-      </p>
-      <div class="button-wrap">
-        <a class="button" href="${esc(flowUrl)}">Open the flow &rarr;</a>
-      </div>
+    <p class="subtext">
+      No POC activity on this onboarding flow for 5 days. Worth a personal
+      nudge. The auto-reminders have already fired, but a real human
+      message moves the needle.
+    </p>
+    <div class="button-wrap">
+      <a class="button" href="${esc(flowUrl)}">Open the flow &rarr;</a>
     </div>`;
-  return layout(inner, agency);
+  return layout(inner, agency, {
+    eyebrow: 'No Progress · 5 Days',
+    heroTitle: `${esc(clientName)} has gone quiet.`,
+  });
 }
 
 // Suppress unused import warnings for future POC-invite logo overrides.

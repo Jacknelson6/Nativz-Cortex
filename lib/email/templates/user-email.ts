@@ -121,6 +121,8 @@ function markdownToHtml(markdown: string, agency: AgencyBrand): string {
 
 export function buildUserEmailHtml(bodyMarkdown: string, agency: AgencyBrand): string {
   const body = markdownToHtml(bodyMarkdown, agency);
-  const card = `<div class="card">${body}</div>`;
-  return layout(card, agency);
+  // Body is admin-composed markdown so we don't lift a heroTitle from it,
+  // the `# heading` block in the body still renders on the white card. Eyebrow
+  // falls back to the brand name through layout()'s default.
+  return layout(body, agency);
 }

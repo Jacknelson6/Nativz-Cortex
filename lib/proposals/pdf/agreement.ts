@@ -20,19 +20,21 @@ import { RUBIK_REGULAR_B64 } from './fonts/rubik-regular';
 import { RUBIK_MEDIUM_B64 } from './fonts/rubik-medium';
 import { CAVEAT_SEMIBOLD_B64 } from './fonts/caveat-semibold';
 import { LOGO_DARK_BG_B64, LOGO_LIGHT_BG_B64 } from './assets';
-import { getEmailLogoUrl } from '@/lib/email/brand-tokens';
+import { layout } from '@/lib/email/resend';
 import type { AgencyBrand } from '@/lib/agency/detect';
 
-// Email-only brand details. The PDF body is still Anderson-skinned (legal
-// agreement template); this resolver only feeds the transactional emails.
+// Email-only copy fields used inside body content. Layout-level concerns
+// (logo, address, gradient header, fonts, footer) are handled by the
+// canonical `layout()` shell in `@/lib/email/resend`, which reads its own
+// per-brand tokens. This resolver only carries free-form strings the body
+// copy needs (legal company name, counter-signer first name, support email).
 type EmailAgencyBrand = {
-  companyName: string;       // legal name in body copy + subjects
-  signerName: string;        // counter-signer name in copy ("…executed by X on behalf of …")
-  contactEmail: string;      // public-facing contact in footers
-  marketingHost: string;     // marketing site host (no protocol)
-  marketingUrl: string;      // marketing site URL with protocol
-  logoUrl: string;           // hosted logo for email <img>
-  postalAddress: string;     // street line for footer
+  /** Legal name used in body copy + subjects ("…executed by X on behalf of Y"). */
+  companyName: string;
+  /** Counter-signer name shown in the body ("…executed by Trevor Anderson…"). */
+  signerName: string;
+  /** Public-facing support contact surfaced in body footers. */
+  contactEmail: string;
 };
 
 function resolveEmailAgencyBrand(agency: AgencyBrand): EmailAgencyBrand {
@@ -41,20 +43,12 @@ function resolveEmailAgencyBrand(agency: AgencyBrand): EmailAgencyBrand {
       companyName: 'Nativz',
       signerName: 'Cole',
       contactEmail: 'cole@nativz.io',
-      marketingHost: 'nativz.io',
-      marketingUrl: 'https://nativz.io',
-      logoUrl: getEmailLogoUrl('nativz'),
-      postalAddress: '',
     };
   }
   return {
     companyName: 'Anderson Collaborative LLC',
     signerName: 'Trevor Anderson',
     contactEmail: 'trevor@andersoncollaborative.com',
-    marketingHost: 'andersoncollaborative.com',
-    marketingUrl: 'https://andersoncollaborative.com',
-    logoUrl: 'https://docs.andersoncollaborative.com/assets/ac-logo-dark.png',
-    postalAddress: '4000 Ponce de Leon Blvd Ste 470, Coral Gables FL 33146',
   };
 }
 
@@ -636,54 +630,26 @@ export function bytesToBase64(bytes: Uint8Array): string {
 }
 
 // ====================================================================
-// EMAIL TEMPLATES (Anderson Collaborative brand)
+// EMAIL TEMPLATES
 // ====================================================================
-
-const EMAIL_WRAPPER_CSS = `
-  body { margin: 0; padding: 0; background: #f4f6f9; }
-  .wrap { max-width: 620px; margin: 0 auto; padding: 32px 16px; font-family: 'Rubik', 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif; color: #00161F; }
-  .card { background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 24px rgba(10, 22, 40, 0.08); }
-  .header { background: linear-gradient(135deg, #00161F 0%, #012029 100%); padding: 32px 34px 30px; position: relative; }
-  .header::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(to right, #36D1C2, #2BB8AA); }
-  .logo { display: block; height: 38px; width: auto; margin-bottom: 20px; }
-  .eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: #36D1C2; margin-bottom: 14px; font-family: 'Rubik', system-ui, sans-serif; }
-  h1.title { font-family: 'Roboto', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 24px; font-weight: 300; color: #ffffff; margin: 0; line-height: 1.3; letter-spacing: 0.01em; }
-  .body { padding: 32px 32px 28px; }
-  .body p { font-size: 14px; line-height: 1.65; color: #3d4852; margin: 0 0 14px; }
-  .body strong { color: #00161F; }
-  .stats { background: #f7f9fb; border: 1px solid #e8ecf0; border-left: 3px solid #36D1C2; border-radius: 8px; padding: 16px 18px; margin: 18px 0 6px; }
-  .stats table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .stats td { padding: 5px 0; vertical-align: top; }
-  .stats td.k { color: #7b8794; width: 140px; }
-  .stats td.v { color: #00161F; font-weight: 600; }
-  .stats code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; background: rgba(0,173,239,0.07); padding: 2px 5px; border-radius: 3px; }
-  .cta-wrap { text-align: center; margin: 24px 0 8px; }
-  .cta { display: inline-block; background: #36D1C2; color: #00161F; text-decoration: none; font-weight: 700; padding: 14px 32px; border-radius: 10px; font-size: 15px; letter-spacing: 0.01em; }
-  .footer { padding: 20px 32px 24px; background: #fafbfc; border-top: 1px solid #e8ecf0; text-align: center; }
-  .footer p { font-size: 11px; color: #7b8794; margin: 3px 0; line-height: 1.5; }
-  .footer a { color: #2BB8AA; text-decoration: none; }
-  .tagline { font-style: italic; color: #7b8794; font-size: 11px; letter-spacing: 0.01em; }
-`;
+//
+// All four helpers below render through the canonical `layout()` shell in
+// `lib/email/resend.ts`, which provides the per-brand gradient header
+// (logo + eyebrow + heroTitle), card chrome, accent stripe, body padding,
+// footer (tagline + address + website link), and brand fonts. Helpers only
+// produce the body content (paragraphs, .stats panels, .button-wrap CTA,
+// dividers). Subjects are set by callers at the `resend.send()` site.
 
 function esc(s: string): string {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c] as string));
 }
 
-function emailShell(innerHtml: string, title: string, brand: EmailAgencyBrand): string {
-  const footerLine = brand.postalAddress
-    ? `${brand.companyName} · ${brand.postalAddress} · <a href="${brand.marketingUrl}" style="color:#2BB8AA;">${brand.marketingHost}</a>`
-    : `${brand.companyName} · <a href="${brand.marketingUrl}" style="color:#2BB8AA;">${brand.marketingHost}</a>`;
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title>
-<!--[if !mso]><!--><link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&family=Rubik:wght@400;500;600&display=swap" rel="stylesheet"><!--<![endif]-->
-<style>${EMAIL_WRAPPER_CSS}</style></head>
-<body>
-<div class="wrap">
-  ${innerHtml}
-  <div class="footer" style="margin-top: 0; border-radius: 0 0 12px 12px;"></div>
-  <p class="tagline" style="text-align:center; margin: 14px 0 0;">Solving the marketing problems of today with the strategies of tomorrow.</p>
-  <p style="text-align:center; font-size:10.5px; color:#7b8794; margin: 6px 0 0;">${footerLine}</p>
-</div>
-</body></html>`;
+/** Brand-accurate body link color used inside `<a>` tags rendered alongside
+ *  the canonical layout. Mirrors the `accentDark` token in brand-tokens.ts so
+ *  links read as the brand's hover/footer color rather than the lighter
+ *  primary accent used on the CTA. */
+function bodyLinkColor(agency: AgencyBrand): string {
+  return agency === 'anderson' ? '#2BB8AA' : '#0090CC';
 }
 
 export function emailClientSigned(input: {
@@ -705,7 +671,8 @@ export function emailClientSigned(input: {
    *  account emails without waiting for payment to clear. */
   intakeUrl?: string;
 }): string {
-  const brand = resolveEmailAgencyBrand(input.agency ?? 'anderson');
+  const agency: AgencyBrand = input.agency ?? 'anderson';
+  const brand = resolveEmailAgencyBrand(agency);
   const first = input.signerName.split(' ')[0] || input.signerName;
   const href = `${input.stripeUrl}?prefilled_email=${encodeURIComponent(input.signerEmail)}&client_reference_id=${input.id}`;
   const cw = input.cadence === 'year' ? 'year' : input.cadence === 'week' ? 'week' : 'month';
@@ -733,30 +700,21 @@ export function emailClientSigned(input: {
     ? `Once the first ${cw} clears, we send a fully counter-signed copy of the agreement and kick off your first deliverables. Questions? Reply to this email.`
     : `Once the deposit clears, we send a fully counter-signed copy of the agreement. Questions? Reply to this email.`;
   const inner = `
-  <div class="card">
-    <div class="header">
-      <img class="logo" src="${brand.logoUrl}" alt="${esc(brand.companyName)}">
-      <div class="eyebrow">Agreement Signed</div>
-      <h1 class="title">Thank you, ${esc(first)}. One step to kickoff.</h1>
-    </div>
-    <div class="body">
-      <p>Your signed <strong>${esc(input.projectName)}</strong> Service Agreement with ${esc(brand.companyName)} is attached. We kept a copy for our records.</p>
-      <div class="stats"><table>${stats}
-      </table></div>
-      <p style="margin-top: 18px;">${nextStep}</p>
-      <div class="cta-wrap"><a class="cta" href="${esc(href)}">${esc(ctaLabel)}</a></div>
-      ${input.intakeUrl ? `
-      <hr style="border: none; border-top: 1px solid #e6e8eb; margin: 22px 0 18px 0;">
-      <p style="margin: 0 0 10px 0;"><strong>Get a head start on onboarding.</strong></p>
-      <p style="margin: 0 0 14px 0; font-size: 13px; color: #4a5568;">While your first payment is processing, drop your raw footage, brand assets, and connect your socials so we can begin the moment it clears.</p>
-      <div class="cta-wrap"><a class="cta" style="background: #2d3748;" href="${esc(input.intakeUrl)}">Start onboarding intake →</a></div>` : ''}
-      <p style="font-size: 12px; color: #7b8794; margin-top: 18px;">${clearedLine}</p>
-    </div>
-  </div>`;
-  const subject = isSub
-    ? `${input.projectName} agreement signed. First ${cw} payment link inside.`
-    : `${input.projectName} agreement signed. Deposit link inside.`;
-  return emailShell(inner, subject, brand);
+    <p>Your signed <strong>${esc(input.projectName)}</strong> Service Agreement with ${esc(brand.companyName)} is attached. We kept a copy for our records.</p>
+    <div class="stats"><table>${stats}
+    </table></div>
+    <p style="margin-top: 18px;">${nextStep}</p>
+    <div class="button-wrap"><a class="button" href="${esc(href)}">${esc(ctaLabel)}</a></div>
+    ${input.intakeUrl ? `
+    <hr style="border: none; border-top: 1px solid #e6e8eb; margin: 22px 0 18px 0;">
+    <p style="margin: 0 0 10px 0;"><strong>Get a head start on onboarding.</strong></p>
+    <p style="margin: 0 0 14px 0; font-size: 13px; color: #4a5568;">While your first payment is processing, drop your raw footage, brand assets, and connect your socials so we can begin the moment it clears.</p>
+    <div class="button-wrap"><a class="button" style="background:#2d3748;color:#ffffff;" href="${esc(input.intakeUrl)}">Start onboarding intake →</a></div>` : ''}
+    <p style="font-size: 12px; color: #7b8794; margin-top: 18px;">${clearedLine}</p>`;
+  return layout(inner, agency, {
+    eyebrow: 'Agreement Signed',
+    heroTitle: `Thank you, ${esc(first)}. One step to kickoff.`,
+  });
 }
 
 export function emailOpsSigned(input: {
@@ -778,7 +736,7 @@ export function emailOpsSigned(input: {
   cadence?: 'month' | 'year' | 'week';
   agency?: AgencyBrand;
 }): string {
-  const brand = resolveEmailAgencyBrand(input.agency ?? 'anderson');
+  const agency: AgencyBrand = input.agency ?? 'anderson';
   const cw = input.cadence === 'year' ? 'year' : input.cadence === 'week' ? 'week' : 'month';
   const isSub = !!input.subscription;
   const tierLine = isSub
@@ -787,30 +745,25 @@ export function emailOpsSigned(input: {
   const statusLine = isSub
     ? `<strong>Status:</strong> Stripe first-${cw} link sent to client. Payment pending. Webhook will fire the counter-signed PDF once it clears.`
     : `<strong>Status:</strong> Stripe deposit link sent to client. Payment pending. Webhook will fire the counter-signed PDF once it clears.`;
+  const linkColor = bodyLinkColor(agency);
   const inner = `
-  <div class="card">
-    <div class="header">
-      <img class="logo" src="${brand.logoUrl}" alt="${esc(brand.companyName)}">
-      <div class="eyebrow">New Signing · ${esc(input.projectName)}</div>
-      <h1 class="title">${esc(input.clientLegalName)}</h1>
-    </div>
-    <div class="body">
-      <div class="stats"><table>
-        <tr><td class="k">Signer</td><td class="v">${esc(input.signerName)}, ${esc(input.signerTitle)}</td></tr>
-        <tr><td class="k">Email</td><td class="v"><a href="mailto:${esc(input.signerEmail)}" style="color:#2BB8AA;">${esc(input.signerEmail)}</a></td></tr>
-        <tr><td class="k">Address</td><td class="v">${esc(input.clientAddress)}</td></tr>
-        <tr><td class="k">Tier</td><td class="v">${tierLine}</td></tr>
-        <tr><td class="k">Signed (UTC)</td><td class="v">${esc(input.signedAt)}</td></tr>
-        <tr><td class="k">IP</td><td class="v"><code>${esc(input.ip)}</code></td></tr>
-        <tr><td class="k">User Agent</td><td class="v" style="font-size:11px;">${esc(input.ua.slice(0, 80))}</td></tr>
-        <tr><td class="k">Document ID</td><td class="v"><code>${esc(input.id)}</code></td></tr>
-        <tr><td class="k">SHA-256</td><td class="v"><code>${esc(input.pdfHash.slice(0, 32))}…</code></td></tr>
-      </table></div>
-      <p style="margin-top: 18px;">${statusLine}</p>
-      <p style="font-size: 12px; color: #7b8794;">KV: <code>sign:${esc(input.id)}:*</code> · 7-year retention.</p>
-    </div>
-  </div>`;
-  return emailShell(inner, `[Signed · ${input.projectName}] ${input.clientLegalName} · ${input.tierLabel}`, brand);
+    <div class="stats"><table>
+      <tr><td class="k">Signer</td><td class="v">${esc(input.signerName)}, ${esc(input.signerTitle)}</td></tr>
+      <tr><td class="k">Email</td><td class="v"><a href="mailto:${esc(input.signerEmail)}" style="color:${linkColor};text-decoration:none;">${esc(input.signerEmail)}</a></td></tr>
+      <tr><td class="k">Address</td><td class="v">${esc(input.clientAddress)}</td></tr>
+      <tr><td class="k">Tier</td><td class="v">${tierLine}</td></tr>
+      <tr><td class="k">Signed (UTC)</td><td class="v">${esc(input.signedAt)}</td></tr>
+      <tr><td class="k">IP</td><td class="v"><code>${esc(input.ip)}</code></td></tr>
+      <tr><td class="k">User Agent</td><td class="v" style="font-size:11px;">${esc(input.ua.slice(0, 80))}</td></tr>
+      <tr><td class="k">Document ID</td><td class="v"><code>${esc(input.id)}</code></td></tr>
+      <tr><td class="k">SHA-256</td><td class="v"><code>${esc(input.pdfHash.slice(0, 32))}…</code></td></tr>
+    </table></div>
+    <p style="margin-top: 18px;">${statusLine}</p>
+    <p style="font-size: 12px; color: #7b8794;">KV: <code>sign:${esc(input.id)}:*</code> · 7-year retention.</p>`;
+  return layout(inner, agency, {
+    eyebrow: `New Signing · ${esc(input.projectName)}`,
+    heroTitle: esc(input.clientLegalName),
+  });
 }
 
 export function emailClientPaid(input: {
@@ -826,7 +779,8 @@ export function emailClientPaid(input: {
   cadence?: 'month' | 'year' | 'week';
   agency?: AgencyBrand;
 }): string {
-  const brand = resolveEmailAgencyBrand(input.agency ?? 'anderson');
+  const agency: AgencyBrand = input.agency ?? 'anderson';
+  const brand = resolveEmailAgencyBrand(agency);
   const first = input.signerName.split(' ')[0] || input.signerName;
   const cw = input.cadence === 'year' ? 'year' : input.cadence === 'week' ? 'week' : 'month';
   const isSub = !!input.subscription;
@@ -853,24 +807,15 @@ export function emailClientPaid(input: {
     : `<strong>What happens next:</strong> we reach out within 24 hours to schedule kickoff. In the meantime, start gathering brand assets, preferred color palette, competitor sites you admire, and any content to migrate.`;
   const contactFirstName = brand.signerName.split(' ')[0] || brand.signerName;
   const inner = `
-  <div class="card">
-    <div class="header" style="background: linear-gradient(135deg, #00161F 0%, #012029 100%);">
-      <img class="logo" src="${brand.logoUrl}" alt="${esc(brand.companyName)}">
-      <div class="eyebrow" style="color: #4ade80;">${eyebrowText}</div>
-      <h1 class="title">Welcome aboard, ${esc(first)}. Kickoff inbound.</h1>
-    </div>
-    <div class="body">
-      <p>${openingLine}</p>
-      <div class="stats" style="border-left-color: #16a34a;"><table>${stats}
-      </table></div>
-      <p style="margin-top: 18px;">${nextLine}</p>
-      <p style="font-size: 12px; color: #7b8794; margin-top: 18px;">Questions? Reply to this email or reach ${esc(contactFirstName)} at ${esc(brand.contactEmail)}.</p>
-    </div>
-  </div>`;
-  const subject = isSub
-    ? `First ${cw} received. Fully executed ${input.projectName} agreement attached.`
-    : `Deposit received. Fully executed ${input.projectName} agreement attached.`;
-  return emailShell(inner, subject, brand);
+    <p>${openingLine}</p>
+    <div class="stats" style="border-left-color: #16a34a;"><table>${stats}
+    </table></div>
+    <p style="margin-top: 18px;">${nextLine}</p>
+    <p style="font-size: 12px; color: #7b8794; margin-top: 18px;">Questions? Reply to this email or reach ${esc(contactFirstName)} at ${esc(brand.contactEmail)}.</p>`;
+  return layout(inner, agency, {
+    eyebrow: eyebrowText,
+    heroTitle: `Welcome aboard, ${esc(first)}. Kickoff inbound.`,
+  });
 }
 
 export function emailOpsPaid(input: {
@@ -889,7 +834,7 @@ export function emailOpsPaid(input: {
   cadence?: 'month' | 'year' | 'week';
   agency?: AgencyBrand;
 }): string {
-  const brand = resolveEmailAgencyBrand(input.agency ?? 'anderson');
+  const agency: AgencyBrand = input.agency ?? 'anderson';
   const cw = input.cadence === 'year' ? 'year' : input.cadence === 'week' ? 'week' : 'month';
   const isSub = !!input.subscription;
   const eyebrowText = isSub
@@ -902,25 +847,20 @@ export function emailOpsPaid(input: {
   const secondRowValue = isSub
     ? `$${input.total.toLocaleString()} same date next ${cw}`
     : `$${input.deposit.toLocaleString()} at launch or day 60`;
+  const linkColor = bodyLinkColor(agency);
   const inner = `
-  <div class="card">
-    <div class="header">
-      <img class="logo" src="${brand.logoUrl}" alt="${esc(brand.companyName)}">
-      <div class="eyebrow" style="color: #4ade80;">${eyebrowText}</div>
-      <h1 class="title">${esc(input.clientLegalName)} → kickoff within 24h</h1>
-    </div>
-    <div class="body">
-      <div class="stats" style="border-left-color: #16a34a;"><table>
-        <tr><td class="k">Tier</td><td class="v">${tierRow}</td></tr>
-        <tr><td class="k">Client</td><td class="v">${esc(input.signerName)} (<a href="mailto:${esc(input.signerEmail)}" style="color:#2BB8AA;">${esc(input.signerEmail)}</a>)</td></tr>
-        <tr><td class="k">Paid</td><td class="v">$${(input.amountPaid / 100).toFixed(2)} USD</td></tr>
-        <tr><td class="k">${secondRowLabel}</td><td class="v">${secondRowValue}</td></tr>
-        <tr><td class="k">Stripe Customer</td><td class="v"><code>${esc(input.stripeCustomer)}</code></td></tr>
-        <tr><td class="k">PaymentIntent</td><td class="v"><code>${esc(input.stripePaymentIntent)}</code></td></tr>
-        <tr><td class="k">Document ID</td><td class="v"><code>${esc(input.id)}</code></td></tr>
-      </table></div>
-      <p style="margin-top: 18px;">Fully executed PDF attached. <strong>Kickoff call needed within 24h.</strong></p>
-    </div>
-  </div>`;
-  return emailShell(inner, `[Paid · ${input.projectName}] ${input.clientLegalName} · ${input.tierLabel}`, brand);
+    <div class="stats" style="border-left-color: #16a34a;"><table>
+      <tr><td class="k">Tier</td><td class="v">${tierRow}</td></tr>
+      <tr><td class="k">Client</td><td class="v">${esc(input.signerName)} (<a href="mailto:${esc(input.signerEmail)}" style="color:${linkColor};text-decoration:none;">${esc(input.signerEmail)}</a>)</td></tr>
+      <tr><td class="k">Paid</td><td class="v">$${(input.amountPaid / 100).toFixed(2)} USD</td></tr>
+      <tr><td class="k">${secondRowLabel}</td><td class="v">${secondRowValue}</td></tr>
+      <tr><td class="k">Stripe Customer</td><td class="v"><code>${esc(input.stripeCustomer)}</code></td></tr>
+      <tr><td class="k">PaymentIntent</td><td class="v"><code>${esc(input.stripePaymentIntent)}</code></td></tr>
+      <tr><td class="k">Document ID</td><td class="v"><code>${esc(input.id)}</code></td></tr>
+    </table></div>
+    <p style="margin-top: 18px;">Fully executed PDF attached. <strong>Kickoff call needed within 24h.</strong></p>`;
+  return layout(inner, agency, {
+    eyebrow: eyebrowText,
+    heroTitle: `${esc(input.clientLegalName)} → kickoff within 24h`,
+  });
 }
