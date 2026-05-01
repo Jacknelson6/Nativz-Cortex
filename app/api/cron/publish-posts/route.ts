@@ -4,6 +4,7 @@ import { getPostingService } from '@/lib/posting';
 import type { SocialPlatform } from '@/lib/posting/types';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 import { notifyAdmins } from '@/lib/notifications';
+import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
 
 const STALE_ALERT_PREFIX = 'Stale draft: scheduled time passed without approval';
 
@@ -336,6 +337,67 @@ async function handleGet(request: NextRequest) {
       }
     }
 
+    // APPROVED-DRAFT RECOVERY SWEEP
+    //
+    // The share-link comment route calls `publishScheduledPost` inline when
+    // a comment lands as 'approved'. If that call fails (deploy timing,
+    // function timeout, transient Zernio error) the post sits in 'draft'
+    // forever even though the client said "ship it." This sweep finds drop
+    // posts in 'draft' that have at least one 'approved' review comment and
+    // re-runs `publishScheduledPost`. The function is idempotent, so
+    // double-firing is safe. We only touch drop posts (rows linked from
+    // `content_drop_videos`) so non-drop drafts stay untouched.
+    let recoveredCount = 0;
+    try {
+      const { data: approvedComments } = await adminClient
+        .from('post_review_comments')
+        .select('review_link_id, post_review_links:review_link_id (post_id)')
+        .eq('status', 'approved');
+
+      const approvedPostIds = new Set<string>();
+      for (const c of approvedComments ?? []) {
+        const raw = (c as unknown as { post_review_links: { post_id: string } | { post_id: string }[] | null }).post_review_links;
+        const links = Array.isArray(raw) ? raw : raw ? [raw] : [];
+        for (const link of links) {
+          if (link?.post_id) approvedPostIds.add(link.post_id);
+        }
+      }
+
+      if (approvedPostIds.size > 0) {
+        const { data: approvedDrafts } = await adminClient
+          .from('scheduled_posts')
+          .select('id')
+          .eq('status', 'draft')
+          .in('id', Array.from(approvedPostIds));
+
+        const draftIds = (approvedDrafts ?? []).map((r) => (r as { id: string }).id);
+        if (draftIds.length > 0) {
+          // Restrict to drop posts.
+          const { data: dropRows } = await adminClient
+            .from('content_drop_videos')
+            .select('scheduled_post_id')
+            .in('scheduled_post_id', draftIds);
+          const dropDraftIds = (dropRows ?? []).map(
+            (r) => (r as { scheduled_post_id: string }).scheduled_post_id,
+          );
+
+          for (const postId of dropDraftIds) {
+            try {
+              const result = await publishScheduledPost(adminClient, postId);
+              if (!result.alreadyPublished) {
+                recoveredCount++;
+                console.log(`[publish-cron] recovered approved draft ${postId} → Zernio ${result.externalPostId}`);
+              }
+            } catch (err) {
+              console.error(`[publish-cron] failed to recover approved draft ${postId}:`, err);
+            }
+          }
+        }
+      }
+    } catch (recoverErr) {
+      console.error('[publish-cron] approved-draft recovery sweep failed:', recoverErr);
+    }
+
     // STALE-DRAFT SCAN
     //
     // Drop posts whose scheduled_at has passed but never got an approval
@@ -416,6 +478,7 @@ async function handleGet(request: NextRequest) {
       message: `Processed ${pendingPosts?.length ?? 0} posts`,
       published: publishedCount,
       failed: failedCount,
+      recovered_approved: recoveredCount,
       stale_alerted: staleAlertedCount,
     });
   } catch (error) {
