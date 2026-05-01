@@ -137,10 +137,24 @@ async function loadSendContext(token: string) {
     .eq('client_id', clientId)
     .returns<ReviewContactRow[]>();
 
-  const eligible = (contacts ?? []).filter(
+  let eligible = (contacts ?? []).filter(
     (c): c is { email: string; name: string | null; notifications_enabled: boolean } =>
       !!c.email && c.notifications_enabled !== false,
   );
+
+  // Fallback to the brand's POC roster (`contacts` table) when no review-
+  // specific contacts have been set up. Avoids forcing admins to re-enter
+  // the same people they already added to the brand profile.
+  if (eligible.length === 0) {
+    const { data: brandContacts } = await admin
+      .from('contacts')
+      .select('email, name')
+      .eq('client_id', clientId)
+      .not('email', 'is', null);
+    eligible = (brandContacts ?? [])
+      .filter((c): c is { email: string; name: string | null } => !!c.email)
+      .map((c) => ({ email: c.email, name: c.name, notifications_enabled: true }));
+  }
 
   return {
     admin,

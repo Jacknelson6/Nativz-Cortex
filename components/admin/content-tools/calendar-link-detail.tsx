@@ -50,6 +50,11 @@ interface ContactRow {
   name: string | null;
   role: string | null;
   notifications_enabled: boolean;
+  // 'review' = explicit entry on /review notifications page.
+  // 'brand'  = fallback pulled from the brand profile's POC roster
+  //           when no review-specific contacts exist. Mirrors the
+  //           same fallback the /send route applies server-side.
+  source?: 'review' | 'brand';
 }
 
 /**
@@ -147,7 +152,43 @@ export function CalendarLinkDetail({
         );
         if (!res.ok) throw new Error('failed');
         const data = (await res.json()) as { contacts: ContactRow[] };
-        if (!cancelled) setContacts(data.contacts ?? []);
+        const reviewContacts = (data.contacts ?? []).map<ContactRow>((c) => ({
+          ...c,
+          source: 'review',
+        }));
+
+        // Fall back to the brand profile's POC roster when no review-specific
+        // contacts are configured. Mirrors the server-side fallback in the
+        // /send route so the displayed list matches who the email actually
+        // goes to.
+        if (reviewContacts.length === 0) {
+          const brandRes = await fetch(
+            `/api/clients/${encodeURIComponent(clientId)}/contacts`,
+            { cache: 'no-store' },
+          );
+          if (brandRes.ok) {
+            const brand = (await brandRes.json()) as Array<{
+              id: string;
+              email: string | null;
+              name: string | null;
+              role: string | null;
+            }>;
+            const fallback: ContactRow[] = (brand ?? [])
+              .filter((c): c is { id: string; email: string; name: string | null; role: string | null } => !!c.email)
+              .map((c) => ({
+                id: c.id,
+                email: c.email,
+                name: c.name,
+                role: c.role,
+                notifications_enabled: true,
+                source: 'brand',
+              }));
+            if (!cancelled) setContacts(fallback);
+            return;
+          }
+        }
+
+        if (!cancelled) setContacts(reviewContacts);
       } catch {
         if (!cancelled) setContacts([]);
       } finally {
@@ -456,7 +497,23 @@ export function CalendarLinkDetail({
                   </a>
                 </div>
               ) : (
-                <ul className="space-y-2">
+                <>
+                  {contacts[0]?.source === 'brand' && (
+                    <p className="mb-2 flex items-center gap-1.5 text-[11px] text-text-muted">
+                      <Users size={11} />
+                      Pulled from brand profile contacts. Override per brand in{' '}
+                      <a
+                        href="/review"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-accent-text hover:underline"
+                      >
+                        Review → Notifications
+                      </a>
+                      .
+                    </p>
+                  )}
+                  <ul className="space-y-2">
                   {contacts.map((c) => (
                     <li
                       key={c.id}
@@ -483,7 +540,8 @@ export function CalendarLinkDetail({
                       )}
                     </li>
                   ))}
-                </ul>
+                  </ul>
+                </>
               )}
             </div>
           </Section>
