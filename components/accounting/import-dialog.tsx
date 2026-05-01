@@ -199,7 +199,8 @@ export function ImportDialog({
           {stage === 'preview' && (
             <p className="text-sm text-text-secondary mt-1">
               {proposals.length} proposed entries · {centsToDollars(grandTotal)} total.
-              Edit or remove any row below before confirming.
+              Edit or remove any row below before confirming. Amber fields are
+              ones the parser couldn&apos;t fill in.
             </p>
           )}
         </div>
@@ -221,22 +222,17 @@ export function ImportDialog({
                   <option value="blogging">Blogging</option>
                 </select>
                 <span className="text-xs text-text-secondary">
-                  Applied when the text doesn't specify a service per row.
+                  Applied when the text doesn&apos;t specify a service per row.
                 </span>
               </div>
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder={`Paste anything — a Google Sheet selection, a Slack message, freeform notes.
-
-Example:
-Khori — 12 edits for Toastique @ $35 = $420
-Jashan — 8 Videolab videos, $35 each = $280
-Affiliate payout: Cole @ Rockpower, $1200
-`}
+                placeholder={`Paste anything: freeform text, a Notion table, a Wise CSV row. We'll figure it out.`}
                 rows={14}
                 className="w-full rounded-lg border border-nativz-border bg-background px-4 py-3 text-base text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-1 focus:ring-accent font-mono"
               />
+              <PasteHints />
             </div>
           ) : (
             <div className="p-4">
@@ -269,6 +265,13 @@ Affiliate payout: Cole @ Rockpower, $1200
                     const unresolvedPayee = !p.team_member_id && !p.payee_label;
                     const needsClient = !p.client_id && p.client_name_raw;
                     const perUnit = hasPerUnitPricing(p.entry_type);
+                    // For per-unit rows the parser should have surfaced
+                    // a video count and a rate; if either landed at 0
+                    // the amount will too. Highlight so the importer
+                    // catches a parse miss before commit.
+                    const needsVideos = perUnit && p.video_count === 0;
+                    const needsRate = perUnit && p.rate_cents === 0;
+                    const needsAmount = !perUnit && p.amount_cents === 0;
                     return (
                       <tr key={i} className="border-b border-nativz-border align-top">
                         <td className="px-3 py-2">
@@ -335,7 +338,12 @@ Affiliate payout: Cole @ Rockpower, $1200
                               aria-label="Videos"
                               value={p.video_count}
                               onChange={(e) => updateRow(i, { video_count: parseInt(e.target.value, 10) || 0 })}
-                              className="w-full rounded border border-nativz-border bg-background px-2 py-1 text-sm tabular-nums text-text-primary"
+                              className={`w-full rounded border bg-background px-2 py-1 text-sm tabular-nums ${
+                                needsVideos
+                                  ? 'border-amber-500/60 text-amber-400'
+                                  : 'border-nativz-border text-text-primary'
+                              }`}
+                              title={needsVideos ? 'Parser missed this column' : undefined}
                             />
                           ) : (
                             <span className="text-text-secondary text-xs">—</span>
@@ -352,7 +360,12 @@ Affiliate payout: Cole @ Rockpower, $1200
                               onChange={(e) =>
                                 updateRow(i, { rate_cents: Math.round((parseFloat(e.target.value) || 0) * 100) })
                               }
-                              className="w-full rounded border border-nativz-border bg-background px-2 py-1 text-sm tabular-nums text-text-primary"
+                              className={`w-full rounded border bg-background px-2 py-1 text-sm tabular-nums ${
+                                needsRate
+                                  ? 'border-amber-500/60 text-amber-400'
+                                  : 'border-nativz-border text-text-primary'
+                              }`}
+                              title={needsRate ? 'Parser missed this column' : undefined}
                             />
                           ) : (
                             <span className="text-text-secondary text-xs">—</span>
@@ -373,9 +386,17 @@ Affiliate payout: Cole @ Rockpower, $1200
                             className={`w-full rounded border bg-background px-2 py-1 text-sm tabular-nums font-semibold ${
                               perUnit
                                 ? 'border-nativz-border text-text-secondary cursor-not-allowed'
-                                : 'border-nativz-border text-text-primary'
+                                : needsAmount
+                                  ? 'border-amber-500/60 text-amber-400'
+                                  : 'border-nativz-border text-text-primary'
                             }`}
-                            title={perUnit ? 'Auto-computed from units × rate' : undefined}
+                            title={
+                              perUnit
+                                ? 'Auto-computed from units × rate'
+                                : needsAmount
+                                  ? 'Parser missed this column'
+                                  : undefined
+                            }
                           />
                         </td>
                         <td className="px-3 py-2">
@@ -402,7 +423,7 @@ Affiliate payout: Cole @ Rockpower, $1200
           )}
         </div>
 
-        {/* Footer */}
+        {/* Hint examples handled inline above; footer below. */}
         <div className="border-t border-nativz-border px-6 py-4 flex items-center justify-between gap-3 bg-background/30">
           {stage === 'paste' ? (
             <>
@@ -443,5 +464,42 @@ Affiliate payout: Cole @ Rockpower, $1200
           )}
         </div>
     </Dialog>
+  );
+}
+
+function PasteHints() {
+  return (
+    <div className="rounded-lg border border-nativz-border bg-background/40 p-4 text-xs text-text-secondary space-y-3">
+      <p className="font-semibold text-text-primary uppercase tracking-wide text-[11px]">
+        Works with anything. A few examples:
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <HintBlock
+          title="Freeform"
+          sample={`Khori: 12 edits for Toastique @ $35\nJashan: 8 Videolab videos @ $35\nCole affiliate Rockpower $1200`}
+        />
+        <HintBlock
+          title="Notion table"
+          sample={`Editor\tClient\tVideos\tRate\tTotal\nJed\tToastique\t12\t35\t420\nKen\tVideolab\t8\t35\t280`}
+        />
+        <HintBlock
+          title="Wise CSV row"
+          sample={`Date,Recipient,Amount,Currency\n2026-04-15,Jed Smith,420.00,USD\n2026-04-15,Ken Lee,280.00,USD`}
+        />
+      </div>
+    </div>
+  );
+}
+
+function HintBlock({ title, sample }: { title: string; sample: string }) {
+  return (
+    <div className="rounded border border-nativz-border bg-surface px-3 py-2">
+      <p className="text-[10px] uppercase tracking-wide font-semibold text-text-primary mb-1.5">
+        {title}
+      </p>
+      <pre className="text-[11px] leading-snug whitespace-pre-wrap break-words font-mono text-text-secondary">
+        {sample}
+      </pre>
+    </div>
   );
 }

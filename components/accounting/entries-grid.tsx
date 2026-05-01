@@ -168,6 +168,19 @@ export function EntriesGrid({
     const smmClients = clients.filter(
       (c) => Array.isArray(c.services) && c.services.includes('SMM') && !existingClientIds.has(c.id),
     );
+    // Surface which clients got filtered out so it's obvious when a brand
+    // is missing the SMM service tag in /admin/clients.
+    if (process.env.NODE_ENV !== 'production') {
+      const rejected = clients.filter(
+        (c) => !existingClientIds.has(c.id) && !(Array.isArray(c.services) && c.services.includes('SMM')),
+      );
+      if (rejected.length > 0) {
+        console.info(
+          '[autoAddSmmClients] skipped (not tagged SMM):',
+          rejected.map((c) => c.name).join(', '),
+        );
+      }
+    }
     if (smmClients.length === 0) {
       toast.info('All SMM-flagged clients already have a row.');
       return;
