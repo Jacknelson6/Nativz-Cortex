@@ -13,6 +13,14 @@ export interface OAuthStatePayload {
   client_id: string;
   platform: string;
   ts: number;
+  /**
+   * When the connection was kicked off from a self-serve invite link
+   * (`/connect/invite/{token}`), the callback uses this to mark the
+   * platform as completed on `connection_invites` and fire the notify
+   * webhooks the admin opted into. Absent for the legacy slug-based
+   * flow and the admin-driven scheduler kickoff.
+   */
+  invite_token?: string;
 }
 
 function getSecret(): string {

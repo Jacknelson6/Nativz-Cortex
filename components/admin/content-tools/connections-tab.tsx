@@ -5,14 +5,25 @@ import { toast } from 'sonner';
 import {
   AlertTriangle,
   Cable,
+  CalendarClock,
   CheckCircle2,
   Circle,
-  Copy,
-  Hand,
+  Plus,
   RefreshCcw,
   Search,
+  Send,
 } from 'lucide-react';
-import { Facebook, Instagram, Linkedin, Music2, Youtube } from 'lucide-react';
+import {
+  Bookmark,
+  Camera,
+  Facebook,
+  Globe,
+  Instagram,
+  Linkedin,
+  Music2,
+  Twitter,
+  Youtube,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ClientLogo } from '@/components/clients/client-logo';
 import { Dialog } from '@/components/ui/dialog';
@@ -25,30 +36,28 @@ import {
 /**
  * Connections tab.
  *
- * Per-brand × per-platform matrix of Zernio connection status. Replaces
- * the old infrastructure-probe layout (Resend / Supabase / OpenRouter)
- * because what the agency actually needs to see is which brand is
- * missing a TikTok login or whose Instagram token Zernio just revoked.
+ * Per-brand × per-platform matrix of Zernio connection status. The
+ * brand cell opens an Invite Builder modal where the admin picks the
+ * platforms a client needs to (re)connect, picks recipients off the
+ * brand's `contacts` table, and emails a `/connect/invite/{token}`
+ * link via Resend. The client lands on a no-auth page, taps Connect
+ * per platform, and the OAuth callback marks each one done +
+ * optionally pings the team via Google Chat / email.
  *
- * One row per active brand. Five columns, in posting-priority order:
- * TikTok, Instagram, Facebook, YouTube, LinkedIn. LinkedIn sits
- * alongside the Zernio four on purpose: Zernio has no LinkedIn flow,
- * so the column always reads "Manual" or "Missing", and keeping it
- * visible signals that to the operator at a glance.
+ * Three statuses (after the April 2026 simplification — "manual" was
+ * dropped because having a profile URL on file does not equal access):
  *
- * Each cell renders one of:
+ *   ●  green  CheckCircle2  Connected     (Zernio token, can post)
+ *   ●  red    AlertTriangle Disconnected  (Zernio reported revoke)
+ *   ○  gray   Circle        Not connected (no Zernio token)
  *
- *   ●  green  CheckCircle2  Connected     (Zernio-authed, can post)
- *   ●  blue   Hand          Manual        (client granted access by hand)
- *   ●  red    AlertTriangle Disconnected  (Zernio token revoked, re-auth)
- *   ○  gray   Circle        Missing       (no profile row at all)
- *
- * The data comes from /api/admin/content-tools/connections-matrix which
- * reads `social_profiles` server-side and returns a per-client slot for
- * every platform.
+ * Five core columns (TikTok, Instagram, Facebook, YouTube, LinkedIn)
+ * are always visible. The "Show all platforms" toggle adds the rest of
+ * Zernio's supported set (Google Business, Pinterest, X, Threads,
+ * Bluesky) on demand.
  */
 
-const PLATFORMS = [
+const CORE_PLATFORMS = [
   { key: 'tiktok', label: 'TikTok', Icon: Music2 },
   { key: 'instagram', label: 'Instagram', Icon: Instagram },
   { key: 'facebook', label: 'Facebook', Icon: Facebook },
@@ -56,14 +65,27 @@ const PLATFORMS = [
   { key: 'linkedin', label: 'LinkedIn', Icon: Linkedin },
 ] as const;
 
-type PlatformKey = (typeof PLATFORMS)[number]['key'];
+const EXTRA_PLATFORMS = [
+  { key: 'googlebusiness', label: 'Google Business', Icon: Globe },
+  { key: 'pinterest', label: 'Pinterest', Icon: Bookmark },
+  { key: 'x', label: 'X (Twitter)', Icon: Twitter },
+  { key: 'threads', label: 'Threads', Icon: Camera },
+  { key: 'bluesky', label: 'Bluesky', Icon: Globe },
+] as const;
 
-type SlotStatus = 'connected' | 'manual' | 'disconnected' | 'missing';
+const ALL_PLATFORMS = [...CORE_PLATFORMS, ...EXTRA_PLATFORMS] as const;
+
+type PlatformKey = (typeof ALL_PLATFORMS)[number]['key'];
+type PlatformDef = (typeof ALL_PLATFORMS)[number];
+
+type SlotStatus = 'connected' | 'disconnected' | 'missing';
 
 interface PlatformSlot {
   status: SlotStatus;
   username: string | null;
   disconnectedAt: string | null;
+  tokenExpiresAt: string | null;
+  tokenStatus: string | null;
 }
 
 interface ClientRow {
@@ -71,16 +93,10 @@ interface ClientRow {
   name: string;
   slug: string | null;
   logoUrl: string | null;
-  /**
-   * Active services from `clients.services` (text[]). Used for the
-   * "Active production only" filter chip; canonical values are 'SMM',
-   * 'Paid Media', 'Editing', 'Affiliates'.
-   */
   services: string[];
   profiles: Record<PlatformKey, PlatformSlot>;
 }
 
-/** Services that count as "active production" for the filter chip. */
 const PRODUCTION_SERVICES = ['SMM', 'Editing'] as const;
 
 function hasActiveProduction(c: ClientRow): boolean {
@@ -93,7 +109,6 @@ interface MatrixResponse {
   clients: ClientRow[];
   totals: {
     connected: number;
-    manual: number;
     disconnected: number;
     missing: number;
   };
@@ -104,24 +119,22 @@ export function ConnectionsTab() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
-  /**
-   * "Active production only" hides brands without SMM or Editing on
-   * their service list. Useful when the matrix grows past ~30 brands
-   * and the operator only cares about who we're posting / cutting for
-   * right now.
-   */
   const [activeOnly, setActiveOnly] = useState(false);
-  /**
-   * Which client's "Send connection links" modal is open. Clicking the
-   * brand cell sets this; the modal lists all 5 platforms with a
-   * copy-to-clipboard URL Jack can forward to the client.
-   */
-  const [linksFor, setLinksFor] = useState<ClientRow | null>(null);
+  const [showAllPlatforms, setShowAllPlatforms] = useState(false);
+  const [inviteFor, setInviteFor] = useState<ClientRow | null>(null);
 
   async function load(silent = false) {
     if (silent) setRefreshing(true);
     else setLoading(true);
     try {
+      if (silent) {
+        // Re-check pings Zernio for fresh token expiry before re-reading.
+        // Failures here don't block the matrix render — the cached
+        // `token_expires_at` will still surface.
+        await fetch('/api/admin/content-tools/connections-matrix/sync', {
+          method: 'POST',
+        }).catch(() => undefined);
+      }
       const res = await fetch('/api/admin/content-tools/connections-matrix', {
         cache: 'no-store',
       });
@@ -141,6 +154,10 @@ export function ConnectionsTab() {
   useEffect(() => {
     void load();
   }, []);
+
+  const visiblePlatforms: readonly PlatformDef[] = showAllPlatforms
+    ? ALL_PLATFORMS
+    : CORE_PLATFORMS;
 
   const filtered = useMemo(() => {
     if (!data) return [];
@@ -181,6 +198,19 @@ export function ConnectionsTab() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowAllPlatforms((v) => !v)}
+            className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors ${
+              showAllPlatforms
+                ? 'border-accent-text/40 bg-accent-text/10 text-accent-text'
+                : 'border-nativz-border bg-background text-text-muted hover:text-text-primary'
+            }`}
+            aria-pressed={showAllPlatforms}
+            title="Show every Zernio-supported platform"
+          >
+            <span>All platforms</span>
+          </button>
           <button
             type="button"
             onClick={() => setActiveOnly((v) => !v)}
@@ -226,14 +256,22 @@ export function ConnectionsTab() {
           {query ? 'No brands match that search.' : 'No brands yet.'}
         </div>
       ) : (
-        <MatrixTable rows={filtered} onPickClient={setLinksFor} />
+        <MatrixTable
+          rows={filtered}
+          platforms={visiblePlatforms}
+          onPickClient={setInviteFor}
+        />
       )}
 
       <Legend />
 
-      <SendLinksModal
-        client={linksFor}
-        onClose={() => setLinksFor(null)}
+      <InviteBuilderModal
+        client={inviteFor}
+        onClose={() => setInviteFor(null)}
+        onSent={() => {
+          setInviteFor(null);
+          void load(true);
+        }}
       />
     </div>
   );
@@ -265,9 +303,11 @@ function SearchInput({
 
 function MatrixTable({
   rows,
+  platforms,
   onPickClient,
 }: {
   rows: ClientRow[];
+  platforms: readonly PlatformDef[];
   onPickClient: (c: ClientRow) => void;
 }) {
   return (
@@ -278,7 +318,7 @@ function MatrixTable({
             <th className="px-5 py-2 text-left text-[11px] font-medium uppercase tracking-wide text-text-muted">
               Brand
             </th>
-            {PLATFORMS.map(({ key, label, Icon }) => (
+            {platforms.map(({ key, label, Icon }) => (
               <th
                 key={key}
                 className="px-3 py-2 text-center text-[11px] font-medium uppercase tracking-wide text-text-muted"
@@ -302,7 +342,7 @@ function MatrixTable({
                   type="button"
                   onClick={() => onPickClient(row)}
                   className="-mx-1.5 -my-1 flex items-center gap-2.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-surface-hover focus:bg-surface-hover focus:outline-none"
-                  title="Send connection links"
+                  title="Send connection invite"
                 >
                   <ClientLogo
                     name={row.name}
@@ -316,7 +356,7 @@ function MatrixTable({
                   </div>
                 </button>
               </td>
-              {PLATFORMS.map(({ key }) => (
+              {platforms.map(({ key }) => (
                 <td key={key} className="px-3 py-3 text-center">
                   <SlotCell slot={row.profiles[key]} platformKey={key} />
                 </td>
@@ -339,16 +379,24 @@ function SlotCell({
   const meta = STATUS_META[slot.status];
   const Icon = meta.Icon;
   const tooltip = describeSlot(slot, platformKey);
+  const expiringSoon = isExpiringSoon(slot.tokenExpiresAt);
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span
-          className={`inline-flex items-center justify-center rounded-full border ${meta.chip}`}
-          style={{ height: 26, width: 26 }}
-          aria-label={`${platformKey} ${meta.label}`}
-        >
-          <Icon className="size-3.5" />
+        <span className="relative inline-flex">
+          <span
+            className={`inline-flex items-center justify-center rounded-full border ${meta.chip}`}
+            style={{ height: 26, width: 26 }}
+            aria-label={`${platformKey} ${meta.label}`}
+          >
+            <Icon className="size-3.5" />
+          </span>
+          {expiringSoon && slot.status === 'connected' ? (
+            <span className="absolute -right-1 -top-1 flex size-3.5 items-center justify-center rounded-full border border-status-warning/50 bg-status-warning/20 text-status-warning">
+              <CalendarClock className="size-2.5" />
+            </span>
+          ) : null}
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" className="w-56">
@@ -359,18 +407,34 @@ function SlotCell({
   );
 }
 
+function isExpiringSoon(iso: string | null): boolean {
+  if (!iso) return false;
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return false;
+  const days = (t - Date.now()) / (1000 * 60 * 60 * 24);
+  return days >= 0 && days <= 14;
+}
+
 function describeSlot(slot: PlatformSlot, platform: PlatformKey): string {
-  const noun = PLATFORMS.find((p) => p.key === platform)?.label ?? platform;
+  const noun =
+    ALL_PLATFORMS.find((p) => p.key === platform)?.label ?? platform;
   switch (slot.status) {
-    case 'connected':
-      return slot.username
+    case 'connected': {
+      const base = slot.username
         ? `Posting as @${slot.username} via Zernio.`
         : `${noun} is connected via Zernio.`;
-    case 'manual':
-      if (platform === 'linkedin') {
-        return 'Zernio has no LinkedIn flow. Posting goes through the client account by hand.';
+      if (slot.tokenExpiresAt && isExpiringSoon(slot.tokenExpiresAt)) {
+        const days = Math.max(
+          0,
+          Math.round(
+            (Date.parse(slot.tokenExpiresAt) - Date.now()) /
+              (1000 * 60 * 60 * 24),
+          ),
+        );
+        return `${base} Token expires in ${days} day${days === 1 ? '' : 's'} — send a reconnect invite.`;
       }
-      return `${noun} access was confirmed manually. Re-run onboarding to wire up Zernio.`;
+      return base;
+    }
     case 'disconnected': {
       const when = slot.disconnectedAt
         ? new Date(slot.disconnectedAt).toLocaleDateString('en-US', {
@@ -383,7 +447,10 @@ function describeSlot(slot: PlatformSlot, platform: PlatformKey): string {
         : 'Zernio reported the token is revoked. Reconnect to resume posting.';
     }
     case 'missing':
-      return `No ${noun} profile on file. Onboarding has not been started.`;
+      if (platform === 'linkedin') {
+        return `${noun}: Zernio has no LinkedIn flow. Posts go through the client account by hand.`;
+      }
+      return `No ${noun} token on file. Send a connection invite to reconnect.`;
   }
 }
 
@@ -399,13 +466,6 @@ const STATUS_META: Record<
     label: 'Connected',
     Icon: CheckCircle2,
     chip: 'border-status-success/40 bg-status-success/10 text-status-success',
-  },
-  manual: {
-    label: 'Manual access',
-    Icon: Hand,
-    // Amber instead of teal so it reads as "halfway there" rather than
-    // "all good" - the agency still has to log in by hand on these.
-    chip: 'border-status-warning/40 bg-status-warning/10 text-status-warning',
   },
   disconnected: {
     label: 'Disconnected',
@@ -437,6 +497,12 @@ function Legend() {
           </div>
         );
       })}
+      <div className="inline-flex items-center gap-1.5">
+        <span className="inline-flex size-4 items-center justify-center rounded-full border border-status-warning/50 bg-status-warning/20 text-status-warning">
+          <CalendarClock className="size-2.5" />
+        </span>
+        <span>Token expiring soon</span>
+      </div>
     </div>
   );
 }
@@ -445,160 +511,360 @@ function summarize(totals: MatrixResponse['totals']): string {
   const parts: string[] = [];
   parts.push(`${totals.connected} connected`);
   if (totals.disconnected > 0) parts.push(`${totals.disconnected} disconnected`);
-  if (totals.manual > 0) parts.push(`${totals.manual} manual`);
   if (totals.missing > 0) parts.push(`${totals.missing} missing`);
   return parts.join(' · ');
 }
 
+interface Contact {
+  id: string;
+  name: string | null;
+  email: string;
+  isPrimary: boolean;
+}
+
+interface InviteContext {
+  contacts: Contact[];
+  hasChatWebhook: boolean;
+}
+
 /**
- * "Send connection links" modal.
+ * Invite Builder modal.
  *
- * Triggered by clicking a brand cell in the matrix. Lists all five
- * platforms with:
- *   - status icon (reuses STATUS_META, so it matches the matrix cells)
- *   - attached username when connected
- *   - copy-to-clipboard URL the agency can forward to the client
+ * Lets the admin configure a self-serve connection invite for a brand:
+ *   - which platforms to ask for (defaults to non-Connected platforms)
+ *   - which POCs to email (multi-select against the brand's contacts)
+ *   - whether to ping Google Chat / email on each connection
  *
- * LinkedIn is special-cased: Zernio has no LinkedIn flow, so instead
- * of a connection URL we show "Manual setup" copy. Putting it inside
- * the same modal (rather than hiding it) makes the gap obvious to the
- * operator, matching how the matrix shows it.
+ * Posts to `/api/admin/connection-invites`, which mints the token,
+ * inserts the row, and fires the Resend email per recipient.
  */
-function SendLinksModal({
+function InviteBuilderModal({
   client,
   onClose,
+  onSent,
 }: {
   client: ClientRow | null;
   onClose: () => void;
+  onSent: () => void;
 }) {
   const open = !!client;
-  // Snapshot the origin so we can preview the URL the client will see.
-  // SSR-safe: we only ever read this on the client.
-  const origin =
-    typeof window !== 'undefined' ? window.location.origin : 'https://cortex.nativz.io';
+
+  const [ctx, setCtx] = useState<InviteContext | null>(null);
+  const [ctxLoading, setCtxLoading] = useState(false);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Set<PlatformKey>>(
+    new Set(),
+  );
+  const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [extraEmail, setExtraEmail] = useState('');
+  const [notifyChat, setNotifyChat] = useState(true);
+  const [notifyEmail, setNotifyEmail] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [showExtras, setShowExtras] = useState(false);
+
+  // Reset state every time we open for a new brand.
+  useEffect(() => {
+    if (!client) return;
+    const defaults = new Set<PlatformKey>();
+    for (const p of CORE_PLATFORMS) {
+      if (p.key === 'linkedin') continue;
+      if (client.profiles[p.key].status !== 'connected') defaults.add(p.key);
+    }
+    setSelectedPlatforms(defaults);
+    setSelectedContactIds(new Set());
+    setExtraEmail('');
+    setNotifyChat(true);
+    setNotifyEmail(true);
+    setShowExtras(false);
+
+    setCtxLoading(true);
+    void fetch(`/api/admin/connection-invites/context?clientId=${client.id}`, {
+      cache: 'no-store',
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('ctx failed'))))
+      .then((body: InviteContext) => {
+        setCtx(body);
+        // Pre-check the primary contact.
+        const primary = body.contacts.find((c) => c.isPrimary);
+        if (primary) setSelectedContactIds(new Set([primary.id]));
+      })
+      .catch(() => setCtx({ contacts: [], hasChatWebhook: false }))
+      .finally(() => setCtxLoading(false));
+  }, [client]);
+
+  const togglePlatform = (key: PlatformKey) =>
+    setSelectedPlatforms((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  const toggleContact = (id: string) =>
+    setSelectedContactIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  async function handleSend() {
+    if (!client) return;
+    const platforms = Array.from(selectedPlatforms);
+    if (platforms.length === 0) {
+      toast.error('Pick at least one platform');
+      return;
+    }
+    const ctxContacts = ctx?.contacts ?? [];
+    const recipientEmails = ctxContacts
+      .filter((c) => selectedContactIds.has(c.id))
+      .map((c) => c.email);
+    const trimmedExtra = extraEmail.trim();
+    if (trimmedExtra) recipientEmails.push(trimmedExtra);
+    if (recipientEmails.length === 0) {
+      toast.error('Pick at least one recipient or add an email');
+      return;
+    }
+
+    setSending(true);
+    try {
+      const res = await fetch('/api/admin/connection-invites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: client.id,
+          platforms,
+          recipientEmails,
+          notifyChat,
+          notifyEmail,
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        sent?: number;
+      };
+      if (!res.ok) throw new Error(body.error ?? 'Send failed');
+      toast.success(`Invite sent to ${body.sent ?? recipientEmails.length} recipient${(body.sent ?? recipientEmails.length) === 1 ? '' : 's'}`);
+      onSent();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Send failed');
+    } finally {
+      setSending(false);
+    }
+  }
 
   return (
     <Dialog
       open={open}
       onClose={onClose}
-      title={
-        client ? `Send ${client.name} a connection link` : 'Send connection link'
-      }
+      title={client ? `Invite ${client.name} to reconnect` : 'Send connection invite'}
       maxWidth="lg"
     >
       {client && (
-        <div className="space-y-2">
+        <div className="space-y-5">
           <p className="text-xs text-text-muted">
-            Copy any of the links below and send it to the client. They&apos;ll
-            land on a one-tap login page that connects the account
-            straight into Cortex.
+            Pick the platforms you want them to reconnect, choose who the
+            email goes to, and we&apos;ll send a one-tap connect page.
+            They never see a password screen on our side.
           </p>
-          <ul className="mt-2 divide-y divide-nativz-border/60 rounded-lg border border-nativz-border bg-background/40">
-            {PLATFORMS.map((p) => (
-              <PlatformLinkRow
-                key={p.key}
-                platform={p}
-                slot={client.profiles[p.key]}
-                slug={client.slug}
-                origin={origin}
-              />
-            ))}
-          </ul>
+
+          <Section title="Platforms">
+            <ul className="divide-y divide-nativz-border/60 rounded-lg border border-nativz-border bg-background/40">
+              {CORE_PLATFORMS.map((p) => (
+                <PlatformPickerRow
+                  key={p.key}
+                  platform={p}
+                  slot={client.profiles[p.key]}
+                  checked={selectedPlatforms.has(p.key)}
+                  onToggle={() => togglePlatform(p.key)}
+                />
+              ))}
+              {showExtras &&
+                EXTRA_PLATFORMS.map((p) => (
+                  <PlatformPickerRow
+                    key={p.key}
+                    platform={p}
+                    slot={client.profiles[p.key]}
+                    checked={selectedPlatforms.has(p.key)}
+                    onToggle={() => togglePlatform(p.key)}
+                  />
+                ))}
+            </ul>
+            {!showExtras ? (
+              <button
+                type="button"
+                onClick={() => setShowExtras(true)}
+                className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-accent-text hover:underline"
+              >
+                <Plus className="size-3.5" />
+                More platforms (Google Business, Pinterest, X, Threads, Bluesky)
+              </button>
+            ) : null}
+          </Section>
+
+          <Section title="Recipients">
+            {ctxLoading ? (
+              <div className="text-xs text-text-muted">Loading contacts...</div>
+            ) : (
+              <>
+                {(ctx?.contacts ?? []).length === 0 ? (
+                  <div className="text-xs text-text-muted">
+                    No contacts on file for this brand. Add one below.
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-nativz-border/60 rounded-lg border border-nativz-border bg-background/40">
+                    {(ctx?.contacts ?? []).map((c) => (
+                      <li
+                        key={c.id}
+                        className="flex items-center gap-3 px-3 py-2.5"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedContactIds.has(c.id)}
+                          onChange={() => toggleContact(c.id)}
+                          className="size-4 rounded border-nativz-border bg-background text-accent-text focus:ring-accent-text/40"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm text-text-primary">
+                            {c.name ?? c.email}
+                            {c.isPrimary ? (
+                              <span className="ml-2 rounded bg-accent-text/10 px-1.5 py-0.5 text-[10px] font-medium text-accent-text">
+                                Primary
+                              </span>
+                            ) : null}
+                          </div>
+                          {c.name ? (
+                            <div className="truncate text-xs text-text-muted">
+                              {c.email}
+                            </div>
+                          ) : null}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="mt-3">
+                  <label className="block text-[11px] font-medium uppercase tracking-wide text-text-muted">
+                    Or add another email
+                  </label>
+                  <input
+                    type="email"
+                    value={extraEmail}
+                    onChange={(e) => setExtraEmail(e.target.value)}
+                    placeholder="someone@example.com"
+                    className="mt-1 h-8 w-full rounded-md border border-nativz-border bg-background px-2.5 text-xs text-text-primary placeholder:text-text-muted focus:border-accent-text focus:outline-none focus:ring-1 focus:ring-accent-text/40"
+                  />
+                </div>
+              </>
+            )}
+          </Section>
+
+          <Section title="Notify on connect">
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-xs text-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={notifyChat}
+                  onChange={(e) => setNotifyChat(e.target.checked)}
+                  disabled={!ctx?.hasChatWebhook}
+                  className="size-4 rounded border-nativz-border bg-background text-accent-text focus:ring-accent-text/40 disabled:opacity-40"
+                />
+                <span>
+                  Post to Google Chat
+                  {ctx && !ctx.hasChatWebhook ? (
+                    <span className="ml-1.5 text-text-muted">
+                      (no webhook on file for this brand)
+                    </span>
+                  ) : null}
+                </span>
+              </label>
+              <label className="flex items-center gap-2 text-xs text-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={notifyEmail}
+                  onChange={(e) => setNotifyEmail(e.target.checked)}
+                  className="size-4 rounded border-nativz-border bg-background text-accent-text focus:ring-accent-text/40"
+                />
+                <span>Email me on each connection</span>
+              </label>
+            </div>
+          </Section>
+
+          <div className="flex items-center justify-end gap-2 border-t border-nativz-border pt-4">
+            <Button variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void handleSend()}
+              disabled={sending}
+            >
+              <Send className="size-3.5" />
+              {sending ? 'Sending...' : 'Send invite'}
+            </Button>
+          </div>
         </div>
       )}
     </Dialog>
   );
 }
 
-type PlatformDef = (typeof PLATFORMS)[number];
-
-function PlatformLinkRow({
-  platform,
-  slot,
-  slug,
-  origin,
+function Section({
+  title,
+  children,
 }: {
-  platform: PlatformDef;
-  slot: PlatformSlot;
-  slug: string | null;
-  origin: string;
+  title: string;
+  children: React.ReactNode;
 }) {
-  const { key, label, Icon } = platform;
-  const meta = STATUS_META[slot.status];
-  const StatusIcon = meta.Icon;
-  const isLinkedIn = key === 'linkedin';
-  // LinkedIn has no Zernio flow - everything else uses the public
-  // slug-based kickoff endpoint.
-  const url = !isLinkedIn && slug ? `${origin}/connect/${slug}/${key}` : null;
-
-  async function handleCopy() {
-    if (!url) return;
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success(`Copied ${label} link`);
-    } catch {
-      toast.error('Could not copy. Select and copy by hand.');
-    }
-  }
-
   return (
-    <li className="flex items-center gap-3 px-3 py-3">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-nativz-border bg-surface text-text-secondary">
-        <Icon className="size-4" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-text-primary">
-            {label}
-          </span>
-          <span
-            className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${meta.chip}`}
-          >
-            <StatusIcon className="size-3" />
-            {meta.label}
-          </span>
-        </div>
-        <div className="mt-0.5 truncate text-xs text-text-muted">
-          {renderSubline(slot, isLinkedIn, url)}
-        </div>
+    <div>
+      <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-text-muted">
+        {title}
       </div>
-      {url ? (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void handleCopy()}
-          className="shrink-0"
-        >
-          <Copy className="size-3.5" />
-          <span>Copy link</span>
-        </Button>
-      ) : (
-        <span className="shrink-0 text-[11px] text-text-tertiary">
-          {isLinkedIn ? 'Manual setup' : 'Slug missing'}
-        </span>
-      )}
-    </li>
+      {children}
+    </div>
   );
 }
 
-function renderSubline(
-  slot: PlatformSlot,
-  isLinkedIn: boolean,
-  url: string | null,
-): string {
-  if (slot.status === 'connected' && slot.username) {
-    return `Posting as @${slot.username}`;
-  }
-  if (slot.status === 'manual' && slot.username) {
-    return `Manual access as @${slot.username}`;
-  }
-  if (isLinkedIn) {
-    return 'Zernio has no LinkedIn flow. Post via the client account by hand.';
-  }
-  if (slot.status === 'disconnected') {
-    return 'Token revoked. Send the link to reconnect.';
-  }
-  return url ?? 'No link available';
+function PlatformPickerRow({
+  platform,
+  slot,
+  checked,
+  onToggle,
+}: {
+  platform: PlatformDef;
+  slot: PlatformSlot;
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  const meta = STATUS_META[slot.status];
+  const StatusIcon = meta.Icon;
+  const { label, Icon } = platform;
+  return (
+    <li className="flex items-center gap-3 px-3 py-2.5">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onToggle}
+        className="size-4 rounded border-nativz-border bg-background text-accent-text focus:ring-accent-text/40"
+      />
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-nativz-border bg-surface text-text-secondary">
+        <Icon className="size-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium text-text-primary">{label}</div>
+        {slot.username ? (
+          <div className="text-[11px] text-text-muted">@{slot.username}</div>
+        ) : null}
+      </div>
+      <span
+        className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${meta.chip}`}
+      >
+        <StatusIcon className="size-3" />
+        {meta.label}
+      </span>
+    </li>
+  );
 }
 
 function MatrixSkeleton() {

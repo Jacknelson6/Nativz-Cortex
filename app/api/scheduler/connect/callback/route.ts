@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { verifyState } from '@/lib/scheduler/oauth-state';
 import { getZernioApiBase, getZernioApiKey } from '@/lib/posting';
+import { handleInviteCompletion } from '@/lib/scheduler/invite-completion';
 
 /**
  * GET /api/scheduler/connect/callback
@@ -31,10 +32,12 @@ export async function GET(request: NextRequest) {
     // Verify HMAC signature and extract payload
     let clientId: string;
     let platform: string;
+    let inviteToken: string | undefined;
     try {
       const payload = await verifyState(stateToken);
       clientId = payload.client_id;
       platform = payload.platform;
+      inviteToken = payload.invite_token;
     } catch (err) {
       console.error('OAuth state verification failed:', err);
       return NextResponse.redirect(new URL('/admin/scheduler?error=invalid_state', request.url));
@@ -111,9 +114,30 @@ export async function GET(request: NextRequest) {
             avatar_url: null,
             late_account_id: resolvedAccountId,
             is_active: true,
+            disconnect_alerted_at: null,
           },
           { onConflict: 'client_id,platform,platform_user_id' },
         );
+    }
+
+    if (inviteToken && resolvedPlatform) {
+      try {
+        await handleInviteCompletion({
+          admin: adminClient,
+          inviteToken,
+          clientId,
+          platform: resolvedPlatform,
+          username: resolvedUsername,
+        });
+      } catch (err) {
+        console.error('[connect/callback] invite completion failed:', err);
+      }
+      return NextResponse.redirect(
+        new URL(
+          `/connect/invite/${inviteToken}?ok=1&platform=${resolvedPlatform}`,
+          request.url,
+        ),
+      );
     }
 
     return NextResponse.redirect(

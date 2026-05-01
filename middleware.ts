@@ -204,7 +204,16 @@ export async function middleware(request: NextRequest) {
     // page is server-rendered and the /api/calendar/share/[token]/* routes
     // validate the token on every request, so neither needs an auth session.
     pathname.startsWith('/c/') ||
-    pathname.startsWith('/api/calendar/share/')
+    pathname.startsWith('/api/calendar/share/') ||
+    // Self-serve connection invite. The /connect/invite/[token] page and
+    // /api/public/connection-invites/[token]/* routes are gated by the
+    // invite token row, no auth session needed.
+    pathname.startsWith('/connect/invite/') ||
+    pathname.startsWith('/api/public/connection-invites/') ||
+    // Existing slug-based public connect kickoff pages — admin pastes
+    // the link into a DM and the client opens it without an account.
+    pathname.startsWith('/connect/') ||
+    pathname.startsWith('/api/public/clients/')
   ) {
     if (pathname.startsWith('/api/')) {
       setCorsHeaders(supabaseResponse, requestOrigin);

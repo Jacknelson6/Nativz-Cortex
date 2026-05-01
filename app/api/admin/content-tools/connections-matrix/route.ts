@@ -11,36 +11,33 @@ export const dynamic = 'force-dynamic';
  * Returns a per-client, per-platform connection status grid for the
  * Connections tab on /admin/content-tools.
  *
- *   clients: [{ id, name, logoUrl, slug,
- *               profiles: { tiktok, instagram, facebook, youtube, linkedin } }]
- *
- * Each platform slot resolves to one of:
- *   - connected: `social_profiles` row with `is_active = true` and
- *     `late_account_id` set (Zernio OAuth completed; we can post via
- *     the API).
- *   - manual:    row exists + active but no `late_account_id`. The
- *     client confirmed manual access (no_account / website_scraped /
- *     legacy onboarding) but we can't post without their direct
- *     login.
+ * Slot statuses (after the April 2026 simplification):
+ *   - connected:    Zernio reports the account active and we have a
+ *                   `late_account_id` on file. We can post.
  *   - disconnected: row exists but `is_active = false` OR
- *     `disconnect_alerted_at` is set, meaning Zernio reported the
- *     token has been revoked. Surface in red so the agency can re-
- *     auth before posts queue up.
- *   - missing:   no row at all. Client has never been onboarded for
- *     this platform.
+ *                   `disconnect_alerted_at` is set, meaning Zernio
+ *                   reported the token revoked. Surface in red so
+ *                   the agency can re-auth before posts queue up.
+ *   - missing:      no Zernio-authed row at all. Either we never
+ *                   onboarded the platform, or we have a profile URL
+ *                   on file but no token (the legacy "manual" state).
+ *                   In either case the operator can't post until the
+ *                   client connects through Zernio.
  *
- * The five platforms surfaced match the calendar scheduling pipeline
- * (the four Zernio supports, plus LinkedIn which is manual-only by
- * design, Zernio has no LinkedIn flow). Anything else stored in
- * `social_profiles.platform` is intentionally ignored.
+ * The 5 cores (TikTok, Instagram, Facebook, YouTube, LinkedIn) plus
+ * the Zernio-supported extras (Google Business, Pinterest, X, Threads,
+ * Bluesky) are surfaced. LinkedIn slots are always `missing` until the
+ * client logs in directly; Zernio has no LinkedIn flow.
  *
  * Auth: admin-only. Cross-brand surface, no org filter.
  */
 
-const PLATFORMS = ['tiktok', 'instagram', 'facebook', 'youtube', 'linkedin'] as const;
+const CORE_PLATFORMS = ['tiktok', 'instagram', 'facebook', 'youtube', 'linkedin'] as const;
+const EXTRA_PLATFORMS = ['googlebusiness', 'pinterest', 'x', 'threads', 'bluesky'] as const;
+const PLATFORMS = [...CORE_PLATFORMS, ...EXTRA_PLATFORMS] as const;
 type Platform = (typeof PLATFORMS)[number];
 
-type Status = 'connected' | 'manual' | 'disconnected' | 'missing';
+type Status = 'connected' | 'disconnected' | 'missing';
 
 interface PlatformSlot {
   status: Status;
@@ -48,6 +45,9 @@ interface PlatformSlot {
   /** ISO timestamp of the most recent Zernio disconnect alert. Drives
    *  the "needs re-auth" copy under disconnected slots. */
   disconnectedAt: string | null;
+  /** Zernio-reported token expiry if synced; null if we haven't checked. */
+  tokenExpiresAt: string | null;
+  tokenStatus: string | null;
 }
 
 interface ClientRow {
@@ -55,28 +55,27 @@ interface ClientRow {
   name: string;
   slug: string | null;
   logoUrl: string | null;
-  /**
-   * Active services from `clients.services` (text[]), canonical values:
-   * 'SMM', 'Paid Media', 'Editing', 'Affiliates'. Surfaced so the UI can
-   * filter the matrix to brands the agency is actively producing for.
-   */
   services: string[];
   profiles: Record<Platform, PlatformSlot>;
 }
 
 interface ResponseBody {
   clients: ClientRow[];
-  /** Snapshot summary for the header chip ("12 of 30 connected"). */
   totals: {
     connected: number;
-    manual: number;
     disconnected: number;
     missing: number;
   };
 }
 
 function emptySlot(): PlatformSlot {
-  return { status: 'missing', username: null, disconnectedAt: null };
+  return {
+    status: 'missing',
+    username: null,
+    disconnectedAt: null,
+    tokenExpiresAt: null,
+    tokenStatus: null,
+  };
 }
 
 export async function GET() {
@@ -91,9 +90,6 @@ export async function GET() {
 
   const admin = createAdminClient();
 
-  // Pull every active client + every social_profiles row in parallel.
-  // Inactive clients don't surface, the matrix is meant to be the
-  // operational view for ongoing brands, not an archive.
   const [clientsRes, profilesRes] = await Promise.all([
     admin
       .from('clients')
@@ -102,7 +98,7 @@ export async function GET() {
     admin
       .from('social_profiles')
       .select(
-        'client_id, platform, username, is_active, late_account_id, disconnect_alerted_at',
+        'client_id, platform, username, is_active, late_account_id, disconnect_alerted_at, token_expires_at, token_status',
       ),
   ]);
 
@@ -119,17 +115,10 @@ export async function GET() {
     );
   }
 
-  // Group profiles by client_id for O(1) lookup while building rows.
-  // The same client + platform pair can have multiple rows in theory
-  // (legacy migrations); pick the most informative one ("connected"
-  // beats "manual" beats "disconnected" beats "missing").
-  const profilesByClient = new Map<
-    string,
-    Map<Platform, PlatformSlot>
-  >();
+  const profilesByClient = new Map<string, Map<Platform, PlatformSlot>>();
   for (const p of profilesRes.data ?? []) {
     const platform = p.platform as Platform;
-    if (!PLATFORMS.includes(platform)) continue;
+    if (!(PLATFORMS as readonly string[]).includes(platform)) continue;
 
     const inner =
       profilesByClient.get(p.client_id) ?? new Map<Platform, PlatformSlot>();
@@ -156,7 +145,7 @@ export async function GET() {
     };
   });
 
-  const totals = { connected: 0, manual: 0, disconnected: 0, missing: 0 };
+  const totals = { connected: 0, disconnected: 0, missing: 0 };
   for (const c of clients) {
     for (const p of PLATFORMS) {
       totals[c.profiles[p].status] += 1;
@@ -167,41 +156,52 @@ export async function GET() {
   return NextResponse.json(body);
 }
 
-/** Read a single `social_profiles` row into the matrix vocabulary. */
 function resolveSlot(p: {
   username: string | null;
   is_active: boolean | null;
   late_account_id: string | null;
   disconnect_alerted_at: string | null;
+  token_expires_at: string | null;
+  token_status: string | null;
 }): PlatformSlot {
-  if (p.disconnect_alerted_at && p.is_active === false) {
+  // Disconnected: Zernio either flagged a revoke, or we marked the row
+  // inactive. Either way the agency needs the client to re-auth.
+  if (p.disconnect_alerted_at || p.is_active === false) {
     return {
       status: 'disconnected',
       username: p.username,
       disconnectedAt: p.disconnect_alerted_at,
+      tokenExpiresAt: p.token_expires_at,
+      tokenStatus: p.token_status,
     };
   }
-  if (p.is_active === false) {
-    return {
-      status: 'disconnected',
-      username: p.username,
-      disconnectedAt: p.disconnect_alerted_at,
-    };
-  }
+  // Connected: active row + Zernio account id on file.
   if (p.late_account_id) {
-    return { status: 'connected', username: p.username, disconnectedAt: null };
+    return {
+      status: 'connected',
+      username: p.username,
+      disconnectedAt: null,
+      tokenExpiresAt: p.token_expires_at,
+      tokenStatus: p.token_status,
+    };
   }
-  return { status: 'manual', username: p.username, disconnectedAt: null };
+  // Profile URL on file but no Zernio token — operator can't post.
+  // Treated as missing so the matrix nudges them to send an invite.
+  return {
+    status: 'missing',
+    username: p.username,
+    disconnectedAt: null,
+    tokenExpiresAt: null,
+    tokenStatus: null,
+  };
 }
 
 const STATUS_RANK: Record<Status, number> = {
-  connected: 4,
-  manual: 3,
+  connected: 3,
   disconnected: 2,
   missing: 1,
 };
 
-/** When a (client, platform) has multiple rows, keep the strongest. */
 function mergeSlot(
   existing: PlatformSlot | undefined,
   next: PlatformSlot,
