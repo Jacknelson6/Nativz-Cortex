@@ -96,9 +96,9 @@ export async function POST(
   const admin = createAdminClient();
   const { data: link } = await admin
     .from('content_drop_share_links')
-    .select('drop_id, post_review_link_map, expires_at')
+    .select('id, drop_id, post_review_link_map, expires_at')
     .eq('token', token)
-    .single<{ drop_id: string; post_review_link_map: Record<string, string>; expires_at: string }>();
+    .single<{ id: string; drop_id: string; post_review_link_map: Record<string, string>; expires_at: string }>();
   if (!link) return NextResponse.json({ error: 'not found' }, { status: 404 });
   if (new Date(link.expires_at) < new Date()) {
     return NextResponse.json({ error: 'link expired' }, { status: 410 });
@@ -157,7 +157,7 @@ export async function POST(
   // still landed.
   after(async () => {
     try {
-      await notifyAdminsOfComment(admin, link.drop_id, token, reviewLinkMap, {
+      await notifyAdminsOfComment(admin, link.id, link.drop_id, token, reviewLinkMap, {
         postId: parsed.data.postId,
         authorName: parsed.data.authorName.trim(),
         content: trimmedContent,
@@ -206,9 +206,9 @@ export async function DELETE(
   const admin = createAdminClient();
   const { data: link } = await admin
     .from('content_drop_share_links')
-    .select('drop_id, post_review_link_map, expires_at')
+    .select('id, drop_id, post_review_link_map, expires_at')
     .eq('token', token)
-    .single<{ drop_id: string; post_review_link_map: Record<string, string>; expires_at: string }>();
+    .single<{ id: string; drop_id: string; post_review_link_map: Record<string, string>; expires_at: string }>();
   if (!link) return NextResponse.json({ error: 'not found' }, { status: 404 });
   if (new Date(link.expires_at) < new Date()) {
     return NextResponse.json({ error: 'link expired' }, { status: 410 });
@@ -239,6 +239,14 @@ export async function DELETE(
   // schedule_change, video_revised, plain comments) are pure audit trail —
   // skip the sync to avoid a needless Monday round-trip.
   if (comment.status === 'approved') {
+    // Clear the all-approved dedup stamp so a future re-approval can fire the
+    // celebration ping again. Only clear when this calendar was previously
+    // fully approved (otherwise the stamp is already null).
+    await admin
+      .from('content_drop_share_links')
+      .update({ all_approved_notified_at: null })
+      .eq('id', link.id);
+
     after(async () => {
       try {
         await syncMondayApprovalForDrop(admin, link.drop_id);
@@ -435,6 +443,7 @@ async function maybeFireRevisionsCompleteNotification(
 
 async function notifyAdminsOfComment(
   admin: ReturnType<typeof createAdminClient>,
+  shareLinkId: string,
   dropId: string,
   shareToken: string,
   reviewLinkMap: Record<string, string>,
@@ -502,10 +511,27 @@ async function notifyAdminsOfComment(
     }).catch(() => {});
   }
 
-  const allApproved =
-    comment.status === 'approved'
-      ? await checkAllApproved(admin, reviewLinkMap)
-      : false;
+  // For approved-status events, claim the right to send the all-approved
+  // notifications atomically. Two concurrent approvers (or a single
+  // double-click) used to both pass a non-atomic "did everyone approve?"
+  // SELECT and post the celebration twice. Now: only the request that flips
+  // all_approved_notified_at NULL → timestamp wins and posts. The DELETE
+  // handler clears the stamp when an approval is removed, so re-approval can
+  // fire the ping again.
+  let allApprovedClaim: 'won' | 'lost' | 'not-yet' = 'not-yet';
+  if (comment.status === 'approved') {
+    const allApproved = await checkAllApproved(admin, reviewLinkMap);
+    if (allApproved) {
+      const { data: claimed } = await admin
+        .from('content_drop_share_links')
+        .update({ all_approved_notified_at: new Date().toISOString() })
+        .eq('id', shareLinkId)
+        .is('all_approved_notified_at', null)
+        .select('id')
+        .maybeSingle();
+      allApprovedClaim = claimed ? 'won' : 'lost';
+    }
+  }
 
   // Per-client Google Chat (collab space): driven by clients.chat_webhook_url.
   // - comment / changes_requested → post immediately with full content + attachments
@@ -530,18 +556,16 @@ async function notifyAdminsOfComment(
       const postLine = postTimeLine ? `\n_Post scheduled for ${postTimeLine}_` : '';
       const text = `*${comment.authorName}* ${verb} on ${clientName}:${postLine}${quotedBlock}${attachmentBlock}\n\n${shareUrl}`;
       postToGoogleChatSafe(chatWebhookUrl, { text }, `comment ${dropId}`);
-    } else if (comment.status === 'approved' && allApproved) {
+    } else if (allApprovedClaim === 'won') {
       const reviewLinkIds = Object.values(reviewLinkMap);
-      // Race: concurrent approvers may both observe "all approved" and post twice.
-      // Accepted for now; revisit with a unique-message-key gate if it bites.
       const text = `🎉 All ${reviewLinkIds.length} posts in ${clientName}'s calendar are approved.\n${shareUrl}`;
       postToGoogleChatSafe(chatWebhookUrl, { text }, `all-approved ${dropId}`);
     }
   }
 
-  // Paid-media team ping: only fires on the all-approved transition for
-  // clients flagged Paid Media on the Monday Clients board.
-  if (comment.status === 'approved' && allApproved) {
+  // Paid-media team ping: gated on the same atomic claim so the team space
+  // doesn't double-fire either.
+  if (allApprovedClaim === 'won') {
     try {
       await pingPaidMediaTeam(clientName, drop.start_date);
     } catch (err) {
