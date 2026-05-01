@@ -68,15 +68,19 @@ export interface EditingProject {
   status: EditingProjectStatus;
   assignee_id: string | null;
   assignee_email: string | null;
+  assignee_name: string | null;
   /**
-   * Pipeline role assignments (added in migration 203). All optional;
-   * not every project has all three roles wired the moment it lands.
-   * `assignee_id` is the legacy editor slot, kept for backward compat.
+   * Pipeline role assignments (added in migration 203, repointed to
+   * `team_members` in migration 212). All optional; not every project
+   * has all three roles wired the moment it lands. `assignee_id` is the
+   * legacy editor slot, kept for backward compat.
    */
   videographer_id: string | null;
   videographer_email: string | null;
+  videographer_name: string | null;
   strategist_id: string | null;
   strategist_email: string | null;
+  strategist_name: string | null;
   /** Strategist-authored brief, separate from internal `notes`. */
   project_brief: string | null;
   /** ISO date (YYYY-MM-DD) of the on-set capture day, or null. */

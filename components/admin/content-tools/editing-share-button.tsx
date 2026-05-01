@@ -149,6 +149,8 @@ export function EditingShareButton({
         align="end"
         sideOffset={6}
         className="w-96 p-0"
+        matchAnchorWidth={false}
+        disablePortal
       >
         <div className="border-b border-nativz-border p-3">
           <p className="text-sm font-medium text-text-primary">

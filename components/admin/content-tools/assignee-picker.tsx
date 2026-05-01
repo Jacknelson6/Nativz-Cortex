@@ -38,6 +38,7 @@ interface TeamMember {
   avatar_url: string | null;
   role: string;
   is_super_admin: boolean;
+  editing_roles: string[];
 }
 
 let cachedMembers: TeamMember[] | null = null;
@@ -65,6 +66,17 @@ const ROLE_LABEL: Record<AssigneeRole, string> = {
   assignee_id: 'Editor',
   videographer_id: 'Videographer',
   strategist_id: 'Strategist',
+};
+
+/**
+ * Map the editing_projects FK column name to the `team_members.editing_roles`
+ * tag we filter by. Members are tagged in migration 212; the picker only
+ * shows people whose tag matches the slot they're filling.
+ */
+const ROLE_TAG: Record<AssigneeRole, string> = {
+  assignee_id: 'editor',
+  videographer_id: 'videographer',
+  strategist_id: 'strategist',
 };
 
 export function AssigneePicker({
@@ -114,14 +126,21 @@ export function AssigneePicker({
   }, [open]);
 
   const filtered = useMemo(() => {
+    const tag = ROLE_TAG[role];
+    // Restrict to members tagged with the slot's role. The team API
+    // returns every editing-eligible member; we narrow client-side so
+    // a single fetch backs all three pickers on the page.
+    const eligible = members.filter((m) =>
+      Array.isArray(m.editing_roles) && m.editing_roles.includes(tag),
+    );
     const q = query.trim().toLowerCase();
-    if (!q) return members;
-    return members.filter((m) => {
+    if (!q) return eligible;
+    return eligible.filter((m) => {
       const name = (m.full_name ?? '').toLowerCase();
       const email = m.email.toLowerCase();
       return name.includes(q) || email.includes(q);
     });
-  }, [members, query]);
+  }, [members, query, role]);
 
   async function patch(nextId: string | null) {
     setSaving(true);
@@ -203,6 +222,7 @@ export function AssigneePicker({
         align="start"
         sideOffset={6}
         matchAnchorWidth={false}
+        disablePortal
         className="w-72 p-0"
         onClick={(e) => e.stopPropagation()}
       >

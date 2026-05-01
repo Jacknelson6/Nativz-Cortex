@@ -65,9 +65,9 @@ export async function GET(req: Request) {
        drop_id, created_by, created_at, updated_at, ready_at, approved_at,
        scheduled_at, archived_at,
        client:clients!editing_projects_client_id_fkey(name, slug, logo_url),
-       assignee:users!editing_projects_assignee_id_fkey(email),
-       videographer:users!editing_projects_videographer_id_fkey(email),
-       strategist:users!editing_projects_strategist_id_fkey(email),
+       assignee:team_members!editing_projects_assignee_id_fkey(email, full_name),
+       videographer:team_members!editing_projects_videographer_id_fkey(email, full_name),
+       strategist:team_members!editing_projects_strategist_id_fkey(email, full_name),
        videos:editing_project_videos(count),
        raw_videos:editing_project_raw_videos(count)`,
     )
@@ -98,10 +98,13 @@ export async function GET(req: Request) {
     status: row.status,
     assignee_id: row.assignee_id,
     assignee_email: row.assignee?.email ?? null,
+    assignee_name: row.assignee?.full_name ?? null,
     videographer_id: row.videographer_id ?? null,
     videographer_email: row.videographer?.email ?? null,
+    videographer_name: row.videographer?.full_name ?? null,
     strategist_id: row.strategist_id ?? null,
     strategist_email: row.strategist?.email ?? null,
+    strategist_name: row.strategist?.full_name ?? null,
     project_brief: row.project_brief ?? null,
     shoot_date: row.shoot_date ?? null,
     drive_folder_url: row.drive_folder_url,
@@ -136,6 +139,21 @@ export async function POST(req: Request) {
   }
 
   const admin = createAdminClient();
+
+  // assignee_id now FKs into team_members (migration 212), so translate
+  // the current admin's auth user id to their team_members row if there
+  // is one. If the admin doesn't have a roster entry (e.g. a
+  // super-admin with no team_members row) we leave it null and let the
+  // user pick later.
+  const { data: teamRow } = await admin
+    .from('team_members')
+    .select('id')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  const defaultAssigneeId = (teamRow?.id as string | undefined) ?? null;
+
   const { data, error } = await admin
     .from('editing_projects')
     .insert({
@@ -145,7 +163,7 @@ export async function POST(req: Request) {
       drive_folder_url: parsed.data.drive_folder_url ?? null,
       notes: parsed.data.notes ?? null,
       created_by: user.id,
-      assignee_id: user.id,
+      assignee_id: defaultAssigneeId,
     })
     .select('id')
     .single();

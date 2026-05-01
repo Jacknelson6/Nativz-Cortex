@@ -15,13 +15,29 @@ const PopoverContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content> & {
     /** Match anchor width (default true for command bars). */
     matchAnchorWidth?: boolean;
+    /**
+     * Skip the Radix portal and render inline inside the trigger's DOM
+     * subtree. Required when the popover lives inside a native
+     * `<dialog>.showModal()` modal, otherwise the portaled content lands
+     * in `document.body` (below the dialog's top-layer) and becomes
+     * invisible. Default false to preserve existing behaviour.
+     */
+    disablePortal?: boolean;
   }
 >(
   (
-    { className, align = 'start', sideOffset = 8, matchAnchorWidth = true, children, ...props },
+    {
+      className,
+      align = 'start',
+      sideOffset = 8,
+      matchAnchorWidth = true,
+      disablePortal = false,
+      children,
+      ...props
+    },
     ref,
-  ) => (
-    <PopoverPrimitive.Portal>
+  ) => {
+    const content = (
       <PopoverPrimitive.Content
         ref={ref}
         data-slot="popover-content"
@@ -39,8 +55,10 @@ const PopoverContent = React.forwardRef<
       >
         {children}
       </PopoverPrimitive.Content>
-    </PopoverPrimitive.Portal>
-  ),
+    );
+    if (disablePortal) return content;
+    return <PopoverPrimitive.Portal>{content}</PopoverPrimitive.Portal>;
+  },
 );
 PopoverContent.displayName = PopoverPrimitive.Content.displayName;
 
