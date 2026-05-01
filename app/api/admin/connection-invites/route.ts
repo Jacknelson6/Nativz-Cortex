@@ -95,43 +95,86 @@ function inviteHtml(opts: {
   platforms: string[];
   brand: 'nativz' | 'anderson';
 }): string {
+  // Mirrors Trevor's emailShell pattern (intro paragraph -> stats panel ->
+  // structured detail rows -> left-aligned CTA -> small footer note). Body
+  // is intentionally dense so the email reads like the docs-repo
+  // notifications, not a one-paragraph blast.
   const platformRows = opts.platforms
     .map((p) => {
       const label = PLATFORM_LABEL[p as keyof typeof PLATFORM_LABEL] ?? p;
-      return `
-        <tr>
-          <td class="k">${esc(label)}</td>
-          <td class="v" style="text-align:right;">Reconnect</td>
-        </tr>`;
+      return `<tr><td class="k">${esc(label)}</td><td class="v">Authorization expired</td></tr>`;
     })
     .join('');
 
-  const accountWord = opts.platforms.length === 1 ? 'account' : 'accounts';
-  const eyebrow =
-    opts.platforms.length === 1
-      ? 'Account reconnect'
-      : 'Account reconnects';
+  const single = opts.platforms.length === 1;
+  const accountWord = single ? 'account' : 'accounts';
+  const heroTitle = single
+    ? `Reconnect ${esc(opts.clientName)}'s social account`
+    : `Reconnect ${esc(opts.clientName)}'s social accounts`;
+  const replyTo = getReplyTo(opts.brand);
+  const accent = opts.brand === 'anderson' ? '#36D1C2' : '#00ADEF';
+  const accentDark = opts.brand === 'anderson' ? '#2BB8AA' : '#0090CC';
+  const text = opts.brand === 'anderson' ? '#00161F' : '#0A1628';
+  const muted = '#7b8794';
+  const border = '#e8ecf0';
+
+  const stepRows = [
+    {
+      n: '1',
+      title: 'Open the secure link',
+      body: `Tap the button below. No login on your end &mdash; the link signs you in automatically and lands you on a single reconnect screen.`,
+    },
+    {
+      n: '2',
+      title: `Reauthorize each ${single ? 'account' : 'platform'}`,
+      body: `You'll see a row for each expired account. Hit "Reconnect," accept the prompt from ${single ? 'the platform' : 'each platform'}, and the row turns green.`,
+    },
+    {
+      n: '3',
+      title: 'Done',
+      body: `As soon as the last row is green, scheduled posts start flowing again on our end. Nothing else for you to do.`,
+    },
+  ]
+    .map(
+      (s) => `
+    <tr>
+      <td style="vertical-align:top;width:34px;padding:14px 0 14px 0;border-bottom:1px solid ${border};">
+        <div style="display:inline-block;width:24px;height:24px;line-height:24px;border-radius:999px;background:${accent};color:#ffffff;font-size:12px;font-weight:700;text-align:center;">${s.n}</div>
+      </td>
+      <td style="vertical-align:top;padding:14px 0 14px 12px;border-bottom:1px solid ${border};">
+        <div style="font-size:13.5px;font-weight:700;color:${text};margin-bottom:3px;">${s.title}</div>
+        <div style="font-size:13px;line-height:1.6;color:#3d4852;">${s.body}</div>
+      </td>
+    </tr>`,
+    )
+    .join('');
 
   const inner = `
-    <div class="card">
-      <h1 class="heading">Let's reconnect ${esc(opts.clientName)}.</h1>
-      <p class="subtext">
-        Your ${accountWord} below ${opts.platforms.length === 1 ? 'needs' : 'need'} a quick reconnect so we can keep publishing on your behalf. Tap the button to open one page where you can knock them out in a few taps.
-      </p>
-      <div class="stats">
-        <table>${platformRows}</table>
-      </div>
-      <div class="button-wrap" style="text-align:center;margin:28px 0 12px;">
-        <a class="button" href="${esc(opts.url)}" style="color:#ffffff !important;padding:16px 36px;font-size:15px;letter-spacing:0.02em;">
-          Reconnect ${accountWord} &rarr;
-        </a>
-      </div>
-      <hr class="divider" />
-      <p class="small">
-        This link is valid for 30 days. Reply to this email if anything looks off and we'll sort it out.
-      </p>
-    </div>`;
-  return layout(inner, opts.brand, { eyebrow });
+    <p class="subtext" style="margin-top:0;">
+      A few of <strong>${esc(opts.clientName)}</strong>'s social authorizations have expired on our end, which means scheduled posts can't go out to those platforms until they're refreshed. Reconnecting takes about a minute and doesn't require a Cortex login.
+    </p>
+
+    <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${muted};margin:22px 0 8px;">${single ? 'Account that needs attention' : 'Accounts that need attention'}</div>
+    <div class="stats" style="margin:0 0 6px;"><table>${platformRows}</table></div>
+
+    <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${muted};margin:26px 0 4px;">What happens next</div>
+    <table role="presentation" cellspacing="0" cellpadding="0" width="100%" style="border-collapse:collapse;border-top:1px solid ${border};">${stepRows}</table>
+
+    <div class="button-wrap" style="text-align:center;margin:26px 0 4px;">
+      <a class="button" href="${esc(opts.url)}">Reconnect ${accountWord} &rarr;</a>
+    </div>
+    <p style="font-size:12px;color:${muted};margin:8px 0 0;line-height:1.55;text-align:center;">
+      Link valid for 30 days &middot; ${opts.platforms.length} ${single ? 'account' : 'accounts'} &middot; ${esc(opts.clientName)}
+    </p>
+
+    <p style="font-size:11.5px;line-height:1.6;color:${muted};margin-top:22px;border-top:1px solid ${border};padding-top:16px;">
+      Questions, or hit a snag? Reply to this email or write to <a href="mailto:${replyTo}" style="color:${accentDark};text-decoration:none;">${replyTo}</a> &mdash; we'll jump in.
+    </p>`;
+
+  return layout(inner, opts.brand, {
+    eyebrow: 'Action Required',
+    heroTitle,
+  });
 }
 
 function esc(s: string): string {

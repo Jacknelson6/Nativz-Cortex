@@ -54,6 +54,22 @@ export type EmailBrand = {
   readonly titleWeight: number;
   /** Title color inside the dark header (defaults to white). */
   readonly titleColor: string;
+  /** Title font-size inside the dark header. Canonical: 24px both brands. */
+  readonly titleSize: string;
+  /** Title line-height inside the dark header. */
+  readonly titleLineHeight: string;
+  /** Title letter-spacing inside the dark header. */
+  readonly titleLetterSpacing: string;
+  /** Eyebrow letter-spacing on the dark header. */
+  readonly eyebrowLetterSpacing: string;
+  /** Eyebrow font-weight on the dark header. */
+  readonly eyebrowWeight: number;
+  /** Hero-card padding around logo + eyebrow + title. */
+  readonly headerPadding: string;
+  /** Logo height inside the dark header. */
+  readonly logoHeight: string;
+  /** Bottom gap between logo and eyebrow. */
+  readonly logoMarginBottom: string;
   /** Tagline shown under the card. */
   readonly tagline: string;
   /** Address shown under the tagline. */
@@ -113,6 +129,14 @@ const NATIVZ_EMAIL: EmailBrand = buildBrand({
     "'futura-pt', Futura, Jost, 'Century Gothic', system-ui, -apple-system, sans-serif",
   titleWeight: 700,
   titleColor: '#ffffff',
+  titleSize: '24px',
+  titleLineHeight: '1.25',
+  titleLetterSpacing: '-0.01em',
+  eyebrowLetterSpacing: '0.14em',
+  eyebrowWeight: 700,
+  headerPadding: '28px 32px',
+  logoHeight: '24px',
+  logoMarginBottom: '18px',
   tagline: 'Data-driven strategies. Creative execution. Real growth.',
   address: 'Nativz LLC, 3322 Shorecrest Drive Suite 225, Dallas TX 75235',
   websiteUrl: 'https://nativz.io',
@@ -138,6 +162,14 @@ const AC_EMAIL: EmailBrand = buildBrand({
     "'Roboto', 'Helvetica Neue', Helvetica, Arial, sans-serif",
   titleWeight: 300,
   titleColor: '#ffffff',
+  titleSize: '24px',
+  titleLineHeight: '1.3',
+  titleLetterSpacing: '0.01em',
+  eyebrowLetterSpacing: '0.18em',
+  eyebrowWeight: 600,
+  headerPadding: '32px 34px 30px',
+  logoHeight: '38px',
+  logoMarginBottom: '20px',
   tagline: 'Solving the marketing problems of today with the strategies of tomorrow.',
   address: 'Anderson Collaborative LLC, 4000 Ponce de Leon Blvd Ste 470, Coral Gables FL 33146',
   websiteUrl: 'https://andersoncollaborative.com',
@@ -152,9 +184,15 @@ export function getEmailBrand(agency: AgencyBrand): EmailBrand {
 export const EMAIL_BRAND = NATIVZ_EMAIL;
 export const AC_EMAIL_BRAND = AC_EMAIL;
 
-const NATIVZ_MARKETING_LOGO_DEFAULT = 'https://cortex.nativz.io/nativz-logo.png';
+// Trevor's canonical email logo PNGs (mark + wordmark stacked with registered
+// glyph). Default to the docs-repo hosted versions so test sends and pre-deploy
+// emails render correctly. Once Cortex deploys with the matching PNGs in
+// public/, override via EMAIL_NATIVZ_LOGO_URL / EMAIL_AC_LOGO_URL or change
+// these defaults to the Cortex-hosted paths.
+const NATIVZ_MARKETING_LOGO_DEFAULT =
+  'https://docs.nativz.io/assets/nativz-logo-dark.png';
 const AC_MARKETING_LOGO_DEFAULT =
-  'https://cortex.andersoncollaborative.com/anderson-logo-dark.svg';
+  'https://docs.andersoncollaborative.com/assets/ac-logo-dark.png';
 
 export function nativzEmailLogoUrl(): string {
   const custom = process.env.EMAIL_NATIVZ_LOGO_URL?.trim();

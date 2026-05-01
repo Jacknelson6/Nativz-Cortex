@@ -205,7 +205,7 @@ export function getReplyTo(agency: AgencyBrand): string {
 export function layout(
   content: string,
   agency: AgencyBrand = 'nativz',
-  options: { eyebrow?: string | false } = {},
+  options: { eyebrow?: string | false; heroTitle?: string } = {},
 ) {
   const BRAND = getEmailBrand(agency);
   const logoSrc = getEmailLogoUrl(agency);
@@ -220,10 +220,20 @@ export function layout(
       ? null
       : options.eyebrow ?? BRAND.brandName;
 
-  const cortexUrl =
+  // Hero title slot — when present, renders a large white H1 inside the
+  // dark hero card below the eyebrow. Use this when you want the headline
+  // to live on the dark gradient (premium / editorial feel) instead of
+  // appearing on the white body card.
+  const heroTitle = options.heroTitle ?? null;
+
+  // Mirrors Trevor's docs-repo shell: load brand display fonts via Google
+  // Fonts so the hero title + eyebrow render in the right typeface in clients
+  // that allow webfonts (Apple Mail, iOS Mail, most desktop clients). Outlook
+  // strips this and falls back to the system stack, which is fine.
+  const fontHref =
     agency === 'anderson'
-      ? 'https://cortex.andersoncollaborative.com'
-      : 'https://cortex.nativz.io';
+      ? 'https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&family=Rubik:wght@400;500;600&display=swap'
+      : 'https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap';
 
   return `
 <!DOCTYPE html>
@@ -231,18 +241,24 @@ export function layout(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="supported-color-schemes" content="light dark" />
+  <!--[if !mso]><!--><link href="${fontHref}" rel="stylesheet" /><!--<![endif]-->
   <style>
+    :root { color-scheme: light dark; supported-color-schemes: light dark; }
     body { margin: 0; padding: 0; background: ${BRAND.pageBg}; font-family: ${BRAND.fontStack}; -webkit-font-smoothing: antialiased; }
     .wrap { max-width: 620px; margin: 0 auto; padding: 32px 16px; color: ${BRAND.textPrimary}; }
 
     /* Card with dark gradient header strip. Class is intentionally unique
        so existing inner blocks that use <div class="card"> stay harmless. */
     .nz-shell { background: ${BRAND.cardBg}; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 24px rgba(10, 22, 40, 0.08); }
-    .nz-shell-header { background: linear-gradient(135deg, ${BRAND.headerGradStart} 0%, ${BRAND.headerGradEnd} 100%); padding: 32px 32px 28px; position: relative; }
+    .nz-shell-header { background: linear-gradient(135deg, ${BRAND.headerGradStart} 0%, ${BRAND.headerGradEnd} 100%); padding: ${BRAND.headerPadding}; position: relative; text-align: left; }
     .nz-shell-header::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(to right, ${BRAND.accent}, ${BRAND.accentDark}); }
-    .logo { display: block; height: 40px; width: auto; margin-bottom: 20px; }
-    .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: ${BRAND.accent}; margin: 0; }
-    .nz-shell-body { padding: 32px 32px 28px; background: ${BRAND.cardBg}; }
+    .logo { display: block; height: ${BRAND.logoHeight}; width: auto; margin: 0 0 ${BRAND.logoMarginBottom}; }
+    .eyebrow { font-size: 11px; font-weight: ${BRAND.eyebrowWeight}; letter-spacing: ${BRAND.eyebrowLetterSpacing}; text-transform: uppercase; color: ${BRAND.accent} !important; margin: 0; text-align: left; }
+    .hero-title { font-family: ${BRAND.titleFontStack}; color: #ffffff !important; font-size: ${BRAND.titleSize}; font-weight: ${BRAND.titleWeight}; letter-spacing: ${BRAND.titleLetterSpacing}; line-height: ${BRAND.titleLineHeight}; margin: 14px 0 0; max-width: 460px; text-align: left; mso-line-height-rule: exactly; }
+    .hero-title font { color: #ffffff !important; }
+    .nz-shell-body { padding: 32px 32px 28px; background: ${BRAND.cardBg}; text-align: left; }
     /* Strip any nested <div class="card"> styling so legacy templates passthrough. */
     .nz-shell-body .card { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; border-radius: 0 !important; }
 
@@ -251,12 +267,14 @@ export function layout(
     .subtext { color: ${BRAND.textBody}; font-size: 14px; line-height: 1.7; margin: 0 0 18px; }
     .small { color: ${BRAND.textMuted}; font-size: 12px; line-height: 1.6; margin: 0; }
 
-    /* CTA. .button (new) and .btn (legacy) both render the branded pill. */
-    .button-wrap { text-align: left; margin: 24px 0 8px; }
+    /* CTA. Mirrors Trevor's docs-repo .cta rule (bright brand accent
+       background, 14px / 32px padding, 10px radius, weight 700, 15px) but
+       with white text per Jack's preference. */
+    .button-wrap { text-align: center; margin: 24px 0 8px; }
     .button, .btn {
       display: inline-block;
       background: ${BRAND.accent};
-      color: ${BRAND.textPrimary} !important;
+      color: #ffffff !important;
       text-decoration: none;
       font-weight: 700;
       padding: 14px 32px;
@@ -265,6 +283,7 @@ export function layout(
       letter-spacing: 0.01em;
       mso-padding-alt: 14px 32px;
     }
+    .button font, .btn font { color: #ffffff !important; }
 
     /* Divider */
     .divider { border: none; border-top: 1px solid ${BRAND.border}; margin: 24px 0; }
@@ -294,28 +313,53 @@ export function layout(
     .footer p { color: ${BRAND.textMuted}; font-size: 11px; margin: 0 0 4px; line-height: 1.55; }
     .footer a { color: ${BRAND.accentDark}; text-decoration: none; }
     .tagline { font-style: italic; color: ${BRAND.textMuted}; font-size: 11.5px; letter-spacing: 0.01em; margin: 14px 0 0; text-align: center; }
+
+    /* Dark-mode preservation. Email clients (iOS Mail, Gmail, Outlook.com)
+       auto-invert "light" content for dark UI. Our shell is already dark on
+       purpose, so re-assert key colors and force the gradient header to keep
+       its hue. [data-ogsc] / [data-ogsb] = Outlook.com web; u + .body styling
+       = Apple Mail dark mode. */
+    @media (prefers-color-scheme: dark) {
+      body, .wrap, .nz-shell-body { background: ${BRAND.pageBg} !important; color: ${BRAND.textPrimary} !important; }
+      .nz-shell-header { background: ${BRAND.headerGradStart} !important; background: linear-gradient(135deg, ${BRAND.headerGradStart} 0%, ${BRAND.headerGradEnd} 100%) !important; }
+      .hero-title, .hero-title font { color: #ffffff !important; }
+      .eyebrow { color: ${BRAND.accent} !important; }
+      .heading { color: ${BRAND.textPrimary} !important; }
+      .subtext { color: ${BRAND.textBody} !important; }
+      .small, .footer p, .tagline { color: ${BRAND.textMuted} !important; }
+      .button, .btn { background: ${BRAND.accent} !important; color: #ffffff !important; }
+      .stats { background: ${BRAND.panelBg} !important; }
+      .stats td.k { color: ${BRAND.textMuted} !important; }
+      .stats td.v { color: ${BRAND.textPrimary} !important; }
+      .highlight { color: ${BRAND.accentDark} !important; }
+    }
+    [data-ogsc] .hero-title, [data-ogsc] .hero-title font { color: #ffffff !important; }
+    [data-ogsc] .eyebrow { color: ${BRAND.accent} !important; }
+    [data-ogsb] .nz-shell-header { background: ${BRAND.headerGradStart} !important; }
+    u + .body .hero-title, u + .body .hero-title font { color: #ffffff !important; }
   </style>
 </head>
-<body style="margin:0;padding:0;background-color:${BRAND.pageBg};">
+<body class="body" style="margin:0;padding:0;background-color:${BRAND.pageBg};">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${BRAND.pageBg}" style="background-color:${BRAND.pageBg};">
     <tr>
       <td align="center" style="padding:0;background-color:${BRAND.pageBg};">
         <div class="wrap">
-          <div class="nz-shell">
-            <div class="nz-shell-header">
+          <div class="nz-shell" style="text-align:left;">
+            <div class="nz-shell-header" bgcolor="${BRAND.headerGradStart}" style="text-align:left;background-color:${BRAND.headerGradStart};">
               <img class="logo" src="${logoSrc}" alt="${BRAND.brandName}" />
-              ${eyebrowText ? `<p class="eyebrow">${eyebrowText}</p>` : ''}
+              ${eyebrowText ? `<p class="eyebrow" style="text-align:left;color:${BRAND.accent};">${eyebrowText}</p>` : ''}
+              ${heroTitle ? `<h1 class="hero-title" style="text-align:left;color:#ffffff;"><font color="#FFFFFF" style="color:#ffffff;">${heroTitle}</font></h1>` : ''}
             </div>
-            <div class="nz-shell-body">
+            <div class="nz-shell-stripe" style="height:3px;line-height:3px;font-size:0;background:linear-gradient(to right, ${BRAND.accent}, ${BRAND.accentDark});background-color:${BRAND.accent};">&nbsp;</div>
+            <div class="nz-shell-body" style="text-align:left;">
               ${content}
             </div>
           </div>
           <p class="tagline">${BRAND.tagline}</p>
-          <p style="text-align:center;font-size:10.5px;color:${BRAND.textMuted};margin:6px 0 0;line-height:1.55;">
-            ${BRAND.address} &middot; <a href="${BRAND.websiteUrl}" style="color:${BRAND.accentDark};">${BRAND.websiteUrl.replace(/^https?:\/\//, '')}</a>
-          </p>
-          <p style="text-align:center;font-size:10.5px;color:${BRAND.textMuted};margin:4px 0 0;line-height:1.55;">
-            <a href="${cortexUrl}" style="color:${BRAND.accentDark};">${cortexUrl.replace(/^https?:\/\//, '')}</a>
+          <p style="text-align:center;font-size:10.5px;color:${BRAND.textMuted};margin:6px 0 0;line-height:1.6;">
+            ${BRAND.address}
+            &nbsp;&middot;&nbsp;
+            <a href="${BRAND.websiteUrl}" style="color:${BRAND.accentDark};text-decoration:none;">${BRAND.websiteUrl.replace(/^https?:\/\//, '')}</a>
           </p>
         </div>
       </td>
