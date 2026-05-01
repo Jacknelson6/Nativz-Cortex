@@ -138,21 +138,22 @@ export function CalendarLinkDetail({
       return;
     }
     let cancelled = false;
-    setContactsLoading(true);
-    fetch(
-      `/api/calendar/review/contacts?clientId=${encodeURIComponent(clientId)}`,
-      { cache: 'no-store' },
-    )
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('failed'))))
-      .then((data: { contacts: ContactRow[] }) => {
+    void (async () => {
+      setContactsLoading(true);
+      try {
+        const res = await fetch(
+          `/api/calendar/review/contacts?clientId=${encodeURIComponent(clientId)}`,
+          { cache: 'no-store' },
+        );
+        if (!res.ok) throw new Error('failed');
+        const data = (await res.json()) as { contacts: ContactRow[] };
         if (!cancelled) setContacts(data.contacts ?? []);
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setContacts([]);
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setContactsLoading(false);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
