@@ -223,6 +223,7 @@ export function PeriodDetailClient({
         />
       ) : (
         <EntriesGrid
+          key={activeTab}
           service={activeTab}
           entries={entriesByService[activeTab]}
           teamMembers={teamMembers}

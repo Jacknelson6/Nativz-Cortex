@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Trash2, Sparkles, Check, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -32,6 +32,9 @@ export interface GridEntry {
 
 interface DraftRow {
   _localId: string;
+  // Locked at creation so a draft committed after a tab switch can't
+  // be misclassified by a stale-closure POST.
+  entry_type: EntryType;
   team_member_id: string | null;
   payee_label: string | null;
   client_id: string | null;
@@ -94,9 +97,28 @@ export function EntriesGrid({
 
   const isEditing = service === 'editing';
 
+  // Latest drafts via ref so debounced commits read fresh state instead
+  // of a stale closure snapshot.
+  const draftsRef = useRef<DraftRow[]>(drafts);
+  useEffect(() => {
+    draftsRef.current = drafts;
+  }, [drafts]);
+
+  // One debounce timer per draft; rapid-fire field edits collapse into a
+  // single POST 250ms after the user stops touching the row.
+  const commitTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  useEffect(() => {
+    const timers = commitTimers.current;
+    return () => {
+      for (const t of timers.values()) clearTimeout(t);
+      timers.clear();
+    };
+  }, []);
+
   function newDraft(prefill?: Partial<DraftRow>): DraftRow {
     return {
       _localId: `draft-${Math.random().toString(36).slice(2, 9)}`,
+      entry_type: service,
       team_member_id: prefill?.team_member_id ?? null,
       payee_label: prefill?.payee_label ?? null,
       client_id: prefill?.client_id ?? null,
@@ -147,17 +169,31 @@ export function EntriesGrid({
     return hasPayee && hasMoney;
   }
 
-  async function persistDraft(d: DraftRow) {
+  function scheduleCommit(localId: string) {
+    const existing = commitTimers.current.get(localId);
+    if (existing) clearTimeout(existing);
+    const t = setTimeout(() => {
+      commitTimers.current.delete(localId);
+      void persistDraftById(localId);
+    }, 250);
+    commitTimers.current.set(localId, t);
+  }
+
+  async function persistDraftById(localId: string) {
+    const d = draftsRef.current.find((x) => x._localId === localId);
+    if (!d) return;
     if (!isDraftReadyToSave(d) || d.saving) return;
+
     setDrafts((prev) =>
-      prev.map((x) => (x._localId === d._localId ? { ...x, saving: true, error: null } : x)),
+      prev.map((x) => (x._localId === localId ? { ...x, saving: true, error: null } : x)),
     );
 
-    const margin = isEditing ? computeEditingMargin(d, clientById) : 0;
+    // Compute margin/rate using the draft's locked entry_type, not the
+    // currently-rendered tab.
+    const draftIsEditing = d.entry_type === 'editing';
+    const margin = draftIsEditing ? computeEditingMargin(d, clientById) : 0;
     const ratePerVideo =
-      isEditing && d.video_count > 0
-        ? Math.round(d.amount_cents / d.video_count)
-        : 0;
+      draftIsEditing && d.video_count > 0 ? Math.round(d.amount_cents / d.video_count) : 0;
 
     try {
       const res = await fetch('/api/accounting/entries', {
@@ -165,7 +201,7 @@ export function EntriesGrid({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           period_id: periodId,
-          entry_type: service,
+          entry_type: d.entry_type,
           team_member_id: d.team_member_id,
           payee_label: d.payee_label?.trim() || null,
           client_id: d.client_id,
@@ -180,7 +216,7 @@ export function EntriesGrid({
       if (!res.ok) {
         setDrafts((prev) =>
           prev.map((x) =>
-            x._localId === d._localId
+            x._localId === localId
               ? { ...x, saving: false, error: data.error ?? 'Failed to save' }
               : x,
           ),
@@ -188,11 +224,11 @@ export function EntriesGrid({
         return;
       }
       onLocalCreate(data.entry);
-      removeDraft(d._localId);
+      removeDraft(localId);
     } catch {
       setDrafts((prev) =>
         prev.map((x) =>
-          x._localId === d._localId ? { ...x, saving: false, error: 'Network error' } : x,
+          x._localId === localId ? { ...x, saving: false, error: 'Network error' } : x,
         ),
       );
     }
@@ -337,7 +373,7 @@ export function EntriesGrid({
                   clientById={clientById}
                   readyToSave={isDraftReadyToSave(d)}
                   onChange={(patch) => updateDraft(d._localId, patch)}
-                  onCommit={() => persistDraft(d)}
+                  onCommit={() => scheduleCommit(d._localId)}
                   onRemove={() => removeDraft(d._localId)}
                 />
               ))}
@@ -580,7 +616,7 @@ function DraftRowUI({
           readonly={false}
           onPickMember={(id) => {
             onChange({ team_member_id: id, payee_label: null });
-            if (id) setTimeout(onCommit, 0);
+            if (id) onCommit();
           }}
           onTypeLabel={(label) => onChange({ team_member_id: null, payee_label: label })}
           onBlur={onCommit}
@@ -593,7 +629,7 @@ function DraftRowUI({
           readonly={false}
           onPick={(id) => {
             onChange({ client_id: id });
-            setTimeout(onCommit, 0);
+            onCommit();
           }}
         />
       </Cell>
@@ -604,7 +640,7 @@ function DraftRowUI({
             readonly={false}
             onCommit={(v) => {
               onChange({ video_count: v });
-              setTimeout(onCommit, 0);
+              onCommit();
             }}
           />
         </Cell>
@@ -615,7 +651,7 @@ function DraftRowUI({
           readonly={false}
           onCommit={(c) => {
             onChange({ amount_cents: c });
-            setTimeout(onCommit, 0);
+            onCommit();
           }}
         />
       </Cell>
@@ -636,7 +672,7 @@ function DraftRowUI({
           readonly={false}
           onCommit={(v) => {
             onChange({ description: v || null });
-            setTimeout(onCommit, 0);
+            onCommit();
           }}
         />
       </Cell>
