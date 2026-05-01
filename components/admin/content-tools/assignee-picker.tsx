@@ -41,23 +41,34 @@ interface TeamMember {
   editing_roles: string[];
 }
 
-let cachedMembers: TeamMember[] | null = null;
-let inflight: Promise<TeamMember[]> | null = null;
+// Per-role module cache. Keys: 'editor' | 'videographer' | 'strategist'.
+// We key by role tag (not the FK column) so that future surfaces that
+// reuse the picker for a different slot mapping still share a hit.
+// Using a Map + null-safe check avoids the empty-array-is-truthy trap
+// that previously froze the picker if a fetch ever returned [].
+const cachedByRole = new Map<string, TeamMember[]>();
+const inflightByRole = new Map<string, Promise<TeamMember[]>>();
 
-async function fetchMembers(): Promise<TeamMember[]> {
-  if (cachedMembers) return cachedMembers;
-  if (inflight) return inflight;
-  inflight = fetch('/api/admin/editing/team', { cache: 'no-store' })
+async function fetchMembers(roleTag: string): Promise<TeamMember[]> {
+  const cached = cachedByRole.get(roleTag);
+  if (cached !== undefined) return cached;
+  const existing = inflightByRole.get(roleTag);
+  if (existing) return existing;
+  const p = fetch(
+    `/api/admin/editing/team?role=${encodeURIComponent(roleTag)}`,
+    { cache: 'no-store' },
+  )
     .then(async (res) => {
       if (!res.ok) throw new Error('Failed to load team');
       const body = (await res.json()) as { members: TeamMember[] };
-      cachedMembers = body.members;
+      cachedByRole.set(roleTag, body.members);
       return body.members;
     })
     .finally(() => {
-      inflight = null;
+      inflightByRole.delete(roleTag);
     });
-  return inflight;
+  inflightByRole.set(roleTag, p);
+  return p;
 }
 
 export type AssigneeRole = 'assignee_id' | 'videographer_id' | 'strategist_id';
@@ -95,8 +106,11 @@ export function AssigneePicker({
   /** Called after a successful PATCH so the parent can refresh data. */
   onSaved?: () => void;
 }) {
+  const tag = ROLE_TAG[role];
   const [open, setOpen] = useState(false);
-  const [members, setMembers] = useState<TeamMember[]>(cachedMembers ?? []);
+  const [members, setMembers] = useState<TeamMember[]>(
+    () => cachedByRole.get(tag) ?? [],
+  );
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState('');
@@ -104,17 +118,20 @@ export function AssigneePicker({
 
   // Lazy-load the member list the first time the popover opens. Keep
   // the cached copy mounted between opens so the second click feels
-  // instant.
+  // instant. We only refetch when the cache for this role tag is
+  // genuinely missing (`undefined`), not just empty - an explicit
+  // empty result is still a valid cache hit.
   useEffect(() => {
-    if (!open || cachedMembers) return;
+    if (!open) return;
+    if (cachedByRole.has(tag)) return;
     setLoadingMembers(true);
-    fetchMembers()
+    fetchMembers(tag)
       .then((list) => setMembers(list))
       .catch((err) =>
         toast.error(err instanceof Error ? err.message : 'Failed to load team'),
       )
       .finally(() => setLoadingMembers(false));
-  }, [open]);
+  }, [open, tag]);
 
   // Autofocus search when popover opens. Radix returns focus to the
   // trigger on close, which is what we want.
@@ -126,12 +143,11 @@ export function AssigneePicker({
   }, [open]);
 
   const filtered = useMemo(() => {
-    const tag = ROLE_TAG[role];
-    // Restrict to members tagged with the slot's role. The team API
-    // returns every editing-eligible member; we narrow client-side so
-    // a single fetch backs all three pickers on the page.
-    const eligible = members.filter((m) =>
-      Array.isArray(m.editing_roles) && m.editing_roles.includes(tag),
+    // Server filters by role tag; this client-side check is defence in
+    // depth so a stale cache or relaxed server contract can't leak
+    // unrelated members into the dropdown.
+    const eligible = members.filter(
+      (m) => Array.isArray(m.editing_roles) && m.editing_roles.includes(tag),
     );
     const q = query.trim().toLowerCase();
     if (!q) return eligible;
@@ -140,7 +156,7 @@ export function AssigneePicker({
       const email = m.email.toLowerCase();
       return name.includes(q) || email.includes(q);
     });
-  }, [members, query, role]);
+  }, [members, query, tag]);
 
   async function patch(nextId: string | null) {
     setSaving(true);

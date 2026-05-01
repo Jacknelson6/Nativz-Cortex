@@ -11,23 +11,29 @@ export const dynamic = 'force-dynamic';
  * Returns the agency roster as picker options for the editing project
  * detail panel. The three role assignments on `editing_projects`
  * (`assignee_id` / `videographer_id` / `strategist_id`) FK into
- * `team_members` (migration 212), which is the canonical agency-people
+ * `team_members` (migration 213), which is the canonical agency-people
  * table and includes folks without auth accounts (Jaime, Jashan, Jed,
  * Khen, Kiet, etc.).
  *
  * The optional `role` filter narrows the list to members tagged with
  * that editing role via `team_members.editing_roles`. The picker uses
  * this so the strategist dropdown only shows strategists, etc. With no
- * filter we return any member that has at least one editing role tag,
- * so unrelated roster entries (CEO, CMO, test rows) don't pollute the
- * picker.
+ * filter we return any member tagged with ANY of the three valid
+ * editing roles, so unrelated roster entries (CEO, CMO, test rows)
+ * don't pollute the picker.
+ *
+ * Implementation note: we filter via the `cs` (contains) operator on
+ * `editing_roles` rather than checking `editing_roles != '{}'`. The
+ * `eq.{}` form against a text[] is fragile in PostgREST URL encoding;
+ * explicit `cs` over the valid tags is unambiguous.
  *
  * Sorted by full_name asc (then email) for a stable list.
  *
  * Auth: any admin can read this.
  */
 
-const VALID_ROLES = new Set(['strategist', 'editor', 'videographer']);
+const VALID_ROLES = ['strategist', 'editor', 'videographer'] as const;
+const VALID_ROLE_SET = new Set<string>(VALID_ROLES);
 
 interface TeamMember {
   id: string;
@@ -52,7 +58,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const roleParam = url.searchParams.get('role');
   const filterRole =
-    roleParam && VALID_ROLES.has(roleParam) ? roleParam : null;
+    roleParam && VALID_ROLE_SET.has(roleParam) ? roleParam : null;
 
   const admin = createAdminClient();
   let query = admin
@@ -65,8 +71,14 @@ export async function GET(req: Request) {
     // Members tagged with the requested editing role.
     query = query.contains('editing_roles', [filterRole]);
   } else {
-    // Any member with at least one editing role tag.
-    query = query.not('editing_roles', 'eq', '{}');
+    // Any member tagged with any of the three valid editing roles.
+    // Using `cs` (contains) over the explicit role set instead of
+    // `not.eq.{}` because the empty-array literal is fragile via the
+    // PostgREST URL encoding.
+    const orParts = VALID_ROLES.map(
+      (r) => `editing_roles.cs.{${r}}`,
+    ).join(',');
+    query = query.or(orParts);
   }
 
   const { data, error } = await query;
