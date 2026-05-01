@@ -32,13 +32,16 @@ if (!process.env.RESEND_API_KEY) {
 
 import { sendShootBriefReminderEmail } from '@/lib/email/resend';
 import type { AgencyBrand } from '@/lib/agency/detect';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 const TO = process.env.TO ?? 'jack@nativz.io';
 const AGENCY: AgencyBrand = process.env.AGENCY === 'anderson' ? 'anderson' : 'nativz';
 
 async function main() {
   const shootDate = new Date(Date.now() + 48 * 3600 * 1000);
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://cortex.nativz.io';
+  // Use the agency-aware production host, NOT NEXT_PUBLIC_APP_URL, so a dev
+  // .env.local with localhost cannot end up in the rendered email.
+  const baseUrl = getCortexAppUrl(AGENCY);
 
   console.log(`Sending sample shoot-brief-reminder to ${TO}`);
   console.log(`  agency: ${AGENCY}`);

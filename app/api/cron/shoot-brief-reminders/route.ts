@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 import { sendShootBriefReminderEmail } from '@/lib/email/resend';
 import type { AgencyBrand } from '@/lib/agency/detect';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 export const maxDuration = 300;
 
@@ -30,8 +31,6 @@ async function handleGet(request: NextRequest) {
   }
 
   const adminClient = createAdminClient();
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://cortex.nativz.io';
-  const contentLabUrl = `${baseUrl}/lab`;
 
   const now = new Date();
   const windowStart = new Date(now.getTime() + LOOKAHEAD_LOWER_HOURS * 3600 * 1000);
@@ -96,6 +95,9 @@ async function handleGet(request: NextRequest) {
     const clientName = (clientRow as { name?: string } | null)?.name ?? null;
     const clientAgency = (clientRow as { agency?: string | null } | null)?.agency ?? null;
     const agency: AgencyBrand = clientAgency === 'anderson' ? 'anderson' : 'nativz';
+    // Resolve the link host per shoot from the agency, never NEXT_PUBLIC_APP_URL,
+    // so a dev .env.local with localhost cannot leak into a transactional email.
+    const contentLabUrl = `${getCortexAppUrl(agency)}/lab`;
 
     const matches = attendees
       .map((e) => teamByEmail.get(e.toLowerCase()))
