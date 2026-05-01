@@ -485,14 +485,14 @@ export async function sendWelcomeEmail(opts: {
     recipientName: opts.name,
     subject: `Welcome to Cortex`,
     html: layout(`
-      <p class="subtext">
+      <p class="subtext" style="text-align:center;">
         Your Cortex account is ready. Sign in to get started.
       </p>
-      <div class="button-wrap">
+      <div class="button-wrap" style="text-align:center;">
         <a href="${opts.loginUrl}" class="button">Sign in &rarr;</a>
       </div>
       <hr class="divider" />
-      <p class="small">
+      <p class="small" style="text-align:center;">
         Signed up as <strong>${opts.to}</strong>
       </p>
     `, agency, {
@@ -807,32 +807,49 @@ export async function sendCalendarCommentDigestEmail(opts: {
   agency?: AgencyBrand;
 }) {
   const agency = opts.agency ?? 'nativz';
+  const brand = getEmailBrand(agency);
   const totalComments = opts.groups.reduce((sum, g) => sum + g.comments.length, 0);
   const subject = `${totalComments} content calendar ${totalComments === 1 ? 'comment' : 'comments'}, ${opts.windowLabel}`;
 
-  const verbByStatus = {
-    approved: 'approved',
-    changes_requested: 'requested changes',
-    comment: 'commented',
+  // Per-status presentation: chip color + verb. Approved gets the green
+  // "shipped" feel, changes_requested goes red, plain comments stay neutral
+  // blue so the eye still sorts them at a glance.
+  const statusMeta = {
+    approved: { verb: 'approved', bg: '#e8f7ee', fg: '#0a8a4a' },
+    changes_requested: { verb: 'requested changes', bg: '#fef3f2', fg: '#b42318' },
+    comment: { verb: 'commented', bg: brand.blueSurface, fg: brand.blue },
   } as const;
 
   const sections = opts.groups
     .map((g) => {
       const rows = g.comments
-        .map((c) => `
-          <tr>
-            <td style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
-              <div style="font-size:13px;color:#fff;"><strong>${c.authorName}</strong> ${verbByStatus[c.status]}</div>
-              <div style="font-size:12px;color:#9aa3b2;margin-top:2px;">on &ldquo;${c.captionPreview}&rdquo;</div>
-              ${c.contentPreview ? `<div style="font-size:12px;color:#cbd2dd;margin-top:6px;font-style:italic;">&ldquo;${c.contentPreview}&rdquo;</div>` : ''}
-            </td>
-          </tr>`)
+        .map((c) => {
+          const meta = statusMeta[c.status];
+          const safeAuthor = escapeHtml(c.authorName);
+          const safeCaption = escapeHtml(c.captionPreview);
+          const contentBlock = c.contentPreview
+            ? `<div style="margin-top:8px;padding:10px 12px;background:${brand.panelBg};border-left:3px solid ${meta.fg};border-radius:6px;color:${brand.textBody};font-size:13px;line-height:1.5;font-style:italic;">&ldquo;${escapeHtml(c.contentPreview)}&rdquo;</div>`
+            : '';
+          return `
+            <tr>
+              <td style="padding:14px 0;border-bottom:1px solid ${brand.borderCard};">
+                <div style="display:inline-block;padding:3px 10px;border-radius:999px;background:${meta.bg};color:${meta.fg};font-size:11px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;">${meta.verb}</div>
+                <div style="margin-top:8px;color:${brand.textPrimary};font-size:14px;font-weight:600;">${safeAuthor}</div>
+                <div style="margin-top:2px;color:${brand.textMuted};font-size:12px;">on &ldquo;${safeCaption}&rdquo;</div>
+                ${contentBlock}
+              </td>
+            </tr>`;
+        })
         .join('');
+      const safeClient = escapeHtml(g.clientName);
       return `
-        <div style="margin-bottom:24px;">
-          <h2 style="font-size:15px;font-weight:600;color:#fff;margin:0 0 8px;">${g.clientName}</h2>
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows}</table>
-          <div style="margin-top:12px;"><a href="${g.dropUrl}" style="font-size:12px;color:#5eb6ff;text-decoration:none;">Open ${g.clientName}'s calendar &rarr;</a></div>
+        <div style="margin:22px 0 0;padding:20px 22px;background:${brand.cardBg};border:1px solid ${brand.border};border-radius:12px;">
+          <h2 style="margin:0 0 6px;font-size:16px;font-weight:700;color:${brand.textPrimary};letter-spacing:-0.01em;">${safeClient}</h2>
+          <p style="margin:0;color:${brand.textMuted};font-size:12px;">${g.comments.length} ${g.comments.length === 1 ? 'note' : 'notes'} this window</p>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">${rows}</table>
+          <div class="button-wrap" style="margin:18px 0 0;text-align:left;">
+            <a href="${g.dropUrl}" class="button">Open ${safeClient}'s calendar &rarr;</a>
+          </div>
         </div>`;
     })
     .join('');
@@ -849,8 +866,8 @@ export async function sendCalendarCommentDigestEmail(opts: {
       </p>
       ${sections}
     `, agency, {
-      eyebrow: `Calendar Digest · ${opts.windowLabel}`,
-      heroTitle: 'Yesterday’s calendar activity',
+      eyebrow: `Calendar Digest - ${opts.windowLabel}`,
+      heroTitle: "Yesterday's calendar activity",
     }),
     metadata: {
       totalComments,
@@ -864,6 +881,9 @@ export async function sendCalendarCommentDigestEmail(opts: {
 
 export async function sendCalendarNoOpenReminderEmail(opts: {
   to: string;
+  /** First names of the calendar's POCs. 1 → "Hey Jack", 2 → "Hey Jack and
+   *  Sara", 3+ → "Hi team". Empty array falls back to "Hey {clientName}". */
+  pocFirstNames?: string[];
   clientName: string;
   shareUrl: string;
   hours: number;
@@ -876,6 +896,7 @@ export async function sendCalendarNoOpenReminderEmail(opts: {
   const agency = opts.agency ?? 'nativz';
   const noun = opts.pending === 1 ? 'post' : 'posts';
   const subject = `${opts.pending} ${noun} still need your review`;
+  const greeting = greetingFor(opts.pocFirstNames ?? [], opts.clientName);
   return sendAndLog({
     category: 'transactional',
     typeKey: 'calendar_no_open_reminder',
@@ -885,20 +906,21 @@ export async function sendCalendarNoOpenReminderEmail(opts: {
     dropId: opts.dropId,
     subject,
     html: layout(`
-      <p class="subtext">Hey ${opts.clientName}, we sent over your latest content calendar about ${opts.hours} hours ago and haven't seen anyone open it yet. Take a quick look and either approve the posts or drop comments where anything needs to change.</p>
+      <p class="subtext">${greeting}, we sent over your latest content calendar about ${opts.hours} hours ago and haven't seen anyone open it yet. Take a quick look and either approve the posts or drop comments where anything needs to change.</p>
       <div class="button-wrap">
-        <a href="${opts.shareUrl}" class="btn">Open your calendar</a>
+        <a href="${opts.shareUrl}" class="button">Open your calendar &rarr;</a>
       </div>
     `, agency, {
       eyebrow: 'Calendar Reminder',
       heroTitle: `${opts.pending} of ${opts.total} ${opts.pending === 1 ? 'post' : 'posts'} still need your review`,
     }),
-    metadata: { clientName: opts.clientName, hours: opts.hours, pending: opts.pending, total: opts.total },
+    metadata: { clientName: opts.clientName, pocFirstNames: opts.pocFirstNames ?? [], hours: opts.hours, pending: opts.pending, total: opts.total },
   });
 }
 
 export async function sendCalendarNoActionReminderEmail(opts: {
   to: string;
+  pocFirstNames?: string[];
   clientName: string;
   shareUrl: string;
   hours: number;
@@ -914,9 +936,10 @@ export async function sendCalendarNoActionReminderEmail(opts: {
   // Tone shifts based on whether they've started reviewing (partial action)
   // versus opened-but-untouched. Keeps the message honest in both cases.
   const partialAction = opts.pending < opts.total;
+  const greeting = greetingFor(opts.pocFirstNames ?? [], opts.clientName);
   const body = partialAction
-    ? `Hey ${opts.clientName}, you've reviewed some of the calendar already, thanks for that. ${opts.pending} of ${opts.total} ${noun} still need your eyes. Hit reply or drop comments directly on the posts.`
-    : `Hey ${opts.clientName}, you opened the calendar but the ${opts.total} ${opts.total === 1 ? 'post' : 'posts'} still need your review. Hit reply or drop comments directly on the posts.`;
+    ? `${greeting}, you've reviewed some of the calendar already, thanks for that. ${opts.pending} of ${opts.total} ${noun} still need your eyes. Hit reply or drop comments directly on the posts.`
+    : `${greeting}, you opened the calendar but the ${opts.total} ${opts.total === 1 ? 'post' : 'posts'} still need your review. Hit reply or drop comments directly on the posts.`;
   return sendAndLog({
     category: 'transactional',
     typeKey: 'calendar_no_action_reminder',
@@ -956,12 +979,10 @@ export function buildCalendarFollowupDraft(opts: {
   pocFirstNames: string[];
   clientName: string;
 }): { subject: string; message: string } {
-  const greetingNames = opts.pocFirstNames.length
-    ? opts.pocFirstNames.join(', ')
-    : opts.clientName;
+  const greeting = greetingFor(opts.pocFirstNames, opts.clientName);
   const subject = `Checking in on your content calendar`;
   const message =
-    `Hey ${greetingNames}, just circling back on the latest content calendar for ${opts.clientName}. ` +
+    `${greeting}, just circling back on the latest content calendar for ${opts.clientName}. ` +
     `Whenever you have a few minutes, take a look and either approve the posts or drop comments where anything needs to change.\n\n` +
     `No rush, but the sooner we hear from you, the sooner the team can lock everything in.`;
   return { subject, message };
@@ -1038,6 +1059,7 @@ export async function sendCalendarFollowupEmail(opts: {
 
 export async function sendCalendarFinalCallEmail(opts: {
   to: string;
+  pocFirstNames?: string[];
   clientName: string;
   shareUrl: string;
   firstPostAt: string;
@@ -1050,6 +1072,7 @@ export async function sendCalendarFinalCallEmail(opts: {
   const agency = opts.agency ?? 'nativz';
   const noun = opts.pending === 1 ? 'post' : 'posts';
   const subject = `${opts.pending} ${noun} still pending, first post goes live ${opts.firstPostAt}`;
+  const greeting = greetingFor(opts.pocFirstNames ?? [], opts.clientName);
   return sendAndLog({
     category: 'transactional',
     typeKey: 'calendar_final_call',
@@ -1059,16 +1082,16 @@ export async function sendCalendarFinalCallEmail(opts: {
     dropId: opts.dropId,
     subject,
     html: layout(`
-      <p class="subtext">Hey ${opts.clientName}, your first scheduled post goes live ${opts.firstPostAt}. ${opts.pending} of ${opts.total} ${noun} still ${opts.pending === 1 ? 'needs' : 'need'} your sign-off, so unless you flag something we'll publish on the dates you saw in the calendar.</p>
+      <p class="subtext">${greeting}, your first scheduled post goes live ${opts.firstPostAt}. ${opts.pending} of ${opts.total} ${noun} still ${opts.pending === 1 ? 'needs' : 'need'} your sign-off, so unless you flag something we'll publish on the dates you saw in the calendar.</p>
       <p class="subtext" style="margin-top:10px;">If anything needs to change, drop a comment on the post or hit reply now.</p>
       <div class="button-wrap">
-        <a href="${opts.shareUrl}" class="btn">Open the calendar</a>
+        <a href="${opts.shareUrl}" class="button">Open the calendar &rarr;</a>
       </div>
     `, agency, {
       eyebrow: 'Final Call',
       heroTitle: 'Final call before we publish',
     }),
-    metadata: { clientName: opts.clientName, firstPostAt: opts.firstPostAt, pending: opts.pending, total: opts.total },
+    metadata: { clientName: opts.clientName, pocFirstNames: opts.pocFirstNames ?? [], firstPostAt: opts.firstPostAt, pending: opts.pending, total: opts.total },
   });
 }
 
@@ -1106,9 +1129,7 @@ export async function sendCalendarDeliveryEmail(opts: {
     month: 'long',
     timeZone: 'UTC',
   });
-  const greeting = opts.pocFirstNames.length > 0
-    ? `Hey ${humanizeNameList(opts.pocFirstNames)}`
-    : `Hey ${opts.clientName}`;
+  const greeting = greetingFor(opts.pocFirstNames, opts.clientName);
   const replyTo = isAC ? 'jack@andersoncollaborative.com' : 'jack@nativz.io';
 
   const introBlock = opts.firstRoundIntro
@@ -1192,9 +1213,7 @@ export async function sendCombinedCalendarDeliveryEmail(opts: {
     month: 'long',
     timeZone: 'UTC',
   });
-  const greeting = opts.pocFirstNames.length > 0
-    ? `Hey ${humanizeNameList(opts.pocFirstNames)}`
-    : 'Hey there';
+  const greeting = greetingFor(opts.pocFirstNames);
   const brandList = humanizeNameList(opts.calendars.map((c) => c.clientName));
 
   const introBlock = opts.firstRoundIntro
@@ -1207,13 +1226,13 @@ export async function sendCombinedCalendarDeliveryEmail(opts: {
   const calendarSections = opts.calendars
     .map(
       (c) => `
-        <div style="margin-top:18px;padding:18px 20px;border:1px solid #e8ecf0;border-radius:10px;background:#f7f9fb;">
+        <div style="margin-top:18px;padding:22px 20px;border:1px solid #e8ecf0;border-radius:10px;background:#f7f9fb;text-align:center;">
           <h2 style="font-family:inherit;font-size:18px;font-weight:700;color:inherit;margin:0 0 6px;">${c.clientName}</h2>
-          <p class="small" style="margin:0 0 12px;">
+          <p class="small" style="margin:0 0 16px;">
             <span class="highlight">${c.postCount} posts</span>
             scheduled ${formatDateLabel(c.startDate)} to ${formatDateLabel(c.endDate)}.
           </p>
-          <div>
+          <div class="button-wrap" style="margin:0;">
             <a href="${c.shareUrl}" class="button">Open ${c.clientName} calendar &rarr;</a>
           </div>
         </div>
@@ -1285,9 +1304,7 @@ export function buildCalendarShareSendDraft(opts: {
     month: 'long',
     timeZone: 'UTC',
   });
-  const greetingNames = opts.pocFirstNames.length > 0
-    ? humanizeNameList(opts.pocFirstNames)
-    : opts.clientName;
+  const greeting = greetingFor(opts.pocFirstNames, opts.clientName);
   const dateRange = `${formatDateLabel(opts.startDate)} to ${formatDateLabel(opts.endDate)}`;
   const postsWord = opts.postCount === 1 ? 'post' : 'posts';
 
@@ -1295,7 +1312,7 @@ export function buildCalendarShareSendDraft(opts: {
     return {
       subject: `${opts.clientName}: revised content calendar ready for review`,
       message:
-        `Hey ${greetingNames}, ${team} just made revisions to the ${monthLabel} content calendar.\n\n` +
+        `${greeting}, ${team} just made revisions to the ${monthLabel} content calendar.\n\n` +
         `Tap the button below to re-review the ${opts.postCount} ${postsWord} scheduled across ${dateRange}, then approve or leave another comment if anything still needs to change.`,
     };
   }
@@ -1303,7 +1320,7 @@ export function buildCalendarShareSendDraft(opts: {
   return {
     subject: `Your ${monthLabel} content calendar from ${brand} is ready`,
     message:
-      `Hey ${greetingNames}, ${team} just shipped ${opts.postCount} ${postsWord} for you to review, scheduled across ${dateRange}.\n\n` +
+      `${greeting}, ${team} just shipped ${opts.postCount} ${postsWord} for you to review, scheduled across ${dateRange}.\n\n` +
       `Tap the button below to watch the videos, read the captions, and approve or request changes one post at a time.`,
   };
 }
@@ -1411,6 +1428,44 @@ function humanizeNameList(names: string[]): string {
   return `${cleaned.slice(0, -1).join(', ')}, and ${cleaned[cleaned.length - 1]}`;
 }
 
+/**
+ * How we open every client-facing email. Jack's standing rule:
+ *
+ *   1 POC  → "Hey Jack"
+ *   2 POCs → "Hey Jack and Sara"
+ *   3+     → "Hi team"
+ *   none   → fallback ("Hey {clientName}" via the caller)
+ *
+ * Returns just the addressee phrase (no greeting word), so callers can wrap
+ * it with "Hey ", "Hi ", or "Heya " to taste. Pass an optional fallback
+ * (typically the client name) so a missing POC list still produces a
+ * readable greeting.
+ */
+function humanizeAddressee(pocFirstNames: string[], fallback?: string): string {
+  const cleaned = pocFirstNames.map((n) => n.trim()).filter(Boolean);
+  if (cleaned.length === 0) return fallback?.trim() || 'there';
+  if (cleaned.length === 1) return cleaned[0];
+  if (cleaned.length === 2) return `${cleaned[0]} and ${cleaned[1]}`;
+  return 'team';
+}
+
+/**
+ * Full greeting phrase ready to drop into a sentence:
+ *   1 POC  → "Hey Jack"
+ *   2 POCs → "Hey Jack and Sara"
+ *   3+     → "Hi team"
+ *   none   → "Hey {clientName}" / "Hey there"
+ *
+ * The "Hi team" form intentionally swaps "Hey" for "Hi", it sits better with
+ * the plural and reads more like a real human greeting. All other cases stay
+ * on "Hey" so the casual house tone holds.
+ */
+function greetingFor(pocFirstNames: string[], fallback?: string): string {
+  const cleaned = pocFirstNames.map((n) => n.trim()).filter(Boolean);
+  if (cleaned.length >= 3) return 'Hi team';
+  return `Hey ${humanizeAddressee(cleaned, fallback)}`;
+}
+
 function formatDateLabel(isoDate: string): string {
   return new Date(`${isoDate}T00:00:00Z`).toLocaleString('en-US', {
     month: 'short',
@@ -1423,14 +1478,18 @@ export async function sendCalendarRevisionsCompleteEmail(opts: {
   to: string;
   clientName: string;
   shareUrl: string;
+  /** First names of the calendar's POCs. 1 → "Hey Jack", 2 → "Hey Jack and
+   *  Sara", 3+ → "Hi team". Empty / missing falls back to "Hey {clientName}". */
+  pocFirstNames?: string[];
   agency?: AgencyBrand;
   clientId?: string;
   dropId?: string;
 }) {
   const agency = opts.agency ?? 'nativz';
   const subject = 'Your revisions are ready to review';
+  const greeting = greetingFor(opts.pocFirstNames ?? [], opts.clientName);
   const html = layout(`
-    <p class="subtext">Hey ${opts.clientName}, we've worked through every change you flagged. Hop back in to take a final look and approve the posts you're happy with.</p>
+    <p class="subtext">${greeting}, we've worked through every change you flagged. Hop back in to take a final look and approve the posts you're happy with.</p>
     <div class="button-wrap">
       <a href="${opts.shareUrl}" class="btn">Review the updated posts</a>
     </div>
@@ -1491,33 +1550,13 @@ export async function sendCalendarRevisedVideosEmail(opts: {
   const isAC = agency === 'anderson';
   const teamLabel = isAC ? 'AC editing team' : 'Nativz editing team';
   const replyTo = isAC ? 'jack@andersoncollaborative.com' : 'jack@nativz.io';
-  const greeting = opts.pocFirstNames.length > 0
-    ? `Hey ${humanizeNameList(opts.pocFirstNames)}`
-    : `Hey ${opts.clientName}`;
+  const greeting = greetingFor(opts.pocFirstNames, opts.clientName);
   const count = opts.revisedCount;
   const word = count === 1 ? 'video' : 'videos';
   const subjectPrefix = opts.isTestOverride ? '[Test] ' : '';
   const subject = `${subjectPrefix}${opts.clientName}: revised ${word} ready for review`;
 
-  // The bulleted "what we did" list is wrapped in an inline-block so the list
-  // itself stays left-aligned (readable) while the wrapper sits centered on
-  // the row. Without this, centering the card would also center each bullet,
-  // which looks chaotic when bullets vary in length.
-  const summarySection = opts.summaryBullets.length > 0
-    ? `
-        <p class="subtext" style="margin-top:18px;text-align:center;">Here's what we did:</p>
-        <div style="text-align:center;">
-          <ul style="margin:8px 0 0;padding:0 0 0 20px;display:inline-block;text-align:left;">
-            ${opts.summaryBullets
-              .map(
-                (b) =>
-                  `<li style="color:#cbd2dd;font-size:14px;line-height:1.55;margin:0 0 6px;">${escapeAlertHtml(b)}</li>`,
-              )
-              .join('')}
-          </ul>
-        </div>
-      `
-    : '';
+  const summarySection = opts.summaryBullets.length > 0 ? renderRevisionsCard(opts.summaryBullets, agency) : '';
 
   const html = layout(`
     <p class="subtext">
@@ -1594,38 +1633,42 @@ export async function sendPostHealthAlertEmail(opts: {
   const { failedPosts, disconnects } = opts;
   if (failedPosts.length === 0 && disconnects.length === 0) return null;
 
+  const brand = getEmailBrand('nativz');
+  // Soft red accents for failure-state details. We don't want to invent a new
+  // brand token for a low-volume internal alert, so the values are inlined.
+  const failureRed = '#b42318';
+  const failureRedBg = '#fef3f2';
+  const sectionLabel = (text: string) => `
+    <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:${brand.textMuted};margin:0 0 10px;">${escapeAlertHtml(text)}</div>
+  `;
+  const card = (inner: string) => `
+    <div style="margin:0 0 10px;padding:14px 16px;background:${brand.panelBg};border:1px solid ${brand.border};border-radius:10px;">${inner}</div>
+  `;
+
   const failedSection = failedPosts.length === 0 ? '' : `
-    <h2 style="color:#fff;font-size:16px;font-weight:700;margin:0 0 12px;">Failed posts (${failedPosts.length})</h2>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
-      ${failedPosts.map((p) => `
-        <tr>
-          <td style="padding:12px 0;border-bottom:1px solid #1f2937;">
-            <p style="margin:0 0 4px;color:#fff;font-size:14px;font-weight:600;">${escapeAlertHtml(p.clientName)}</p>
-            <p style="margin:0 0 4px;color:#94a3b8;font-size:12px;">
-              ${p.scheduledFor ? new Date(p.scheduledFor).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : 'no scheduled time'} · retries: ${p.retryCount}
-            </p>
-            ${p.caption ? `<p style="margin:0 0 6px;color:#cbd5e1;font-size:13px;line-height:1.5;">${escapeAlertHtml(truncateAlert(p.caption, 120))}</p>` : ''}
-            ${p.failureReason ? `<p style="margin:0;color:#fca5a5;font-size:12px;font-family:ui-monospace,Menlo,monospace;">${escapeAlertHtml(truncateAlert(p.failureReason, 240))}</p>` : ''}
-          </td>
-        </tr>
-      `).join('')}
-    </table>
+    ${sectionLabel(`Failed posts (${failedPosts.length})`)}
+    <div style="margin:0 0 22px;">
+      ${failedPosts.map((p) => card(`
+        <div style="font-size:14px;font-weight:700;color:${brand.textPrimary};margin:0 0 4px;">${escapeAlertHtml(p.clientName)}</div>
+        <div style="font-size:12px;color:${brand.textMuted};margin:0 0 ${p.caption || p.failureReason ? '8px' : '0'};">
+          ${p.scheduledFor ? new Date(p.scheduledFor).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : 'no scheduled time'} · retries: ${p.retryCount}
+        </div>
+        ${p.caption ? `<div style="font-size:13px;line-height:1.55;color:${brand.textBody};margin:0 0 ${p.failureReason ? '8px' : '0'};">${escapeAlertHtml(truncateAlert(p.caption, 120))}</div>` : ''}
+        ${p.failureReason ? `<div style="display:inline-block;padding:6px 10px;border-radius:6px;background:${failureRedBg};color:${failureRed};font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.45;">${escapeAlertHtml(truncateAlert(p.failureReason, 240))}</div>` : ''}
+      `)).join('')}
+    </div>
   `;
 
   const disconnectSection = disconnects.length === 0 ? '' : `
-    <h2 style="color:#fff;font-size:16px;font-weight:700;margin:0 0 12px;">Disconnected accounts (${disconnects.length})</h2>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
-      ${disconnects.map((d) => `
-        <tr>
-          <td style="padding:12px 0;border-bottom:1px solid #1f2937;">
-            <p style="margin:0 0 4px;color:#fff;font-size:14px;font-weight:600;">${escapeAlertHtml(d.clientName)}</p>
-            <p style="margin:0;color:#94a3b8;font-size:12px;">
-              ${escapeAlertHtml(d.platform)}${d.username ? ` · @${escapeAlertHtml(d.username)}` : ''}
-            </p>
-          </td>
-        </tr>
-      `).join('')}
-    </table>
+    ${sectionLabel(`Disconnected accounts (${disconnects.length})`)}
+    <div style="margin:0 0 22px;">
+      ${disconnects.map((d) => card(`
+        <div style="font-size:14px;font-weight:700;color:${brand.textPrimary};margin:0 0 4px;">${escapeAlertHtml(d.clientName)}</div>
+        <div style="font-size:12px;color:${brand.textMuted};margin:0;">
+          ${escapeAlertHtml(d.platform)}${d.username ? ` · @${escapeAlertHtml(d.username)}` : ''}
+        </div>
+      `)).join('')}
+    </div>
   `;
 
   const subjectParts: string[] = [];
@@ -1634,12 +1677,12 @@ export async function sendPostHealthAlertEmail(opts: {
   const subject = `[Cortex] ${subjectParts.join(' · ')}`;
 
   const html = layout(`
-    <p class="subtext">
+    <p class="subtext" style="margin:0 0 22px;">
       The post-health cron picked up new issues. Each row fires once, re-posts and reconnects clear automatically.
     </p>
     ${failedSection}
     ${disconnectSection}
-    <div class="button-wrap">
+    <div class="button-wrap" style="margin-top:6px;">
       <a href="https://cortex.nativz.io/admin/calendar" class="button">Open the calendar &rarr;</a>
     </div>
   `, 'nativz', {
@@ -1684,6 +1727,29 @@ function truncateAlert(s: string, max: number): string {
   return s.length <= max ? s : s.slice(0, max - 1) + '…';
 }
 
+/**
+ * "Here's what we did" revisions card. Used by both the calendar revised-
+ * videos email and the editing re-review email so the visual reads identically
+ * across surfaces. Pass an empty array to hide the card entirely (the caller
+ * should already short-circuit, but the helper degrades safely either way).
+ */
+function renderRevisionsCard(bullets: string[], agency: AgencyBrand): string {
+  if (bullets.length === 0) return '';
+  const brand = getEmailBrand(agency);
+  const items = bullets
+    .map(
+      (b) =>
+        `<li style="color:${brand.textBody};font-size:14px;line-height:1.6;margin:0 0 8px;">${escapeAlertHtml(b)}</li>`,
+    )
+    .join('');
+  return `
+    <div style="margin:22px 0 6px;padding:18px 22px;background:${brand.panelBg};border:1px solid ${brand.border};border-radius:12px;">
+      <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:${brand.textMuted};margin-bottom:10px;">Here's what we did</div>
+      <ul style="margin:0;padding:0 0 0 20px;list-style:disc;">${items}</ul>
+    </div>
+  `;
+}
+
 // ── Editing deliverable email ───────────────────────────────────────────────
 //
 // Mirrors the calendar followup pattern: a default subject + body the admin
@@ -1698,12 +1764,10 @@ export function buildEditingDeliverableDraft(opts: {
   clientName: string;
   projectName: string;
 }): { subject: string; message: string } {
-  const greetingNames = opts.pocFirstNames.length
-    ? opts.pocFirstNames.join(', ')
-    : opts.clientName;
+  const greeting = greetingFor(opts.pocFirstNames, opts.clientName);
   const subject = `Your ${opts.projectName} cuts are ready for review`;
   const message =
-    `Hey ${greetingNames}, the latest cuts for ${opts.projectName} are ready for your review. ` +
+    `${greeting}, the latest cuts for ${opts.projectName} are ready for your review. ` +
     `Tap the button below to watch each video and either approve it or drop comments where you'd like changes.\n\n` +
     `Once you've signed off we'll get everything packaged for delivery.`;
   return { subject, message };
@@ -1775,9 +1839,7 @@ export function buildEditingRereviewDraft(opts: {
   projectName: string;
   pendingCount: number;
 }): { subject: string; message: string } {
-  const greetingNames = opts.pocFirstNames.length
-    ? opts.pocFirstNames.join(', ')
-    : opts.clientName;
+  const greeting = greetingFor(opts.pocFirstNames, opts.clientName);
   const cutWord = opts.pendingCount === 1 ? 'cut' : 'cuts';
   const subject =
     opts.pendingCount > 0
@@ -1785,10 +1847,10 @@ export function buildEditingRereviewDraft(opts: {
       : `Re-review ready for ${opts.projectName}`;
   const body =
     opts.pendingCount > 0
-      ? `Hey ${greetingNames}, we worked through the notes and re-uploaded ${opts.pendingCount} revised ${cutWord} for ${opts.projectName}. ` +
+      ? `${greeting}, we worked through the notes and re-uploaded ${opts.pendingCount} revised ${cutWord} for ${opts.projectName}. ` +
         `Tap the button below to watch the new versions and either approve them or drop more comments.\n\n` +
         `Thanks for the quick turn on the last round.`
-      : `Hey ${greetingNames}, the revised ${opts.projectName} cuts are ready for another look. ` +
+      : `${greeting}, the revised ${opts.projectName} cuts are ready for another look. ` +
         `Tap the button below to watch the new versions and either approve them or drop more comments.`;
   return { subject, message: body };
 }
@@ -1800,6 +1862,11 @@ export async function sendEditingRereviewEmail(opts: {
   projectName: string;
   shareUrl: string;
   pendingCount: number;
+  /** Past-tense action bullets describing what the editor actually changed
+   *  this round (already AI-rephrased upstream). When [] or undefined the
+   *  "Here's what we did" card is hidden entirely - matches the calendar
+   *  revised-videos email so the surfaces feel like one product. */
+  summaryBullets?: string[];
   agency?: AgencyBrand;
   clientId?: string;
   projectId?: string;
@@ -1818,6 +1885,8 @@ export async function sendEditingRereviewEmail(opts: {
   const subject = opts.subjectOverride?.trim() || draft.subject;
   const messageText = opts.messageOverride?.trim() || draft.message;
   const bodyHtml = messageToHtmlParagraphs(messageText);
+  const summaryBullets = opts.summaryBullets ?? [];
+  const summarySection = renderRevisionsCard(summaryBullets, agency);
   return sendAndLog({
     category: 'transactional',
     typeKey: 'editing_rereview',
@@ -1827,6 +1896,7 @@ export async function sendEditingRereviewEmail(opts: {
     subject,
     html: layout(`
       ${bodyHtml}
+      ${summarySection}
       <div class="button-wrap">
         <a href="${opts.shareUrl}" class="btn">Watch the revised cuts</a>
       </div>
@@ -1840,6 +1910,7 @@ export async function sendEditingRereviewEmail(opts: {
       projectId: opts.projectId,
       pocFirstNames: opts.pocFirstNames,
       pendingCount: opts.pendingCount,
+      summaryBulletsCount: summaryBullets.length,
       edited: !!(opts.subjectOverride || opts.messageOverride),
     },
   });

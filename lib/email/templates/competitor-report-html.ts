@@ -94,21 +94,31 @@ function renderCompetitor(
     ? `<p style="margin:8px 0 0;padding:8px 12px;background:${brand.blueSurface};border-radius:6px;color:${brand.textMuted};font-size:11px;line-height:1.4;">⚠ Last scrape warning: ${escapeHtml(c.scrape_error)}</p>`
     : '';
 
+  // Header is rendered as a 2-cell `<table>` instead of flexbox so Outlook +
+  // narrower clients stop colliding the platform pill into the @username
+  // line. The pill stays right-aligned and vertically centered with the
+  // display name; the @username drops to its own muted line below. We also
+  // dropped the duplicate "@user · platform" rendering since the badge
+  // already calls out the platform.
   return `
-  <div style="margin-top:20px;padding:16px;border:1px solid ${brand.borderCard};border-radius:10px;background:${brand.bgCard};">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;">
-      <div>
-        <p style="margin:0;color:${brand.textPrimary};font-size:15px;font-weight:600;">
-          ${escapeHtml(c.display_name ?? c.username)}
-        </p>
-        <p style="margin:2px 0 0;color:${brand.textMuted};font-size:12px;">
-          @${escapeHtml(c.username)} · ${platformLabel}
-        </p>
-      </div>
-      <span style="display:inline-block;padding:2px 8px;border-radius:999px;background:${brand.blueSurface};color:${brand.blue};font-size:10px;text-transform:uppercase;letter-spacing:1px;">
-        ${platformLabel}
-      </span>
-    </div>
+  <div style="margin-top:20px;padding:18px 20px;border:1px solid ${brand.borderCard};border-radius:12px;background:${brand.bgCard};">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+      <tr>
+        <td style="vertical-align:middle;">
+          <p style="margin:0;color:${brand.textPrimary};font-size:15px;font-weight:700;letter-spacing:-0.01em;">
+            ${escapeHtml(c.display_name ?? c.username)}
+          </p>
+          <p style="margin:3px 0 0;color:${brand.textMuted};font-size:12px;">
+            @${escapeHtml(c.username)}
+          </p>
+        </td>
+        <td align="right" style="vertical-align:middle;width:1%;white-space:nowrap;">
+          <span style="display:inline-block;padding:4px 10px;border-radius:999px;background:${brand.blueSurface};color:${brand.blue};font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">
+            ${platformLabel}
+          </span>
+        </td>
+      </tr>
+    </table>
     <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:14px;">
       <tr>
         <td style="padding:6px 12px 6px 0;vertical-align:top;">
@@ -133,7 +143,7 @@ function renderCompetitor(
         </td>
       </tr>
     </table>
-    <p style="margin:14px 0 4px;color:${brand.textMuted};font-size:10px;text-transform:uppercase;letter-spacing:1px;">Top posts this period</p>
+    <p style="margin:18px 0 4px;color:${brand.textMuted};font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;">Top posts this period</p>
     <table cellpadding="0" cellspacing="0" border="0" width="100%">${topPostsHtml}</table>
     ${errorBlock}
   </div>`;

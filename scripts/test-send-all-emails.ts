@@ -82,6 +82,30 @@ const AGENCIES: AgencyBrand[] = ONLY === 'anderson'
 const THROTTLE_MS = 350;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Real production refs pulled from Supabase so the [Test] emails link to live
+// surfaces instead of dead /SAMPLE-TOKEN URLs. Refresh with:
+//   select token from content_drop_share_links order by created_at desc limit 2;
+//   select token from invite_tokens where expires_at > now() ...
+//   select token from team_invite_tokens where expires_at > now() ...
+//   select token from editing_project_share_links order by created_at desc;
+//   select token from connection_invites where expires_at > now() ...
+//   select id::text from topic_searches order by created_at desc limit 1;
+// Onboarding flow refs stay as placeholders since no live flows exist yet.
+const REFS = {
+  teamInviteToken: '0d2dd491cc23e609f0963992114fb59d739886a07d4cb3cbacf52e34964a5bc9',
+  clientInviteToken: 'ce4d4aecf393a1ae02c31ae7b469eb87e6f4b8d1f17eceb23efa46771efb3c82',
+  searchId: '7bdb8ef4-8ba1-42b7-8e05-bfddaabcd1e2',
+  calendarShareToken1: 'a8622471a4ab4e92388d1e3252b198453789dc61fb02103b68bcfb5a24b19c31',
+  calendarShareToken2: 'a932d0ebf8d070192594c6f127faec373b9abd0d54a1fbfc2dc4f09bee64c9e5',
+  editingShareToken: '7875af852723c9fbf590d0ce4398bb375d72aef47c2e9eaba0099f9b815a53b1',
+  connectionInviteToken: 'OltTpvXNFNohIJXGmVkNoH4amqOFTvWV',
+  // No live onboarding flows in prod yet, leave as placeholder UUID-ish so the
+  // URL still parses and the recipient can eyeball the layout.
+  onboardingFlowId: '00000000-0000-0000-0000-onboardingflow',
+  onboardingPocToken: '00000000-0000-0000-0000-onboardingpoc',
+  kickoffScheduleToken: '00000000-0000-0000-0000-kickoffsched',
+} as const;
+
 // ── shared fixtures ─────────────────────────────────────────────────────
 
 function clientNameFor(agency: AgencyBrand): string {
@@ -251,7 +275,7 @@ pushBoth('team_invite', 'Team invite', (agency) => async () => {
     to: TO,
     memberName: 'Jack',
     invitedBy: 'Trevor Anderson',
-    inviteUrl: 'https://cortex.nativz.io/accept-invite/SAMPLE-TOKEN',
+    inviteUrl: `https://cortex.nativz.io/accept-invite/${REFS.teamInviteToken}`,
     agency,
   });
   return { ok: r.ok, id: r.messageId, error: r.error };
@@ -262,7 +286,7 @@ pushBoth('client_invite', 'Client portal invite', (agency) => async () => {
     to: TO,
     contactName: 'Jack',
     clientName: clientNameFor(agency),
-    inviteUrl: 'https://cortex.nativz.io/portal/join/SAMPLE-TOKEN',
+    inviteUrl: `https://cortex.nativz.io/portal/join/${REFS.clientInviteToken}`,
     invitedBy: 'Trevor Anderson',
     agency,
   });
@@ -322,18 +346,44 @@ pushBoth('search_completed', 'Research/search completed', (agency) => async () =
     clientName: clientNameFor(agency),
     summaryPreview:
       'Three angles are trending this week, behind-the-scenes touring footage, day-in-the-life crew content, and gear-pack reveals. The full report breaks each cluster down with example posts and suggested hooks.',
-    resultsUrl: 'https://cortex.nativz.io/research/SAMPLE-ID',
+    resultsUrl: `https://cortex.nativz.io/research/${REFS.searchId}`,
     agency,
   });
   return { ok: r.ok, id: r.messageId, error: r.error };
 });
 
 pushBoth('onboarding_markdown', 'Onboarding (admin → client, markdown)', (agency) => async () => {
+  const portalUrl = agency === 'anderson'
+    ? 'https://cortex.andersoncollaborative.com/portal'
+    : 'https://cortex.nativz.io/portal';
   const r = await sendOnboardingEmail({
     to: TO,
     subject: `[Test] Quick note from ${brandFor(agency)}`,
-    bodyMarkdown:
-      `Hi Jack,\n\nA quick checkpoint, wanted to make sure the kickoff packet landed and you have everything you need to get rolling.\n\n**Outstanding items:**\n- Brand guidelines PDF\n- Logo SVGs (light + dark)\n- Top 3 reference accounts\n\nHappy to jump on a quick call if it's faster than email.\n\nThanks,\nThe ${brandFor(agency)} team`,
+    bodyMarkdown: [
+      `# Hi Jack,`,
+      ``,
+      `A quick checkpoint, wanted to make sure the kickoff packet landed and you have everything you need to get rolling. Below is a snapshot of where things stand.`,
+      ``,
+      `## Where we are`,
+      ``,
+      `Brand brief is in, first round of topic research is queued, and the shoot calendar is roughed in for the next four weeks. We're waiting on three small things from your side before we hit record.`,
+      ``,
+      `**Outstanding items:**`,
+      `- Brand guidelines PDF (current version, even rough)`,
+      `- Logo SVGs, light + dark variants`,
+      `- Top three reference accounts you want us studying`,
+      ``,
+      `## What happens next`,
+      ``,
+      `Once the items above land, we'll lock the shoot dates and send the script outline for round one. You'll see drafts inside the portal before anything goes live, so nothing ships without your sign-off.`,
+      ``,
+      `[Open the client portal](${portalUrl})`,
+      ``,
+      `Happy to jump on a quick call if it's faster than email.`,
+      ``,
+      `Thanks,`,
+      `- The ${brandFor(agency)} team`,
+    ].join('\n'),
     agency,
   });
   return { ok: r.ok, id: r.ok ? r.id : null, error: r.ok ? undefined : r.error };
@@ -363,7 +413,7 @@ for (const status of ['comment', 'approved', 'changes_requested'] as const) {
           : status === 'approved'
           ? 'Locked in, ship it.'
           : 'Quick thought, the hook lands harder if we cut the first second.',
-      dropUrl: 'https://cortex.nativz.io/c/SAMPLE-TOKEN',
+      dropUrl: `https://cortex.nativz.io/c/${REFS.calendarShareToken1}`,
       agency,
     });
     return { ok: r.ok, id: r.messageId, error: r.error };
@@ -378,7 +428,7 @@ pushBoth('calendar_comment_digest', 'Calendar comment digest', (agency) => async
     groups: [
       {
         clientName,
-        dropUrl: 'https://cortex.nativz.io/c/SAMPLE-TOKEN',
+        dropUrl: `https://cortex.nativz.io/c/${REFS.calendarShareToken1}`,
         comments: [
           {
             authorName: 'Trevor Anderson',
@@ -412,8 +462,9 @@ pushBoth('calendar_comment_digest', 'Calendar comment digest', (agency) => async
 pushBoth('calendar_no_open_reminder', 'Calendar no-open reminder', (agency) => async () => {
   const r = await sendCalendarNoOpenReminderEmail({
     to: TO,
+    pocFirstNames: ['Jack'],
     clientName: clientNameFor(agency),
-    shareUrl: 'https://cortex.nativz.io/c/SAMPLE-TOKEN',
+    shareUrl: `https://cortex.nativz.io/c/${REFS.calendarShareToken1}`,
     hours: 18,
     pending: 9,
     total: 9,
@@ -425,8 +476,9 @@ pushBoth('calendar_no_open_reminder', 'Calendar no-open reminder', (agency) => a
 pushBoth('calendar_no_action_reminder', 'Calendar no-action reminder', (agency) => async () => {
   const r = await sendCalendarNoActionReminderEmail({
     to: TO,
+    pocFirstNames: ['Jack'],
     clientName: clientNameFor(agency),
-    shareUrl: 'https://cortex.nativz.io/c/SAMPLE-TOKEN',
+    shareUrl: `https://cortex.nativz.io/c/${REFS.calendarShareToken1}`,
     hours: 36,
     pending: 4,
     total: 9,
@@ -440,7 +492,7 @@ pushBoth('calendar_followup', 'Calendar followup nudge', (agency) => async () =>
     to: TO,
     pocFirstNames: ['Jack', 'Trevor'],
     clientName: clientNameFor(agency),
-    shareUrl: 'https://cortex.nativz.io/c/SAMPLE-TOKEN',
+    shareUrl: `https://cortex.nativz.io/c/${REFS.calendarShareToken1}`,
     agency,
   });
   return { ok: r.ok, id: r.messageId, error: r.error };
@@ -449,8 +501,9 @@ pushBoth('calendar_followup', 'Calendar followup nudge', (agency) => async () =>
 pushBoth('calendar_final_call', 'Calendar final call', (agency) => async () => {
   const r = await sendCalendarFinalCallEmail({
     to: TO,
+    pocFirstNames: ['Jack'],
     clientName: clientNameFor(agency),
-    shareUrl: 'https://cortex.nativz.io/c/SAMPLE-TOKEN',
+    shareUrl: `https://cortex.nativz.io/c/${REFS.calendarShareToken1}`,
     firstPostAt: 'Sunday at 9am',
     pending: 3,
     total: 9,
@@ -467,7 +520,7 @@ pushBoth('calendar_delivery', 'Calendar delivery (single)', (agency) => async ()
     postCount: 12,
     startDate: '2026-05-03',
     endDate: '2026-05-30',
-    shareUrl: 'https://cortex.nativz.io/c/SAMPLE-TOKEN',
+    shareUrl: `https://cortex.nativz.io/c/${REFS.calendarShareToken1}`,
     firstRoundIntro: true,
     agency,
   });
@@ -484,14 +537,14 @@ pushBoth('combined_calendar_delivery', 'Calendar delivery (combined / multi-bran
         postCount: 12,
         startDate: '2026-05-03',
         endDate: '2026-05-30',
-        shareUrl: 'https://cortex.nativz.io/c/SAMPLE-1',
+        shareUrl: `https://cortex.nativz.io/c/${REFS.calendarShareToken1}`,
       },
       {
         clientName: agency === 'anderson' ? 'Lake Charles Visitors Bureau' : 'Beaux',
         postCount: 8,
         startDate: '2026-05-03',
         endDate: '2026-05-26',
-        shareUrl: 'https://cortex.nativz.io/c/SAMPLE-2',
+        shareUrl: `https://cortex.nativz.io/c/${REFS.calendarShareToken2}`,
       },
     ],
     firstRoundIntro: false,
@@ -505,7 +558,7 @@ pushBoth('calendar_share_send_initial', 'Calendar share send (initial)', (agency
     to: TO,
     pocFirstNames: ['Jack'],
     clientName: clientNameFor(agency),
-    shareUrl: 'https://cortex.nativz.io/c/SAMPLE-TOKEN',
+    shareUrl: `https://cortex.nativz.io/c/${REFS.calendarShareToken1}`,
     variant: 'initial',
     postCount: 12,
     startDate: '2026-05-03',
@@ -520,7 +573,7 @@ pushBoth('calendar_share_send_revised', 'Calendar share send (revised)', (agency
     to: TO,
     pocFirstNames: ['Jack'],
     clientName: clientNameFor(agency),
-    shareUrl: 'https://cortex.nativz.io/c/SAMPLE-TOKEN',
+    shareUrl: `https://cortex.nativz.io/c/${REFS.calendarShareToken1}`,
     variant: 'revised',
     postCount: 12,
     startDate: '2026-05-03',
@@ -533,8 +586,9 @@ pushBoth('calendar_share_send_revised', 'Calendar share send (revised)', (agency
 pushBoth('calendar_revisions_complete', 'Calendar revisions complete', (agency) => async () => {
   const r = await sendCalendarRevisionsCompleteEmail({
     to: TO,
+    pocFirstNames: ['Jack'],
     clientName: clientNameFor(agency),
-    shareUrl: 'https://cortex.nativz.io/c/SAMPLE-TOKEN',
+    shareUrl: `https://cortex.nativz.io/c/${REFS.calendarShareToken1}`,
     agency,
   });
   return { ok: r.ok, id: r.messageId, error: r.error };
@@ -545,7 +599,7 @@ pushBoth('calendar_revised_videos', 'Calendar revised videos', (agency) => async
     to: TO,
     pocFirstNames: ['Jack'],
     clientName: clientNameFor(agency),
-    shareUrl: 'https://cortex.nativz.io/c/SAMPLE-TOKEN',
+    shareUrl: `https://cortex.nativz.io/c/${REFS.calendarShareToken1}`,
     summaryBullets: [
       'Re-cut the opener to drop the first second so the hook lands harder.',
       'Swapped the 0:14 b-roll for a wider crew shot.',
@@ -601,7 +655,7 @@ pushBoth('editing_deliverable', 'Editing deliverable', (agency) => async () => {
     pocFirstNames: ['Jack'],
     clientName: clientNameFor(agency),
     projectName: 'Spring Wave 1',
-    shareUrl: 'https://cortex.nativz.io/c/edit/SAMPLE-TOKEN',
+    shareUrl: `https://cortex.nativz.io/c/edit/${REFS.editingShareToken}`,
     agency,
   });
   return { ok: r.ok, id: r.messageId, error: r.error };
@@ -613,7 +667,7 @@ pushBoth('editing_rereview', 'Editing re-review', (agency) => async () => {
     pocFirstNames: ['Jack'],
     clientName: clientNameFor(agency),
     projectName: 'Spring Wave 1',
-    shareUrl: 'https://cortex.nativz.io/c/edit/SAMPLE-TOKEN',
+    shareUrl: `https://cortex.nativz.io/c/edit/${REFS.editingShareToken}`,
     pendingCount: 3,
     agency,
   });
@@ -732,7 +786,7 @@ pushBoth('connection_invite', 'Connection invite (reconnect socials)', (agency) 
     <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${muted};margin:26px 0 4px;">What happens next</div>
     <table role="presentation" cellspacing="0" cellpadding="0" width="100%" style="border-collapse:collapse;border-top:1px solid ${border};">${stepRows}</table>
     <div class="button-wrap" style="text-align:center;margin:26px 0 4px;">
-      <a class="button" href="https://cortex.nativz.io/connect/invite/SAMPLE-TOKEN">Reconnect accounts &rarr;</a>
+      <a class="button" href="https://cortex.nativz.io/connect/invite/${REFS.connectionInviteToken}">Reconnect accounts &rarr;</a>
     </div>
     <p style="font-size:12px;color:${muted};margin:8px 0 0;line-height:1.55;text-align:center;">
       Link valid for 30 days &middot; ${platforms.length} accounts &middot; ${clientName}
@@ -761,8 +815,8 @@ pushBoth('connection_invite', 'Connection invite (reconnect socials)', (agency) 
 pushBoth('flow_poc_invite', 'Onboarding · POC invite', (agency) => async () => {
   const clientName = clientNameFor(agency);
   const url = agency === 'anderson'
-    ? 'https://cortex.andersoncollaborative.com/onboarding/sample?token=SAMPLE'
-    : 'https://cortex.nativz.io/onboarding/sample?token=SAMPLE';
+    ? `https://cortex.andersoncollaborative.com/onboarding/${REFS.onboardingFlowId}?token=${REFS.onboardingPocToken}`
+    : `https://cortex.nativz.io/onboarding/${REFS.onboardingFlowId}?token=${REFS.onboardingPocToken}`;
   const inner = `
     <p class="subtext">
       Your agreement is signed and the deposit cleared, thank you. The next
@@ -796,8 +850,8 @@ pushBoth('flow_poc_invite', 'Onboarding · POC invite', (agency) => async () => 
 pushBoth('flow_poc_reminder', 'Onboarding · POC reminder', (agency) => async () => {
   const clientName = clientNameFor(agency);
   const url = agency === 'anderson'
-    ? 'https://cortex.andersoncollaborative.com/onboarding/sample?token=SAMPLE'
-    : 'https://cortex.nativz.io/onboarding/sample?token=SAMPLE';
+    ? `https://cortex.andersoncollaborative.com/onboarding/${REFS.onboardingFlowId}?token=${REFS.onboardingPocToken}`
+    : `https://cortex.nativz.io/onboarding/${REFS.onboardingFlowId}?token=${REFS.onboardingPocToken}`;
   const inner = `
     <p class="subtext">
       Just bumping this to the top of your inbox. Your setup checklist
@@ -830,8 +884,8 @@ pushBoth('flow_poc_reminder', 'Onboarding · POC reminder', (agency) => async ()
 
 pushBoth('flow_stakeholder_milestone', 'Onboarding · Stakeholder milestone', (agency) => async () => {
   const clientName = clientNameFor(agency);
-  const flowUrl = 'https://cortex.nativz.io/admin/onboarding/SAMPLE-FLOW-ID';
-  const kickoffShareUrl = 'https://cortex.nativz.io/schedule/SAMPLE-TOKEN';
+  const flowUrl = `https://cortex.nativz.io/admin/onboarding/${REFS.onboardingFlowId}`;
+  const kickoffShareUrl = `https://cortex.nativz.io/schedule/${REFS.kickoffScheduleToken}`;
   // Match the production builder in lib/onboarding/system-emails.ts:
   // - headline drops the client name (the hero title already prefixes it)
   // - secondary CTA is an outline button, not a text link
@@ -863,7 +917,7 @@ pushBoth('flow_stakeholder_milestone', 'Onboarding · Stakeholder milestone', (a
 
 pushBoth('flow_no_progress', 'Onboarding · No-progress flag (5 days)', (agency) => async () => {
   const clientName = clientNameFor(agency);
-  const flowUrl = 'https://cortex.nativz.io/admin/onboarding/SAMPLE-FLOW-ID';
+  const flowUrl = `https://cortex.nativz.io/admin/onboarding/${REFS.onboardingFlowId}`;
   const inner = `
     <p class="subtext">
       No POC activity on this onboarding flow for 5 days. Worth a personal
