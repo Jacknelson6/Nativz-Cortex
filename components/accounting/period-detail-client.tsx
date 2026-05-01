@@ -19,11 +19,12 @@ import { SubmitTokensDialog } from './submit-tokens-dialog';
 import { ComptrollerShareDialog } from './comptroller-share-dialog';
 import { EntriesGrid, type GridEntry } from './entries-grid';
 import { PayoutsPane } from './payouts-pane';
+import { MarginPane } from './margin-pane';
 
 // DB still accepts 'override' and 'misc' (schema unchanged). They're
 // just not exposed as tabs in the UI per product call.
 type EntryType = 'editing' | 'smm' | 'affiliate' | 'blogging';
-type TabKey = 'overview' | 'payouts' | EntryType;
+type TabKey = 'overview' | 'payouts' | 'margin' | EntryType;
 
 interface TeamMember { id: string; full_name: string | null; role: string | null }
 interface Client {
@@ -60,12 +61,13 @@ const ENTRY_TYPE_LABELS: Record<EntryType, string> = {
 const SERVICE_TAB_LABELS: Record<TabKey, string> = {
   overview: 'Overview',
   payouts: 'Payouts',
+  margin: 'Margin',
   editing: 'Editing',
   smm: 'SMM',
   affiliate: 'Affiliate',
   blogging: 'Blogging',
 };
-const SERVICE_TAB_ORDER: TabKey[] = ['overview', 'payouts', 'editing', 'smm', 'affiliate', 'blogging'];
+const SERVICE_TAB_ORDER: TabKey[] = ['overview', 'payouts', 'margin', 'editing', 'smm', 'affiliate', 'blogging'];
 
 export function PeriodDetailClient({
   period,
@@ -120,6 +122,7 @@ export function PeriodDetailClient({
       let count: number;
       if (slug === 'overview') count = entries.length;
       else if (slug === 'payouts') count = payoutPayeeCount;
+      else if (slug === 'margin') count = entriesByService.editing.length;
       else count = entriesByService[slug].length;
       return {
         slug,
@@ -220,6 +223,13 @@ export function PeriodDetailClient({
           periodLabel={period.label}
           entries={entries}
           clients={clients}
+        />
+      ) : activeTab === 'margin' ? (
+        <MarginPane
+          periodLabel={period.label}
+          entries={entries}
+          clients={clients}
+          teamMembers={teamMembers}
         />
       ) : (
         <EntriesGrid
