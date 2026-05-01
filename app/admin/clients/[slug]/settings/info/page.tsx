@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import { FileUser, Users, Plug } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ClientContactsCard } from '@/components/clients/client-contacts-card';
+import { getBrandFromAgency } from '@/lib/agency/detect';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 import { ClientFlowStateCard } from '@/components/clients/client-flow-state-card';
 import { IntegrationsTable } from '@/components/clients/settings/integrations-table';
 import { InfoCard } from '@/components/clients/settings/info-card';
@@ -92,6 +94,76 @@ export default async function ClientSettingsInfoPage({
   const brandDnaUpdatedAt = dnaRow.data?.updated_at ?? null;
   const brandProfileHref = `/brand-profile?client=${encodeURIComponent(client.slug ?? slug)}`;
 
+  // Pre-fetch contacts + invites in parallel so the contacts card paints
+  // populated on first render. Portal users still hydrate client-side because
+  // the existing endpoint scopes by user_client_access correctly and isn't a
+  // hot path; the loading flash Jack flagged was the contacts + invites pair.
+  const [contactsRes, invitesRes] = await Promise.all([
+    admin
+      .from('contacts')
+      .select('id, client_id, name, email, phone, role, project_role, is_primary, created_at')
+      .eq('client_id', client.id)
+      .order('is_primary', { ascending: false })
+      .order('name', { ascending: true }),
+    admin
+      .from('invite_tokens')
+      .select('id, token, email, expires_at, used_at, used_by, created_at, created_by')
+      .eq('client_id', client.id)
+      .order('created_at', { ascending: false }),
+  ]);
+
+  const initialContacts = (contactsRes.data ?? []) as Array<{
+    id: string;
+    client_id: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    role: string | null;
+    project_role: string | null;
+    is_primary: boolean;
+    created_at: string;
+  }>;
+
+  // Replicate /api/invites GET enrichment server-side: agency-aware base URL,
+  // computed status, used_by lookup. Keeping this in lockstep with the API
+  // route is the price of skipping the client-side fetch.
+  const inviteRows = invitesRes.data ?? [];
+  const usedByIds = inviteRows.map((i) => i.used_by).filter((u): u is string => !!u);
+  const usedByMap: Record<string, { email: string; full_name: string }> = {};
+  if (usedByIds.length > 0) {
+    const { data: usedByUsers } = await admin
+      .from('users')
+      .select('id, email, full_name')
+      .in('id', usedByIds);
+    for (const u of usedByUsers ?? []) {
+      usedByMap[u.id] = { email: u.email, full_name: u.full_name };
+    }
+  }
+
+  const inviteAgency = getBrandFromAgency(client.agency);
+  const inviteBaseUrl = getCortexAppUrl(inviteAgency);
+  // eslint-disable-next-line react-hooks/purity -- server component, runs once per request
+  const nowMs = Date.now();
+  const initialInvites = inviteRows.map((inv) => {
+    const expired = new Date(inv.expires_at).getTime() < nowMs;
+    const status: 'used' | 'expired' | 'active' = inv.used_at
+      ? 'used'
+      : expired
+      ? 'expired'
+      : 'active';
+    return {
+      id: inv.id,
+      token: inv.token,
+      email: inv.email ?? null,
+      invite_url: `${inviteBaseUrl}/join/${inv.token}`,
+      status,
+      expires_at: inv.expires_at,
+      used_at: inv.used_at,
+      used_by: inv.used_by ? usedByMap[inv.used_by] ?? null : null,
+      created_at: inv.created_at,
+    };
+  });
+
   return (
     <div className="space-y-4">
       <SettingsPageHeader
@@ -178,6 +250,8 @@ export default async function ClientSettingsInfoPage({
           bare
           clientId={client.id}
           clientName={client.name ?? ''}
+          initialContacts={initialContacts}
+          initialInvites={initialInvites}
         />
       </InfoCard>
 

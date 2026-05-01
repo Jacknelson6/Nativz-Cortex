@@ -73,6 +73,10 @@ interface ClientContactsCardProps {
   clientName: string;
   vaultContacts?: VaultContact[];
   portalContacts?: PortalUser[];
+  /** Eager-loaded contacts from the server. Skip the initial fetch when present. */
+  initialContacts?: Contact[];
+  /** Eager-loaded invites from the server. Skip the initial fetch when present. */
+  initialInvites?: InviteRow[];
   /** When true, drops the outer Card chrome so the caller can embed it
    *  inside an InfoCard / equivalent surface. */
   bare?: boolean;
@@ -110,12 +114,15 @@ export function ClientContactsCard({
   clientName,
   vaultContacts = [],
   portalContacts: initialPortalContacts = [],
+  initialContacts,
+  initialInvites,
   bare = false,
 }: ClientContactsCardProps) {
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const hasInitialData = initialContacts !== undefined && initialInvites !== undefined;
+  const [contacts, setContacts] = useState<Contact[]>(initialContacts ?? []);
   const [portalUsers, setPortalUsers] = useState<PortalUser[]>(initialPortalContacts);
-  const [invites, setInvites] = useState<InviteRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [invites, setInvites] = useState<InviteRow[]>(initialInvites ?? []);
+  const [loading, setLoading] = useState(!hasInitialData);
   const [saving, setSaving] = useState(false);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
@@ -164,7 +171,14 @@ export function ClientContactsCard({
     }
   }, [clientId]);
 
-  useEffect(() => { reload(); }, [reload]);
+  // Skip the initial fetch when the parent has already eager-loaded contacts +
+  // invites on the server. `reload` still runs after every mutation to keep
+  // post-action state accurate; this only avoids the "blank then populate"
+  // flash on first paint.
+  useEffect(() => {
+    if (hasInitialData) return;
+    reload();
+  }, [reload, hasInitialData]);
 
   const merged: MergedRow[] = useMemo(() => {
     const byEmail = new Map<string, MergedRow>();
