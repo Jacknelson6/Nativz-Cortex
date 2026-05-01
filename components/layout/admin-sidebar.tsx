@@ -102,18 +102,15 @@ const NAV_SECTIONS: NavSection[] = [
       { href: '/lab', label: 'Strategy Lab', icon: MessagesSquare },
       {
         // "Content" parent — splits the old flat Calendar row into a
-        // 2-child accordion (Calendar + Review). Default child stays
-        // /admin/calendar so existing bookmarks land on the scheduler;
-        // Review is the new share-link inventory subpage.
-        href: '/admin/calendar',
+        // 2-child accordion (Calendar + Review). Calendar lives at brand-
+        // root /calendar (no /admin/ prefix) so the same URL serves admin
+        // and viewer; the page body branches on role. Same brand-root
+        // pattern as /review, /brand-profile, /lab, /spying.
+        href: '/calendar',
         label: 'Content',
         icon: CalendarDays,
         children: [
-          { href: '/admin/calendar', label: 'Calendar', icon: CalendarDays },
-          // Review is brand-scoped, lives at root /review (no /admin/
-          // prefix — same brand-root pattern as /brand-profile, /lab,
-          // /spying). Same URL serves admin and viewer; the page body
-          // branches on role.
+          { href: '/calendar', label: 'Calendar', icon: CalendarDays },
           { href: '/review', label: 'Review', icon: ClipboardCheck },
         ],
       },
@@ -265,12 +262,11 @@ const PORTAL_HREF_REWRITES: Record<string, string> = {
 /**
  * Unified-shell href rewrites for viewers. When a NAV_SECTIONS item lives
  * under /admin/* but the viewer mirror lives at root (no /admin/ prefix),
- * we can't naively keep the admin href. Calendar is the first case: admins
- * use /admin/calendar (rich edit surface), viewers use /calendar (read-only).
+ * we can't naively keep the admin href. Currently empty — calendar is now
+ * served at /calendar for both roles, matching the brand-root pattern used
+ * by /review, /brand-profile, /lab, /spying.
  */
-const VIEWER_UNIFIED_HREFS: Record<string, string> = {
-  '/admin/calendar': '/calendar',
-};
+const VIEWER_UNIFIED_HREFS: Record<string, string> = {};
 
 function getNavSectionsForRole(role: 'admin' | 'viewer', prefix: string): NavSection[] {
   if (role === 'admin') return NAV_SECTIONS;

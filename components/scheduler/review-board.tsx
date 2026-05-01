@@ -132,7 +132,7 @@ interface ReviewBoardProps {
 
 export function ReviewBoard({
   isAdmin,
-  createHref = '/admin/calendar',
+  createHref = '/calendar',
   clientId = null,
   title,
   description,

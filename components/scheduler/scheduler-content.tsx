@@ -90,7 +90,7 @@ function SchedulerInner({
     const connected = searchParams.get('connected');
     if (connected) {
       toast.success(`${connected.charAt(0).toUpperCase() + connected.slice(1)} connected`);
-      router.replace('/admin/calendar', { scroll: false });
+      router.replace('/calendar', { scroll: false });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -433,7 +433,7 @@ function SchedulerInner({
           onCreated={(id) => {
             setShowNewDrop(false);
             toast.success('Content calendar created — analysing content…');
-            router.push(`/admin/calendar/${id}`);
+            router.push(`/calendar/${id}`);
           }}
         />
       )}
