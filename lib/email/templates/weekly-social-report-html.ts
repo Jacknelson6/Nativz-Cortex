@@ -44,9 +44,9 @@ function prettyPlatform(p: string): string {
 }
 
 /**
- * Brand-tinted swatch shown when a top post has no thumbnail. Renders the
- * platform's first letter inside a soft rounded square so the row still feels
- * intentional instead of an empty grey block. Uses inline-only styles for
+ * Brand-tinted 9:16 swatch shown when a top post has no thumbnail. Matches
+ * the portrait aspect of short-form video so the row reads as a natural
+ * video preview slot, not a blank square. Uses inline-only styles for
  * Outlook/Gmail compatibility.
  */
 function platformSwatch(platform: string, brand: typeof NATIVZ | typeof AC): string {
@@ -54,7 +54,7 @@ function platformSwatch(platform: string, brand: typeof NATIVZ | typeof AC): str
   return `
     <div style="
       width:64px;
-      height:64px;
+      height:114px;
       border-radius:8px;
       background:linear-gradient(135deg, ${brand.blueSurface} 0%, ${brand.borderCard} 100%);
       color:${brand.blue};
@@ -62,7 +62,7 @@ function platformSwatch(platform: string, brand: typeof NATIVZ | typeof AC): str
       font-size:24px;
       font-weight:700;
       letter-spacing:-0.02em;
-      line-height:64px;
+      line-height:114px;
       text-align:center;
     ">${letter}</div>`;
 }
@@ -121,28 +121,19 @@ export function buildWeeklySocialReportCardHtml(opts: {
       </tr>
     </table>`;
 
-  // Per-platform followers breakdown
-  const platformRows = report.followers.perPlatform.length
-    ? report.followers.perPlatform
-        .map(
-          (p) => `
-      <tr>
-        <td style="padding:8px 0;border-bottom:1px solid ${BRAND.borderCard};color:${BRAND.textBody};font-size:13px;">${prettyPlatform(p.platform)}</td>
-        <td style="padding:8px 0;border-bottom:1px solid ${BRAND.borderCard};color:${BRAND.textMuted};font-size:13px;text-align:right;">${fmtInt(p.current)}</td>
-        <td style="padding:8px 0;border-bottom:1px solid ${BRAND.borderCard};color:${BRAND.textBody};font-size:13px;text-align:right;font-weight:600;">${fmtDelta(p.delta)}</td>
-      </tr>`,
-        )
-        .join('')
-    : `<tr><td colspan="3" style="padding:12px 0;color:${BRAND.textMuted};font-size:13px;">No follower snapshots in range.</td></tr>`;
-
-  // Top 3 posts. We render real thumbnails when available and fall back to a
-  // platform-tinted swatch with the platform's first letter when not - empty
-  // grey boxes were reading as "broken image" in inboxes.
+  // Top 3 posts. Thumbnails are rendered at 9:16 (short-form video aspect)
+  // so the row reads as a video preview, not a generic 64x64 chip. We pull
+  // the real platform thumbnail when available and fall back to a brand-
+  // tinted portrait swatch when not - empty grey boxes read as "broken
+  // image" in inboxes.
+  // NOTE: per Jack's call, platform attribution is intentionally NOT shown
+  // on individual posts - the per-platform breakdown was removed for the
+  // same data-accuracy reason. Captions + metrics carry the row.
   const topPostsRows = report.topPosts.length
     ? report.topPosts
         .map((p) => {
           const thumb = p.thumbnailUrl
-            ? `<img src="${escapeHtml(p.thumbnailUrl)}" width="64" height="64" alt="" style="display:block;border-radius:8px;object-fit:cover;" />`
+            ? `<img src="${escapeHtml(p.thumbnailUrl)}" width="64" height="114" alt="" style="display:block;border-radius:8px;object-fit:cover;" />`
             : platformSwatch(p.platform, BRAND);
           const link = p.postUrl
             ? `<a href="${escapeHtml(p.postUrl)}" style="color:${BRAND.blue};text-decoration:none;font-weight:600;">View &rarr;</a>`
@@ -151,8 +142,7 @@ export function buildWeeklySocialReportCardHtml(opts: {
       <tr>
         <td style="padding:12px 0;border-bottom:1px solid ${BRAND.borderCard};vertical-align:top;width:76px;">${thumb}</td>
         <td style="padding:12px 0 12px 14px;border-bottom:1px solid ${BRAND.borderCard};vertical-align:top;">
-          <p style="margin:0;color:${BRAND.textPrimary};font-size:13px;font-weight:600;letter-spacing:0.01em;">${prettyPlatform(p.platform)}</p>
-          <p style="margin:4px 0 0 0;color:${BRAND.textBody};font-size:13px;line-height:1.5;">${escapeHtml(clip(p.caption, 110))}</p>
+          <p style="margin:0;color:${BRAND.textBody};font-size:13px;line-height:1.5;">${escapeHtml(clip(p.caption, 110))}</p>
           <p style="margin:6px 0 0 0;color:${BRAND.textMuted};font-size:11px;">
             ${fmtInt(p.views)} views
             <span style="color:${BRAND.borderCard};">&nbsp;|&nbsp;</span>
@@ -165,49 +155,12 @@ export function buildWeeklySocialReportCardHtml(opts: {
         .join('')
     : `<tr><td style="padding:12px 0;color:${BRAND.textMuted};font-size:13px;">No published posts in range.</td></tr>`;
 
-  // Upcoming shoots (only render block when there's at least one)
-  const upcomingBlock = report.upcomingShoots.length
-    ? `
-        <hr class="divider" />
-        <p class="detail-label">Upcoming shoots this week</p>
-        <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:8px;">
-          ${report.upcomingShoots
-            .map((u) => {
-              const dateStr = new Date(`${u.shootDate}T12:00:00Z`).toLocaleDateString('en-US', {
-                weekday: 'short',
-                month: 'short',
-                day: 'numeric',
-              });
-              return `<tr>
-            <td style="padding:8px 0;border-bottom:1px solid ${BRAND.borderCard};color:${BRAND.textPrimary};font-size:13px;font-weight:600;width:140px;">${escapeHtml(dateStr)}</td>
-            <td style="padding:8px 0;border-bottom:1px solid ${BRAND.borderCard};color:${BRAND.textBody};font-size:13px;">${escapeHtml(clip(u.notes, 120)) || '-'}</td>
-          </tr>`;
-            })
-            .join('')}
-        </table>`
-    : '';
-
   return `
       <p class="subtext">${safeClient} &middot; ${safeRange}</p>
         ${kpiRow}
 
-        <p class="detail-label">Followers by platform</p>
-        <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:8px;">
-          <thead>
-            <tr>
-              <th align="left" style="padding:8px 0;color:${BRAND.textMuted};font-size:10px;text-transform:uppercase;letter-spacing:0.8px;">Platform</th>
-              <th align="right" style="padding:8px 0;color:${BRAND.textMuted};font-size:10px;text-transform:uppercase;letter-spacing:0.8px;">Current</th>
-              <th align="right" style="padding:8px 0;color:${BRAND.textMuted};font-size:10px;text-transform:uppercase;letter-spacing:0.8px;">Δ this week</th>
-            </tr>
-          </thead>
-          <tbody>${platformRows}</tbody>
-        </table>
-
-        <hr class="divider" />
         <p class="detail-label">Top 3 posts (${fmtInt(report.aggregates.posts)} published)</p>
         <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:8px;">
           <tbody>${topPostsRows}</tbody>
-        </table>
-
-        ${upcomingBlock}`;
+        </table>`;
 }

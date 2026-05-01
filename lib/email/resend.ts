@@ -934,7 +934,7 @@ export async function sendCalendarNoOpenReminderEmail(opts: {
       </div>
     `, agency, {
       eyebrow: 'Calendar Reminder',
-      heroTitle: `${opts.pending} of ${opts.total} ${opts.pending === 1 ? 'post' : 'posts'} still need your review`,
+      heroTitle: `${opts.pending} ${noun} still need your review.`,
     }),
     metadata: { clientName: opts.clientName, pocFirstNames: opts.pocFirstNames ?? [], hours: opts.hours, pending: opts.pending, total: opts.total },
   });
@@ -960,8 +960,8 @@ export async function sendCalendarNoActionReminderEmail(opts: {
   const partialAction = opts.pending < opts.total;
   const greeting = greetingFor(opts.pocFirstNames ?? [], opts.clientName);
   const body = partialAction
-    ? `${greeting}, you've reviewed some of the calendar already, thanks for that. ${opts.pending} of ${opts.total} ${noun} still need your eyes. Hit reply or drop comments directly on the posts.`
-    : `${greeting}, you opened the calendar but the ${opts.total} ${opts.total === 1 ? 'post' : 'posts'} still need your review. Hit reply or drop comments directly on the posts.`;
+    ? `${greeting}, you've reviewed some of the calendar already, thanks for that. ${opts.pending} ${noun} still need your eyes. Hit reply or drop comments directly on the posts.`
+    : `${greeting}, you opened the calendar but ${opts.pending} ${noun} still need your review. Hit reply or drop comments directly on the posts.`;
   return sendAndLog({
     category: 'transactional',
     typeKey: 'calendar_no_action_reminder',
@@ -977,7 +977,7 @@ export async function sendCalendarNoActionReminderEmail(opts: {
       </div>
     `, agency, {
       eyebrow: 'Calendar Reminder',
-      heroTitle: `${opts.pending} of ${opts.total} ${noun} still need your review`,
+      heroTitle: `${opts.pending} ${noun} still need your review.`,
     }),
     metadata: { clientName: opts.clientName, hours: opts.hours, pending: opts.pending, total: opts.total },
   });
@@ -1093,7 +1093,7 @@ export async function sendCalendarFinalCallEmail(opts: {
 }) {
   const agency = opts.agency ?? 'nativz';
   const noun = opts.pending === 1 ? 'post' : 'posts';
-  const subject = `${opts.pending} ${noun} still pending, first post goes live ${opts.firstPostAt}`;
+  const subject = `${opts.pending} ${noun} still need your review before launch`;
   const greeting = greetingFor(opts.pocFirstNames ?? [], opts.clientName);
   return sendAndLog({
     category: 'transactional',
@@ -1104,14 +1104,14 @@ export async function sendCalendarFinalCallEmail(opts: {
     dropId: opts.dropId,
     subject,
     html: layout(`
-      <p class="subtext">${greeting}, your first scheduled post goes live ${opts.firstPostAt}. ${opts.pending} of ${opts.total} ${noun} still ${opts.pending === 1 ? 'needs' : 'need'} your sign-off, so unless you flag something we'll publish on the dates you saw in the calendar.</p>
+      <p class="subtext">${greeting}, your first scheduled post is set for ${opts.firstPostAt}. ${opts.pending} ${noun} still need your review. Without your approval, ${opts.pending === 1 ? 'it stays' : 'they stay'} as ${opts.pending === 1 ? 'a draft' : 'drafts'} and nothing goes live.</p>
       <p class="subtext" style="margin-top:10px;">If anything needs to change, drop a comment on the post or hit reply now.</p>
       <div class="button-wrap">
         <a href="${opts.shareUrl}" class="button">Open the calendar &rarr;</a>
       </div>
     `, agency, {
       eyebrow: 'Final Call',
-      heroTitle: 'Final call before we publish',
+      heroTitle: 'Approve before launch',
     }),
     metadata: { clientName: opts.clientName, pocFirstNames: opts.pocFirstNames ?? [], firstPostAt: opts.firstPostAt, pending: opts.pending, total: opts.total },
   });
