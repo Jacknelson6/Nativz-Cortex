@@ -3,6 +3,9 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getPostingService } from '@/lib/posting';
 import type { SocialPlatform } from '@/lib/posting/types';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
+import { notifyAdmins } from '@/lib/notifications';
+
+const STALE_ALERT_PREFIX = 'Stale draft: scheduled time passed without approval';
 
 export const maxDuration = 300;
 
@@ -66,14 +69,14 @@ async function handleGet(request: NextRequest) {
       return NextResponse.json({ error: 'Query failed' }, { status: 500 });
     }
 
-    if (!pendingPosts?.length) {
-      return NextResponse.json({ message: 'No posts to publish', count: 0 });
-    }
-
     let publishedCount = 0;
     let failedCount = 0;
+    let staleAlertedCount = 0;
 
-    for (const post of pendingPosts) {
+    // Note: don't early-return on empty pendingPosts — we still need to
+    // run the stale-draft scan below.
+
+    for (const post of pendingPosts ?? []) {
       try {
         // APPROVAL GATE — defense in depth.
         //
@@ -333,10 +336,87 @@ async function handleGet(request: NextRequest) {
       }
     }
 
+    // STALE-DRAFT SCAN
+    //
+    // Drop posts whose scheduled_at has passed but never got an approval
+    // comment will sit in 'draft' forever. The cron's publish loop never
+    // touches draft rows, so we'd silently miss the post date with no
+    // signal to anyone. Per Jack's invariant: unapproved posts MUST NEVER
+    // publish, but they SHOULD ping us so we can chase the client for
+    // approval (or pull the post). We notify once per stale draft (dedup
+    // by stamping `failure_reason`) and leave the row in 'draft' so it
+    // can still be approved → published if the client comes through late.
+    try {
+      const nowIso = new Date().toISOString();
+      const { data: staleCandidates } = await adminClient
+        .from('scheduled_posts')
+        .select('id, client_id, caption, scheduled_at, failure_reason')
+        .eq('status', 'draft')
+        .lt('scheduled_at', nowIso)
+        .limit(50);
+
+      const candidates = (staleCandidates ?? []).filter((p) => {
+        const reason = (p as { failure_reason: string | null }).failure_reason;
+        return !reason || !reason.startsWith(STALE_ALERT_PREFIX);
+      });
+
+      if (candidates.length > 0) {
+        const candidateIds = candidates.map((p) => (p as { id: string }).id);
+        const { data: dropRows } = await adminClient
+          .from('content_drop_videos')
+          .select('scheduled_post_id')
+          .in('scheduled_post_id', candidateIds);
+        const dropPostIds = new Set(
+          (dropRows ?? []).map(
+            (r) => (r as { scheduled_post_id: string }).scheduled_post_id,
+          ),
+        );
+
+        const staleDropPosts = candidates.filter((p) =>
+          dropPostIds.has((p as { id: string }).id),
+        );
+
+        for (const post of staleDropPosts) {
+          const row = post as {
+            id: string;
+            client_id: string;
+            caption: string | null;
+            scheduled_at: string;
+          };
+          const caption = (row.caption ?? '').substring(0, 80);
+          try {
+            await notifyAdmins({
+              type: 'post_failed',
+              title: 'Drop post past due without approval',
+              body: `Post scheduled for ${new Date(row.scheduled_at).toLocaleString()} is still in draft (no approval comment). Caption: "${caption}${(row.caption ?? '').length > 80 ? '...' : ''}"`,
+              linkPath: `/admin/scheduling?post=${row.id}`,
+              clientId: row.client_id,
+            });
+            await adminClient
+              .from('scheduled_posts')
+              .update({
+                failure_reason: `${STALE_ALERT_PREFIX} (alerted ${nowIso})`,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', row.id);
+            staleAlertedCount++;
+          } catch (notifyErr) {
+            console.error(
+              `[publish-cron] failed to alert on stale draft ${row.id}:`,
+              notifyErr,
+            );
+          }
+        }
+      }
+    } catch (scanErr) {
+      console.error('[publish-cron] stale-draft scan failed:', scanErr);
+    }
+
     return NextResponse.json({
-      message: `Processed ${pendingPosts.length} posts`,
+      message: `Processed ${pendingPosts?.length ?? 0} posts`,
       published: publishedCount,
       failed: failedCount,
+      stale_alerted: staleAlertedCount,
     });
   } catch (error) {
     console.error('POST /api/cron/publish-posts error:', error);
