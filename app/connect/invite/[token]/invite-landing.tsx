@@ -14,6 +14,7 @@ import {
   Youtube,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ClientLogo } from '@/components/clients/client-logo';
 import type { AgencyBrand } from '@/lib/agency/detect';
 
@@ -71,10 +72,22 @@ interface Props {
   expired: boolean;
 }
 
+type PendingConfirm =
+  | { kind: 'connect'; platform: string }
+  | { kind: 'disconnect'; platform: string }
+  | null;
+
 /**
  * Public invite landing. Polls the public invite endpoint on mount + after
  * `?ok=1` returns from the OAuth round-trip, so the just-connected platform
  * flips to a green check without a manual refresh.
+ *
+ * Confirmation gate: every "Connect" click opens a modal that asks the
+ * client to verify they're logged into the *brand's* account on the platform
+ * they're about to link. This is the cheapest defense against clients
+ * accidentally linking their personal IG / TikTok and feeding us posts to
+ * their personal feed. Pair: the "Remove" button on connected rows lets
+ * them undo a wrong account without going through the team.
  */
 export function InviteLanding({
   token,
@@ -94,7 +107,21 @@ export function InviteLanding({
   const [platforms, setPlatforms] = useState<PlatformStatus[]>(initialPlatforms);
   const [completedAt, setCompletedAt] = useState<string | null>(initialCompletedAt);
   const [pendingPlatform, setPendingPlatform] = useState<string | null>(null);
+  const [removingPlatform, setRemovingPlatform] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<PendingConfirm>(null);
   const [error, setError] = useState<string | null>(null);
+
+  async function refresh() {
+    try {
+      const res = await fetch(`/api/public/connection-invites/${token}`);
+      if (!res.ok) return;
+      const data = (await res.json()) as InviteResponse;
+      setPlatforms(data.platforms);
+      setCompletedAt(data.completedAt);
+    } catch {
+      // Silent: caller surfaces its own error if needed.
+    }
+  }
 
   useEffect(() => {
     if (expired) return;
@@ -108,7 +135,7 @@ export function InviteLanding({
         setPlatforms(data.platforms);
         setCompletedAt(data.completedAt);
       } catch {
-        // Silent — initial paint already shows asked-for list.
+        // Silent: initial paint already shows the asked-for list.
       }
     })();
     return () => {
@@ -116,7 +143,7 @@ export function InviteLanding({
     };
   }, [token, expired]);
 
-  async function handleConnect(platform: string) {
+  async function startConnect(platform: string) {
     setPendingPlatform(platform);
     setError(null);
     let redirected = false;
@@ -138,6 +165,37 @@ export function InviteLanding({
     }
   }
 
+  async function startDisconnect(platform: string) {
+    setRemovingPlatform(platform);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/public/connection-invites/${token}/disconnect/${platform}`,
+        { method: 'DELETE' },
+      );
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        success?: boolean;
+      };
+      if (!res.ok || !data.success) {
+        throw new Error(data.error ?? 'Failed to remove connection');
+      }
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setRemovingPlatform(null);
+    }
+  }
+
+  function handleConfirm() {
+    const c = confirm;
+    setConfirm(null);
+    if (!c) return;
+    if (c.kind === 'connect') void startConnect(c.platform);
+    else void startDisconnect(c.platform);
+  }
+
   if (expired) {
     return (
       <Shell brandName={brandName} brandLogoUrl={brandLogoUrl}>
@@ -155,6 +213,9 @@ export function InviteLanding({
   }
 
   const allDone = !!completedAt;
+  const confirmPlatformLabel = confirm
+    ? PLATFORM_LABEL[confirm.platform] ?? confirm.platform
+    : '';
 
   return (
     <Shell brandName={brandName} brandLogoUrl={brandLogoUrl}>
@@ -183,34 +244,60 @@ export function InviteLanding({
         </>
       )}
 
-      {!allDone && (
-        <ul className="mt-6 flex w-full flex-col gap-3">
-          {platforms.map((p) => (
-            <PlatformRow
-              key={p.key}
-              platform={p}
-              pending={pendingPlatform === p.key}
-              onConnect={() => void handleConnect(p.key)}
-            />
-          ))}
-        </ul>
-      )}
+      <ul className="mt-6 flex w-full flex-col gap-3">
+        {platforms.map((p) => (
+          <PlatformRow
+            key={p.key}
+            platform={p}
+            connecting={pendingPlatform === p.key}
+            removing={removingPlatform === p.key}
+            onConnect={() => setConfirm({ kind: 'connect', platform: p.key })}
+            onRemove={() => setConfirm({ kind: 'disconnect', platform: p.key })}
+          />
+        ))}
+      </ul>
 
       {error && (
         <p className="mt-3 text-xs text-status-danger">{error}</p>
       )}
+
+      <ConfirmDialog
+        open={confirm?.kind === 'connect'}
+        variant="default"
+        title={`Connecting ${confirmPlatformLabel}`}
+        description={`This will take you to ${confirmPlatformLabel} to log in. Make sure you're already signed in to the ${brandName} ${confirmPlatformLabel} account in this browser, not your personal one. Whichever account is logged in is the one we'll connect.`}
+        confirmLabel="Continue"
+        cancelLabel="Cancel"
+        onConfirm={handleConfirm}
+        onCancel={() => setConfirm(null)}
+      />
+
+      <ConfirmDialog
+        open={confirm?.kind === 'disconnect'}
+        variant="danger"
+        title={`Remove ${confirmPlatformLabel}?`}
+        description={`We'll disconnect ${confirmPlatformLabel} from ${brandName} and you can connect it again with the right account. Posts already scheduled to this account will fail to publish until you reconnect.`}
+        confirmLabel="Remove"
+        cancelLabel="Keep connected"
+        onConfirm={handleConfirm}
+        onCancel={() => setConfirm(null)}
+      />
     </Shell>
   );
 }
 
 function PlatformRow({
   platform,
-  pending,
+  connecting,
+  removing,
   onConnect,
+  onRemove,
 }: {
   platform: PlatformStatus;
-  pending: boolean;
+  connecting: boolean;
+  removing: boolean;
   onConnect: () => void;
+  onRemove: () => void;
 }) {
   const Icon = PLATFORM_ICON[platform.key] ?? Globe;
   const isZernio = ZERNIO_PLATFORMS.has(platform.key);
@@ -240,21 +327,38 @@ function PlatformRow({
       </div>
 
       {isConnected ? (
-        <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-status-success">
-          <Check className="size-3.5" />
-          Connected
-        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="flex items-center gap-1 text-xs font-medium text-status-success">
+            <Check className="size-3.5" />
+            Connected
+          </span>
+          {isZernio && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onRemove}
+              disabled={removing}
+              className="h-7 px-2 text-xs text-text-muted hover:text-status-danger"
+            >
+              {removing ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                'Remove'
+              )}
+            </Button>
+          )}
+        </div>
       ) : isZernio ? (
         <Button
           size="sm"
           onClick={onConnect}
-          disabled={pending}
+          disabled={connecting}
           className="shrink-0"
         >
-          {pending ? (
+          {connecting ? (
             <Loader2 className="size-3.5 animate-spin" />
           ) : null}
-          {pending ? 'Opening...' : 'Connect'}
+          {connecting ? 'Opening...' : 'Connect'}
         </Button>
       ) : (
         <span className="shrink-0 text-xs text-text-tertiary">Manual</span>
