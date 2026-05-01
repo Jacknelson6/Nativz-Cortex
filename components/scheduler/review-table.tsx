@@ -252,7 +252,7 @@ export function ReviewTable({
       <div className="cortex-page-gutter mx-auto max-w-6xl space-y-5">
         <header className="flex items-end justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-xl font-semibold text-text-primary">{title ?? 'Review'}</h1>
+            <h1 className="text-xl font-semibold text-text-primary">{title ?? 'Your reviews'}</h1>
             <p className="mt-1 text-sm text-text-muted">{subtitle}</p>
           </div>
           {tab === 'content' && (
@@ -284,6 +284,8 @@ export function ReviewTable({
               onPatchLink={patchLink}
               sort={sort}
               onSortChange={setSort}
+              hideColumns={['last_followup']}
+              title="Your content"
             />
           )
         ) : clientId ? (
@@ -306,8 +308,8 @@ function TabStrip({
   onChange: (t: Tab) => void;
 }) {
   const tabs: { key: Tab; label: string; icon: typeof FileText }[] = [
-    { key: 'content', label: 'Content', icon: FileText },
-    { key: 'notifications', label: 'Notifications', icon: Bell },
+    { key: 'content', label: 'Your content', icon: FileText },
+    { key: 'notifications', label: 'Your notifications', icon: Bell },
   ];
   return (
     <nav className="flex items-center gap-1 border-b border-nativz-border" aria-label="Review sections">
