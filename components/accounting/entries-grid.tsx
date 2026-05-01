@@ -255,6 +255,22 @@ export function EntriesGrid({
 
   const totalEntries = entries.length + drafts.length;
 
+  const totals = useMemo(() => {
+    let amount = 0;
+    let videos = 0;
+    let revenue = 0;
+    let margin = 0;
+    for (const e of entries) {
+      amount += e.amount_cents ?? 0;
+      videos += e.video_count ?? 0;
+      if (isEditing) {
+        revenue += computeEditingRevenue(e, clientById);
+        margin += computeEditingMargin(e, clientById);
+      }
+    }
+    return { amount, videos, revenue, margin };
+  }, [entries, isEditing, clientById]);
+
   return (
     <div className="space-y-3">
       {!readonly && service === 'smm' && (
@@ -326,6 +342,45 @@ export function EntriesGrid({
                 />
               ))}
             </tbody>
+            {entries.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-nativz-border bg-background/30 font-semibold">
+                  <td className="px-3 py-2 text-left text-text-primary" colSpan={2}>
+                    Period total
+                  </td>
+                  {isEditing && (
+                    <td className="px-3 py-2 text-center tabular-nums text-text-primary">
+                      {totals.videos || '—'}
+                    </td>
+                  )}
+                  <td className="px-3 py-2 text-center tabular-nums text-text-primary">
+                    {totals.amount ? `$${(totals.amount / 100).toFixed(2)}` : '—'}
+                  </td>
+                  {isEditing && (
+                    <td className="px-3 py-2 text-center tabular-nums text-text-primary">
+                      {totals.revenue ? `$${(totals.revenue / 100).toFixed(2)}` : '—'}
+                    </td>
+                  )}
+                  {isEditing && (
+                    <td
+                      className={`px-3 py-2 text-center tabular-nums ${
+                        totals.margin < 0
+                          ? 'text-red-400'
+                          : totals.margin > 0
+                            ? 'text-emerald-400'
+                            : 'text-text-muted'
+                      }`}
+                    >
+                      {totals.margin === 0
+                        ? '—'
+                        : `${totals.margin < 0 ? '-' : ''}$${(Math.abs(totals.margin) / 100).toFixed(2)}`}
+                    </td>
+                  )}
+                  <td className="px-3 py-2" />
+                  {!readonly && <td className="px-3 py-2" />}
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       )}
@@ -348,10 +403,20 @@ function payeeHeader(service: EntryType): string {
   return 'Editor';
 }
 
-function HeadCell({ children, className }: { children?: React.ReactNode; className?: string }) {
+function HeadCell({
+  children,
+  className,
+  align = 'center',
+}: {
+  children?: React.ReactNode;
+  className?: string;
+  align?: 'left' | 'center' | 'right';
+}) {
+  const alignCx =
+    align === 'left' ? 'text-left' : align === 'right' ? 'text-right' : 'text-center';
   return (
     <th
-      className={`px-3 py-2 text-[11px] uppercase tracking-wide font-semibold text-text-muted ${className ?? ''}`}
+      className={`px-3 py-2 text-[11px] uppercase tracking-wide font-semibold text-text-muted ${alignCx} ${className ?? ''}`}
     >
       {children}
     </th>
@@ -589,12 +654,20 @@ function DraftRowUI({
 
 // ── Cell shells ───────────────────────────────────────────────────────────
 
-function Cell({ children }: { children: React.ReactNode }) {
-  return <td className="px-3 py-1.5 align-middle">{children}</td>;
+function Cell({
+  children,
+  align = 'center',
+}: {
+  children: React.ReactNode;
+  align?: 'left' | 'center' | 'right';
+}) {
+  const alignCx =
+    align === 'left' ? 'text-left' : align === 'right' ? 'text-right' : 'text-center';
+  return <td className={`px-3 py-1.5 align-middle ${alignCx}`}>{children}</td>;
 }
 
 const cellInputCx =
-  'block w-full rounded-md border border-transparent bg-transparent px-2 py-1 text-sm text-text-primary placeholder-text-muted hover:border-nativz-border focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent';
+  'block w-full rounded-md border border-transparent bg-transparent px-2 py-1 text-sm text-text-primary placeholder-text-muted hover:border-nativz-border focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent text-center';
 
 function PayeePicker({
   teamMemberId,
@@ -771,24 +844,19 @@ function DollarInput({
     );
   }
   return (
-    <div className="relative">
-      <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-text-muted text-xs">
-        $
-      </span>
-      <input
-        type="text"
-        inputMode="decimal"
-        value={local}
-        onChange={(e) => setLocal(e.target.value)}
-        placeholder="0.00"
-        onBlur={() => {
-          const next = parseDollarsInput(local);
-          if (next !== cents) onCommit(next);
-          setLocal(dollarsInputValue(next));
-        }}
-        className={cellInputCx + ' pl-5 tabular-nums'}
-      />
-    </div>
+    <input
+      type="text"
+      inputMode="decimal"
+      value={local}
+      onChange={(e) => setLocal(e.target.value)}
+      placeholder="$0.00"
+      onBlur={() => {
+        const next = parseDollarsInput(local);
+        if (next !== cents) onCommit(next);
+        setLocal(dollarsInputValue(next));
+      }}
+      className={cellInputCx + ' tabular-nums'}
+    />
   );
 }
 
