@@ -32,6 +32,7 @@ Full doc index lives in `docs/`. Read on-demand based on the task:
 - Topic search pipeline (SearXNG/OpenAI/OpenRouter, env vars) → `docs/topic-search.md`
 - Zernio setup + webhook secret + notify env → `docs/zernio-setup.md`
 - Revenue Hub + Stripe + Proposals → `docs/revenue.md`
+- **Email style guide (REQUIRED before authoring any sender) → `docs/email-style.md`**
 - Vercel build-cache flag → `docs/vercel-build.md`
 - Specs → `docs/spec-*.md`, `docs/MOODBOARD_PRD.md`
 - Latest pass-off after a long break → newest `docs/session-passoff-*.md`

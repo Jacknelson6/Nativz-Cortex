@@ -11,6 +11,28 @@ import type { WeeklySocialReport } from '@/lib/reporting/weekly-social-report';
 import type { AgencyBrand } from '@/lib/agency/detect';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+// ── Authoring rules ────────────────────────────────────────────────────────
+//
+// READ `docs/email-style.md` BEFORE ADDING OR EDITING ANY SENDER IN THIS FILE.
+//
+// Hard rules (no exceptions):
+//   1. Every email body goes through `layout(body, agency, { eyebrow, heroTitle })`.
+//      Never assemble your own outer shell. Never hand-render a <p> on a white
+//      background and ship it.
+//   2. Pull every color/font from `getEmailBrand(agency)`. No hardcoded hex
+//      values for chrome (semantic delta colors are the only carve-out).
+//   3. Use `<table>` for layout. No flexbox, no grid (Outlook breaks both).
+//   4. Senders that have access to client POCs MUST take `pocFirstNames?: string[]`
+//      and call `greetingFor(pocFirstNames, fallback)` for the salutation.
+//      Generic "Hi there" greetings are not acceptable for client-context emails.
+//   5. Em-dashes (U+2013, U+2014) are banned everywhere. ASCII hyphen only.
+//   6. Every new sender ships with a fixture in `scripts/test-send-all-emails.ts`
+//      covering both `nativz` and `anderson` agencies.
+//
+// If a new email doesn't visually match `welcome` / `weekly_social_report` /
+// `calendar_comment_digest`, it isn't done. Pull patterns from
+// `lib/email/templates/*` before inventing new ones.
+//
 // ── Centralized send + log wrapper ─────────────────────────────────────────
 //
 // Every sender in this file goes through `sendAndLog`. It writes a row to
