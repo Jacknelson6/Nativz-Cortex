@@ -70,6 +70,15 @@ export interface ReviewLinkRow {
   /** How many manual followups have been sent. Initial send is not
    *  counted; only Send-followup-button presses bump this. */
   followup_count: number;
+  /** Timestamp of the FIRST real calendar email send. NULL until an
+   *  admin clicks "Send share link" and Resend accepts. Drives the
+   *  DATE SENT table column and the variant default in the send dialog. */
+  first_sent_at: string | null;
+  /** Most recent calendar send (initial OR "revised, please re-review").
+   *  Followup pings live on `last_followup_at` instead. */
+  last_sent_at: string | null;
+  /** Count of calendar sends (initial + revised). */
+  send_count: number;
   /**
    * Discriminator so a single table can render both calendar share-link
    * rows and editing-project rows side-by-side. `'calendar'` (or

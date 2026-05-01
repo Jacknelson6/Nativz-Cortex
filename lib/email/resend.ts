@@ -1194,6 +1194,151 @@ export async function sendCombinedCalendarDeliveryEmail(opts: {
   });
 }
 
+// ── Manual share-link send (admin "Send share link" / "Resend revised") ──
+//
+// Fired from the calendar-link-detail dialog. Two variants:
+//   - 'initial': first time we ship this calendar to the client. Subject
+//                + body match sendCalendarDeliveryEmail's tone.
+//   - 'revised': we updated something post-send. Subject + body tell the
+//                client the calendar was revised and to re-review.
+//
+// Mirrors sendCalendarFollowupEmail: a build*Draft helper returns
+// { subject, message } so the GET /send preview can render it, and the
+// send function accepts subjectOverride/messageOverride from the modal so
+// admins can tweak copy before hitting send.
+
+export function buildCalendarShareSendDraft(opts: {
+  variant: 'initial' | 'revised';
+  pocFirstNames: string[];
+  clientName: string;
+  postCount: number;
+  startDate: string;
+  endDate: string;
+  agency: AgencyBrand;
+}): { subject: string; message: string } {
+  const isAC = opts.agency === 'anderson';
+  const brand = isAC ? 'Anderson Collaborative' : 'Nativz';
+  const team = isAC ? 'the AC team' : 'the Nativz team';
+  const monthLabel = new Date(`${opts.startDate}T00:00:00Z`).toLocaleString('en-US', {
+    month: 'long',
+    timeZone: 'UTC',
+  });
+  const greetingNames = opts.pocFirstNames.length > 0
+    ? humanizeNameList(opts.pocFirstNames)
+    : opts.clientName;
+  const dateRange = `${formatDateLabel(opts.startDate)} to ${formatDateLabel(opts.endDate)}`;
+  const postsWord = opts.postCount === 1 ? 'post' : 'posts';
+
+  if (opts.variant === 'revised') {
+    return {
+      subject: `${opts.clientName}: revised content calendar ready for review`,
+      message:
+        `Hey ${greetingNames}, ${team} just made revisions to the ${monthLabel} content calendar.\n\n` +
+        `Tap the button below to re-review the ${opts.postCount} ${postsWord} scheduled across ${dateRange}, then approve or drop another comment if anything still needs to change.`,
+    };
+  }
+
+  return {
+    subject: `Your ${monthLabel} content calendar from ${brand} is ready`,
+    message:
+      `Hey ${greetingNames}, ${team} just dropped ${opts.postCount} ${postsWord} for you to review, scheduled across ${dateRange}.\n\n` +
+      `Tap the button below to watch the videos, read the captions, and approve or request changes one post at a time.`,
+  };
+}
+
+export function buildCalendarShareSendHtml(opts: {
+  variant: 'initial' | 'revised';
+  subject: string;
+  message: string;
+  shareUrl: string;
+  agency: AgencyBrand;
+}): string {
+  const isAC = opts.agency === 'anderson';
+  const replyTo = isAC ? 'jack@andersoncollaborative.com' : 'jack@nativz.io';
+  const buttonLabel = opts.variant === 'revised'
+    ? 'Re-review the calendar &rarr;'
+    : 'Open content calendar &rarr;';
+  const heading = opts.variant === 'revised'
+    ? 'Revised content calendar ready'
+    : 'Your content calendar is ready';
+  const bodyHtml = messageToHtmlParagraphs(opts.message);
+  return layout(`
+    <div class="card" style="text-align:center;">
+      <h1 class="heading" style="text-align:center;">${escapeHtml(heading)}</h1>
+      <div style="text-align:left;">${bodyHtml}</div>
+      <div class="button-wrap" style="margin-top:24px;text-align:center;">
+        <a href="${opts.shareUrl}" class="button">${buttonLabel}</a>
+      </div>
+      <p class="small" style="text-align:center;margin-top:24px;">
+        Questions or want to chat about a post? Just reply to this email and it'll come straight to ${replyTo}.
+      </p>
+    </div>
+  `, opts.agency);
+}
+
+export async function sendCalendarShareSendEmail(opts: {
+  to: string | string[];
+  cc?: string | string[];
+  pocFirstNames: string[];
+  clientName: string;
+  shareUrl: string;
+  variant: 'initial' | 'revised';
+  postCount: number;
+  startDate: string;
+  endDate: string;
+  agency?: AgencyBrand;
+  clientId?: string;
+  dropId?: string;
+  /** Admin-edited subject from the preview modal. Falls back to the default. */
+  subjectOverride?: string;
+  /** Admin-edited body (plain text, blank-line separated paragraphs). */
+  messageOverride?: string;
+}) {
+  const agency = opts.agency ?? 'nativz';
+  const isAC = agency === 'anderson';
+  const replyTo = isAC ? 'jack@andersoncollaborative.com' : 'jack@nativz.io';
+  const draft = buildCalendarShareSendDraft({
+    variant: opts.variant,
+    pocFirstNames: opts.pocFirstNames,
+    clientName: opts.clientName,
+    postCount: opts.postCount,
+    startDate: opts.startDate,
+    endDate: opts.endDate,
+    agency,
+  });
+  const subject = opts.subjectOverride?.trim() || draft.subject;
+  const message = opts.messageOverride?.trim() || draft.message;
+  const html = buildCalendarShareSendHtml({
+    variant: opts.variant,
+    subject,
+    message,
+    shareUrl: opts.shareUrl,
+    agency,
+  });
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: opts.variant === 'revised' ? 'calendar_revised_videos' : 'calendar_delivery',
+    agency,
+    to: opts.to,
+    cc: opts.cc,
+    subject,
+    html,
+    replyToOverride: replyTo,
+    clientId: opts.clientId,
+    dropId: opts.dropId,
+    metadata: {
+      clientName: opts.clientName,
+      pocFirstNames: opts.pocFirstNames,
+      variant: opts.variant,
+      postCount: opts.postCount,
+      startDate: opts.startDate,
+      endDate: opts.endDate,
+      manualSend: true,
+      edited: !!(opts.subjectOverride || opts.messageOverride),
+    },
+  });
+}
+
 function humanizeNameList(names: string[]): string {
   const cleaned = names.map((n) => n.trim()).filter(Boolean);
   if (cleaned.length <= 1) return cleaned[0] ?? '';

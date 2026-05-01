@@ -43,6 +43,7 @@
     "app/playwright.config.ts",
     "scripts/assets/playwright.config.ts",
     "OpenCassava",
-    "hyperframes-explainer"
+    "hyperframes-explainer",
+    "tmp"
   ]
 }

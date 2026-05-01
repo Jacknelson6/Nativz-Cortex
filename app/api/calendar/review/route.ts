@@ -69,7 +69,7 @@ export async function GET(req: Request) {
   const { data: links } = await admin
     .from('content_drop_share_links')
     .select(
-      'id, drop_id, token, included_post_ids, post_review_link_map, expires_at, created_at, last_viewed_at, name, project_type, project_type_other, abandoned_at, last_followup_at, followup_count',
+      'id, drop_id, token, included_post_ids, post_review_link_map, expires_at, created_at, last_viewed_at, name, project_type, project_type_other, abandoned_at, last_followup_at, followup_count, first_sent_at, last_sent_at, send_count',
     )
     .in('drop_id', dropIds)
     .is('archived_at', null)
@@ -172,6 +172,9 @@ export async function GET(req: Request) {
       abandoned_at?: string | null;
       last_followup_at?: string | null;
       followup_count?: number | null;
+      first_sent_at?: string | null;
+      last_sent_at?: string | null;
+      send_count?: number | null;
     };
 
     return {
@@ -197,6 +200,9 @@ export async function GET(req: Request) {
       abandoned_at: linkExtra.abandoned_at ?? null,
       last_followup_at: linkExtra.last_followup_at ?? null,
       followup_count: linkExtra.followup_count ?? 0,
+      first_sent_at: linkExtra.first_sent_at ?? null,
+      last_sent_at: linkExtra.last_sent_at ?? null,
+      send_count: linkExtra.send_count ?? 0,
     };
   });
 

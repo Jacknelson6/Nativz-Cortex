@@ -10,6 +10,8 @@ import {
   ExternalLink,
   Eye,
   MessagesSquare,
+  Send,
+  RefreshCcw,
 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -20,6 +22,25 @@ import type {
   ReviewLinkRow,
   ReviewLinkStatus,
 } from '@/components/scheduler/review-board';
+
+type SendVariant = 'initial' | 'revised';
+
+interface SendPreview {
+  variant: SendVariant;
+  default_variant: SendVariant;
+  subject: string;
+  message: string;
+  html: string;
+  share_url: string;
+  recipients: { email: string; name: string | null }[];
+  client_name: string;
+  post_count: number;
+  start_date: string;
+  end_date: string;
+  first_sent_at: string | null;
+  last_sent_at: string | null;
+  send_count: number;
+}
 
 /**
  * Detail dialog for a calendar share link (rows with `kind === 'calendar'`
@@ -46,21 +67,49 @@ export function CalendarLinkDetail({
   link,
   onClose,
   onRevoked,
+  onSent,
 }: {
   link: ReviewLinkRow | null;
   onClose: () => void;
   onRevoked: () => void;
+  /**
+   * Called after a successful send/resend. Parent should re-fetch the
+   * row so DATE SENT (`first_sent_at`) and the variant default flip
+   * without forcing a full table reload.
+   */
+  onSent?: (patch: {
+    first_sent_at: string;
+    last_sent_at: string;
+    send_count: number;
+  }) => void;
 }) {
   const open = !!link;
   const [revoking, setRevoking] = useState(false);
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState<'details' | 'history'>('details');
 
+  // Send preview / dialog state. `null` = closed; setting to a variant
+  // pops the modal and kicks off the GET preview fetch.
+  const [previewVariant, setPreviewVariant] = useState<SendVariant | null>(null);
+  const [preview, setPreview] = useState<SendPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [subjectDraft, setSubjectDraft] = useState('');
+  const [messageDraft, setMessageDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  // Render toggle: edit the source copy, or eyeball the rendered HTML
+  // exactly the way the recipient will see it. Defaults to edit so the
+  // dialog opens "ready to tweak the subject", not "ready to send".
+  const [renderMode, setRenderMode] = useState<'edit' | 'preview'>('edit');
+
   // Reset transient UI state when a new link is opened.
   useEffect(() => {
     if (open) {
       setCopied(false);
       setTab('details');
+      setPreviewVariant(null);
+      setPreview(null);
+      setPreviewError(null);
     }
   }, [open, link?.id]);
 
@@ -111,8 +160,109 @@ export function CalendarLinkDetail({
     }
   }
 
+  async function openSendPreview(variant: SendVariant) {
+    if (!link) return;
+    setPreviewVariant(variant);
+    setPreview(null);
+    setPreviewError(null);
+    setRenderMode('edit');
+    setPreviewLoading(true);
+    try {
+      const res = await fetch(
+        `/api/calendar/share/${link.token}/send?variant=${variant}`,
+        { cache: 'no-store' },
+      );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          typeof json?.error === 'string' ? json.error : 'Failed to load preview',
+        );
+      }
+      const data = json as SendPreview;
+      setPreview(data);
+      setSubjectDraft(data.subject);
+      setMessageDraft(data.message);
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : 'Failed to load preview');
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  function closeSendPreview() {
+    if (sending) return;
+    setPreviewVariant(null);
+    setPreview(null);
+    setPreviewError(null);
+  }
+
+  async function confirmSend() {
+    if (!link || !preview || !previewVariant || sending) return;
+    setSending(true);
+    try {
+      const res = await fetch(`/api/calendar/share/${link.token}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          variant: previewVariant,
+          // Only forward overrides when the admin actually edited them,
+          // so an untouched preview falls through to the server defaults
+          // (handy if the variant copy gets tweaked later).
+          ...(subjectDraft.trim() !== preview.subject.trim()
+            ? { subject: subjectDraft.trim() }
+            : {}),
+          ...(messageDraft.trim() !== preview.message.trim()
+            ? { message: messageDraft.trim() }
+            : {}),
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof json?.error === 'string' ? json.error : 'Send failed');
+      }
+      toast.success(
+        previewVariant === 'initial'
+          ? 'Calendar sent to client'
+          : 'Revised calendar sent to client',
+      );
+      onSent?.({
+        first_sent_at: json.first_sent_at,
+        last_sent_at: json.last_sent_at,
+        send_count: json.send_count,
+      });
+      setPreviewVariant(null);
+      setPreview(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Send failed');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const hasBeenSent = !!link.first_sent_at;
+  // Hide send actions on terminal links — there's nothing to chase, and
+  // clicking through would burn an email on a closed loop.
+  const canSend = !isExpired && !isAbandoned && link.post_count > 0;
+
   return (
-    <Dialog open={open} onClose={onClose} title="" maxWidth="2xl" bodyClassName="p-0">
+    <>
+      <SendPreviewDialog
+        open={!!previewVariant}
+        variant={previewVariant ?? 'initial'}
+        loading={previewLoading}
+        error={previewError}
+        preview={preview}
+        subject={subjectDraft}
+        message={messageDraft}
+        renderMode={renderMode}
+        sending={sending}
+        onChangeSubject={setSubjectDraft}
+        onChangeMessage={setMessageDraft}
+        onChangeRenderMode={setRenderMode}
+        onClose={closeSendPreview}
+        onSend={confirmSend}
+      />
+    <Dialog open={open && !previewVariant} onClose={onClose} title="" maxWidth="2xl" bodyClassName="p-0">
       <div className="flex h-full max-h-[80vh] flex-col">
         {/* Header */}
         <div className="flex items-start gap-3 border-b border-nativz-border py-4 pl-6 pr-14">
@@ -197,6 +347,39 @@ export function CalendarLinkDetail({
                 </p>
               )}
             </div>
+
+            {/* Send affordances. Hidden once the link is terminal (expired
+                or abandoned) or when the project has zero posts — sending
+                an empty calendar isn't a real workflow. */}
+            {canSend && (
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {!hasBeenSent ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => openSendPreview('initial')}
+                  >
+                    <Send size={13} />
+                    Send share link
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => openSendPreview('revised')}
+                  >
+                    <RefreshCcw size={13} />
+                    Resend (revised)
+                  </Button>
+                )}
+                {hasBeenSent && link.last_sent_at && (
+                  <span className="text-[11px] text-text-muted">
+                    Last sent {formatRelative(link.last_sent_at)}
+                    {link.send_count > 1 ? ` · ${link.send_count} sends` : ''}
+                  </span>
+                )}
+              </div>
+            )}
           </Section>
 
           {/* Counts: approved / revising / pending. Skipped when the
@@ -290,6 +473,162 @@ export function CalendarLinkDetail({
           )}
         </div>
         )}
+      </div>
+    </Dialog>
+    </>
+  );
+}
+
+function SendPreviewDialog({
+  open,
+  variant,
+  loading,
+  error,
+  preview,
+  subject,
+  message,
+  renderMode,
+  sending,
+  onChangeSubject,
+  onChangeMessage,
+  onChangeRenderMode,
+  onClose,
+  onSend,
+}: {
+  open: boolean;
+  variant: SendVariant;
+  loading: boolean;
+  error: string | null;
+  preview: SendPreview | null;
+  subject: string;
+  message: string;
+  renderMode: 'edit' | 'preview';
+  sending: boolean;
+  onChangeSubject: (v: string) => void;
+  onChangeMessage: (v: string) => void;
+  onChangeRenderMode: (m: 'edit' | 'preview') => void;
+  onClose: () => void;
+  onSend: () => void;
+}) {
+  const title =
+    variant === 'initial' ? 'Send share link' : 'Resend (revised)';
+
+  return (
+    <Dialog open={open} onClose={onClose} title={title} maxWidth="2xl" bodyClassName="p-0">
+      <div className="flex h-full max-h-[80vh] flex-col">
+        {loading ? (
+          <div className="flex-1 p-8 text-sm text-text-muted">Loading preview…</div>
+        ) : error ? (
+          <div className="flex-1 space-y-3 p-6 text-sm">
+            <p className="text-status-danger">{error}</p>
+            <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        ) : preview ? (
+          <>
+            <div className="flex-1 space-y-4 overflow-y-auto p-6">
+              {/* Recipients */}
+              <Section label={`Recipients (${preview.recipients.length})`}>
+                <div className="flex flex-wrap gap-1.5">
+                  {preview.recipients.map((r) => (
+                    <span
+                      key={r.email}
+                      className="inline-flex items-center gap-1 rounded-full border border-nativz-border bg-surface px-2.5 py-1 text-[11px] text-text-secondary"
+                      title={r.email}
+                    >
+                      <span className="font-medium text-text-primary">
+                        {r.name ?? r.email}
+                      </span>
+                      {r.name && (
+                        <span className="text-text-muted">· {r.email}</span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              </Section>
+
+              {/* Toggle: edit copy vs render preview */}
+              <div className="flex items-center gap-1 rounded-lg border border-nativz-border bg-background p-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() => onChangeRenderMode('edit')}
+                  className={`flex-1 rounded-md px-3 py-1.5 transition-colors ${
+                    renderMode === 'edit'
+                      ? 'bg-surface text-text-primary'
+                      : 'text-text-muted hover:text-text-secondary'
+                  }`}
+                >
+                  Edit copy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChangeRenderMode('preview')}
+                  className={`flex-1 rounded-md px-3 py-1.5 transition-colors ${
+                    renderMode === 'preview'
+                      ? 'bg-surface text-text-primary'
+                      : 'text-text-muted hover:text-text-secondary'
+                  }`}
+                >
+                  Rendered preview
+                </button>
+              </div>
+
+              {renderMode === 'edit' ? (
+                <>
+                  <Section label="Subject">
+                    <input
+                      value={subject}
+                      onChange={(e) => onChangeSubject(e.target.value)}
+                      className="block w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                    />
+                  </Section>
+                  <Section label="Message">
+                    <textarea
+                      value={message}
+                      onChange={(e) => onChangeMessage(e.target.value)}
+                      rows={10}
+                      className="block w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm leading-relaxed text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                    />
+                  </Section>
+                  <p className="text-[11px] text-text-muted">
+                    Edits stay scoped to this send. The default copy refreshes every time you reopen the dialog.
+                  </p>
+                </>
+              ) : (
+                <Section label="Rendered email">
+                  <iframe
+                    title="Email preview"
+                    srcDoc={preview.html}
+                    className="h-[420px] w-full rounded-md border border-nativz-border bg-white"
+                  />
+                  <p className="mt-2 text-[11px] text-text-muted">
+                    Layout reference using the default copy. Subject + body edits in the other tab apply at send time.
+                  </p>
+                </Section>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-nativz-border px-6 py-4">
+              <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={sending}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={onSend}
+                disabled={sending || !subject.trim() || !message.trim()}
+              >
+                <Send size={13} />
+                {sending
+                  ? 'Sending…'
+                  : variant === 'initial'
+                    ? `Send to ${preview.recipients.length} ${preview.recipients.length === 1 ? 'recipient' : 'recipients'}`
+                    : `Resend to ${preview.recipients.length} ${preview.recipients.length === 1 ? 'recipient' : 'recipients'}`}
+              </Button>
+            </div>
+          </>
+        ) : null}
       </div>
     </Dialog>
   );

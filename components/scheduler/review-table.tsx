@@ -635,8 +635,8 @@ function ReviewTableRow({
       </TableCell>
       {showDateSent && (
         <TableCell className="whitespace-nowrap px-2.5 text-center">
-          <span className="text-sm text-text-secondary tabular-nums">
-            {formatShortDate(link.created_at)}
+          <span className={`text-sm tabular-nums ${link.first_sent_at ? 'text-text-secondary' : 'text-text-muted'}`}>
+            {link.first_sent_at ? formatShortDate(link.first_sent_at) : '-'}
           </span>
         </TableCell>
       )}
@@ -1294,6 +1294,14 @@ export function sortLinksBy(
     const bBlank = !b.last_followup_at;
     if (aBlank !== bBlank) return aBlank ? 1 : -1;
   }
+  // Never-sent calendars (first_sent_at IS NULL) always sink to the
+  // bottom of the DATE SENT column. The hyphen placeholder rendered in
+  // the cell would otherwise clump at the top under ascending sort.
+  if (state.field === 'date_sent') {
+    const aBlank = !a.first_sent_at;
+    const bBlank = !b.first_sent_at;
+    if (aBlank !== bBlank) return aBlank ? 1 : -1;
+  }
 
   const cmp = (() => {
     switch (state.field) {
@@ -1308,8 +1316,8 @@ export function sortLinksBy(
         return aName.localeCompare(bName);
       }
       case 'date_sent': {
-        const aT = new Date(a.created_at ?? a.drop_start ?? 0).getTime();
-        const bT = new Date(b.created_at ?? b.drop_start ?? 0).getTime();
+        const aT = new Date(a.first_sent_at ?? a.created_at ?? a.drop_start ?? 0).getTime();
+        const bT = new Date(b.first_sent_at ?? b.created_at ?? b.drop_start ?? 0).getTime();
         return aT - bT;
       }
       case 'status':

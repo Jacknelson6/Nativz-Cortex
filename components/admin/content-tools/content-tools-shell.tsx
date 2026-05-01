@@ -197,6 +197,9 @@ function editingProjectToRow(p: EditingProject): ReviewLinkRow {
     abandoned_at: p.archived_at,
     last_followup_at: null,
     followup_count: 0,
+    first_sent_at: null,
+    last_sent_at: null,
+    send_count: 0,
     kind: 'editing',
     editing_project_id: p.id,
     editing_status: p.status,
@@ -565,6 +568,16 @@ export function ContentToolsShell() {
           link={activeCalendarLink}
           onClose={() => setActiveCalendarLink(null)}
           onRevoked={() => void loadProjects(true)}
+          onSent={(patch) => {
+            // Optimistically refresh the open row + the table so DATE
+            // SENT flips and the variant default switches to "revised"
+            // without forcing a full reload.
+            if (activeCalendarLink) {
+              const next = { ...activeCalendarLink, ...patch };
+              setActiveCalendarLink(next);
+              patchLink(next.id, patch);
+            }
+          }}
         />
       </div>
     </TooltipProvider>
