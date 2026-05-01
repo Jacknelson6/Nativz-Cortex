@@ -221,6 +221,21 @@ export function PeriodDetailClient({
           entries={entries}
           clients={clients}
         />
+      ) : activeTab === 'editing' ? (
+        <EditingPane
+          entries={entriesByService.editing}
+          teamMembers={teamMembers}
+          clients={clients}
+          readonly={readonly}
+          periodId={period.id}
+          onLocalCreate={(e) => setEntries((prev) => [...prev, e])}
+          onLocalUpdate={(e) =>
+            setEntries((prev) => prev.map((x) => (x.id === e.id ? e : x)))
+          }
+          onLocalDelete={(id) =>
+            setEntries((prev) => prev.filter((x) => x.id !== id))
+          }
+        />
       ) : (
         <EntriesGrid
           key={activeTab}
@@ -323,6 +338,124 @@ function OverviewPane({
           No entries yet. Pick a service tab above to add entries.
         </div>
       )}
+    </div>
+  );
+}
+
+// Editor sub-tabs derived from the period's editing entries. "All" is the
+// default; each editor sub-tab filters the grid + locks the manager picker
+// on draft rows so a row added under "Jed" can't accidentally land on Ken.
+function EditingPane({
+  entries,
+  teamMembers,
+  clients,
+  readonly,
+  periodId,
+  onLocalCreate,
+  onLocalUpdate,
+  onLocalDelete,
+}: {
+  entries: GridEntry[];
+  teamMembers: TeamMember[];
+  clients: Client[];
+  readonly: boolean;
+  periodId: string;
+  onLocalCreate: (e: GridEntry) => void;
+  onLocalUpdate: (e: GridEntry) => void;
+  onLocalDelete: (id: string) => void;
+}) {
+  type EditorKey = string; // 'all' | 'm:<member-id>' | 'l:<label>'
+  const [activeEditor, setActiveEditor] = useState<EditorKey>('all');
+
+  const editorGroups = useMemo(() => {
+    const groups = new Map<EditorKey, { label: string; total: number; count: number }>();
+    for (const e of entries) {
+      let key: EditorKey;
+      let label: string;
+      if (e.team_member_id) {
+        key = `m:${e.team_member_id}`;
+        label =
+          teamMembers.find((m) => m.id === e.team_member_id)?.full_name ?? 'Unnamed';
+      } else {
+        const trimmed = (e.payee_label ?? '').trim();
+        if (!trimmed) continue;
+        key = `l:${trimmed.toLowerCase()}`;
+        label = trimmed;
+      }
+      const prev = groups.get(key);
+      if (prev) {
+        prev.total += e.amount_cents ?? 0;
+        prev.count += 1;
+      } else {
+        groups.set(key, { label, total: e.amount_cents ?? 0, count: 1 });
+      }
+    }
+    return Array.from(groups.entries())
+      .map(([key, v]) => ({ key, ...v }))
+      .sort((a, b) => b.total - a.total);
+  }, [entries, teamMembers]);
+
+  // If the active editor disappears (last row removed), snap back to All.
+  if (activeEditor !== 'all' && !editorGroups.some((g) => g.key === activeEditor)) {
+    setActiveEditor('all');
+  }
+
+  const subNavItems = useMemo<SubNavItem<EditorKey>[]>(
+    () => [
+      { slug: 'all', label: 'All', count: entries.length || null },
+      ...editorGroups.map((g) => ({
+        slug: g.key,
+        label: g.label,
+        count: g.count,
+      })),
+    ],
+    [editorGroups, entries.length],
+  );
+
+  const filteredEntries = useMemo(() => {
+    if (activeEditor === 'all') return entries;
+    if (activeEditor.startsWith('m:')) {
+      const id = activeEditor.slice(2);
+      return entries.filter((e) => e.team_member_id === id);
+    }
+    if (activeEditor.startsWith('l:')) {
+      const label = activeEditor.slice(2);
+      return entries.filter(
+        (e) => !e.team_member_id && (e.payee_label ?? '').trim().toLowerCase() === label,
+      );
+    }
+    return entries;
+  }, [entries, activeEditor]);
+
+  const lockedTeamMemberId = activeEditor.startsWith('m:') ? activeEditor.slice(2) : null;
+  const lockedPayeeLabel = activeEditor.startsWith('l:')
+    ? editorGroups.find((g) => g.key === activeEditor)?.label ?? null
+    : null;
+
+  return (
+    <div className="space-y-4">
+      {editorGroups.length > 1 && (
+        <SubNav
+          items={subNavItems}
+          active={activeEditor}
+          onChange={setActiveEditor}
+          ariaLabel="Editor"
+        />
+      )}
+      <EntriesGrid
+        key={`editing:${activeEditor}`}
+        service="editing"
+        entries={filteredEntries}
+        teamMembers={teamMembers}
+        clients={clients}
+        readonly={readonly}
+        periodId={periodId}
+        lockedTeamMemberId={lockedTeamMemberId}
+        lockedPayeeLabel={lockedPayeeLabel}
+        onLocalCreate={onLocalCreate}
+        onLocalUpdate={onLocalUpdate}
+        onLocalDelete={onLocalDelete}
+      />
     </div>
   );
 }

@@ -56,6 +56,11 @@ interface EntriesGridProps {
   onLocalCreate: (entry: GridEntry) => void;
   onLocalUpdate: (entry: GridEntry) => void;
   onLocalDelete: (id: string) => void;
+  // When set, new draft rows pre-stamp this payee and the draft picker
+  // renders as a fixed label. Used by editor sub-tabs so adding a row
+  // while filtered to "Jed" auto-targets Jed.
+  lockedTeamMemberId?: string | null;
+  lockedPayeeLabel?: string | null;
 }
 
 const SERVICE_LABELS: Record<EntryType, string> = {
@@ -88,6 +93,8 @@ export function EntriesGrid({
   onLocalCreate,
   onLocalUpdate,
   onLocalDelete,
+  lockedTeamMemberId = null,
+  lockedPayeeLabel = null,
 }: EntriesGridProps) {
   const [drafts, setDrafts] = useState<DraftRow[]>([]);
   const [savingExisting, setSavingExisting] = useState<Set<string>>(new Set());
@@ -137,8 +144,8 @@ export function EntriesGrid({
     return {
       _localId: `draft-${Math.random().toString(36).slice(2, 9)}`,
       entry_type: service,
-      team_member_id: prefill?.team_member_id ?? null,
-      payee_label: prefill?.payee_label ?? null,
+      team_member_id: prefill?.team_member_id ?? lockedTeamMemberId ?? null,
+      payee_label: prefill?.payee_label ?? lockedPayeeLabel ?? null,
       client_id: prefill?.client_id ?? null,
       video_count: prefill?.video_count ?? 0,
       amount_cents: prefill?.amount_cents ?? 0,
@@ -539,6 +546,9 @@ export function EntriesGrid({
                   clients={clients}
                   clientById={clientById}
                   readonly={readonly}
+                  payeeLocked={
+                    lockedTeamMemberId !== null || lockedPayeeLabel !== null
+                  }
                   readyToSave={isDraftReadyToSave(d)}
                   onChange={(patch) => updateDraft(d._localId, patch)}
                   onCommit={() => scheduleCommit(d._localId)}
@@ -768,6 +778,7 @@ function DraftRowUI({
   clients,
   clientById,
   readonly,
+  payeeLocked,
   readyToSave,
   onChange,
   onCommit,
@@ -779,6 +790,7 @@ function DraftRowUI({
   clients: Client[];
   clientById: Map<string, Client>;
   readonly: boolean;
+  payeeLocked: boolean;
   readyToSave: boolean;
   onChange: (patch: Partial<DraftRow>) => void;
   onCommit: () => void;
@@ -798,7 +810,7 @@ function DraftRowUI({
           payeeLabel={draft.payee_label}
           teamMembers={teamMembers}
           memberById={memberById}
-          readonly={false}
+          readonly={payeeLocked}
           onPickMember={(id) => {
             onChange({ team_member_id: id, payee_label: null });
             if (id) onCommit();
