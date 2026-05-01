@@ -15,6 +15,9 @@ export const dynamic = 'force-dynamic';
  *   - email_sent        ← editing_deliverable / editing_rereview email send
  *   - share_link        ← a new share link was minted
  *   - revision_uploaded ← a new revision (version > 1) was uploaded
+ *   - review_comment    ← reviewer left a comment / approved / requested
+ *                         changes via the public share page (or admin
+ *                         posting from the dialog)
  *
  * Newest first. Cap at 200 events so the panel stays snappy. The dialog
  * decides how to render each event type by switching on `kind`.
@@ -51,6 +54,17 @@ type Activity =
         title: string | null;
         position: number;
       };
+    }
+  | {
+      kind: 'review_comment';
+      at: string;
+      detail: {
+        author_name: string;
+        status: 'approved' | 'changes_requested' | 'comment' | 'video_revised';
+        content: string;
+        video_id: string | null;
+        attachment_count: number;
+      };
     };
 
 export async function GET(
@@ -82,8 +96,8 @@ export async function GET(
     .eq('project_id', id);
   const linkIds = (links ?? []).map((l) => l.id as string);
 
-  // Fan out the four queries in parallel — all read-only.
-  const [viewsRes, emailsRes, revisionsRes] = await Promise.all([
+  // Fan out the read-only queries in parallel.
+  const [viewsRes, emailsRes, revisionsRes, commentsRes] = await Promise.all([
     linkIds.length
       ? admin
           .from('editing_project_share_link_views')
@@ -110,6 +124,17 @@ export async function GET(
       .select('id, version, position, title, created_at')
       .eq('project_id', id)
       .gt('version', 1)
+      .order('created_at', { ascending: false })
+      .limit(200),
+    // Public-share review comments. Each row already carries enough info
+    // to render a single timeline line: who said what, what status it
+    // was, whether it was pinned to a video.
+    admin
+      .from('editing_project_review_comments')
+      .select(
+        'id, video_id, author_name, content, status, attachments, created_at',
+      )
+      .eq('project_id', id)
       .order('created_at', { ascending: false })
       .limit(200),
   ]);
@@ -183,6 +208,29 @@ export async function GET(
         version: r.version,
         title: r.title,
         position: r.position,
+      },
+    });
+  }
+
+  type CommentRow = {
+    video_id: string | null;
+    author_name: string | null;
+    content: string | null;
+    status: 'approved' | 'changes_requested' | 'comment' | 'video_revised';
+    attachments: unknown;
+    created_at: string;
+  };
+  for (const c of (commentsRes.data ?? []) as CommentRow[]) {
+    const attachments = Array.isArray(c.attachments) ? c.attachments : [];
+    events.push({
+      kind: 'review_comment',
+      at: c.created_at,
+      detail: {
+        author_name: (c.author_name ?? '').trim() || 'Anonymous',
+        status: c.status,
+        content: (c.content ?? '').trim(),
+        video_id: c.video_id,
+        attachment_count: attachments.length,
       },
     });
   }

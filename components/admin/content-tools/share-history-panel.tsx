@@ -1,7 +1,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Eye, Film, Link2, Loader2, Mail, MailX } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Eye,
+  Film,
+  Link2,
+  Loader2,
+  Mail,
+  MailX,
+  MessageSquare,
+  Paperclip,
+  RefreshCw,
+} from 'lucide-react';
 
 /**
  * Shared "History" tab panel used by both EditingProjectDetail and
@@ -50,6 +62,17 @@ export type ShareHistoryEvent =
         version: number;
         title: string | null;
         position: number;
+      };
+    }
+  | {
+      kind: 'review_comment';
+      at: string;
+      detail: {
+        author_name: string;
+        status: 'approved' | 'changes_requested' | 'comment' | 'video_revised';
+        content: string;
+        video_id: string | null;
+        attachment_count: number;
       };
     };
 
@@ -169,6 +192,40 @@ function HistoryRow({ event }: { event: ShareHistoryEvent }) {
     );
   }
 
+  if (event.kind === 'review_comment') {
+    const { author_name, status, content, attachment_count } = event.detail;
+    const swatch = reviewSwatch(status);
+    const verb = reviewVerb(status, author_name);
+    return (
+      <li className="flex items-start gap-3 rounded-lg border border-nativz-border bg-surface p-3">
+        <span
+          className={
+            'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md ' +
+            swatch.cls
+          }
+        >
+          {swatch.icon}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm text-text-primary">{verb}</p>
+          {content && (
+            <p className="mt-0.5 line-clamp-2 text-xs text-text-secondary">
+              {content}
+            </p>
+          )}
+          {attachment_count > 0 && (
+            <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-text-muted">
+              <Paperclip size={10} />
+              {attachment_count} attachment
+              {attachment_count === 1 ? '' : 's'}
+            </p>
+          )}
+        </div>
+        <span className="shrink-0 text-[11px] text-text-muted">{ts}</span>
+      </li>
+    );
+  }
+
   // email_sent
   const failed = event.detail.status === 'failed';
   const verb = emailVerb(event.detail.type_key, failed);
@@ -213,6 +270,44 @@ function emailVerb(typeKey: string | null | undefined, failed: boolean): string 
   if (typeKey === 'editing_deliverable') return 'Delivery email sent';
   if (typeKey === 'content_drop_followup') return 'Follow-up email sent';
   return 'Notification sent';
+}
+
+function reviewSwatch(status: 'approved' | 'changes_requested' | 'comment' | 'video_revised'): {
+  cls: string;
+  icon: React.ReactNode;
+} {
+  if (status === 'approved') {
+    return {
+      cls: 'bg-emerald-500/10 text-emerald-400',
+      icon: <CheckCircle2 size={13} />,
+    };
+  }
+  if (status === 'changes_requested') {
+    return {
+      cls: 'bg-amber-500/10 text-amber-400',
+      icon: <AlertTriangle size={13} />,
+    };
+  }
+  if (status === 'video_revised') {
+    return {
+      cls: 'bg-accent-surface text-accent-text',
+      icon: <RefreshCw size={13} />,
+    };
+  }
+  return {
+    cls: 'bg-surface-hover text-text-secondary',
+    icon: <MessageSquare size={13} />,
+  };
+}
+
+function reviewVerb(
+  status: 'approved' | 'changes_requested' | 'comment' | 'video_revised',
+  author: string,
+): string {
+  if (status === 'approved') return `${author} approved a video`;
+  if (status === 'changes_requested') return `${author} requested changes`;
+  if (status === 'video_revised') return `${author} uploaded a revised video`;
+  return `${author} left a comment`;
 }
 
 function formatTimestamp(iso: string): string {

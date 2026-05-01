@@ -34,6 +34,13 @@ export interface EditingProjectVideo {
   position: number;
   uploaded_by: string | null;
   created_at: string;
+  /**
+   * Latest reviewer verdict for this cut, derived from
+   * `editing_project_review_comments` (newest non-resolved row that
+   * isn't a plain comment / video_revised event). Server-computed;
+   * not stored on the row itself.
+   */
+  review_status?: 'approved' | 'changes_requested' | null;
 }
 
 /**

@@ -97,26 +97,61 @@ export async function GET(
     strategist_name: r.strategist?.full_name ?? null,
   };
 
-  // Run the two child-row queries in parallel — they're independent and
-  // both feed the detail panel on the same render. Promise.all avoids
-  // the round-trip stacking flagged in MEMORY.md.
-  const [{ data: videos }, { data: rawVideos }] = await Promise.all([
-    admin
-      .from('editing_project_videos')
-      .select('*')
-      .eq('project_id', id)
-      .order('position', { ascending: true })
-      .order('version', { ascending: false }),
-    admin
-      .from('editing_project_raw_videos')
-      .select('*')
-      .eq('project_id', id)
-      .order('created_at', { ascending: false }),
-  ]);
+  // Run the three child-row queries in parallel — independent reads
+  // that all feed the detail panel on the same render.
+  const [{ data: videos }, { data: rawVideos }, { data: reviewComments }] =
+    await Promise.all([
+      admin
+        .from('editing_project_videos')
+        .select('*')
+        .eq('project_id', id)
+        .order('position', { ascending: true })
+        .order('version', { ascending: false }),
+      admin
+        .from('editing_project_raw_videos')
+        .select('*')
+        .eq('project_id', id)
+        .order('created_at', { ascending: false }),
+      // Walk newest-first so the first row we see for a given video_id
+      // wins. We strip 'comment'/'video_revised' since those don't
+      // change a cut's review state, and we treat resolved
+      // changes_requested rows as no-ops.
+      admin
+        .from('editing_project_review_comments')
+        .select('video_id, status, metadata, created_at')
+        .eq('project_id', id)
+        .order('created_at', { ascending: false }),
+    ]);
+
+  // Derive a per-video review status: 'approved' | 'changes_requested' | null.
+  // Walk newest -> oldest, keep the first non-resolved review row per
+  // video. The dialog uses this to render a status pill on each cut card.
+  type ReviewRow = {
+    video_id: string | null;
+    status: 'approved' | 'changes_requested' | 'comment' | 'video_revised';
+    metadata: Record<string, unknown> | null;
+  };
+  const reviewByVideo = new Map<string, 'approved' | 'changes_requested'>();
+  for (const c of (reviewComments ?? []) as ReviewRow[]) {
+    if (!c.video_id) continue;
+    if (reviewByVideo.has(c.video_id)) continue;
+    if (c.status === 'comment' || c.status === 'video_revised') continue;
+    if (
+      c.status === 'changes_requested' &&
+      (c.metadata as { resolved?: boolean } | null)?.resolved
+    )
+      continue;
+    reviewByVideo.set(c.video_id, c.status);
+  }
+
+  const videosWithStatus = (videos ?? []).map((v) => ({
+    ...v,
+    review_status: reviewByVideo.get(v.id as string) ?? null,
+  }));
 
   return NextResponse.json({
     project,
-    videos: videos ?? [],
+    videos: videosWithStatus,
     raw_videos: rawVideos ?? [],
   });
 }

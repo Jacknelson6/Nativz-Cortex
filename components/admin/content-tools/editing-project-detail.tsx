@@ -645,11 +645,24 @@ function VideoCard({
   onDelete: () => void;
 }) {
   const sizeLabel = video.size_bytes ? formatBytes(video.size_bytes) : '';
+  const status = video.review_status ?? null;
   return (
     <li className="group flex items-center gap-3 rounded-lg border border-nativz-border bg-background p-3">
       <VideoThumb video={video} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm text-text-primary">{video.filename}</p>
+        <div className="flex items-center gap-2">
+          <p className="truncate text-sm text-text-primary">{video.filename}</p>
+          {status === 'approved' && (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
+              <CheckCircle2 size={10} /> Approved
+            </span>
+          )}
+          {status === 'changes_requested' && (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-400">
+              Needs changes
+            </span>
+          )}
+        </div>
         <p className="text-[11px] text-text-muted">
           {sizeLabel}
           {video.version > 1 && ` - v${video.version}`}
