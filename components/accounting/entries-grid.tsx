@@ -5,6 +5,7 @@ import { Plus, Trash2, Sparkles, Check, Loader2, AlertCircle, X } from 'lucide-r
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { dollarsToCents } from '@/lib/accounting/periods';
+import { getPreset } from '@/lib/accounting/presets';
 
 type EntryType = 'editing' | 'smm' | 'affiliate' | 'blogging';
 
@@ -163,9 +164,12 @@ export function EntriesGrid({
       toast.info('All SMM-flagged clients already have a row.');
       return;
     }
+    const preset = getPreset('smm');
     setDrafts((prev) => [
       ...prev,
-      ...smmClients.map((c) => newDraft({ client_id: c.id })),
+      ...smmClients.map((c) =>
+        newDraft({ client_id: c.id, amount_cents: preset?.amount_cents ?? 0 }),
+      ),
     ]);
     toast.success(`Added ${smmClients.length} SMM ${smmClients.length === 1 ? 'client' : 'clients'}.`);
   }
@@ -809,7 +813,14 @@ function DraftRowUI({
           clients={clients}
           readonly={false}
           onPick={(id) => {
-            onChange({ client_id: id });
+            const patch: Partial<DraftRow> = { client_id: id };
+            // Auto-fill the preset amount on first client pick. Don't
+            // clobber a user-entered value if they typed first.
+            if (id && draft.amount_cents === 0) {
+              const preset = getPreset(draft.entry_type);
+              if (preset) patch.amount_cents = preset.amount_cents;
+            }
+            onChange(patch);
             onCommit();
           }}
         />
@@ -1277,6 +1288,12 @@ function BulkActionBar({
   const [desc, setDesc] = useState('');
 
   const memberLabel = service === 'smm' ? 'Manager' : payeeHeader(service);
+  const preset = getPreset(service);
+
+  function applyPreset() {
+    if (!preset) return;
+    onApply({ amount_cents: preset.amount_cents });
+  }
 
   function handleApply() {
     const patch: Parameters<typeof onApply>[0] = {};
@@ -1349,6 +1366,17 @@ function BulkActionBar({
           {busy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
           Apply
         </Button>
+        {preset && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={applyPreset}
+            disabled={busy}
+            title={`Apply preset (${preset.label})`}
+          >
+            <Sparkles size={13} /> Apply {preset.label.split(' ')[0]}
+          </Button>
+        )}
         <Button variant="outline" size="sm" onClick={onDelete} disabled={busy}>
           <Trash2 size={13} /> Delete
         </Button>
