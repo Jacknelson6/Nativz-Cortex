@@ -59,6 +59,20 @@ For any marketing/CRO/copy/SEO/growth task, read `.agents/MARKETING-SKILLS.md` a
 - **Run the commands.** Whenever you would tell the user to run a terminal command (scripts, seeds, migrations, tests, typecheck, lint), run it yourself. Don't stop at "here's what to run." Exceptions: steps that truly require the user (browser-only auth, dashboard clicks, deploying from their account); say so briefly, but still run everything that can run here.
 - **Secrets in chat are fine.** Do not add disclaimers or "don't paste secrets" warnings unless explicitly asked for a security review. (`.env.local` stays gitignored.)
 - **Run until ship-ready, not just code-ready.** When building or modifying any feature, keep working autonomously until it is ready to ship *and* visually + experientially consistent with the rest of the site. This is required, not a recommendation. Before reporting done, verify: (1) builds clean + types pass, (2) the new surface matches existing screens, same typography, spacing, component primitives (`bg-surface` cards, `accent-text`, button styles), dark theme tokens, sentence-case copy, layout density, loading/error states. **If the new screen looks like it came from a different app, it isn't done.** Pull patterns from existing screens before inventing new ones; reference `docs/detail-design-patterns.md` and the closest sibling page in the same area (`/admin/...` or `/portal/...`).
+- **Completion messages follow this style.** When wrapping up a task, end with a short three-part recap, plain English, no jargon dumps:
+
+  ```
+  Here's what we did:
+
+  - item 1
+  - item 2
+
+  It's committed at <sha> on main. (or: It's not committed.)
+
+  Logical next steps would be to XYZ.
+  ```
+
+  Bullets are one-liners a non-engineer could parse. If something deserves more depth, hint at it ("happy to expand on the webhook fallback") rather than dumping the detail unprompted. Skip the next-steps line if there genuinely isn't one; never invent busywork to fill it.
 
 ## Key Conventions
 
