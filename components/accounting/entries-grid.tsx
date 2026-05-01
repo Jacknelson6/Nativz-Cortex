@@ -1,0 +1,924 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import { Plus, Trash2, Sparkles, Check, Loader2, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { dollarsToCents } from '@/lib/accounting/periods';
+
+type EntryType = 'editing' | 'smm' | 'affiliate' | 'blogging';
+
+interface TeamMember { id: string; full_name: string | null; role: string | null }
+interface Client {
+  id: string;
+  name: string;
+  services?: string[] | null;
+  editing_rate_per_video_cents?: number | null;
+}
+
+export interface GridEntry {
+  id: string;
+  entry_type: EntryType | 'override' | 'misc';
+  team_member_id: string | null;
+  payee_label: string | null;
+  client_id: string | null;
+  video_count: number;
+  rate_cents: number;
+  amount_cents: number;
+  margin_cents: number;
+  description: string | null;
+  created_at: string;
+}
+
+interface DraftRow {
+  _localId: string;
+  team_member_id: string | null;
+  payee_label: string | null;
+  client_id: string | null;
+  video_count: number;
+  amount_cents: number;
+  description: string | null;
+  saving: boolean;
+  error: string | null;
+}
+
+interface EntriesGridProps {
+  service: EntryType;
+  entries: GridEntry[];
+  teamMembers: TeamMember[];
+  clients: Client[];
+  readonly: boolean;
+  periodId: string;
+  onLocalCreate: (entry: GridEntry) => void;
+  onLocalUpdate: (entry: GridEntry) => void;
+  onLocalDelete: (id: string) => void;
+}
+
+const SERVICE_LABELS: Record<EntryType, string> = {
+  editing: 'Editing',
+  smm: 'SMM',
+  affiliate: 'Affiliate',
+  blogging: 'Blogging',
+};
+
+function dollarsInputValue(cents: number): string {
+  if (!cents) return '';
+  return (cents / 100).toFixed(2);
+}
+
+function parseDollarsInput(raw: string): number {
+  const trimmed = raw.trim().replace(/[$,]/g, '');
+  if (!trimmed) return 0;
+  const n = parseFloat(trimmed);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 100);
+}
+
+export function EntriesGrid({
+  service,
+  entries,
+  teamMembers,
+  clients,
+  readonly,
+  periodId,
+  onLocalCreate,
+  onLocalUpdate,
+  onLocalDelete,
+}: EntriesGridProps) {
+  const [drafts, setDrafts] = useState<DraftRow[]>([]);
+  const [savingExisting, setSavingExisting] = useState<Set<string>>(new Set());
+  const [errorExisting, setErrorExisting] = useState<Map<string, string>>(new Map());
+
+  const memberById = useMemo(() => new Map(teamMembers.map((m) => [m.id, m])), [teamMembers]);
+  const clientById = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients]);
+
+  const isEditing = service === 'editing';
+
+  function newDraft(prefill?: Partial<DraftRow>): DraftRow {
+    return {
+      _localId: `draft-${Math.random().toString(36).slice(2, 9)}`,
+      team_member_id: prefill?.team_member_id ?? null,
+      payee_label: prefill?.payee_label ?? null,
+      client_id: prefill?.client_id ?? null,
+      video_count: prefill?.video_count ?? 0,
+      amount_cents: prefill?.amount_cents ?? 0,
+      description: prefill?.description ?? null,
+      saving: false,
+      error: null,
+    };
+  }
+
+  function addBlankDraft() {
+    setDrafts((prev) => [...prev, newDraft()]);
+  }
+
+  function autoAddSmmClients() {
+    const existingClientIds = new Set([
+      ...entries.map((e) => e.client_id).filter(Boolean),
+      ...drafts.map((d) => d.client_id).filter(Boolean),
+    ]);
+    const smmClients = clients.filter(
+      (c) => Array.isArray(c.services) && c.services.includes('SMM') && !existingClientIds.has(c.id),
+    );
+    if (smmClients.length === 0) {
+      toast.info('All SMM-flagged clients already have a row.');
+      return;
+    }
+    setDrafts((prev) => [
+      ...prev,
+      ...smmClients.map((c) => newDraft({ client_id: c.id })),
+    ]);
+    toast.success(`Added ${smmClients.length} SMM ${smmClients.length === 1 ? 'client' : 'clients'}.`);
+  }
+
+  function updateDraft(localId: string, patch: Partial<DraftRow>) {
+    setDrafts((prev) =>
+      prev.map((d) => (d._localId === localId ? { ...d, ...patch, error: null } : d)),
+    );
+  }
+
+  function removeDraft(localId: string) {
+    setDrafts((prev) => prev.filter((d) => d._localId !== localId));
+  }
+
+  function isDraftReadyToSave(d: DraftRow): boolean {
+    const hasPayee = Boolean(d.team_member_id) || Boolean(d.payee_label?.trim());
+    const hasMoney = d.amount_cents > 0 || (isEditing && d.video_count > 0);
+    return hasPayee && hasMoney;
+  }
+
+  async function persistDraft(d: DraftRow) {
+    if (!isDraftReadyToSave(d) || d.saving) return;
+    setDrafts((prev) =>
+      prev.map((x) => (x._localId === d._localId ? { ...x, saving: true, error: null } : x)),
+    );
+
+    const margin = isEditing ? computeEditingMargin(d, clientById) : 0;
+    const ratePerVideo =
+      isEditing && d.video_count > 0
+        ? Math.round(d.amount_cents / d.video_count)
+        : 0;
+
+    try {
+      const res = await fetch('/api/accounting/entries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          period_id: periodId,
+          entry_type: service,
+          team_member_id: d.team_member_id,
+          payee_label: d.payee_label?.trim() || null,
+          client_id: d.client_id,
+          video_count: d.video_count,
+          rate_cents: ratePerVideo,
+          amount_cents: d.amount_cents,
+          margin_cents: margin,
+          description: d.description?.trim() || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setDrafts((prev) =>
+          prev.map((x) =>
+            x._localId === d._localId
+              ? { ...x, saving: false, error: data.error ?? 'Failed to save' }
+              : x,
+          ),
+        );
+        return;
+      }
+      onLocalCreate(data.entry);
+      removeDraft(d._localId);
+    } catch {
+      setDrafts((prev) =>
+        prev.map((x) =>
+          x._localId === d._localId ? { ...x, saving: false, error: 'Network error' } : x,
+        ),
+      );
+    }
+  }
+
+  async function patchExisting(entry: GridEntry, patch: Partial<GridEntry>) {
+    setSavingExisting((s) => new Set(s).add(entry.id));
+    setErrorExisting((m) => {
+      const next = new Map(m);
+      next.delete(entry.id);
+      return next;
+    });
+
+    const merged: GridEntry = { ...entry, ...patch };
+    if (isEditing) {
+      merged.margin_cents = computeEditingMargin(merged, clientById);
+      merged.rate_cents =
+        merged.video_count > 0 ? Math.round(merged.amount_cents / merged.video_count) : 0;
+    }
+
+    const body: Record<string, unknown> = { ...patch };
+    if (isEditing) {
+      body.margin_cents = merged.margin_cents;
+      body.rate_cents = merged.rate_cents;
+    }
+
+    onLocalUpdate(merged);
+
+    try {
+      const res = await fetch(`/api/accounting/entries/${entry.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorExisting((m) => new Map(m).set(entry.id, data.error ?? 'Failed to save'));
+        onLocalUpdate(entry);
+      }
+    } catch {
+      setErrorExisting((m) => new Map(m).set(entry.id, 'Network error'));
+      onLocalUpdate(entry);
+    } finally {
+      setSavingExisting((s) => {
+        const next = new Set(s);
+        next.delete(entry.id);
+        return next;
+      });
+    }
+  }
+
+  async function deleteExisting(entry: GridEntry) {
+    onLocalDelete(entry.id);
+    const res = await fetch(`/api/accounting/entries/${entry.id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      toast.error('Failed to delete');
+      onLocalUpdate(entry);
+    }
+  }
+
+  const totalEntries = entries.length + drafts.length;
+
+  return (
+    <div className="space-y-3">
+      {!readonly && service === 'smm' && (
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-nativz-border bg-surface px-4 py-3">
+          <p className="text-sm text-text-secondary">
+            Auto-fill from clients with SMM in their service list, then tweak per-period.
+          </p>
+          <Button variant="outline" size="sm" onClick={autoAddSmmClients}>
+            <Sparkles size={14} /> Add SMM clients
+          </Button>
+        </div>
+      )}
+
+      {totalEntries === 0 ? (
+        <div className="rounded-xl border border-dashed border-nativz-border bg-surface px-4 py-12 text-center">
+          <p className="text-base text-text-secondary mb-4">
+            No {SERVICE_LABELS[service].toLowerCase()} entries yet.
+          </p>
+          {!readonly && (
+            <Button variant="outline" onClick={addBlankDraft}>
+              <Plus size={14} /> Add row
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-nativz-border bg-surface">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-nativz-border bg-background/40 text-left">
+                <HeadCell>{isEditing ? 'Editor' : payeeHeader(service)}</HeadCell>
+                <HeadCell>Client</HeadCell>
+                {isEditing && <HeadCell className="w-20">Videos</HeadCell>}
+                <HeadCell className="w-32">{isEditing ? 'Editor cost' : 'Amount'}</HeadCell>
+                {isEditing && <HeadCell className="w-32">Revenue</HeadCell>}
+                {isEditing && <HeadCell className="w-32">Margin</HeadCell>}
+                <HeadCell>Description</HeadCell>
+                {!readonly && <HeadCell className="w-10" />}
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((e) => (
+                <ExistingRow
+                  key={e.id}
+                  entry={e}
+                  service={service}
+                  teamMembers={teamMembers}
+                  clients={clients}
+                  clientById={clientById}
+                  memberById={memberById}
+                  readonly={readonly}
+                  saving={savingExisting.has(e.id)}
+                  error={errorExisting.get(e.id) ?? null}
+                  onPatch={(patch) => patchExisting(e, patch)}
+                  onDelete={() => deleteExisting(e)}
+                />
+              ))}
+              {drafts.map((d) => (
+                <DraftRowUI
+                  key={d._localId}
+                  draft={d}
+                  service={service}
+                  teamMembers={teamMembers}
+                  clients={clients}
+                  clientById={clientById}
+                  readyToSave={isDraftReadyToSave(d)}
+                  onChange={(patch) => updateDraft(d._localId, patch)}
+                  onCommit={() => persistDraft(d)}
+                  onRemove={() => removeDraft(d._localId)}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {!readonly && totalEntries > 0 && (
+        <div className="flex justify-start">
+          <Button variant="outline" size="sm" onClick={addBlankDraft}>
+            <Plus size={14} /> Add row
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function payeeHeader(service: EntryType): string {
+  if (service === 'smm') return 'Manager';
+  if (service === 'affiliate') return 'Payee';
+  if (service === 'blogging') return 'Blogger';
+  return 'Editor';
+}
+
+function HeadCell({ children, className }: { children?: React.ReactNode; className?: string }) {
+  return (
+    <th
+      className={`px-3 py-2 text-[11px] uppercase tracking-wide font-semibold text-text-muted ${className ?? ''}`}
+    >
+      {children}
+    </th>
+  );
+}
+
+function computeEditingMargin(
+  row: { client_id: string | null; video_count: number; amount_cents: number },
+  clientById: Map<string, Client>,
+): number {
+  const c = row.client_id ? clientById.get(row.client_id) : null;
+  const ratePerVideo = c?.editing_rate_per_video_cents ?? 5000;
+  const revenue = (row.video_count ?? 0) * ratePerVideo;
+  return revenue - (row.amount_cents ?? 0);
+}
+
+function computeEditingRevenue(
+  row: { client_id: string | null; video_count: number },
+  clientById: Map<string, Client>,
+): number {
+  const c = row.client_id ? clientById.get(row.client_id) : null;
+  const ratePerVideo = c?.editing_rate_per_video_cents ?? 5000;
+  return (row.video_count ?? 0) * ratePerVideo;
+}
+
+// ── Row: existing entry (PATCH on blur) ───────────────────────────────────
+
+function ExistingRow({
+  entry,
+  service,
+  teamMembers,
+  clients,
+  clientById,
+  memberById,
+  readonly,
+  saving,
+  error,
+  onPatch,
+  onDelete,
+}: {
+  entry: GridEntry;
+  service: EntryType;
+  teamMembers: TeamMember[];
+  clients: Client[];
+  clientById: Map<string, Client>;
+  memberById: Map<string, TeamMember>;
+  readonly: boolean;
+  saving: boolean;
+  error: string | null;
+  onPatch: (patch: Partial<GridEntry>) => void;
+  onDelete: () => void;
+}) {
+  const isEditing = service === 'editing';
+  const revenue = isEditing ? computeEditingRevenue(entry, clientById) : 0;
+  const margin = isEditing ? computeEditingMargin(entry, clientById) : 0;
+
+  return (
+    <tr className="border-t border-nativz-border first:border-t-0">
+      <Cell>
+        <PayeePicker
+          teamMemberId={entry.team_member_id}
+          payeeLabel={entry.payee_label}
+          teamMembers={teamMembers}
+          memberById={memberById}
+          readonly={readonly}
+          onPickMember={(id) => onPatch({ team_member_id: id, payee_label: null })}
+          onTypeLabel={(label) => onPatch({ team_member_id: null, payee_label: label })}
+        />
+      </Cell>
+      <Cell>
+        <ClientPicker
+          clientId={entry.client_id}
+          clients={clients}
+          readonly={readonly}
+          onPick={(id) => onPatch({ client_id: id })}
+        />
+      </Cell>
+      {isEditing && (
+        <Cell>
+          <NumberInput
+            value={entry.video_count}
+            readonly={readonly}
+            onCommit={(v) => v !== entry.video_count && onPatch({ video_count: v })}
+          />
+        </Cell>
+      )}
+      <Cell>
+        <DollarInput
+          cents={entry.amount_cents}
+          readonly={readonly}
+          onCommit={(c) => c !== entry.amount_cents && onPatch({ amount_cents: c })}
+        />
+      </Cell>
+      {isEditing && (
+        <Cell>
+          <ReadonlyDollar cents={revenue} />
+        </Cell>
+      )}
+      {isEditing && (
+        <Cell>
+          <ReadonlyDollar cents={margin} dim={margin === 0} negative={margin < 0} />
+        </Cell>
+      )}
+      <Cell>
+        <TextInput
+          value={entry.description ?? ''}
+          placeholder="Optional"
+          readonly={readonly}
+          onCommit={(v) => v !== (entry.description ?? '') && onPatch({ description: v || null })}
+        />
+      </Cell>
+      {!readonly && (
+        <Cell>
+          <RowStatus
+            saving={saving}
+            error={error}
+            onDelete={onDelete}
+          />
+        </Cell>
+      )}
+    </tr>
+  );
+}
+
+// ── Row: unsaved draft ────────────────────────────────────────────────────
+
+function DraftRowUI({
+  draft,
+  service,
+  teamMembers,
+  clients,
+  clientById,
+  readyToSave,
+  onChange,
+  onCommit,
+  onRemove,
+}: {
+  draft: DraftRow;
+  service: EntryType;
+  teamMembers: TeamMember[];
+  clients: Client[];
+  clientById: Map<string, Client>;
+  readyToSave: boolean;
+  onChange: (patch: Partial<DraftRow>) => void;
+  onCommit: () => void;
+  onRemove: () => void;
+}) {
+  const isEditing = service === 'editing';
+  const revenue = isEditing ? computeEditingRevenue(draft, clientById) : 0;
+  const margin = isEditing ? revenue - draft.amount_cents : 0;
+  const memberById = useMemo(() => new Map(teamMembers.map((m) => [m.id, m])), [teamMembers]);
+
+  return (
+    <tr className="border-t border-nativz-border bg-accent/[0.03]">
+      <Cell>
+        <PayeePicker
+          teamMemberId={draft.team_member_id}
+          payeeLabel={draft.payee_label}
+          teamMembers={teamMembers}
+          memberById={memberById}
+          readonly={false}
+          onPickMember={(id) => {
+            onChange({ team_member_id: id, payee_label: null });
+            if (id) setTimeout(onCommit, 0);
+          }}
+          onTypeLabel={(label) => onChange({ team_member_id: null, payee_label: label })}
+          onBlur={onCommit}
+        />
+      </Cell>
+      <Cell>
+        <ClientPicker
+          clientId={draft.client_id}
+          clients={clients}
+          readonly={false}
+          onPick={(id) => {
+            onChange({ client_id: id });
+            setTimeout(onCommit, 0);
+          }}
+        />
+      </Cell>
+      {isEditing && (
+        <Cell>
+          <NumberInput
+            value={draft.video_count}
+            readonly={false}
+            onCommit={(v) => {
+              onChange({ video_count: v });
+              setTimeout(onCommit, 0);
+            }}
+          />
+        </Cell>
+      )}
+      <Cell>
+        <DollarInput
+          cents={draft.amount_cents}
+          readonly={false}
+          onCommit={(c) => {
+            onChange({ amount_cents: c });
+            setTimeout(onCommit, 0);
+          }}
+        />
+      </Cell>
+      {isEditing && (
+        <Cell>
+          <ReadonlyDollar cents={revenue} />
+        </Cell>
+      )}
+      {isEditing && (
+        <Cell>
+          <ReadonlyDollar cents={margin} dim={margin === 0} negative={margin < 0} />
+        </Cell>
+      )}
+      <Cell>
+        <TextInput
+          value={draft.description ?? ''}
+          placeholder="Optional"
+          readonly={false}
+          onCommit={(v) => {
+            onChange({ description: v || null });
+            setTimeout(onCommit, 0);
+          }}
+        />
+      </Cell>
+      <Cell>
+        <DraftStatus
+          ready={readyToSave}
+          saving={draft.saving}
+          error={draft.error}
+          onRemove={onRemove}
+        />
+      </Cell>
+    </tr>
+  );
+}
+
+// ── Cell shells ───────────────────────────────────────────────────────────
+
+function Cell({ children }: { children: React.ReactNode }) {
+  return <td className="px-3 py-1.5 align-middle">{children}</td>;
+}
+
+const cellInputCx =
+  'block w-full rounded-md border border-transparent bg-transparent px-2 py-1 text-sm text-text-primary placeholder-text-muted hover:border-nativz-border focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent';
+
+function PayeePicker({
+  teamMemberId,
+  payeeLabel,
+  teamMembers,
+  memberById,
+  readonly,
+  onPickMember,
+  onTypeLabel,
+  onBlur,
+}: {
+  teamMemberId: string | null;
+  payeeLabel: string | null;
+  teamMembers: TeamMember[];
+  memberById: Map<string, TeamMember>;
+  readonly: boolean;
+  onPickMember: (id: string | null) => void;
+  onTypeLabel: (label: string) => void;
+  onBlur?: () => void;
+}) {
+  const [mode, setMode] = useState<'member' | 'label'>(
+    teamMemberId ? 'member' : payeeLabel ? 'label' : 'member',
+  );
+
+  if (readonly) {
+    return (
+      <span className="text-text-primary">
+        {teamMemberId
+          ? memberById.get(teamMemberId)?.full_name ?? '—'
+          : payeeLabel?.trim() || '—'}
+      </span>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      {mode === 'member' ? (
+        <select
+          value={teamMemberId ?? ''}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === '__label__') {
+              setMode('label');
+              onPickMember(null);
+              return;
+            }
+            onPickMember(v || null);
+          }}
+          onBlur={onBlur}
+          className={cellInputCx + ' min-w-[8rem]'}
+        >
+          <option value="">— pick —</option>
+          {teamMembers.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.full_name ?? 'unnamed'}
+            </option>
+          ))}
+          <option value="__label__">+ Custom name…</option>
+        </select>
+      ) : (
+        <>
+          <input
+            type="text"
+            value={payeeLabel ?? ''}
+            placeholder="Freelancer name"
+            onChange={(e) => onTypeLabel(e.target.value)}
+            onBlur={onBlur}
+            className={cellInputCx + ' min-w-[8rem]'}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              setMode('member');
+              onTypeLabel('');
+            }}
+            className="text-xs text-text-muted hover:text-text-secondary"
+            title="Switch back to team member dropdown"
+          >
+            ↩
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ClientPicker({
+  clientId,
+  clients,
+  readonly,
+  onPick,
+}: {
+  clientId: string | null;
+  clients: Client[];
+  readonly: boolean;
+  onPick: (id: string | null) => void;
+}) {
+  if (readonly) {
+    const c = clientId ? clients.find((x) => x.id === clientId) : null;
+    return <span className="text-text-primary">{c?.name ?? '—'}</span>;
+  }
+  return (
+    <select
+      value={clientId ?? ''}
+      onChange={(e) => onPick(e.target.value || null)}
+      className={cellInputCx + ' min-w-[8rem]'}
+    >
+      <option value="">— none —</option>
+      {clients.map((c) => (
+        <option key={c.id} value={c.id}>
+          {c.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function NumberInput({
+  value,
+  readonly,
+  onCommit,
+}: {
+  value: number;
+  readonly: boolean;
+  onCommit: (v: number) => void;
+}) {
+  const [local, setLocal] = useState(String(value || ''));
+  const [seen, setSeen] = useState(value);
+  if (seen !== value) {
+    setSeen(value);
+    setLocal(String(value || ''));
+  }
+
+  if (readonly) {
+    return <span className="tabular-nums text-text-primary">{value || 0}</span>;
+  }
+  return (
+    <input
+      type="number"
+      min="0"
+      value={local}
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={() => {
+        const n = parseInt(local, 10);
+        const next = Number.isFinite(n) && n >= 0 ? n : 0;
+        if (next !== value) onCommit(next);
+      }}
+      className={cellInputCx + ' tabular-nums'}
+    />
+  );
+}
+
+function DollarInput({
+  cents,
+  readonly,
+  onCommit,
+}: {
+  cents: number;
+  readonly: boolean;
+  onCommit: (cents: number) => void;
+}) {
+  const [local, setLocal] = useState(dollarsInputValue(cents));
+  const [seen, setSeen] = useState(cents);
+  if (seen !== cents) {
+    setSeen(cents);
+    setLocal(dollarsInputValue(cents));
+  }
+
+  if (readonly) {
+    return (
+      <span className="tabular-nums text-text-primary">
+        {cents ? `$${(cents / 100).toFixed(2)}` : '—'}
+      </span>
+    );
+  }
+  return (
+    <div className="relative">
+      <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-text-muted text-xs">
+        $
+      </span>
+      <input
+        type="text"
+        inputMode="decimal"
+        value={local}
+        onChange={(e) => setLocal(e.target.value)}
+        placeholder="0.00"
+        onBlur={() => {
+          const next = parseDollarsInput(local);
+          if (next !== cents) onCommit(next);
+          setLocal(dollarsInputValue(next));
+        }}
+        className={cellInputCx + ' pl-5 tabular-nums'}
+      />
+    </div>
+  );
+}
+
+function ReadonlyDollar({
+  cents,
+  dim,
+  negative,
+}: {
+  cents: number;
+  dim?: boolean;
+  negative?: boolean;
+}) {
+  const cls = negative
+    ? 'text-red-400'
+    : dim
+      ? 'text-text-muted'
+      : 'text-text-primary font-medium';
+  return (
+    <span className={`tabular-nums ${cls}`}>
+      {cents === 0 ? '—' : `${negative ? '-' : ''}$${(Math.abs(cents) / 100).toFixed(2)}`}
+    </span>
+  );
+}
+
+function TextInput({
+  value,
+  placeholder,
+  readonly,
+  onCommit,
+}: {
+  value: string;
+  placeholder?: string;
+  readonly: boolean;
+  onCommit: (v: string) => void;
+}) {
+  const [local, setLocal] = useState(value);
+  const [seen, setSeen] = useState(value);
+  if (seen !== value) {
+    setSeen(value);
+    setLocal(value);
+  }
+
+  if (readonly) {
+    return (
+      <span className="text-text-secondary text-sm">{value || '—'}</span>
+    );
+  }
+  return (
+    <input
+      type="text"
+      value={local}
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={() => {
+        const trimmed = local.trim();
+        if (trimmed !== value) onCommit(trimmed);
+      }}
+      placeholder={placeholder}
+      className={cellInputCx}
+    />
+  );
+}
+
+function RowStatus({
+  saving,
+  error,
+  onDelete,
+}: {
+  saving: boolean;
+  error: string | null;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-end gap-1.5">
+      {saving ? (
+        <Loader2 size={13} className="animate-spin text-text-muted" />
+      ) : error ? (
+        <span title={error} className="text-red-400">
+          <AlertCircle size={13} />
+        </span>
+      ) : null}
+      <button
+        type="button"
+        onClick={onDelete}
+        className="rounded p-1 text-text-muted hover:bg-surface-hover hover:text-red-400"
+        title="Delete row"
+      >
+        <Trash2 size={13} />
+      </button>
+    </div>
+  );
+}
+
+function DraftStatus({
+  ready,
+  saving,
+  error,
+  onRemove,
+}: {
+  ready: boolean;
+  saving: boolean;
+  error: string | null;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-end gap-1.5">
+      {saving ? (
+        <Loader2 size={13} className="animate-spin text-text-muted" />
+      ) : error ? (
+        <span title={error} className="text-red-400">
+          <AlertCircle size={13} />
+        </span>
+      ) : ready ? (
+        <Check size={13} className="text-emerald-400" />
+      ) : (
+        <span className="text-[10px] uppercase tracking-wide text-text-muted">draft</span>
+      )}
+      <button
+        type="button"
+        onClick={onRemove}
+        className="rounded p-1 text-text-muted hover:bg-surface-hover hover:text-red-400"
+        title="Discard draft row"
+      >
+        <Trash2 size={13} />
+      </button>
+    </div>
+  );
+}
+
+// Re-exported in case the period detail wants to inline-call this for its
+// own draft state preview.
+export function _internalDollarsToCents(v: string) {
+  return dollarsToCents(v);
+}

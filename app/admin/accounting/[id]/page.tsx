@@ -39,7 +39,10 @@ export default async function AccountingPeriodPage({ params }: { params: Promise
       .select('id, full_name, role, is_active, user_id, created_at')
       .eq('is_active', true)
       .order('full_name'),
-    adminClient.from('clients').select('id, name').order('name'),
+    adminClient
+      .from('clients')
+      .select('id, name, services, editing_rate_per_video_cents')
+      .order('name'),
   ]);
   if (userRow?.role !== 'admin') redirect('/admin/dashboard');
   if (!period) notFound();

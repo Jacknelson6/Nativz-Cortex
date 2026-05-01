@@ -5,11 +5,17 @@ import { labelFor, centsToDollars } from '@/lib/accounting/periods';
 
 /**
  * GET /api/accounting/periods/[id]/export — CSV download of every entry in
- * the period. Columns are ordered for the "drop into a spreadsheet and
- * paste into bookkeeping" workflow, with headers the tax person can read.
+ * the period.
+ *
+ *   ?format=quickbooks (default) — five-column Bills shape that QuickBooks
+ *     Online imports cleanly: Date, Vendor, Account, Memo, Amount.
+ *   ?format=detailed — long-form columns for spreadsheet review.
  */
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const url = new URL(req.url);
+  const format = url.searchParams.get('format') === 'detailed' ? 'detailed' : 'quickbooks';
+
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -53,6 +59,84 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const memberName = new Map((members ?? []).map((m) => [m.id, m.full_name ?? '']));
   const clientName = new Map((clients ?? []).map((c) => [c.id, c.name]));
 
+  const csv =
+    format === 'detailed'
+      ? buildDetailedCsv(entries ?? [], memberName, clientName)
+      : buildQuickbooksCsv(entries ?? [], memberName, clientName, period.end_date as string);
+
+  const filename =
+    format === 'detailed'
+      ? `payroll-${period.start_date}-${period.half}-detailed.csv`
+      : `quickbooks-bills-${period.start_date}-${period.half}.csv`;
+
+  return new NextResponse(csv, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Cache-Control': 'no-store',
+      'X-Payroll-Period': encodeURIComponent(
+        labelFor(period.start_date, period.half as 'first-half' | 'second-half'),
+      ),
+    },
+  });
+}
+
+const QB_ACCOUNT_BY_TYPE: Record<string, string> = {
+  editing: 'Payroll - Editing',
+  smm: 'Payroll - SMM',
+  affiliate: 'Affiliate Payouts',
+  blogging: 'Payroll - Blogging',
+  override: 'Payroll - Misc',
+  misc: 'Payroll - Misc',
+};
+
+interface RawEntry {
+  entry_type: string;
+  team_member_id: string | null;
+  payee_label: string | null;
+  client_id: string | null;
+  video_count: number | null;
+  rate_cents: number | null;
+  amount_cents: number | null;
+  margin_cents: number | null;
+  description: string | null;
+  created_at: string;
+}
+
+function buildQuickbooksCsv(
+  entries: RawEntry[],
+  memberName: Map<string, string>,
+  clientName: Map<string, string>,
+  billDate: string,
+): string {
+  const header = ['Date', 'Vendor', 'Account', 'Memo', 'Amount'];
+  const rows = entries
+    .filter((e) => (e.amount_cents ?? 0) > 0)
+    .map((e) => {
+      const vendor = e.team_member_id
+        ? memberName.get(e.team_member_id) ?? ''
+        : (e.payee_label ?? '').trim();
+      const account = QB_ACCOUNT_BY_TYPE[e.entry_type] ?? 'Payroll - Misc';
+      const client = e.client_id ? clientName.get(e.client_id) ?? '' : '';
+      const memoParts = [
+        client ? client : null,
+        e.video_count ? `${e.video_count} videos` : null,
+        e.description?.trim() || null,
+      ].filter(Boolean);
+      const memo = memoParts.join(' · ').replace(/\r?\n/g, ' ');
+      const amount = ((e.amount_cents ?? 0) / 100).toFixed(2);
+      return [billDate, vendor, account, memo, amount];
+    });
+
+  return [header, ...rows].map((cols) => cols.map(csvEscape).join(',')).join('\n');
+}
+
+function buildDetailedCsv(
+  entries: RawEntry[],
+  memberName: Map<string, string>,
+  clientName: Map<string, string>,
+): string {
   const header = [
     'Type',
     'Payee',
@@ -64,8 +148,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     'Description',
     'Created',
   ];
-
-  const rows = (entries ?? []).map((e) => [
+  const rows = entries.map((e) => [
     e.entry_type,
     e.team_member_id ? memberName.get(e.team_member_id) ?? '' : e.payee_label ?? '',
     e.client_id ? clientName.get(e.client_id) ?? '' : '',
@@ -76,25 +159,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     (e.description ?? '').replace(/\r?\n/g, ' '),
     new Date(e.created_at).toISOString().split('T')[0],
   ]);
-
-  const csv = [header, ...rows]
-    .map((cols) => cols.map(csvEscape).join(','))
-    .join('\n');
-
-  const filename = `payroll-${period.start_date}-${period.half}.csv`;
-  return new NextResponse(csv, {
-    status: 200,
-    headers: {
-      'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="${filename}"`,
-      'Cache-Control': 'no-store',
-      // RFC 7230 restricts header values to ASCII — the period label contains
-      // `·` and an en-dash, which make Node throw before the body is sent.
-      'X-Payroll-Period': encodeURIComponent(
-        labelFor(period.start_date, period.half as 'first-half' | 'second-half'),
-      ),
-    },
-  });
+  return [header, ...rows].map((cols) => cols.map(csvEscape).join(',')).join('\n');
 }
 
 function csvEscape(cell: string): string {
