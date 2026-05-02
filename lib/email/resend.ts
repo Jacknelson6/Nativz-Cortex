@@ -278,8 +278,13 @@ export function layout(
     .nz-shell-header::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(to right, ${BRAND.accent}, ${BRAND.accentDark}); }
     .logo { display: block; height: ${BRAND.logoHeight}; width: auto; margin: 0 0 ${BRAND.logoMarginBottom}; }
     .eyebrow { font-size: 11px; font-weight: ${BRAND.eyebrowWeight}; letter-spacing: ${BRAND.eyebrowLetterSpacing}; text-transform: uppercase; color: ${BRAND.accent} !important; margin: 0; text-align: left; }
-    .hero-title { font-family: ${BRAND.titleFontStack}; color: #ffffff !important; font-size: ${BRAND.titleSize}; font-weight: ${BRAND.titleWeight}; letter-spacing: ${BRAND.titleLetterSpacing}; line-height: ${BRAND.titleLineHeight}; margin: 14px 0 0; max-width: 460px; text-align: left; mso-line-height-rule: exactly; }
-    .hero-title font { color: #ffffff !important; }
+    /* -webkit-text-fill-color is the one property Gmail's Android/iOS dark
+       mode does NOT invert. Without it, the white headline on the blue hero
+       gets repainted near-black on Gmail mobile dark, making the title
+       unreadable against the dark gradient. Belt-and-suspenders: keep the
+       inline color attr, the <font color>, AND -webkit-text-fill-color. */
+    .hero-title { font-family: ${BRAND.titleFontStack}; color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; font-size: ${BRAND.titleSize}; font-weight: ${BRAND.titleWeight}; letter-spacing: ${BRAND.titleLetterSpacing}; line-height: ${BRAND.titleLineHeight}; margin: 14px 0 0; max-width: 460px; text-align: left; mso-line-height-rule: exactly; }
+    .hero-title font { color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; }
     .nz-shell-body { padding: 32px 32px 28px; background: ${BRAND.cardBg}; text-align: left; }
     /* Strip any nested <div class="card"> styling so legacy templates passthrough. */
     .nz-shell-body .card { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; border-radius: 0 !important; }
@@ -297,6 +302,7 @@ export function layout(
       display: inline-block;
       background: ${BRAND.accent};
       color: #ffffff !important;
+      -webkit-text-fill-color: #ffffff !important;
       text-decoration: none;
       font-weight: 700;
       padding: 14px 32px;
@@ -305,7 +311,7 @@ export function layout(
       letter-spacing: 0.01em;
       mso-padding-alt: 14px 32px;
     }
-    .button font, .btn font { color: #ffffff !important; }
+    .button font, .btn font { color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; }
 
     /* Divider */
     .divider { border: none; border-top: 1px solid ${BRAND.border}; margin: 24px 0; }
@@ -344,21 +350,21 @@ export function layout(
     @media (prefers-color-scheme: dark) {
       body, .wrap, .nz-shell-body { background: ${BRAND.pageBg} !important; color: ${BRAND.textPrimary} !important; }
       .nz-shell-header { background: ${BRAND.headerGradStart} !important; background: linear-gradient(135deg, ${BRAND.headerGradStart} 0%, ${BRAND.headerGradEnd} 100%) !important; }
-      .hero-title, .hero-title font { color: #ffffff !important; }
+      .hero-title, .hero-title font { color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; }
       .eyebrow { color: ${BRAND.accent} !important; }
       .heading { color: ${BRAND.textPrimary} !important; }
       .subtext { color: ${BRAND.textBody} !important; }
       .small, .footer p, .tagline { color: ${BRAND.textMuted} !important; }
-      .button, .btn { background: ${BRAND.accent} !important; color: #ffffff !important; }
+      .button, .btn { background: ${BRAND.accent} !important; color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; }
       .stats { background: ${BRAND.panelBg} !important; }
       .stats td.k { color: ${BRAND.textMuted} !important; }
       .stats td.v { color: ${BRAND.textPrimary} !important; }
       .highlight { color: ${BRAND.accentDark} !important; }
     }
-    [data-ogsc] .hero-title, [data-ogsc] .hero-title font { color: #ffffff !important; }
+    [data-ogsc] .hero-title, [data-ogsc] .hero-title font { color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; }
     [data-ogsc] .eyebrow { color: ${BRAND.accent} !important; }
     [data-ogsb] .nz-shell-header { background: ${BRAND.headerGradStart} !important; }
-    u + .body .hero-title, u + .body .hero-title font { color: #ffffff !important; }
+    u + .body .hero-title, u + .body .hero-title font { color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; }
   </style>
 </head>
 <body class="body" style="margin:0;padding:0;background-color:${BRAND.pageBg};">
@@ -370,7 +376,7 @@ export function layout(
             <div class="nz-shell-header" bgcolor="${BRAND.headerGradStart}" style="text-align:left;background-color:${BRAND.headerGradStart};">
               <img class="logo" src="${logoSrc}" alt="${BRAND.brandName}" />
               ${eyebrowText ? `<p class="eyebrow" style="text-align:left;color:${BRAND.accent};">${eyebrowText}</p>` : ''}
-              ${heroTitle ? `<h1 class="hero-title" style="text-align:left;color:#ffffff;"><font color="#FFFFFF" style="color:#ffffff;">${heroTitle}</font></h1>` : ''}
+              ${heroTitle ? `<h1 class="hero-title" style="text-align:left;color:#ffffff;-webkit-text-fill-color:#ffffff;"><font color="#FFFFFF" style="color:#ffffff;-webkit-text-fill-color:#ffffff;">${heroTitle}</font></h1>` : ''}
             </div>
             <div class="nz-shell-stripe" style="height:3px;line-height:3px;font-size:0;background:linear-gradient(to right, ${BRAND.accent}, ${BRAND.accentDark});background-color:${BRAND.accent};">&nbsp;</div>
             <div class="nz-shell-body" style="text-align:left;">
