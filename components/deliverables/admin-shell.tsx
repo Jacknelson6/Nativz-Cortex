@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * AdminShell — per-(client, type) deliverables admin replacing
+ * AdminShell, per-(client, type) deliverables admin replacing
  * `CreditsAdminPanel`.
  *
  * Layout:
@@ -273,7 +273,7 @@ export function AdminShell({
         </div>
       ) : null}
 
-      {/* Tier header — admin-only summary of the assigned package_tier with
+      {/* Tier header, admin-only summary of the assigned package_tier with
           a button to swap. Mid-period swaps run through `applyTierChange`
           which prorates the delta and is idempotent on retry. */}
       <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-nativz-border bg-surface p-4">

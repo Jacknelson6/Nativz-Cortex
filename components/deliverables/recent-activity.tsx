@@ -1,5 +1,5 @@
 /**
- * RecentActivity — calm activity feed replacing the old credits ledger table.
+ * RecentActivity, calm activity feed replacing the old credits ledger table.
  *
  * Renders `RecentActivityEntry[]` from `lib/deliverables/get-recent-activity.ts`.
  * The PRD asked for a feed that reads like a billing statement, not an audit

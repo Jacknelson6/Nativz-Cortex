@@ -6,14 +6,14 @@
  * round-tripping to Postgres on every consume/grant is wasteful. We cache
  * the table for 60s.
  *
- * The cache is process-local — Vercel Functions hot-pool instances under
+ * The cache is process-local, Vercel Functions hot-pool instances under
  * Fluid Compute, so a single instance can serve thousands of requests off
  * one fetch. Stampede protection is handled by tracking the in-flight
  * promise: concurrent first-fetches share the same await.
  *
  * Cache invalidation: 60s TTL only. New slugs land via migration, so the
  * cache settles within a minute of any new type going live without an
- * explicit bust. Admin tooling that mutates types (none yet — Phase B+)
+ * explicit bust. Admin tooling that mutates types (none yet, Phase B+)
  * should call `invalidateDeliverableTypesCache()` after writes.
  */
 

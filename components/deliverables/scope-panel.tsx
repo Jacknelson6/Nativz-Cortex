@@ -1,5 +1,5 @@
 /**
- * ScopePanel — "What's in scope this month" summary on /deliverables.
+ * ScopePanel, "What's in scope this month" summary on /deliverables.
  *
  * Reads a `ScopeTier` (from `lib/deliverables/scope.ts`) and renders:
  *   • A short blurb describing the tier's positioning

@@ -4,8 +4,8 @@
  * Per the directional pivot doc (`memory/project_credits_directional_pivot.md`):
  * internal accounting language stays "credits"; external/client surfaces speak
  * "deliverables / production capacity / monthly output." This module is the
- * single source of truth for the external phrasing — display names,
- * singular/plural, low-balance / overdraft framing — keyed off slug so adding
+ * single source of truth for the external phrasing, display names,
+ * singular/plural, low-balance / overdraft framing, keyed off slug so adding
  * a new type is a single object literal entry.
  *
  * Anything a client reads must come from here. If you find yourself
@@ -26,7 +26,7 @@ export interface DeliverableCopy {
    */
   shortLabel: string;
   /**
-   * Verb form for "this charges N <verb>" — the noun the consume action is
+   * Verb form for "this charges N <verb>", the noun the consume action is
    * deducting from. Almost always the same as `plural` but exposed so
    * future types ("retainer hours", "ad impressions") can deviate.
    */

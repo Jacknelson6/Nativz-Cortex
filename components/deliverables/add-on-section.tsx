@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * AddOnSection — replaces the 5/10/25 "credit pack" CTAs with named SKUs.
+ * AddOnSection, replaces the 5/10/25 "credit pack" CTAs with named SKUs.
  *
  * Per the directional pivot: the client's purchase model is "buy a deliverable"
  * (Extra Edited Video, UGC-Style Video) plus the SLA modifier (Rush). Each
@@ -11,7 +11,7 @@
  *   • POSTs `{ clientId, addon_slug }` to `/api/credits/checkout`.
  *   • On success, navigates the window to the returned Stripe URL.
  *   • On 503 (SKU not configured for this agency), shows a calm inline note
- *     instead of a red error — the client should fall back to "reach out".
+ *     instead of a red error, the client should fall back to "reach out".
  *   • Card grid stays single-column on mobile, 3-up on desktop.
  *
  * Configured-only filtering happens server-side: the parent passes the
@@ -89,7 +89,7 @@ export function AddOnSection({ clientId, brandName, addons }: AddOnSectionProps)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not start checkout');
     } finally {
-      // Leave spinner spinning if we're navigating away — resetting flashes
+      // Leave spinner spinning if we're navigating away, resetting flashes
       // the button back to enabled briefly during the redirect.
       if (!redirected) setBusySlug(null);
     }

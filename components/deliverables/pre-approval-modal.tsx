@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * PreApprovalModal — soft-block at zero balance.
+ * PreApprovalModal, soft-block at zero balance.
  *
  * Shown when a client clicks "Approve" on a share-link review and the
  * matching deliverable type has `current_balance <= 0`. The modal explains
@@ -63,7 +63,7 @@ export function PreApprovalModal({
   const copy = deliverableCopy(deliverableTypeSlug);
 
   // Filter to add-ons that actually credit this type's balance bucket. SLA
-  // modifiers (rush_upgrade, deliverable_type_slug = null) are excluded —
+  // modifiers (rush_upgrade, deliverable_type_slug = null) are excluded -
   // those don't fix the zero-balance gate.
   const relevantAddons = addons.filter(
     (a) => a.deliverable_type_slug === deliverableTypeSlug,
@@ -98,7 +98,7 @@ export function PreApprovalModal({
   if (!open) return null;
 
   const subjectLine = assetTitle
-    ? `Out of ${copy.shortLabel} for ${brandName} — approving "${assetTitle}"`
+    ? `Out of ${copy.shortLabel} for ${brandName}, approving "${assetTitle}"`
     : `Out of ${copy.shortLabel} for ${brandName}`;
 
   return (

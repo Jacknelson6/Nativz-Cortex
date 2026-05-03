@@ -1,5 +1,5 @@
 /**
- * getActiveTier — resolve the client's currently-assigned package_tier into
+ * getActiveTier, resolve the client's currently-assigned package_tier into
  * a `TierCardData` so /deliverables can render the real card instead of the
  * inferred `ScopePanel`.
  *

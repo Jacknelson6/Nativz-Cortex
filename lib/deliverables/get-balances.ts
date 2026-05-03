@@ -1,5 +1,5 @@
 /**
- * getDeliverableBalances — per-client, per-type balance loader.
+ * getDeliverableBalances, per-client, per-type balance loader.
  *
  * Returns one entry per active deliverable type so UI code can write
  * `balances.find(b => b.deliverableTypeSlug === 'edited_video')` without

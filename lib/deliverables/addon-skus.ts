@@ -18,7 +18,7 @@
  *
  * Adding a new SKU: append a new entry below + add the matching
  * `<AGENCY>_${env_key}` env var. No code changes required in the checkout
- * route or webhook — the addon-slug is the routing key.
+ * route or webhook, the addon-slug is the routing key.
  */
 
 import type { AgencyBrand } from '@/lib/agency/detect';
@@ -32,7 +32,7 @@ export interface AddonSku {
   description: string;
   /**
    * Type bucket to credit on successful purchase. `null` for SLA modifiers
-   * (Rush) that don't add deliverables — they get recorded as a `grant_topup`
+   * (Rush) that don't add deliverables, they get recorded as a `grant_topup`
    * with delta=0 plus a flag set on the linked deliverable in Phase D.
    */
   deliverable_type_slug: DeliverableTypeSlug | null;
@@ -47,7 +47,7 @@ export interface AddonSku {
     | 'STRIPE_PRICE_ADDON_RUSH_UPGRADE';
   /**
    * One-line subtitle used on the AddOnSection card. Sentence case, no
-   * trailing period — the layout supplies its own punctuation.
+   * trailing period, the layout supplies its own punctuation.
    */
   card_subtitle: string;
 }
@@ -103,7 +103,7 @@ export function isAddonSlug(value: unknown): value is AddonSlug {
 
 /**
  * Resolve the Stripe price id for an add-on on a given agency. Returns null
- * when the env var isn't configured for that agency — checkout surfaces a
+ * when the env var isn't configured for that agency, checkout surfaces a
  * 503 instead of a 500 in that case.
  */
 export function resolveAddonPriceId(

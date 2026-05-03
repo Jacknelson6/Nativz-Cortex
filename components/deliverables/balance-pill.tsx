@@ -4,7 +4,7 @@
  * Replaces `components/credits/balance-pill.tsx`. Three differences:
  *
  *   1. Multi-type. Shows "12 Edited · 3 UGC · 47 Graphics left" instead
- *      of a single number. Each segment is independent — if a type is
+ *      of a single number. Each segment is independent, if a type is
  *      out, only that segment goes amber.
  *   2. Speaks deliverable language. The word "credit" never appears
  *      anywhere this pill renders.
@@ -26,7 +26,7 @@ interface BalancePillProps {
   /**
    * The type the current approve action will consume. The matching segment
    * gets the amber treatment when balance <= 0; other segments stay neutral.
-   * Optional — when omitted the pill renders all segments in neutral chrome
+   * Optional, when omitted the pill renders all segments in neutral chrome
    * with per-segment amber for any zero balance.
    */
   approvingTypeSlug?: DeliverableBalance['deliverableTypeSlug'];

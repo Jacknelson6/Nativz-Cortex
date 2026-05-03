@@ -73,7 +73,7 @@ function toLocalInput(d: Date): string {
 }
 
 function fmtUsd(cents: number | null): string {
-  if (cents == null) return '—';
+  if (cents == null) return '-';
   const sign = cents < 0 ? '-' : '';
   const abs = Math.abs(cents);
   return `${sign}$${(abs / 100).toLocaleString('en-US', {
@@ -240,7 +240,7 @@ export function AdminMarginView({ clientId }: Props) {
                   </td>
                   <td className="py-2 text-right font-mono text-text-secondary">
                     {r.rateMissing ? (
-                      <span className="text-text-muted">—</span>
+                      <span className="text-text-muted">-</span>
                     ) : (
                       fmtUsd(r.costCents)
                     )}

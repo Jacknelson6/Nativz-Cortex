@@ -1,5 +1,5 @@
 /**
- * getTierCatalog — load the package_tiers catalog for an agency, joined
+ * getTierCatalog, load the package_tiers catalog for an agency, joined
  * with their allotments and labelled per deliverable type.
  *
  * Single read used by:

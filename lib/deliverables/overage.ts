@@ -1,5 +1,5 @@
 /**
- * Overage allowance — does this client get to keep approving past 0?
+ * Overage allowance, does this client get to keep approving past 0?
  *
  * Phase B shipped a hard "no overage" default. Phase D adds a per-client
  * opt-out via `clients.allow_silent_overage`: agencies can flip the column

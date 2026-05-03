@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * TierPickerAdmin — admin-only modal that lists every active tier for the
+ * TierPickerAdmin, admin-only modal that lists every active tier for the
  * client's agency and lets the operator assign one (or change the assigned
  * tier mid-period). Wires into the same `applyTierChange` helper as the
  * Stripe webhook handler so a manual override and a Stripe-driven swap

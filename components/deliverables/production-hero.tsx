@@ -1,5 +1,5 @@
 /**
- * ProductionHero — top-of-page KPI tiles.
+ * ProductionHero, top-of-page KPI tiles.
  *
  * One tile per active deliverable type, each showing:
  *   • {plural} remaining / {monthly_allowance}
@@ -92,7 +92,7 @@ export function ProductionHero({
                     {copy.shortLabel}
                   </p>
                   <p className={`mt-1 font-mono text-2xl ${tone}`}>
-                    {b.hasRow ? remaining : '—'}
+                    {b.hasRow ? remaining : '-'}
                     {b.hasRow ? (
                       <span className="ml-1 text-[13px] font-normal text-text-muted">
                         / {allowance}

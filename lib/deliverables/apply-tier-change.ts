@@ -1,5 +1,5 @@
 /**
- * applyTierChange — idempotent tier assignment for a client.
+ * applyTierChange, idempotent tier assignment for a client.
  *
  * Single entry point for changing a client's `package_tier_id`. Used by:
  *   1. The Stripe webhook handler when `customer.subscription.updated` shows

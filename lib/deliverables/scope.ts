@@ -9,7 +9,7 @@
  * combined monthly_allowance across types maps to a single tier label.
  *
  * The panel content is fully static per tier so this stub is correct
- * enough — the real Phase D version pulls bullets + out-of-scope copy
+ * enough, the real Phase D version pulls bullets + out-of-scope copy
  * from a `package_tiers` table. No DB calls in this file.
  */
 

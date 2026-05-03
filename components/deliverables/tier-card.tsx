@@ -1,5 +1,5 @@
 /**
- * TierCard — render a single `package_tiers` row for /deliverables.
+ * TierCard, render a single `package_tiers` row for /deliverables.
  *
  * Phase D replaces the inferred `ScopePanel` story with a real card that
  * reads display_name + blurb + price + scope_in + scope_out from the row.
