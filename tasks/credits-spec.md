@@ -314,6 +314,67 @@ If `current_balance` is negative (overdraft), we still grant the full
 allowance on top. So a client at -2 with allowance 8 ends the reset at +6.
 The overdraft warning UI is for revenue follow-up, not enforcement.
 
+### First-period proration
+
+A client signs mid-month. We do **not** prorate the first period:
+
+- `period_started_at = now()` at activation, `period_ends_at = now() +
+  interval '1 month'`, full `monthly_allowance` granted immediately as a
+  `grant_monthly` row.
+- The reset cycle anchors to the signup date, not the calendar 1st. A
+  client who signs on the 18th resets on the 18th every month forever.
+
+Why no proration:
+
+- Nativz contracts are flat-monthly subscriptions, not metered. A client
+  who signs on the 28th still expects "this month's videos."
+- Proration creates rounding ambiguity ("you have 1.4 credits") that
+  doesn't exist anywhere else in the system.
+- Per-client anchoring removes the global thundering-herd problem on a
+  shared reset day. The cron sees a smooth distribution of work across
+  the month rather than every client at midnight on the 1st.
+
+Edge cases:
+
+- Client signs, then immediately gets paused before the first cron runs
+  → the initial grant is independent of the pause flag (it happens at
+  activation in the admin UI), and the next reset is what gets skipped.
+- Client signs late in the day → the reset anchor is timestamped to the
+  minute. UI displays "resets on the 18th of each month" using the
+  date-only projection of `period_started_at`.
+
+---
+
+## Contract Source of Truth
+
+`monthly_allowance` lives on `client_credit_balances`, not derived from
+any external contract object. The admin updates it whenever the contract
+changes. We considered driving it from a Contracts/Subscriptions table
+and rejected that for v1:
+
+- Cortex doesn't yet have a single canonical Contracts table that
+  represents what every client is sold. There are proposals, there are
+  Stripe subscriptions for paid tiers, and there are hand-shake monthly
+  retainers tracked in Notion. None of these is the source.
+- Special deals (annual prepay = 12-month allowance bump, agency dual-
+  brand discount, internal Nativz demo accounts) need an admin-editable
+  override anyway, so any auto-sync would still need a manual escape
+  hatch.
+- The cost of getting it wrong is a misaligned `monthly_allowance` for
+  one client, which is visible the first time their balance is wrong.
+  Cheap to detect, cheap to fix.
+
+The mitigation for "admin forgets to set it" is the daily admin digest
+that flags any client with `monthly_allowance = 0` AND any consumption
+in the last 7 days, plus the onboarding checklist line item from the
+Risks section.
+
+When Cortex eventually has a canonical Contracts table (separate
+project), we'll add a `synced_from_contract_at` timestamp on
+`client_credit_balances` and a job that syncs allowance from there,
+with the admin-edit override still allowed (last-write wins, with the
+override flagged in the UI).
+
 ---
 
 ## Top-Up Packs (Stripe)
@@ -328,15 +389,72 @@ Two surfaces:
    pack (5 / 10 / 25 — final SKUs in PRD).
 
 The Stripe webhook handler already exists at `app/api/stripe/webhook/route.ts`.
-Add a case for `checkout.session.completed` with metadata `{ kind: 'credits',
-client_id, pack_size }` that:
+Three event types now feed credit state, all gated by metadata
+`{ kind: 'credits', ... }` on the originating session:
+
+### `checkout.session.completed`
 
 1. Verifies the session
-2. Calls `grant_credit` RPC with `kind = 'grant_topup'` and the
-   `stripe_payment_intent` recorded
+2. Calls `grant_credit` RPC with `kind = 'grant_topup'`,
+   `stripe_payment_intent` recorded, and idempotency key
+   `topup:<session_id>` (the only place key-based dedup is used, since
+   there's no consume/refund state-machine for grants)
 3. Sends a confirmation email via `sendCreditsTopupConfirmationEmail`
 
-**Q:** Do top-up credits expire? Lean: no, they roll forever. Easier to sell.
+### `charge.refunded`
+
+When a top-up charge is refunded (full or partial) in Stripe, we claw
+back the corresponding credits:
+
+1. Look up the matching `grant_topup` row by `stripe_payment_intent`
+2. Compute the refunded credit count: full refund → all `pack_size`
+   credits; partial refund → `floor(refund_amount / unit_price)`
+   credits, with the unit_price recorded in the original session
+   metadata
+3. Insert an `expire` row with `delta = -<refunded_count>`,
+   `note = 'stripe_refund:<charge_id>'`, idempotency key
+   `expire:refund:<charge_id>`
+4. If `current_balance` goes negative as a result (the client already
+   spent the credits), we let it. Overdraft is allowed by design and
+   the daily admin digest already catches this.
+
+Partial refunds against a top-up that's already partially clawed back
+are additive: the `expire` rows track cumulative refunded amount, and
+the idempotency key includes the Stripe `refund_id` (not just
+`charge_id`) when there are multiple refund events on the same charge.
+
+### `charge.dispute.created`
+
+A chargeback is functionally a forced refund. Same treatment as
+`charge.refunded`, but the `note` is
+`stripe_dispute:<dispute_id>` and the row is also flagged in the
+admin digest with higher urgency (chargebacks need human attention).
+
+When the dispute is later resolved in Stripe (`charge.dispute.closed`),
+we do NOT auto-restore the credits. If we win the dispute and the
+client should get their credits back, an admin issues a manual
+`adjust` with a note pointing at the dispute. This keeps the audit
+trail explicit.
+
+### Idempotency on refund/dispute paths
+
+- `expire:refund:<refund_id>` — primary key for each Stripe refund
+  event (note: `refund_id`, not `charge_id`, since a charge can have
+  multiple partial refunds)
+- `expire:dispute:<dispute_id>` — primary key for each dispute event
+- Both use the `idempotency_key` column on `credit_transactions` as
+  a true UNIQUE constraint (the only place where idempotency keys
+  carry that semantic). The state-based dedup on consume/refund is
+  separate.
+
+To support that, the migration adds a partial unique index:
+`CREATE UNIQUE INDEX ... ON credit_transactions (idempotency_key)
+WHERE kind IN ('grant_topup', 'expire')` so accidental double-fires
+of Stripe webhooks can't double-grant or double-claw.
+
+**Q:** Do top-up credits expire on inactivity? Lean: no, they roll
+forever. The `expire` kind is reserved for Stripe-driven clawbacks,
+not time-based decay.
 
 ---
 
@@ -373,10 +491,15 @@ client_id, pack_size }` that:
 
 Migration `220_credits_v1.sql`:
 
-1. Create both tables + all indexes (including the partial
-   `next_reset_at WHERE auto_grant_enabled IS TRUE` index and the
-   `(charge_unit_kind, charge_unit_id, created_at desc)` + `refund_for_id`
-   indexes)
+1. Create both tables + all indexes:
+   - Partial cron index on `next_reset_at WHERE auto_grant_enabled IS TRUE`
+   - `(charge_unit_kind, charge_unit_id, created_at desc)`
+   - `refund_for_id`
+   - **Partial UNIQUE index on `credit_transactions(idempotency_key)
+     WHERE kind IN ('grant_topup', 'expire')`** — backs the
+     Stripe webhook dedup; consume/refund rows do NOT participate
+     in this constraint (they use state-based dedup via the live
+     ledger query).
 2. Create the SQL functions: `consume_credit`, `refund_credit`,
    `grant_credit`, `monthly_reset_for_client`. All four take `FOR UPDATE`
    on the balance row before any ledger work.
@@ -437,10 +560,19 @@ function.
 - **Pause/inactive clients:** `auto_grant_enabled` flag + optional
   `paused_until`. Cron filters at the index level. Skipped months are
   not backfilled.
+- **First-period proration:** none. New clients get full allowance on
+  signup, reset cycle anchored to signup date.
+- **Contract source-of-truth:** `monthly_allowance` is admin-edited on
+  `client_credit_balances` for v1. No external Contracts table dep.
+  Future sync job is documented as a separate project.
+- **Stripe refunds + disputes:** webhook handles `charge.refunded` and
+  `charge.dispute.created` by inserting `expire` rows with negative
+  delta. Dispute resolutions in our favor do NOT auto-restore credits;
+  manual `adjust` only. Backed by partial UNIQUE index on
+  `idempotency_key` for `kind IN ('grant_topup', 'expire')`.
 
 ## Open Questions
 
-- **Q:** Top-up expiry, lean no, top-ups roll forever.
 - **Q:** Should the portal pill be visible to viewer-role users only, or also
   to share-link reviewers (who may not be the billing contact)? Lean: pill is
   only on the portal Credits page; share-link reviewers see nothing
@@ -492,11 +624,19 @@ function.
   - On non-approval comment that follows a prior approved comment: call
     `refund_credit` (silent-overcharge fix)
   - On comment DELETE for an approval row: call `refund_credit`
-- `app/api/stripe/webhook/route.ts` — add `kind: 'credits'` branch with
-  `topup:<session_id>` idempotency on the grant row
+- `app/api/stripe/webhook/route.ts`:
+  - `checkout.session.completed` with `kind: 'credits'` metadata →
+    `grant_credit` with key `topup:<session_id>`
+  - `charge.refunded` → look up matching grant by
+    `stripe_payment_intent`, insert `expire` with key
+    `expire:refund:<refund_id>`
+  - `charge.dispute.created` → insert `expire` with key
+    `expire:dispute:<dispute_id>`
 - `vercel.json` — add `/api/cron/credits-reset` at `0 4 * * *`
 - `app/admin/clients/[id]/page.tsx` — link the new panel
 - Sidebar nav — add Credits to the portal sidebar
+- Onboarding flow / new-client activation — require setting
+  `monthly_allowance` before activation, no zero-default path
 
 ---
 
@@ -541,11 +681,32 @@ function.
 
 ### Stripe + manual grants
 - Top-up via test mode webhook: `grant_credit` row written with
-  `kind = 'grant_topup'` and `stripe_payment_intent` set.
-- Webhook fires twice for the same session: idempotency key
-  `topup:<session_id>` deduplicates; one grant only.
+  `kind = 'grant_topup'`, `stripe_payment_intent` set, idempotency key
+  `topup:<session_id>`.
+- Webhook fires twice for the same session: partial UNIQUE index on
+  `idempotency_key` deduplicates; one grant only.
+- `charge.refunded` (full): `expire` row written with
+  `delta = -<pack_size>`, `note = 'stripe_refund:<charge_id>'`,
+  idempotency key `expire:refund:<refund_id>`. Balance decremented.
+- `charge.refunded` (partial, 2 of 5): `expire` row with `delta = -2`.
+  A second partial refund on the same charge inserts a second `expire`
+  row keyed by the second `refund_id` (additive).
+- `charge.refunded` after credits already consumed: balance goes
+  negative; overdraft is allowed; daily admin digest flags it.
+- `charge.dispute.created`: `expire` row with `delta = -<pack_size>`,
+  `note = 'stripe_dispute:<dispute_id>'`, key
+  `expire:dispute:<dispute_id>`.
+- `charge.dispute.closed` (won by us): no automatic state change. Admin
+  manually issues an `adjust` if restoring is desired.
 - Admin manual grant via `/api/credits/[clientId]/grant`: row written
   with `kind = 'adjust'`, `actor_user_id` set, no Stripe metadata.
+
+### First-period proration
+- New client activation grants full `monthly_allowance` immediately;
+  `period_started_at = now()`. No fractional credits.
+- Reset cycle anchors to signup date. Client signed on the 18th resets
+  on the 18th every month. Verified across month-boundary edge cases
+  (signed Jan 31, resets Feb 28/29 then Mar 28).
 
 ### Negative
 - Approval continues to work even if `consume_credit` raises (ledger gap

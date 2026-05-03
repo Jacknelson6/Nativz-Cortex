@@ -114,9 +114,21 @@ We do NOT use a unique idempotency key as the dedup mechanism. Instead, the `con
 - [ ] "Buy more credits" CTA on `/portal/credits` opens pack selector (5 / 10 / 25 final SKUs in pricing review)
 - [ ] Selecting a pack hits `POST /api/credits/checkout` and redirects to Stripe Checkout
 - [ ] Stripe webhook `checkout.session.completed` with metadata `{ kind: 'credits', client_id, pack_size }` triggers `grant_credit` RPC
-- [ ] Granted top-up logs a `kind = 'grant_topup'` transaction with `stripe_payment_intent` recorded
+- [ ] Granted top-up logs a `kind = 'grant_topup'` transaction with `stripe_payment_intent` recorded and idempotency key `topup:<session_id>`
 - [ ] Top-up confirmation email sent via `sendCreditsTopupConfirmationEmail`
-- [ ] Top-up credits roll forever (no expiry)
+- [ ] Top-up credits roll forever (no time-based expiry)
+- [ ] Typecheck/lint passes
+
+### US-004b: Stripe refund / dispute claws back top-up credits
+**Description:** As the system, I need to remove top-up credits when the underlying Stripe charge is refunded or disputed so we never carry a balance for a payment that didn't land.
+
+**Acceptance Criteria:**
+- [ ] Webhook subscribes to `charge.refunded` and `charge.dispute.created` (in addition to `checkout.session.completed`)
+- [ ] On `charge.refunded`, look up the matching `grant_topup` row by `stripe_payment_intent`, compute refunded credit count (full = `pack_size`; partial = `floor(refund_amount / unit_price)`), insert an `expire` row with `delta = -<count>`, `note = 'stripe_refund:<charge_id>'`, idempotency key `expire:refund:<refund_id>`
+- [ ] Partial refunds against a charge that's already been partially clawed are additive (idempotency key uses Stripe's `refund_id`, not `charge_id`)
+- [ ] On `charge.dispute.created`, same treatment with key `expire:dispute:<dispute_id>`. Dispute resolutions (`charge.dispute.closed`) do NOT auto-restore credits — admin issues a manual `adjust` if we win and want to restore.
+- [ ] Partial UNIQUE index on `credit_transactions(idempotency_key) WHERE kind IN ('grant_topup', 'expire')` so a webhook re-fire can't double-grant or double-claw
+- [ ] If the claw-back drives `current_balance` negative, we let it (overdraft is allowed) and the admin digest flags it
 - [ ] Typecheck/lint passes
 
 ### US-005: Monthly reset cron
@@ -124,7 +136,7 @@ We do NOT use a unique idempotency key as the dedup mechanism. Instead, the `con
 
 **Acceptance Criteria:**
 - [ ] New cron at `/api/cron/credits-reset`, schedule `0 4 * * *`
-- [ ] Scans `client_credit_balances` for rows where `next_reset_at <= now()`
+- [ ] Scans `client_credit_balances` for rows where `next_reset_at <= now() AND auto_grant_enabled IS TRUE AND (paused_until IS NULL OR paused_until < now())`
 - [ ] For each match, calls `monthly_reset_for_client` RPC
 - [ ] Rollover policies behave as specified in the spec:
   - `none` (default): new balance = `monthly_allowance`
@@ -133,6 +145,7 @@ We do NOT use a unique idempotency key as the dedup mechanism. Instead, the `con
 - [ ] Negative balances at reset still receive the full allowance on top
 - [ ] `period_started_at`, `period_ends_at`, `next_reset_at` advance by exactly one calendar month from the prior `period_started_at` (no drift from cron lag)
 - [ ] Each reset writes a `grant_monthly` transaction with the actual delta applied
+- [ ] **First-period proration: NONE.** New clients activated mid-month receive their full `monthly_allowance` immediately and reset on the same day every month thereafter (anchored to signup date, not calendar 1st).
 - [ ] Typecheck/lint passes
 
 ### US-006: Low-balance warning email
@@ -213,9 +226,15 @@ Rollback at any step is a `DELETE FROM credit_transactions WHERE created_at > '<
 - **Risk:** Client gets confused about what consumes a credit (revisions? scheduling?).
   - **Mitigation:** Portal copy explicitly says "1 credit = 1 approved video. Revisions and re-schedules are free." Same line in the low-balance email.
 - **Risk:** Account manager forgets to set `monthly_allowance` for a new client and the client overdrafts immediately.
-  - **Mitigation:** Onboarding checklist gains a "Set credit allowance" item. Daily admin digest flags clients with `monthly_allowance = 0` and any consumption that month.
+  - **Mitigation:** Onboarding checklist gains a "Set credit allowance" item. Daily admin digest flags clients with `monthly_allowance = 0` and any consumption that month. Client activation in the admin UI requires setting an allowance (no zero-default activation path).
+- **Risk:** A client signs mid-month and disputes that they got their full month's worth.
+  - **Mitigation:** Proration is explicitly NONE. A client who signs on the 18th gets the full allowance on the 18th and resets on the 18th going forward. Portal copy states "Your month resets on the {Nth}." No fractional credits exist anywhere in the system.
 - **Risk:** Stripe webhook fires twice for the same checkout session.
-  - **Mitigation:** Idempotency key `topup:<stripe_session_id>` on the grant transaction (top-ups still use key-based dedup, since there's no state-machine to consult).
+  - **Mitigation:** Idempotency key `topup:<stripe_session_id>` on the grant transaction (top-ups use key-based dedup, since there's no state-machine to consult). Backed by a partial UNIQUE index on `credit_transactions.idempotency_key WHERE kind IN ('grant_topup', 'expire')`.
+- **Risk:** Client charges back or refunds a top-up after consuming the credits, balance is wrong.
+  - **Mitigation:** Webhook subscribes to `charge.refunded` and `charge.dispute.created`; both insert an `expire` row with negative delta. Overdraft is allowed; admin digest flags negative balances driven by clawbacks. Dispute reversals (we won) do NOT auto-restore credits; admin issues a manual `adjust` to keep the audit trail explicit.
+- **Risk:** Allowance source-of-truth drifts from contract reality (admin edits allowance once, then the contract changes and nobody updates Cortex).
+  - **Mitigation:** v1 keeps `monthly_allowance` as a manually-edited admin field; the daily digest flags any client with `monthly_allowance = 0` AND consumption in the last 7 days. Future Contracts table integration will add a `synced_from_contract_at` timestamp + sync job, with admin override still allowed (last-write wins, flagged in UI).
 - **Risk:** Contract bumps mid-period (client upgrades from 8 to 12 credits halfway through the month).
   - **Mitigation:** Admin edits `monthly_allowance` and adds a manual `adjust` for the prorated delta. Explicit, audited, simple.
 - **Risk:** Client churns, gets deleted, history is lost; or churns, stays in the DB, keeps getting monthly grants forever.
