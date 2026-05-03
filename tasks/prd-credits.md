@@ -199,6 +199,27 @@ We do NOT use a unique idempotency key as the dedup mechanism. Instead, the `con
 - [ ] Manual `adjust` from the admin panel still works on paused accounts
 - [ ] Typecheck/lint passes
 
+### US-011: Free-tier / zero-allowance clients
+**Description:** As an admin, I want some clients (free-tier accounts, internal demos, paused clients) to sit at `monthly_allowance = 0` without the cron writing noisy `grant_monthly` rows or breaking their period dates.
+
+**Acceptance Criteria:**
+- [ ] Cron filter excludes `monthly_allowance = 0` from the grant pass (no `grant_monthly` row with `delta = 0`)
+- [ ] A separate lightweight pass advances `period_started_at` and `next_reset_at` on those rows so per-period email-stamp columns reset correctly
+- [ ] Stripe top-ups work regardless of `monthly_allowance` or pause state (free-tier client buys a 5-pack, balance goes 0 → 5, consume works)
+- [ ] Portal Credits page on a free-tier client renders honestly (balance 0, "Buy more" CTA active, no monthly-allowance copy that implies a recurring grant)
+- [ ] Typecheck/lint passes
+
+### US-012: Daily reconciliation detects ledger gaps
+**Description:** As an admin, I want any drift between `current_balance` and the sum of ledger deltas to surface in the daily digest, so I can investigate before a client notices.
+
+**Acceptance Criteria:**
+- [ ] `/api/cron/credits-reconcile` runs at `0 5 * * *` (one hour after the reset cron)
+- [ ] Computes expected balance from `monthly_allowance + Σ delta` for the current period; writes a `credit_ledger_gaps` row when mismatch
+- [ ] Cron is read-only against the ledger, never auto-corrects
+- [ ] Daily admin digest "Credits anomalies" section lists open gaps, cron failures, webhook rejections, and clients with `monthly_allowance = 0` + recent consumption
+- [ ] Success-metric "<1% ledger gap rate" computed nightly as a 7-day rolling rate, alerts to Slack at the threshold
+- [ ] Typecheck/lint passes
+
 ### US-007: Balance pill on the share-link review page
 **Description:** As a client reviewing a video on the share link, I want to see how many credits I have left so I'm not surprised when my balance drops after I approve.
 
@@ -271,6 +292,14 @@ Rollback at any step is a `DELETE FROM credit_transactions WHERE created_at > '<
   - **Mitigation:** Admin edits `monthly_allowance` and adds a manual `adjust` for the prorated delta. Explicit, audited, simple.
 - **Risk:** Client churns, gets deleted, history is lost; or churns, stays in the DB, keeps getting monthly grants forever.
   - **Mitigation:** `auto_grant_enabled = false` keeps the row + history but stops grants. Time-bounded breaks (one month off) use `paused_until`. Cron filters at the index level so paused accounts never wake the cron up.
+- **Risk:** Vercel cron fires twice during a deploy and double-grants a client.
+  - **Mitigation:** `monthly_reset_for_client` re-checks `next_reset_at <= now()` inside the row lock. Second invocation sees the advanced timestamp and no-ops. Per-client try/catch + 500-row batch ceiling means a stuck client doesn't block the rest. Cron emits `credits.cron.run.{started,completed,failed}` metrics; failures appear in the daily digest.
+- **Risk:** RLS policy locks super_admins out, or lets a viewer in org A read org B's transactions.
+  - **Mitigation:** Admin policies use `users.role IN ('admin', 'super_admin')`, never bare-equals. Viewer policies join through `client_credit_balances` → `clients.organization_id` → `user_client_access`. `consume_credit` re-asserts `share_link.client_id === p_client_id` before writing, so a swapped token can't misattribute a charge.
+- **Risk:** Silent ledger drift (a bug or manual SQL puts `current_balance` out of sync with the ledger sum) goes unnoticed.
+  - **Mitigation:** Nightly reconciliation cron diffs expected vs actual balance for every active client, writes `credit_ledger_gaps` rows for any mismatch, surfaces in the daily admin digest. Cron is read-only against the ledger, never auto-corrects (auto-correction would mask the underlying bug). Slack alert at 1% rolling rate.
+- **Risk:** Free-tier or `monthly_allowance = 0` accounts get cron-fired anyway and accumulate noisy `grant_monthly` rows with `delta = 0`.
+  - **Mitigation:** Cron filter extends to `monthly_allowance > 0`. A separate lightweight pass advances period dates without writing a ledger row, so per-period email stamps still reset. Top-ups remain independent of the allowance value.
 
 ## Success Metrics
 

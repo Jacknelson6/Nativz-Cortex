@@ -110,10 +110,32 @@ row not yet referenced by a refund" is one indexed left-join.
 
 ### RLS
 
-- Admin: full read/write
+- Admin + super_admin: full read/write. Policies use
+  `EXISTS (SELECT 1 FROM users WHERE users.id = auth.uid()
+   AND users.role IN ('admin', 'super_admin'))` — never bare-equals
+  `'admin'`, which would lock super_admins out.
 - Viewer (portal): SELECT-only on rows where the joined `client_id` is in the
   user's `user_client_access`. No writes from the portal — top-ups go through
   the Stripe webhook server-side.
+- Service role (cron, webhook, comment route): bypasses RLS. Every
+  `createAdminClient()` call site is responsible for re-deriving
+  `client_id` from a trusted source (share-link record, session.customer
+  → stripe_customer_id, authenticated user_client_access). Body-supplied
+  `client_id` is never trusted.
+
+Cross-org defense in depth:
+
+- `consume_credit` re-fetches the share-link by id and re-asserts that
+  `share_link.client_id === p_client_id` before writing the ledger row.
+  A reviewer who somehow swaps in another client's share-link token gets
+  a `403` instead of a misattributed consume.
+- `credit_transactions` SELECT policy joins through `client_credit_balances`
+  → `clients.organization_id` → `user_client_access`. A viewer in org A
+  who guesses a transaction id from org B sees zero rows.
+- The ledger-gap detection cron (Observability section) flags any
+  `credit_transactions` row whose `client_id` doesn't match the
+  `client_credit_balances` row that the same period covers, so a
+  cross-org bug surfaces in the daily digest.
 
 ---
 
@@ -313,6 +335,53 @@ to prevent drift from cron lag).
 If `current_balance` is negative (overdraft), we still grant the full
 allowance on top. So a client at -2 with allowance 8 ends the reset at +6.
 The overdraft warning UI is for revenue follow-up, not enforcement.
+
+### Zero-allowance / free-tier accounts
+
+Some clients sit at `monthly_allowance = 0`: free-tier accounts, internal
+demos, paused-with-zero clients we want kept warm without grants. The
+cron skips these to avoid noisy `grant_monthly` rows with `delta = 0`:
+
+```
+WHERE next_reset_at <= now()
+  AND auto_grant_enabled IS TRUE
+  AND monthly_allowance > 0
+  AND (paused_until IS NULL OR paused_until < now())
+```
+
+The partial cron index extends to `monthly_allowance > 0`. Period dates
+still advance on these rows (handled by a separate lightweight pass that
+just bumps `period_started_at` and `next_reset_at` without writing a
+ledger row), so the per-period email-stamp columns reset correctly.
+
+Free-tier clients can still top up: the Stripe path is independent of
+the auto-grant flag and the allowance value. A free-tier client buys
+the 5-pack, lands as `grant_topup`, balance goes 0 → 5, consumption
+works normally. If their balance ever reaches zero again the next
+reset is still a no-op.
+
+### Cron concurrency + at-least-once delivery
+
+Vercel crons are at-least-once: a deploy that lands during cron execution,
+or a function timeout, can cause a second invocation. The reset path is
+hardened to make this safe:
+
+- `monthly_reset_for_client` takes `FOR UPDATE` on the balance row, then
+  re-checks `next_reset_at <= now()` inside the locked region. If the
+  first invocation already advanced `next_reset_at` past `now()`, the
+  second invocation no-ops without writing a ledger row.
+- The outer cron handler iterates one client at a time inside a `try /
+  catch`, so one failing client doesn't kill the whole run. Failures
+  log the `client_id` + error and continue. The next nightly run picks
+  up the missed client because `next_reset_at` is still in the past for
+  that row.
+- Batch ceiling: process at most 500 clients per invocation. If the
+  scan returns more, the cron exits early; the next-minute Vercel retry
+  picks up the remaining rows. (We currently have ~50 active clients,
+  the ceiling is precautionary.)
+- The cron writes a single `cron_runs` row at start + completion with
+  the count of grants written, so a stuck or partial run is observable
+  from the admin digest.
 
 ### First-period proration
 
@@ -627,6 +696,86 @@ deserves the same scrutiny:
 
 ---
 
+## Observability + Ledger Gap Detection
+
+The "<1% ledger gap rate" success metric needs measurement
+infrastructure, not a vibe check. Three layers:
+
+### Per-event metrics
+
+Every ledger write (`consume`, `refund`, `grant_monthly`, `grant_topup`,
+`adjust`, `expire`) increments a Vercel Analytics counter keyed by
+`kind` + outcome (`success` | `noop` | `error`). The cron handler
+also emits `credits.cron.run.{started,completed,failed}` with the
+processed-client count.
+
+### Daily reconciliation cron
+
+`/api/cron/credits-reconcile` runs at `0 5 * * *` (one hour after the
+reset cron, so any month-boundary work has settled). For each row in
+`client_credit_balances`:
+
+```
+expected_balance = monthly_allowance
+                 + Σ delta from credit_transactions
+                   WHERE client_id = b.client_id
+                   AND created_at >= b.period_started_at
+                   - <opening_balance_at_period_start>
+```
+
+If `expected_balance != current_balance`, write a row to a new
+`credit_ledger_gaps` table:
+
+```sql
+create table credit_ledger_gaps (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid references clients(id) on delete set null,
+  detected_at timestamptz not null default now(),
+  expected_balance int not null,
+  actual_balance int not null,
+  drift int generated always as (actual_balance - expected_balance) stored,
+  resolved_at timestamptz,
+  resolution_note text
+);
+```
+
+The reconciliation cron is read-only against the ledger, it never
+auto-corrects. Auto-correction would mask whatever bug created the gap.
+
+### Daily admin digest
+
+The existing daily admin digest gets a "Credits anomalies" section:
+
+- **Active ledger gaps:** count + list of client names with current
+  drift, links to the ledger view
+- **Stripe events in last 24h:** count of `charge.refunded` and
+  `charge.dispute.created` (operational awareness, not necessarily a
+  bug)
+- **Zero-allowance + active consumption:** clients where
+  `monthly_allowance = 0` but `credit_transactions` show consume rows
+  in the last 7 days (means a contract was never set up)
+- **Negative balances > 3 days:** revenue follow-up
+- **Cron failures:** any `credits.cron.run.failed` event in the last
+  24h
+- **Webhook rejections:** count of `webhook_events` rows with
+  `verified = false` in the last 24h
+
+### Success-metric definition
+
+The "<1% ledger gap rate" is computed nightly as:
+
+```
+rate = (count distinct client_id from credit_ledger_gaps
+        where detected_at >= now() - interval '7 days'
+        and resolved_at is null)
+     / (count from client_credit_balances where auto_grant_enabled = true)
+```
+
+Reported on the admin dashboard as a sparkline of the last 30 days.
+Alerts fire to Slack when the 7-day rolling rate exceeds 1%.
+
+---
+
 ## Migration Plan
 
 Migration `220_credits_v1.sql`:
@@ -655,6 +804,8 @@ Migration `220_credits_v1.sql`:
 5. Create `webhook_events` table for forensic logging of every
    credits-relevant Stripe event (`stripe_event_id` UNIQUE,
    `payload jsonb`, `verified boolean`, `received_at timestamptz`)
+   and `credit_ledger_gaps` table for the daily reconciliation cron
+   (see Observability section)
 6. Backfill: for every existing client, insert a `client_credit_balances`
    row with `monthly_allowance = 0`, `current_balance = 0`,
    `period_started_at = now()`, `next_reset_at = now() + interval '1 month'`,
@@ -729,6 +880,28 @@ function.
   Downgrades take effect at next reset, no retroactive claw-back.
 - **Client deletion:** `credit_transactions.client_id` is `ON DELETE
   SET NULL` (audit log survives). `client_credit_balances` is CASCADE.
+- **Cron concurrency:** Vercel cron is at-least-once;
+  `monthly_reset_for_client` re-checks `next_reset_at <= now()` inside
+  the row lock so a double-fire no-ops. Per-client try/catch + 500-row
+  batch ceiling + `cron_runs` row at start/finish for observability.
+- **Zero-allowance accounts:** cron filter extends to
+  `monthly_allowance > 0`; period dates still advance via a separate
+  lightweight pass so per-period email stamps reset correctly. Stripe
+  top-ups work regardless of allowance or pause state.
+- **RLS for super_admin:** policies use
+  `users.role IN ('admin', 'super_admin')`, not bare-equals. Viewer
+  policies join through `client_credit_balances` →
+  `clients.organization_id` → `user_client_access`.
+- **Cross-org defense:** `consume_credit` re-asserts
+  `share_link.client_id === p_client_id` before writing. Reconciliation
+  cron flags any `credit_transactions` whose `client_id` doesn't match
+  the period it covers.
+- **Observability:** per-event metrics on every ledger write,
+  `/api/cron/credits-reconcile` runs nightly and writes
+  `credit_ledger_gaps` rows for any drift, daily admin digest surfaces
+  open gaps + cron failures + webhook rejections. The "<1% ledger gap
+  rate" success metric is computed nightly as a 7-day rolling rate
+  with a Slack alert at the 1% threshold.
 - **Webhook security:** signature verification + 5min replay window +
   metadata `client_id` re-verification against
   `session.customer → clients.stripe_customer_id` + new `webhook_events`
@@ -780,7 +953,10 @@ function.
 - `components/credits/balance-pill.tsx` — share-page pill
 - `lib/email/templates/credits-low-balance.ts`
 - `app/api/cron/credits-reset/route.ts` — daily reset cron, scans with
-  the paused-aware filter
+  the paused-aware + `monthly_allowance > 0` filter, per-client try/catch,
+  500-row batch ceiling, emits `credits.cron.run.*` metrics
+- `app/api/cron/credits-reconcile/route.ts` — daily reconciliation cron,
+  writes drift rows to `credit_ledger_gaps`, never auto-corrects
 - `scripts/seed-client-allowances.ts` — one-time setter
 
 **Edit:**
@@ -797,7 +973,8 @@ function.
     `expire:refund:<refund_id>`
   - `charge.dispute.created` → insert `expire` with key
     `expire:dispute:<dispute_id>`
-- `vercel.json` — add `/api/cron/credits-reset` at `0 4 * * *`
+- `vercel.json` — add `/api/cron/credits-reset` at `0 4 * * *` and
+  `/api/cron/credits-reconcile` at `0 5 * * *`
 - `app/admin/clients/[id]/page.tsx` — link the new panel
 - Sidebar nav — add Credits to the portal sidebar
 - Onboarding flow / new-client activation — require setting
@@ -805,9 +982,11 @@ function.
 - `lib/credits/email.ts` — low-balance + overdraft email senders, period-
   flag stamp logic, POC + fallback recipient resolution
 - Daily admin digest cron — add a "Credits anomalies" section listing:
-  clients with `monthly_allowance = 0` AND consumption in last 7 days,
-  clients with negative balance for > 3 days, charge.refunded /
-  charge.dispute.created events from the last 24h
+  active ledger gaps (open rows in `credit_ledger_gaps`), clients with
+  `monthly_allowance = 0` AND consumption in last 7 days, clients with
+  negative balance for > 3 days, charge.refunded /
+  charge.dispute.created events from the last 24h, cron failures,
+  webhook rejections
 - Rate-limit middleware on `app/api/credits/checkout/route.ts` (5/10min/user)
 
 ---
@@ -848,8 +1027,17 @@ function.
 - **Pause filter:** fixture client with `auto_grant_enabled = false` is
   skipped by the cron. Fixture with `paused_until > now()` is skipped.
   Fixture with `paused_until < now()` is granted (auto-resume).
+- **Zero-allowance filter:** fixture with `monthly_allowance = 0` is
+  skipped (no `grant_monthly` row written), but its period dates still
+  advance via the lightweight pass.
 - Resume after pause does NOT backfill skipped months; one allowance, new
   `period_started_at = now()`.
+- **At-least-once safety:** `monthly_reset_for_client` invoked twice
+  back-to-back inside the same minute writes ONE grant row (second call
+  sees `next_reset_at` advanced, no-ops).
+- **Per-client failure isolation:** fixture with deliberately corrupt
+  data raises inside `monthly_reset_for_client`; cron logs the error
+  and continues; the next client in the batch still gets its grant.
 
 ### Stripe + manual grants
 - Top-up via test mode webhook: `grant_credit` row written with
@@ -922,6 +1110,34 @@ function.
 - `POST /api/credits/checkout` from viewer on org A trying to buy for
   org B's client: rejects 403; `client_id` derivation ignores body.
 - 6th checkout in 10 minutes from same user: 429.
+
+### RLS + cross-org defense
+- super_admin role hits the same admin policies as admin (no lockout).
+- Viewer in org A tries to SELECT a `credit_transactions` row whose
+  `client_id` belongs to org B → zero rows returned.
+- `consume_credit` called with a `share_link_id` that resolves to a
+  different `client_id` than `p_client_id` → raises `403`, no ledger
+  row written.
+
+### Observability + reconciliation
+- Reconciliation cron against a clean fixture: zero gaps detected,
+  no `credit_ledger_gaps` rows written.
+- Inject a synthetic gap (UPDATE balance row directly bypassing the
+  ledger) → reconciliation cron writes a `credit_ledger_gaps` row with
+  the exact drift; the daily digest renders it.
+- Resolve a gap manually (admin posts an `adjust` to bring the balance
+  in line, then sets `resolved_at` on the gap row): next reconciliation
+  pass does NOT re-emit a duplicate gap.
+- Success metric calculation: 1 open gap across 100 active clients =
+  1.0% rate, alert fires at the 1% threshold.
+
+### Free-tier / zero-allowance accounts
+- Free-tier client (`monthly_allowance = 0`, `auto_grant_enabled = true`):
+  cron skips, no `grant_monthly` row written, period dates still advance.
+- Same client buys a 5-pack: `grant_topup` row written, balance 0 → 5,
+  consume works normally.
+- Same client's balance returns to 0 after consumption: next reset is
+  still a no-op; portal shows balance 0 with the "Buy more" CTA active.
 
 ### Negative
 - Approval continues to work even if `consume_credit` raises (ledger gap
