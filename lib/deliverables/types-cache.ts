@@ -32,14 +32,18 @@ let cache: CachedTypes | null = null;
 let inflight: Promise<CachedTypes> | null = null;
 
 async function fetchTypes(admin: SupabaseClient): Promise<CachedTypes> {
+  // The live table column is `label_singular` (set by the original
+  // deliverable_types migration). Older drafts of this cache referenced a
+  // non-existent `display_name`; we read the real column and rename it in
+  // memory so every downstream consumer keeps working unchanged.
   const { data, error } = await admin
     .from('deliverable_types')
-    .select('id, slug, display_name, sort_order, is_active')
+    .select('id, slug, label_singular, sort_order, is_active')
     .eq('is_active', true)
     .returns<Array<{
       id: string;
       slug: string;
-      display_name: string;
+      label_singular: string;
       sort_order: number;
       is_active: boolean;
     }>>();
@@ -51,8 +55,8 @@ async function fetchTypes(admin: SupabaseClient): Promise<CachedTypes> {
   const bySlug = new Map<string, { id: string; display_name: string; sort_order: number }>();
   const byId = new Map<string, { slug: string; display_name: string; sort_order: number }>();
   for (const row of data ?? []) {
-    bySlug.set(row.slug, { id: row.id, display_name: row.display_name, sort_order: row.sort_order });
-    byId.set(row.id, { slug: row.slug, display_name: row.display_name, sort_order: row.sort_order });
+    bySlug.set(row.slug, { id: row.id, display_name: row.label_singular, sort_order: row.sort_order });
+    byId.set(row.id, { slug: row.slug, display_name: row.label_singular, sort_order: row.sort_order });
   }
 
   return { bySlug, byId, fetchedAt: Date.now() };
