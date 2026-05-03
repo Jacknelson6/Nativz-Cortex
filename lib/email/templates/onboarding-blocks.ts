@@ -4,8 +4,10 @@
  * .button / .features / .divider classes in layout() — same visual
  * language as the invite and reset emails.
  *
- * The shape is a JSONB array on onboarding_email_templates.blocks. Null
- * column means fall back to the existing markdown body.
+ * Historically the shape was a JSONB array on
+ * `onboarding_email_templates.blocks`; that table is gone in the
+ * unified onboarding rebuild, so callers now build the block array
+ * inline and hand it to `renderBlocks` directly.
  *
  * Inline styles are required because many email clients strip <style>
  * blocks from the body; the <head> block in layout() survives in Gmail

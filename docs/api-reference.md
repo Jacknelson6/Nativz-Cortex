@@ -2,7 +2,7 @@
 
 > **For AI agents:** This document describes every API endpoint that exists on disk. Auto-generated from `app/api/**/route.ts` by `scripts/generate-api-docs.ts` — do not edit by hand. Re-run the script after adding/removing routes or tweaking a JSDoc block.
 
-**702 endpoints across 32 sections.**
+**652 endpoints across 32 sections.**
 
 ## Authentication
 
@@ -2338,13 +2338,15 @@ Returns the share-link inventory powering the new "Review" subpage. One row per 
 
 ### `PATCH /api/calendar/share/:token/comment`
 
-Detect natural-language approval inside a "comment" / "changes_requested" payload. Some clients submit the revision form with text like "approved" or "love this, change nothing" — the smart move is to treat those as an approval rather than a vague request for changes. Heuristic: 1. Trimmed message must be ≤80 chars (long, nuanced messages are not blanket approvals). 2. Must match an approval phrase. 3. Must not contain a hedging conjunction ("but", "however", …) that signals a follow-up request. Conservative on purpose. Better to miss a fuzzy approval than to publish a post the client wanted to tweak. / function looksLikeApproval(content: string): boolean { const trimmed = content.trim(); if (!trimmed || trimmed.length > 80) return false; const APPROVAL_RE = /\b(approved?|approving|lgtm|sgtm|ship ?it|good to go|all good|love (this|it|them)|nothing to change|change nothing|no (changes?|edits|notes|revisions?)|leave (as is|it)|perfect|looks (good|great|amazing|perfect|fantastic)|sounds (good|great)|green ?light)\b/i; if (!APPROVAL_RE.test(trimmed)) return false; if (/\b(but|except|however|though|other than|aside from)\b/i.test(trimmed)) return false; return true; } const TITLE_BY_STATUS: Record<'approved' | 'changes_requested' | 'comment', (a: string, c: string) => string> = { approved: (a, c) => `${a} approved a post in ${c}`, changes_requested: (a, c) => `${a} requested changes in ${c}`, comment: (a, c) => `${a} left a comment on ${c}`, }; export async function POST( req: Request, ctx: { params: Promise<{ token: string }> }, ) { const { token } = await ctx.params; const body = await req.json().catch(() => null); const parsed = BodySchema.safeParse(body); if (!parsed.success) { return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 }); } const admin = createAdminClient(); const { data: link } = await admin .from('content_drop_share_links') .select('id, drop_id, post_review_link_map, expires_at') .eq('token', token) .single<{ id: string; drop_id: string; post_review_link_map: Record<string, string>; expires_at: string }>(); if (!link) return NextResponse.json({ error: 'not found' }, { status: 404 }); if (new Date(link.expires_at) < new Date()) { return NextResponse.json({ error: 'link expired' }, { status: 410 }); } const reviewLinkMap = link.post_review_link_map ?? {}; const reviewLinkId = reviewLinkMap[parsed.data.postId]; if (!reviewLinkId) { return NextResponse.json({ error: 'post is not part of this share link' }, { status: 400 }); } // Smart approval: if the user submitted via "Add revision" (or as a plain // comment) but the body reads like an approval, upgrade the status. We // attach a metadata flag so the audit trail still shows it was inferred, // not a button-press, and the public UI can surface that nuance. const submittedStatus = parsed.data.status; const trimmedContent = parsed.data.content.trim(); const inferredApproval = submittedStatus !== 'approved' && looksLikeApproval(trimmedContent); const finalStatus: 'approved' | 'changes_requested' | 'comment' = inferredApproval ? 'approved' : submittedStatus; const insertMetadata: Record<string, unknown> = inferredApproval ? { auto_approved: true, original_status: submittedStatus } : {}; // Only honor a timestamp on plain comments and change requests — anchoring // an "approved" stamp to a specific moment doesn't carry meaning. const timestampSeconds = finalStatus === 'comment' || finalStatus === 'changes_requested' ? parsed.data.timestampSeconds ?? null : null; const { data, error } = await admin .from('post_review_comments') .insert({ review_link_id: reviewLinkId, author_name: parsed.data.authorName.trim(), content: trimmedContent, status: finalStatus, attachments: parsed.data.attachments ?? [], metadata: insertMetadata, timestamp_seconds: timestampSeconds, }) .select('id, review_link_id, author_name, content, status, created_at, attachments, metadata, timestamp_seconds') .single(); if (error || !data) { return NextResponse.json({ error: error?.message ?? 'failed' }, { status: 500 }); } // Run notifications + Monday sync + Zernio publish AFTER the response. // `after()` keeps the function alive past the response on Vercel, so // multi-step work (Monday writeback, Zernio publish) doesn't get cut off // mid-flight. Bare fire-and-forget would race against serverless shutdown — // that's how the Monday sync was silently dropping while chat 🎉 messages // still landed. after(async () => { try { await notifyAdminsOfComment(admin, link.id, link.drop_id, token, reviewLinkMap, { postId: parsed.data.postId, authorName: parsed.data.authorName.trim(), content: trimmedContent, status: finalStatus, attachments: parsed.data.attachments ?? [], }); } catch (err) { console.error('Comment notification failed:', err); } // Recompute drop-level approval state and push to Monday. State-derived // (not event-driven), so a single approval that doesn't yet make // everything approved still leaves Monday at "Waiting on approval", and // the next event re-syncs. try { await syncMondayApprovalForDrop(admin, link.drop_id); } catch (err) { console.error('Monday calendar approval sync failed:', err); } if (finalStatus === 'approved') { // publishScheduledPost is idempotent (returns alreadyPublished=true if // already scheduled), so re-approval / multiple approvers won't double-post. try { await publishScheduledPost(admin, parsed.data.postId); } catch (err) { console.error(`Approval → Zernio publish failed for post ${parsed.data.postId}:`, err); } } }); return NextResponse.json({ comment: data }); } export async function DELETE( req: Request, ctx: { params: Promise<{ token: string }> }, ) { const { token } = await ctx.params; const body = await req.json().catch(() => null); const parsed = DeleteSchema.safeParse(body); if (!parsed.success) { return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 }); } const admin = createAdminClient(); const { data: link } = await admin .from('content_drop_share_links') .select('id, drop_id, post_review_link_map, expires_at') .eq('token', token) .single<{ id: string; drop_id: string; post_review_link_map: Record<string, string>; expires_at: string }>(); if (!link) return NextResponse.json({ error: 'not found' }, { status: 404 }); if (new Date(link.expires_at) < new Date()) { return NextResponse.json({ error: 'link expired' }, { status: 410 }); } const { data: comment } = await admin .from('post_review_comments') .select('id, review_link_id, status') .eq('id', parsed.data.commentId) .single<{ id: string; review_link_id: string; status: string }>(); if (!comment) return NextResponse.json({ error: 'not found' }, { status: 404 }); const allowedReviewIds = new Set(Object.values(link.post_review_link_map ?? {})); if (!allowedReviewIds.has(comment.review_link_id)) { return NextResponse.json({ error: 'comment is not part of this share link' }, { status: 400 }); } const { error: delErr } = await admin .from('post_review_comments') .delete() .eq('id', comment.id); if (delErr) { return NextResponse.json({ error: delErr.message }, { status: 500 }); } // Only approval deletions affect the Monday-side state ("Client approved" → // "Waiting on approval"). Other history rows (caption_edit, tag_edit, // schedule_change, video_revised, plain comments) are pure audit trail — // skip the sync to avoid a needless Monday round-trip. if (comment.status === 'approved') { // Clear the all-approved dedup stamp so a future re-approval can fire the // celebration ping again. Only clear when this calendar was previously // fully approved (otherwise the stamp is already null). await admin .from('content_drop_share_links') .update({ all_approved_notified_at: null }) .eq('id', link.id); after(async () => { try { await syncMondayApprovalForDrop(admin, link.drop_id); } catch (err) { console.error('Monday calendar approval sync failed (delete):', err); } }); } return NextResponse.json({ ok: true, commentId: comment.id }); } /** Toggle the "resolved" flag on a `changes_requested` history row. Editors use this to mark a revision request as handled — the icon flips from a warning to a green check and the label changes to "Revised". Stored as a metadata flag rather than a status change so the comment still threads correctly with other change-request rows in the audit trail.
+Detect natural-language approval inside a "comment" / "changes_requested" payload. Some clients submit the revision form with text like "approved" or "love this, change nothing" — the smart move is to treat those as an approval rather than a vague request for changes. Heuristic: 1. Trimmed message must be ≤80 chars (long, nuanced messages are not blanket approvals). 2. Must match an approval phrase. 3. Must not contain a hedging conjunction ("but", "however", …) that signals a follow-up request. Conservative on purpose. Better to miss a fuzzy approval than to publish a post the client wanted to tweak. / function looksLikeApproval(content: string): boolean { const trimmed = content.trim(); if (!trimmed || trimmed.length > 80) return false; const APPROVAL_RE = /\b(approved?|approving|lgtm|sgtm|ship ?it|good to go|all good|love (this|it|them)|nothing to change|change nothing|no (changes?|edits|notes|revisions?)|leave (as is|it)|perfect|looks (good|great|amazing|perfect|fantastic)|sounds (good|great)|green ?light)\b/i; if (!APPROVAL_RE.test(trimmed)) return false; if (/\b(but|except|however|though|other than|aside from)\b/i.test(trimmed)) return false; return true; } const TITLE_BY_STATUS: Record<'approved' | 'changes_requested' | 'comment', (a: string, c: string) => string> = { approved: (a, c) => `${a} approved a post in ${c}`, changes_requested: (a, c) => `${a} requested changes in ${c}`, comment: (a, c) => `${a} left a comment on ${c}`, }; export async function POST( req: Request, ctx: { params: Promise<{ token: string }> }, ) { const { token } = await ctx.params; const body = await req.json().catch(() => null); const parsed = BodySchema.safeParse(body); if (!parsed.success) { return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 }); } const admin = createAdminClient(); const { data: link } = await admin .from('content_drop_share_links') .select('id, drop_id, post_review_link_map, expires_at') .eq('token', token) .single<{ id: string; drop_id: string; post_review_link_map: Record<string, string>; expires_at: string }>(); if (!link) return NextResponse.json({ error: 'not found' }, { status: 404 }); if (new Date(link.expires_at) < new Date()) { return NextResponse.json({ error: 'link expired' }, { status: 410 }); } const reviewLinkMap = link.post_review_link_map ?? {}; const reviewLinkId = reviewLinkMap[parsed.data.postId]; if (!reviewLinkId) { return NextResponse.json({ error: 'post is not part of this share link' }, { status: 400 }); } // Smart approval: if the user submitted via "Add revision" (or as a plain // comment) but the body reads like an approval, upgrade the status. We // attach a metadata flag so the audit trail still shows it was inferred, // not a button-press, and the public UI can surface that nuance. const submittedStatus = parsed.data.status; const trimmedContent = parsed.data.content.trim(); const inferredApproval = submittedStatus !== 'approved' && looksLikeApproval(trimmedContent); const finalStatus: 'approved' | 'changes_requested' | 'comment' = inferredApproval ? 'approved' : submittedStatus; const insertMetadata: Record<string, unknown> = inferredApproval ? { auto_approved: true, original_status: submittedStatus } : {}; // Only honor a timestamp on plain comments and change requests — anchoring // an "approved" stamp to a specific moment doesn't carry meaning. const timestampSeconds = finalStatus === 'comment' || finalStatus === 'changes_requested' ? parsed.data.timestampSeconds ?? null : null; // Soft-block on approval when the client is out of scope for this // deliverable type. The PRD calls today's silent-overage behavior the // bug. Block the approval (no comment insert, no consume) and return a // structured 402 so the share-link UI can render an "out of scope, add // one" CTA. Run only on `approved` so plain comments + change requests // still write through. if (finalStatus === 'approved') { const charge = await resolveChargeUnit(admin, { scheduledPostId: parsed.data.postId, }); if (charge) { const { data: post } = await admin .from('scheduled_posts') .select('client_id') .eq('id', parsed.data.postId) .maybeSingle<{ client_id: string | null }>(); const clientId = post?.client_id ?? null; if (clientId) { const deliverableTypeId = await getDeliverableTypeId( admin, charge.deliverableTypeSlug, ); const { data: balanceRow } = await admin .from('client_credit_balances') .select('current_balance') .eq('client_id', clientId) .eq('deliverable_type_id', deliverableTypeId) .maybeSingle<{ current_balance: number }>(); const remaining = balanceRow?.current_balance ?? 0; if (remaining <= 0) { const overageOk = await clientAllowsOverage( admin, clientId, deliverableTypeId, ); if (!overageOk) { const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'; return NextResponse.json( { error: 'scope_exhausted', deliverable_type: charge.deliverableTypeSlug, remaining, addon_url: `${appUrl}/deliverables`, }, { status: 402 }, ); } } } } } const { data, error } = await admin .from('post_review_comments') .insert({ review_link_id: reviewLinkId, author_name: parsed.data.authorName.trim(), content: trimmedContent, status: finalStatus, attachments: parsed.data.attachments ?? [], metadata: insertMetadata, timestamp_seconds: timestampSeconds, }) .select('id, review_link_id, author_name, content, status, created_at, attachments, metadata, timestamp_seconds') .single(); if (error || !data) { return NextResponse.json({ error: error?.message ?? 'failed' }, { status: 500 }); } // Run notifications + Monday sync + Zernio publish AFTER the response. // `after()` keeps the function alive past the response on Vercel, so // multi-step work (Monday writeback, Zernio publish) doesn't get cut off // mid-flight. Bare fire-and-forget would race against serverless shutdown — // that's how the Monday sync was silently dropping while chat 🎉 messages // still landed. after(async () => { try { await notifyAdminsOfComment(admin, link.id, link.drop_id, token, reviewLinkMap, { postId: parsed.data.postId, authorName: parsed.data.authorName.trim(), content: trimmedContent, status: finalStatus, attachments: parsed.data.attachments ?? [], }); } catch (err) { console.error('Comment notification failed:', err); } // Recompute drop-level approval state and push to Monday. State-derived // (not event-driven), so a single approval that doesn't yet make // everything approved still leaves Monday at "Waiting on approval", and // the next event re-syncs. try { await syncMondayApprovalForDrop(admin, link.drop_id); } catch (err) { console.error('Monday calendar approval sync failed:', err); } if (finalStatus === 'approved') { // publishScheduledPost is idempotent (returns alreadyPublished=true if // already scheduled), so re-approval / multiple approvers won't double-post. try { await publishScheduledPost(admin, parsed.data.postId); } catch (err) { console.error(`Approval → Zernio publish failed for post ${parsed.data.postId}:`, err); } // Approval-as-consumption: 1 credit per approved video. State-based // dedup in consume_credit makes re-approval (delete+approve) safe. await consumeForApproval(admin, { scheduledPostId: parsed.data.postId, shareLinkId: link.id, reviewerName: parsed.data.authorName.trim(), reviewLinkId, }); } else if (finalStatus === 'changes_requested') { // Silent-overcharge fix: if this post was already approved earlier // and the reviewer is now requesting changes, refund the prior // consume. refund_credit is a no-op if there's nothing to refund, // but we guard with hasPriorApproval to avoid an extra round-trip // on the common (no-prior-approval) path. const prior = await hasPriorApproval(admin, reviewLinkId); if (prior) { await refundForUnapproval(admin, { scheduledPostId: parsed.data.postId, reason: 'changes_requested after prior approval', }); } } }); return NextResponse.json({ comment: data }); } export async function DELETE( req: Request, ctx: { params: Promise<{ token: string }> }, ) { const { token } = await ctx.params; const body = await req.json().catch(() => null); const parsed = DeleteSchema.safeParse(body); if (!parsed.success) { return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 }); } const admin = createAdminClient(); const { data: link } = await admin .from('content_drop_share_links') .select('id, drop_id, post_review_link_map, expires_at') .eq('token', token) .single<{ id: string; drop_id: string; post_review_link_map: Record<string, string>; expires_at: string }>(); if (!link) return NextResponse.json({ error: 'not found' }, { status: 404 }); if (new Date(link.expires_at) < new Date()) { return NextResponse.json({ error: 'link expired' }, { status: 410 }); } const { data: comment } = await admin .from('post_review_comments') .select('id, review_link_id, status') .eq('id', parsed.data.commentId) .single<{ id: string; review_link_id: string; status: string }>(); if (!comment) return NextResponse.json({ error: 'not found' }, { status: 404 }); const allowedReviewIds = new Set(Object.values(link.post_review_link_map ?? {})); if (!allowedReviewIds.has(comment.review_link_id)) { return NextResponse.json({ error: 'comment is not part of this share link' }, { status: 400 }); } const { error: delErr } = await admin .from('post_review_comments') .delete() .eq('id', comment.id); if (delErr) { return NextResponse.json({ error: delErr.message }, { status: 500 }); } // Only approval deletions affect the Monday-side state ("Client approved" → // "Waiting on approval"). Other history rows (caption_edit, tag_edit, // schedule_change, video_revised, plain comments) are pure audit trail — // skip the sync to avoid a needless Monday round-trip. if (comment.status === 'approved') { // Clear the all-approved dedup stamp so a future re-approval can fire the // celebration ping again. Only clear when this calendar was previously // fully approved (otherwise the stamp is already null). await admin .from('content_drop_share_links') .update({ all_approved_notified_at: null }) .eq('id', link.id); // Reverse the post_id → review_link_id map to find the post tied to // this deleted approval. Needed for the credit refund (resolveChargeUnit // takes a scheduled_post_id). const reviewLinkMap = link.post_review_link_map ?? {}; const reversedPostId = Object.entries(reviewLinkMap).find( ([, reviewId]) => reviewId === comment.review_link_id, )?.[0]; after(async () => { try { await syncMondayApprovalForDrop(admin, link.drop_id); } catch (err) { console.error('Monday calendar approval sync failed (delete):', err); } // Approval revoked → refund the consume row. State-based dedup // makes this a no-op if the consume was already refunded (e.g. by // an earlier changes_requested-after-approval). Skips silently if // we somehow can't reverse-map the post id. if (reversedPostId) { await refundForUnapproval(admin, { scheduledPostId: reversedPostId, reason: 'approval comment deleted', }); } }); } return NextResponse.json({ ok: true, commentId: comment.id }); } /** Toggle the "resolved" flag on a `changes_requested` history row. Editors use this to mark a revision request as handled — the icon flips from a warning to a green check and the label changes to "Revised". Stored as a metadata flag rather than a status change so the comment still threads correctly with other change-request rows in the audit trail.
 
 ### `POST /api/calendar/share/:token/comment`
 
 ### `GET /api/calendar/share/:token/followup`
 
 ### `POST /api/calendar/share/:token/followup`
+
+### `POST /api/calendar/share/:token/followup/manual`
 
 ### `POST /api/calendar/share/:token/notify-revisions`
 
@@ -5438,7 +5440,7 @@ Find potential duplicate contacts. The email column has a lowercase-unique index
 
 ### `GET /api/admin/email-log`
 
-Unified send log across every email path in Cortex: - email_messages: campaigns, sequences, reports, invites, one-off composer sends - onboarding_email_sends: ad-hoc sends from /admin/onboarding + invoice reminders + kickoff emails (these also land in email_messages via the webhook callback, but we surface them separately so admins can see the "what was attempted" record even when Resend hasn't webhooked back yet).
+Unified send log across every email path in Cortex. Everything now lands in `email_messages` (campaigns, sequences, reports, invites, one-off composer sends, onboarding welcomes + nudges via `sendAndLog`). The "onboarding" vs "campaign" split is a UI filter on `metadata.onboarding_id` rather than a separate table, since the legacy `onboarding_email_sends` log is gone.
 
 ### `GET /api/admin/email-templates`
 
@@ -5458,75 +5460,23 @@ GET /api/admin/errors — recent API errors (super_admin only)
 
 ### `GET /api/admin/notifications/:key/preview`
 
-### `GET /api/admin/pdf/preview/branded-deliverable`
+### `GET /api/admin/onboardings`
 
-### `GET /api/admin/proposal-services`
+### `POST /api/admin/onboardings`
 
-GET /api/admin/proposal-services?agency= — list catalog.
+### `DELETE /api/admin/onboardings/:id`
 
-### `POST /api/admin/proposal-services`
+### `GET /api/admin/onboardings/:id`
 
-POST /api/admin/proposal-services — create.
+### `PATCH /api/admin/onboardings/:id`
 
-### `DELETE /api/admin/proposal-services/:id`
+### `POST /api/admin/onboardings/:id/nudge`
 
-### `PATCH /api/admin/proposal-services/:id`
+### `GET /api/admin/onboardings/:id/team`
 
-### `POST /api/admin/proposal-services/extract`
+### `POST /api/admin/onboardings/:id/team`
 
-Paste an existing proposal (markdown / plain text — copy from a doc, a PDF text extract, whatever) and the LLM returns a structured array of services + suggested pricing rules. The admin reviews and accepts the parsed output via the catalog UI; nothing writes to the catalog directly from this endpoint. Output shape matches what the catalog form expects, so the UI can pre-fill the Create form with each suggestion.
-
-### `GET /api/admin/proposal-templates`
-
-### `GET /api/admin/proposals`
-
-### `POST /api/admin/proposals`
-
-### `DELETE /api/admin/proposals/:id`
-
-Delete a proposal. Allowed for any status EXCEPT `paid` — paid proposals have money tied to them and need to stay in the audit trail. Admins wanting to clean up a paid record should use Stripe + a dedicated accounting flow, not this endpoint. Cleans up downstream: signed/executed PDFs in Storage, proposal_events, and the proposal row itself. The cascade on proposal_events FK already handles event cleanup; we just blast the storage objects manually.
-
-### `PATCH /api/admin/proposals/:id`
-
-### `POST /api/admin/proposals/:id/send`
-
-### `GET /api/admin/proposals/drafts`
-
-GET /api/admin/proposals/drafts — list this admin's recent drafts.
-
-### `POST /api/admin/proposals/drafts`
-
-is set, auto-fills signer fields from the client's primary contact.
-
-### `DELETE /api/admin/proposals/drafts/:id`
-
-### `GET /api/admin/proposals/drafts/:id`
-
-### `PATCH /api/admin/proposals/drafts/:id`
-
-### `PATCH /api/admin/proposals/drafts/:id/blocks`
-
-### `POST /api/admin/proposals/drafts/:id/blocks`
-
-Markdown blocks render as rich text inline; image blocks render as a captioned figure. Image content should be a URL (the chat uploads dropped images to Storage first and passes the public URL here).
-
-### `POST /api/admin/proposals/drafts/:id/commit`
-
-draft into a real `proposals` row by going through the existing createProposalDraft pipeline. Bridge strategy: the legacy proposal flow expects a template_id + tier. The chat-built draft has neither. renderDraftAsTemplateTier() synthesizes a transient template + tier from the draft so the canonical proposal renderer + sign + Stripe flow keep working without a parallel pipeline.
-
-### `PATCH /api/admin/proposals/drafts/:id/lines`
-
-PATCH /api/admin/proposals/drafts/[id]/lines — mutate or remove a line.
-
-### `POST /api/admin/proposals/drafts/:id/lines`
-
-POST /api/admin/proposals/drafts/[id]/lines — append a service line.
-
-### `POST /api/admin/proposals/drafts/:id/upload-image`
-
-image file (multipart form, field name 'file'), stores it in the 'proposal-draft-images' bucket under <draft_id>/<uuid>-<filename>, and returns the public URL. The chat then calls /blocks with kind= 'image' and that URL as content. Bucket is public-read so the preview iframe doesn't need a signed URL on every render. The path is uuid-prefixed so URL guessing is impractical.
-
-### `POST /api/admin/proposals/generate`
+### `DELETE /api/admin/onboardings/:id/team/:assignmentId`
 
 ### `GET /api/admin/scheduled-emails`
 
@@ -6141,10 +6091,6 @@ _Internal scheduled jobs for sync, publishing, monitoring._
 
 ### `GET /api/cron/meta-ads-sync`
 
-### `GET /api/cron/onboarding-flow-reminders`
-
-### `GET /api/cron/onboarding-notifications`
-
 ### `GET /api/cron/revenue-anomalies`
 
 ### `GET /api/cron/revenue-reconcile`
@@ -6195,6 +6141,22 @@ Delete a group. ON DELETE SET NULL on clients.group_id means members fall back t
 
 Rename, recolor, or reorder a group.
 
+### `PUT /api/credits/:clientId/allowance`
+
+### `POST /api/credits/:clientId/grant`
+
+### `POST /api/credits/:clientId/pause`
+
+### `POST /api/credits/checkout`
+
+### `GET /api/deliverables/:clientId/margin`
+
+### `GET /api/deliverables/:clientId/pipeline`
+
+### `POST /api/deliverables/:clientId/tier`
+
+### `GET /api/deliverables/:clientId/tiers`
+
 ### `GET /api/editing/share/:token`
 
 ### `DELETE /api/editing/share/:token/comment`
@@ -6213,134 +6175,6 @@ Public comment endpoints for the editing-project review page. Mirrors `/api/cale
 
 Receives Mux platform webhooks. Events we act on: - video.upload.asset_created — fires when the upload finishes; payload carries the upload id (top-level `data.id`) and the new asset id (`data.asset_id`). We use this to attach mux_asset_id to our row. - video.asset.ready — fires when the asset is fully packaged for HLS playback; we read the public playback id and flip mux_status='ready'. - video.asset.static_renditions.ready — fires when the capped-1080p MP4 rendition is packaged. We stamp revised_mp4_url so the publish cron has a downloadable file (Zernio / Late ingest can't read HLS manifests). This event can land BEFORE or AFTER asset.ready, so the handler is idempotent and pulls the playback id from the event payload directly. Everything else is logged + ignored. Verification uses `MUX_WEBHOOK_SECRET` (set in .env.local once the webhook is created in the Mux dashboard). Without the secret we still process events in dev so the happy path can be exercised locally — production deploys MUST set it.
 
-### `POST /api/offer/:slug/sign`
-
-### `POST /api/onboard/:token/connect`
-
-### `PATCH /api/onboard/:token/items/:itemId`
-
-### `POST /api/onboarding/flows`
-
-client. Idempotent: if a live (non-archived/completed) flow already exists for the client, we return it instead of erroring. The persistent "Start onboarding" toast surfaces from `getPendingFlowToastsForUser` until the admin attaches a proposal or dismisses the toast.
-
-### `GET /api/onboarding/flows/:id`
-
-### `PATCH /api/onboarding/flows/:id`
-
-### `POST /api/onboarding/flows/:id/dismiss-toast`
-
-button on the persistent "Start onboarding" toast. The flow itself stays live (it still appears in the roster); only the toast goes away.
-
-### `POST /api/onboarding/flows/:id/segments`
-
-Each non-virtual segment kind has a starter tracker template (lib/onboarding/segment-templates.ts) that scaffolds the onboarding_trackers row + phases + checklist groups + items. The flow_segments junction is then created pointing at the new tracker.
-
-### `DELETE /api/onboarding/flows/:id/segments/:segmentId`
-
-service segment. Cascades: the junction row + the underlying tracker (and its checklist groups/items + phases via FK CASCADE). The agreement_payment segment is virtual and cannot be removed.
-
-### `POST /api/onboarding/flows/:id/send-poc-invite`
-
-automated POC invite that fires on `proposal.paid`. Admin can re-fire if the proposal-paid send failed (Resend hiccup, missing API key at the time, etc.).
-
-### `POST /api/onboarding/flows/:id/stakeholders`
-
-as a milestone-notification stakeholder. Snapshot their email + display name + role label at attach time so renders don't re-query. Default notify settings: onboarding_complete = true, the others off. Admin can toggle each individually after add via PATCH.
-
-### `DELETE /api/onboarding/flows/:id/stakeholders/:stakeholderId`
-
-### `PATCH /api/onboarding/flows/:id/stakeholders/:stakeholderId`
-
-### `POST /api/onboarding/groups`
-
-### `DELETE /api/onboarding/groups/:id`
-
-### `PATCH /api/onboarding/groups/:id`
-
-### `POST /api/onboarding/items`
-
-### `DELETE /api/onboarding/items/:id`
-
-### `PATCH /api/onboarding/items/:id`
-
-### `POST /api/onboarding/items/reorder`
-
-Commits new checklist-item order after a drag-drop. Same shape as the phases reorder route but scoped by `group_id`. We only touch items that actually belong to the named group, so a stale or malicious id can't trample an item in another group.
-
-### `POST /api/onboarding/phases`
-
-Add a new timeline phase to a tracker. Appends at the end of the existing sort order.
-
-### `DELETE /api/onboarding/phases/:id`
-
-### `PATCH /api/onboarding/phases/:id`
-
-### `POST /api/onboarding/phases/reorder`
-
-Commits a new phase order after a drag-drop. Accepts `order` — the full ordered array of phase ids — and rewrites `sort_order` to 0..N-1 in that sequence. We refetch the tracker's actual phase ids first and drop any strays in the request (so a malformed client can't overwrite phases on a different tracker). The write is a parallel batch of one-row UPDATEs because Supabase doesn't expose per-row batch updates with distinct values.
-
-### `POST /api/onboarding/public/connect`
-
-### `POST /api/onboarding/public/item-toggle`
-
-### `POST /api/onboarding/public/link`
-
-### `POST /api/onboarding/public/upload`
-
-multipart/form-data: - share_token (string, required, uuid) - file (File, required, up to 50MB) - phase_id (string, optional — fulfil a specific phase) - note (string, optional — client's own message) Validates the token, writes the file to the private onboarding-uploads bucket under `onboarding/<tracker_id>/<upload_id>-<safename>`, and records the row. Then fires the file-uploaded notification non-blocking.
-
-### `GET /api/onboarding/trackers`
-
-with client name + slug joined for the list page. Admin-only. Optional query params: ?client_id=<uuid> — scope to one client ?is_template=true|false — default false (real trackers only).
-
-### `POST /api/onboarding/trackers`
-
-DB unique constraint prevents duplicates on (client_id, service) for real trackers; templates are allowed in unlimited number per service because NULL client_id is distinct in Postgres unique indexes.
-
-### `DELETE /api/onboarding/trackers/:id`
-
-Cascade deletes phases, groups, and items via FK ON DELETE CASCADE.
-
-### `GET /api/onboarding/trackers/:id`
-
-Full tracker + phases + groups + items for the admin editor.
-
-### `PATCH /api/onboarding/trackers/:id`
-
-Update status, title, timestamps, or rotate the share token.
-
-### `POST /api/onboarding/trackers/:id/apply-template`
-
-Seeds the target tracker from a template by copying its phases, checklist groups, and items. Appends onto whatever's already there — existing data is never destroyed. sort_order values start after the current max for each collection so the copied content renders below the existing content, in order. Validates that the template is actually `is_template=true` and matches the target tracker's service — applying a "Paid Media" template to a Social tracker is rejected at the API boundary.
-
-### `POST /api/onboarding/trackers/:id/duplicate`
-
-Clones a tracker (real or template) along with its phases + groups + items. Result matches the kind of the source: - real tracker → new real tracker, same client_id, title "X (copy)" - template → new template, no client_id, name "X (copy)" If a real tracker already exists for (client_id, service) — the DB has a partial unique index — the duplicate lands without a client_id reference won't collide, but a real-duplicate IS blocked. We surface the DB error plainly in that case so admins understand. Partial-failure rollback: if any child copy fails, we delete the freshly-created parent to avoid orphans.
-
-### `POST /api/onboarding/trackers/:id/save-as-template`
-
-Snapshots the source tracker's phases + checklist into a new `is_template=true` tracker with the same service. The source tracker is unchanged. Useful after an admin has hand-tuned a client's onboarding and wants to reuse the shape for future clients. We persist the source's CURRENT status values too, because sometimes admins want "pre-completed setup steps" in a template. Easy to reset manually after the save.
-
-### `POST /api/onboarding/trackers/:id/send-email`
-
-### `GET /api/onboarding/trackers/:id/uploads`
-
-Admin list of every upload tied to this tracker, newest first.
-
-### `DELETE /api/onboarding/trackers/:id/uploads/:upload_id`
-
-Admin removes the upload row + storage object.
-
-### `GET /api/onboarding/trackers/:id/uploads/:upload_id`
-
-Returns a short-lived signed URL for the admin to download the file.
-
-### `GET /api/proposals/public/:slug/config`
-
-### `POST /api/proposals/public/:slug/sign`
-
-### `PATCH /api/proposals/templates/:id/payment-links`
-
 ### `POST /api/public/clients/:slug/connect/:platform`
 
 ### `GET /api/public/connection-invites/:token`
@@ -6351,7 +6185,7 @@ Returns a short-lived signed URL for the admin to download the file.
 
 ### `GET /api/public/onboarding/:token`
 
-Public read endpoint for the client-facing timeline page. No auth — possession of the share token IS the auth. Returns the tracker plus all phases + checklist groups + items in one shape so the public page can render without additional round-trips. Uses the admin client (service role) to bypass RLS after matching the token. Nothing sensitive is returned; the shape matches what RankPrompt exposes on their equivalent page.
+### `PATCH /api/public/onboarding/:token`
 
 ### `DELETE /api/revenue/ad-spend`
 
@@ -6385,10 +6219,6 @@ Public read endpoint for the client-facing timeline page. No auth — possession
 
 ### `GET /api/revenue/subscriptions`
 
-### `POST /api/sales/prospects`
-
-brand-new prospect AND immediately creates a `needs_proposal` flow so the admin lands on the flow detail page with everything pre-wired. Idempotent on (name, signer_email) — re-submitting the same prospect returns the existing client + flow rather than creating dupes. The caller redirects to /admin/onboarding/[flowId] on success. This sidesteps the auto-create-on-proposal path in `createProposalDraft` for admins who want the brand wired up before generating a proposal. The proposal step itself is unchanged — once attached, the existing sign endpoint links it back to the flow as before.
-
 ### `GET /api/schedule/:token`
 
 ### `POST /api/schedule/:token/pick`
@@ -6404,6 +6234,8 @@ Pulls the brand's connected IG + TikTok handles from `social_profiles`, creates 
 ### `GET /api/spying/watch/:id/history`
 
 GET /api/spying/watch/[id]/history — full snapshot history for a single client_benchmarks row. Powers the watch-history drawer on /spying. Returns the rows in chronological order so the chart code can map them straight onto an x-axis without resorting.
+
+### `GET /api/thumb`
 
 ### `GET /api/webhooks/openrouter/generation`
 

@@ -35,12 +35,11 @@ type EmailLogRow = {
 };
 
 /**
- * Unified send log across every email path in Cortex:
- *   - email_messages: campaigns, sequences, reports, invites, one-off composer sends
- *   - onboarding_email_sends: ad-hoc sends from /admin/onboarding + invoice
- *     reminders + kickoff emails (these also land in email_messages via the
- *     webhook callback, but we surface them separately so admins can see the
- *     "what was attempted" record even when Resend hasn't webhooked back yet).
+ * Unified send log across every email path in Cortex. Everything now lands in
+ * `email_messages` (campaigns, sequences, reports, invites, one-off composer
+ * sends, onboarding welcomes + nudges via `sendAndLog`). The "onboarding" vs
+ * "campaign" split is a UI filter on `metadata.onboarding_id` rather than a
+ * separate table, since the legacy `onboarding_email_sends` log is gone.
  */
 export async function GET(req: NextRequest) {
   const auth = await requireAdmin();
@@ -51,97 +50,85 @@ export async function GET(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.message }, { status: 400 });
   const { source, status, q, since, limit } = parsed.data;
 
+  let qm = admin
+    .from('email_messages')
+    .select(
+      'id, recipient_email, subject, status, sent_at, delivered_at, opened_at, clicked_at, bounced_at, failure_reason, open_count, click_count, resend_id, agency, metadata, created_at, created_by, users:created_by(email)',
+    )
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (status) qm = qm.eq('status', status);
+  if (since) qm = qm.gte('created_at', since);
+  if (q) qm = qm.or(`subject.ilike.%${q}%,recipient_email.ilike.%${q}%`);
+  if (source === 'campaign') qm = qm.is('metadata->>onboarding_id', null);
+  if (source === 'onboarding') qm = qm.not('metadata->>onboarding_id', 'is', null);
+
+  const { data: messages } = await qm;
+
+  // Resolve client name/slug for onboarding rows in a single batched lookup.
+  const onboardingIds = new Set<string>();
+  for (const m of messages ?? []) {
+    const meta = (m.metadata ?? {}) as Record<string, unknown>;
+    const oid = meta.onboarding_id;
+    if (typeof oid === 'string' && oid) onboardingIds.add(oid);
+  }
+
+  const clientByOnboardingId = new Map<string, { name: string | null; slug: string | null }>();
+  if (onboardingIds.size > 0) {
+    const { data: onboardings } = await admin
+      .from('onboardings')
+      .select('id, clients(name, slug)')
+      .in('id', Array.from(onboardingIds));
+    for (const o of onboardings ?? []) {
+      const c = (o.clients ?? null) as { name?: string | null; slug?: string | null } | null;
+      clientByOnboardingId.set(o.id as string, {
+        name: c?.name ?? null,
+        slug: c?.slug ?? null,
+      });
+    }
+  }
+
   const rows: EmailLogRow[] = [];
-
-  if (source === 'all' || source === 'campaign') {
-    let qm = admin
-      .from('email_messages')
-      .select(
-        'id, recipient_email, subject, status, sent_at, delivered_at, opened_at, clicked_at, bounced_at, failure_reason, open_count, click_count, resend_id, agency, metadata, created_at, created_by, users:created_by(email)',
-      )
-      .order('created_at', { ascending: false })
-      .limit(limit);
-    if (status) qm = qm.eq('status', status);
-    if (since) qm = qm.gte('created_at', since);
-    if (q) {
-      qm = qm.or(`subject.ilike.%${q}%,recipient_email.ilike.%${q}%`);
-    }
-    const { data } = await qm;
-    for (const m of data ?? []) {
-      const meta = (m.metadata ?? {}) as Record<string, unknown>;
-      rows.push({
-        id: m.id,
-        source: 'campaign',
-        recipient: m.recipient_email,
-        subject: m.subject,
-        status: m.status,
-        sent_at: m.sent_at,
-        delivered_at: m.delivered_at,
-        opened_at: m.opened_at,
-        clicked_at: m.clicked_at,
-        bounced_at: m.bounced_at,
-        failure_reason: m.failure_reason,
-        open_count: m.open_count ?? 0,
-        click_count: m.click_count ?? 0,
-        resend_id: m.resend_id,
-        type_hint: (meta.type as string | undefined) ?? (meta.kind as string | undefined) ?? null,
-        agency: m.agency,
-        sender_user_email:
-          (m.users as { email?: string | null } | null)?.email ?? null,
-        client_name: null,
-        client_slug: null,
-      });
-    }
+  for (const m of messages ?? []) {
+    const meta = (m.metadata ?? {}) as Record<string, unknown>;
+    const oid = typeof meta.onboarding_id === 'string' ? meta.onboarding_id : null;
+    const client = oid ? clientByOnboardingId.get(oid) ?? null : null;
+    const isOnboarding = oid !== null;
+    rows.push({
+      id: m.id,
+      source: isOnboarding ? 'onboarding' : 'campaign',
+      recipient: m.recipient_email,
+      subject: m.subject,
+      status: m.status,
+      sent_at: m.sent_at,
+      delivered_at: m.delivered_at,
+      opened_at: m.opened_at,
+      clicked_at: m.clicked_at,
+      bounced_at: m.bounced_at,
+      failure_reason: m.failure_reason,
+      open_count: m.open_count ?? 0,
+      click_count: m.click_count ?? 0,
+      resend_id: m.resend_id,
+      type_hint:
+        (meta.type as string | undefined) ??
+        (meta.kind as string | undefined) ??
+        (isOnboarding ? 'onboarding' : null),
+      agency: m.agency,
+      sender_user_email:
+        (m.users as { email?: string | null } | null)?.email ?? null,
+      client_name: client?.name ?? null,
+      client_slug: client?.slug ?? null,
+    });
   }
 
-  if (source === 'all' || source === 'onboarding') {
-    let qo = admin
-      .from('onboarding_email_sends')
-      .select(
-        'id, to_email, subject, success, error, resend_id, sent_at, onboarding_trackers(client_id, clients(name, slug))',
-      )
-      .order('sent_at', { ascending: false })
-      .limit(limit);
-    if (since) qo = qo.gte('sent_at', since);
-    if (q) qo = qo.or(`subject.ilike.%${q}%,to_email.ilike.%${q}%`);
-    const { data } = await qo;
-    for (const o of data ?? []) {
-      const tracker = o.onboarding_trackers as {
-        client_id?: string | null;
-        clients?: { name?: string | null; slug?: string | null } | null;
-      } | null;
-      rows.push({
-        id: o.id,
-        source: 'onboarding',
-        recipient: o.to_email,
-        subject: o.subject,
-        status: o.success ? 'sent' : 'failed',
-        sent_at: o.sent_at,
-        delivered_at: null,
-        opened_at: null,
-        clicked_at: null,
-        bounced_at: null,
-        failure_reason: o.error,
-        open_count: 0,
-        click_count: 0,
-        resend_id: o.resend_id,
-        type_hint: 'onboarding',
-        agency: null,
-        sender_user_email: null,
-        client_name: tracker?.clients?.name ?? null,
-        client_slug: tracker?.clients?.slug ?? null,
-      });
-    }
-  }
-
-  // Merge + sort by most recent timestamp, then slice to `limit`.
+  // Sort by most recent timestamp, then slice to `limit`.
   rows.sort((a, b) => {
     const ta = new Date(a.sent_at ?? 0).getTime();
     const tb = new Date(b.sent_at ?? 0).getTime();
     return tb - ta;
   });
 
-  // Surface counts by status so the UI can render a summary strip.
   const counts = {
     total: rows.length,
     sent: rows.filter((r) => r.status === 'sent').length,

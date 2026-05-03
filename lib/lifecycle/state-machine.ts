@@ -122,41 +122,16 @@ export async function onInvoicePaid(
     });
   }
 
-  await advanceFirstOnboardingPhase(clientId, admin);
   await queueKickoffEmail(clientId, client.slug, admin);
 }
 
-async function advanceFirstOnboardingPhase(clientId: string, admin: AdminClient): Promise<void> {
-  const { data: tracker } = await admin
-    .from('onboarding_trackers')
-    .select('id, status')
-    .eq('client_id', clientId)
-    .eq('status', 'active')
-    .order('started_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (!tracker) return;
-
-  const { data: firstPhase } = await admin
-    .from('onboarding_phases')
-    .select('id, status, sort_order')
-    .eq('tracker_id', tracker.id)
-    .order('sort_order', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (!firstPhase) return;
-
-  if (firstPhase.status === 'not_started') {
-    await admin
-      .from('onboarding_phases')
-      .update({ status: 'in_progress' })
-      .eq('id', firstPhase.id);
-    await logLifecycleEvent(clientId, 'onboarding.advanced', 'Onboarding phase 1 started', {
-      metadata: { tracker_id: tracker.id, phase_id: firstPhase.id },
-      admin,
-    });
-  }
-}
+// `advanceFirstOnboardingPhase` lived here under the legacy
+// onboarding_trackers + onboarding_phases world to flip phase 1 from
+// not_started → in_progress on deposit paid. The unified `onboardings`
+// table starts every new row in `in_progress` from creation, so there
+// is nothing to advance here anymore. Removed during the onboarding
+// rebuild; if a deposit-driven trigger ever needs to mutate onboarding
+// state, do it against the `onboardings` row directly.
 
 async function queueKickoffEmail(
   clientId: string,
@@ -182,25 +157,20 @@ async function queueKickoffEmail(
     .maybeSingle();
   if (!contact?.email) return;
 
-  const { data: template } = await admin
-    .from('onboarding_email_templates')
-    .select('subject, body')
-    .eq('name', 'kickoff_invitation')
-    .maybeSingle();
-  if (!template) return;
-
+  // Inline kickoff template. The legacy `onboarding_email_templates`
+  // table is being dropped in the v2 cleanup migration; the body lives
+  // here so the lifecycle webhook is self-contained and version-bumps
+  // don't require an out-of-band DB seed.
   const firstName = (contact.name ?? '').split(' ')[0] || 'there';
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://cortex.nativz.io';
   const kickoffUrl = `${appUrl}/admin/clients/${clientSlug}/onboarding`;
-
-  const body = (template.body as string)
-    .replaceAll('{{contact_first_name}}', firstName)
-    .replaceAll('{{client_name}}', client?.name ?? 'your brand')
-    .replaceAll('{{kickoff_url}}', kickoffUrl);
+  const brandName = client?.name ?? 'your brand';
+  const subject = `Welcome to Nativz, ${brandName}`;
+  const body = `<p>Hi ${firstName}, thanks for signing with ${brandName}. Schedule your kickoff call here: <a href="${kickoffUrl}">${kickoffUrl}</a></p>`;
 
   const result = await sendOnboardingEmail({
     to: contact.email,
-    subject: template.subject as string,
+    subject,
     html: body,
     agency: 'nativz',
   });

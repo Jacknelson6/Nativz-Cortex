@@ -30,9 +30,6 @@ type State = {
     kickoff_email_sent_at: string | null;
   }>;
   contacts: Map<string, { email: string; name: string }>;
-  tracker: { id: string; status: string } | null;
-  firstPhase: { id: string; status: string; sort_order: number } | null;
-  template: { subject: string; body: string } | null;
   admins: Array<{ id: string }>;
   invoices: Array<{
     client_id: string | null;
@@ -65,12 +62,6 @@ function createState(): State {
       ],
     ]),
     contacts: new Map([['client-1', { email: 'dana@acme.test', name: 'Dana Smith' }]]),
-    tracker: { id: 'tracker-1', status: 'active' },
-    firstPhase: { id: 'phase-1', status: 'not_started', sort_order: 0 },
-    template: {
-      subject: 'Welcome — kickoff',
-      body: '<p>Hi {{contact_first_name}}, welcome {{client_name}}. Schedule: {{kickoff_url}}</p>',
-    },
     admins: [{ id: 'admin-1' }],
     invoices: [],
     refunds: [],
@@ -137,40 +128,6 @@ function makeAdmin(state: State): SupabaseClient {
         }),
       };
     }
-    if (table === 'onboarding_trackers') {
-      return {
-        select: () => ({
-          eq: () => ({
-            eq: () => ({
-              order: () => ({
-                limit: () => ({
-                  maybeSingle: () => Promise.resolve({ data: state.tracker, error: null }),
-                }),
-              }),
-            }),
-          }),
-        }),
-      };
-    }
-    if (table === 'onboarding_phases') {
-      return {
-        select: () => ({
-          eq: () => ({
-            order: () => ({
-              limit: () => ({
-                maybeSingle: () => Promise.resolve({ data: state.firstPhase, error: null }),
-              }),
-            }),
-          }),
-        }),
-        update: (patch: Record<string, unknown>) => ({
-          eq: () => {
-            if (state.firstPhase) Object.assign(state.firstPhase, patch);
-            return Promise.resolve({ error: null });
-          },
-        }),
-      };
-    }
     if (table === 'contacts') {
       return {
         select: () => ({
@@ -179,15 +136,6 @@ function makeAdmin(state: State): SupabaseClient {
               maybeSingle: () =>
                 Promise.resolve({ data: state.contacts.get(v) ?? null, error: null }),
             }),
-          }),
-        }),
-      };
-    }
-    if (table === 'onboarding_email_templates') {
-      return {
-        select: () => ({
-          eq: () => ({
-            maybeSingle: () => Promise.resolve({ data: state.template, error: null }),
           }),
         }),
       };

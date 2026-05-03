@@ -57,13 +57,14 @@ export default async function AdminClientsPage() {
         .from('client_groups')
         .select('id, name, color, sort_order')
         .order('sort_order', { ascending: true }) as unknown as { data: ClientGroupRow[] | null },
-      // Trackers in flight — anything not completed or archived. We derive the
-      // "Onboarding" row from this set so a tracker hitting completed anywhere
-      // in the app auto-removes the client from that row on next render.
+      // Onboardings in flight, anything in_progress or paused. The new
+      // unified onboardings table replaces onboarding_trackers; we derive
+      // the "Onboarding" client-row badge from this set so a row hitting
+      // completed anywhere auto-removes from that group on next render.
       adminClient
-        .from('onboarding_trackers')
+        .from('onboardings')
         .select('client_id')
-        .in('status', ['active', 'paused'])
+        .in('status', ['in_progress', 'paused'])
         .not('client_id', 'is', null),
     ]);
 

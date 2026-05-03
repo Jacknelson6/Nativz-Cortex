@@ -22,7 +22,6 @@ type Captured = {
   lifecycleInserts: Array<Record<string, unknown>>;
   notificationInserts: Array<Array<Record<string, unknown>>>;
   clientUpdates: Array<{ where: Record<string, unknown>; patch: Record<string, unknown> }>;
-  phaseUpdates: Array<{ id: string; patch: Record<string, unknown> }>;
 };
 
 function makeAdmin(): { admin: SupabaseClient; captured: Captured } {
@@ -30,17 +29,10 @@ function makeAdmin(): { admin: SupabaseClient; captured: Captured } {
     lifecycleInserts: [],
     notificationInserts: [],
     clientUpdates: [],
-    phaseUpdates: [],
   };
 
   const admins = [{ id: 'admin-1' }, { id: 'admin-2' }];
-  const tracker = { id: 'tracker-1', status: 'active' };
-  const firstPhase = { id: 'phase-1', status: 'not_started', sort_order: 0 };
   const contact = { email: 'client@example.com', name: 'Dana Smith' };
-  const template = {
-    subject: 'Welcome — kickoff',
-    body: '<p>Hi {{contact_first_name}}, thanks for signing with {{client_name}}. Schedule: {{kickoff_url}}</p>',
-  };
   const clientRow = {
     id: 'client-1',
     name: 'Acme Inc',
@@ -95,53 +87,12 @@ function makeAdmin(): { admin: SupabaseClient; captured: Captured } {
         }),
       };
     }
-    if (table === 'onboarding_trackers') {
-      return {
-        select: () => ({
-          eq: () => ({
-            eq: () => ({
-              order: () => ({
-                limit: () => ({
-                  maybeSingle: () => Promise.resolve({ data: tracker, error: null }),
-                }),
-              }),
-            }),
-          }),
-        }),
-      };
-    }
-    if (table === 'onboarding_phases') {
-      return {
-        select: () => ({
-          eq: () => ({
-            order: () => ({
-              limit: () => ({
-                maybeSingle: () => Promise.resolve({ data: firstPhase, error: null }),
-              }),
-            }),
-          }),
-        }),
-        update: (patch: Record<string, unknown>) => ({
-          eq: (_k: string, val: string) => {
-            captured.phaseUpdates.push({ id: val, patch });
-            return Promise.resolve({ error: null });
-          },
-        }),
-      };
-    }
     if (table === 'contacts') {
       return {
         select: () => ({
           eq: () => ({
             eq: () => ({ maybeSingle: () => Promise.resolve({ data: contact, error: null }) }),
           }),
-        }),
-      };
-    }
-    if (table === 'onboarding_email_templates') {
-      return {
-        select: () => ({
-          eq: () => ({ maybeSingle: () => Promise.resolve({ data: template, error: null }) }),
         }),
       };
     }
@@ -166,7 +117,7 @@ describe('onInvoicePaid', () => {
     sendOnboardingEmail.mockResolvedValue({ ok: true as const, id: 'resend-id-1' });
   });
 
-  it('logs a lifecycle event, notifies admins, advances onboarding, emails the client', async () => {
+  it('logs a lifecycle event, notifies admins, marks deposit paid, emails the client', async () => {
     const { admin, captured } = makeAdmin();
 
     await onInvoicePaid(
@@ -185,16 +136,15 @@ describe('onInvoicePaid', () => {
 
     const types = captured.lifecycleInserts.map((r) => r.type);
     expect(types).toContain('invoice.paid');
+    // Deposit-paid lifecycle bridge still fires when the contracted client
+    // pays — the onboarding-row advance is gone, but the lifecycle log entry
+    // remains.
     expect(types).toContain('onboarding.advanced');
 
     const notificationRows = captured.notificationInserts.flat();
     expect(notificationRows.length).toBe(2);
     expect(notificationRows.every((r) => r.type === 'payment_received')).toBe(true);
     expect(notificationRows.map((r) => r.user_id).sort()).toEqual(['admin-1', 'admin-2']);
-
-    expect(captured.phaseUpdates).toEqual([
-      { id: 'phase-1', patch: { status: 'in_progress' } },
-    ]);
 
     expect(sendOnboardingEmail).toHaveBeenCalledTimes(1);
     const firstCall = sendOnboardingEmail.mock.calls[0];

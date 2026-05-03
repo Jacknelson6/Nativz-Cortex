@@ -1,7 +1,7 @@
 /**
- * Promote a client out of onboarding: mark every active/paused onboarding
- * tracker as `completed` and set `clients.agency` to the target value in
- * one transactional call.
+ * Promote a client out of onboarding: mark every in_progress/paused row in
+ * the unified `onboardings` table as `completed` and set `clients.agency`
+ * to the target value in one transactional call.
  *
  * Called by the clients Kanban when a card is dragged from the Onboarding
  * column to an agency column.
@@ -48,13 +48,13 @@ export async function POST(
   const { id } = await params;
   const { agency } = parsed.data;
 
-  // 1. Close out any active/paused trackers for this client.
+  // 1. Close out any in_progress/paused onboardings for this client.
   const nowIso = new Date().toISOString();
   const { error: trackerErr, count: trackerCount } = await admin
-    .from('onboarding_trackers')
+    .from('onboardings')
     .update({ status: 'completed', completed_at: nowIso }, { count: 'exact' })
     .eq('client_id', id)
-    .in('status', ['active', 'paused']);
+    .in('status', ['in_progress', 'paused']);
 
   if (trackerErr) {
     return NextResponse.json({ error: trackerErr.message }, { status: 500 });
