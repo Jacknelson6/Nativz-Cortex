@@ -95,7 +95,9 @@ function renderValue(v: unknown): React.ReactNode {
             <dt className="text-[11px] uppercase tracking-wide text-text-secondary pt-0.5">
               {humanLabel(k)}
             </dt>
-            <dd className="text-foreground break-words">{renderScalar(vv)}</dd>
+            <dd className="text-foreground break-words">
+              {vv && typeof vv === 'object' ? renderValue(vv) : renderScalar(vv)}
+            </dd>
           </div>
         ))}
       </dl>

@@ -21,6 +21,7 @@ import type { AgencyBrand } from '@/lib/agency/detect';
 import type { OnboardingScreen } from '@/lib/onboarding/screens';
 import type { OnboardingRow } from '@/lib/onboarding/types';
 import { Button } from '@/components/ui/button';
+import { StepStateView } from '@/components/onboarding/step-state-view';
 import { BrandBasicsScreen } from '@/components/onboarding/screens/brand-basics';
 import { SocialConnectScreen } from '@/components/onboarding/screens/social-connect';
 import { ContentPrefsScreen } from '@/components/onboarding/screens/content-prefs';
@@ -121,7 +122,7 @@ export function OnboardingStepper(props: Props) {
       {/* Header */}
       <header className="flex items-center justify-between">
         <BrandLogo agency={agency} clientName={clientName} clientLogoUrl={clientLogoUrl} />
-        <div className="text-xs uppercase tracking-wide text-text-muted">
+        <div className="text-[11px] uppercase tracking-wide text-text-secondary">
           {isDone ? 'Done' : `Step ${progress.current} of ${progress.total}`}
         </div>
       </header>
@@ -143,7 +144,13 @@ export function OnboardingStepper(props: Props) {
         ) : null}
 
         {isDone ? (
-          <DoneScreen clientName={clientName} kind={initial.kind} completedAt={completedAt} />
+          <DoneScreen
+            clientName={clientName}
+            kind={initial.kind}
+            completedAt={completedAt}
+            stepState={stepState}
+            screens={screens}
+          />
         ) : screen.key === 'welcome' ? (
           <WelcomeScreen
             clientName={clientName}
@@ -279,28 +286,72 @@ function DoneScreen({
   clientName,
   kind,
   completedAt,
+  stepState,
+  screens,
 }: {
   clientName: string;
   kind: OnboardingRow['kind'];
   completedAt: string | null;
+  stepState: Record<string, unknown>;
+  screens: readonly OnboardingScreen[];
 }) {
   const message =
     kind === 'smm'
       ? `That's everything we need to get started, ${clientName}. Your account manager will reach out within a business day to confirm your kickoff time.`
       : `Got it, ${clientName}. We'll grab your assets and have your first cut back within 5 to 7 business days. We'll email when it's ready for review.`;
+
+  // Render a labeled summary of saved answers so the client can see what we
+  // captured. Walks the screens in order and surfaces only the ones with a
+  // step_state_key + non-empty payload, so welcome/turnaround_ack don't add
+  // noise. Mirrors the admin detail's StepStateView treatment.
+  const sections = screens
+    .filter((s) => s.step_state_key)
+    .map((s) => {
+      const key = s.step_state_key as string;
+      const value = stepState[key];
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+      const record = value as Record<string, unknown>;
+      if (Object.keys(record).length === 0) return null;
+      return { key, label: s.label, value: record };
+    })
+    .filter((x): x is { key: string; label: string; value: Record<string, unknown> } => x !== null);
+
   return (
-    <div className="space-y-6">
-      <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-accent/15 text-accent-text">
-        <Check size={20} />
+    <div className="space-y-8">
+      <div className="space-y-6">
+        <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-accent/15 text-accent-text">
+          <Check size={20} />
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-3xl font-semibold text-text-primary">All set.</h1>
+          <p className="text-base text-text-secondary">{message}</p>
+        </div>
+        {completedAt ? (
+          <p className="text-xs text-text-secondary">
+            Completed {new Date(completedAt).toLocaleString()}.
+          </p>
+        ) : null}
       </div>
-      <div className="space-y-2">
-        <h1 className="text-3xl font-semibold text-text-primary">All set.</h1>
-        <p className="text-base text-text-secondary">{message}</p>
-      </div>
-      {completedAt ? (
-        <p className="text-xs text-text-muted">
-          Completed {new Date(completedAt).toLocaleString()}.
-        </p>
+
+      {sections.length > 0 ? (
+        <div className="space-y-4">
+          <h2 className="text-[11px] uppercase tracking-wide text-text-secondary">
+            Your answers
+          </h2>
+          <div className="space-y-3">
+            {sections.map((section) => (
+              <div
+                key={section.key}
+                className="rounded-lg border border-border bg-surface p-4"
+              >
+                <h3 className="text-sm font-semibold text-text-primary">
+                  {section.label}
+                </h3>
+                <StepStateView screenKey={section.key} value={section.value} />
+              </div>
+            ))}
+          </div>
+        </div>
       ) : null}
     </div>
   );
