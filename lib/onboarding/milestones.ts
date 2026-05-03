@@ -175,7 +175,17 @@ export async function notifyMilestones(opts: {
         });
       }
     } catch (err) {
-      console.warn('[onboarding/milestones] completion email failed:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      // A brand with zero POC contacts is a normal state for fresh
+      // clients (and every E2E seed). Don't dump a stack for it.
+      if (msg.includes('no contacts on the brand profile')) {
+        console.info(
+          '[onboarding/milestones] completion email skipped: no POC contacts on client',
+          opts.next.client_id,
+        );
+      } else {
+        console.warn('[onboarding/milestones] completion email failed:', err);
+      }
     }
   }
 }
