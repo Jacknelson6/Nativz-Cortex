@@ -18,7 +18,24 @@ We considered three triggers for consumption:
 2. **On revised-video upload** — credit consumed when the editor pushes a final cut. Rejected: rewards rework with extra credits, charges twice for one deliverable that needed a re-edit.
 3. **On client approval** — credit consumed when the client clicks "approve" on the share link. Chosen: approval is the only mutually-agreed completion signal, and it's already a hard event in the existing data model (`scheduled_posts` join + `post_review_comments.status = 'approved'`).
 
-The consumption hook lives in exactly one place: `app/api/calendar/share/[token]/comment/route.ts` inside the `if (finalStatus === 'approved')` branch. A unique idempotency key per scheduled post means re-approvals after revisions never double-charge, and unapprovals refund automatically.
+The consumption hook lives in exactly one place: `app/api/calendar/share/[token]/comment/route.ts` inside the `if (finalStatus === 'approved')` branch.
+
+### Charge unit: 1 credit = 1 video (not 1 post)
+
+A credit pays for a *video*, not a calendar slot. The system charges per `content_drop_videos` row when a post is rooted in a drop, and falls back to `scheduled_posts.id` only for posts created outside the drop flow. That means:
+
+- Platform fan-out is free. One scheduled post that publishes to TikTok + Reels + Shorts via `scheduled_post_platforms` consumes one credit, not three.
+- Schedule fan-out is free. Re-using the same edit on a different day (a second `scheduled_posts` row pointing at the same `content_drop_videos.id`) does not consume a second credit.
+
+### Lifecycle: state-based dedup, not immutable keys
+
+We do NOT use a unique idempotency key as the dedup mechanism. Instead, the `consume_credit` and `refund_credit` RPCs lock the balance row, then query the live ledger for "is there a `consume` row for this charge unit that has NOT been neutralized by a `refund`?" That makes approve → unapprove → re-approve produce exactly one net consume, even though it's three separate inserts.
+
+### Refund triggers (three, not one)
+
+1. Approval comment is deleted (existing DELETE handler).
+2. A `changes_requested` comment lands AFTER an `approved` comment on the same post. This closes a silent-overcharge bug: the prior approval row stays in the audit trail, so without this trigger the client gets billed for a video they then asked to be redone.
+3. The scheduled post is deleted entirely. A `BEFORE DELETE` trigger on `scheduled_posts` calls `refund_credit` for any unrefunded consume.
 
 ## Goals
 
@@ -67,15 +84,27 @@ The consumption hook lives in exactly one place: `app/api/calendar/share/[token]
 - [ ] Typecheck/lint passes
 
 ### US-003: Approval consumes a credit
-**Description:** As the system, I need to consume exactly one credit when a client approves a video so the balance is always in sync with the deliverable count.
+**Description:** As the system, I need to consume exactly one credit when a client approves a video so the balance is always in sync with the deliverable count, with no over-charging on revisions or re-schedules.
 
 **Acceptance Criteria:**
-- [ ] On `finalStatus === 'approved'` in `app/api/calendar/share/[token]/comment/route.ts`, call `consume_credit` RPC with `idempotency_key = 'consume:<scheduled_post_id>'`
-- [ ] Re-approval after revision does NOT consume a second credit (idempotency key collides, RPC returns `{ already_consumed: true }`)
-- [ ] On approval-comment delete (unapproval), call `refund_credit` with the same key
-- [ ] Refund inserts a `kind = 'refund'` transaction with `delta = +1` and a derived idempotency key
-- [ ] If `consume_credit` errors, log and continue, approval still succeeds (correctness > billing in the hot path)
-- [ ] Re-approve after refund consumes again (clean cycle)
+- [ ] On `finalStatus === 'approved'` in `app/api/calendar/share/[token]/comment/route.ts`, resolve the charge unit (`drop_video` if the post is rooted in a content drop, else `scheduled_post`) and call `consume_credit` RPC with `(p_charge_unit_kind, p_charge_unit_id)`
+- [ ] State-based dedup: RPC takes `FOR UPDATE` on the balance row, then queries the ledger for any `consume` on this charge unit not yet referenced by a `refund.refund_for_id`. If found → no-op returns `{ already_consumed: true }`. If not → insert a new `consume` row.
+- [ ] Re-approval after a revision cycle (approve → changes_requested → approve) produces exactly one net consume across the cycle
+- [ ] Same `content_drop_videos.id` re-scheduled to a second `scheduled_posts` row does NOT consume a second credit (charge keyed by drop_video, not by post)
+- [ ] Platform fan-out across `scheduled_post_platforms` (TikTok + Reels + Shorts on one post) consumes exactly one credit
+- [ ] If `consume_credit` errors, log and continue — approval still succeeds (correctness > billing in the hot path)
+- [ ] Typecheck/lint passes
+
+### US-003b: Refund triggers (auto-correct on un-approval and revisions)
+**Description:** As the system, I need to refund a consumed credit whenever the client effectively un-approves a video, so a client never pays for a video they later asked to be redone.
+
+**Acceptance Criteria:**
+- [ ] On approval-comment DELETE in the share-link comment route, call `refund_credit` for the post's charge unit
+- [ ] On a NEW `changes_requested` comment that follows a prior `approved` comment for the same post, call `refund_credit`. (This is the silent-overcharge fix.)
+- [ ] On `scheduled_posts` row DELETE, a `BEFORE DELETE` trigger calls `refund_credit` for any un-refunded consume on the post's charge unit
+- [ ] Refund only fires against an UN-refunded consume. Two rapid un-approvals can NEVER produce two refund rows for one consume.
+- [ ] Each refund row sets `refund_for_id` to the consume row it neutralizes (cheap "is this already refunded" join)
+- [ ] Re-approve after refund consumes again (clean cycle, one net consume per cycle)
 - [ ] Typecheck/lint passes
 
 ### US-004: Client buys a top-up pack
@@ -118,6 +147,19 @@ The consumption hook lives in exactly one place: `app/api/calendar/share/[token]
 - [ ] Dedup: don't send the same low-balance email twice in the same period
 - [ ] Typecheck/lint passes
 
+### US-008: Pause monthly grants for inactive clients
+**Description:** As an admin, I want to pause monthly credit grants for a client without deleting them so churned, on-hold, free-tier, or trial accounts stop consuming new allowance while preserving their history.
+
+**Acceptance Criteria:**
+- [ ] Two pause shapes on `client_credit_balances`: `auto_grant_enabled boolean` (indefinite) and `paused_until timestamptz null` (time-bounded)
+- [ ] Cron filter: `next_reset_at <= now() AND auto_grant_enabled IS TRUE AND (paused_until IS NULL OR paused_until < now())`. Partial index on `next_reset_at WHERE auto_grant_enabled IS TRUE` so paused rows are skipped at the index level.
+- [ ] Two buttons on the admin Credits panel: **Pause monthly grants** (flips `auto_grant_enabled = false`, prompts for `pause_reason`) and **Pause until...** (date picker → sets `paused_until`)
+- [ ] Panel copy spells out the difference: "Paused indefinitely, no grants until re-enabled" vs "Paused until <date>, resumes on the cron run after that"
+- [ ] Skipped months are NOT backfilled when a paused client is resumed. The next cron run after un-pause grants one full allowance and advances `period_started_at` from `now()`. Admins who want to backfill use a manual `adjust`.
+- [ ] Stripe top-ups still work on paused accounts (pause governs auto-grants, not customer purchases)
+- [ ] Manual `adjust` from the admin panel still works on paused accounts
+- [ ] Typecheck/lint passes
+
 ### US-007: Balance pill on the share-link review page
 **Description:** As a client reviewing a video on the share link, I want to see how many credits I have left so I'm not surprised when my balance drops after I approve.
 
@@ -133,8 +175,8 @@ The consumption hook lives in exactly one place: `app/api/calendar/share/[token]
 
 Two new tables:
 
-- **`client_credit_balances`** — one row per client, holds the live `current_balance`, `monthly_allowance`, period dates, and rollover config
-- **`credit_transactions`** — append-only audit log, every grant / consume / refund / adjust / expire event with idempotency keys
+- **`client_credit_balances`** — one row per client, holds the live `current_balance`, `monthly_allowance`, period dates, rollover config, and pause flags (`auto_grant_enabled`, `paused_until`, `pause_reason`)
+- **`credit_transactions`** — append-only audit log, every grant / consume / refund / adjust / expire event. Consume + refund rows carry `(charge_unit_kind, charge_unit_id)` plus `refund_for_id` so the live ledger is the dedup mechanism, no UNIQUE-key constraint needed.
 
 Both org-scoped via `clients.organization_id`. RLS gives admins full read/write and viewers SELECT-only on their own org. Full schema in `tasks/credits-spec.md`.
 
@@ -163,15 +205,21 @@ Rollback at any step is a `DELETE FROM credit_transactions WHERE created_at > '<
 ## Risks + Mitigations
 
 - **Risk:** A bug in the consume hook double-charges or drops charges.
-  - **Mitigation:** Idempotency key UNIQUE constraint on `(client_id, idempotency_key)`. Race-replay test in the suite.
+  - **Mitigation:** State-based dedup. RPC locks the balance row with `FOR UPDATE`, then queries the ledger for an un-refunded consume on this charge unit. Two concurrent fires serialise on the lock; the second sees the first and no-ops. Race-replay test in the suite.
+- **Risk:** Client approves, then asks for revisions, gets billed for a video they no longer accept.
+  - **Mitigation:** A `changes_requested` comment after a prior `approved` triggers `refund_credit`. Tested as part of the cycle: approve → changes_requested → approve produces one net consume.
+- **Risk:** Same edit gets re-scheduled to a second day or to multiple platforms, double-charges.
+  - **Mitigation:** Charge unit is `content_drop_videos.id`, not `scheduled_posts.id`. Platform fan-out happens at `scheduled_post_platforms` (free). Re-schedule fan-out happens at `scheduled_posts` (free, charged at drop-video level).
 - **Risk:** Client gets confused about what consumes a credit (revisions? scheduling?).
-  - **Mitigation:** Portal copy explicitly says "1 credit = 1 approved video. Revisions are free." Same line in the low-balance email.
+  - **Mitigation:** Portal copy explicitly says "1 credit = 1 approved video. Revisions and re-schedules are free." Same line in the low-balance email.
 - **Risk:** Account manager forgets to set `monthly_allowance` for a new client and the client overdrafts immediately.
   - **Mitigation:** Onboarding checklist gains a "Set credit allowance" item. Daily admin digest flags clients with `monthly_allowance = 0` and any consumption that month.
 - **Risk:** Stripe webhook fires twice for the same checkout session.
-  - **Mitigation:** Idempotency key `topup:<stripe_session_id>` on the grant transaction.
+  - **Mitigation:** Idempotency key `topup:<stripe_session_id>` on the grant transaction (top-ups still use key-based dedup, since there's no state-machine to consult).
 - **Risk:** Contract bumps mid-period (client upgrades from 8 to 12 credits halfway through the month).
   - **Mitigation:** Admin edits `monthly_allowance` and adds a manual `adjust` for the prorated delta. Explicit, audited, simple.
+- **Risk:** Client churns, gets deleted, history is lost; or churns, stays in the DB, keeps getting monthly grants forever.
+  - **Mitigation:** `auto_grant_enabled = false` keeps the row + history but stops grants. Time-bounded breaks (one month off) use `paused_until`. Cron filters at the index level so paused accounts never wake the cron up.
 
 ## Success Metrics
 
