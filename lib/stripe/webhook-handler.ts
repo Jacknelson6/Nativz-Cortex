@@ -40,6 +40,7 @@ import {
   onCreditsChargeDisputed,
 } from '@/lib/credits/webhook';
 import { applyTierChange } from '@/lib/deliverables/apply-tier-change';
+import { resolveTierByPriceId } from '@/lib/deliverables/resolve-tier-price';
 
 export async function handleStripeWebhook(
   req: NextRequest,
@@ -129,7 +130,7 @@ async function dispatch(
   admin: ReturnType<typeof createAdminClient>,
   agency: AgencyBrand,
 ): Promise<void> {
-  // agency is currently just logged — when we backfill the `stripe_account_id`
+  // agency is currently just logged. When we backfill the `stripe_account_id`
   // column into the mirror tables, pass it into each upsert so rows get tagged.
   // For now Stripe IDs are globally unique per account, so no collision risk.
   void agency;
@@ -221,29 +222,44 @@ async function dispatch(
       // Phase D: tier-change branch. Stripe surfaces a price_id swap on
       // `customer.subscription.updated` via items.data[].price.id; the prior
       // value lives in previous_attributes.items. We resolve the new
-      // price_id to a package_tiers row and call applyTierChange. Failures
-      // are logged but don't abort the webhook (the lifecycle update below
-      // still needs to run for status/cancel propagation).
+      // price_id to a package_tiers row via env-keyed lookup
+      // (resolveTierByPriceId, mirrors the addon-skus pattern) and call
+      // applyTierChange. Failures are logged but don't abort the webhook,
+      // the lifecycle update below still needs to run for status/cancel
+      // propagation.
+      //
+      // Multi-item subscriptions: we scan every line item rather than
+      // assuming items.data[0]. The first line whose price changed and
+      // resolves to an active tier wins.
       try {
         const items = (sub as unknown as { items?: { data?: Array<{ price?: { id?: string } }> } }).items;
-        const newPriceId = items?.data?.[0]?.price?.id ?? null;
         const prevItems = prev.items as
           | { data?: Array<{ price?: { id?: string } }> }
           | undefined;
-        const prevPriceId = prevItems?.data?.[0]?.price?.id ?? null;
-        const tierChanged = !!newPriceId && !!prevPriceId && newPriceId !== prevPriceId;
-        if (tierChanged && newPriceId && result.client_id) {
-          const { data: tierRow } = await admin
-            .from('package_tiers')
-            .select('id, slug, display_name')
-            .eq('stripe_price_id', newPriceId)
-            .eq('is_active', true)
-            .maybeSingle<{ id: string; slug: string; display_name: string }>();
-          if (tierRow) {
-            const applied = await applyTierChange(admin, result.client_id, tierRow.id);
+        const newIds = (items?.data ?? [])
+          .map((d) => d.price?.id ?? null)
+          .filter((id): id is string => !!id);
+        const prevIds = (prevItems?.data ?? [])
+          .map((d) => d.price?.id ?? null)
+          .filter((id): id is string => !!id);
+        const swappedIds = newIds.filter((id) => !prevIds.includes(id));
+        if (swappedIds.length > 0 && result.client_id) {
+          let matched: { id: string; slug: string } | null = null;
+          let matchedPriceId: string | null = null;
+          for (const candidate of swappedIds) {
+            const tier = await resolveTierByPriceId(admin, agency, candidate);
+            if (tier) {
+              matched = tier;
+              matchedPriceId = candidate;
+              break;
+            }
+          }
+          if (matched) {
+            const applied = await applyTierChange(admin, result.client_id, matched.id);
             console.info('[stripe webhook] tier change applied', {
               client_id: result.client_id,
-              new_tier: tierRow.slug,
+              new_tier: matched.slug,
+              new_price_id: matchedPriceId,
               rows: applied.rows.map((r) => ({
                 slug: r.deliverableTypeSlug,
                 delta: r.proratedDelta,
@@ -252,7 +268,7 @@ async function dispatch(
             });
           } else {
             console.warn('[stripe webhook] price_id not mapped to a package_tier', {
-              new_price_id: newPriceId,
+              swapped_price_ids: swappedIds,
             });
           }
         }

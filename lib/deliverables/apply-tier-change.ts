@@ -18,6 +18,13 @@
  *   - Rewrites `monthly_allowance` + `rollover_policy` on every affected
  *     row so the next monthly_reset cron picks up the new tier numbers.
  *   - Stamps `package_tier_id` on each (client, type) row.
+ *   - Cleans up orphans on downgrade: balance rows whose deliverable_type
+ *     isn't in the new tier's allotments get monthly_allowance = 0,
+ *     auto_grant_enabled = false, package_tier_id = newTierId, and a
+ *     prorated debit so the remainder of the period winds down to zero.
+ *     Without this step the next monthly_reset cron would keep granting
+ *     stale allowances under the old tier (e.g. ugc_video carrying after
+ *     a Full Social → Studio downgrade).
  *
  * Idempotency:
  *   The webhook can fire multiple times for the same subscription update
@@ -283,6 +290,109 @@ export async function applyTierChange(
       newMonthlyCount,
       proratedDelta,
       rowCreated: !existing,
+      alreadyApplied,
+    });
+  }
+
+  // Orphan cleanup pass.
+  //
+  // Any balance row whose deliverable_type isn't covered by the new tier
+  // (i.e. a Full Social → Studio downgrade leaves ugc_video orphaned) needs
+  // to wind down. Without this pass the row keeps its old monthly_allowance
+  // and auto_grant_enabled = true, so the next monthly_reset cron will
+  // re-grant the stale allowance and the client effectively keeps the old
+  // tier's perks for one type indefinitely.
+  //
+  // Symmetric proration: treat newCount = 0 and apply the same prorate()
+  // formula. The remainder of the current period winds down naturally; the
+  // next reset writes 0 and the row goes dormant. We also flip
+  // auto_grant_enabled = false belt-and-suspenders so a buggy reset cron
+  // doesn't accidentally re-grant.
+  const allottedTypeIds = new Set(allotments.map((a) => a.deliverable_type_id));
+  const orphans = balances.filter(
+    (b) => !allottedTypeIds.has(b.deliverable_type_id),
+  );
+  for (const orphan of orphans) {
+    const slug = slugById.get(orphan.deliverable_type_id) ?? 'unknown';
+    const oldMonthlyCount = orphan.monthly_allowance;
+    const newMonthlyCount = 0;
+    const proratedDelta = prorate(
+      newMonthlyCount,
+      oldMonthlyCount,
+      new Date(orphan.period_started_at),
+      new Date(orphan.period_ends_at),
+      now,
+    );
+
+    const idempotencyKey = `tier-change:${clientId}:${newTierId}:${orphan.period_started_at}:${orphan.deliverable_type_id}`;
+
+    // Same idempotency gate as the in-tier loop. We only check when there's
+    // a delta to write, but we still want the balance + flag updates to be
+    // safe under replay, so the UPDATE itself is naturally idempotent
+    // (writes are equal-state on second run).
+    if (proratedDelta !== 0) {
+      const { data: priorRows } = await admin
+        .from('credit_transactions')
+        .select('id')
+        .eq('idempotency_key', idempotencyKey)
+        .limit(1);
+      if (priorRows && priorRows.length > 0) {
+        rows.push({
+          deliverableTypeId: orphan.deliverable_type_id,
+          deliverableTypeSlug: slug,
+          oldMonthlyCount,
+          newMonthlyCount,
+          proratedDelta,
+          rowCreated: false,
+          alreadyApplied: true,
+        });
+        continue;
+      }
+    }
+
+    const { error: updErr } = await admin
+      .from('client_credit_balances')
+      .update({
+        package_tier_id: newTierId,
+        monthly_allowance: 0,
+        rollover_policy: 'none',
+        rollover_cap: null,
+        auto_grant_enabled: false,
+        current_balance: orphan.current_balance + proratedDelta,
+      })
+      .eq('client_id', clientId)
+      .eq('deliverable_type_id', orphan.deliverable_type_id);
+    if (updErr) throw new Error(`Orphan balance update failed: ${updErr.message}`);
+
+    let alreadyApplied = false;
+    if (proratedDelta !== 0) {
+      const { error: txErr } = await admin
+        .from('credit_transactions')
+        .insert({
+          client_id: clientId,
+          deliverable_type_id: orphan.deliverable_type_id,
+          kind: 'adjust',
+          delta: proratedDelta,
+          actor_user_id: options.actorUserId ?? null,
+          note: `Tier change to ${tier.display_name}: ${slug} no longer covered, ${oldMonthlyCount} prorated wind-down`,
+          idempotency_key: idempotencyKey,
+        });
+      if (txErr) {
+        if ((txErr as { code?: string }).code === '23505') {
+          alreadyApplied = true;
+        } else {
+          throw new Error(`Orphan ledger write failed: ${txErr.message}`);
+        }
+      }
+    }
+
+    rows.push({
+      deliverableTypeId: orphan.deliverable_type_id,
+      deliverableTypeSlug: slug,
+      oldMonthlyCount,
+      newMonthlyCount,
+      proratedDelta,
+      rowCreated: false,
       alreadyApplied,
     });
   }

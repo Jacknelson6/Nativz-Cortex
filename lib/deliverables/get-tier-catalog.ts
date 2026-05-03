@@ -23,7 +23,6 @@ interface PackageTierRow {
   blurb: string;
   price_cents: number;
   monthly_term_minimum_months: number;
-  stripe_price_id: string;
   sort_order: number;
   is_best_value: boolean;
   scope_in: string;
@@ -43,7 +42,7 @@ export async function getTierCatalog(
   const { data: tiers, error: tiersErr } = await admin
     .from('package_tiers')
     .select(
-      'id, slug, display_name, blurb, price_cents, monthly_term_minimum_months, stripe_price_id, sort_order, is_best_value, scope_in, scope_out',
+      'id, slug, display_name, blurb, price_cents, monthly_term_minimum_months, sort_order, is_best_value, scope_in, scope_out',
     )
     .eq('agency', agency)
     .eq('is_active', true)
