@@ -578,6 +578,13 @@ export function ContentToolsShell() {
               patchLink(next.id, patch);
             }
           }}
+          onFollowupRecorded={(patch) => {
+            if (activeCalendarLink) {
+              const next = { ...activeCalendarLink, ...patch };
+              setActiveCalendarLink(next);
+              patchLink(next.id, patch);
+            }
+          }}
         />
       </div>
     </TooltipProvider>

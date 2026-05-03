@@ -55,6 +55,7 @@ async function handleGet(request: NextRequest) {
     no_action_nudge_sent_at: string | null;
     final_call_sent_at: string | null;
     revisions_ops_nudged_at: string | null;
+    followup_count: number | null;
     expires_at: string;
     content_drops: {
       id: string;
@@ -81,6 +82,7 @@ async function handleGet(request: NextRequest) {
       no_action_nudge_sent_at,
       final_call_sent_at,
       revisions_ops_nudged_at,
+      followup_count,
       expires_at,
       content_drops!inner (
         id,
@@ -248,9 +250,17 @@ async function handleGet(request: NextRequest) {
               dropId: link.drop_id,
             })),
           );
+          const stampIso = new Date().toISOString();
           await admin
             .from('content_drop_share_links')
-            .update({ no_open_nudge_sent_at: new Date().toISOString() })
+            .update({
+              no_open_nudge_sent_at: stampIso,
+              // Automated nudges are followups too. Bump the deliverables-table
+              // counter alongside the dedicated stamp so the "Last Followup"
+              // column reflects the most recent contact, not just manual sends.
+              last_followup_at: stampIso,
+              followup_count: (link.followup_count ?? 0) + 1,
+            })
             .eq('id', link.id);
           sent.no_open += 1;
         } catch (e) {
@@ -293,9 +303,14 @@ async function handleGet(request: NextRequest) {
               dropId: link.drop_id,
             })),
           );
+          const stampIso = new Date().toISOString();
           await admin
             .from('content_drop_share_links')
-            .update({ no_action_nudge_sent_at: new Date().toISOString() })
+            .update({
+              no_action_nudge_sent_at: stampIso,
+              last_followup_at: stampIso,
+              followup_count: (link.followup_count ?? 0) + 1,
+            })
             .eq('id', link.id);
           sent.no_action += 1;
         } catch (e) {
@@ -358,9 +373,14 @@ async function handleGet(request: NextRequest) {
                 },
                 `final_call_ops:${link.id}`,
               );
+              const stampIso = new Date().toISOString();
               await admin
                 .from('content_drop_share_links')
-                .update({ final_call_sent_at: new Date().toISOString() })
+                .update({
+                  final_call_sent_at: stampIso,
+                  last_followup_at: stampIso,
+                  followup_count: (link.followup_count ?? 0) + 1,
+                })
                 .eq('id', link.id);
               sent.final_call += 1;
             } catch (e) {

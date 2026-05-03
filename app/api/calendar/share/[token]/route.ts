@@ -102,6 +102,32 @@ export async function GET(
   req: Request,
   ctx: { params: Promise<{ token: string }> },
 ) {
+  try {
+    return await handleShareGet(req, ctx);
+  } catch (err) {
+    // Unhandled exceptions used to bubble out as an empty 500 body, which
+    // hit the client as "Unexpected end of JSON input" and the friendly
+    // copy "This share link may have expired or been deactivated." The
+    // viewer would then sit on a dead-end with no way to recover, even
+    // though the link was still valid. Always return a structured JSON
+    // error here so the client can surface a real message and stale links
+    // can't masquerade as expired ones.
+    const { token } = await ctx.params.catch(() => ({ token: 'unknown' }));
+    console.error('[share-link-get] unhandled error', {
+      token,
+      err: err instanceof Error ? err.stack ?? err.message : String(err),
+    });
+    return NextResponse.json(
+      { error: 'share link load failed', detail: err instanceof Error ? err.message : 'unknown' },
+      { status: 500 },
+    );
+  }
+}
+
+async function handleShareGet(
+  req: Request,
+  ctx: { params: Promise<{ token: string }> },
+) {
   const { token } = await ctx.params;
   const admin = createAdminClient();
   const url = new URL(req.url);
@@ -158,18 +184,29 @@ export async function GET(
       v.mux_upload_id != null,
   );
   if (inFlight.length > 0) {
-    const patches = await Promise.all(
-      inFlight.map((row) => reconcileMuxRow(admin, row)),
-    );
-    inFlight.forEach((row, i) => {
-      const patch = patches[i];
-      if (!patch) return;
-      if (patch.mux_status !== undefined) row.mux_status = patch.mux_status;
-      if (patch.mux_asset_id !== undefined) row.mux_asset_id = patch.mux_asset_id;
-      if (patch.mux_playback_id !== undefined) row.mux_playback_id = patch.mux_playback_id;
-      if (patch.revised_video_url !== undefined) row.revised_video_url = patch.revised_video_url;
-      if (patch.revised_mp4_url !== undefined) row.revised_mp4_url = patch.revised_mp4_url;
-    });
+    try {
+      const patches = await Promise.all(
+        inFlight.map((row) => reconcileMuxRow(admin, row)),
+      );
+      inFlight.forEach((row, i) => {
+        const patch = patches[i];
+        if (!patch) return;
+        if (patch.mux_status !== undefined) row.mux_status = patch.mux_status;
+        if (patch.mux_asset_id !== undefined) row.mux_asset_id = patch.mux_asset_id;
+        if (patch.mux_playback_id !== undefined) row.mux_playback_id = patch.mux_playback_id;
+        if (patch.revised_video_url !== undefined) row.revised_video_url = patch.revised_video_url;
+        if (patch.revised_mp4_url !== undefined) row.revised_mp4_url = patch.revised_mp4_url;
+      });
+    } catch (err) {
+      // Mux client construction or a raw transport error would otherwise
+      // 500 the entire share page even though the underlying DB rows are
+      // perfectly viewable. Log + skip; the next page-view re-runs the
+      // reconcile and the auto-poll on the client picks up state changes.
+      console.warn('[share-link-get] mux reconcile batch failed; skipping', {
+        count: inFlight.length,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   const videoByPost: Record<string, string> = {};
@@ -198,22 +235,29 @@ export async function GET(
     };
   }
 
-  const [{ data: client }, balances] = await Promise.all([
+  // Phase D added per-client deliverable balances + agency add-on context to
+  // the share payload. Both are enrichments — the BalancePill and pre-approval
+  // modal degrade gracefully without them — so a deliverable_types fetch
+  // failure or stale balances row should never blank out the entire share
+  // page (which is what was happening when this route 500'd with an empty
+  // body). Settle the balance fetch independently and fall back to an empty
+  // array on failure; log the underlying error so we can fix the root cause.
+  const [{ data: client }, balancesResult] = await Promise.all([
     admin
       .from('clients')
       .select('name, agency')
       .eq('id', drop.client_id)
       .single<{ name: string | null; agency: string | null }>(),
-    // Per-type balances feed the deliverables BalancePill near the approve
-    // buttons. Phase B speaks "deliverables" (edited / UGC / graphics);
-    // soft-block on overage lives in the comment route.
-    getDeliverableBalances(admin, drop.client_id),
+    getDeliverableBalances(admin, drop.client_id).catch((err: unknown) => {
+      console.warn('[share-link-get] balances fetch failed; degrading to empty', {
+        clientId: drop.client_id,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return [] as Awaited<ReturnType<typeof getDeliverableBalances>>;
+    }),
   ]);
+  const balances = balancesResult;
 
-  // Phase D pre-approval modal context. The viewer needs these to render the
-  // soft-block modal when the comment route returns 402 / scope_exhausted.
-  // Add-ons are filtered by the client's agency so the modal only shows the
-  // matching agency's SKUs.
   const agencyBrand = getBrandFromAgency(client?.agency ?? null);
   const addons = listConfiguredAddons(agencyBrand);
   const supportEmail = AGENCY_CONFIG[agencyBrand].supportEmail;

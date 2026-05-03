@@ -76,6 +76,7 @@ export function CalendarLinkDetail({
   onClose,
   onRevoked,
   onSent,
+  onFollowupRecorded,
 }: {
   link: ReviewLinkRow | null;
   onClose: () => void;
@@ -90,9 +91,19 @@ export function CalendarLinkDetail({
     last_sent_at: string;
     send_count: number;
   }) => void;
+  /**
+   * Called when the admin records an out-of-band followup (Slack/text/etc.)
+   * via the "Mark followed up" button. Patches the row optimistically so
+   * the Last-followup column drops back to green without a refetch.
+   */
+  onFollowupRecorded?: (patch: {
+    last_followup_at: string;
+    followup_count: number;
+  }) => void;
 }) {
   const open = !!link;
   const [revoking, setRevoking] = useState(false);
+  const [markingFollowup, setMarkingFollowup] = useState(false);
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState<'details' | 'history'>('details');
   // Recipients live on the detail panel itself (not just the send preview)
@@ -177,6 +188,30 @@ export function CalendarLinkDetail({
       setTimeout(() => setCopied(false), 1500);
     } catch {
       toast.error('Could not copy link');
+    }
+  }
+
+  async function markFollowedUp() {
+    if (markingFollowup || !link) return;
+    setMarkingFollowup(true);
+    try {
+      const res = await fetch(
+        `/api/calendar/share/${link.token}/followup/manual`,
+        { method: 'POST' },
+      );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof json?.error === 'string' ? json.error : 'Failed to record');
+      }
+      toast.success('Followup recorded');
+      onFollowupRecorded?.({
+        last_followup_at: json.last_followup_at,
+        followup_count: json.followup_count,
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to record');
+    } finally {
+      setMarkingFollowup(false);
     }
   }
 
@@ -546,6 +581,23 @@ export function CalendarLinkDetail({
             destructive button never lands closest to the close X. */}
         {tab === 'details' && (canSend || !isExpired) && (
           <div className="flex items-center justify-end gap-2 border-t border-nativz-border px-6 py-4">
+            {/* Out-of-band followup recorder. Useful when the chase happened
+                on Slack, text, or in person — stamps the table indicator
+                without firing another email at the client. Only surfaces
+                while the link is still live and pending action. */}
+            {!isExpired && !isAbandoned && hasBeenSent && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={markFollowedUp}
+                disabled={markingFollowup}
+                className="text-text-muted hover:text-text-primary"
+                title="Record an out-of-band nudge (Slack, text, in-person) without sending an email"
+              >
+                {markingFollowup ? 'Recording...' : 'Mark followed up'}
+              </Button>
+            )}
             {!isExpired && (
               <Button
                 type="button"
