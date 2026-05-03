@@ -40,12 +40,19 @@ export interface ConsumeForApprovalArgs {
   reviewerName: string;
   /**
    * The share-link comment surface only collects `authorName`, no email.
-   * Stamp it onto `reviewer_email` for audit purposes — the column is
+   * Stamp it onto `reviewer_email` for audit purposes, the column is
    * lightly typed (text) and exists primarily so admins can trace who
    * triggered the consume. Pass real email here when one is available
    * (e.g. portal-authenticated approval flows).
    */
   reviewerEmail?: string | null;
+  /**
+   * The review_link_id whose `approved` comment triggered this consume.
+   * Used to count prior `changes_requested` comments and stamp
+   * `revision_count` on the consume row. Optional, callers without it
+   * yield revision_count=0 (acceptable for first-approval / legacy paths).
+   */
+  reviewLinkId?: string | null;
 }
 
 export async function consumeForApproval(
@@ -75,6 +82,22 @@ export async function consumeForApproval(
       );
       return;
     }
+
+    // Phase C: count revision cycles for the margin view. Each prior
+    // `changes_requested` comment on the same review_link_id represents a
+    // round-trip the editor had to absorb before approval. Cheap head-count
+    // query, runs once per approval. Errors here are non-fatal: a bad
+    // count just stamps 0 instead of blocking the consume.
+    let revisionCount = 0;
+    if (args.reviewLinkId) {
+      const { count } = await admin
+        .from('post_review_comments')
+        .select('id', { count: 'exact', head: true })
+        .eq('review_link_id', args.reviewLinkId)
+        .eq('status', 'changes_requested');
+      revisionCount = count ?? 0;
+    }
+
     const result = await consumeCredit(admin, {
       clientId,
       chargeUnitKind: charge.kind,
@@ -83,6 +106,9 @@ export async function consumeForApproval(
       shareLinkId: args.shareLinkId,
       reviewerEmail: args.reviewerEmail ?? args.reviewerName,
       deliverableTypeSlug: charge.deliverableTypeSlug,
+      editorUserId: charge.editorUserId,
+      deliverableId: charge.deliverableId,
+      revisionCount,
     });
     if ('already_consumed' in result && result.already_consumed) {
       // Re-approval, no-op. Don't log — common path.

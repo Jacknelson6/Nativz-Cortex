@@ -50,7 +50,7 @@ export function RecentActivity({ entries, brandName }: RecentActivityProps) {
           {brandName ? `${brandName}'s production log` : 'Production log'}
         </h2>
         <p className="text-[13px] text-text-secondary">
-          The last {entries.length} movements across this month's scope.
+          The last {entries.length} movements across this month&apos;s scope.
         </p>
       </header>
 
@@ -74,10 +74,25 @@ export function RecentActivity({ entries, brandName }: RecentActivityProps) {
                 key={e.id}
                 className="flex items-start gap-3 rounded-xl border border-nativz-border/60 bg-background/40 p-3"
               >
-                <span
-                  aria-hidden
-                  className={`mt-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full ${tone}`}
-                />
+                {e.thumbnailUrl ? (
+                  <span className="relative mt-0.5 block h-10 w-10 shrink-0 overflow-hidden rounded-md border border-nativz-border bg-background">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={e.thumbnailUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                    <span
+                      aria-hidden
+                      className={`absolute right-1 top-1 inline-block h-1.5 w-1.5 rounded-full ring-2 ring-background ${tone}`}
+                    />
+                  </span>
+                ) : (
+                  <span
+                    aria-hidden
+                    className={`mt-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full ${tone}`}
+                  />
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="text-[13px] text-text-primary">{e.headline}</p>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-text-muted">

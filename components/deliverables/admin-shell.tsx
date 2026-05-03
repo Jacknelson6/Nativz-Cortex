@@ -39,6 +39,15 @@ import type {
   RolloverPolicy,
 } from '@/lib/credits/types';
 import { deliverableCopy } from '@/lib/deliverables/copy';
+import { AdminMarginView } from './admin-margin-view';
+
+/**
+ * Sentinel slug for the "Margin" pseudo-tab. We piggyback on the existing
+ * tab-button rendering by giving it a slug value that can never collide
+ * with a real `deliverable_types.slug` (those are alphanumeric without
+ * leading underscores).
+ */
+const MARGIN_SLUG = '__margin__';
 
 interface AdminShellProps {
   clientId: string;
@@ -75,7 +84,9 @@ export function AdminShell({ clientId, balances, transactions }: AdminShellProps
     () => balances.slice().sort((a, b) => a.sortOrder - b.sortOrder),
     [balances],
   );
-  const [activeSlug, setActiveSlug] = useState(
+  // Widened to string so we can host a sentinel slug ("__margin__") for the
+  // pseudo-tab alongside real `DeliverableTypeSlug` values.
+  const [activeSlug, setActiveSlug] = useState<string>(
     sorted[0]?.deliverableTypeSlug ?? 'edited_video',
   );
 
@@ -246,8 +257,9 @@ export function AdminShell({ clientId, balances, transactions }: AdminShellProps
         </div>
       ) : null}
 
-      {/* Tabs: one per type. hasRow=false rows still appear so the admin can
-          provision them; saving the allowance creates the row. */}
+      {/* Tabs: one per type plus a Margin pseudo-tab. hasRow=false rows still
+          appear so the admin can provision them; saving the allowance creates
+          the row. */}
       <div className="flex flex-wrap gap-1 rounded-xl border border-nativz-border bg-surface p-1">
         {sorted.map((b) => {
           const copy = deliverableCopy(b.deliverableTypeSlug);
@@ -276,8 +288,23 @@ export function AdminShell({ clientId, balances, transactions }: AdminShellProps
             </button>
           );
         })}
+        <button
+          type="button"
+          onClick={() => setActiveSlug(MARGIN_SLUG)}
+          className={`ml-auto rounded-lg px-3 py-1.5 text-[12px] font-medium transition-colors ${
+            activeSlug === MARGIN_SLUG
+              ? 'bg-accent text-[color:var(--accent-contrast)]'
+              : 'text-text-secondary hover:bg-surface-hover'
+          }`}
+        >
+          Margin
+        </button>
       </div>
 
+      {activeSlug === MARGIN_SLUG ? <AdminMarginView clientId={clientId} /> : null}
+
+      {activeSlug !== MARGIN_SLUG ? (
+        <>
       {!hasRow ? (
         <section className="rounded-xl border border-amber-300/30 bg-amber-300/5 p-5 text-sm text-amber-300">
           No balance row exists for this type yet. Save an allowance below to provision it; the
@@ -565,6 +592,8 @@ export function AdminShell({ clientId, balances, transactions }: AdminShellProps
           </div>
         )}
       </section>
+        </>
+      ) : null}
     </>
   );
 }

@@ -13,11 +13,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type {
-  CreditTransactionKind,
-  CreditTransactionRow,
-  DeliverableTypeSlug,
-} from '@/lib/credits/types';
+import type { CreditTransactionKind, DeliverableTypeSlug } from '@/lib/credits/types';
 import { listDeliverableTypes } from './types-cache';
 import { deliverableCopy, pluraliseDeliverable } from './copy';
 
@@ -31,6 +27,12 @@ export interface RecentActivityEntry {
   headline: string;
   /** Optional detail line (e.g. note, post title). */
   detail?: string | null;
+  /**
+   * Drop-video thumbnail URL when the row charges a drop_video unit. Lets
+   * the activity feed render a visual marker so the operator can scan
+   * "which post was that?" at a glance.
+   */
+  thumbnailUrl?: string | null;
 }
 
 const DEFAULT_LIMIT = 30;
@@ -72,30 +74,55 @@ export async function getRecentDeliverableActivity(
   const slugById = new Map(types.map((t) => [t.id, t.slug]));
   const rows = txResult.data ?? [];
 
-  // Pull post titles in one batch when any consume references a scheduled
-  // post — keeps "Hot Take #4 approved" reading natural without N+1 fetches.
+  // Pull post titles + drop-video thumbnails in one batch each. The post
+  // titles keep "Hot Take #4 approved" reading natural; the thumbnails let
+  // the activity feed render a visual marker so the operator can scan
+  // which post a row refers to without clicking through. Both batches run
+  // in parallel because they're independent.
   const postIds = rows
     .map((r) => r.scheduled_post_id)
     .filter((v): v is string => !!v);
-  let titleByPostId = new Map<string, string>();
-  if (postIds.length > 0) {
-    const { data: posts } = await admin
-      .from('scheduled_posts')
-      .select('id, title')
-      .in('id', postIds)
-      .returns<Array<{ id: string; title: string | null }>>();
-    titleByPostId = new Map(
-      (posts ?? [])
-        .filter((p): p is { id: string; title: string } => !!p.title)
-        .map((p) => [p.id, p.title]),
-    );
-  }
+  const dropVideoIds = rows
+    .filter((r) => r.charge_unit_kind === 'drop_video' && !!r.charge_unit_id)
+    .map((r) => r.charge_unit_id as string);
+
+  const [postTitleResult, dropVideoResult] = await Promise.all([
+    postIds.length > 0
+      ? admin
+          .from('scheduled_posts')
+          .select('id, title')
+          .in('id', postIds)
+          .returns<Array<{ id: string; title: string | null }>>()
+      : Promise.resolve({ data: [] as Array<{ id: string; title: string | null }> }),
+    dropVideoIds.length > 0
+      ? admin
+          .from('content_drop_videos')
+          .select('id, thumbnail_url')
+          .in('id', dropVideoIds)
+          .returns<Array<{ id: string; thumbnail_url: string | null }>>()
+      : Promise.resolve({ data: [] as Array<{ id: string; thumbnail_url: string | null }> }),
+  ]);
+
+  const titleByPostId = new Map(
+    (postTitleResult.data ?? [])
+      .filter((p): p is { id: string; title: string } => !!p.title)
+      .map((p) => [p.id, p.title]),
+  );
+  const thumbnailByDropVideoId = new Map(
+    (dropVideoResult.data ?? [])
+      .filter((v): v is { id: string; thumbnail_url: string } => !!v.thumbnail_url)
+      .map((v) => [v.id, v.thumbnail_url]),
+  );
 
   const out: RecentActivityEntry[] = [];
   for (const row of rows) {
     const slug = slugById.get(row.deliverable_type_id);
     if (!slug) continue; // unknown type; skip rather than guess
     const summary = summarise(row, slug, titleByPostId);
+    const thumbnailUrl =
+      row.charge_unit_kind === 'drop_video' && row.charge_unit_id
+        ? (thumbnailByDropVideoId.get(row.charge_unit_id) ?? null)
+        : null;
     out.push({
       id: row.id,
       createdAt: row.created_at,
@@ -104,6 +131,7 @@ export async function getRecentDeliverableActivity(
       deliverableTypeSlug: slug,
       headline: summary.headline,
       detail: summary.detail,
+      thumbnailUrl,
     });
   }
   return out;

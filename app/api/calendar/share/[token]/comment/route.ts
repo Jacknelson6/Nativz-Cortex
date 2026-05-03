@@ -254,6 +254,7 @@ export async function POST(
         scheduledPostId: parsed.data.postId,
         shareLinkId: link.id,
         reviewerName: parsed.data.authorName.trim(),
+        reviewLinkId,
       });
     } else if (finalStatus === 'changes_requested') {
       // Silent-overcharge fix: if this post was already approved earlier
