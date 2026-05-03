@@ -114,6 +114,14 @@
     {
       "path": "/api/cron/refresh-openrouter-models",
       "schedule": "0 4 1,15 * *"
+    },
+    {
+      "path": "/api/cron/credits-reset",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/credits-reconcile",
+      "schedule": "0 5 * * *"
     }
   ]
 }

@@ -45,8 +45,10 @@ const KIND_LABEL: Record<CreditTransactionKind, string> = {
   expire: 'Expired',
 };
 
+const PACK_SIZES: ReadonlyArray<5 | 10 | 25> = [5, 10, 25] as const;
+
 export function CreditsViewerLedger({ balance, transactions, clientName }: Props) {
-  const [busy, setBusy] = useState(false);
+  const [busyPack, setBusyPack] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Server returns transactions sorted DESC; defensive re-sort handles a
@@ -56,15 +58,15 @@ export function CreditsViewerLedger({ balance, transactions, clientName }: Props
     [transactions],
   );
 
-  async function buyCredits() {
-    setBusy(true);
+  async function buyCredits(packSize: 5 | 10 | 25) {
+    setBusyPack(packSize);
     setError(null);
     let redirected = false;
     try {
       const res = await fetch('/api/credits/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: balance?.client_id }),
+        body: JSON.stringify({ clientId: balance?.client_id, packSize }),
       });
       const text = await res.text();
       const json = text ? (JSON.parse(text) as { url?: string; error?: string }) : null;
@@ -79,7 +81,7 @@ export function CreditsViewerLedger({ balance, transactions, clientName }: Props
       // Leave the spinner active when we're about to navigate away — the
       // page is unmounting anyway, and resetting busy would briefly flash
       // the button back to enabled.
-      if (!redirected) setBusy(false);
+      if (!redirected) setBusyPack(null);
     }
   }
 
@@ -95,18 +97,32 @@ export function CreditsViewerLedger({ balance, transactions, clientName }: Props
       {/* Top-up CTA. Sits above the ledger so it's the first thing a
           reviewer sees when their balance hits zero. */}
       <section className="rounded-xl border border-nativz-border bg-surface p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 shrink">
             <h2 className="text-sm font-semibold text-text-primary">Need more credits?</h2>
             <p className="mt-1 max-w-prose text-[12px] text-text-muted">
               Top up {clientName} with extra credits any time. Approvals still work if you go
               over your allowance, your next invoice will reflect the overage.
             </p>
           </div>
-          <Button variant="primary" size="sm" onClick={buyCredits} disabled={busy || !balance}>
-            {busy ? <Loader2 size={14} className="animate-spin" /> : <ShoppingCart size={14} />}
-            Buy more credits
-          </Button>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            {PACK_SIZES.map((size) => (
+              <Button
+                key={size}
+                variant={size === 10 ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={() => buyCredits(size)}
+                disabled={busyPack !== null || !balance}
+              >
+                {busyPack === size ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <ShoppingCart size={14} />
+                )}
+                {size} credits
+              </Button>
+            ))}
+          </div>
         </div>
       </section>
 

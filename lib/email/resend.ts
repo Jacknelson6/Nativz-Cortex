@@ -2166,3 +2166,75 @@ export async function sendCreditsOverdraftEmail(opts: {
     },
   });
 }
+
+// ── Credits: top-up confirmation ────────────────────────────────────────────
+//
+// Fired by the Stripe `checkout.session.completed` webhook handler after the
+// `grant_topup` row lands. Confirms the purchase, shows the new balance, and
+// links back to /credits in the portal.
+
+export async function sendCreditsTopupConfirmationEmail(opts: {
+  to: string | string[];
+  pocFirstNames?: string[];
+  clientName: string;
+  packSize: number;
+  newBalance: number;
+  amountPaidCents: number;
+  receiptUrl?: string | null; // Stripe receipt url; falls back to portal link
+  portalUrl: string; // /credits in the active brand
+  agency?: AgencyBrand;
+  clientId?: string;
+}) {
+  const agency = opts.agency ?? 'nativz';
+  const greeting = greetingFor(opts.pocFirstNames ?? [], opts.clientName);
+  const amount = (opts.amountPaidCents / 100).toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  });
+  const subject = `Top-up complete: +${opts.packSize} credits for ${opts.clientName}`;
+  const ctaUrl = opts.receiptUrl ?? opts.portalUrl;
+  const ctaLabel = opts.receiptUrl ? 'View receipt' : 'See activity';
+
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: 'credits_topup_confirmation',
+    agency,
+    to: opts.to,
+    clientId: opts.clientId,
+    subject,
+    html: layout(
+      `
+      <p class="subtext">
+        ${greeting},
+      </p>
+      <p class="subtext">
+        Your <strong>${opts.packSize}-credit top-up</strong> for
+        <span class="highlight">${opts.clientName}</span> just went through. The
+        credits are already in your account, balance is now
+        <strong>${opts.newBalance}</strong>.
+      </p>
+      <p class="subtext">
+        Charge: <strong>${amount}</strong>. Top-up credits roll forward, they don't expire with your monthly reset.
+      </p>
+      <div class="button-wrap">
+        <a href="${ctaUrl}" class="button">${ctaLabel} &rarr;</a>
+      </div>
+      <hr class="divider" />
+      <p class="small">
+        Need to undo this? Reach out to your Nativz contact, refunds claw the credits back automatically.
+      </p>
+    `,
+      agency,
+      {
+        eyebrow: 'Top-up complete',
+        heroTitle: `+${opts.packSize} credits added.`,
+      },
+    ),
+    metadata: {
+      clientName: opts.clientName,
+      packSize: opts.packSize,
+      newBalance: opts.newBalance,
+      amountPaidCents: opts.amountPaidCents,
+    },
+  });
+}

@@ -34,6 +34,11 @@ import {
   onSubscriptionUpdated,
 } from '@/lib/lifecycle/state-machine';
 import { onProposalCheckoutCompleted } from '@/lib/proposals/on-paid';
+import {
+  onCreditsCheckoutCompleted,
+  onCreditsChargeRefunded,
+  onCreditsChargeDisputed,
+} from '@/lib/credits/webhook';
 
 export async function handleStripeWebhook(
   req: NextRequest,
@@ -243,10 +248,20 @@ async function dispatch(
 
     case 'charge.succeeded':
     case 'charge.failed':
-    case 'charge.refunded':
     case 'charge.updated':
       await upsertChargeFromStripe(event.data.object as Stripe.Charge, admin);
       return;
+
+    case 'charge.refunded': {
+      const charge = event.data.object as Stripe.Charge;
+      // Mirror first so the charges/refunds tables stay accurate, then
+      // claw credits back if this refund was for a credits top-up. The
+      // credits handler no-ops when the charge isn't a credits charge,
+      // so it's safe to call unconditionally.
+      await upsertChargeFromStripe(charge, admin);
+      await onCreditsChargeRefunded(charge, admin);
+      return;
+    }
 
     case 'refund.created':
     case 'refund.updated':
@@ -254,9 +269,25 @@ async function dispatch(
       await upsertRefundFromStripe(event.data.object as Stripe.Refund, admin);
       return;
 
-    case 'checkout.session.completed':
-      await onProposalCheckoutCompleted(event.data.object as Stripe.Checkout.Session, admin);
+    case 'charge.dispute.created': {
+      const dispute = event.data.object as Stripe.Dispute;
+      await onCreditsChargeDisputed(dispute, admin, agency);
       return;
+    }
+
+    case 'checkout.session.completed': {
+      const session = event.data.object as Stripe.Checkout.Session;
+      // Branch on metadata.kind. Credits sessions stamp `kind: 'credits'`
+      // on creation; legacy proposal checkouts don't (and we keep that
+      // shape to avoid migrating outstanding proposal links).
+      const kind = (session.metadata as Record<string, string> | null)?.kind;
+      if (kind === 'credits') {
+        await onCreditsCheckoutCompleted(session, admin, agency);
+      } else {
+        await onProposalCheckoutCompleted(session, admin);
+      }
+      return;
+    }
 
     default:
       return;
