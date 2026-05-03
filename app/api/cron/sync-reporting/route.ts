@@ -67,6 +67,12 @@ async function handleGet(request: NextRequest) {
     let failedCount = 0;
     let totalNotifications = 0;
 
+    // Collect per-client sync errors so we can emit a single coalesced
+    // notification at the end of the run instead of one per client. A
+    // single Zernio outage typically takes down /analytics for every
+    // client at once, so 1 notification is the right unit of signal.
+    const failuresThisRun: Array<{ clientId: string; clientName: string; errors: string[] }> = [];
+
     // Sync analytics for clients with social profiles
     for (const client of allClients) {
       if (!profileClientIds.has(client.id)) continue;
@@ -126,25 +132,11 @@ async function handleGet(request: NextRequest) {
             `[sync-reporting] ${client.name} errors:`,
             result.errors,
           );
-
-          // Only notify if no identical sync_failed notification exists in the last 24h
-          const { count: recentCount } = await adminClient
-            .from('notifications')
-            .select('*', { count: 'exact', head: true })
-            .eq('type', 'sync_failed')
-            .eq('title', `Sync issue for ${client.name}`)
-            .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
-
-          if ((recentCount ?? 0) === 0) {
-            await notifyAdmins({
-              type: 'sync_failed',
-              title: `Sync issue for ${client.name}`,
-              body: truncateNotificationBody(result.errors.join('; ')),
-              linkPath: `/admin/analytics?client=${client.id}`,
-              clientId: client.id,
-            });
-            totalNotifications++;
-          }
+          failuresThisRun.push({
+            clientId: client.id,
+            clientName: client.name,
+            errors: result.errors,
+          });
         }
       } catch (err) {
         failedCount++;
@@ -152,6 +144,45 @@ async function handleGet(request: NextRequest) {
           `[sync-reporting] ${client.name} (${client.id}) failed:`,
           err,
         );
+      }
+    }
+
+    // Coalesce per-client failures into a single notification per cron run.
+    // A Zernio outage normally hits every client at once, so emitting one
+    // notification ("Sync issue across N clients") gives ops a clean signal
+    // instead of burying the bell with N near-identical rows. We still
+    // throttle to once per 24h on the same root error so a multi-day outage
+    // doesn't keep re-notifying.
+    if (failuresThisRun.length > 0) {
+      const isMulti = failuresThisRun.length > 1;
+      const title = isMulti
+        ? `Sync issue across ${failuresThisRun.length} clients`
+        : `Sync issue for ${failuresThisRun[0].clientName}`;
+      const bodyLines = failuresThisRun.map(
+        (f) => `${f.clientName}: ${f.errors.join('; ')}`,
+      );
+      // Throttle by title (so the same root error doesn't keep re-firing).
+      const { count: recentCount } = await adminClient
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('type', 'sync_failed')
+        .eq('title', title)
+        .gte(
+          'created_at',
+          new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+        );
+
+      if ((recentCount ?? 0) === 0) {
+        await notifyAdmins({
+          type: 'sync_failed',
+          title,
+          body: truncateNotificationBody(bodyLines.join(' | ')),
+          linkPath: isMulti
+            ? `/admin/analytics`
+            : `/admin/analytics?client=${failuresThisRun[0].clientId}`,
+          clientId: isMulti ? undefined : failuresThisRun[0].clientId,
+        });
+        totalNotifications++;
       }
     }
 

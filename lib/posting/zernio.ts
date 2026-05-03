@@ -80,6 +80,24 @@ async function zernioRequest<T>(path: string, options: RequestInit = {}, retryAt
     return zernioRequest<T>(path, options, retryAttempt + 1);
   }
 
+  // Transient upstream failures. Zernio fans out to Meta / TikTok / YouTube
+  // and frequently returns 500 / 502 / 503 / 504 when an upstream blip
+  // happens (e.g. "Failed to fetch analytics posts for charts" surfacing as
+  // a 500 from the /analytics endpoint when Meta times out). Retry with
+  // exponential backoff so a one-off blip during the twice-daily cron
+  // doesn't generate a false-positive sync_failed notification.
+  if (
+    (response.status === 500 ||
+      response.status === 502 ||
+      response.status === 503 ||
+      response.status === 504) &&
+    retryAttempt < 3
+  ) {
+    const backoffSeconds = Math.pow(2, retryAttempt) * 1.5; // 1.5s, 3s, 6s
+    await new Promise((r) => setTimeout(r, backoffSeconds * 1000));
+    return zernioRequest<T>(path, options, retryAttempt + 1);
+  }
+
   if (!response.ok) {
     const body = await response.text();
     throw new Error(`Zernio API error (${response.status}): ${body.substring(0, 300)}`);
