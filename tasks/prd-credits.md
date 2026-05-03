@@ -149,15 +149,41 @@ We do NOT use a unique idempotency key as the dedup mechanism. Instead, the `con
 - [ ] Typecheck/lint passes
 
 ### US-006: Low-balance warning email
-**Description:** As a client, I want an email warning when I'm running low on credits so I can decide whether to top up before I run out.
+**Description:** As a client, I want an email warning when I'm running low on credits so I can decide whether to top up before I run out, but never spammed.
 
 **Acceptance Criteria:**
-- [ ] When `consume_credit` returns `balance_after <= 1`, queue a low-balance email
-- [ ] Email goes to the client's primary POC contacts (excluding `paid media only` and `avoid bulk` roles, same filter as revised-videos email)
-- [ ] Subject: `${clientName}: 1 credit left this month`
-- [ ] Body shows balance, days until reset, "Buy more credits" CTA linking to portal
-- [ ] Second email triggered on overdraft (balance goes negative)
-- [ ] Dedup: don't send the same low-balance email twice in the same period
+- [ ] When `consume_credit` transitions balance from `>= 2` to `<= 1` AND `low_balance_email_period_id != current_period_id`, queue a low-balance email and stamp both period columns on `client_credit_balances`
+- [ ] When balance transitions from `>= 0` to `< 0` AND `overdraft_email_period_id != current_period_id`, queue an overdraft email and stamp the period columns
+- [ ] Cron `monthly_reset_for_client` clears both period flags so next month's threshold crossing fires fresh
+- [ ] Top-up that lifts balance back above 1 does NOT clear the period flag (no re-spam if the client crosses back down later in the same period)
+- [ ] Email goes to the client's primary POC contacts (excluding `paid media only` and `avoid bulk` roles); falls back to `client.primary_email`; if both null, log warning and skip
+- [ ] Subject: `${clientName}: 1 credit left this month` (low-balance) or `${clientName}: balance went negative` (overdraft)
+- [ ] Body shows balance, days until reset (using signup-anchored reset date), "Buy more credits" CTA linking to portal
+- [ ] Period flag is stamped before the send; Resend delivery failures don't unflag (single send attempt per period)
+- [ ] Typecheck/lint passes
+
+### US-009: Webhook security + abuse prevention
+**Description:** As the system, I need the Stripe webhook + portal checkout endpoint hardened against replay, metadata-spoofing, and rate-abuse so credits can't be granted to the wrong client.
+
+**Acceptance Criteria:**
+- [ ] Stripe webhook verifies `Stripe-Signature` against `STRIPE_WEBHOOK_SECRET` on every request (existing path, confirm reuse for credits branch)
+- [ ] Reject Stripe events older than 5 minutes (replay-window guard, in addition to Stripe's own protection)
+- [ ] On `kind: 'credits'` metadata, re-verify `client_id` against the session's `customer` → `clients.stripe_customer_id` mapping. Don't trust metadata as identity.
+- [ ] Every credits-relevant webhook event (verified or rejected) is logged to a new `webhook_events` table keyed by `stripe_event_id` UNIQUE
+- [ ] `POST /api/credits/checkout` derives `client_id` from `user_client_access`, never from the request body
+- [ ] `pack_size` validated against allow-list `[5, 10, 25]`; other values reject 400
+- [ ] Rate-limit on `POST /api/credits/checkout`: 5 sessions / 10 min / user
+- [ ] Typecheck/lint passes
+
+### US-010: Client deletion preserves audit ledger
+**Description:** As an admin, I need the credits audit log to survive client deletion so Stripe disputes and revenue reconciliation can still be answered after a client is removed.
+
+**Acceptance Criteria:**
+- [ ] `credit_transactions.client_id` FK is `ON DELETE SET NULL` (rows survive, disowned)
+- [ ] `client_credit_balances.client_id` FK is `ON DELETE CASCADE` (live balance dies with the client)
+- [ ] Reporting queries that join `clients` skip the disowned rows naturally
+- [ ] Disowned rows remain queryable directly for forensic / Stripe-dispute analysis
+- [ ] Restoring a client (un-delete) creates a fresh `client_credit_balances` row at zero; old transactions stay disowned (no auto-reattach)
 - [ ] Typecheck/lint passes
 
 ### US-008: Pause monthly grants for inactive clients
@@ -235,6 +261,12 @@ Rollback at any step is a `DELETE FROM credit_transactions WHERE created_at > '<
   - **Mitigation:** Webhook subscribes to `charge.refunded` and `charge.dispute.created`; both insert an `expire` row with negative delta. Overdraft is allowed; admin digest flags negative balances driven by clawbacks. Dispute reversals (we won) do NOT auto-restore credits; admin issues a manual `adjust` to keep the audit trail explicit.
 - **Risk:** Allowance source-of-truth drifts from contract reality (admin edits allowance once, then the contract changes and nobody updates Cortex).
   - **Mitigation:** v1 keeps `monthly_allowance` as a manually-edited admin field; the daily digest flags any client with `monthly_allowance = 0` AND consumption in the last 7 days. Future Contracts table integration will add a `synced_from_contract_at` timestamp + sync job, with admin override still allowed (last-write wins, flagged in UI).
+- **Risk:** Low-balance email spams the client (three approvals at balance 1 = three emails).
+  - **Mitigation:** Per-period flag columns on `client_credit_balances` stamp on first crossing. Reset clears the flag. Top-up does not (so the client doesn't get re-spammed if they cross back down).
+- **Risk:** Stripe webhook is forged or replayed to grant credits to an arbitrary client.
+  - **Mitigation:** Signature verification, 5-min replay window, `metadata.client_id` is re-verified against `session.customer → clients.stripe_customer_id`. Every event logged to `webhook_events` (`stripe_event_id` UNIQUE) for forensic review.
+- **Risk:** Client gets deleted, audit trail is lost, Stripe dispute weeks later can't be answered.
+  - **Mitigation:** `credit_transactions.client_id` is `ON DELETE SET NULL`. The audit log survives client deletion. `client_credit_balances` is CASCADE (live state dies with the client; ledger does not).
 - **Risk:** Contract bumps mid-period (client upgrades from 8 to 12 credits halfway through the month).
   - **Mitigation:** Admin edits `monthly_allowance` and adds a manual `adjust` for the prorated delta. Explicit, audited, simple.
 - **Risk:** Client churns, gets deleted, history is lost; or churns, stays in the DB, keeps getting monthly grants forever.

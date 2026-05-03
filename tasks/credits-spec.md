@@ -485,6 +485,146 @@ not time-based decay.
   balance to <= 1 (and again on overdraft). Plain `buildUserEmailHtml` style,
   goes to the client's primary POC.
 
+#### Email idempotency + recipient resolution
+
+A naive "if balance <= 1, send email" fires on every consume that lands
+the balance at 1 — three approvals at balance 1 means three emails. We
+gate sends on a per-period state column on `client_credit_balances`:
+
+| column                            | type             | notes                                         |
+|-----------------------------------|------------------|-----------------------------------------------|
+| `low_balance_email_sent_at`       | timestamptz null | when the threshold-crossing email last fired |
+| `low_balance_email_period_id`     | text null        | `period_started_at::date`-stamped period key  |
+| `overdraft_email_sent_at`         | timestamptz null | when the overdraft email last fired           |
+| `overdraft_email_period_id`       | text null        | same period stamping                          |
+
+Send rules:
+
+- Low-balance: fire when balance transitions from `>= 2` to `<= 1` AND
+  `low_balance_email_period_id != current_period_id`. Stamp both
+  columns.
+- Overdraft: fire when balance transitions from `>= 0` to `< 0` AND
+  `overdraft_email_period_id != current_period_id`. Stamp both columns.
+- Reset clears both `*_period_id` columns (so next month's threshold
+  crossing fires fresh).
+- A top-up that lifts balance back above 1 does NOT clear the period
+  flag, the same client crossing back down later in the same period
+  doesn't get spammed.
+
+Recipient resolution:
+
+- Same filter as the revised-videos email: client's POC contacts,
+  excluding `paid media only` and `avoid bulk` roles.
+- If the filter returns zero contacts, fall back to the
+  `client.primary_email` column (the contract email). If that's also
+  null, no email is sent and a server log warns — billing/account
+  managers see the silent client in the daily admin digest.
+- All recipients on one BCC envelope, single send. Failed deliveries
+  inside Resend don't block the period flag from being stamped, treat
+  the period flag as "we tried."
+
+---
+
+## Allowance Mid-Period Changes
+
+A client upgrades from 8 to 12 credits halfway through a month. We
+support this without complicating the cron:
+
+- Admin edits `monthly_allowance` in the Credits panel from 8 → 12.
+  This change takes effect on the next reset; no automatic mid-period
+  grant.
+- For mid-period delivery, the admin uses the **Grant credits** button
+  to add the prorated delta (in this case, +4) as a manual `adjust`
+  with `note = 'allowance_increase_proration'`. The audit trail clearly
+  shows both the allowance change (in panel state, not the ledger) and
+  the proration grant.
+- Downgrades (12 → 8) take effect on next reset. The ledger does NOT
+  retroactively claw back unused credits from the current period; the
+  client keeps what they have until reset, then resets to 8.
+
+The admin Credits panel surfaces a banner when `monthly_allowance` was
+changed mid-period: "Allowance increased to 12 on the 18th. The 4-credit
+proration was granted manually on the 18th." This is rendered from a
+join of `client_credit_balances.updated_at` against the latest `adjust`
+row's `note` — no new schema needed.
+
+The Risks section's mention of "Contract bumps mid-period" is now
+formalized here.
+
+---
+
+## Client Lifecycle
+
+The credits subsystem must survive the four ways a `clients` row gets
+mutated:
+
+1. **Active client** — normal path, `auto_grant_enabled = true`,
+   monthly cron grants normally.
+2. **Paused (indefinite or time-bounded)** — covered in the Allocation
+   section. `client_credit_balances` row stays, history stays.
+3. **Deleted** — `clients` row removed entirely (current schema uses
+   ON DELETE CASCADE through related tables). Behavior:
+   - `client_credit_balances` row is deleted via FK CASCADE
+   - `credit_transactions` rows for that client are NOT deleted, FK
+     declared as `ON DELETE SET NULL` on `client_id` so the audit log
+     survives. Reporting queries that join from `clients` will skip
+     these rows naturally; the rows are still queryable directly for
+     post-mortem ledger analysis.
+4. **Restored after deletion** (rare; admin un-deletes via Supabase
+   dashboard) — re-create a fresh `client_credit_balances` row with
+   `current_balance = 0`. Old transaction rows (with `client_id =
+   NULL`) stay disowned. If admin wants to reattach, that's a manual
+   one-off SQL operation, not a supported flow.
+
+We considered ON DELETE CASCADE on `credit_transactions.client_id` for
+simplicity and rejected it: the audit log is the only durable record
+of money flow on this account. Losing it makes Stripe disputes
+unprovable.
+
+The `BEFORE DELETE` trigger on `scheduled_posts` (refund cascade) does
+NOT fire when the parent client is deleted — by the time the client
+delete cascades to scheduled_posts, the balance row is already gone
+and the refund would no-op anyway. Acceptable: client deletion is rare
+and is its own ledger-closing event (the digest entry is the audit
+trail).
+
+---
+
+## Webhook Security
+
+The Stripe webhook handler is the only externally-callable code path
+that can write to the credit ledger. It must:
+
+- Verify `Stripe-Signature` header against the configured webhook
+  secret on every request. Reject with 400 on mismatch. The existing
+  handler already does this; we just need to confirm the credits
+  branch reuses the same verification path before the metadata switch.
+- Reject events older than 5 minutes (replay-window guard). Stripe
+  itself has replay protection, but a leaked webhook secret + a
+  captured payload could be re-sent days later; the timestamp guard
+  closes that window without complicating the happy path.
+- Treat `metadata.kind === 'credits'` as the routing trigger, but
+  re-verify `client_id` against the customer record on the session
+  (`session.customer` → `clients.stripe_customer_id`). Don't trust
+  metadata alone; an attacker who controlled the metadata payload
+  could otherwise grant credits to any client.
+- Log every credits-relevant webhook event (verified or rejected) to
+  a new `webhook_events` table for forensic analysis. Keyed by
+  `stripe_event_id`, primary key UNIQUE so re-deliveries are visible.
+
+The portal `POST /api/credits/checkout` is a different surface but
+deserves the same scrutiny:
+
+- Auth required (portal user, viewer role).
+- `client_id` is derived from the session's `user_client_access`, not
+  taken from the request body, so a viewer on org A can't checkout
+  for org B's client.
+- `pack_size` is validated against an allow-list (5 / 10 / 25); any
+  other value rejects with 400.
+- Rate-limit: 5 checkout sessions / 10 minutes / user. Prevents the
+  abandoned-cart denial-of-service pattern where an attacker creates
+  thousands of pending Stripe sessions.
+
 ---
 
 ## Migration Plan
@@ -492,6 +632,9 @@ not time-based decay.
 Migration `220_credits_v1.sql`:
 
 1. Create both tables + all indexes:
+   - `client_credit_balances` includes the four email-state columns
+     (`low_balance_email_sent_at`, `low_balance_email_period_id`,
+     `overdraft_email_sent_at`, `overdraft_email_period_id`)
    - Partial cron index on `next_reset_at WHERE auto_grant_enabled IS TRUE`
    - `(charge_unit_kind, charge_unit_id, created_at desc)`
    - `refund_for_id`
@@ -500,18 +643,25 @@ Migration `220_credits_v1.sql`:
      Stripe webhook dedup; consume/refund rows do NOT participate
      in this constraint (they use state-based dedup via the live
      ledger query).
-2. Create the SQL functions: `consume_credit`, `refund_credit`,
+2. Set `client_id` FK on `credit_transactions` to `ON DELETE SET NULL`
+   (audit log survives client deletion). FK on
+   `client_credit_balances.client_id` is `ON DELETE CASCADE` (live
+   balance dies with the client).
+3. Create the SQL functions: `consume_credit`, `refund_credit`,
    `grant_credit`, `monthly_reset_for_client`. All four take `FOR UPDATE`
    on the balance row before any ledger work.
-3. Create the `BEFORE DELETE` trigger on `scheduled_posts` that calls
+4. Create the `BEFORE DELETE` trigger on `scheduled_posts` that calls
    `refund_credit` for any unrefunded consume on the post's charge unit
-4. Backfill: for every existing client, insert a `client_credit_balances`
+5. Create `webhook_events` table for forensic logging of every
+   credits-relevant Stripe event (`stripe_event_id` UNIQUE,
+   `payload jsonb`, `verified boolean`, `received_at timestamptz`)
+6. Backfill: for every existing client, insert a `client_credit_balances`
    row with `monthly_allowance = 0`, `current_balance = 0`,
    `period_started_at = now()`, `next_reset_at = now() + interval '1 month'`,
    `auto_grant_enabled = true`. Allowance gets edited manually per client
    in the admin UI as part of the rollout. Inactive/churned clients get
    `auto_grant_enabled = false` set during step 2 of the cutover.
-5. Enable RLS, add admin + viewer policies
+7. Enable RLS, add admin + viewer policies
 
 No backfill of historical consumption — credits start counting forward from
 launch day.
@@ -570,6 +720,21 @@ function.
   delta. Dispute resolutions in our favor do NOT auto-restore credits;
   manual `adjust` only. Backed by partial UNIQUE index on
   `idempotency_key` for `kind IN ('grant_topup', 'expire')`.
+- **Email idempotency:** four period-stamped columns on
+  `client_credit_balances` (`low_balance_email_*`, `overdraft_email_*`).
+  Reset clears them. Top-up does not. POC filter falls back to
+  `primary_email` then logs.
+- **Allowance mid-period:** admin edits the field directly (next reset
+  honors it), uses Grant button for the prorated delta on the same day.
+  Downgrades take effect at next reset, no retroactive claw-back.
+- **Client deletion:** `credit_transactions.client_id` is `ON DELETE
+  SET NULL` (audit log survives). `client_credit_balances` is CASCADE.
+- **Webhook security:** signature verification + 5min replay window +
+  metadata `client_id` re-verification against
+  `session.customer → clients.stripe_customer_id` + new `webhook_events`
+  table for forensic logging. Portal checkout endpoint rate-limited to
+  5/10min/user, `pack_size` allow-listed, `client_id` derived from
+  `user_client_access` not body.
 
 ## Open Questions
 
@@ -637,6 +802,13 @@ function.
 - Sidebar nav — add Credits to the portal sidebar
 - Onboarding flow / new-client activation — require setting
   `monthly_allowance` before activation, no zero-default path
+- `lib/credits/email.ts` — low-balance + overdraft email senders, period-
+  flag stamp logic, POC + fallback recipient resolution
+- Daily admin digest cron — add a "Credits anomalies" section listing:
+  clients with `monthly_allowance = 0` AND consumption in last 7 days,
+  clients with negative balance for > 3 days, charge.refunded /
+  charge.dispute.created events from the last 24h
+- Rate-limit middleware on `app/api/credits/checkout/route.ts` (5/10min/user)
 
 ---
 
@@ -707,6 +879,49 @@ function.
 - Reset cycle anchors to signup date. Client signed on the 18th resets
   on the 18th every month. Verified across month-boundary edge cases
   (signed Jan 31, resets Feb 28/29 then Mar 28).
+
+### Email idempotency
+- Three consecutive consumes that all land at balance 1 fire EXACTLY
+  ONE low-balance email (period flag stamps on the first crossing).
+- Top-up lifts balance from 1 → 6, then four more consumes drop it to
+  1 again in the same period: NO second email.
+- Reset clears the flag; first crossing in the new period fires fresh.
+- Overdraft path: balance goes 0 → -1 fires the overdraft email; -1 →
+  -2 in the same period does not re-fire.
+- POC filter returns zero contacts → falls back to `primary_email`;
+  both null → log warning, no send, period flag still stamped.
+
+### Allowance mid-period
+- Admin edits 8 → 12 mid-period: `monthly_allowance` updates in panel
+  state, no automatic ledger row.
+- Admin clicks Grant +4: `adjust` row written with
+  `note = 'allowance_increase_proration'`. Banner renders on the
+  Credits panel showing the change date + the proration grant.
+- Downgrade 12 → 8: takes effect on next reset, no retroactive claw-back.
+
+### Client lifecycle
+- Delete a client: `client_credit_balances` row CASCADE-deleted;
+  `credit_transactions` rows survive with `client_id = NULL`.
+- Reports joined from `clients` correctly omit disowned rows; direct
+  query against `credit_transactions WHERE client_id IS NULL` returns
+  the audit trail.
+- Re-creating a client with the same UUID does NOT auto-reattach
+  disowned rows (new fresh balance row only).
+- Scheduled-post deletion AFTER client deletion: trigger fires but
+  `refund_credit` is a no-op because the balance row is gone.
+
+### Webhook security
+- Stripe webhook with bad signature: reject 400, no ledger write,
+  `webhook_events` row written with `verified = false`.
+- Stripe event with `created` > 5 min ago: reject as replay.
+- `metadata.kind === 'credits'` with a `client_id` that doesn't match
+  `session.customer` → `clients.stripe_customer_id`: reject 400, log.
+- Re-delivery of the same `stripe_event_id`: `webhook_events` UNIQUE
+  blocks the second insert, ledger untouched, response 200 (Stripe
+  treats 200 as ack so it stops retrying).
+- `POST /api/credits/checkout` from viewer on org A trying to buy for
+  org B's client: rejects 403; `client_id` derivation ignores body.
+- 6th checkout in 10 minutes from same user: 429.
 
 ### Negative
 - Approval continues to work even if `consume_credit` raises (ledger gap
