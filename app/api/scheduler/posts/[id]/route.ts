@@ -106,6 +106,55 @@ export async function PUT(
 
     const adminClient = createAdminClient();
 
+    // APPROVAL GATE — defense in depth.
+    //
+    // If this PUT flips status from 'draft' to 'scheduled', and the row is
+    // a drop-derived post (linked from `content_drop_videos`), it MUST
+    // already have an approved `post_review_comments` row. The cron
+    // (`/api/cron/publish-posts`) refuses to publish unapproved drop rows,
+    // but the calendar UI shouldn't even let a row go "scheduled" without
+    // approval — it creates the false impression that the post will ship.
+    // Same gate as `publish-drafts` and `batch-publish`; this is the third
+    // entry point that can flip drop drafts toward publishing.
+    if (data.status === 'scheduled') {
+      const { data: dropVideo } = await adminClient
+        .from('content_drop_videos')
+        .select('scheduled_post_id')
+        .eq('scheduled_post_id', id)
+        .maybeSingle();
+
+      if (dropVideo) {
+        const { data: reviewLinks } = await adminClient
+          .from('post_review_links')
+          .select('id')
+          .eq('post_id', id);
+
+        const linkIds = (reviewLinks ?? []).map(
+          (r) => (r as { id: string }).id,
+        );
+        let hasApproval = false;
+        if (linkIds.length > 0) {
+          const { data: approvedComments } = await adminClient
+            .from('post_review_comments')
+            .select('id')
+            .in('review_link_id', linkIds)
+            .eq('status', 'approved')
+            .limit(1);
+          hasApproval = (approvedComments?.length ?? 0) > 0;
+        }
+
+        if (!hasApproval) {
+          return NextResponse.json(
+            {
+              error:
+                'This post is part of a content drop and needs an approval comment before it can be scheduled.',
+            },
+            { status: 422 },
+          );
+        }
+      }
+    }
+
     // Build update object with only provided fields
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (data.caption !== undefined) updates.caption = data.caption;

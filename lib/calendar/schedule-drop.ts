@@ -268,6 +268,40 @@ export async function publishScheduledPost(
     return { alreadyPublished: true, externalPostId: post.late_post_id ?? undefined };
   }
 
+  // ATOMIC CLAIM — closes the race between the share-link approval handler
+  // and the publish-cron approved-draft recovery sweep. Both call
+  // publishScheduledPost; without this CAS the read at line 238 + the
+  // status check at 267 are wide enough for both callers to pass through,
+  // each fire `service.publishPost`, and each stamp `late_post_id`. The
+  // second writer overwrites the first, leaving an orphan Zernio post live
+  // with no DB row pointing at it.
+  //
+  // We try to flip 'draft' → 'publishing' atomically; only one caller wins.
+  // The loser sees zero rows back and short-circuits as `alreadyPublished`.
+  // The cron's hard publish path uses the same intermediate 'publishing'
+  // state, so this fits the existing state machine cleanly.
+  const { data: claimed } = await admin
+    .from('scheduled_posts')
+    .update({ status: 'publishing', updated_at: new Date().toISOString() })
+    .eq('id', postId)
+    .eq('status', 'draft')
+    .is('late_post_id', null)
+    .select('id')
+    .maybeSingle();
+  if (!claimed) {
+    // Re-read to give the caller a useful externalPostId if the winning
+    // worker has already stamped late_post_id.
+    const { data: refreshed } = await admin
+      .from('scheduled_posts')
+      .select('late_post_id')
+      .eq('id', postId)
+      .maybeSingle<{ late_post_id: string | null }>();
+    return {
+      alreadyPublished: true,
+      externalPostId: refreshed?.late_post_id ?? undefined,
+    };
+  }
+
   // Pull the linked media row to get the late_media_url for the actual file.
   const { data: mediaLink } = await admin
     .from('scheduled_post_media')

@@ -79,6 +79,41 @@ async function handleGet(request: NextRequest) {
 
     for (const post of pendingPosts ?? []) {
       try {
+        // ATOMIC CLAIM — prevents two cron invocations from both publishing
+        // the same row to Zernio. The SELECT above can return the same row
+        // to overlapping invocations (Vercel can re-fire if a previous run
+        // stalls past the schedule, and `'publishing'` rows from a stuck
+        // earlier run are intentionally re-grabbed for recovery). Without
+        // this CAS, both workers pass the approval gate, both flip to
+        // 'publishing', and both POST to Zernio — the second `late_post_id`
+        // overwrites the first, leaving the original Zernio post live with
+        // no DB row pointing at it (silent duplicate publish).
+        //
+        // CAS on `updated_at`: only flip to 'publishing' if the row's
+        // `updated_at` matches what we just read. The first worker wins;
+        // the second's UPDATE returns 0 rows and we skip cleanly. There's
+        // no DB-level update trigger on `scheduled_posts.updated_at` (only
+        // a refund trigger on DELETE) so this is a true CAS.
+        const claimNowIso = new Date().toISOString();
+        const { data: claimed } = await adminClient
+          .from('scheduled_posts')
+          .update({ status: 'publishing', updated_at: claimNowIso })
+          .eq('id', post.id)
+          .eq('updated_at', post.updated_at)
+          .in('status', ['scheduled', 'publishing'])
+          .select('id')
+          .maybeSingle();
+        if (!claimed) {
+          console.log(
+            `[publish-cron] skipped ${post.id} — claimed by another worker`,
+          );
+          continue;
+        }
+        // Refresh our in-memory copy so any subsequent UPDATE keyed off
+        // updated_at uses the new value (currently no-op — no later CAS in
+        // this block — but cheap insurance against future edits).
+        post.updated_at = claimNowIso;
+
         // APPROVAL GATE — defense in depth.
         //
         // Posts that came from a content calendar drop MUST have an explicit

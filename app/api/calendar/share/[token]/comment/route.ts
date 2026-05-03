@@ -597,15 +597,20 @@ async function notifyAdminsOfComment(
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
   const shareUrl = `${appUrl}/c/${shareToken}`;
 
-  // In-app: Jack only. Future: per-share-link recipient list.
-  const { data: jack } = await admin
+  // In-app: every admin user gets the bell ping. Was previously hard-coded
+  // to jack@nativz.io, which meant no other editor on the team saw revision
+  // requests / approvals show up in the app — they had to be in the right
+  // Google Chat space, and if the client had no chat_webhook_url they got
+  // nothing at all. We pull `role='admin'` from `users` so the recipient
+  // list grows automatically as new editors join the team.
+  const { data: adminUsers } = await admin
     .from('users')
     .select('id')
-    .eq('email', 'jack@nativz.io')
-    .maybeSingle<{ id: string }>();
-  if (jack?.id) {
+    .eq('role', 'admin');
+  for (const adminUser of adminUsers ?? []) {
+    const recipientId = (adminUser as { id: string }).id;
     createNotification({
-      recipientUserId: jack.id,
+      recipientUserId: recipientId,
       type: 'general',
       title,
       body: preview,
@@ -635,10 +640,16 @@ async function notifyAdminsOfComment(
     }
   }
 
-  // Per-client Google Chat (collab space): driven by clients.chat_webhook_url.
+  // Google Chat: prefer the per-client collab space when set, otherwise fall
+  // back to the ops chat space so editors still see the ping. Without the
+  // fallback, a client that hasn't been wired into a Chat space yet
+  // produces silent revision requests — the editor only finds out when they
+  // happen to reload the share link UI.
   // - comment / changes_requested → post immediately with full content + attachments
   // - approved → post 🎉 once every post in this share link is approved
-  if (chatWebhookUrl) {
+  const opsWebhookUrl = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
+  const targetWebhookUrl = chatWebhookUrl ?? opsWebhookUrl;
+  if (targetWebhookUrl) {
     if (comment.status === 'comment' || comment.status === 'changes_requested') {
       const verb = comment.status === 'changes_requested' ? 'requested changes' : 'commented';
       const trimmed = comment.content.trim();
@@ -657,11 +668,11 @@ async function notifyAdminsOfComment(
       // the chat without opening the share link.
       const postLine = postTimeLine ? `\n_Post scheduled for ${postTimeLine}_` : '';
       const text = `*${comment.authorName}* ${verb} on ${clientName}:${postLine}${quotedBlock}${attachmentBlock}\n\n${shareUrl}`;
-      postToGoogleChatSafe(chatWebhookUrl, { text }, `comment ${dropId}`);
+      postToGoogleChatSafe(targetWebhookUrl, { text }, `comment ${dropId}`);
     } else if (allApprovedClaim === 'won') {
       const reviewLinkIds = Object.values(reviewLinkMap);
       const text = `🎉 All ${reviewLinkIds.length} posts in ${clientName}'s calendar are approved.\n${shareUrl}`;
-      postToGoogleChatSafe(chatWebhookUrl, { text }, `all-approved ${dropId}`);
+      postToGoogleChatSafe(targetWebhookUrl, { text }, `all-approved ${dropId}`);
     }
   }
 

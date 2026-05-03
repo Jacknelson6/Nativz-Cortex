@@ -75,9 +75,20 @@ export async function POST(
   }
 
   const nowIso = new Date().toISOString();
+  // Null out the prior cut's URLs in lockstep with stamping the new
+  // upload. Without this, a re-revision (editor uploads cut #2 before the
+  // cron has fired on cut #1) leaves cut #1's `revised_mp4_url` intact, so
+  // the cron sees `revised_video_uploaded_at` is recent AND
+  // `revised_mp4_url` is non-null and ships the OLD file. We want the cron
+  // to treat the row as "revision pending" until the new asset.ready /
+  // static_renditions.ready webhooks repopulate these fields.
   const { error: updateErr } = await admin
     .from('content_drop_videos')
     .update({
+      revised_video_url: null,
+      revised_mp4_url: null,
+      mux_playback_id: null,
+      mux_asset_id: null,
       revised_video_uploaded_at: nowIso,
       revised_video_uploaded_by: user.id,
       revised_video_notify_pending: true,

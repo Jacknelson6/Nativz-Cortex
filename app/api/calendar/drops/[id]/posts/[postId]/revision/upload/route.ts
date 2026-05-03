@@ -68,10 +68,27 @@ export async function POST(
   });
 
   const nowIso = new Date().toISOString();
+  // CRITICAL: also stamp `revised_mp4_url` in lockstep with `revised_video_url`.
+  //
+  // The publish cron (`app/api/cron/publish-posts/route.ts:181-184`) refuses
+  // to publish a post once `revised_video_uploaded_at` is non-null until
+  // `revised_mp4_url` lands — that gate exists to wait for Mux's static
+  // rendition. This legacy route, however, writes the file straight to
+  // Supabase Storage and never goes through Mux, so without this assignment
+  // the cron throws "Revision pending" on every retry until exhausting the
+  // backoff and hard-failing the post.
+  //
+  // The storage URL we just got back from `uploadVideoBytes` is already a
+  // directly-playable container (mp4/mov/webm/mkv). Late/Zernio ingest is
+  // happy with any of those, so mirroring it into `revised_mp4_url` is the
+  // right move and keeps both the cron approval/Mux-wait gate AND the
+  // share-page rendering paths happy. Future: route everything through Mux
+  // and delete this handler entirely.
   const { error: updateErr } = await admin
     .from('content_drop_videos')
     .update({
       revised_video_url: url,
+      revised_mp4_url: url,
       revised_video_uploaded_at: nowIso,
       revised_video_uploaded_by: user.id,
       revised_video_notify_pending: true,
