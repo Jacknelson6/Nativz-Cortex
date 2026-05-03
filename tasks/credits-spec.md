@@ -49,6 +49,7 @@ One row per client. Cheap to read on every page load.
 | `auto_grant_enabled`       | boolean       | default `true`. Set to false to pause monthly grants without deleting the row. |
 | `paused_until`             | timestamptz null | optional time-bounded pause. Cron skips when `now() < paused_until`.        |
 | `pause_reason`             | text null     | free-text reason ("client on hold", "contract expired", "trial ended")         |
+| `opening_balance_at_period_start` | integer not null default 0 | snapshot of `current_balance` immediately AFTER the most recent reset's grant. Used by the reconciliation cron to compute expected balance without re-summing the whole ledger. |
 | `created_at` / `updated_at`| timestamptz   |                                                                                |
 
 `current_balance` is the only field the consumption hook touches at write
@@ -412,6 +413,37 @@ Edge cases:
   minute. UI displays "resets on the 18th of each month" using the
   date-only projection of `period_started_at`.
 
+### Period date math + timezone
+
+`period_started_at`, `period_ends_at`, `next_reset_at` are all
+`timestamptz`, stored in UTC. Period advance uses Postgres' `interval
+'1 month'` arithmetic, which has well-defined end-of-month behavior:
+
+- Jan 31 + 1 month = Feb 28 (or Feb 29 in leap years)
+- Feb 28 + 1 month = Mar 28 (NOT Mar 31). Once a client lands on the
+  28th, they stay on the 28th forever, even if they originally signed
+  on Jan 31.
+
+This is acceptable, calendar drift on end-of-month signups is the
+universal SaaS norm and clients understand it. The admin UI surfaces
+the current anchor date so it's never a mystery.
+
+Display timezone:
+
+- The cron threshold check (`next_reset_at <= now()`) runs in UTC.
+  Whether a client's reset fires at 11pm or 1am in their local
+  timezone is irrelevant, the moment the timestamp passes, the next
+  cron run grants.
+- The portal copy ("Your month resets on the 18th") formats
+  `period_started_at` in the client's organization timezone (already
+  available via `clients.timezone` or `organizations.timezone`,
+  fall back to `America/Los_Angeles` for legacy rows).
+- Daylight saving transitions (twice a year) shift the displayed local
+  hour by ±1, but timestamptz arithmetic is unaffected. A client whose
+  reset normally renders as "midnight on the 18th" sees "11pm on the
+  17th" or "1am on the 18th" for one cycle around DST. Acceptable;
+  documented in code comments next to the format helper.
+
 ---
 
 ## Contract Source of Truth
@@ -456,6 +488,30 @@ Two surfaces:
 2. **Portal** shows a "Buy more credits" button that hits
    `POST /api/credits/checkout`, which mints a Stripe Checkout session for a
    pack (5 / 10 / 25 — final SKUs in PRD).
+
+### First-time customer onboarding
+
+A client may not have `clients.stripe_customer_id` set the first time
+they top up (we haven't billed them through Stripe before). The
+checkout endpoint handles this in three ordered steps:
+
+1. If `clients.stripe_customer_id IS NULL`, call
+   `stripe.customers.create({ email: <portal_user.email>, metadata: {
+   client_id, organization_id } })` and persist the returned id back to
+   `clients.stripe_customer_id` in the same transaction. If two
+   concurrent checkouts race here, the unique-by-client_id constraint
+   keeps the second one from creating a duplicate; the second invocation
+   re-reads the row and gets the first one's customer.
+2. Pass `customer: <stripe_customer_id>` to
+   `checkout.sessions.create`, NOT `customer_email` (which would let
+   Stripe create a duplicate customer).
+3. The webhook's `client_id` re-verification path
+   (`session.customer → clients.stripe_customer_id`) now works
+   reliably because step 1 ensured the link exists.
+
+Currency: USD only in v1. Stripe price IDs are USD-denominated; multi-
+currency is out of scope and called out explicitly in the PRD
+non-goals.
 
 The Stripe webhook handler already exists at `app/api/stripe/webhook/route.ts`.
 Three event types now feed credit state, all gated by metadata
@@ -592,6 +648,23 @@ Recipient resolution:
   inside Resend don't block the period flag from being stamped, treat
   the period flag as "we tried."
 
+Send-failure semantics:
+
+- Stamp the period flag inside the same transaction that decrements the
+  balance, BEFORE the Resend call. This guarantees a duplicate consume
+  in the same millisecond can't double-send.
+- If the Resend call fails (network, 5xx, throttle), log the failure
+  with `client_id`, `template`, `period_id`, `error_message` to a new
+  `failed_email_attempts` table. The daily admin digest surfaces these
+  so a human can decide whether to manually re-send.
+- We do NOT auto-retry from a cron, the failure mode is most often a
+  data issue (bad recipient list, stale POC contact) that retrying
+  doesn't fix. The digest entry plus a one-click "Resend" admin button
+  is enough.
+- The period flag stays stamped after a failure (per "we tried"
+  semantics), so the next consume in the same period doesn't try
+  again. The admin manual resend bypasses the flag check.
+
 ---
 
 ## Allowance Mid-Period Changes
@@ -716,12 +789,24 @@ reset cron, so any month-boundary work has settled). For each row in
 `client_credit_balances`:
 
 ```
-expected_balance = monthly_allowance
+expected_balance = opening_balance_at_period_start
                  + Σ delta from credit_transactions
                    WHERE client_id = b.client_id
                    AND created_at >= b.period_started_at
-                   - <opening_balance_at_period_start>
 ```
+
+`opening_balance_at_period_start` is snapshotted on every reset
+(`monthly_reset_for_client` writes it after applying the rollover +
+grant). For brand-new clients it's the initial grant value. For
+clients that existed before the credits launch, the backfill seeds it
+to the same value as `current_balance`.
+
+This formula is correct across cross-period refunds: a consume that
+landed in period N gets a refund row in period N+1, the refund's `+1`
+delta lands inside period N+1's `Σ delta` window so the balance is
+accurate. The audit trail still shows the cross-period link via
+`refund_for_id`, but the reconciliation math doesn't care which
+period the original consume came from.
 
 If `expected_balance != current_balance`, write a row to a new
 `credit_ledger_gaps` table:
@@ -808,11 +893,23 @@ Migration `220_credits_v1.sql`:
    (see Observability section)
 6. Backfill: for every existing client, insert a `client_credit_balances`
    row with `monthly_allowance = 0`, `current_balance = 0`,
-   `period_started_at = now()`, `next_reset_at = now() + interval '1 month'`,
+   `opening_balance_at_period_start = 0`, `period_started_at = now()`,
+   `next_reset_at = now() + interval '1 month'`,
    `auto_grant_enabled = true`. Allowance gets edited manually per client
    in the admin UI as part of the rollout. Inactive/churned clients get
    `auto_grant_enabled = false` set during step 2 of the cutover.
 7. Enable RLS, add admin + viewer policies
+8. **Backfill validation pass:** run a one-shot script
+   (`scripts/validate-credits-backfill.ts`) that asserts:
+   - Every active `clients` row has exactly one `client_credit_balances`
+     row (no orphans, no duplicates)
+   - No `client_credit_balances` row has `current_balance != 0` or any
+     `credit_transactions` rows yet
+   - All `period_started_at` values are within a 60-second window of
+     each other (sanity: they were all inserted in one migration run)
+   - Every `paused_until IS NOT NULL` row also has `pause_reason` set
+   The script exits non-zero on any violation; cutover step 3
+   (consumption hook flip) is gated on it passing clean.
 
 No backfill of historical consumption — credits start counting forward from
 launch day.
@@ -902,6 +999,30 @@ function.
   open gaps + cron failures + webhook rejections. The "<1% ledger gap
   rate" success metric is computed nightly as a 7-day rolling rate
   with a Slack alert at the 1% threshold.
+- **Reconciliation correctness across periods:** new
+  `opening_balance_at_period_start` column snapshotted on every reset.
+  Reconciliation formula uses it instead of `monthly_allowance`, so
+  cross-period refunds are accounted correctly without re-summing the
+  full ledger.
+- **First-time top-up customer:** checkout endpoint creates
+  `stripe.customers` if `clients.stripe_customer_id` is null, persists
+  the id back atomically, then mints the session with `customer:`
+  (never `customer_email` which would create duplicates). Webhook
+  verification path works regardless of whether the client had a
+  Stripe customer before.
+- **Email send failures:** period flag stamped BEFORE the Resend call;
+  failures log to a new `failed_email_attempts` table surfaced in the
+  daily digest with a one-click manual resend. No auto-retry cron.
+- **Period date math:** Postgres `interval '1 month'` arithmetic.
+  Jan 31 → Feb 28 → Mar 28 (anchor sticks once it lands on a shorter
+  month). Cron threshold checks run UTC; portal copy formats in the
+  client's org timezone with DST-shift acceptable.
+- **Multi-currency:** USD-only in v1, called out in PRD non-goals.
+  Multi-currency is a future project that needs Stripe price-id
+  fan-out + per-org currency selection.
+- **Backfill validation:** one-shot script asserts orphan-free,
+  zero-balance-everywhere, single-window insert, paused rows have
+  reasons. Cutover step 3 is gated on it.
 - **Webhook security:** signature verification + 5min replay window +
   metadata `client_id` re-verification against
   `session.customer → clients.stripe_customer_id` + new `webhook_events`
@@ -926,7 +1047,10 @@ function.
 ## Files to Create / Edit
 
 **New:**
-- `supabase/migrations/220_credits_v1.sql` — both tables, RPCs
+- `supabase/migrations/220_credits_v1.sql` — both tables (incl
+  `client_credit_balances.opening_balance_at_period_start` +
+  `failed_email_attempts` + `credit_ledger_gaps` + `webhook_events`),
+  RPCs
   (`consume_credit`, `refund_credit`, `grant_credit`,
   `monthly_reset_for_client`), `BEFORE DELETE` trigger on
   `scheduled_posts` that calls `refund_credit` for any unrefunded consume,
@@ -958,6 +1082,13 @@ function.
 - `app/api/cron/credits-reconcile/route.ts` — daily reconciliation cron,
   writes drift rows to `credit_ledger_gaps`, never auto-corrects
 - `scripts/seed-client-allowances.ts` — one-time setter
+- `scripts/validate-credits-backfill.ts` — one-shot validator,
+  asserts orphan-free + zero-balance-everywhere + single-window insert
+  + paused-rows-have-reasons. Exits non-zero on violation, gates
+  cutover step 3.
+- `lib/credits/stripe-customer.ts` — `ensureStripeCustomer(clientId)`
+  helper, creates if null, persists, returns id. Used by both portal
+  checkout and any future top-up flow.
 
 **Edit:**
 - `app/api/calendar/share/[token]/comment/route.ts`:
@@ -1130,6 +1261,53 @@ function.
   pass does NOT re-emit a duplicate gap.
 - Success metric calculation: 1 open gap across 100 active clients =
   1.0% rate, alert fires at the 1% threshold.
+
+### Reconciliation across periods
+- Approve in period N, unapprove in period N+1: refund row lands in
+  N+1's window, expected balance computed from
+  `opening_balance_at_period_start + Σ delta` matches actual.
+- Reset writes `opening_balance_at_period_start = current_balance`
+  immediately after applying rollover + grant; subsequent
+  reconciliation passes match.
+- Backfill seeds `opening_balance_at_period_start = current_balance`
+  for pre-existing clients; first reconciliation pass shows zero gaps.
+
+### First-time top-up customer
+- Portal user clicks "Buy more" with `clients.stripe_customer_id IS
+  NULL`: `ensureStripeCustomer` creates the customer, persists the id,
+  checkout session uses `customer:` (not `customer_email`).
+- Two concurrent portal checkouts on a client with null customer: the
+  second one re-reads after the first commits, no duplicate Stripe
+  customer is created.
+- Webhook for the resulting session verifies normally because the
+  customer link now exists.
+
+### Email send failure
+- Resend returns 5xx on a low-balance email: period flag is already
+  stamped, a `failed_email_attempts` row is written, daily digest
+  surfaces it.
+- Admin clicks "Resend" on the digest entry: bypasses the period flag,
+  re-fires the same template, logs the second outcome.
+- Concurrent consumes both crossing the threshold: only one row writes
+  the period flag (CAS via `UPDATE ... WHERE period_id != current`),
+  the other reads the new flag and skips the send.
+
+### Period date math
+- Client signs Jan 31: first reset on Feb 28 (or Feb 29 in leap year),
+  second reset on Mar 28. Anchor stays at 28 forever.
+- Period dates stored UTC; portal copy renders in the client's
+  organization timezone; DST shift produces a one-hour visible drift
+  for one cycle but no missed grant.
+- Cron runs at 04:00 UTC on a client with `next_reset_at = 03:30 UTC`
+  in the same day → grants. With `next_reset_at = 04:30 UTC` → skips,
+  grants the next day.
+
+### Backfill validation
+- Run on a clean post-backfill DB: exits 0, no violations.
+- Inject a duplicate `client_credit_balances` row for one client: exits
+  non-zero with the offending `client_id`.
+- Inject a `current_balance = 5` on one row: exits non-zero.
+- Inject a `paused_until` set without `pause_reason`: exits non-zero.
 
 ### Free-tier / zero-allowance accounts
 - Free-tier client (`monthly_allowance = 0`, `auto_grant_enabled = true`):

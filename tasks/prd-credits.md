@@ -55,6 +55,8 @@ We do NOT use a unique idempotency key as the dedup mechanism. Instead, the `con
 - Credit expiry on top-up packs, top-ups roll forever
 - Free trial credit accounting separate from `kind = 'adjust'`
 - Refund issuance to the credit card on unapprovals, internal balance only
+- Multi-currency top-ups, USD-only in v1 (single Stripe price ID per pack); EUR/GBP/etc are a future project that needs per-org currency selection and price-id fan-out
+- Auto-retry of failed transactional emails, manual resend from the daily admin digest only
 
 ## User Stories
 
@@ -300,6 +302,16 @@ Rollback at any step is a `DELETE FROM credit_transactions WHERE created_at > '<
   - **Mitigation:** Nightly reconciliation cron diffs expected vs actual balance for every active client, writes `credit_ledger_gaps` rows for any mismatch, surfaces in the daily admin digest. Cron is read-only against the ledger, never auto-corrects (auto-correction would mask the underlying bug). Slack alert at 1% rolling rate.
 - **Risk:** Free-tier or `monthly_allowance = 0` accounts get cron-fired anyway and accumulate noisy `grant_monthly` rows with `delta = 0`.
   - **Mitigation:** Cron filter extends to `monthly_allowance > 0`. A separate lightweight pass advances period dates without writing a ledger row, so per-period email stamps still reset. Top-ups remain independent of the allowance value.
+- **Risk:** Reconciliation maths get tangled when a refund crosses a period boundary (consume in month N, refund in month N+1).
+  - **Mitigation:** New `opening_balance_at_period_start` column snapshotted on every reset. The expected-balance formula uses it instead of `monthly_allowance`, so cross-period refunds land cleanly in N+1's `Σ delta` window without re-summing the full ledger.
+- **Risk:** First-time top-up fails because `clients.stripe_customer_id` is null and the webhook can't verify the metadata link.
+  - **Mitigation:** `ensureStripeCustomer(clientId)` helper creates the Stripe customer if missing, persists the id atomically, and the checkout session uses `customer: <id>` rather than `customer_email`. Webhook verification then works on the very first top-up.
+- **Risk:** Resend rejects a low-balance email and the client is silently uninformed.
+  - **Mitigation:** Period flag stamps before the Resend call (so duplicates can't double-send), failures land in `failed_email_attempts` with full context, daily admin digest surfaces them with a one-click manual resend. No auto-retry cron, the failure is usually a data issue.
+- **Risk:** Calendar drift confuses end-of-month signups (client signs Jan 31, expects to reset on the 31st forever).
+  - **Mitigation:** Postgres `interval '1 month'` arithmetic handled in the cron; Jan 31 → Feb 28 → Mar 28, anchor sticks at 28. Portal copy says "Your month resets on the 28th" in the client's org timezone, so there's no surprise. Documented as universal SaaS behavior.
+- **Risk:** Backfill miswires a client's initial balance row and the bug only surfaces weeks later under load.
+  - **Mitigation:** `scripts/validate-credits-backfill.ts` runs after migration step 6 and asserts orphan-free, zero-balance-everywhere, single-window insert, paused rows have reasons. Cutover step 3 (consumption hook flip) is gated on a clean exit.
 
 ## Success Metrics
 
