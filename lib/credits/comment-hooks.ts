@@ -30,6 +30,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveChargeUnit } from './resolve-charge-unit';
 import { consumeCredit } from './consume';
 import { refundCredit } from './refund';
+import { maybeSendBalanceWarning } from './email';
+import { isConsumed } from './types';
 
 export interface ConsumeForApprovalArgs {
   scheduledPostId: string;
@@ -83,6 +85,20 @@ export async function consumeForApproval(
     if ('already_consumed' in result && result.already_consumed) {
       // Re-approval, no-op. Don't log — common path.
       return;
+    }
+
+    if (isConsumed(result)) {
+      // Reconstruct the pre-consume balance from the post-consume value the
+      // RPC just returned, then ask the email orchestrator whether this
+      // consume crossed the low-balance or overdraft threshold. Atomic
+      // period-flag stamping inside `maybeSendBalanceWarning` makes this
+      // safe under concurrent consumes.
+      const previousBalance = result.new_balance + 1;
+      await maybeSendBalanceWarning(admin, {
+        clientId,
+        previousBalance,
+        newBalance: result.new_balance,
+      });
     }
   } catch (err) {
     console.error(

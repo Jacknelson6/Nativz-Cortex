@@ -195,11 +195,25 @@ export async function GET(
     };
   }
 
-  const { data: client } = await admin
-    .from('clients')
-    .select('name')
-    .eq('id', drop.client_id)
-    .single();
+  const [{ data: client }, { data: balance }] = await Promise.all([
+    admin
+      .from('clients')
+      .select('name')
+      .eq('id', drop.client_id)
+      .single(),
+    // Surface the credits balance so the share page can render the inline
+    // "N credits left this month" pill near the approve buttons. Subtle
+    // signal only — the page never blocks approval on credits.
+    admin
+      .from('client_credit_balances')
+      .select('current_balance, monthly_allowance, next_reset_at')
+      .eq('client_id', drop.client_id)
+      .maybeSingle<{
+        current_balance: number;
+        monthly_allowance: number;
+        next_reset_at: string;
+      }>(),
+  ]);
 
   const reviewLinkIds = Object.values(link.post_review_link_map ?? {});
   const { data: comments } = reviewLinkIds.length
@@ -258,6 +272,16 @@ export async function GET(
     isEditor,
     projectType,
     projectTypeOther: link.project_type_other,
+    // null when the client has no balance row yet (rare, e.g. brand-new
+    // client created post-launch with the cron not yet seeded). The pill
+    // hides itself in that case.
+    credits: balance
+      ? {
+          current_balance: balance.current_balance,
+          monthly_allowance: balance.monthly_allowance,
+          next_reset_at: balance.next_reset_at,
+        }
+      : null,
     drop: {
       id: drop.id,
       start_date: drop.start_date,

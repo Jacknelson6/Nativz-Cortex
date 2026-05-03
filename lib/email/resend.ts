@@ -2058,3 +2058,111 @@ export async function sendShootBriefReminderEmail(opts: {
     },
   });
 }
+
+// ── Credits: low-balance + overdraft warning ────────────────────────────────
+//
+// Fired from `lib/credits/email.ts` after a consume drops the balance to <= 1
+// (or below 0). Period-flag dedup is handled by the caller, this just renders
+// + sends. Recipients are the client POC contacts (filtered) BCCed onto a
+// single send so we don't spam each one with separate envelopes.
+
+export async function sendCreditsLowBalanceEmail(opts: {
+  to: string | string[];
+  pocFirstNames?: string[];
+  clientName: string;
+  currentBalance: number;
+  monthlyAllowance: number;
+  nextResetLabel: string; // e.g. "Jun 1"
+  topUpUrl: string; // points at /credits in the portal
+  agency?: AgencyBrand;
+  clientId?: string;
+}) {
+  const agency = opts.agency ?? 'nativz';
+  const greeting = greetingFor(opts.pocFirstNames ?? [], opts.clientName);
+  const balanceWord = opts.currentBalance === 1 ? 'credit' : 'credits';
+  const subject = `${opts.clientName} is running low on credits (${opts.currentBalance} left)`;
+
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: 'credits_low_balance',
+    agency,
+    to: opts.to,
+    clientId: opts.clientId,
+    subject,
+    html: layout(`
+      <p class="subtext">
+        ${greeting},
+      </p>
+      <p class="subtext">
+        <span class="highlight">${opts.clientName}</span> has <strong>${opts.currentBalance} ${balanceWord}</strong> left this month out of ${opts.monthlyAllowance}. Each approved short-form video uses 1 credit, so once you hit zero the team will pause new approvals until your next reset on <strong>${opts.nextResetLabel}</strong>.
+      </p>
+      <p class="subtext">
+        Want to keep momentum? Top up any time and the credits roll into your account immediately.
+      </p>
+      <div class="button-wrap">
+        <a href="${opts.topUpUrl}" class="button">Top up credits &rarr;</a>
+      </div>
+      <hr class="divider" />
+      <p class="small">
+        This is a one-time heads-up for the current period. We won't send another low-balance email this month, even if more approvals land you back at 1.
+      </p>
+    `, agency, {
+      eyebrow: 'Credits Low',
+      heroTitle: `Heads up: ${opts.currentBalance} ${balanceWord} left.`,
+    }),
+    metadata: {
+      clientName: opts.clientName,
+      currentBalance: opts.currentBalance,
+      monthlyAllowance: opts.monthlyAllowance,
+      nextResetLabel: opts.nextResetLabel,
+    },
+  });
+}
+
+export async function sendCreditsOverdraftEmail(opts: {
+  to: string | string[];
+  pocFirstNames?: string[];
+  clientName: string;
+  currentBalance: number; // negative
+  nextResetLabel: string;
+  topUpUrl: string;
+  agency?: AgencyBrand;
+  clientId?: string;
+}) {
+  const agency = opts.agency ?? 'nativz';
+  const greeting = greetingFor(opts.pocFirstNames ?? [], opts.clientName);
+  const overBy = Math.abs(opts.currentBalance);
+  const subject = `${opts.clientName} is over their monthly credits`;
+
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: 'credits_overdraft',
+    agency,
+    to: opts.to,
+    clientId: opts.clientId,
+    subject,
+    html: layout(`
+      <p class="subtext">
+        ${greeting},
+      </p>
+      <p class="subtext">
+        <span class="highlight">${opts.clientName}</span> is now <strong>${overBy} credit${overBy === 1 ? '' : 's'} over</strong> the monthly allowance. We'll keep producing and approving as normal, but to stay on top of billing we recommend topping up before the next reset on <strong>${opts.nextResetLabel}</strong>.
+      </p>
+      <div class="button-wrap">
+        <a href="${opts.topUpUrl}" class="button">Top up credits &rarr;</a>
+      </div>
+      <hr class="divider" />
+      <p class="small">
+        Approvals are never blocked. This is a courtesy heads-up, you'll only get one of these per period.
+      </p>
+    `, agency, {
+      eyebrow: 'Credits Over',
+      heroTitle: `${opts.clientName} is over for the month.`,
+    }),
+    metadata: {
+      clientName: opts.clientName,
+      currentBalance: opts.currentBalance,
+      nextResetLabel: opts.nextResetLabel,
+    },
+  });
+}
