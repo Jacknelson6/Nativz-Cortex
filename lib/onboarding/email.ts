@@ -311,3 +311,57 @@ export async function sendOnboardingNudgeEmail(opts: {
 
   return results;
 }
+
+// ── Completion (sent once when status flips to 'completed') ──────────────
+
+export async function sendOnboardingCompleteEmail(opts: {
+  onboarding: OnboardingRow;
+  recipient_email?: string;
+  triggered_by?: string;
+}): Promise<OnboardingEmailResult[]> {
+  const client = await loadClient(opts.onboarding.client_id);
+  const recipients = await resolveRecipients(client.client_id, opts.recipient_email);
+  const isSmm = opts.onboarding.kind === 'smm';
+
+  const intro = isSmm
+    ? `That's a wrap on onboarding for ${escape(client.client_name)}. We've got everything we need to start scheduling content. Your account lead will reach out shortly to lock in the kickoff call and walk through the first batch of posts.`
+    : `That's a wrap on onboarding for ${escape(client.client_name)}. We've got the brief, your raw assets, and the turnaround expectations. Editing kicks off now; expect a first cut within 5-7 business days.`;
+
+  const subject = isSmm
+    ? `${client.client_name} onboarding is complete`
+    : `${client.client_name} editing brief received`;
+
+  const eyebrow = 'All set';
+  const heroTitle = `Thanks, ${client.client_name}.`;
+
+  const results: OnboardingEmailResult[] = [];
+  for (const recipient of recipients) {
+    const body = `
+      <p class="subtext">${greeting(recipient.first_name)},</p>
+      <p class="subtext">${intro}</p>
+      <p class="subtext">No action needed on your end right now. We'll be in touch with next steps.</p>
+    `;
+
+    const html = layout(body, client.agency, { eyebrow, heroTitle });
+
+    const sent = await sendAndLog({
+      category: 'transactional',
+      typeKey: `onboarding_complete_${opts.onboarding.kind}`,
+      agency: client.agency,
+      to: recipient.email,
+      recipientName: recipient.first_name,
+      subject,
+      html,
+      clientId: client.client_id,
+      metadata: {
+        onboarding_id: opts.onboarding.id,
+        kind: opts.onboarding.kind,
+        triggered_by: opts.triggered_by ?? null,
+      },
+    });
+
+    results.push(shellResult(recipient.email, subject, preview(intro), sent));
+  }
+
+  return results;
+}

@@ -114,6 +114,10 @@
     {
       "path": "/api/cron/credits-reconcile",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/onboarding-lagging-nudge",
+      "schedule": "0 15 * * *"
     }
   ]
 }

@@ -23,7 +23,8 @@ export type NotificationType =
   | 'search_completed'
   | 'topic_search_failed'
   | 'topic_search_stuck'
-  | 'pipeline_alert';
+  | 'pipeline_alert'
+  | 'onboarding_milestone';
 
 /** Load merged notification preferences for a user */
 export async function getUserNotificationPreferences(userId: string): Promise<NotificationPreferences> {

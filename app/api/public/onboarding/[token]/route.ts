@@ -31,6 +31,7 @@ import {
 } from '@/lib/onboarding/api';
 import { SCREENS, doneIndex } from '@/lib/onboarding/screens';
 import { getBrandFromAgency } from '@/lib/agency/detect';
+import { notifyMilestones } from '@/lib/onboarding/milestones';
 import type { OnboardingRow } from '@/lib/onboarding/types';
 
 export const runtime = 'nodejs';
@@ -150,6 +151,10 @@ export async function PATCH(
       );
     }
 
+    // Snapshot the row before any mutation so milestone detection can
+    // compare prev/next current_step + status.
+    const prev = row;
+
     if (parsed.data.step_state) {
       row = await patchStepState(row.id, parsed.data.step_state);
     }
@@ -160,6 +165,19 @@ export async function PATCH(
     }
 
     const client = await loadClient(row.client_id);
+
+    // Fire milestone notifications + completion email best-effort. We
+    // intentionally await this so the response only returns once the
+    // notify path has run; failures are swallowed inside notifyMilestones
+    // so the caller never sees a 5xx from a flaky email or notification.
+    if (row.current_step !== prev.current_step || row.status !== prev.status) {
+      await notifyMilestones({
+        prev,
+        next: row,
+        clientName: client?.name ?? null,
+      });
+    }
+
     return NextResponse.json({
       onboarding: publicView(row),
       client,
