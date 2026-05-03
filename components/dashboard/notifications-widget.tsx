@@ -55,6 +55,7 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
   sync_failed: <RefreshCcw size={14} className="text-[color:var(--status-danger)]" />,
   post_published: <CheckCircle size={14} className="text-[color:var(--status-success)]" />,
   post_failed: <AlertTriangle size={14} className="text-[color:var(--status-danger)]" />,
+  post_needs_approval: <Clock size={14} className="text-[color:var(--status-warning)]" />,
   post_trending: <Zap size={14} className="text-[color:var(--status-trending)]" />,
   account_disconnected: <WifiOff size={14} className="text-[color:var(--status-warning)]" />,
   topic_search_failed: <AlertTriangle size={14} className="text-[color:var(--status-danger)]" />,

@@ -541,7 +541,7 @@ async function handleGet(request: NextRequest) {
           const caption = (row.caption ?? '').substring(0, 80);
           try {
             await notifyAdmins({
-              type: 'post_failed',
+              type: 'post_needs_approval',
               title: 'Drop post past due without approval',
               body: `Post scheduled for ${new Date(row.scheduled_at).toLocaleString()} is still in draft (no approval comment). Caption: "${caption}${(row.caption ?? '').length > 80 ? '...' : ''}"`,
               linkPath: `/admin/scheduling?post=${row.id}`,

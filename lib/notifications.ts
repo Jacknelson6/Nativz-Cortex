@@ -17,6 +17,7 @@ export type NotificationType =
   | 'sync_failed'
   | 'post_published'
   | 'post_failed'
+  | 'post_needs_approval'
   | 'post_trending'
   | 'account_disconnected'
   | 'search_completed'

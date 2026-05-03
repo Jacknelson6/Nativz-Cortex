@@ -30,6 +30,7 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
   sync_failed: <RefreshCcw size={14} className="text-red-400" />,
   post_published: <CheckCircle size={14} className="text-emerald-400" />,
   post_failed: <AlertTriangle size={14} className="text-red-400" />,
+  post_needs_approval: <Clock size={14} className="text-amber-400" />,
   post_trending: <Zap size={14} className="text-yellow-400" />,
   account_disconnected: <WifiOff size={14} className="text-amber-400" />,
   topic_search_failed: <AlertTriangle size={14} className="text-red-400" />,
