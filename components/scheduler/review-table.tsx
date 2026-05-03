@@ -939,7 +939,14 @@ function FollowupCell({
     return <span className="text-sm text-text-muted">—</span>;
   }
 
-  const stamp = link.last_followup_at;
+  // Migration 200 backfilled `last_followup_at = created_at` for every
+  // pre-existing share link, so the timestamp alone can't distinguish
+  // "actually nudged N days ago" from "never followed up but was created
+  // N days ago." `followup_count` is the only field that increments on a
+  // real send (see /api/calendar/share/[token]/followup), so treat 0 as
+  // "no followup sent" regardless of what the timestamp says.
+  const hasRealFollowup = (link.followup_count ?? 0) > 0;
+  const stamp = hasRealFollowup ? link.last_followup_at : null;
   const days = stamp ? daysSince(stamp) : null;
   const tone = followupTone(days);
   const label = formatFollowupLabel(days);
@@ -1292,8 +1299,11 @@ export function sortLinksBy(
     if (aEmpty !== bEmpty) return aEmpty ? 1 : -1;
   }
   if (state.field === 'last_followup') {
-    const aBlank = !a.last_followup_at;
-    const bBlank = !b.last_followup_at;
+    // Match the cell renderer: rows without a real followup
+    // (followup_count === 0) sink to the bottom regardless of the
+    // backfilled last_followup_at timestamp from migration 200.
+    const aBlank = (a.followup_count ?? 0) === 0;
+    const bBlank = (b.followup_count ?? 0) === 0;
     if (aBlank !== bBlank) return aBlank ? 1 : -1;
   }
   // Never-sent calendars (first_sent_at IS NULL) always sink to the
@@ -1335,8 +1345,12 @@ export function sortLinksBy(
         return aR - bR;
       }
       case 'last_followup': {
-        const aT = new Date(a.last_followup_at ?? 0).getTime();
-        const bT = new Date(b.last_followup_at ?? 0).getTime();
+        // Treat non-followed-up rows as having no timestamp so the
+        // comparator agrees with the cell label and the blank-sink above.
+        const aReal = (a.followup_count ?? 0) > 0;
+        const bReal = (b.followup_count ?? 0) > 0;
+        const aT = aReal ? new Date(a.last_followup_at ?? 0).getTime() : 0;
+        const bT = bReal ? new Date(b.last_followup_at ?? 0).getTime() : 0;
         return aT - bT;
       }
     }

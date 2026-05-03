@@ -133,15 +133,13 @@ export default function EditingProjectSharePage({
           : '';
       const qs = storedName ? `?as=${encodeURIComponent(storedName)}` : '';
       const res = await fetch(`/api/editing/share/${token}${qs}`);
-      const json = await res.json();
+      const json = await readJsonSafe(res);
       if (!res.ok) {
-        throw new Error(
-          typeof json.error === 'string'
-            ? friendlyError(json.error)
-            : 'Failed to load',
-        );
+        const code = json && typeof json.error === 'string' ? json.error : null;
+        throw new Error(code ? friendlyError(code) : 'Link unavailable');
       }
-      setData(json as SharedPayload);
+      if (!json) throw new Error('Link unavailable');
+      setData(json as unknown as SharedPayload);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load');
     }
@@ -159,15 +157,13 @@ export default function EditingProjectSharePage({
             : '';
         const qs = storedName ? `?as=${encodeURIComponent(storedName)}` : '';
         const res = await fetch(`/api/editing/share/${token}${qs}`);
-        const json = await res.json();
+        const json = await readJsonSafe(res);
         if (!res.ok) {
-          throw new Error(
-            typeof json.error === 'string'
-              ? friendlyError(json.error)
-              : 'Failed to load',
-          );
+          const code = json && typeof json.error === 'string' ? json.error : null;
+          throw new Error(code ? friendlyError(code) : 'Link unavailable');
         }
-        if (!cancelled) setData(json as SharedPayload);
+        if (!json) throw new Error('Link unavailable');
+        if (!cancelled) setData(json as unknown as SharedPayload);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load');
       } finally {
@@ -1710,6 +1706,21 @@ function formatShoot(iso: string): string {
     day: 'numeric',
     year: 'numeric',
   });
+}
+
+// See app/c/[token]/page.tsx readJsonSafe — same defensive parse so empty
+// or non-JSON bodies don't surface as "Unexpected end of JSON input" to
+// editing-share visitors.
+async function readJsonSafe(
+  res: Response,
+): Promise<Record<string, unknown> | null> {
+  const text = await res.text().catch(() => '');
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
 }
 
 function friendlyError(code: string): string {

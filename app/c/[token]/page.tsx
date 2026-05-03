@@ -166,9 +166,15 @@ export default function PublicCalendarSharePage({
             : '';
         const qs = storedName ? `?as=${encodeURIComponent(storedName)}` : '';
         const res = await fetch(`/api/calendar/share/${token}${qs}`);
-        const json = await res.json();
-        if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Failed to load');
-        if (!cancelled) setData(json as SharedDrop);
+        const json = await readJsonSafe(res);
+        if (!res.ok) {
+          throw new Error(
+            (json && typeof json.error === 'string' ? json.error : null) ??
+              `Link unavailable (${res.status})`,
+          );
+        }
+        if (!json) throw new Error('Empty response from server');
+        if (!cancelled) setData(json as unknown as SharedDrop);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load');
       } finally {
@@ -193,7 +199,7 @@ export default function PublicCalendarSharePage({
       <div className="min-h-screen bg-background flex items-center justify-center px-6">
         <div className="text-center">
           <AlertCircle className="mx-auto mb-4 h-12 w-12 text-status-danger" />
-          <h1 className="text-lg font-semibold text-text-primary">{error ?? 'Link not found'}</h1>
+          <h1 className="text-lg font-semibold text-text-primary">{toFriendlyShareError(error)}</h1>
           <p className="mt-1 text-sm text-text-muted">
             This share link may have expired or been deactivated.
           </p>
@@ -559,8 +565,8 @@ function SharedDropView({
           : '';
       const qs = storedName ? `?as=${encodeURIComponent(storedName)}` : '';
       const res = await fetch(`/api/calendar/share/${token}${qs}`);
-      const json = await res.json();
-      if (res.ok) setData(() => json as SharedDrop);
+      const json = await readJsonSafe(res);
+      if (res.ok && json) setData(() => json as unknown as SharedDrop);
     } catch {
       // refetch failure is non-fatal; UI keeps the optimistic state
     }
@@ -3382,6 +3388,39 @@ function sortPostsForList(posts: SharedPost[]): SharedPost[] {
     if (!b.scheduled_at) return 1;
     return new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime();
   });
+}
+
+// Map raw fetch / parse errors to copy that makes sense to a non-engineer
+// share-link visitor. The share page renders this as the title above the
+// "may have expired" subline.
+function toFriendlyShareError(raw: string | null): string {
+  if (!raw) return 'Link not found';
+  const lower = raw.toLowerCase();
+  if (lower.includes('not found')) return 'Link not found';
+  if (lower.includes('expired')) return 'This link has expired';
+  if (lower.includes('revoked')) return 'This link has been revoked';
+  if (lower.includes('unexpected end of json') || lower.includes('failed to execute') || lower.includes('empty response')) {
+    return 'Link unavailable';
+  }
+  if (lower.startsWith('link unavailable')) return raw;
+  return 'Link unavailable';
+}
+
+// Some upstream errors (Vercel HTML pages, 204s, edge-aborted requests)
+// return empty or non-JSON bodies. Calling res.json() on those throws
+// "Unexpected end of JSON input" and surfaces the raw exception to the
+// share-link visitor. Read as text first, parse defensively, return null
+// on failure so callers can build a friendly status-code message.
+async function readJsonSafe(
+  res: Response,
+): Promise<Record<string, unknown> | null> {
+  const text = await res.text().catch(() => '');
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
 }
 
 function toLocalDatetimeInput(iso: string): string {
