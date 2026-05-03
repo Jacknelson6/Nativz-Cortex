@@ -32,6 +32,7 @@ import { consumeCredit } from './consume';
 import { refundCredit } from './refund';
 import { maybeSendBalanceWarning } from './email';
 import { isConsumed } from './types';
+import { getDeliverableTypeId } from '@/lib/deliverables/types-cache';
 
 export interface ConsumeForApprovalArgs {
   scheduledPostId: string;
@@ -81,6 +82,7 @@ export async function consumeForApproval(
       scheduledPostId: args.scheduledPostId,
       shareLinkId: args.shareLinkId,
       reviewerEmail: args.reviewerEmail ?? args.reviewerName,
+      deliverableTypeSlug: charge.deliverableTypeSlug,
     });
     if ('already_consumed' in result && result.already_consumed) {
       // Re-approval, no-op. Don't log — common path.
@@ -93,11 +95,18 @@ export async function consumeForApproval(
       // consume crossed the low-balance or overdraft threshold. Atomic
       // period-flag stamping inside `maybeSendBalanceWarning` makes this
       // safe under concurrent consumes.
+      //
+      // Per-type since migration 221: every (client, type) row carries its
+      // own period flag, so we resolve the type id from the slug we already
+      // computed above. The cache is process-local + 60s TTL, so this is a
+      // memory hit on the warm path.
       const previousBalance = result.new_balance + 1;
+      const deliverableTypeId = await getDeliverableTypeId(admin, charge.deliverableTypeSlug);
       await maybeSendBalanceWarning(admin, {
         clientId,
         previousBalance,
         newBalance: result.new_balance,
+        deliverableTypeId,
       });
     }
   } catch (err) {

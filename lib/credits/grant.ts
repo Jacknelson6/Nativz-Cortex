@@ -7,10 +7,14 @@
  *
  * `expire_credit` handles Stripe refunds / dispute claw-backs (negative
  * delta). Same partial UNIQUE index handles the dedup.
+ *
+ * Both RPCs gained `p_deliverable_type_slug` in migration 221 (default
+ * `'edited_video'`). New callers should always pass the slug; the default
+ * keeps the legacy single-type call sites working unchanged.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { ExpireResult, GrantResult } from './types';
+import type { DeliverableTypeSlug, ExpireResult, GrantResult } from './types';
 
 export interface GrantCreditArgs {
   clientId: string;
@@ -20,6 +24,8 @@ export interface GrantCreditArgs {
   note?: string | null;
   actorUserId?: string | null;
   stripePaymentIntent?: string | null;
+  /** Defaults to 'edited_video' on the RPC side if omitted. */
+  deliverableTypeSlug?: DeliverableTypeSlug;
 }
 
 export async function grantCredit(
@@ -34,6 +40,7 @@ export async function grantCredit(
     p_note: args.note ?? null,
     p_actor_user_id: args.actorUserId ?? null,
     p_stripe_payment_intent: args.stripePaymentIntent ?? null,
+    p_deliverable_type_slug: args.deliverableTypeSlug ?? 'edited_video',
   });
   if (error) {
     throw new Error(`grant_credit failed: ${error.message}`);
@@ -46,6 +53,8 @@ export interface ExpireCreditArgs {
   delta: number; // must be negative
   idempotencyKey: string;
   note: string;
+  /** Defaults to 'edited_video' on the RPC side if omitted. */
+  deliverableTypeSlug?: DeliverableTypeSlug;
 }
 
 export async function expireCredit(
@@ -60,6 +69,7 @@ export async function expireCredit(
     p_delta: args.delta,
     p_idempotency_key: args.idempotencyKey,
     p_note: args.note,
+    p_deliverable_type_slug: args.deliverableTypeSlug ?? 'edited_video',
   });
   if (error) {
     throw new Error(`expire_credit failed: ${error.message}`);

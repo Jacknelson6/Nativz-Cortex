@@ -117,6 +117,12 @@ interface MaybeNotifyArgs {
   previousBalance: number;
   /** Balance AFTER the consume. */
   newBalance: number;
+  /**
+   * Per-type discriminator after migration 221. The balance + period flag
+   * columns live on the (client_id, deliverable_type_id) row so each type
+   * gets its own dedup window.
+   */
+  deliverableTypeId: string;
 }
 
 /**
@@ -131,7 +137,7 @@ export async function maybeSendBalanceWarning(
   admin: SupabaseClient,
   args: MaybeNotifyArgs,
 ): Promise<void> {
-  const { clientId, previousBalance, newBalance } = args;
+  const { clientId, previousBalance, newBalance, deliverableTypeId } = args;
 
   // Detect transitions first — cheaper than any DB call.
   const crossedLow = previousBalance >= 2 && newBalance <= 1;
@@ -152,6 +158,7 @@ export async function maybeSendBalanceWarning(
       'client_id, current_balance, monthly_allowance, period_started_at, next_reset_at, low_balance_email_period_id, overdraft_email_period_id',
     )
     .eq('client_id', clientId)
+    .eq('deliverable_type_id', deliverableTypeId)
     .maybeSingle<{
       client_id: string;
       current_balance: number;
@@ -202,6 +209,7 @@ export async function maybeSendBalanceWarning(
       [sentAtColumn]: nowIso,
     })
     .eq('client_id', clientId)
+    .eq('deliverable_type_id', deliverableTypeId)
     .or(`${flagColumn}.is.null,${flagColumn}.neq.${periodId}`)
     .select('client_id')
     .maybeSingle<{ client_id: string }>();
@@ -266,6 +274,7 @@ export async function maybeSendBalanceWarning(
     if (!result.ok) {
       await admin.from('failed_email_attempts').insert({
         client_id: clientId,
+        deliverable_type_id: deliverableTypeId,
         template:
           threshold === 'overdraft' ? 'credits_overdraft' : 'credits_low_balance',
         period_id: periodId,
@@ -280,6 +289,7 @@ export async function maybeSendBalanceWarning(
     const message = err instanceof Error ? err.message : 'unknown send error';
     await admin.from('failed_email_attempts').insert({
       client_id: clientId,
+      deliverable_type_id: deliverableTypeId,
       template:
         threshold === 'overdraft' ? 'credits_overdraft' : 'credits_low_balance',
       period_id: periodId,

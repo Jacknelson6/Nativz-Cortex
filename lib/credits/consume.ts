@@ -2,15 +2,17 @@
  * consumeCredit — typed wrapper around the `consume_credit` RPC.
  *
  * Approval-as-consumption hook. State-based dedup: re-firing on the same
- * charge unit (drop_video.id preferred, scheduled_post.id fallback) is a
- * safe no-op when there's still an unrefunded consume row.
+ * (charge_unit, deliverable_type) is a safe no-op when there's still an
+ * unrefunded consume row.
  *
- * Returns the RPC payload as-is so callers can branch on
- * `already_consumed` vs `consumed`.
+ * After migration 221 the RPC takes an optional `p_deliverable_type_slug`
+ * (default `'edited_video'` for back-compat). Callers from new code should
+ * always pass an explicit slug; the default keeps the silent-overdraft fix
+ * working while we migrate call sites.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { ChargeUnitKind, ConsumeResult } from './types';
+import type { ChargeUnitKind, ConsumeResult, DeliverableTypeSlug } from './types';
 
 export interface ConsumeCreditArgs {
   clientId: string;
@@ -19,6 +21,8 @@ export interface ConsumeCreditArgs {
   scheduledPostId?: string | null;
   shareLinkId?: string | null;
   reviewerEmail?: string | null;
+  /** Defaults to 'edited_video' on the RPC side if omitted. */
+  deliverableTypeSlug?: DeliverableTypeSlug;
 }
 
 export async function consumeCredit(
@@ -32,6 +36,7 @@ export async function consumeCredit(
     p_scheduled_post_id: args.scheduledPostId ?? null,
     p_share_link_id: args.shareLinkId ?? null,
     p_reviewer_email: args.reviewerEmail ?? null,
+    p_deliverable_type_slug: args.deliverableTypeSlug ?? 'edited_video',
   });
   if (error) {
     throw new Error(`consume_credit failed: ${error.message}`);

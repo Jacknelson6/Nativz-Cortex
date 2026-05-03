@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getCreditsAdminContext } from '@/lib/credits/admin-auth';
+import { getDeliverableTypeId } from '@/lib/deliverables/types-cache';
 
 /**
  * PUT /api/credits/[clientId]/allowance
  *
- * Admin-only. Set the per-client monthly allowance + rollover policy.
+ * Admin-only. Set the per-(client, deliverable_type) monthly allowance +
+ * rollover policy.
  *
+ *   - deliverable_type_slug: targets the specific type row. Defaults to
+ *     'edited_video' for back-compat with the pre-migration UI; Phase B
+ *     ships a per-type editor and always passes an explicit slug.
  *   - monthly_allowance: 0 turns the cron grant into a no-op (period dates
  *     still advance so per-period email idempotency stamps reset).
  *   - rollover_policy: 'none' | 'cap' | 'unlimited'
@@ -24,6 +29,9 @@ const Body = z
     monthly_allowance: z.number().int().min(0).max(10_000),
     rollover_policy: z.enum(['none', 'cap', 'unlimited']),
     rollover_cap: z.number().int().min(0).max(100_000).optional().nullable(),
+    deliverable_type_slug: z
+      .enum(['edited_video', 'ugc_video', 'static_graphic'])
+      .optional(),
   })
   .refine(
     (v) => v.rollover_policy !== 'cap' || (v.rollover_cap != null && v.rollover_cap >= 0),
@@ -58,6 +66,9 @@ export async function PUT(
       );
     }
 
+    const slug = parsed.data.deliverable_type_slug ?? 'edited_video';
+    const deliverableTypeId = await getDeliverableTypeId(admin, slug);
+
     const { data, error } = await admin
       .from('client_credit_balances')
       .update({
@@ -68,15 +79,16 @@ export async function PUT(
         updated_at: new Date().toISOString(),
       })
       .eq('client_id', clientId)
+      .eq('deliverable_type_id', deliverableTypeId)
       .select(
-        'client_id, monthly_allowance, rollover_policy, rollover_cap, current_balance, next_reset_at',
+        'client_id, deliverable_type_id, monthly_allowance, rollover_policy, rollover_cap, current_balance, next_reset_at',
       )
       .single();
 
     if (error) {
       if (error.code === 'PGRST116') {
         return NextResponse.json(
-          { error: 'No credit balance row for this client' },
+          { error: `No ${slug} balance row for this client` },
           { status: 404 },
         );
       }

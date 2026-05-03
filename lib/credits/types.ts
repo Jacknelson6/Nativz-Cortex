@@ -1,14 +1,17 @@
 /**
- * Credits feature v1 — TypeScript types
+ * Credits feature — TypeScript types (multi-type evolution).
  *
- * Mirrors the shapes from supabase/migrations/220_credits_v1.sql:
- *   - credit_transactions.kind enum
- *   - credit_transactions.charge_unit_kind enum
- *   - client_credit_balances.rollover_policy enum
- *   - RPC return shapes (consume_credit / refund_credit / grant_credit /
- *     expire_credit / monthly_reset_for_client)
+ * Internal accounting layer. Database tables stay `credit_*` for stability;
+ * client-visible surfaces speak "deliverables / production capacity / monthly
+ * output" via lib/deliverables/copy.ts.
  *
- * Spec: tasks/credits-spec.md · PRD: tasks/prd-credits.md
+ * Mirrors the schema from:
+ *   - supabase/migrations/220_credits_v1.sql (base ledger)
+ *   - supabase/migrations/221_deliverables_v1.sql (deliverable_types lookup,
+ *     per-(client, type) PK on client_credit_balances, deliverable_type_id
+ *     stamped on every transaction + gap row)
+ *
+ * Spec: tasks/prd-deliverables-phase-a-engine.md
  */
 
 export type CreditTransactionKind =
@@ -23,8 +26,32 @@ export type ChargeUnitKind = 'drop_video' | 'scheduled_post';
 
 export type RolloverPolicy = 'none' | 'cap' | 'unlimited';
 
+/**
+ * Slugs for the seeded deliverable types. Adding a new type means seeding a
+ * row in `deliverable_types` AND extending this union; no schema migration
+ * required for the ledger itself.
+ */
+export type DeliverableTypeSlug = 'edited_video' | 'ugc_video' | 'static_graphic';
+
+export interface DeliverableTypeRow {
+  id: string;
+  slug: DeliverableTypeSlug;
+  label_singular: string;
+  label_plural: string;
+  unit_cost_cents: number;
+  description: string;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+}
+
 export interface ClientCreditBalanceRow {
   client_id: string;
+  /**
+   * Per-type discriminator. NOT NULL after migration 221. Joined to
+   * `deliverable_types.id` for the slug + display label.
+   */
+  deliverable_type_id: string;
   current_balance: number;
   monthly_allowance: number;
   rollover_policy: RolloverPolicy;
@@ -47,6 +74,11 @@ export interface ClientCreditBalanceRow {
 export interface CreditTransactionRow {
   id: string;
   client_id: string | null;
+  /**
+   * Per-type discriminator. NOT NULL after migration 221. Backfilled to
+   * 'edited_video' for historical rows.
+   */
+  deliverable_type_id: string;
   kind: CreditTransactionKind;
   delta: number;
   charge_unit_kind: ChargeUnitKind | null;
@@ -81,12 +113,31 @@ export type ExpireResult =
   | { already_expired: true }
   | { expired: true; tx_id: string; new_balance: number };
 
-export type MonthlyResetResult =
+export type ResetBalanceRowResult =
   | { not_found: true }
   | { already_reset: true }
   | { skipped_paused: true }
   | { zero_allowance_advanced: true }
   | { reset: true; tx_id: string; grant_delta: number; new_balance: number };
+
+/**
+ * `monthly_reset_for_client(p_client_id)` is the back-compat shim that loops
+ * every (client, deliverable_type) row and aggregates the per-row results.
+ *
+ *   - `{ not_found: true }` when the client has zero balance rows
+ *   - `{ per_type_results: [{ type_id, result }] }` otherwise
+ *
+ * Callers tally per-bucket counts client-side; the per-row `result` is the
+ * canonical signal for telemetry.
+ */
+export type MonthlyResetResult =
+  | { not_found: true }
+  | {
+      per_type_results: Array<{
+        type_id: string;
+        result: ResetBalanceRowResult;
+      }>;
+    };
 
 // ---- Helper type guards (cheap and JSON-friendly, no runtime deps) ----
 
@@ -108,4 +159,10 @@ export function isGranted(
   r: GrantResult,
 ): r is { granted: true; tx_id: string; new_balance: number } {
   return 'granted' in r && r.granted === true;
+}
+
+export function isReset(
+  r: ResetBalanceRowResult,
+): r is { reset: true; tx_id: string; grant_delta: number; new_balance: number } {
+  return 'reset' in r && r.reset === true;
 }

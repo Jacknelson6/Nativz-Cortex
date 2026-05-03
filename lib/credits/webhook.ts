@@ -30,8 +30,24 @@ import type { AgencyBrand } from '@/lib/agency/detect';
 import { getStripe } from '@/lib/stripe/client';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { grantCredit, expireCredit } from './grant';
-import { isGranted, type GrantResult } from './types';
+import { isGranted, type DeliverableTypeSlug, type GrantResult } from './types';
+import {
+  getDeliverableTypeId,
+  getDeliverableTypeSlug,
+} from '@/lib/deliverables/types-cache';
 import { sendCreditsTopupConfirmationEmail } from '@/lib/email/resend';
+
+const VALID_TYPE_SLUGS: DeliverableTypeSlug[] = ['edited_video', 'ugc_video', 'static_graphic'];
+
+function resolveSlugFromMetadata(raw: string | undefined): DeliverableTypeSlug {
+  if (raw && (VALID_TYPE_SLUGS as string[]).includes(raw)) {
+    return raw as DeliverableTypeSlug;
+  }
+  // Default keeps pre-migration top-up sessions (no metadata) flowing into
+  // the edited_video bucket, which is the only type Phase A actually grants
+  // through Stripe.
+  return 'edited_video';
+}
 
 interface ContactRow {
   name: string;
@@ -119,6 +135,9 @@ export async function onCreditsCheckoutCompleted(
       ? session.payment_intent
       : session.payment_intent?.id ?? null;
 
+  const deliverableTypeSlug = resolveSlugFromMetadata(meta.deliverable_type_slug);
+  const deliverableTypeId = await getDeliverableTypeId(admin, deliverableTypeSlug);
+
   const result: GrantResult = await grantCredit(admin, {
     clientId,
     kind: 'grant_topup',
@@ -127,6 +146,7 @@ export async function onCreditsCheckoutCompleted(
     note: `stripe_topup:${session.id}`,
     actorUserId,
     stripePaymentIntent: paymentIntentId,
+    deliverableTypeSlug,
   });
 
   if (!isGranted(result)) {
@@ -202,6 +222,7 @@ export async function onCreditsCheckoutCompleted(
     if (!send.ok) {
       await admin.from('failed_email_attempts').insert({
         client_id: clientId,
+        deliverable_type_id: deliverableTypeId,
         template: 'credits_topup_confirmation',
         period_id: session.id, // session id is the natural per-event id
         recipients: recipients.emails,
@@ -215,6 +236,7 @@ export async function onCreditsCheckoutCompleted(
     const message = err instanceof Error ? err.message : 'unknown send error';
     await admin.from('failed_email_attempts').insert({
       client_id: clientId,
+      deliverable_type_id: deliverableTypeId,
       template: 'credits_topup_confirmation',
       period_id: session.id,
       recipients: recipients.emails,
@@ -231,6 +253,8 @@ interface MatchingGrant {
   client_id: string;
   delta: number; // = pack_size
   charge_amount_cents: number; // sourced from the charge object
+  /** Type the grant landed on. Expire claws back from the same bucket. */
+  deliverable_type_id: string;
 }
 
 /**
@@ -241,6 +265,9 @@ interface MatchingGrant {
  * We trust the grant row's `delta` as the canonical pack_size and use
  * `charge.amount / delta` as the unit price. Stashing unit_price separately
  * in metadata buys us nothing and adds a place to drift.
+ *
+ * Also pulls the grant's `deliverable_type_id` so refunds/disputes can claw
+ * back from the same type bucket the grant landed in.
  */
 async function findCreditsGrantForCharge(
   admin: SupabaseClient,
@@ -254,16 +281,21 @@ async function findCreditsGrantForCharge(
 
   const { data: grant } = await admin
     .from('credit_transactions')
-    .select('client_id, delta')
+    .select('client_id, delta, deliverable_type_id')
     .eq('kind', 'grant_topup')
     .eq('stripe_payment_intent', paymentIntentId)
-    .maybeSingle<{ client_id: string; delta: number }>();
-  if (!grant?.client_id || !grant.delta) return null;
+    .maybeSingle<{
+      client_id: string;
+      delta: number;
+      deliverable_type_id: string;
+    }>();
+  if (!grant?.client_id || !grant.delta || !grant.deliverable_type_id) return null;
 
   return {
     client_id: grant.client_id,
     delta: grant.delta,
     charge_amount_cents: charge.amount ?? 0,
+    deliverable_type_id: grant.deliverable_type_id,
   };
 }
 
@@ -308,11 +340,13 @@ export async function onCreditsChargeRefunded(
   const creditsToExpire = Math.floor(latest.amount / unitCents);
   if (creditsToExpire <= 0) return; // refund smaller than one credit, ignore
 
+  const slug = await getDeliverableTypeSlug(admin, match.deliverable_type_id);
   await expireCredit(admin, {
     clientId: match.client_id,
     delta: -creditsToExpire,
     idempotencyKey: `expire:refund:${latest.id}`,
     note: `stripe_refund:${charge.id}`,
+    deliverableTypeSlug: slug,
   });
 }
 
@@ -363,10 +397,12 @@ export async function onCreditsChargeDisputed(
   const creditsToExpire = Math.floor(disputeAmount / unitCents);
   if (creditsToExpire <= 0) return;
 
+  const slug = await getDeliverableTypeSlug(admin, match.deliverable_type_id);
   await expireCredit(admin, {
     clientId: match.client_id,
     delta: -creditsToExpire,
     idempotencyKey: `expire:dispute:${dispute.id}`,
     note: `stripe_dispute:${dispute.id}`,
+    deliverableTypeSlug: slug,
   });
 }

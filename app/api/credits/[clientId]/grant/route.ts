@@ -11,10 +11,16 @@ import { getCreditsAdminContext } from '@/lib/credits/admin-auth';
  * the webhook handler (Phase 5), which calls the same `grant_credit` RPC
  * with `kind = 'grant_topup'` and a Stripe-event idempotency key.
  *
+ * Per migration 221, grants are scoped to a deliverable type. The body's
+ * optional `deliverable_type_slug` defaults to `edited_video` so legacy
+ * tooling (one-off `grant_topup` from the admin shell before Phase B ships
+ * the type selector) keeps working unchanged.
+ *
  * @auth Required (admin / super_admin)
  * @body kind  - 'grant_topup' | 'adjust'
  * @body delta - non-zero integer (positive grants, negative adjusts allowed)
  * @body note  - optional human-readable reason (audit trail)
+ * @body deliverable_type_slug - optional, defaults to 'edited_video'
  * @returns RPC payload from `grant_credit` (granted/already_granted)
  */
 
@@ -23,6 +29,9 @@ const Body = z.object({
   delta: z.number().int().refine((n) => n !== 0, 'delta cannot be zero'),
   note: z.string().min(1).max(500).optional(),
   idempotencyKey: z.string().min(1).max(200).optional(),
+  deliverable_type_slug: z
+    .enum(['edited_video', 'ugc_video', 'static_graphic'])
+    .optional(),
 });
 
 export async function POST(
@@ -57,6 +66,7 @@ export async function POST(
       note: parsed.data.note ?? null,
       idempotencyKey: parsed.data.idempotencyKey ?? null,
       actorUserId: user.id,
+      deliverableTypeSlug: parsed.data.deliverable_type_slug,
     });
 
     return NextResponse.json(result);
