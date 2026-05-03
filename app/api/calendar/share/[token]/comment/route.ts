@@ -13,6 +13,11 @@ import {
 } from '@/lib/monday/calendar-approval';
 import { isClientPaidMedia } from '@/lib/monday/paid-media';
 import { getCalendarTeamWebhook } from '@/lib/chat/calendar-team-webhooks';
+import {
+  consumeForApproval,
+  hasPriorApproval,
+  refundForUnapproval,
+} from '@/lib/credits/comment-hooks';
 
 const AttachmentSchema = z.object({
   url: z.string().url(),
@@ -186,6 +191,27 @@ export async function POST(
       } catch (err) {
         console.error(`Approval → Zernio publish failed for post ${parsed.data.postId}:`, err);
       }
+
+      // Approval-as-consumption: 1 credit per approved video. State-based
+      // dedup in consume_credit makes re-approval (delete+approve) safe.
+      await consumeForApproval(admin, {
+        scheduledPostId: parsed.data.postId,
+        shareLinkId: link.id,
+        reviewerName: parsed.data.authorName.trim(),
+      });
+    } else if (finalStatus === 'changes_requested') {
+      // Silent-overcharge fix: if this post was already approved earlier
+      // and the reviewer is now requesting changes, refund the prior
+      // consume. refund_credit is a no-op if there's nothing to refund,
+      // but we guard with hasPriorApproval to avoid an extra round-trip
+      // on the common (no-prior-approval) path.
+      const prior = await hasPriorApproval(admin, reviewLinkId);
+      if (prior) {
+        await refundForUnapproval(admin, {
+          scheduledPostId: parsed.data.postId,
+          reason: 'changes_requested after prior approval',
+        });
+      }
     }
   });
 
@@ -247,11 +273,30 @@ export async function DELETE(
       .update({ all_approved_notified_at: null })
       .eq('id', link.id);
 
+    // Reverse the post_id → review_link_id map to find the post tied to
+    // this deleted approval. Needed for the credit refund (resolveChargeUnit
+    // takes a scheduled_post_id).
+    const reviewLinkMap = link.post_review_link_map ?? {};
+    const reversedPostId = Object.entries(reviewLinkMap).find(
+      ([, reviewId]) => reviewId === comment.review_link_id,
+    )?.[0];
+
     after(async () => {
       try {
         await syncMondayApprovalForDrop(admin, link.drop_id);
       } catch (err) {
         console.error('Monday calendar approval sync failed (delete):', err);
+      }
+
+      // Approval revoked → refund the consume row. State-based dedup
+      // makes this a no-op if the consume was already refunded (e.g. by
+      // an earlier changes_requested-after-approval). Skips silently if
+      // we somehow can't reverse-map the post id.
+      if (reversedPostId) {
+        await refundForUnapproval(admin, {
+          scheduledPostId: reversedPostId,
+          reason: 'approval comment deleted',
+        });
       }
     });
   }
