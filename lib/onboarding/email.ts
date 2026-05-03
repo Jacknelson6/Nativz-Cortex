@@ -105,22 +105,26 @@ async function loadClient(clientId: string): Promise<ClientCtx> {
   };
 }
 
-async function resolveRecipient(
+/**
+ * Resolve every brand-profile POC we should email for this onboarding.
+ * Falls back to the explicit `override` (single recipient) when the caller
+ * passed one, since admin-triggered nudges accept a "send to" override field.
+ */
+async function resolveRecipients(
   clientId: string,
   override: string | undefined,
-): Promise<RecipientCtx> {
+): Promise<RecipientCtx[]> {
   if (override) {
-    return { email: override, first_name: null };
+    return [{ email: override, first_name: null }];
   }
   const admin = createAdminClient();
   const pocs = await getClientNotificationRecipients(admin, clientId);
-  const first = pocs[0];
-  if (!first) {
+  if (pocs.length === 0) {
     throw new Error(
       'no contacts on the brand profile to email. Add a POC on the brand profile or pass `recipient_email`.',
     );
   }
-  return { email: first.email, first_name: firstName(first.name) };
+  return pocs.map((p) => ({ email: p.email, first_name: firstName(p.name) }));
 }
 
 function progressLine(kind: OnboardingKind, currentStep: number): string {
@@ -155,9 +159,9 @@ export async function sendOnboardingWelcomeEmail(opts: {
   onboarding: OnboardingRow;
   recipient_email?: string;
   triggered_by?: string;
-}): Promise<OnboardingEmailResult> {
+}): Promise<OnboardingEmailResult[]> {
   const client = await loadClient(opts.onboarding.client_id);
-  const recipient = await resolveRecipient(client.client_id, opts.recipient_email);
+  const recipients = await resolveRecipients(client.client_id, opts.recipient_email);
   const brand = getEmailBrand(client.agency);
   const url = shareUrl(client.agency, opts.onboarding.share_token);
 
@@ -166,46 +170,53 @@ export async function sendOnboardingWelcomeEmail(opts: {
     ? `We're getting ${escape(client.client_name)} set up for short-form social. The link below opens a quick guided walkthrough so we can lock down your brand basics, social accounts, content preferences, and a kickoff time.`
     : `We're getting ${escape(client.client_name)} set up for editing. The link below opens a short guided walkthrough so we can capture your project brief, raw footage, and turnaround expectations.`;
 
-  const body = `
-    <p class="subtext">${greeting(recipient.first_name)},</p>
-    <p class="subtext">${intro}</p>
-    <p class="subtext">It takes about 5 minutes. You can pause and come back; the link saves your progress automatically.</p>
-    <div class="button-wrap" style="text-align:center;">
-      <a href="${url}" class="button">Start onboarding</a>
-    </div>
-    <hr class="divider" />
-    <p class="small" style="text-align:center;">
-      If the button doesn't work, paste this into your browser:<br />
-      <a href="${url}" style="color:${brand.blue};">${url}</a>
-    </p>
-  `;
-
   const subject = isSmm
     ? `Let's kick off ${client.client_name} on Cortex`
     : `Let's get ${client.client_name} editing started`;
 
-  const html = layout(body, client.agency, {
-    eyebrow: 'Onboarding',
-    heroTitle: `Welcome to ${brand.brandName}, ${client.client_name}.`,
-  });
+  // Personalise greeting per POC. Body, hero, CTA stay identical across the
+  // fan-out so all recipients land on the same shared onboarding link.
+  const results: OnboardingEmailResult[] = [];
+  for (const recipient of recipients) {
+    const body = `
+      <p class="subtext">${greeting(recipient.first_name)},</p>
+      <p class="subtext">${intro}</p>
+      <p class="subtext">It takes about 5 minutes. You can pause and come back; the link saves your progress automatically.</p>
+      <div class="button-wrap" style="text-align:center;">
+        <a href="${url}" class="button">Start onboarding</a>
+      </div>
+      <hr class="divider" />
+      <p class="small" style="text-align:center;">
+        If the button doesn't work, paste this into your browser:<br />
+        <a href="${url}" style="color:${brand.blue};">${url}</a>
+      </p>
+    `;
 
-  const sent = await sendAndLog({
-    category: 'transactional',
-    typeKey: `onboarding_welcome_${opts.onboarding.kind}`,
-    agency: client.agency,
-    to: recipient.email,
-    recipientName: recipient.first_name,
-    subject,
-    html,
-    clientId: client.client_id,
-    metadata: {
-      onboarding_id: opts.onboarding.id,
-      kind: opts.onboarding.kind,
-      triggered_by: opts.triggered_by ?? null,
-    },
-  });
+    const html = layout(body, client.agency, {
+      eyebrow: 'Onboarding',
+      heroTitle: `Welcome to ${brand.brandName}, ${client.client_name}.`,
+    });
 
-  return shellResult(recipient.email, subject, preview(intro), sent);
+    const sent = await sendAndLog({
+      category: 'transactional',
+      typeKey: `onboarding_welcome_${opts.onboarding.kind}`,
+      agency: client.agency,
+      to: recipient.email,
+      recipientName: recipient.first_name,
+      subject,
+      html,
+      clientId: client.client_id,
+      metadata: {
+        onboarding_id: opts.onboarding.id,
+        kind: opts.onboarding.kind,
+        triggered_by: opts.triggered_by ?? null,
+      },
+    });
+
+    results.push(shellResult(recipient.email, subject, preview(intro), sent));
+  }
+
+  return results;
 }
 
 // ── Nudge (manual / step reminder / lagging) ─────────────────────────────
@@ -219,9 +230,9 @@ export async function sendOnboardingNudgeEmail(opts: {
   /** Optional admin-authored note. If present, replaces the default body copy. */
   message?: string;
   triggered_by?: string;
-}): Promise<OnboardingEmailResult> {
+}): Promise<OnboardingEmailResult[]> {
   const client = await loadClient(opts.onboarding.client_id);
-  const recipient = await resolveRecipient(client.client_id, opts.recipient_email);
+  const recipients = await resolveRecipients(client.client_id, opts.recipient_email);
   const brand = getEmailBrand(client.agency);
   const url = shareUrl(client.agency, opts.onboarding.share_token);
 
@@ -255,43 +266,48 @@ export async function sendOnboardingNudgeEmail(opts: {
     cta = 'Open onboarding';
   }
 
-  const body = `
-    <p class="subtext">${greeting(recipient.first_name)},</p>
-    <p class="subtext">${intro}</p>
-    <p class="subtext"><em>${escape(progress)}</em></p>
-    <div class="button-wrap" style="text-align:center;">
-      <a href="${url}" class="button">${cta}</a>
-    </div>
-    <hr class="divider" />
-    <p class="small" style="text-align:center;">
-      If the button doesn't work, paste this into your browser:<br />
-      <a href="${url}" style="color:${brand.blue};">${url}</a>
-    </p>
-  `;
-
-  const html = layout(body, client.agency, { eyebrow, heroTitle });
-
-  const sent = await sendAndLog({
-    category: 'transactional',
-    typeKey: `onboarding_${opts.kind}`,
-    agency: client.agency,
-    to: recipient.email,
-    recipientName: recipient.first_name,
-    subject,
-    html,
-    clientId: client.client_id,
-    metadata: {
-      onboarding_id: opts.onboarding.id,
-      kind: opts.onboarding.kind,
-      nudge_kind: opts.kind,
-      triggered_by: opts.triggered_by ?? null,
-      has_message: !!opts.message,
-    },
-  });
-
   const previewBody = opts.message
     ? preview(opts.message)
     : preview(intro.replace(/<[^>]+>/g, ''));
 
-  return shellResult(recipient.email, subject, previewBody, sent);
+  const results: OnboardingEmailResult[] = [];
+  for (const recipient of recipients) {
+    const body = `
+      <p class="subtext">${greeting(recipient.first_name)},</p>
+      <p class="subtext">${intro}</p>
+      <p class="subtext"><em>${escape(progress)}</em></p>
+      <div class="button-wrap" style="text-align:center;">
+        <a href="${url}" class="button">${cta}</a>
+      </div>
+      <hr class="divider" />
+      <p class="small" style="text-align:center;">
+        If the button doesn't work, paste this into your browser:<br />
+        <a href="${url}" style="color:${brand.blue};">${url}</a>
+      </p>
+    `;
+
+    const html = layout(body, client.agency, { eyebrow, heroTitle });
+
+    const sent = await sendAndLog({
+      category: 'transactional',
+      typeKey: `onboarding_${opts.kind}`,
+      agency: client.agency,
+      to: recipient.email,
+      recipientName: recipient.first_name,
+      subject,
+      html,
+      clientId: client.client_id,
+      metadata: {
+        onboarding_id: opts.onboarding.id,
+        kind: opts.onboarding.kind,
+        nudge_kind: opts.kind,
+        triggered_by: opts.triggered_by ?? null,
+        has_message: !!opts.message,
+      },
+    });
+
+    results.push(shellResult(recipient.email, subject, previewBody, sent));
+  }
+
+  return results;
 }

@@ -95,22 +95,26 @@ export async function POST(req: Request) {
     // the admin can resend manually from the detail page.
     if (send_welcome !== false) {
       try {
-        const sent = await sendOnboardingWelcomeEmail({
+        const sentList = await sendOnboardingWelcomeEmail({
           onboarding: row,
           recipient_email: poc_email,
           triggered_by: guard.ctx.user.id,
         });
-        await logEmail({
-          onboarding_id: row.id,
-          kind: 'welcome',
-          to_email: sent.to,
-          subject: sent.subject,
-          body_preview: sent.body_preview,
-          resend_id: sent.resend_id,
-          ok: sent.ok,
-          error: sent.error,
-          triggered_by: guard.ctx.user.id,
-        });
+        // One log row per POC; the welcome fan-out lands separate emails to
+        // every brand-profile contact, so each gets its own audit trail.
+        for (const sent of sentList) {
+          await logEmail({
+            onboarding_id: row.id,
+            kind: 'welcome',
+            to_email: sent.to,
+            subject: sent.subject,
+            body_preview: sent.body_preview,
+            resend_id: sent.resend_id,
+            ok: sent.ok,
+            error: sent.error,
+            triggered_by: guard.ctx.user.id,
+          });
+        }
       } catch (mailErr) {
         // Log + continue.
         const msg = mailErr instanceof Error ? mailErr.message : 'unknown';

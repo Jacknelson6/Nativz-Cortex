@@ -46,29 +46,43 @@ export async function POST(
   const kind = parsed.data.kind ?? 'manual';
 
   try {
-    const sent = await sendOnboardingNudgeEmail({
+    const sentList = await sendOnboardingNudgeEmail({
       onboarding: row,
       kind,
       recipient_email: parsed.data.to,
       message: parsed.data.message,
       triggered_by: guard.ctx.user.id,
     });
-    await logEmail({
-      onboarding_id: row.id,
-      kind,
-      to_email: sent.to,
-      subject: sent.subject,
-      body_preview: sent.body_preview,
-      resend_id: sent.resend_id,
-      ok: sent.ok,
-      error: sent.error,
-      triggered_by: guard.ctx.user.id,
-    });
 
-    if (!sent.ok) {
-      return NextResponse.json({ error: sent.error ?? 'send failed' }, { status: 502 });
+    // Log one row per recipient. When the admin passes an explicit `to`,
+    // sentList has length 1 - same audit trail as before.
+    for (const sent of sentList) {
+      await logEmail({
+        onboarding_id: row.id,
+        kind,
+        to_email: sent.to,
+        subject: sent.subject,
+        body_preview: sent.body_preview,
+        resend_id: sent.resend_id,
+        ok: sent.ok,
+        error: sent.error,
+        triggered_by: guard.ctx.user.id,
+      });
     }
-    return NextResponse.json({ ok: true });
+
+    // Surface a partial-failure 502 only when EVERY send failed; if at least
+    // one POC got the nudge we treat the call as ok and let the per-recipient
+    // log rows tell the rest of the story.
+    const anyOk = sentList.some((s) => s.ok);
+    if (!anyOk) {
+      const firstErr = sentList.find((s) => s.error)?.error ?? 'send failed';
+      return NextResponse.json({ error: firstErr }, { status: 502 });
+    }
+    return NextResponse.json({
+      ok: true,
+      sent_count: sentList.filter((s) => s.ok).length,
+      total: sentList.length,
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown error';
     return NextResponse.json({ error: msg }, { status: 500 });

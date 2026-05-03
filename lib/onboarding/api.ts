@@ -180,6 +180,76 @@ export async function setStatus(id: string, status: OnboardingStatus): Promise<O
   return dbOk(data as OnboardingRow | null, error, 'setStatus');
 }
 
+/* ---------- social connection sync ------------------------------------- */
+
+/**
+ * Mirror a Zernio social-account connection into the client's active
+ * SMM onboarding. The webhook handler calls this on `account.connected`
+ * and `account.disconnected` so the social_connect step's `connections`
+ * map reflects what's actually wired in Zernio without forcing the
+ * client to re-tap the screen.
+ *
+ * No-op (returns null) if the client has no active SMM onboarding;
+ * post-onboarding reconnects shouldn't resurrect a finished row.
+ *
+ * The user-driven `handles` map (handle + url they typed in) stays
+ * untouched; we only write under `connections[platform]` so the two
+ * inputs don't clobber each other.
+ */
+export async function markPlatformConnection(opts: {
+  client_id: string;
+  platform: string;
+  status: 'connected' | 'pending' | 'manual';
+  zernio_account_id?: string | null;
+  username?: string | null;
+}): Promise<OnboardingRow | null> {
+  const admin = createAdminClient();
+  const { data: row, error } = await admin
+    .from('onboardings')
+    .select(ONBOARDING_COLUMNS)
+    .eq('client_id', opts.client_id)
+    .eq('kind', 'smm')
+    .eq('status', 'in_progress' as OnboardingStatus)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`[onboarding/markPlatformConnection] ${error.message}`);
+  if (!row) return null;
+
+  const current = (row as OnboardingRow).step_state ?? {};
+  const social = (current.social_handles as Record<string, unknown> | undefined) ?? {};
+  const connections =
+    (social.connections as Record<string, Record<string, unknown>> | undefined) ?? {};
+
+  const next = {
+    ...connections[opts.platform],
+    status: opts.status,
+    connected_at: opts.status === 'connected' ? new Date().toISOString() : null,
+    zernio_account_id: opts.zernio_account_id ?? connections[opts.platform]?.zernio_account_id ?? null,
+    username: opts.username ?? connections[opts.platform]?.username ?? null,
+  };
+
+  const merged = {
+    ...current,
+    social_handles: {
+      ...social,
+      connections: {
+        ...connections,
+        [opts.platform]: next,
+      },
+    },
+  };
+
+  const { data: updated, error: upErr } = await admin
+    .from('onboardings')
+    .update({ step_state: merged })
+    .eq('id', (row as OnboardingRow).id)
+    .select(ONBOARDING_COLUMNS)
+    .single();
+  if (upErr) throw new Error(`[onboarding/markPlatformConnection] ${upErr.message}`);
+  return updated as OnboardingRow;
+}
+
 /* ---------- team assignments ------------------------------------------- */
 
 export async function listTeamAssignments(client_id: string): Promise<TeamAssignmentRow[]> {

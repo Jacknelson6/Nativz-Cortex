@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { notifyZernioWebhookRecipients } from '@/lib/social/zernio-webhook-notify';
+import { markPlatformConnection } from '@/lib/onboarding/api';
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
@@ -149,7 +150,7 @@ export async function POST(request: NextRequest) {
 
         await notifyZernioWebhookRecipients({
           type: 'post_failed',
-          title: `Scheduled post failed — ${clientName}`,
+          title: `Scheduled post failed, ${clientName}`,
           body: [captionPreview && `Caption: ${captionPreview}`, failDetail && `Detail: ${failDetail}`]
             .filter(Boolean)
             .join('\n'),
@@ -183,9 +184,27 @@ export async function POST(request: NextRequest) {
             .update({ is_active: true })
             .eq('late_account_id', accountId);
 
-          // Onboarding auto-advance on social connect is re-implemented by
-          // the rebuilt onboarding system (Phase 4 of the rebuild). Until
-          // then this branch only flips the social_profile active flag.
+          // Mirror the connection into the client's active SMM onboarding so
+          // the social_connect step's connections map auto-ticks without the
+          // client retapping the screen. No-op if there's no live onboarding.
+          const { data: prof } = await adminClient
+            .from('social_profiles')
+            .select('platform, username, client_id')
+            .eq('late_account_id', accountId)
+            .maybeSingle();
+          if (prof?.client_id && prof?.platform) {
+            try {
+              await markPlatformConnection({
+                client_id: prof.client_id as string,
+                platform: prof.platform as string,
+                status: 'connected',
+                zernio_account_id: accountId,
+                username: (prof.username as string) ?? null,
+              });
+            } catch (err) {
+              console.error('[zernio-webhook] markPlatformConnection (connected) failed:', err);
+            }
+          }
         }
         break;
       }
@@ -216,16 +235,32 @@ export async function POST(request: NextRequest) {
           pickStr(accountPayload, 'username', 'handle') ||
           '';
 
+        // Flip the active SMM onboarding's connection back to pending so the
+        // stepper / admin tracker reflect that the client owes us a reconnect.
+        if (prof?.client_id && prof?.platform) {
+          try {
+            await markPlatformConnection({
+              client_id: prof.client_id as string,
+              platform: prof.platform as string,
+              status: 'pending',
+              zernio_account_id: accountId,
+              username: username || null,
+            });
+          } catch (err) {
+            console.error('[zernio-webhook] markPlatformConnection (disconnected) failed:', err);
+          }
+        }
+
         await notifyZernioWebhookRecipients({
           type: 'account_disconnected',
-          title: `Social account disconnected — ${clientName}`,
+          title: `Social account disconnected, ${clientName}`,
           body: `${platform}${username ? ` (@${username})` : ''} lost connection in Zernio. Reconnect in scheduler or Zernio dashboard.`,
           linkPath: '/admin/scheduler',
         });
         break;
       }
       default: {
-        // message.received, comment.received — log for now
+        // message.received, comment.received: log for now
         console.log(`Zernio webhook: ${event}`, { postId, accountId, hasPost: !!postPayload });
         break;
       }
