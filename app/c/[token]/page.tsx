@@ -12,7 +12,8 @@ import { toast } from 'sonner';
 import { Dialog } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
-import { BalancePill } from '@/components/credits/balance-pill';
+import { BalancePill } from '@/components/deliverables/balance-pill';
+import type { DeliverableBalance } from '@/lib/deliverables/get-balances';
 
 // Mux Player is a heavy web-component-backed React component. Dynamic-import
 // with ssr:false keeps it out of the initial server bundle and avoids
@@ -94,14 +95,10 @@ interface SharedDrop {
   drop: { id: string; start_date: string; end_date: string; default_post_time: string };
   posts: SharedPost[];
   expiresAt: string;
-  // Inline balance signal for the BalancePill near the approve buttons.
-  // Null when the client has no balance row yet (rare, e.g. brand-new
-  // accounts not yet backfilled). Pill hides itself in that case.
-  credits: {
-    current_balance: number;
-    monthly_allowance: number;
-    next_reset_at: string;
-  } | null;
+  // Per-type deliverable balances feeding the BalancePill near the approve
+  // buttons. Empty array when no active types are configured for the client
+  // (brand-new account); pill hides itself in that case.
+  balances: DeliverableBalance[];
 }
 
 type ReviewStatus = 'approved' | 'changes_requested' | 'comment';
@@ -525,7 +522,7 @@ function SharedDropView({
                 <p className="text-sm text-text-secondary sm:text-base">
                   {total} post{total !== 1 ? 's' : ''} to review · scheduled {formatDropDateRange(data.drop.start_date, data.drop.end_date)}
                 </p>
-                <BalancePill credits={data.credits} />
+                <BalancePill balances={data.balances} />
               </div>
             </div>
             <div className="flex items-center gap-2">

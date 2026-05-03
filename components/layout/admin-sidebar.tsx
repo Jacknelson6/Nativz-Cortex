@@ -128,11 +128,11 @@ const NAV_SECTIONS: NavSection[] = [
       },
       { href: '/brand-profile', label: 'Brand Profile', icon: BookUser },
       { href: '/notes', label: 'Notes', icon: StickyNote },
-      // Credits is brand-scoped (follows the active pill) so it lives
+      // Deliverables is brand-scoped (follows the active pill) so it lives
       // alongside the other brand tools rather than under Admin. Both
-      // admins (full controls) and viewers (read + top-up CTA) land on
-      // the same /credits URL — body branches on role.
-      { href: '/credits', label: 'Credits', icon: Coins },
+      // admins (full controls) and viewers (production scope + add-ons) land
+      // on the same /deliverables URL; the body branches on role.
+      { href: '/deliverables', label: 'Deliverables', icon: Coins },
     ],
   },
   {

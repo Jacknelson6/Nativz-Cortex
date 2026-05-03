@@ -35,7 +35,14 @@ import {
   getDeliverableTypeId,
   getDeliverableTypeSlug,
 } from '@/lib/deliverables/types-cache';
-import { sendCreditsTopupConfirmationEmail } from '@/lib/email/resend';
+import { sendDeliverableAddonReceiptEmail } from '@/lib/email/resend';
+import {
+  ADDON_SKUS,
+  isAddonSlug,
+  type AddonSku,
+  type AddonSlug,
+} from '@/lib/deliverables/addon-skus';
+import { deliverableCopy } from '@/lib/deliverables/copy';
 
 const VALID_TYPE_SLUGS: DeliverableTypeSlug[] = ['edited_video', 'ugc_video', 'static_graphic'];
 
@@ -47,6 +54,34 @@ function resolveSlugFromMetadata(raw: string | undefined): DeliverableTypeSlug {
   // the edited_video bucket, which is the only type Phase A actually grants
   // through Stripe.
   return 'edited_video';
+}
+
+/**
+ * Phase B replaces the legacy `pack_size` metadata with a named `addon_slug`.
+ * In-flight sessions from before the cutover still carry pack_size; map them
+ * onto the closest SKU equivalent so we don't strand any payments.
+ *
+ * Returns null when nothing usable is on the session — caller bails with a
+ * structured log so we can backfill manually if it ever happens.
+ */
+function resolveAddonFromMetadata(meta: Record<string, string>): {
+  sku: AddonSku;
+  quantity: number;
+} | null {
+  const explicit = meta.addon_slug;
+  if (explicit && isAddonSlug(explicit)) {
+    const sku = ADDON_SKUS[explicit as AddonSlug];
+    const qtyRaw = Number.parseInt(meta.quantity ?? '', 10);
+    const quantity = Number.isFinite(qtyRaw) && qtyRaw > 0 ? qtyRaw : sku.quantity;
+    return { sku, quantity };
+  }
+  // Legacy fallback: pack_size sessions minted before Phase B. Map onto
+  // extra_edited_video so the deliverable lands somewhere accountable.
+  const legacyPack = Number.parseInt(meta.pack_size ?? '', 10);
+  if (Number.isFinite(legacyPack) && legacyPack > 0) {
+    return { sku: ADDON_SKUS.extra_edited_video, quantity: legacyPack };
+  }
+  return null;
 }
 
 interface ContactRow {
@@ -115,18 +150,18 @@ export async function onCreditsCheckoutCompleted(
 ): Promise<void> {
   const meta = (session.metadata ?? {}) as Record<string, string>;
   const clientId = meta.client_id;
-  const packSizeRaw = meta.pack_size;
   const actorUserId = meta.actor_user_id ?? null;
-  const packSize = Number.parseInt(packSizeRaw ?? '', 10);
+  const resolved = resolveAddonFromMetadata(meta);
 
-  if (!clientId || !Number.isFinite(packSize) || packSize <= 0) {
+  if (!clientId || !resolved) {
     console.error('[credits.webhook] checkout.session.completed missing metadata', {
       sessionId: session.id,
       clientId,
-      packSizeRaw,
+      meta,
     });
     return;
   }
+  const { sku, quantity } = resolved;
 
   // Stripe types `payment_intent` as string | PaymentIntent | null. For a
   // mode='payment' session it's always set after completion.
@@ -135,27 +170,37 @@ export async function onCreditsCheckoutCompleted(
       ? session.payment_intent
       : session.payment_intent?.id ?? null;
 
-  const deliverableTypeSlug = resolveSlugFromMetadata(meta.deliverable_type_slug);
-  const deliverableTypeId = await getDeliverableTypeId(admin, deliverableTypeSlug);
+  // SLA modifiers (Rush) don't move a balance — record the purchase but skip
+  // the grant. Phase D wires the rush flag onto the linked deliverable; in
+  // Phase B we just confirm receipt to the client and stop.
+  const isModifier = sku.deliverable_type_slug === null;
 
-  const result: GrantResult = await grantCredit(admin, {
-    clientId,
-    kind: 'grant_topup',
-    delta: packSize,
-    idempotencyKey: `topup:${session.id}`,
-    note: `stripe_topup:${session.id}`,
-    actorUserId,
-    stripePaymentIntent: paymentIntentId,
-    deliverableTypeSlug,
-  });
+  let newBalance: number | null = null;
+  let deliverableTypeId: string | null = null;
+  if (!isModifier && sku.deliverable_type_slug) {
+    const deliverableTypeSlug = resolveSlugFromMetadata(sku.deliverable_type_slug);
+    deliverableTypeId = await getDeliverableTypeId(admin, deliverableTypeSlug);
 
-  if (!isGranted(result)) {
-    // already_granted — webhook re-fired, nothing more to do (don't re-send
-    // the confirmation email, it would surface as a duplicate to the POC).
-    return;
+    const result: GrantResult = await grantCredit(admin, {
+      clientId,
+      kind: 'grant_topup',
+      delta: quantity,
+      idempotencyKey: `topup:${session.id}`,
+      note: `stripe_addon:${sku.slug}:${session.id}`,
+      actorUserId,
+      stripePaymentIntent: paymentIntentId,
+      deliverableTypeSlug,
+    });
+
+    if (!isGranted(result)) {
+      // already_granted — webhook re-fired, nothing more to do (don't re-send
+      // the confirmation email, it would surface as a duplicate to the POC).
+      return;
+    }
+
+    newBalance = result.new_balance;
   }
 
-  const newBalance = result.new_balance;
   const amountPaidCents = session.amount_total ?? 0;
 
   // Pull the client name + agency for branding. Agency parameter is the
@@ -196,26 +241,34 @@ export async function onCreditsCheckoutCompleted(
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
-  const portalUrl = `${appUrl}/credits`;
+  const deliverablesUrl = `${appUrl}/deliverables`;
 
   const recipients = await resolveTopupRecipients(admin, clientId);
   if (recipients.emails.length === 0) {
     console.warn(
-      `[credits.webhook] no eligible recipients for topup confirmation on client ${clientId}; skipping email`,
+      `[credits.webhook] no eligible recipients for addon receipt on client ${clientId}; skipping email`,
     );
     return;
   }
 
+  // For SLA modifiers we don't have a "credited noun"; the receipt template
+  // branches on null and shows queued-rush copy instead.
+  const deliverableNounPlural = isModifier
+    ? null
+    : deliverableCopy(sku.deliverable_type_slug as DeliverableTypeSlug).plural;
+
   try {
-    const send = await sendCreditsTopupConfirmationEmail({
+    const send = await sendDeliverableAddonReceiptEmail({
       to: recipients.emails,
       pocFirstNames: recipients.pocFirstNames,
       clientName,
-      packSize,
+      addonLabel: sku.label,
+      deliverableNounPlural,
+      quantity,
       newBalance,
       amountPaidCents,
       receiptUrl,
-      portalUrl,
+      deliverablesUrl,
       agency: resolvedAgency,
       clientId,
     });
@@ -223,13 +276,13 @@ export async function onCreditsCheckoutCompleted(
       await admin.from('failed_email_attempts').insert({
         client_id: clientId,
         deliverable_type_id: deliverableTypeId,
-        template: 'credits_topup_confirmation',
+        template: 'deliverable_addon_receipt',
         period_id: session.id, // session id is the natural per-event id
         recipients: recipients.emails,
         error_message: send.error ?? 'unknown send error',
       });
       console.error(
-        `[credits.webhook] topup confirmation send failed for client ${clientId}: ${send.error}`,
+        `[credits.webhook] addon receipt send failed for client ${clientId}: ${send.error}`,
       );
     }
   } catch (err) {
@@ -237,13 +290,13 @@ export async function onCreditsCheckoutCompleted(
     await admin.from('failed_email_attempts').insert({
       client_id: clientId,
       deliverable_type_id: deliverableTypeId,
-      template: 'credits_topup_confirmation',
+      template: 'deliverable_addon_receipt',
       period_id: session.id,
       recipients: recipients.emails,
       error_message: message,
     });
     console.error(
-      `[credits.webhook] topup confirmation send threw for client ${clientId}:`,
+      `[credits.webhook] addon receipt send threw for client ${clientId}:`,
       err,
     );
   }

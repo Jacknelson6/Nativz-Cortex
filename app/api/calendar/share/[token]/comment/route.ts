@@ -18,6 +18,9 @@ import {
   hasPriorApproval,
   refundForUnapproval,
 } from '@/lib/credits/comment-hooks';
+import { resolveChargeUnit } from '@/lib/credits/resolve-charge-unit';
+import { getDeliverableTypeId } from '@/lib/deliverables/types-cache';
+import { clientAllowsOverage } from '@/lib/deliverables/overage';
 
 const AttachmentSchema = z.object({
   url: z.string().url(),
@@ -136,6 +139,59 @@ export async function POST(
     finalStatus === 'comment' || finalStatus === 'changes_requested'
       ? parsed.data.timestampSeconds ?? null
       : null;
+
+  // Soft-block on approval when the client is out of scope for this
+  // deliverable type. The PRD calls today's silent-overage behavior the
+  // bug. Block the approval (no comment insert, no consume) and return a
+  // structured 402 so the share-link UI can render an "out of scope, add
+  // one" CTA. Run only on `approved` so plain comments + change requests
+  // still write through.
+  if (finalStatus === 'approved') {
+    const charge = await resolveChargeUnit(admin, {
+      scheduledPostId: parsed.data.postId,
+    });
+    if (charge) {
+      const { data: post } = await admin
+        .from('scheduled_posts')
+        .select('client_id')
+        .eq('id', parsed.data.postId)
+        .maybeSingle<{ client_id: string | null }>();
+      const clientId = post?.client_id ?? null;
+      if (clientId) {
+        const deliverableTypeId = await getDeliverableTypeId(
+          admin,
+          charge.deliverableTypeSlug,
+        );
+        const { data: balanceRow } = await admin
+          .from('client_credit_balances')
+          .select('current_balance')
+          .eq('client_id', clientId)
+          .eq('deliverable_type_id', deliverableTypeId)
+          .maybeSingle<{ current_balance: number }>();
+        const remaining = balanceRow?.current_balance ?? 0;
+        if (remaining <= 0) {
+          const overageOk = await clientAllowsOverage(
+            admin,
+            clientId,
+            deliverableTypeId,
+          );
+          if (!overageOk) {
+            const appUrl =
+              process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
+            return NextResponse.json(
+              {
+                error: 'scope_exhausted',
+                deliverable_type: charge.deliverableTypeSlug,
+                remaining,
+                addon_url: `${appUrl}/deliverables`,
+              },
+              { status: 402 },
+            );
+          }
+        }
+      }
+    }
+  }
 
   const { data, error } = await admin
     .from('post_review_comments')

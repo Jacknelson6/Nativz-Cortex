@@ -2059,32 +2059,36 @@ export async function sendShootBriefReminderEmail(opts: {
   });
 }
 
-// ── Credits: low-balance + overdraft warning ────────────────────────────────
+// ── Deliverables: scope-approaching + over-scope warnings ───────────────────
 //
 // Fired from `lib/credits/email.ts` after a consume drops the balance to <= 1
-// (or below 0). Period-flag dedup is handled by the caller, this just renders
-// + sends. Recipients are the client POC contacts (filtered) BCCed onto a
-// single send so we don't spam each one with separate envelopes.
+// (or below 0) for one type. Period-flag dedup is handled by the caller. Per
+// the directional pivot doc, client surfaces never say "credits" — these
+// emails name the deliverable type that's running low.
 
-export async function sendCreditsLowBalanceEmail(opts: {
+export async function sendScopeApproachingEmail(opts: {
   to: string | string[];
   pocFirstNames?: string[];
   clientName: string;
+  /** Lowercase plural for body copy, e.g. "edited videos". From `deliverableCopy`. */
+  deliverableNounPlural: string;
+  /** Sentence-case singular short label for the eyebrow, e.g. "Edited video". */
+  deliverableShortLabel: string;
   currentBalance: number;
   monthlyAllowance: number;
   nextResetLabel: string; // e.g. "Jun 1"
-  topUpUrl: string; // points at /credits in the portal
+  /** Points at the brand-root /deliverables page where add-ons live. */
+  deliverablesUrl: string;
   agency?: AgencyBrand;
   clientId?: string;
 }) {
   const agency = opts.agency ?? 'nativz';
   const greeting = greetingFor(opts.pocFirstNames ?? [], opts.clientName);
-  const balanceWord = opts.currentBalance === 1 ? 'credit' : 'credits';
-  const subject = `${opts.clientName} is running low on credits (${opts.currentBalance} left)`;
+  const subject = `${opts.clientName} is approaching this month's ${opts.deliverableNounPlural} allotment`;
 
   return sendAndLog({
     category: 'transactional',
-    typeKey: 'credits_low_balance',
+    typeKey: 'scope_approaching',
     agency,
     to: opts.to,
     clientId: opts.clientId,
@@ -2094,49 +2098,55 @@ export async function sendCreditsLowBalanceEmail(opts: {
         ${greeting},
       </p>
       <p class="subtext">
-        <span class="highlight">${opts.clientName}</span> has <strong>${opts.currentBalance} ${balanceWord}</strong> left this month out of ${opts.monthlyAllowance}. Each approved short-form video uses 1 credit, so once you hit zero the team will pause new approvals until your next reset on <strong>${opts.nextResetLabel}</strong>.
+        <span class="highlight">${opts.clientName}</span> has <strong>${opts.currentBalance} of ${opts.monthlyAllowance}</strong> ${opts.deliverableNounPlural} left this month. Once you hit zero, new approvals on this type pause until your next reset on <strong>${opts.nextResetLabel}</strong>.
       </p>
       <p class="subtext">
-        Want to keep momentum? Top up any time and the credits roll into your account immediately.
+        Need more before then? Grab an add-on and we'll line one up alongside your next batch.
       </p>
       <div class="button-wrap">
-        <a href="${opts.topUpUrl}" class="button">Top up credits &rarr;</a>
+        <a href="${opts.deliverablesUrl}" class="button">View deliverables &rarr;</a>
       </div>
       <hr class="divider" />
       <p class="small">
-        This is a one-time heads-up for the current period. We won't send another low-balance email this month, even if more approvals land you back at 1.
+        One-time heads-up for the current period. We won't send another approaching-scope email this month for the same type.
       </p>
     `, agency, {
-      eyebrow: 'Credits Low',
-      heroTitle: `Heads up: ${opts.currentBalance} ${balanceWord} left.`,
+      eyebrow: opts.deliverableShortLabel,
+      heroTitle: `Approaching this month's allotment.`,
     }),
     metadata: {
       clientName: opts.clientName,
       currentBalance: opts.currentBalance,
       monthlyAllowance: opts.monthlyAllowance,
       nextResetLabel: opts.nextResetLabel,
+      deliverableNounPlural: opts.deliverableNounPlural,
     },
   });
 }
 
-export async function sendCreditsOverdraftEmail(opts: {
+export async function sendScopeOverEmail(opts: {
   to: string | string[];
   pocFirstNames?: string[];
   clientName: string;
+  deliverableNounPlural: string;
+  deliverableShortLabel: string;
   currentBalance: number; // negative
   nextResetLabel: string;
-  topUpUrl: string;
+  deliverablesUrl: string;
   agency?: AgencyBrand;
   clientId?: string;
 }) {
   const agency = opts.agency ?? 'nativz';
   const greeting = greetingFor(opts.pocFirstNames ?? [], opts.clientName);
   const overBy = Math.abs(opts.currentBalance);
-  const subject = `${opts.clientName} is over their monthly credits`;
+  const overWord = overBy === 1
+    ? opts.deliverableNounPlural.replace(/s$/, '')
+    : opts.deliverableNounPlural;
+  const subject = `Heads-up: ${opts.clientName} is over scope this month, let's talk`;
 
   return sendAndLog({
     category: 'transactional',
-    typeKey: 'credits_overdraft',
+    typeKey: 'scope_over',
     agency,
     to: opts.to,
     clientId: opts.clientId,
@@ -2146,42 +2156,54 @@ export async function sendCreditsOverdraftEmail(opts: {
         ${greeting},
       </p>
       <p class="subtext">
-        <span class="highlight">${opts.clientName}</span> is now <strong>${overBy} credit${overBy === 1 ? '' : 's'} over</strong> the monthly allowance. We'll keep producing and approving as normal, but to stay on top of billing we recommend topping up before the next reset on <strong>${opts.nextResetLabel}</strong>.
+        <span class="highlight">${opts.clientName}</span> is now <strong>${overBy} ${overWord}</strong> over scope on this type. We'll keep producing and approving, but it's worth a quick chat about whether this is a one-time push or a sign you've outgrown the current package.
       </p>
       <div class="button-wrap">
-        <a href="${opts.topUpUrl}" class="button">Top up credits &rarr;</a>
+        <a href="${opts.deliverablesUrl}" class="button">Review scope &rarr;</a>
       </div>
       <hr class="divider" />
       <p class="small">
-        Approvals are never blocked. This is a courtesy heads-up, you'll only get one of these per period.
+        Approvals are never blocked, this is just a courtesy heads-up. Next reset is <strong>${opts.nextResetLabel}</strong>.
       </p>
     `, agency, {
-      eyebrow: 'Credits Over',
-      heroTitle: `${opts.clientName} is over for the month.`,
+      eyebrow: opts.deliverableShortLabel,
+      heroTitle: `${opts.clientName} is over scope this month.`,
     }),
     metadata: {
       clientName: opts.clientName,
       currentBalance: opts.currentBalance,
       nextResetLabel: opts.nextResetLabel,
+      deliverableNounPlural: opts.deliverableNounPlural,
     },
   });
 }
 
-// ── Credits: top-up confirmation ────────────────────────────────────────────
+// ── Deliverables: add-on receipt ────────────────────────────────────────────
 //
-// Fired by the Stripe `checkout.session.completed` webhook handler after the
-// `grant_topup` row lands. Confirms the purchase, shows the new balance, and
-// links back to /credits in the portal.
+// Fired by the Stripe `checkout.session.completed` webhook after the addon
+// SKU posts its `grant_topup` row. Names the SKU and the type bucket that
+// was credited; falls through to a "queued" framing for SLA modifiers
+// (Rush) that don't move a balance.
 
-export async function sendCreditsTopupConfirmationEmail(opts: {
+export async function sendDeliverableAddonReceiptEmail(opts: {
   to: string | string[];
   pocFirstNames?: string[];
   clientName: string;
-  packSize: number;
-  newBalance: number;
+  /** Display label of the SKU, e.g. "Extra Edited Video". */
+  addonLabel: string;
+  /**
+   * Lowercase plural deliverable noun this added to (e.g. "edited videos").
+   * Null when the SKU is an SLA modifier (Rush) that doesn't move a balance.
+   */
+  deliverableNounPlural: string | null;
+  /** Quantity added; 0 for SLA modifiers. */
+  quantity: number;
+  /** New balance for the credited type, omitted when SLA modifier. */
+  newBalance: number | null;
   amountPaidCents: number;
   receiptUrl?: string | null; // Stripe receipt url; falls back to portal link
-  portalUrl: string; // /credits in the active brand
+  /** Brand-root /deliverables in the portal. */
+  deliverablesUrl: string;
   agency?: AgencyBrand;
   clientId?: string;
 }) {
@@ -2191,13 +2213,42 @@ export async function sendCreditsTopupConfirmationEmail(opts: {
     style: 'currency',
     currency: 'USD',
   });
-  const subject = `Top-up complete: +${opts.packSize} credits for ${opts.clientName}`;
-  const ctaUrl = opts.receiptUrl ?? opts.portalUrl;
-  const ctaLabel = opts.receiptUrl ? 'View receipt' : 'See activity';
+  const monthLabel = new Date().toLocaleString('en-US', { month: 'long' });
+
+  const isModifier = opts.deliverableNounPlural === null;
+  const subject = isModifier
+    ? `Rush queued for ${opts.clientName}`
+    : `${opts.quantity} ${opts.quantity === 1 ? opts.addonLabel : opts.addonLabel + 's'} added to ${opts.clientName}'s ${monthLabel} scope`;
+  const ctaUrl = opts.receiptUrl ?? opts.deliverablesUrl;
+  const ctaLabel = opts.receiptUrl ? 'View receipt' : 'View deliverables';
+
+  const bodyCopy = isModifier
+    ? `
+      <p class="subtext">
+        Your <strong>${opts.addonLabel}</strong> for
+        <span class="highlight">${opts.clientName}</span> just went through.
+        We'll bump the next in-flight asset to a 48-hour turnaround and confirm
+        which one over email today.
+      </p>
+      <p class="subtext">
+        Charge: <strong>${amount}</strong>.
+      </p>
+    `
+    : `
+      <p class="subtext">
+        Your <strong>${opts.addonLabel}</strong> for
+        <span class="highlight">${opts.clientName}</span> just went through.
+        ${opts.quantity} ${opts.quantity === 1 ? opts.deliverableNounPlural!.replace(/s$/, '') : opts.deliverableNounPlural} added to your ${monthLabel} scope, balance is now
+        <strong>${opts.newBalance}</strong>.
+      </p>
+      <p class="subtext">
+        Charge: <strong>${amount}</strong>. Add-on deliverables roll forward, they don't expire with your monthly reset.
+      </p>
+    `;
 
   return sendAndLog({
     category: 'transactional',
-    typeKey: 'credits_topup_confirmation',
+    typeKey: 'deliverable_addon_receipt',
     agency,
     to: opts.to,
     clientId: opts.clientId,
@@ -2207,32 +2258,27 @@ export async function sendCreditsTopupConfirmationEmail(opts: {
       <p class="subtext">
         ${greeting},
       </p>
-      <p class="subtext">
-        Your <strong>${opts.packSize}-credit top-up</strong> for
-        <span class="highlight">${opts.clientName}</span> just went through. The
-        credits are already in your account, balance is now
-        <strong>${opts.newBalance}</strong>.
-      </p>
-      <p class="subtext">
-        Charge: <strong>${amount}</strong>. Top-up credits roll forward, they don't expire with your monthly reset.
-      </p>
+      ${bodyCopy}
       <div class="button-wrap">
         <a href="${ctaUrl}" class="button">${ctaLabel} &rarr;</a>
       </div>
       <hr class="divider" />
       <p class="small">
-        Need to undo this? Reach out to your Nativz contact, refunds claw the credits back automatically.
+        Need to undo this? Reach out to your Nativz contact, refunds claw the deliverables back automatically.
       </p>
     `,
       agency,
       {
-        eyebrow: 'Top-up complete',
-        heroTitle: `+${opts.packSize} credits added.`,
+        eyebrow: opts.addonLabel,
+        heroTitle: isModifier
+          ? `Rush queued.`
+          : `+${opts.quantity} ${opts.quantity === 1 ? opts.deliverableNounPlural!.replace(/s$/, '') : opts.deliverableNounPlural}.`,
       },
     ),
     metadata: {
       clientName: opts.clientName,
-      packSize: opts.packSize,
+      addonLabel: opts.addonLabel,
+      quantity: opts.quantity,
       newBalance: opts.newBalance,
       amountPaidCents: opts.amountPaidCents,
     },

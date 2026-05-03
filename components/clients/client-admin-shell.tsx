@@ -59,9 +59,9 @@ const NAV: NavItem[] = [
     icon: CreditCard,
   },
   {
-    key: 'credits',
-    label: 'Credits',
-    path: '/credits',
+    key: 'deliverables',
+    label: 'Deliverables',
+    path: '/deliverables',
     icon: Coins,
   },
   { key: 'notifications', label: 'Notifications', path: '/settings/notifications', icon: Bell, separator: true },

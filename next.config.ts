@@ -149,6 +149,14 @@ const nextConfig: NextConfig = {
       // SchedulerContent renders at both URLs, so collapse to one canonical URL.
       // Preserves the ?postId=… query string that opens the post editor on load.
       { source: '/admin/scheduler', destination: '/admin/calendar', permanent: false },
+      // Credits → Deliverables directional pivot (2026-05-02). Brand-root
+      // /credits and the per-client admin /admin/clients/:slug/credits both
+      // collapse onto the new /deliverables surface; client-facing copy is
+      // production capacity, never "credits."
+      { source: '/credits', destination: '/deliverables', permanent: true },
+      { source: '/credits/:path*', destination: '/deliverables/:path*', permanent: true },
+      { source: '/admin/clients/:slug/credits', destination: '/admin/clients/:slug/deliverables', permanent: true },
+      { source: '/admin/clients/:slug/credits/:path*', destination: '/admin/clients/:slug/deliverables/:path*', permanent: true },
     ];
   },
   async rewrites() {

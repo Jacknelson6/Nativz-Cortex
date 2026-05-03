@@ -25,8 +25,10 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { sendCreditsLowBalanceEmail, sendCreditsOverdraftEmail } from '@/lib/email/resend';
+import { sendScopeApproachingEmail, sendScopeOverEmail } from '@/lib/email/resend';
 import { getBrandFromAgency } from '@/lib/agency/detect';
+import { deliverableCopy } from '@/lib/deliverables/copy';
+import { getDeliverableTypeSlug } from '@/lib/deliverables/types-cache';
 
 // Same role exclusions as the revised-videos email — keep these in sync with
 // EXCLUDE_ROLE_PATTERNS in app/api/calendar/share/[token]/comment/route.ts and
@@ -240,33 +242,45 @@ export async function maybeSendBalanceWarning(
   const agency = getBrandFromAgency(client?.agency ?? null);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
-  const topUpUrl = `${appUrl}/credits`;
+  const deliverablesUrl = `${appUrl}/deliverables`;
   const nextResetLabel = new Date(balance.next_reset_at).toLocaleDateString(
     'en-US',
     { month: 'short', day: 'numeric' },
   );
 
+  // Resolve the deliverable type's client-facing copy so the email names
+  // the bucket that's running low (no more "credits" in client-visible
+  // strings).
+  const slug = await getDeliverableTypeSlug(admin, deliverableTypeId);
+  const copy = deliverableCopy(slug);
+  const templateKey =
+    threshold === 'overdraft' ? 'scope_over' : 'scope_approaching';
+
   try {
     const result =
       threshold === 'overdraft'
-        ? await sendCreditsOverdraftEmail({
+        ? await sendScopeOverEmail({
             to: recipients.emails,
             pocFirstNames: recipients.pocFirstNames,
             clientName,
+            deliverableNounPlural: copy.plural,
+            deliverableShortLabel: copy.shortLabel,
             currentBalance: newBalance,
             nextResetLabel,
-            topUpUrl,
+            deliverablesUrl,
             agency,
             clientId,
           })
-        : await sendCreditsLowBalanceEmail({
+        : await sendScopeApproachingEmail({
             to: recipients.emails,
             pocFirstNames: recipients.pocFirstNames,
             clientName,
+            deliverableNounPlural: copy.plural,
+            deliverableShortLabel: copy.shortLabel,
             currentBalance: newBalance,
             monthlyAllowance: balance.monthly_allowance,
             nextResetLabel,
-            topUpUrl,
+            deliverablesUrl,
             agency,
             clientId,
           });
@@ -275,8 +289,7 @@ export async function maybeSendBalanceWarning(
       await admin.from('failed_email_attempts').insert({
         client_id: clientId,
         deliverable_type_id: deliverableTypeId,
-        template:
-          threshold === 'overdraft' ? 'credits_overdraft' : 'credits_low_balance',
+        template: templateKey,
         period_id: periodId,
         recipients: recipients.emails,
         error_message: result.error ?? 'unknown send error',
@@ -290,8 +303,7 @@ export async function maybeSendBalanceWarning(
     await admin.from('failed_email_attempts').insert({
       client_id: clientId,
       deliverable_type_id: deliverableTypeId,
-      template:
-        threshold === 'overdraft' ? 'credits_overdraft' : 'credits_low_balance',
+      template: templateKey,
       period_id: periodId,
       recipients: recipients.emails,
       error_message: message,
