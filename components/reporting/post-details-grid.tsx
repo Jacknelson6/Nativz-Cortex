@@ -230,12 +230,31 @@ export function PostDetailsGrid({ clientId, start, end }: PostDetailsGridProps) 
   );
 }
 
+/**
+ * Route a third-party CDN thumbnail through our `/api/thumb` proxy. TikTok
+ * and Instagram CDNs reject browser hotlinks via Referer sniffing — our
+ * server-side fetch sends no Referer and gets the bytes through.
+ */
+function proxiedThumb(url: string | null): string | null {
+  if (!url) return null;
+  // Already proxied or local — don't double-wrap.
+  if (url.startsWith('/api/thumb') || url.startsWith('/_next/') || url.startsWith('data:')) {
+    return url;
+  }
+  return `/api/thumb?url=${encodeURIComponent(url)}`;
+}
+
 const PostCard = memo(function PostCard({ post }: { post: PostRow }) {
   // CDN thumbnails from Zernio occasionally 404 (expired links, deleted
   // posts). Track that per-card so we can swap to the platform-glyph fallback
   // instead of leaving a broken-image icon in the grid.
   const [imgFailed, setImgFailed] = useState(false);
+  // Track image-loaded so we can fade the bitmap in once decode finishes —
+  // before that we paint a subtle pulse over the slot so the grid doesn't
+  // look half-empty while thumbnails stream in.
+  const [imgLoaded, setImgLoaded] = useState(false);
   const showThumb = Boolean(post.thumbnailUrl) && !imgFailed;
+  const proxiedSrc = proxiedThumb(post.thumbnailUrl);
   const platformLabel =
     PLATFORM_OPTIONS.find((o) => o.value === post.platform)?.label ?? post.platform;
 
@@ -305,14 +324,28 @@ const PostCard = memo(function PostCard({ post }: { post: PostRow }) {
           showThumb ? 'group/thumb bg-black/30' : 'bg-background/40',
         )}
       >
-        {showThumb ? (
+        {showThumb && proxiedSrc ? (
           <>
+            {/* Pulse placeholder fills the slot until the bitmap decodes —
+                same animate-pulse rhythm as the canonical Skeleton primitive
+                so it blends with the rest of the page's loading states. */}
+            {!imgLoaded && (
+              <div
+                className="absolute inset-0 animate-pulse bg-white/[0.04]"
+                aria-hidden
+              />
+            )}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={post.thumbnailUrl!}
+              src={proxiedSrc}
               alt=""
-              className="pointer-events-none h-full w-full object-cover object-center"
+              className={cn(
+                'pointer-events-none h-full w-full object-cover object-center transition-opacity duration-300',
+                imgLoaded ? 'opacity-100' : 'opacity-0',
+              )}
               loading="lazy"
+              decoding="async"
+              onLoad={() => setImgLoaded(true)}
               onError={() => setImgFailed(true)}
             />
             <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-black/55 opacity-0 transition-opacity group-hover/thumb:pointer-events-auto group-hover/thumb:opacity-100">

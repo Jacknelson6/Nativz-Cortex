@@ -255,8 +255,13 @@ export async function GET(request: NextRequest) {
       );
       const latestSnap = snapsAsc[snapsAsc.length - 1];
       const firstSnap = snapsAsc[0];
-      const totalFollowerChange =
-        (latestSnap?.followers_count ?? 0) - (firstSnap?.followers_count ?? 0);
+      // Net follower change for the window, clamped to >=0. A brand shedding
+      // followers shouldn't subtract from "New followers" rollups — the tile
+      // reads as "new followers gained", not "net follower change".
+      const totalFollowerChange = Math.max(
+        0,
+        (latestSnap?.followers_count ?? 0) - (firstSnap?.followers_count ?? 0),
+      );
 
       const avgEngRate =
         snaps.length > 0
@@ -276,9 +281,11 @@ export async function GET(request: NextRequest) {
       const prevSnapsAsc = [...prevSnapsForProfile].sort((a, b) =>
         a.snapshot_date.localeCompare(b.snapshot_date),
       );
-      const prevFollowerChange =
+      const prevFollowerChange = Math.max(
+        0,
         (prevSnapsAsc[prevSnapsAsc.length - 1]?.followers_count ?? 0) -
-        (prevSnapsAsc[0]?.followers_count ?? 0);
+          (prevSnapsAsc[0]?.followers_count ?? 0),
+      );
       const prevAvgEngRate =
         prevSnapsForProfile.length > 0
           ? prevSnapsForProfile.reduce(
@@ -336,9 +343,13 @@ export async function GET(request: NextRequest) {
           for (let i = 1; i < snapsAsc.length; i++) {
             const curr = snapsAsc[i];
             const prev = snapsAsc[i - 1];
+            // Clamp negative-day deltas to 0 so the sparkline never dips
+            // below the axis — matches the rollup tile semantics.
+            const dailyDelta =
+              (curr.followers_count ?? 0) - (prev.followers_count ?? 0);
             series.push({
               date: curr.snapshot_date,
-              value: (curr.followers_count ?? 0) - (prev.followers_count ?? 0),
+              value: Math.max(0, dailyDelta),
             });
           }
           return {
@@ -475,14 +486,16 @@ export async function GET(request: NextRequest) {
         ? Math.round((combinedPrevEngRate / platformCount) * 100) / 100
         : 0;
 
-    // Build daily time-series for chart (aggregate across all platforms per date)
+    // Build daily time-series for chart (aggregate across all platforms per date).
+    // Clamp per-row follower change to >=0 so a single platform's churn day
+    // can't pull the cross-platform "New followers" sparkline negative.
     const dailyMap = new Map<string, { views: number; engagement: number; followers: number }>();
     for (const snap of snapshots) {
       const d = snap.snapshot_date;
       const existing = dailyMap.get(d) ?? { views: 0, engagement: 0, followers: 0 };
       existing.views += snap.views_count ?? 0;
       existing.engagement += snap.engagement_count ?? 0;
-      existing.followers += snap.followers_change ?? 0;
+      existing.followers += Math.max(0, snap.followers_change ?? 0);
       dailyMap.set(d, existing);
     }
 
@@ -490,7 +503,8 @@ export async function GET(request: NextRequest) {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, d]) => ({ date, views: d.views, engagement: d.engagement, followers: d.followers }));
 
-    // Build per-platform daily time-series
+    // Build per-platform daily time-series. Same negative-clamp rule as the
+    // combined chart — "Followers gained" never goes below zero on any tile.
     const platformDailyMaps = new Map<string, Map<string, { views: number; engagement: number; followers: number }>>();
     for (const snap of snapshots) {
       const profile = profileMap.get(snap.social_profile_id);
@@ -502,7 +516,7 @@ export async function GET(request: NextRequest) {
       const existing = dMap.get(d) ?? { views: 0, engagement: 0, followers: 0 };
       existing.views += snap.views_count ?? 0;
       existing.engagement += snap.engagement_count ?? 0;
-      existing.followers += snap.followers_change ?? 0;
+      existing.followers += Math.max(0, snap.followers_change ?? 0);
       dMap.set(d, existing);
     }
 

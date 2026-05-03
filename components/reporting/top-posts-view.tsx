@@ -120,12 +120,15 @@ function TopPostRow({ post }: { post: TopPostItem }) {
 
       <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-md bg-surface-hover">
         {post.thumbnailUrl ? (
+          // Route through `/api/thumb` so TikTok/IG CDN hotlink-protection
+          // doesn't 403 the request — see app/api/thumb/route.ts for why.
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={post.thumbnailUrl}
+            src={`/api/thumb?url=${encodeURIComponent(post.thumbnailUrl)}`}
             alt=""
             className="h-full w-full object-cover"
             loading="lazy"
+            decoding="async"
           />
         ) : (
           <div

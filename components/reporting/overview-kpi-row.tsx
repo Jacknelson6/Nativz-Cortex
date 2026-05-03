@@ -45,18 +45,22 @@ export function OverviewKpiRow({
     const engagementSeries = chart.map((c) => ({ date: c.date, value: c.engagement }));
 
     // Followers Δ daily series — day-over-day change in cumulative followers
-    // across every connected profile. If `chart.followers` is absent the
-    // series ends up empty and the sparkline hides itself.
+    // across every connected profile. Clamp to >=0 so the sparkline matches
+    // the tile semantics ("New followers", not "Net follower change"). If
+    // `chart.followers` is absent the series ends up empty and the sparkline
+    // hides itself.
     const followerDeltaSeries: Array<{ date: string; value: number }> = [];
     for (let i = 1; i < chart.length; i++) {
       const delta = (chart[i].followers ?? 0) - (chart[i - 1].followers ?? 0);
-      followerDeltaSeries.push({ date: chart[i].date, value: delta });
+      followerDeltaSeries.push({ date: chart[i].date, value: Math.max(0, delta) });
     }
 
-    // Sum the explicit per-platform followerChange when `combined` is empty —
-    // keeps the tile honest when Zernio doesn't surface a rolled-up delta.
+    // Sum the explicit per-platform followerChange when `combined` is empty.
+    // Per-platform values are already clamped server-side, but defensive
+    // `Math.max(0, …)` here keeps the rollup honest if any pre-clamp data
+    // ever sneaks back in (e.g. from a stale cache).
     const summedPlatformFollowerChange = (data.platforms ?? []).reduce(
-      (sum, p) => sum + (p.followerChange ?? 0),
+      (sum, p) => sum + Math.max(0, p.followerChange ?? 0),
       0,
     );
     const totalFollowerChange =
