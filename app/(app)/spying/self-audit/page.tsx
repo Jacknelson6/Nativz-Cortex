@@ -16,16 +16,22 @@ export default async function SelfAuditIndexPage() {
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  const { data: me } = await admin
-    .from('users')
-    .select('role, is_super_admin')
-    .eq('id', user.id)
-    .single();
+  // Role check + active brand are independent — fan them out so the auth
+  // chain doesn't compound a roundtrip onto the brand lookup.
+  const [meRes, activeBrandRes] = await Promise.all([
+    admin
+      .from('users')
+      .select('role, is_super_admin')
+      .eq('id', user.id)
+      .single(),
+    getActiveBrand(),
+  ]);
+  const me = meRes.data;
   if (me?.role !== 'admin' && me?.role !== 'super_admin' && !me?.is_super_admin) {
     redirect('/finder/new');
   }
 
-  const { brand } = await getActiveBrand();
+  const { brand } = activeBrandRes;
 
   let listQuery = admin
     .from('brand_audits')

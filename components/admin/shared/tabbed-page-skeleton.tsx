@@ -1,7 +1,14 @@
+import { Skeleton, SkeletonGroup } from '@/components/ui/skeleton';
+
 /**
  * Shared skeleton for tabbed admin pages (AI settings, Accounting,
  * Onboarding, Clients, etc). Matches the SectionHeader → SectionTabs →
  * tile grid shape so the layout doesn't jump when content lands.
+ *
+ * Built on the canonical `<Skeleton/>` primitive so the pulse rhythm
+ * + paint color stay identical to every other loading screen — Jack
+ * flagged the old hand-rolled `bg-surface-hover/N` blocks for looking
+ * subtly different from the rest of the app's loading states.
  *
  * Used from each page's loading.tsx — Next.js renders this while the
  * server component awaits its cached data load.
@@ -16,14 +23,14 @@ interface TabbedPageSkeletonProps {
 
 export function TabbedPageSkeleton({ tileCount = 6, tabCount = 6 }: TabbedPageSkeletonProps = {}) {
   return (
-    <div className="cortex-page-gutter max-w-6xl mx-auto space-y-8">
+    <SkeletonGroup label="Loading page" className="cortex-page-gutter max-w-6xl mx-auto space-y-8">
       {/* Header */}
       <header className="space-y-2">
-        <div className="h-2 w-28 rounded-full bg-surface-hover/60" />
+        <Skeleton className="h-2 w-28 rounded-full" />
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="space-y-3">
-            <div className="h-7 w-48 rounded-md bg-surface-hover/60" />
-            <div className="h-4 w-96 max-w-full rounded-md bg-surface-hover/40" />
+            <Skeleton className="h-7 w-48" />
+            <Skeleton className="h-4 w-96 max-w-full" />
           </div>
         </div>
       </header>
@@ -36,30 +43,32 @@ export function TabbedPageSkeleton({ tileCount = 6, tabCount = 6 }: TabbedPageSk
       >
         {Array.from({ length: tabCount }).map((_, i) => (
           <span key={i} className="px-3 py-2">
-            <span className="inline-block h-3 w-16 rounded bg-surface-hover/40" />
+            <Skeleton className="inline-block h-3 w-16" />
           </span>
         ))}
       </nav>
 
       {/* Overview tile grid */}
-      <div className="space-y-4">
-        <div className="h-4 w-64 rounded-md bg-surface-hover/30" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: tileCount }).map((_, i) => (
-            <div
-              key={i}
-              className="flex items-start gap-4 rounded-xl border border-nativz-border bg-surface p-5"
-            >
-              <div className="h-10 w-10 shrink-0 rounded-full bg-surface-hover/50" />
-              <div className="min-w-0 flex-1 space-y-2">
-                <div className="h-4 w-24 rounded-md bg-surface-hover/50" />
-                <div className="h-4 w-40 max-w-full rounded-md bg-surface-hover/30" />
-                <div className="h-3 w-32 rounded-md bg-surface-hover/20" />
+      {tileCount > 0 ? (
+        <div className="space-y-4">
+          <Skeleton className="h-4 w-64" />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: tileCount }).map((_, i) => (
+              <div
+                key={i}
+                className="flex items-start gap-4 rounded-xl border border-nativz-border bg-surface p-5"
+              >
+                <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-40 max-w-full" />
+                  <Skeleton className="h-3 w-32" />
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
-    </div>
+      ) : null}
+    </SkeletonGroup>
   );
 }
