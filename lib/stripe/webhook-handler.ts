@@ -39,6 +39,7 @@ import {
   onCreditsChargeRefunded,
   onCreditsChargeDisputed,
 } from '@/lib/credits/webhook';
+import { applyTierChange } from '@/lib/deliverables/apply-tier-change';
 
 export async function handleStripeWebhook(
   req: NextRequest,
@@ -217,9 +218,51 @@ async function dispatch(
         return;
       }
 
+      // Phase D: tier-change branch. Stripe surfaces a price_id swap on
+      // `customer.subscription.updated` via items.data[].price.id; the prior
+      // value lives in previous_attributes.items. We resolve the new
+      // price_id to a package_tiers row and call applyTierChange. Failures
+      // are logged but don't abort the webhook (the lifecycle update below
+      // still needs to run for status/cancel propagation).
+      try {
+        const items = (sub as unknown as { items?: { data?: Array<{ price?: { id?: string } }> } }).items;
+        const newPriceId = items?.data?.[0]?.price?.id ?? null;
+        const prevItems = prev.items as
+          | { data?: Array<{ price?: { id?: string } }> }
+          | undefined;
+        const prevPriceId = prevItems?.data?.[0]?.price?.id ?? null;
+        const tierChanged = !!newPriceId && !!prevPriceId && newPriceId !== prevPriceId;
+        if (tierChanged && newPriceId && result.client_id) {
+          const { data: tierRow } = await admin
+            .from('package_tiers')
+            .select('id, slug, display_name')
+            .eq('stripe_price_id', newPriceId)
+            .eq('is_active', true)
+            .maybeSingle<{ id: string; slug: string; display_name: string }>();
+          if (tierRow) {
+            const applied = await applyTierChange(admin, result.client_id, tierRow.id);
+            console.info('[stripe webhook] tier change applied', {
+              client_id: result.client_id,
+              new_tier: tierRow.slug,
+              rows: applied.rows.map((r) => ({
+                slug: r.deliverableTypeSlug,
+                delta: r.proratedDelta,
+                already: r.alreadyApplied,
+              })),
+            });
+          } else {
+            console.warn('[stripe webhook] price_id not mapped to a package_tier', {
+              new_price_id: newPriceId,
+            });
+          }
+        }
+      } catch (err) {
+        console.error('[stripe webhook] tier-change branch failed', err);
+      }
+
       const summaryBits: string[] = [];
-      if ('status' in prev) summaryBits.push(`status → ${sub.status}`);
-      if ('cancel_at_period_end' in prev) summaryBits.push(`cancel_at_period_end → ${sub.cancel_at_period_end}`);
+      if ('status' in prev) summaryBits.push(`status: ${sub.status}`);
+      if ('cancel_at_period_end' in prev) summaryBits.push(`cancel_at_period_end: ${sub.cancel_at_period_end}`);
       const summary = summaryBits.length > 0 ? summaryBits.join(', ') : `status: ${sub.status}`;
       await onSubscriptionUpdated(sub.id, result.client_id, summary, admin);
       return;

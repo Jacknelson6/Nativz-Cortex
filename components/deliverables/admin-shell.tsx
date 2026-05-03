@@ -26,6 +26,7 @@ import {
   AlertCircle,
   ArrowDownCircle,
   ArrowUpCircle,
+  Layers,
   Loader2,
   PauseCircle,
   PlayCircle,
@@ -40,6 +41,7 @@ import type {
 } from '@/lib/credits/types';
 import { deliverableCopy } from '@/lib/deliverables/copy';
 import { AdminMarginView } from './admin-margin-view';
+import { TierPickerAdmin } from './tier-picker-admin';
 
 /**
  * Sentinel slug for the "Margin" pseudo-tab. We piggyback on the existing
@@ -57,6 +59,13 @@ interface AdminShellProps {
    * `deliverable_type_id`. Pre-sorted DESC by `created_at`.
    */
   transactions: CreditTransactionRow[];
+  /**
+   * Display name of the active package_tier (for the "Change tier" header
+   * row). Null when the client has no tier assigned yet.
+   */
+  activeTierDisplayName?: string | null;
+  /** TRUE when the page detected mixed tiers across balance rows. */
+  hasMixedTiers?: boolean;
 }
 
 const KIND_LABEL: Record<CreditTransactionKind, string> = {
@@ -74,9 +83,16 @@ const POLICY_LABEL: Record<RolloverPolicy, string> = {
   unlimited: 'Unlimited, keep everything',
 };
 
-export function AdminShell({ clientId, balances, transactions }: AdminShellProps) {
+export function AdminShell({
+  clientId,
+  balances,
+  transactions,
+  activeTierDisplayName = null,
+  hasMixedTiers = false,
+}: AdminShellProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [tierPickerOpen, setTierPickerOpen] = useState(false);
 
   // Stable tab order. We sort by sortOrder so the admin sees the same
   // sequence as the client surface.
@@ -256,6 +272,45 @@ export function AdminShell({ clientId, balances, transactions }: AdminShellProps
           <AlertCircle size={14} className="mt-0.5 shrink-0" /> {error}
         </div>
       ) : null}
+
+      {/* Tier header — admin-only summary of the assigned package_tier with
+          a button to swap. Mid-period swaps run through `applyTierChange`
+          which prorates the delta and is idempotent on retry. */}
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-nativz-border bg-surface p-4">
+        <div className="min-w-0">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-text/80">
+            Package tier
+          </p>
+          <p className="mt-1 text-sm font-semibold text-text-primary">
+            {activeTierDisplayName ?? 'No tier assigned'}
+          </p>
+          {hasMixedTiers ? (
+            <p className="mt-1 flex items-center gap-1 text-[11px] text-amber-300">
+              <AlertCircle size={11} aria-hidden /> Balance rows reference more than one tier.
+              Re-run the picker to align them.
+            </p>
+          ) : !activeTierDisplayName ? (
+            <p className="mt-1 text-[11px] text-text-muted">
+              Pick a tier to seed allotments + scope copy on the client surface.
+            </p>
+          ) : null}
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setTierPickerOpen(true)}
+          disabled={isPending}
+        >
+          <Layers size={14} aria-hidden />
+          {activeTierDisplayName ? 'Change tier' : 'Assign tier'}
+        </Button>
+      </section>
+
+      <TierPickerAdmin
+        clientId={clientId}
+        open={tierPickerOpen}
+        onClose={() => setTierPickerOpen(false)}
+      />
 
       {/* Tabs: one per type plus a Margin pseudo-tab. hasRow=false rows still
           appear so the admin can provision them; saving the allowance creates

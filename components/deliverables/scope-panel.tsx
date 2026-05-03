@@ -41,7 +41,7 @@ export function ScopePanel({ tier, balances }: ScopePanelProps) {
     <section className="rounded-2xl border border-nativz-border bg-surface p-6">
       <header className="space-y-1">
         <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-text/80">
-          This month's scope
+          This month&apos;s scope
         </p>
         <h2 className="text-lg font-semibold text-text-primary">{tier.label} package</h2>
         <p className="max-w-prose text-[13px] text-text-secondary">{tier.blurb}</p>
@@ -65,7 +65,7 @@ export function ScopePanel({ tier, balances }: ScopePanelProps) {
         </ul>
       ) : (
         <p className="mt-5 text-[13px] text-text-muted">
-          No active deliverables on this account yet. Reach out and we'll get the first month
+          No active deliverables on this account yet. Reach out and we&apos;ll get the first month
           provisioned.
         </p>
       )}

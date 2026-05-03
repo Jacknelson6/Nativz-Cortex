@@ -8,9 +8,11 @@ import { getDeliverableBalances } from '@/lib/deliverables/get-balances';
 import { getRecentDeliverableActivity } from '@/lib/deliverables/get-recent-activity';
 import { getDeliverablePipeline } from '@/lib/deliverables/get-pipeline';
 import { inferScopeTier } from '@/lib/deliverables/scope';
+import { getActiveTier } from '@/lib/deliverables/get-active-tier';
 import { listConfiguredAddons } from '@/lib/deliverables/addon-skus';
 import { ProductionHero } from '@/components/deliverables/production-hero';
 import { ScopePanel } from '@/components/deliverables/scope-panel';
+import { TierCard } from '@/components/deliverables/tier-card';
 import { PipelineView } from '@/components/deliverables/pipeline-view';
 import { RecentActivity } from '@/components/deliverables/recent-activity';
 import { AddOnSection } from '@/components/deliverables/add-on-section';
@@ -52,7 +54,7 @@ export default async function DeliverablesPage() {
         <div className="rounded-xl border border-nativz-border bg-surface p-12 text-center">
           <Boxes className="mx-auto mb-3 h-8 w-8 text-text-tertiary" />
           <p className="text-sm text-text-secondary">
-            Pick a brand from the top bar to see this month's production scope.
+            Pick a brand from the top bar to see this month&apos;s production scope.
           </p>
         </div>
       </div>
@@ -80,7 +82,7 @@ export default async function DeliverablesPage() {
   const admin = createAdminClient();
   const clientId = active.brand.id;
 
-  const [balances, activity, pipeline, txResult, clientResult] = await Promise.all([
+  const [balances, activity, pipeline, txResult, clientResult, activeTier] = await Promise.all([
     getDeliverableBalances(admin, clientId),
     getRecentDeliverableActivity(admin, clientId, { limit: ACTIVITY_LIMIT }),
     getDeliverablePipeline(admin, clientId),
@@ -96,12 +98,19 @@ export default async function DeliverablesPage() {
     admin.from('clients').select('agency').eq('id', clientId).maybeSingle<{
       agency: string | null;
     }>(),
+    getActiveTier(admin, clientId),
   ]);
 
   const txRows = txResult.data ?? [];
   const tier = inferScopeTier(balances);
   const agency = getBrandFromAgency(clientResult.data?.agency ?? null);
   const addons = listConfiguredAddons(agency);
+
+  if (activeTier.mixedTiers) {
+    console.warn(
+      `[deliverables] client ${clientId} has balance rows referencing multiple package_tier_ids; rendering most-common tier. Re-run the tier picker to straighten this out.`,
+    );
+  }
 
   // Hydrate the editor index for pipeline cards in a single round-trip so
   // attribution avatars render without a client-side fetch.
@@ -149,17 +158,27 @@ export default async function DeliverablesPage() {
 
       <ProductionHero
         brandName={active.brand.name}
-        tierLabel={tier.label}
-        tierBlurb={tier.blurb}
+        tierLabel={activeTier.tier?.displayName ?? tier.label}
+        tierBlurb={activeTier.tier?.blurb ?? tier.blurb}
         balances={balances}
       />
 
-      <ScopePanel tier={tier} balances={balances} />
+      {activeTier.tier ? (
+        <TierCard tier={activeTier.tier} active />
+      ) : (
+        <ScopePanel tier={tier} balances={balances} />
+      )}
 
       <PipelineView snapshot={pipeline} editorIndex={editorIndex} />
 
       {active.isAdmin ? (
-        <AdminShell clientId={clientId} balances={balances} transactions={txRows} />
+        <AdminShell
+          clientId={clientId}
+          balances={balances}
+          transactions={txRows}
+          activeTierDisplayName={activeTier.tier?.displayName ?? null}
+          hasMixedTiers={activeTier.mixedTiers}
+        />
       ) : (
         <>
           <RecentActivity entries={activity} brandName={active.brand.name} />

@@ -5,6 +5,8 @@ import { isAdmin } from '@/lib/auth/permissions';
 import { syncMondayApprovalForDrop } from '@/lib/monday/calendar-approval';
 import { reconcileMuxRow } from '@/lib/mux/reconcile';
 import { getDeliverableBalances } from '@/lib/deliverables/get-balances';
+import { listConfiguredAddons } from '@/lib/deliverables/addon-skus';
+import { getBrandFromAgency, AGENCY_CONFIG } from '@/lib/agency/detect';
 
 interface ShareLinkRow {
   id: string;
@@ -199,14 +201,22 @@ export async function GET(
   const [{ data: client }, balances] = await Promise.all([
     admin
       .from('clients')
-      .select('name')
+      .select('name, agency')
       .eq('id', drop.client_id)
-      .single(),
+      .single<{ name: string | null; agency: string | null }>(),
     // Per-type balances feed the deliverables BalancePill near the approve
     // buttons. Phase B speaks "deliverables" (edited / UGC / graphics);
     // soft-block on overage lives in the comment route.
     getDeliverableBalances(admin, drop.client_id),
   ]);
+
+  // Phase D pre-approval modal context. The viewer needs these to render the
+  // soft-block modal when the comment route returns 402 / scope_exhausted.
+  // Add-ons are filtered by the client's agency so the modal only shows the
+  // matching agency's SKUs.
+  const agencyBrand = getBrandFromAgency(client?.agency ?? null);
+  const addons = listConfiguredAddons(agencyBrand);
+  const supportEmail = AGENCY_CONFIG[agencyBrand].supportEmail;
 
   const reviewLinkIds = Object.values(link.post_review_link_map ?? {});
   const { data: comments } = reviewLinkIds.length
@@ -261,6 +271,7 @@ export async function GET(
   const projectType = normalizeProjectType(link.project_type);
 
   return NextResponse.json({
+    clientId: drop.client_id,
     clientName: client?.name ?? 'Brand',
     isEditor,
     projectType,
@@ -269,6 +280,10 @@ export async function GET(
     // active types yet (rare, brand-new client pre-cron); the pill hides
     // itself when no rows are present.
     balances,
+    // Phase D: feed the soft-block PreApprovalModal. addons + supportEmail
+    // never change per page-view, the modal hooks into them on demand.
+    addons,
+    supportEmail,
     drop: {
       id: drop.id,
       start_date: drop.start_date,

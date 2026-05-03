@@ -59,8 +59,8 @@ export function AddOnSection({ clientId, brandName, addons }: AddOnSectionProps)
           </p>
           <h2 className="text-lg font-semibold text-text-primary">Add-ons</h2>
           <p className="max-w-prose text-[13px] text-text-secondary">
-            Self-serve add-ons aren't enabled for {brandName} yet. Reach out to your Nativz
-            contact and we'll line one up the same day.
+            Self-serve add-ons aren&apos;t enabled for {brandName} yet. Reach out to your Nativz
+            contact and we&apos;ll line one up the same day.
           </p>
         </header>
       </section>

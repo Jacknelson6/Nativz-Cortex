@@ -57,7 +57,7 @@ export function ProductionHero({
             {tierLabel} tier
           </p>
           <h2 className="text-lg font-semibold text-text-primary">
-            {brandName}'s production this month
+            {brandName}&apos;s production this month
           </h2>
           <p className="max-w-prose text-[13px] text-text-secondary">{tierBlurb}</p>
         </div>

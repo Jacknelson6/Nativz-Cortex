@@ -2,7 +2,16 @@
 
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
-import { use, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  use,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   AlertCircle, AlertTriangle, AtSign, BellRing, CalendarDays, CheckCircle, Clock,
   File as FileIcon, Film, List, Loader2, MapPin, MessageSquare, Paperclip, Pencil, Play,
@@ -13,7 +22,10 @@ import { Dialog } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import { BalancePill } from '@/components/deliverables/balance-pill';
+import { PreApprovalModal } from '@/components/deliverables/pre-approval-modal';
 import type { DeliverableBalance } from '@/lib/deliverables/get-balances';
+import type { AddonSku } from '@/lib/deliverables/addon-skus';
+import type { DeliverableTypeSlug } from '@/lib/credits/types';
 
 // Mux Player is a heavy web-component-backed React component. Dynamic-import
 // with ssr:false keeps it out of the initial server bundle and avoids
@@ -88,6 +100,8 @@ interface SharedPost {
 type ShareProjectType = 'organic_content' | 'social_ads' | 'ctv_ads' | 'other';
 
 interface SharedDrop {
+  /** Client UUID, used by the soft-block modal as the Stripe checkout subject. */
+  clientId: string;
   clientName: string;
   isEditor: boolean;
   projectType: ShareProjectType;
@@ -99,6 +113,34 @@ interface SharedDrop {
   // buttons. Empty array when no active types are configured for the client
   // (brand-new account); pill hides itself in that case.
   balances: DeliverableBalance[];
+  /** Phase D soft-block: configured add-on SKUs for this client's agency. */
+  addons: AddonSku[];
+  /** Phase D soft-block: agency support email surfaced as the "Talk to AM" CTA. */
+  supportEmail: string;
+}
+
+/**
+ * Phase D soft-block context. The per-post Approve handlers call
+ * `openPreApproval({ deliverableTypeSlug, assetTitle })` when the comment
+ * route returns 402 / scope_exhausted, and the SharedDropView root renders
+ * the modal. Centralising the modal here means every approve path inside
+ * the share page (per-post, modal-detail, follow-up confirm) gets the same
+ * gate without each handler owning its own dialog state.
+ */
+interface PreApprovalCtx {
+  open: (args: { deliverableTypeSlug: DeliverableTypeSlug; assetTitle?: string }) => void;
+}
+const PreApprovalContext = createContext<PreApprovalCtx | null>(null);
+
+function usePreApproval(): PreApprovalCtx {
+  const ctx = useContext(PreApprovalContext);
+  if (!ctx) {
+    // Defensive default: caller is rendered outside the share-page tree
+    // (storybook, isolated test). Fall back to a no-op so the call site
+    // doesn't crash; the server-side soft-block still enforces.
+    return { open: () => undefined };
+  }
+  return ctx;
 }
 
 type ReviewStatus = 'approved' | 'changes_requested' | 'comment';
@@ -181,6 +223,25 @@ function SharedDropView({
   const [approveAllOpen, setApproveAllOpen] = useState(false);
   const [approvingAll, setApprovingAll] = useState(false);
 
+  // Phase D soft-block. When the comment route returns 402 / scope_exhausted
+  // for a per-post or bulk approval, descendants call `openPreApproval` (via
+  // the `usePreApproval` hook) and the modal renders here at the SharedDropView
+  // root. Centralising state means a single dialog instance handles every
+  // approve path on the share page.
+  const [preApproval, setPreApproval] = useState<
+    { slug: DeliverableTypeSlug; assetTitle?: string } | null
+  >(null);
+  const openPreApproval = useCallback(
+    (args: { deliverableTypeSlug: DeliverableTypeSlug; assetTitle?: string }) => {
+      setPreApproval({ slug: args.deliverableTypeSlug, assetTitle: args.assetTitle });
+    },
+    [],
+  );
+  const preApprovalCtxValue = useMemo(
+    () => ({ open: openPreApproval }),
+    [openPreApproval],
+  );
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const stored = window.localStorage.getItem(storageKey);
@@ -253,6 +314,11 @@ function SharedDropView({
     const toastId = toast.loading(`Approving 0 of ${targets.length}…`);
     let done = 0;
     let failed = 0;
+    let blocked = 0;
+    // First scope-exhausted hit during the run. We surface this via the
+    // soft-block modal once the loop wraps up so the user gets one clear
+    // "you're out of scope" prompt instead of N modals stacking up.
+    let firstBlocked: { slug: DeliverableTypeSlug; assetTitle?: string } | null = null;
     try {
       for (const post of targets) {
         try {
@@ -269,20 +335,46 @@ function SharedDropView({
             }),
           });
           const json = await res.json();
+          if (res.status === 402 && json?.error === 'scope_exhausted') {
+            blocked++;
+            if (!firstBlocked) {
+              firstBlocked = {
+                slug: json.deliverable_type as DeliverableTypeSlug,
+                assetTitle:
+                  (post.title?.trim() || post.caption?.slice(0, 60) || undefined) ?? undefined,
+              };
+            }
+            continue;
+          }
           if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Failed');
           appendComment(post.id, json.comment as SharedComment);
           done++;
         } catch {
           failed++;
         }
-        toast.loading(`Approving ${done + failed} of ${targets.length}…`, { id: toastId });
+        toast.loading(
+          `Approving ${done + failed + blocked} of ${targets.length}…`,
+          { id: toastId },
+        );
       }
-      if (failed === 0) {
+      const blockedLine = blocked > 0 ? ` ${blocked} need${blocked === 1 ? 's' : ''} an add-on.` : '';
+      if (failed === 0 && blocked === 0) {
         toast.success(`Approved ${done} post${done === 1 ? '' : 's'}`, { id: toastId });
-      } else if (done === 0) {
+      } else if (done === 0 && blocked === 0) {
         toast.error(`Could not approve any posts. Try again.`, { id: toastId });
+      } else if (done === 0 && blocked > 0) {
+        toast.error(`Out of scope.${blockedLine}`, { id: toastId });
       } else {
-        toast.error(`Approved ${done}, ${failed} failed. Try the rest manually.`, { id: toastId });
+        toast.error(
+          `Approved ${done}, ${failed} failed.${blockedLine}`.trim(),
+          { id: toastId },
+        );
+      }
+      if (firstBlocked) {
+        openPreApproval({
+          deliverableTypeSlug: firstBlocked.slug,
+          assetTitle: firstBlocked.assetTitle,
+        });
       }
     } finally {
       setApprovingAll(false);
@@ -507,6 +599,7 @@ function SharedDropView({
   }, [hasInFlightMux]);
 
   return (
+    <PreApprovalContext.Provider value={preApprovalCtxValue}>
     <div className="min-h-screen bg-background">
       <header className="border-b border-nativz-border bg-surface px-4 py-5 sm:px-6 sm:py-7">
         <div className="mx-auto max-w-5xl">
@@ -748,7 +841,19 @@ function SharedDropView({
           if (!approvingAll) setApproveAllOpen(false);
         }}
       />
+
+      <PreApprovalModal
+        open={!!preApproval}
+        onClose={() => setPreApproval(null)}
+        clientId={data.clientId}
+        deliverableTypeSlug={preApproval?.slug ?? 'edited_video'}
+        brandName={data.clientName}
+        addons={data.addons}
+        supportEmail={data.supportEmail}
+        assetTitle={preApproval?.assetTitle}
+      />
     </div>
+    </PreApprovalContext.Provider>
   );
 }
 
@@ -1549,6 +1654,10 @@ function PostCard({
     (post.title && post.title.trim()) ||
     (post.filename_fallback && post.filename_fallback.trim()) ||
     'Untitled creative';
+  // Phase D soft-block opener. SharedDropView provides the context; if a
+  // PostCard is ever rendered outside the share page (storybook, isolated
+  // test) the hook returns a no-op so submit() degrades gracefully.
+  const preApproval = usePreApproval();
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [removingApproval, setRemovingApproval] = useState(false);
@@ -1763,6 +1872,18 @@ function PostCard({
         }),
       });
       const json = await res.json();
+      // Phase D soft-block. The comment route returns 402 when an approval
+      // would push the matching deliverable type below zero and the client
+      // hasn't opted into silent overage. Pop the pre-approval modal instead
+      // of toasting a raw error so the user lands on the add-on selector.
+      if (res.status === 402 && json?.error === 'scope_exhausted') {
+        preApproval.open({
+          deliverableTypeSlug: json.deliverable_type as DeliverableTypeSlug,
+          assetTitle:
+            (post.title?.trim() || post.caption?.slice(0, 60) || undefined) ?? undefined,
+        });
+        return;
+      }
       if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Failed to submit');
       const savedComment = json.comment as SharedComment;
       onCommentAdded(savedComment);
