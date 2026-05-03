@@ -71,7 +71,7 @@ export default async function AdminOnboardingPage() {
         />
       ) : (
         <div className="rounded-2xl border border-border bg-surface overflow-hidden">
-          <div className="grid grid-cols-12 gap-3 px-4 py-3 text-xs uppercase tracking-wide text-muted border-b border-border">
+          <div className="grid grid-cols-12 gap-3 px-4 py-3 text-[11px] uppercase tracking-wide text-text-secondary border-b border-border">
             <div className="col-span-4">Client</div>
             <div className="col-span-2">Kind</div>
             <div className="col-span-3">Progress</div>
@@ -91,10 +91,10 @@ export default async function AdminOnboardingPage() {
                 <div className="col-span-4 flex flex-col">
                   <span className="text-sm text-foreground">{clientName}</span>
                   {slug ? (
-                    <span className="text-xs text-muted">/{slug}</span>
+                    <span className="text-xs text-text-muted">/{slug}</span>
                   ) : null}
                 </div>
-                <div className="col-span-2 text-sm text-muted capitalize">
+                <div className="col-span-2 text-sm text-text-secondary capitalize">
                   {row.kind}
                 </div>
                 <div className="col-span-3 flex items-center gap-2">
@@ -104,11 +104,11 @@ export default async function AdminOnboardingPage() {
                       style={{ width: `${progress.pct}%` }}
                     />
                   </div>
-                  <span className="text-xs text-muted whitespace-nowrap">
+                  <span className="text-xs text-text-secondary whitespace-nowrap">
                     {progress.current_step + 1}/{progress.total}
                   </span>
                 </div>
-                <div className="col-span-2 text-sm text-muted">
+                <div className="col-span-2 text-sm text-text-secondary">
                   {relTime(row.last_email_at)}
                 </div>
                 <div className="col-span-1 text-right">

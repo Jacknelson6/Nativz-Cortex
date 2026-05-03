@@ -89,7 +89,7 @@ export function OnboardingNewButton({ clients }: { clients: ClientOption[] }) {
       <Dialog open={open} onClose={() => setOpen(false)} title="New onboarding" maxWidth="lg">
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-xs uppercase tracking-wide text-muted">Client</label>
+            <label className="text-[11px] uppercase tracking-wide text-text-secondary">Client</label>
             <select
               value={clientId}
               onChange={(e) => setClientId(e.target.value)}
@@ -106,7 +106,7 @@ export function OnboardingNewButton({ clients }: { clients: ClientOption[] }) {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs uppercase tracking-wide text-muted">Kind</label>
+            <label className="text-[11px] uppercase tracking-wide text-text-secondary">Kind</label>
             <div className="flex gap-2">
               {(['smm', 'editing'] as const).map((k) => (
                 <button
@@ -117,7 +117,7 @@ export function OnboardingNewButton({ clients }: { clients: ClientOption[] }) {
                   className={`flex-1 rounded-lg border px-3 py-2 text-sm capitalize transition-colors ${
                     kind === k
                       ? 'border-accent text-accent-text bg-background'
-                      : 'border-border text-muted hover:bg-background'
+                      : 'border-border text-text-secondary hover:bg-background hover:text-foreground'
                   }`}
                 >
                   {k === 'smm' ? 'Social media' : 'Editing'}
@@ -128,7 +128,7 @@ export function OnboardingNewButton({ clients }: { clients: ClientOption[] }) {
 
           {kind === 'smm' && (
             <div className="space-y-1.5">
-              <label className="text-xs uppercase tracking-wide text-muted">Platforms</label>
+              <label className="text-[11px] uppercase tracking-wide text-text-secondary">Platforms</label>
               <div className="flex flex-wrap gap-2">
                 {PLATFORMS.map((p) => (
                   <button
@@ -139,7 +139,7 @@ export function OnboardingNewButton({ clients }: { clients: ClientOption[] }) {
                     className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
                       platforms.includes(p)
                         ? 'border-accent text-accent-text bg-background'
-                        : 'border-border text-muted hover:bg-background'
+                        : 'border-border text-text-secondary hover:bg-background hover:text-foreground'
                     }`}
                   >
                     {p.replace('_', ' ')}
@@ -150,7 +150,7 @@ export function OnboardingNewButton({ clients }: { clients: ClientOption[] }) {
           )}
 
           <div className="space-y-1.5">
-            <label className="text-xs uppercase tracking-wide text-muted">
+            <label className="text-[11px] uppercase tracking-wide text-text-secondary">
               POC email (optional)
             </label>
             <Input
@@ -162,7 +162,7 @@ export function OnboardingNewButton({ clients }: { clients: ClientOption[] }) {
             />
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-muted">
+          <label className="flex items-center gap-2 text-sm text-text-secondary">
             <input
               type="checkbox"
               checked={sendWelcome}

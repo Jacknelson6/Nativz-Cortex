@@ -25,6 +25,7 @@ import type {
 } from '@/lib/onboarding/types';
 import type { OnboardingScreen } from '@/lib/onboarding/screens';
 import type { ProgressDescriptor } from '@/lib/onboarding/api';
+import { StepStateView } from './step-state-view';
 
 interface ClientLite {
   id: string;
@@ -122,13 +123,13 @@ export function OnboardingDetail(props: {
       <div className="rounded-2xl border border-border bg-surface p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1.5">
-            <div className="text-xs uppercase tracking-wide text-muted">
+            <div className="text-[11px] uppercase tracking-wide text-text-secondary">
               {row.kind === 'smm' ? 'Social media onboarding' : 'Editing onboarding'}
             </div>
             <h1 className="text-2xl font-semibold text-foreground">
               {client?.name ?? 'Unknown client'}
             </h1>
-            <div className="text-sm text-muted">
+            <div className="text-sm text-text-secondary">
               Started {formatTime(row.started_at)}
               {row.completed_at ? ` · finished ${formatTime(row.completed_at)}` : null}
             </div>
@@ -157,7 +158,7 @@ export function OnboardingDetail(props: {
                 href={shareUrl(row.share_token)}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted hover:bg-background"
+                className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-text-secondary hover:bg-background hover:text-foreground transition-colors"
               >
                 <ExternalLink size={12} />
                 Open
@@ -167,7 +168,7 @@ export function OnboardingDetail(props: {
         </div>
 
         <div className="mt-5">
-          <div className="flex items-center justify-between text-xs text-muted mb-1.5">
+          <div className="flex items-center justify-between text-xs text-text-secondary mb-1.5">
             <span>{progress.current_label}</span>
             <span>
               {progress.current_step + 1} of {progress.total} · {progress.pct}%
@@ -190,7 +191,7 @@ export function OnboardingDetail(props: {
 
       {/* Steps */}
       <div className="rounded-2xl border border-border bg-surface overflow-hidden">
-        <div className="px-4 py-3 border-b border-border text-xs uppercase tracking-wide text-muted">
+        <div className="px-4 py-3 border-b border-border text-[11px] uppercase tracking-wide text-text-secondary">
           Steps
         </div>
         <div className="divide-y divide-border">
@@ -222,14 +223,15 @@ export function OnboardingDetail(props: {
                       ) : null}
                     </div>
                     {screen.description ? (
-                      <div className="text-xs text-muted">{screen.description}</div>
+                      <div className="text-xs text-text-secondary">{screen.description}</div>
                     ) : null}
                     {stateValue !== null &&
                     typeof stateValue === 'object' &&
                     Object.keys(stateValue as Record<string, unknown>).length > 0 ? (
-                      <pre className="mt-1 overflow-x-auto rounded-lg bg-background p-2 text-[11px] leading-relaxed text-muted">
-                        {JSON.stringify(stateValue, null, 2)}
-                      </pre>
+                      <StepStateView
+                        screenKey={screen.key}
+                        value={stateValue as Record<string, unknown>}
+                      />
                     ) : null}
                   </div>
                   {!current && row.status !== 'completed' ? (
@@ -255,7 +257,7 @@ export function OnboardingDetail(props: {
 
       {/* Team assignments */}
       <div className="rounded-2xl border border-border bg-surface overflow-hidden">
-        <div className="px-4 py-3 border-b border-border text-xs uppercase tracking-wide text-muted">
+        <div className="px-4 py-3 border-b border-border text-[11px] uppercase tracking-wide text-text-secondary">
           Team
         </div>
         <div className="divide-y divide-border">
@@ -340,7 +342,7 @@ export function OnboardingDetail(props: {
       {/* Email log */}
       <div className="rounded-2xl border border-border bg-surface overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <span className="text-xs uppercase tracking-wide text-muted">Emails</span>
+          <span className="text-[11px] uppercase tracking-wide text-text-secondary">Emails</span>
           <Button
             size="sm"
             variant="ghost"

@@ -133,11 +133,21 @@ export async function getActiveBrand(
   const candidate = urlId ?? cookieId;
   const source: ActiveBrandResult['source'] = urlId ? 'url' : cookieId ? 'cookie' : 'none';
 
+  const admin = createAdminClient();
+
   if (!candidate) {
-    return { brand: null, source: 'none', isAdmin };
+    // Auto-resolve: fresh admins (no cookie, no URL override) land on
+    // "Select a brand" forever otherwise. Pick the first accessible brand
+    // alphabetically so brand-scoped pages (onboarding tracker, audit, etc.)
+    // light up immediately. Persisting the choice is left to the next
+    // explicit pick — keeping this read-only avoids surprise cookie writes
+    // from a server util.
+    const fallback = await listAdminAccessibleBrands();
+    const first = fallback[0] ?? null;
+    if (!first) return { brand: null, source: 'none', isAdmin };
+    return { brand: first, source: 'first-access', isAdmin };
   }
 
-  const admin = createAdminClient();
   // NOTE: `hide_from_roster` filter intentionally omitted here. It errors on
   // databases that haven't applied migration 054; more importantly, the
   // cookie value we're validating was written via `/api/admin/active-client`
@@ -151,9 +161,14 @@ export async function getActiveBrand(
     .maybeSingle();
 
   if (!client) {
-    // Candidate invalid (deleted, deactivated, or tampered cookie) — surface
-    // a clean empty state rather than silently falling back to another brand.
-    return { brand: null, source: 'none', isAdmin };
+    // Candidate invalid (deleted, deactivated, or tampered cookie) - fall
+    // through to the same first-accessible-brand fallback used for fresh
+    // admins. Returning a clean empty state used to look like "Select a
+    // brand" forever, which is brittle whenever a brand is renamed/deleted.
+    const fallback = await listAdminAccessibleBrands();
+    const first = fallback[0] ?? null;
+    if (!first) return { brand: null, source: 'none', isAdmin };
+    return { brand: first, source: 'first-access', isAdmin };
   }
 
   return { brand: client, source, isAdmin };
