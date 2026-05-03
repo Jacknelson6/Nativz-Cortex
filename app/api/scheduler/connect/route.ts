@@ -5,16 +5,16 @@ import { getPostingService } from '@/lib/posting';
 import { z } from 'zod';
 import type { SocialPlatform } from '@/lib/posting/types';
 import { signState } from '@/lib/scheduler/oauth-state';
-import { ensureZernioProfile } from '@/lib/onboarding/ensure-zernio-profile';
+import { ensureZernioProfile } from '@/lib/zernio/ensure-profile';
 
 const ConnectSchema = z.object({
   platform: z.enum(['facebook', 'instagram', 'tiktok', 'youtube']),
   client_id: z.string().uuid(),
 });
 
-// Zernio profile creation is now centralised in
-// lib/onboarding/ensure-zernio-profile.ts — used by this route, the public
-// onboarding connect route, and the tracker-create eager hook.
+// Zernio profile creation is centralised in lib/zernio/ensure-profile.ts,
+// used by this route plus the public client + connection-invite connect
+// routes.
 
 /**
  * POST /api/scheduler/connect

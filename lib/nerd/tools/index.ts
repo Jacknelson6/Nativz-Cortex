@@ -17,7 +17,6 @@ import { topicSignalTools } from './topic-signals';
 // import { agencyKnowledgeTools } from './agency-knowledge';
 import { fyxerTools } from './fyxer';
 import { analysisTools } from './analyses';
-import { proposalTools } from './proposals';
 
 /** Register all tool domains. Call once at startup. */
 export function registerAllTools() {
@@ -38,7 +37,4 @@ export function registerAllTools() {
   registerTools(fyxerTools);
   // Progressive-context tools for Strategy Lab + per-analysis drawer.
   registerTools(analysisTools);
-  // Proposal generation, lookup, resend, deletion. Lets admins build a
-  // proposal end-to-end from chat — pick template, fill signer, send.
-  registerTools(proposalTools);
 }

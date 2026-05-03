@@ -160,12 +160,10 @@ const NAV_SECTIONS: NavSection[] = [
           // burns Gemini 2.5 Flash Image credits — keep it behind the
           // operator menu rather than next to free brand-research surfaces.
           { href: '/ads', label: 'Ad Generator', icon: ImagePlus },
-          // Sales = unified pipeline (replaces standalone Proposals +
-          // Onboarding entries). Spec:
-          // docs/superpowers/specs/2026-04-25-sales-pipeline-unification.md.
-          // Both legacy hrefs still redirect server-side, so any external
-          // bookmarks land on the correct sub-filter.
-          { href: '/admin/sales', label: 'Sales', icon: Workflow },
+          // Onboarding = unified onboarding tracker (SMM + editing). The
+          // legacy "/admin/sales" pipeline was retired with the proposal
+          // strip; the new flow lives at /admin/onboarding.
+          { href: '/admin/onboarding', label: 'Onboarding', icon: Workflow },
           { href: '/admin/users', label: 'Users', icon: Users },
           { href: '/admin/scheduling', label: 'Scheduling', icon: Calendar },
           { href: '/admin/accounting', label: 'Accounting', icon: Receipt, superAdminOnly: true },
@@ -220,7 +218,7 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/accounting',
   '/admin/scheduling',
   '/admin/clients',
-  '/admin/sales',
+  '/admin/onboarding',
   '/admin/users',
   '/admin/presentations',
   '/admin/analyze-social',

@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { notifyZernioWebhookRecipients } from '@/lib/social/zernio-webhook-notify';
-import { zernioToPlatformKeys } from '@/lib/onboarding/platform-to-zernio';
-import { detectPlatform } from '@/lib/onboarding/platform-matcher';
-import { queueOnboardingNotification } from '@/lib/onboarding/queue-notification';
-import { recomputePhaseStatuses } from '@/lib/onboarding/recompute-phase-statuses';
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
@@ -187,12 +183,9 @@ export async function POST(request: NextRequest) {
             .update({ is_active: true })
             .eq('late_account_id', accountId);
 
-          // Auto-advance onboarding: find the social profile we just
-          // flipped, figure out its client + platform, then tick the
-          // matching client-owned checklist item across any active
-          // onboarding tracker for that client. Event + manager
-          // notification fire automatically.
-          await autoTickOnboardingForConnection(adminClient, accountId, accountPayload);
+          // Onboarding auto-advance on social connect is re-implemented by
+          // the rebuilt onboarding system (Phase 4 of the rebuild). Until
+          // then this branch only flips the social_profile active flag.
         }
         break;
       }
@@ -245,135 +238,3 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/**
- * When a Zernio account.connected fires, cross-reference the newly-linked
- * social_profile back to an onboarding tracker and tick the matching
- * client-owned checklist item. "Matching" means the item's task text
- * contains the platform keyword (e.g. a task named "Instagram account
- * access" matches platform=instagram).
- *
- * Silent no-op when:
- *   - No social_profile row found (webhook landed before callback upserted it — the
- *     callback is what creates the row; we rely on its ordering holding)
- *   - No active non-template tracker for the client
- *   - No matching checklist item (the admin didn't add one; still valid)
- *   - Item is owner='agency' (we never tick agency items from webhooks)
- *
- * Errors are swallowed + logged — notifications and checklist side-effects
- * should never bubble up and fail the webhook response, which Zernio
- * retries on non-2xx.
- */
-async function autoTickOnboardingForConnection(
-  admin: ReturnType<typeof createAdminClient>,
-  accountId: string,
-  accountPayload: Record<string, unknown> | null,
-): Promise<void> {
-  try {
-    // Resolve the social_profile we just flipped → client + platform
-    const { data: profile } = await admin
-      .from('social_profiles')
-      .select('id, client_id, platform, username')
-      .eq('late_account_id', accountId)
-      .maybeSingle();
-    if (!profile?.client_id || !profile.platform) return;
-
-    // Find active trackers for this client (can be multiple services).
-    const { data: trackers } = await admin
-      .from('onboarding_trackers')
-      .select('id')
-      .eq('client_id', profile.client_id)
-      .eq('is_template', false)
-      .in('status', ['active', 'paused']);
-    const trackerIds = (trackers ?? []).map((t) => t.id);
-    if (trackerIds.length === 0) return;
-
-    const platformKeys = zernioToPlatformKeys(profile.platform);
-    if (platformKeys.length === 0) return;
-
-    // Pull all groups for these trackers, then all client-owned pending items
-    // in those groups whose platform-detected key is one we're matching.
-    const { data: groups } = await admin
-      .from('onboarding_checklist_groups')
-      .select('id, tracker_id')
-      .in('tracker_id', trackerIds);
-    const groupIds = (groups ?? []).map((g) => g.id);
-    if (groupIds.length === 0) return;
-    const groupToTracker = new Map((groups ?? []).map((g) => [g.id, g.tracker_id]));
-
-    const { data: items } = await admin
-      .from('onboarding_checklist_items')
-      .select('id, task, group_id, owner, status, kind, data, template_key, dont_have')
-      .in('group_id', groupIds)
-      .eq('owner', 'client')
-      .eq('status', 'pending');
-
-    const displayName =
-      pickStr(accountPayload, 'username', 'handle', 'display_name', 'displayName') ||
-      (typeof profile.username === 'string' ? profile.username : '');
-
-    for (const item of items ?? []) {
-      // Two ways to match: blueprint items carry `data.platform` directly;
-      // legacy admin-typed items match via detectPlatform(item.task).
-      const itemData = (item.data as Record<string, unknown> | null) ?? {};
-      const dataPlatform = typeof itemData.platform === 'string' ? itemData.platform : null;
-      const matchedByData = dataPlatform ? (platformKeys as readonly string[]).includes(dataPlatform) : false;
-      const detected = matchedByData ? null : detectPlatform(item.task);
-      const detectedMatch = detected ? platformKeys.includes(detected.key) : false;
-      if (!matchedByData && !detectedMatch) continue;
-
-      // Tick it. For blueprint oauth_socials items, persist connection
-      // details into the data jsonb so the public intake page renders the
-      // confirmed state and so re-instantiation can detect a prior connect.
-      const update: Record<string, unknown> = { status: 'done' };
-      if ((item as { kind?: string }).kind === 'oauth_socials') {
-        update.data = {
-          ...itemData,
-          connected_at: new Date().toISOString(),
-          social_profile_id: profile.id,
-          username: displayName || null,
-        };
-        update.dont_have = false;
-      }
-      await admin.from('onboarding_checklist_items').update(update).eq('id', item.id);
-
-      const trackerId = groupToTracker.get(item.group_id);
-      if (!trackerId) continue;
-
-      const detectedLabel = detected?.name ?? dataPlatform ?? profile.platform;
-
-      // Event + batched notification so the admin feed + digests reflect it.
-      await admin.from('onboarding_events').insert({
-        tracker_id: trackerId,
-        kind: 'connection_confirmed',
-        item_id: item.id,
-        metadata: {
-          task: item.task,
-          platform: profile.platform,
-          username: displayName || null,
-        },
-        actor: 'client',
-      });
-      await queueOnboardingNotification(admin, trackerId, {
-        kind: 'connection_confirmed',
-        detail: displayName ? `${detectedLabel} (@${displayName})` : detectedLabel,
-      });
-      await recomputePhaseStatuses(admin, trackerId);
-
-      // After a webhook-driven tick, re-check whether the parent flow is
-      // fully satisfied. We resolve the flow_id from the segment that points
-      // at this tracker — silent no-op for legacy trackers without a flow.
-      const { data: linkedSegment } = await admin
-        .from('onboarding_flow_segments')
-        .select('flow_id')
-        .eq('tracker_id', trackerId)
-        .maybeSingle();
-      const flowId = (linkedSegment as { flow_id?: string | null } | null)?.flow_id ?? null;
-      if (flowId) {
-        const { checkAndFlipFlowCompletion } = await import('@/lib/onboarding/check-completion');
-        await checkAndFlipFlowCompletion(admin, flowId);
-      }
-    }
-  } catch (err) {
-    console.error('[webhook account.connected] auto-tick failed:', err);
-  }
-}

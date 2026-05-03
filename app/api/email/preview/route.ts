@@ -3,18 +3,10 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { layout } from '@/lib/email/resend';
-import { buildUserEmailHtml } from '@/lib/email/templates/user-email';
 import { buildWeeklySocialReportCardHtml } from '@/lib/email/templates/weekly-social-report-html';
 import { buildAffiliateWeeklyReportCardHtml } from '@/lib/email/templates/affiliate-weekly-report-html';
-import {
-  buildOnboardingBlocksHtml,
-  findUnresolvedBlockPlaceholders,
-  interpolateBlocks,
-  isValidBlockArray,
-} from '@/lib/email/templates/onboarding-blocks';
 import { fetchWeeklySocialReport, rollingSevenDayRangeUtc } from '@/lib/reporting/weekly-social-report';
 import { fetchAffiliateAnalyticsRange } from '@/lib/affiliates/fetch-affiliate-analytics-range';
-import { interpolateEmail } from '@/lib/onboarding/interpolate-email';
 import { resolveAgencyForRequest } from '@/lib/agency/detect';
 
 export const dynamic = 'force-dynamic';
@@ -27,23 +19,13 @@ export const dynamic = 'force-dynamic';
  * no side effects.
  *
  * Kinds:
- *   - onboarding       body with placeholders, markdown-aware HTML
  *   - weekly_social    real rolling-7d data; empty state acceptable
  *   - weekly_affiliate same
  *
- * Response: { subject, html, unresolved: string[] } where unresolved lists
- * any placeholder tokens left in the rendered copy so admins can spot typos.
+ * The legacy `onboarding` kind was retired alongside the proposal/onboarding
+ * rebuild; the new onboarding system owns its own preview surface.
  */
 const Body = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('onboarding'),
-    subject: z.string().max(300),
-    body: z.string().max(10_000),
-    // When blocks is present + non-null, renderer uses it instead of body.
-    // Shape validated at runtime via isValidBlockArray, kept permissive here.
-    blocks: z.array(z.record(z.string(), z.unknown())).max(50).nullable().optional(),
-    tracker_id: z.string().uuid().nullable().optional(),
-  }),
   z.object({
     kind: z.literal('weekly_social'),
     client_id: z.string().uuid(),
@@ -71,8 +53,6 @@ export async function POST(request: NextRequest) {
     const agency = resolveAgencyForRequest(request);
 
     switch (parsed.data.kind) {
-      case 'onboarding':
-        return renderOnboarding(parsed.data, admin, agency);
       case 'weekly_social':
         return renderWeeklySocial(parsed.data, admin, agency);
       case 'weekly_affiliate':
@@ -84,103 +64,8 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function findUnresolvedPlaceholders(subject: string, body: string): string[] {
-  const re = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
-  const out = new Set<string>();
-  for (const s of [subject, body]) {
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(s))) {
-      out.add(m[1]);
-    }
-  }
-  return Array.from(out);
-}
-
 type AdminClient = ReturnType<typeof createAdminClient>;
 type Agency = 'nativz' | 'anderson';
-
-async function renderOnboarding(
-  input: {
-    subject: string;
-    body: string;
-    blocks?: Record<string, unknown>[] | null | undefined;
-    tracker_id?: string | null | undefined;
-  },
-  admin: AdminClient,
-  agency: Agency,
-) {
-  // Generic placeholder context for the standalone template editor, where
-  // no real client is attached. Deliberately impersonal so admins know
-  // they\u2019re looking at sample copy, not a real client\u2019s name.
-  let ctx = {
-    clientName: '[Client]',
-    service: '[Service]',
-    shareUrl: 'https://cortex.nativz.io/onboarding/example?token=preview',
-    contactFirstName: '[First name]',
-  };
-
-  if (input.tracker_id) {
-    const { data: tracker } = await admin
-      .from('onboarding_trackers')
-      .select('id, client_id, service, share_token, clients(name, slug)')
-      .eq('id', input.tracker_id)
-      .maybeSingle();
-    if (tracker) {
-      const clients = (tracker as { clients: { name: string; slug: string } | { name: string; slug: string }[] | null }).clients;
-      const c = Array.isArray(clients) ? clients[0] : clients;
-      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://cortex.nativz.io';
-      let contactFirstName: string | null = null;
-      if (tracker.client_id) {
-        const { data: contact } = await admin
-          .from('contacts')
-          .select('name')
-          .eq('client_id', tracker.client_id)
-          .order('is_primary', { ascending: false })
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .maybeSingle();
-        contactFirstName = contact?.name?.trim().split(/\s+/)[0] ?? null;
-      }
-      ctx = {
-        clientName: c?.name ?? 'Client',
-        service: tracker.service,
-        shareUrl: `${baseUrl}/onboarding/${c?.slug ?? 'onboarding'}?token=${tracker.share_token}`,
-        contactFirstName: contactFirstName ?? 'there',
-      };
-    }
-  }
-
-  const resolvedSubject = interpolateEmail(input.subject, ctx);
-
-  // Block path: when the template has a blocks array, it wins. The rendered
-  // HTML goes through layout() for the branded shell + logo + footer.
-  if (input.blocks && Array.isArray(input.blocks) && input.blocks.length > 0 && isValidBlockArray(input.blocks)) {
-    const mergeCtx: Record<string, string> = {
-      client_name: ctx.clientName,
-      service: ctx.service,
-      share_url: ctx.shareUrl,
-      contact_first_name: ctx.contactFirstName,
-    };
-    const resolvedBlocks = interpolateBlocks(input.blocks, mergeCtx);
-    const inner = buildOnboardingBlocksHtml(resolvedBlocks, agency);
-    const html = layout(inner, agency);
-    const unresolved = findUnresolvedBlockPlaceholders(resolvedBlocks);
-    return NextResponse.json({
-      subject: resolvedSubject,
-      html,
-      unresolved,
-    });
-  }
-
-  const resolvedBody = interpolateEmail(input.body, ctx);
-  const html = buildUserEmailHtml(resolvedBody, agency);
-
-  return NextResponse.json({
-    subject: resolvedSubject,
-    html,
-    unresolved: findUnresolvedPlaceholders(resolvedSubject, resolvedBody),
-  });
-}
 
 async function renderWeeklySocial(
   input: { client_id: string },
@@ -195,7 +80,7 @@ async function renderWeeklySocial(
   if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 });
 
   const range = rollingSevenDayRangeUtc();
-  const rangeLabel = `${range.start} \u2192 ${range.end} (UTC)`;
+  const rangeLabel = `${range.start} → ${range.end} (UTC)`;
   const report = await fetchWeeklySocialReport(admin, client.id, client.name, range);
   const card = buildWeeklySocialReportCardHtml({ report, rangeLabel, agency });
   const html = layout(card, agency);

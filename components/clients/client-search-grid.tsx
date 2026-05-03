@@ -12,7 +12,6 @@ import {
   Link2,
   Trash2,
   ArrowRight,
-  Rocket,
 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 // (SpotlightCard — the cursor-following cyan radial hover glow — was removed
@@ -168,13 +167,11 @@ function ActionMenu({
   onMoveAgency: (bucket: AgencyBucket) => void;
   onDeleted: (dbId: string) => void;
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [copying, setCopying] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [startingOnboarding, setStartingOnboarding] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -214,38 +211,6 @@ function ActionMenu({
       toast.error(`Failed to copy invite link: ${(err as Error).message}`);
     } finally {
       setCopying(false);
-      setOpen(false);
-    }
-  }
-
-  async function handleStartOnboarding() {
-    if (startingOnboarding) return;
-    setStartingOnboarding(true);
-    try {
-      const res = await fetch('/api/onboarding/flows', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ clientId }),
-      });
-      const json = (await res.json().catch(() => null)) as
-        | { ok: true; flowId: string; existing: boolean }
-        | { ok: false; error: string }
-        | null;
-      if (!res.ok || !json || json.ok === false) {
-        const err = json && 'error' in json ? json.error : `failed (${res.status})`;
-        toast.error(`Couldn't start onboarding`, { description: err });
-        return;
-      }
-      toast.success(
-        json.existing
-          ? `${clientName} already has an onboarding flow.`
-          : `Started onboarding for ${clientName}.`,
-        { description: 'Opening it now.' },
-      );
-      router.push(`/admin/onboarding/${json.flowId}`);
-      router.refresh();
-    } finally {
-      setStartingOnboarding(false);
       setOpen(false);
     }
   }
@@ -307,17 +272,6 @@ function ActionMenu({
             >
               <Link2 size={13} className="text-text-muted" />
               <span className="flex-1">{copying ? 'Copying…' : 'Copy invite link'}</span>
-            </button>
-
-            <button
-              type="button"
-              role="menuitem"
-              disabled={startingOnboarding}
-              onClick={() => void handleStartOnboarding()}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-primary hover:bg-surface-hover transition-colors text-left disabled:opacity-60"
-            >
-              <Rocket size={13} className="text-text-muted" />
-              <span className="flex-1">{startingOnboarding ? 'Starting…' : 'Start onboarding'}</span>
             </button>
 
             <div className="my-1 h-px bg-nativz-border/60" />

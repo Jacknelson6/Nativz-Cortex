@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getPostingService } from '@/lib/posting';
 import { signState } from '@/lib/scheduler/oauth-state';
-import { ensureZernioProfile } from '@/lib/onboarding/ensure-zernio-profile';
+import { ensureZernioProfile } from '@/lib/zernio/ensure-profile';
 import type { SocialPlatform } from '@/lib/posting/types';
 
 export const runtime = 'nodejs';

@@ -191,15 +191,13 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/invites/link') ||
     pathname.startsWith('/api/auth/send-email') ||
     pathname.startsWith('/api/auth/forgot-password') ||
-    // Public onboarding page + its share-token-gated API routes. The page
+    // Public onboarding stepper + its share-token-gated API routes. The page
     // itself is server-rendered with the admin client after validating the
-    // token; the /api/onboarding/public/* routes validate the token on every
+    // token; /api/onboarding/[token]/* routes validate the token on every
     // write. Both need to work without a Supabase auth session because the
-    // client has no account — the share token is the access credential.
+    // client has no account, the share token is the access credential.
     pathname.startsWith('/onboarding/') ||
-    pathname.startsWith('/api/onboarding/public/') ||
-    pathname.startsWith('/proposals/') ||
-    pathname.startsWith('/api/proposals/public/') ||
+    pathname.startsWith('/api/onboarding/') ||
     // Public content-calendar review surface — share-token-gated. The /c/[token]
     // page is server-rendered and the /api/calendar/share/[token]/* routes
     // validate the token on every request, so neither needs an auth session.

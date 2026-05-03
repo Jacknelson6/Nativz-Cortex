@@ -33,7 +33,6 @@ import {
   onSubscriptionResumed,
   onSubscriptionUpdated,
 } from '@/lib/lifecycle/state-machine';
-import { onProposalCheckoutCompleted } from '@/lib/proposals/on-paid';
 import {
   onCreditsCheckoutCompleted,
   onCreditsChargeRefunded,
@@ -336,14 +335,14 @@ async function dispatch(
 
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session;
-      // Branch on metadata.kind. Credits sessions stamp `kind: 'credits'`
-      // on creation; legacy proposal checkouts don't (and we keep that
-      // shape to avoid migrating outstanding proposal links).
+      // The legacy proposal-checkout branch was retired with the proposals
+      // strip. The new onboarding system attaches Stripe customers via
+      // `customer.created`/`customer.updated` and never relies on a
+      // checkout-driven activation, so the only branch left here is the
+      // credits top-up flow, gated on metadata.kind === 'credits'.
       const kind = (session.metadata as Record<string, string> | null)?.kind;
       if (kind === 'credits') {
         await onCreditsCheckoutCompleted(session, admin, agency);
-      } else {
-        await onProposalCheckoutCompleted(session, admin);
       }
       return;
     }

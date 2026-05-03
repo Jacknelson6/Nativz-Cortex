@@ -56,10 +56,6 @@
       "schedule": "*/1 * * * *"
     },
     {
-      "path": "/api/cron/onboarding-notifications",
-      "schedule": "*/1 * * * *"
-    },
-    {
       "path": "/api/cron/benchmark-snapshots",
       "schedule": "0 5 * * *"
     },
@@ -90,10 +86,6 @@
     {
       "path": "/api/cron/revenue-anomalies",
       "schedule": "15 * * * *"
-    },
-    {
-      "path": "/api/cron/onboarding-flow-reminders",
-      "schedule": "0 * * * *"
     },
     {
       "path": "/api/cron/sweep-stuck-brand-audits",

@@ -16,18 +16,6 @@ import { AlertTriangle, Monitor, Smartphone } from 'lucide-react';
  * change schedules exactly one refetch 350ms after typing stops. Aborts
  * in-flight requests when inputs change — avoids flashing stale HTML.
  */
-type OnboardingInput = {
-  kind: 'onboarding';
-  subject: string;
-  body: string;
-  /**
-   * When populated, preview renders from rich blocks instead of markdown body.
-   * Null/undefined = markdown mode (the body field is used).
-   */
-  blocks?: Record<string, unknown>[] | null;
-  trackerId?: string | null;
-};
-
 type WeeklySocialInput = {
   kind: 'weekly_social';
   clientId: string;
@@ -39,7 +27,6 @@ type WeeklyAffiliateInput = {
 };
 
 export type EmailPreviewInput =
-  | OnboardingInput
   | WeeklySocialInput
   | WeeklyAffiliateInput;
 
@@ -180,14 +167,6 @@ export function EmailPreview({
 
 function mapToApiBody(input: EmailPreviewInput): Record<string, unknown> {
   switch (input.kind) {
-    case 'onboarding':
-      return {
-        kind: 'onboarding',
-        subject: input.subject,
-        body: input.body,
-        blocks: input.blocks ?? null,
-        tracker_id: input.trackerId ?? null,
-      };
     case 'weekly_social':
       return { kind: 'weekly_social', client_id: input.clientId };
     case 'weekly_affiliate':

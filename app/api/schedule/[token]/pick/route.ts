@@ -4,7 +4,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchBusyForEmail } from '@/lib/scheduling/google-busy';
 import { createSchedulingCalendarEvent } from '@/lib/scheduling/google-event-create';
 import { isImpersonateAllowed } from '@/lib/google/service-account';
-import { checkAndFlipFlowCompletion } from '@/lib/onboarding/check-completion';
 import { logLifecycleEvent } from '@/lib/lifecycle/state-machine';
 
 export const runtime = 'nodejs';
@@ -235,42 +234,10 @@ export async function POST(
       }
     }
 
-    // Flip the linked schedule_meeting onboarding item if there is one.
-    if (event.item_id) {
-      const { data: existingItem } = await admin
-        .from('onboarding_checklist_items')
-        .select('data')
-        .eq('id', event.item_id)
-        .maybeSingle();
-      const prevData =
-        (existingItem?.data as Record<string, unknown> | null | undefined) ?? {};
-      const nextData = {
-        ...prevData,
-        scheduled_for: new Date(startMs).toISOString(),
-        scheduling_event_id: event.id,
-        scheduling_pick_id: pickRow.id,
-        meet_link: meetLink,
-        calendar_event_id: calendarEventId,
-        attendees: allMembers.map((m) => ({
-          email: m.email,
-          name: m.display_name,
-          attendance: m.attendance,
-        })),
-      };
-      await admin
-        .from('onboarding_checklist_items')
-        .update({ status: 'done', data: nextData })
-        .eq('id', event.item_id);
-    }
-
-    if (event.flow_id) {
-      // Best-effort — the pick is already locked in DB, don't make the picker
-      // retry (and hit the unique index 409) just because completion-flip
-      // hiccuped downstream.
-      await checkAndFlipFlowCompletion(admin, event.flow_id as string).catch((err) =>
-        console.error('[scheduling:pick] flow completion check failed', err),
-      );
-    }
+    // The legacy onboarding-checklist + flow-completion linkage was retired
+    // alongside the proposal/onboarding rebuild. The new onboarding system
+    // owns its own scheduling step via a different table; team_scheduling
+    // remains a standalone surface, lifecycle event below covers feed needs.
 
     if (event.client_id) {
       const startLocal = new Date(startMs).toISOString();
