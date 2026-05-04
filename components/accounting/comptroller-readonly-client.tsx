@@ -83,7 +83,7 @@ export function ComptrollerReadonlyClient({ token, role, label, period, entries 
       <header className="mb-6">
         <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-text-muted">
           <Lock size={12} aria-hidden />
-          {ROLE_LABEL[role]} view — read-only
+          {ROLE_LABEL[role]} view (read-only)
           {label ? <span className="text-text-muted/70">· {label}</span> : null}
         </div>
         <h1 className="text-2xl font-semibold tracking-tight text-text-primary md:text-3xl">
@@ -153,8 +153,8 @@ export function ComptrollerReadonlyClient({ token, role, label, period, entries 
               {entries.map((e) => (
                 <tr key={e.id}>
                   <td className="px-4 py-2.5 capitalize text-text-secondary">{e.entry_type}</td>
-                  <td className="px-4 py-2.5 text-text-primary">{e.payee ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-text-secondary">{e.client_name ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-text-primary">{e.payee ?? '-'}</td>
+                  <td className="px-4 py-2.5 text-text-secondary">{e.client_name ?? '-'}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-text-primary">
                     {formatCents(e.amount_cents)}
                   </td>

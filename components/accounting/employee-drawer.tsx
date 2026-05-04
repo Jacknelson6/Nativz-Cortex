@@ -129,7 +129,7 @@ export function EmployeeDrawer({
                   <tr key={e.id} className="border-t border-nativz-border align-top">
                     <td className="px-4 py-3">
                       <p className="text-text-primary">
-                        {e.client_id ? clientNameById.get(e.client_id) ?? '—' : '—'}
+                        {e.client_id ? clientNameById.get(e.client_id) ?? '-' : '-'}
                       </p>
                       {e.description && (
                         <p className="text-sm text-text-secondary mt-1 whitespace-pre-wrap">
@@ -138,16 +138,16 @@ export function EmployeeDrawer({
                       )}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums text-text-primary">
-                      {e.video_count || '—'}
+                      {e.video_count || '-'}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums text-text-primary">
-                      {e.rate_cents ? centsToDollars(e.rate_cents) : '—'}
+                      {e.rate_cents ? centsToDollars(e.rate_cents) : '-'}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums font-semibold text-text-primary">
                       {centsToDollars(e.amount_cents)}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums text-text-secondary">
-                      {e.margin_cents ? centsToDollars(e.margin_cents) : '—'}
+                      {e.margin_cents ? centsToDollars(e.margin_cents) : '-'}
                     </td>
                     <td className="px-4 py-3">
                       {!readonly && (
@@ -167,7 +167,7 @@ export function EmployeeDrawer({
           )}
         </div>
 
-        {/* Footer — totals + actions */}
+        {/* Footer: totals + actions */}
         <div className="border-t border-nativz-border px-6 py-4 space-y-3 bg-background/30">
           <div className="flex items-center justify-between">
             <p className="text-base text-text-secondary">

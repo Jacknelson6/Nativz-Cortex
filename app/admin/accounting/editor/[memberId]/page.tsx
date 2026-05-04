@@ -374,7 +374,7 @@ function PeriodCard({
                 : 'text-emerald-400'
             }`}
           >
-            {margin_cents === 0 ? '—' : centsToDollars(margin_cents)}
+            {margin_cents === 0 ? '-' : centsToDollars(margin_cents)}
           </span>
           <div className="min-w-0 truncate text-xs">
             {payout?.wise_url ? (
@@ -427,11 +427,11 @@ function PeriodCard({
                 <tr key={e.id} className="text-text-secondary">
                   <td className="py-1.5 pr-3 capitalize">{e.entry_type}</td>
                   <td className="py-1.5 pr-3 text-text-primary">
-                    {e.client_id ? clientById.get(e.client_id)?.name ?? '—' : '—'}
+                    {e.client_id ? clientById.get(e.client_id)?.name ?? '-' : '-'}
                   </td>
-                  <td className="py-1.5 pr-3 text-right tabular-nums">{e.video_count || '—'}</td>
+                  <td className="py-1.5 pr-3 text-right tabular-nums">{e.video_count || '-'}</td>
                   <td className="py-1.5 pr-3 text-right tabular-nums">
-                    {e.rate_cents ? centsToDollars(e.rate_cents) : '—'}
+                    {e.rate_cents ? centsToDollars(e.rate_cents) : '-'}
                   </td>
                   <td className="py-1.5 pr-3 text-right tabular-nums text-text-primary">
                     {centsToDollars(e.amount_cents)}
@@ -445,7 +445,7 @@ function PeriodCard({
                         : 'text-emerald-400'
                     }`}
                   >
-                    {e.margin_cents === 0 ? '—' : centsToDollars(e.margin_cents)}
+                    {e.margin_cents === 0 ? '-' : centsToDollars(e.margin_cents)}
                   </td>
                   <td className="py-1.5 text-text-muted">{e.description ?? ''}</td>
                 </tr>

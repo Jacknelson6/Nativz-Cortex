@@ -146,7 +146,7 @@ export function ImportDialog({
       setProposals(data.proposals);
       setStage('preview');
     } catch {
-      toast.error('Parse failed — try again.');
+      toast.error('Parse failed. Try again.');
     } finally {
       setParsing(false);
     }
@@ -274,7 +274,7 @@ export function ImportDialog({
                     onChange={(e) => setDefaultMember(e.target.value)}
                     className="w-full rounded-lg border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary"
                   >
-                    <option value="">— none, parse names from the text —</option>
+                    <option value="">None, parse names from the text</option>
                     {memberOptions.map((m) => (
                       <option key={m.id} value={m.id}>{m.label}</option>
                     ))}
@@ -374,14 +374,14 @@ export function ImportDialog({
                                 : 'border-nativz-border text-text-primary'
                             }`}
                           >
-                            <option value="">{p.payee_label ?? '— pick a team member —'}</option>
+                            <option value="">{p.payee_label ?? 'Pick a team member'}</option>
                             {memberOptions.map((m) => (
                               <option key={m.id} value={m.id}>{m.label}</option>
                             ))}
                           </select>
                           {unresolvedPayee && (
                             <p className="text-[11px] text-amber-400 mt-0.5 flex items-center gap-1">
-                              <AlertCircle size={10} /> Unmatched — pick a team member or leave as label
+                              <AlertCircle size={10} /> Unmatched. Pick a team member or leave as label.
                             </p>
                           )}
                         </td>
@@ -396,7 +396,7 @@ export function ImportDialog({
                             }`}
                           >
                             <option value="">
-                              {p.client_name_raw ? `"${p.client_name_raw}" (unmatched)` : '— none —'}
+                              {p.client_name_raw ? `"${p.client_name_raw}" (unmatched)` : 'No client'}
                             </option>
                             {clientOptions.map((c) => (
                               <option key={c.id} value={c.id}>{c.label}</option>
@@ -419,7 +419,7 @@ export function ImportDialog({
                               title={needsVideos ? 'Parser missed this column' : undefined}
                             />
                           ) : (
-                            <span className="text-text-secondary text-xs">—</span>
+                            <span className="text-text-secondary text-xs">-</span>
                           )}
                         </td>
                         <td className="px-3 py-2">
@@ -441,7 +441,7 @@ export function ImportDialog({
                               title={needsRate ? 'Parser missed this column' : undefined}
                             />
                           ) : (
-                            <span className="text-text-secondary text-xs">—</span>
+                            <span className="text-text-secondary text-xs">-</span>
                           )}
                         </td>
                         <td className="px-3 py-2">
@@ -501,7 +501,7 @@ export function ImportDialog({
           {stage === 'paste' ? (
             <>
               <p className="text-xs text-text-secondary">
-                The AI parses the text locally — you review every row before it gets saved.
+                The AI parses the text locally. You review every row before it gets saved.
               </p>
               <div className="flex gap-2">
                 <Button variant="ghost" onClick={onClose}>Cancel</Button>

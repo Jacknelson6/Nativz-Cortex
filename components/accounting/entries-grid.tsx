@@ -586,15 +586,15 @@ export function EntriesGrid({
                   </td>
                   {isEditing && (
                     <td className="px-3 py-2 text-center tabular-nums text-text-primary">
-                      {totals.videos || '—'}
+                      {totals.videos || '-'}
                     </td>
                   )}
                   <td className="px-3 py-2 text-center tabular-nums text-text-primary">
-                    {totals.amount ? `$${(totals.amount / 100).toFixed(2)}` : '—'}
+                    {totals.amount ? `$${(totals.amount / 100).toFixed(2)}` : '-'}
                   </td>
                   {isEditing && (
                     <td className="px-3 py-2 text-center tabular-nums text-text-primary">
-                      {totals.revenue ? `$${(totals.revenue / 100).toFixed(2)}` : '—'}
+                      {totals.revenue ? `$${(totals.revenue / 100).toFixed(2)}` : '-'}
                     </td>
                   )}
                   {isEditing && (
@@ -608,7 +608,7 @@ export function EntriesGrid({
                       }`}
                     >
                       {totals.margin === 0
-                        ? '—'
+                        ? '-'
                         : `${totals.margin < 0 ? '-' : ''}$${(Math.abs(totals.margin) / 100).toFixed(2)}`}
                     </td>
                   )}
@@ -1019,8 +1019,8 @@ function PayeePicker({
     return (
       <span className="text-text-primary">
         {teamMemberId
-          ? memberById.get(teamMemberId)?.full_name ?? '—'
-          : payeeLabel?.trim() || '—'}
+          ? memberById.get(teamMemberId)?.full_name ?? '-'
+          : payeeLabel?.trim() || '-'}
       </span>
     );
   }
@@ -1042,7 +1042,7 @@ function PayeePicker({
           onBlur={onBlur}
           className={cellInputCx + ' min-w-[8rem]'}
         >
-          <option value="">— pick —</option>
+          <option value="">Pick a team member</option>
           {teamMembers.map((t) => (
             <option key={t.id} value={t.id}>
               {t.full_name ?? 'unnamed'}
@@ -1090,7 +1090,7 @@ function ClientPicker({
 }) {
   if (readonly) {
     const c = clientId ? clients.find((x) => x.id === clientId) : null;
-    return <span className="text-text-primary">{c?.name ?? '—'}</span>;
+    return <span className="text-text-primary">{c?.name ?? '-'}</span>;
   }
   return (
     <select
@@ -1098,7 +1098,7 @@ function ClientPicker({
       onChange={(e) => onPick(e.target.value || null)}
       className={cellInputCx + ' min-w-[8rem]'}
     >
-      <option value="">— none —</option>
+      <option value="">No client</option>
       {clients.map((c) => (
         <option key={c.id} value={c.id}>
           {c.name}
@@ -1162,7 +1162,7 @@ function DollarInput({
   if (readonly) {
     return (
       <span className="tabular-nums text-text-primary">
-        {cents ? `$${(cents / 100).toFixed(2)}` : '—'}
+        {cents ? `$${(cents / 100).toFixed(2)}` : '-'}
       </span>
     );
   }
@@ -1199,7 +1199,7 @@ function ReadonlyDollar({
       : 'text-text-primary font-medium';
   return (
     <span className={`tabular-nums ${cls}`}>
-      {cents === 0 ? '—' : `${negative ? '-' : ''}$${(Math.abs(cents) / 100).toFixed(2)}`}
+      {cents === 0 ? '-' : `${negative ? '-' : ''}$${(Math.abs(cents) / 100).toFixed(2)}`}
     </span>
   );
 }
@@ -1224,7 +1224,7 @@ function TextInput({
 
   if (readonly) {
     return (
-      <span className="text-text-secondary text-sm">{value || '—'}</span>
+      <span className="text-text-secondary text-sm">{value || '-'}</span>
     );
   }
   return (

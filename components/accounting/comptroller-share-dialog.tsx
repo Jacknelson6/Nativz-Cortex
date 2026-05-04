@@ -86,7 +86,7 @@ export function ComptrollerShareDialog({ open, onClose, periodId, periodLabel }:
       await navigator.clipboard.writeText(url);
       toast.success('Copied');
     } catch {
-      toast.error('Copy failed — select the URL manually');
+      toast.error('Copy failed. Select the URL manually.');
     }
   }
 

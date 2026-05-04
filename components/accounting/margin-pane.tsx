@@ -232,14 +232,14 @@ export function MarginPane({ periodLabel, entries, clients, teamMembers }: Margi
                           : 'text-emerald-400'
                       }`}
                     >
-                      {editor.margin_cents === 0 ? '—' : centsToDollars(editor.margin_cents)}
+                      {editor.margin_cents === 0 ? '-' : centsToDollars(editor.margin_cents)}
                     </span>
                     <span
                       className={`text-right text-xs tabular-nums ${
                         editor.margin_cents < 0 ? 'text-red-400' : 'text-text-muted'
                       }`}
                     >
-                      {editor.revenue_cents > 0 ? `${pct.toFixed(0)}%` : '—'}
+                      {editor.revenue_cents > 0 ? `${pct.toFixed(0)}%` : '-'}
                     </span>
                   </div>
                   {isOpen && <PerClientBreakdown clients={editor.per_client} />}
@@ -270,7 +270,7 @@ export function MarginPane({ periodLabel, entries, clients, teamMembers }: Margi
                 totals.margin < 0 ? 'text-red-400' : 'text-text-secondary'
               }`}
             >
-              {totals.revenue > 0 ? `${marginPct.toFixed(1)}%` : '—'}
+              {totals.revenue > 0 ? `${marginPct.toFixed(1)}%` : '-'}
             </span>
           </div>
         </div>
@@ -315,9 +315,9 @@ function PerClientBreakdown({ clients }: { clients: ClientRow[] }) {
                     )}
                   </div>
                 </td>
-                <td className="py-1.5 pr-3 text-right tabular-nums">{c.videos || '—'}</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums">{c.videos || '-'}</td>
                 <td className="py-1.5 pr-3 text-right tabular-nums">
-                  {c.client_rate_cents != null ? centsToDollars(c.client_rate_cents) : '—'}
+                  {c.client_rate_cents != null ? centsToDollars(c.client_rate_cents) : '-'}
                 </td>
                 <td className="py-1.5 pr-3 text-right tabular-nums text-text-primary">
                   {centsToDollars(c.revenue_cents)}
@@ -332,10 +332,10 @@ function PerClientBreakdown({ clients }: { clients: ClientRow[] }) {
                       : 'text-emerald-400'
                   }`}
                 >
-                  {c.margin_cents === 0 ? '—' : centsToDollars(c.margin_cents)}
+                  {c.margin_cents === 0 ? '-' : centsToDollars(c.margin_cents)}
                 </td>
                 <td className={`py-1.5 text-right tabular-nums ${c.margin_cents < 0 ? 'text-red-400' : 'text-text-muted'}`}>
-                  {c.revenue_cents > 0 ? `${pct.toFixed(0)}%` : '—'}
+                  {c.revenue_cents > 0 ? `${pct.toFixed(0)}%` : '-'}
                 </td>
               </tr>
             );

@@ -141,7 +141,7 @@ export function PayoutsPane({ periodId, periodLabel, entries, clients }: Payouts
       .map((r) => {
         const total = centsToDollars(r.total_cents);
         const link = r.wise_url ? r.wise_url : '(no link yet)';
-        return `${r.display_name} — ${total} — ${link}`;
+        return `${r.display_name} | ${total} | ${link}`;
       });
     if (lines.length === 0) {
       toast.error('Nothing to copy');
@@ -300,7 +300,7 @@ export function PayoutsPane({ periodId, periodLabel, entries, clients }: Payouts
                         : 'text-emerald-400'
                     }`}
                   >
-                    {row.margin_cents === 0 ? '—' : centsToDollars(row.margin_cents)}
+                    {row.margin_cents === 0 ? '-' : centsToDollars(row.margin_cents)}
                   </span>
                   <WiseUrlField row={row} onSave={(url) => patchPayout(row, { wise_url: url })} />
                   <div className="flex items-center gap-2">
@@ -418,10 +418,10 @@ function PayoutEntriesBreakdown({
             return (
               <tr key={e.id} className="text-text-secondary">
                 <td className="py-1.5 pr-3 capitalize">{e.entry_type}</td>
-                <td className="py-1.5 pr-3 text-text-primary">{client?.name ?? '—'}</td>
-                <td className="py-1.5 pr-3 text-right tabular-nums">{e.video_count || '—'}</td>
+                <td className="py-1.5 pr-3 text-text-primary">{client?.name ?? '-'}</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums">{e.video_count || '-'}</td>
                 <td className="py-1.5 pr-3 text-right tabular-nums">
-                  {e.rate_cents ? centsToDollars(e.rate_cents) : '—'}
+                  {e.rate_cents ? centsToDollars(e.rate_cents) : '-'}
                 </td>
                 <td className="py-1.5 pr-3 text-right tabular-nums text-text-primary">
                   {centsToDollars(e.amount_cents)}
@@ -435,7 +435,7 @@ function PayoutEntriesBreakdown({
                       : 'text-emerald-400'
                   }`}
                 >
-                  {e.margin_cents === 0 ? '—' : centsToDollars(e.margin_cents)}
+                  {e.margin_cents === 0 ? '-' : centsToDollars(e.margin_cents)}
                 </td>
                 <td className="py-1.5 text-text-muted">{e.description ?? ''}</td>
               </tr>

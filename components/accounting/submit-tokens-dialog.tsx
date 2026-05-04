@@ -156,7 +156,7 @@ export function SubmitTokensDialog({
                               size="sm"
                               onClick={() => mint(m.id, existing.default_entry_type ?? 'editing')}
                               disabled={busy}
-                              title="Rotate — old link stops working"
+                              title="Rotate. Old link stops working."
                             >
                               {busy ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
                             </Button>
@@ -177,7 +177,7 @@ export function SubmitTokensDialog({
                 {teamMembers.length === 0 && (
                   <tr>
                     <td colSpan={3} className="px-4 py-10 text-center text-base text-text-secondary">
-                      No team members yet — add them under Users → Team.
+                      No team members yet. Add them under Users → Team.
                     </td>
                   </tr>
                 )}

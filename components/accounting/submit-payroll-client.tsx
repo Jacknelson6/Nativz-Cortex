@@ -465,7 +465,7 @@ function ClientCardView({
             onChange={(e) => onClientChange(e.target.value || null)}
             className="w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-base font-semibold text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
           >
-            <option value="">— pick a client —</option>
+            <option value="">Pick a client</option>
             {clients.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
