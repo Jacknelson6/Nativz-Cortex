@@ -1,5 +1,7 @@
 # PRD: Service Capacity → Accounting Auto-Population
 
+> **Status: Shipped 2026-05-04.** Phases 1-8 complete. Migrations 233-236 applied to prod. US-001 unit tests in `lib/clients/get-service-capacity.test.ts` (4 passing). Out-of-scope review pill mounts in all three documented spots (client header, deliverable progress strip, period-detail editing banner). No client-visible "credits" leaks remain. Auto-populate engine routes NULL `editor_user_id` consumes to a seeded "Unattributed" team_member (`00000000-0000-0000-0000-0000000000ba`) so they surface in the editing tab for admin re-attribution.
+
 > **The last connective tissue PRD.** This wires the existing pieces together: per-client services (`clients.services`) + package tier (`proposal_templates.tiers_preview`) → monthly deliverable capacity → editor visibility ("X needed this month") → accounting auto-population from approved deliverables → out-of-scope flagging.
 >
 > Pairs with `prd-deliverables-phase-d-tiers.md` (named tiers exist) and `prd-accounting-revamp.md` (period-detail UX shipped). This PRD does NOT redo either; it connects them.

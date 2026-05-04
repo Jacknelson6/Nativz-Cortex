@@ -214,6 +214,7 @@ Video idea submissions with status tracking.
 - **233** extends `proposal_templates.tiers_preview[*].deliverables` jsonb with `{ editing, smm, blogging }` per tier; backfilled the three Editing Packages tiers (Essentials = 4, Studio = 8, Full Social = 12).
 - **234** adds `payroll_entries.source` (`'manual' | 'auto' | 'auto-edited' | 'content_pipeline'`, default `'manual'`) plus a partial unique index on `(period_id, client_id, team_member_id, entry_type) WHERE source IN ('auto','auto-edited')` for idempotent auto-population.
 - **235** adds `deliverable_overage_reviews` (UNIQUE on `(client_id, service, period_id)`, decision `'noted' | 'top_up_opened'`) for one-decision-per-period out-of-scope tracking. Admin-only RLS.
+- **236** seeds a stable `team_members` row (`id = 00000000-0000-0000-0000-0000000000ba`, `full_name = 'Unattributed'`, `is_active = false`) used by `lib/accounting/auto-populate-editing.ts` to bucket approved consume rows whose `editor_user_id` is NULL so they appear in the editing tab for admin re-attribution rather than being silently skipped.
 
 Capacity resolution lives in `lib/clients/get-service-capacity.ts` (single source of truth, joins latest signed proposal → tier → deliverables jsonb, falls back to `lib/clients/service-defaults.ts`).
 

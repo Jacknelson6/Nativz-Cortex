@@ -35,6 +35,8 @@ interface ExistingAutoRow {
 }
 
 const FALLBACK_RATE_CENTS = 4000;
+const UNATTRIBUTED_TEAM_MEMBER_ID = '00000000-0000-0000-0000-0000000000ba';
+const UNATTRIBUTED_KEY = '__unattributed__';
 
 function periodEndExclusive(endDate: string): string {
   const [y, m, d] = endDate.split('-').map(Number);
@@ -122,23 +124,31 @@ export async function autoPopulateEditingForPeriod(
   const keyOf = (clientId: string, editorUserId: string) => `${clientId}::${editorUserId}`;
 
   for (const row of consumes) {
-    if (!row.client_id || !row.editor_user_id) {
+    if (!row.client_id) {
       result.skipped += 1;
       continue;
     }
-    const k = keyOf(row.client_id, row.editor_user_id);
+    const editorKey = row.editor_user_id ?? UNATTRIBUTED_KEY;
+    const k = keyOf(row.client_id, editorKey);
     const existing = counts.get(k);
     if (existing) existing.count += 1;
-    else counts.set(k, { clientId: row.client_id, editorUserId: row.editor_user_id, count: 1 });
+    else counts.set(k, { clientId: row.client_id, editorUserId: editorKey, count: 1 });
   }
   for (const row of refunds) {
-    if (!row.client_id || !row.editor_user_id) continue;
-    const k = keyOf(row.client_id, row.editor_user_id);
+    if (!row.client_id) continue;
+    const editorKey = row.editor_user_id ?? UNATTRIBUTED_KEY;
+    const k = keyOf(row.client_id, editorKey);
     const existing = counts.get(k);
     if (existing) existing.count = Math.max(0, existing.count - 1);
   }
 
-  const editorUserIds = Array.from(new Set(Array.from(counts.values()).map((g) => g.editorUserId)));
+  const editorUserIds = Array.from(
+    new Set(
+      Array.from(counts.values())
+        .map((g) => g.editorUserId)
+        .filter((id) => id !== UNATTRIBUTED_KEY),
+    ),
+  );
   let editorByUserId = new Map<string, TeamMemberRow>();
   if (editorUserIds.length > 0) {
     const { data: members } = await supabase
@@ -147,6 +157,19 @@ export async function autoPopulateEditingForPeriod(
       .in('user_id', editorUserIds)
       .returns<TeamMemberRow[]>();
     editorByUserId = new Map((members ?? []).map((m) => [m.user_id as string, m]));
+  }
+
+  const hasUnattributed = Array.from(counts.values()).some(
+    (g) => g.editorUserId === UNATTRIBUTED_KEY && g.count > 0,
+  );
+  let unattributedMember: TeamMemberRow | null = null;
+  if (hasUnattributed) {
+    const { data: row } = await supabase
+      .from('team_members')
+      .select('id, user_id, full_name, cost_rate_cents_per_hour')
+      .eq('id', UNATTRIBUTED_TEAM_MEMBER_ID)
+      .maybeSingle<TeamMemberRow>();
+    unattributedMember = row ?? null;
   }
 
   const { data: existingRows } = await supabase
@@ -165,13 +188,25 @@ export async function autoPopulateEditingForPeriod(
 
   for (const group of counts.values()) {
     if (group.count <= 0) continue;
-    const editor = editorByUserId.get(group.editorUserId);
-    if (!editor) {
-      result.skipped += 1;
-      result.details.push(
-        `No team_members row for editor user ${group.editorUserId}; row not created`,
-      );
-      continue;
+    let editor: TeamMemberRow | undefined | null;
+    if (group.editorUserId === UNATTRIBUTED_KEY) {
+      editor = unattributedMember;
+      if (!editor) {
+        result.skipped += 1;
+        result.details.push(
+          'Unattributed team_member seed row missing; run migration 236 then re-sync',
+        );
+        continue;
+      }
+    } else {
+      editor = editorByUserId.get(group.editorUserId);
+      if (!editor) {
+        result.skipped += 1;
+        result.details.push(
+          `No team_members row for editor user ${group.editorUserId}; row not created`,
+        );
+        continue;
+      }
     }
     const rateCents = editor.cost_rate_cents_per_hour ?? FALLBACK_RATE_CENTS;
     const amountCents = rateCents * group.count;
@@ -189,7 +224,10 @@ export async function autoPopulateEditingForPeriod(
         rate_cents: rateCents,
         amount_cents: amountCents,
         margin_cents: 0,
-        description: `Auto-populated from approved deliverables (${group.count} edited video${group.count === 1 ? '' : 's'})`,
+        description:
+          group.editorUserId === UNATTRIBUTED_KEY
+            ? `Unattributed: ${group.count} edited video${group.count === 1 ? '' : 's'} need editor re-attribution`
+            : `Auto-populated from approved deliverables (${group.count} edited video${group.count === 1 ? '' : 's'})`,
         source: 'auto',
       });
       if (error) {
@@ -211,7 +249,10 @@ export async function autoPopulateEditingForPeriod(
         video_count: group.count,
         rate_cents: rateCents,
         amount_cents: amountCents,
-        description: `Auto-populated from approved deliverables (${group.count} edited video${group.count === 1 ? '' : 's'})`,
+        description:
+          group.editorUserId === UNATTRIBUTED_KEY
+            ? `Unattributed: ${group.count} edited video${group.count === 1 ? '' : 's'} need editor re-attribution`
+            : `Auto-populated from approved deliverables (${group.count} edited video${group.count === 1 ? '' : 's'})`,
       })
       .eq('id', existing.id);
     if (error) {
