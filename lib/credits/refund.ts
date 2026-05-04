@@ -1,5 +1,5 @@
 /**
- * refundCredit — typed wrapper around the `refund_credit` RPC.
+ * refundCredit, typed wrapper around the `refund_credit` RPC.
  *
  * Three trigger sites:
  *   1. Approval-comment delete on the share-link review surface
