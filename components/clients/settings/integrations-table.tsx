@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Fragment, useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import { Link2, Unlink, Loader2, MessageSquare } from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -184,11 +184,21 @@ export function IntegrationsTable({
   clientId,
   hasAffiliateIntegration,
   chatWebhookUrl: initialChatWebhookUrl = null,
+  isMiscCatchall: initialIsMiscCatchall = false,
+  currentCatchallName = null,
   bare = false,
 }: {
   clientId: string;
   hasAffiliateIntegration?: boolean;
   chatWebhookUrl?: string | null;
+  /** Whether this client currently carries the agency's miscellaneous catchall
+   *  flag — its webhook will receive notifications for siblings that don't have
+   *  one of their own. */
+  isMiscCatchall?: boolean;
+  /** Name of the client that currently holds the catchall flag for this
+   *  agency, when it isn't this one. Used to show "Currently routed to {X}"
+   *  context next to the toggle. */
+  currentCatchallName?: string | null;
   /** When true, drops the outer Card chrome so the table embeds inside an
    *  InfoCard / equivalent surface without nested cards. */
   bare?: boolean;
@@ -203,6 +213,9 @@ export function IntegrationsTable({
   const [chatWebhookUrl, setChatWebhookUrl] = useState<string | null>(initialChatWebhookUrl);
   const [chatDisconnecting, setChatDisconnecting] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
+  const [isMiscCatchall, setIsMiscCatchall] = useState<boolean>(initialIsMiscCatchall);
+  const [catchallSaving, setCatchallSaving] = useState(false);
+  const [displayedCatchallName, setDisplayedCatchallName] = useState<string | null>(currentCatchallName);
 
   useEffect(() => {
     setUpPromoteConnected(hasAffiliateIntegration ?? false);
@@ -211,6 +224,14 @@ export function IntegrationsTable({
   useEffect(() => {
     setChatWebhookUrl(initialChatWebhookUrl);
   }, [initialChatWebhookUrl]);
+
+  useEffect(() => {
+    setIsMiscCatchall(initialIsMiscCatchall);
+  }, [initialIsMiscCatchall]);
+
+  useEffect(() => {
+    setDisplayedCatchallName(currentCatchallName);
+  }, [currentCatchallName]);
 
   const fetchProfiles = useCallback(async () => {
     try {
@@ -292,11 +313,43 @@ export function IntegrationsTable({
         return;
       }
       setChatWebhookUrl(null);
+      // Disconnect on the API side also clears the catchall flag — mirror that
+      // locally so the toggle disappears with the connected row.
+      setIsMiscCatchall(false);
       toast.success('Google Chat webhook disconnected');
     } catch {
       toast.error('Failed to disconnect');
     } finally {
       setChatDisconnecting(false);
+    }
+  }
+
+  async function handleCatchallToggle(next: boolean) {
+    setCatchallSaving(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/chat-webhook`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_misc_catchall: next }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error ?? 'Failed to update catchall');
+        return;
+      }
+      setIsMiscCatchall(next);
+      // When this client takes over as catchall, the previously-shown name no
+      // longer applies — clear it so the hint flips off without a refresh.
+      if (next) setDisplayedCatchallName(null);
+      toast.success(
+        next
+          ? 'Marked as miscellaneous catchall — sibling brands without a webhook will route here'
+          : 'Catchall flag removed',
+      );
+    } catch {
+      toast.error('Failed to update catchall');
+    } finally {
+      setCatchallSaving(false);
     }
   }
 
@@ -392,54 +445,82 @@ export function IntegrationsTable({
         ) : (
           <ul className="divide-y divide-nativz-border">
             {rows.map((row) => (
-              <li
-                key={row.key}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-surface-hover/20 transition-colors"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-nativz-border bg-surface">
-                  {row.icon}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-text-primary truncate">{row.label}</span>
-                    {row.connected && (
-                      <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden />
-                    )}
+              <Fragment key={row.key}>
+                <li className="flex items-center gap-3 px-4 py-3 hover:bg-surface-hover/20 transition-colors">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-nativz-border bg-surface">
+                    {row.icon}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-text-primary truncate">{row.label}</span>
+                      {row.connected && (
+                        <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden />
+                      )}
+                    </div>
+                    <p className="text-xs text-text-muted truncate">
+                      {row.subtitle ?? 'Not connected'}
+                    </p>
                   </div>
-                  <p className="text-xs text-text-muted truncate">
-                    {row.subtitle ?? 'Not connected'}
-                  </p>
-                </div>
-                <RowAction
-                  row={row}
-                  connecting={connecting === row.key}
-                  disconnecting={
-                    row.key === 'uppromote'
-                      ? upPromoteDisconnecting
-                      : row.key === 'google_chat'
-                      ? chatDisconnecting
-                      : disconnecting === row.profileId
-                  }
-                  onConnect={() => {
-                    if (row.key === 'uppromote') {
-                      setShowUpPromoteModal(true);
-                    } else if (row.key === 'google_chat') {
-                      setShowChatModal(true);
-                    } else {
-                      handleConnectSocial(row.key as SocialPlatform);
+                  <RowAction
+                    row={row}
+                    connecting={connecting === row.key}
+                    disconnecting={
+                      row.key === 'uppromote'
+                        ? upPromoteDisconnecting
+                        : row.key === 'google_chat'
+                        ? chatDisconnecting
+                        : disconnecting === row.profileId
                     }
-                  }}
-                  onDisconnect={() => {
-                    if (row.key === 'uppromote') {
-                      handleUpPromoteDisconnect();
-                    } else if (row.key === 'google_chat') {
-                      handleChatDisconnect();
-                    } else if (row.profileId) {
-                      handleDisconnect(row.profileId, row.label);
-                    }
-                  }}
-                />
-              </li>
+                    onConnect={() => {
+                      if (row.key === 'uppromote') {
+                        setShowUpPromoteModal(true);
+                      } else if (row.key === 'google_chat') {
+                        setShowChatModal(true);
+                      } else {
+                        handleConnectSocial(row.key as SocialPlatform);
+                      }
+                    }}
+                    onDisconnect={() => {
+                      if (row.key === 'uppromote') {
+                        handleUpPromoteDisconnect();
+                      } else if (row.key === 'google_chat') {
+                        handleChatDisconnect();
+                      } else if (row.profileId) {
+                        handleDisconnect(row.profileId, row.label);
+                      }
+                    }}
+                  />
+                </li>
+                {row.key === 'google_chat' && row.connected && (
+                  <li className="flex items-start gap-3 px-4 py-3 bg-surface-hover/10">
+                    <span className="flex h-9 w-9 shrink-0" aria-hidden />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-text-primary">
+                          Use as miscellaneous catchall
+                        </span>
+                        {isMiscCatchall && (
+                          <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-300">
+                            Active
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-text-muted">
+                        {isMiscCatchall
+                          ? 'Sibling brands in this agency without their own Google Chat webhook will route notifications to this space.'
+                          : displayedCatchallName
+                          ? `Currently routed to ${displayedCatchallName}. Toggle on to hand the catchall to this brand instead.`
+                          : 'No catchall set for this agency yet. Toggle on to send sibling brands’ notifications to this space.'}
+                      </p>
+                    </div>
+                    <CatchallToggle
+                      enabled={isMiscCatchall}
+                      saving={catchallSaving}
+                      onToggle={() => handleCatchallToggle(!isMiscCatchall)}
+                    />
+                  </li>
+                )}
+              </Fragment>
             ))}
           </ul>
         )}
@@ -468,6 +549,41 @@ export function IntegrationsTable({
 function extractSpaceId(webhookUrl: string): string | null {
   const m = webhookUrl.match(/\/spaces\/([A-Za-z0-9_-]+)\//);
   return m ? m[1] : null;
+}
+
+function CatchallToggle({
+  enabled,
+  saving,
+  onToggle,
+}: {
+  enabled: boolean;
+  saving: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      onClick={onToggle}
+      disabled={saving}
+      className={[
+        'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors',
+        enabled ? 'bg-emerald-400/80' : 'bg-surface-hover border border-nativz-border',
+        saving ? 'opacity-60 cursor-wait' : 'cursor-pointer',
+      ].join(' ')}
+    >
+      <span
+        className={[
+          'inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform',
+          enabled ? 'translate-x-[18px]' : 'translate-x-[3px]',
+        ].join(' ')}
+      />
+      {saving && (
+        <Loader2 size={10} className="absolute right-1.5 animate-spin text-white/80" />
+      )}
+    </button>
+  );
 }
 
 function RowAction({

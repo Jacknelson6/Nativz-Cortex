@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createNotification } from '@/lib/notifications/create';
 import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
 import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { formatPostTimeForChat } from '@/lib/chat/format-post-time';
 import { isMondayConfigured } from '@/lib/monday/client';
 import {
@@ -514,15 +515,18 @@ async function maybeFireRevisionsCompleteNotification(
   // Look up the client + chat webhook so we can route the ping.
   const { data: drop } = await admin
     .from('content_drops')
-    .select('id, clients(name, chat_webhook_url)')
+    .select('id, clients(name, agency, chat_webhook_url)')
     .eq('id', args.dropId)
     .single<{
       id: string;
-      clients: { name: string; chat_webhook_url: string | null } | null;
+      clients: { name: string; agency: string | null; chat_webhook_url: string | null } | null;
     }>();
 
   const clientName = drop?.clients?.name ?? 'Client';
-  const chatWebhookUrl = drop?.clients?.chat_webhook_url ?? null;
+  const chatWebhookUrl = await resolveTeamChatWebhook(admin, {
+    primaryUrl: drop?.clients?.chat_webhook_url ?? null,
+    agency: drop?.clients?.agency ?? null,
+  });
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
   const shareUrl = `${appUrl}/c/${args.token}`;
 
@@ -563,12 +567,12 @@ async function notifyAdminsOfComment(
   const [dropRes, postRes] = await Promise.all([
     admin
       .from('content_drops')
-      .select('id, start_date, clients(name, chat_webhook_url)')
+      .select('id, start_date, clients(name, agency, chat_webhook_url)')
       .eq('id', dropId)
       .single<{
         id: string;
         start_date: string;
-        clients: { name: string; chat_webhook_url: string | null } | null;
+        clients: { name: string; agency: string | null; chat_webhook_url: string | null } | null;
       }>(),
     admin
       .from('scheduled_posts')
@@ -580,7 +584,10 @@ async function notifyAdminsOfComment(
   if (!drop) return;
 
   const clientName = drop.clients?.name ?? 'Client';
-  const chatWebhookUrl = drop.clients?.chat_webhook_url ?? null;
+  const chatWebhookUrl = await resolveTeamChatWebhook(admin, {
+    primaryUrl: drop.clients?.chat_webhook_url ?? null,
+    agency: drop.clients?.agency ?? null,
+  });
   const postScheduledAt = postRes.data?.scheduled_at ?? null;
   const postTimeLine = postScheduledAt ? formatPostTimeForChat(postScheduledAt) : null;
   const title = TITLE_BY_STATUS[comment.status](comment.authorName, clientName);

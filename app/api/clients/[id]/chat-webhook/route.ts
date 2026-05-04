@@ -75,9 +75,91 @@ export async function POST(
 }
 
 /**
+ * PATCH /api/clients/[id]/chat-webhook
+ *
+ * Toggle the `is_misc_catchall` flag — marks this client's webhook as the
+ * miscellaneous catchall for its agency. Only one client per agency can carry
+ * the flag (enforced by `clients_misc_catchall_per_agency` partial unique
+ * index, migration 230). Setting it on a new client clears it from the
+ * previous holder atomically inside a single update.
+ *
+ * @auth Required (admin)
+ */
+const patchSchema = z.object({ is_misc_catchall: z.boolean() });
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const admin = createAdminClient();
+    const { data: userData } = await admin.from('users').select('role').eq('id', user.id).single();
+    if (!userData || userData.role !== 'admin') {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
+    const { id: clientId } = await params;
+    const body = await request.json();
+    const parsed = patchSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: parsed.error.flatten().fieldErrors },
+        { status: 400 },
+      );
+    }
+
+    const { data: client } = await admin
+      .from('clients')
+      .select('agency, chat_webhook_url')
+      .eq('id', clientId)
+      .single<{ agency: string | null; chat_webhook_url: string | null }>();
+    if (!client) {
+      return NextResponse.json({ error: 'Client not found' }, { status: 404 });
+    }
+
+    if (parsed.data.is_misc_catchall) {
+      if (!client.chat_webhook_url) {
+        return NextResponse.json(
+          { error: 'Connect a Google Chat webhook before marking this client as the catchall' },
+          { status: 422 },
+        );
+      }
+      // Atomically: clear any existing catchall for this agency, then set this
+      // one. The partial unique index would otherwise reject the second update.
+      if (client.agency) {
+        await admin
+          .from('clients')
+          .update({ is_misc_catchall: false })
+          .eq('agency', client.agency)
+          .eq('is_misc_catchall', true)
+          .neq('id', clientId);
+      }
+    }
+
+    const { error: updateError } = await admin
+      .from('clients')
+      .update({ is_misc_catchall: parsed.data.is_misc_catchall })
+      .eq('id', clientId);
+    if (updateError) {
+      return NextResponse.json({ error: 'Failed to update catchall flag' }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('PATCH /api/clients/[id]/chat-webhook error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+/**
  * DELETE /api/clients/[id]/chat-webhook
  *
- * Disconnect the Google Chat webhook for a client.
+ * Disconnect the Google Chat webhook for a client. Also clears the catchall
+ * flag — a webhook-less client can't act as the catchall.
  *
  * @auth Required (admin)
  */
@@ -99,7 +181,7 @@ export async function DELETE(
     const { id: clientId } = await params;
     const { error: updateError } = await admin
       .from('clients')
-      .update({ chat_webhook_url: null })
+      .update({ chat_webhook_url: null, is_misc_catchall: false })
       .eq('id', clientId);
     if (updateError) {
       return NextResponse.json({ error: 'Failed to remove webhook' }, { status: 500 });

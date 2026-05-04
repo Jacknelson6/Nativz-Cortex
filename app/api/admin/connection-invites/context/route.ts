@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/auth/permissions';
 import { isGoogleChatWebhook } from '@/lib/chat/post-to-google-chat';
+import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
       .order('name'),
     admin
       .from('clients')
-      .select('chat_webhook_url')
+      .select('chat_webhook_url, agency')
       .eq('id', clientId)
       .maybeSingle(),
   ]);
@@ -64,9 +65,15 @@ export async function GET(request: NextRequest) {
       isPrimary: c.is_primary === true,
     }));
 
-  const hasChatWebhook = isGoogleChatWebhook(
-    clientRes.data?.chat_webhook_url ?? null,
-  );
+  // Reflects what notify_chat will actually post to: own webhook → agency
+  // miscellaneous catchall → none. The toggle in InviteBuilderModal stays
+  // enabled whenever either resolves to a real Google Chat webhook so brands
+  // without their own room still get pings via the catchall.
+  const resolvedWebhook = await resolveTeamChatWebhook(admin, {
+    primaryUrl: (clientRes.data?.chat_webhook_url as string | null) ?? null,
+    agency: (clientRes.data?.agency as string | null) ?? null,
+  });
+  const hasChatWebhook = isGoogleChatWebhook(resolvedWebhook);
 
   return NextResponse.json({ contacts, hasChatWebhook });
 }

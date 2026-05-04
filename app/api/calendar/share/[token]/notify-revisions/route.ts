@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/auth/permissions';
 import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { formatPostTimeForChat } from '@/lib/chat/format-post-time';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { sendCalendarRevisedVideosEmail } from '@/lib/email/resend';
@@ -119,7 +120,12 @@ export async function POST(
   const clientName = drop?.clients?.name ?? 'Client';
   const clientId = drop?.clients?.id ?? drop?.client_id ?? null;
   const agency = getBrandFromAgency(drop?.clients?.agency ?? null);
-  const chatWebhookUrl = drop?.clients?.chat_webhook_url ?? null;
+  // Resolves the client's own webhook first, then the agency's miscellaneous
+  // catchall as fallback. See migration 230.
+  const chatWebhookUrl = await resolveTeamChatWebhook(admin, {
+    primaryUrl: drop?.clients?.chat_webhook_url ?? null,
+    agency: drop?.clients?.agency ?? null,
+  });
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
   const shareUrl = `${appUrl}/c/${token}`;
 

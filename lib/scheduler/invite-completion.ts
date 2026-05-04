@@ -19,6 +19,7 @@ import { Resend } from 'resend';
 import { getFromAddress, getReplyTo, layout } from '@/lib/email/resend';
 import { getSecret } from '@/lib/secrets/store';
 import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 
 const PLATFORM_LABEL: Record<string, string> = {
@@ -100,10 +101,12 @@ export async function handleInviteCompletion(opts: {
   const summary = `${brandName} just reconnected ${platformLabel} as ${handle}.`;
 
   if (invite.notify_chat) {
-    const webhook =
-      (client.chat_webhook_url as string | null) ??
-      process.env.OPS_GOOGLE_CHAT_WEBHOOK ??
-      null;
+    // Resolver: client's own webhook → agency miscellaneous catchall → ops env.
+    const resolved = await resolveTeamChatWebhook(admin, {
+      primaryUrl: (client.chat_webhook_url as string | null) ?? null,
+      agency: (client.agency as string | null) ?? null,
+    });
+    const webhook = resolved ?? process.env.OPS_GOOGLE_CHAT_WEBHOOK ?? null;
     postToGoogleChatSafe(
       webhook,
       { text: `🔌 ${summary}` },

@@ -10,6 +10,7 @@ import { getNotificationSetting } from '@/lib/notifications/get-setting';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 
 export const maxDuration = 60;
 
@@ -358,8 +359,12 @@ async function handleGet(request: NextRequest) {
                   dropId: link.drop_id,
                 })),
               );
+              const finalCallWebhook = await resolveTeamChatWebhook(admin, {
+                primaryUrl: client.chat_webhook_url,
+                agency: client.agency,
+              });
               postToGoogleChatSafe(
-                client.chat_webhook_url,
+                finalCallWebhook,
                 {
                   text: `*Final call before publishing* — ${pending} of ${total} ${pending === 1 ? 'post' : 'posts'} still pending. Your first scheduled post goes live ${firstPostLabel}. ${shareUrl}`,
                 },
