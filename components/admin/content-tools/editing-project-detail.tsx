@@ -8,11 +8,8 @@ import {
 } from 'react';
 import { toast } from 'sonner';
 import { Archive, ExternalLink, Loader2 } from 'lucide-react';
-import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ComboSelect } from '@/components/ui/combo-select';
-import { SubNav } from '@/components/ui/sub-nav';
-import { ClientLogo } from '@/components/clients/client-logo';
 import {
   EDITING_STATUS_LABEL,
   EDITING_TYPE_LABEL,
@@ -25,6 +22,12 @@ import { AssigneePicker } from './assignee-picker';
 import { EditingShareButton } from './editing-share-button';
 import { ShareHistoryPanel } from './share-history-panel';
 import { EditedVideosBox, UploadRow } from './edited-videos-box';
+import {
+  ContentDetailDialog,
+  type DetailTab,
+} from './detail-dialog/dialog-shell';
+import { Field, Section, SideField } from './detail-dialog/section';
+import { formatTimestamp } from './detail-dialog/format';
 import {
   enqueueUploads,
   getProjectUploads,
@@ -85,7 +88,7 @@ export function EditingProjectDetail({
   const [type, setType] = useState<EditingProjectType>('organic_content');
   const [status, setStatus] = useState<EditingProjectStatus>('editing');
   const [dragActive, setDragActive] = useState(false);
-  const [tab, setTab] = useState<'details' | 'history'>('details');
+  const [tab, setTab] = useState<DetailTab>('details');
 
   const projectId = project?.id ?? null;
 
@@ -222,251 +225,199 @@ export function EditingProjectDetail({
   if (!open || !project) return null;
 
   return (
-    <Dialog open={open} onClose={onClose} title="" maxWidth="2xl" bodyClassName="p-0">
-      {/* Single-column, narrower-card layout to match CalendarLinkDetail.
-          Jack prefers the calendar dialog's stacked Section pattern over
-          the old 2-column grid; min-h locks the body so flipping
-          Details -> History doesn't shrink the card. */}
-      <div className="flex h-full max-h-[80vh] min-h-[640px] flex-col">
-        {/* Header */}
-        <div className="flex items-start gap-3 border-b border-nativz-border py-4 pl-6 pr-14">
-          <ClientLogo
-            src={project.client_logo_url}
-            name={project.client_name ?? 'Client'}
-            size="md"
+    <ContentDetailDialog
+      open={open}
+      onClose={onClose}
+      logoUrl={project.client_logo_url}
+      brandName={project.client_name ?? 'Client'}
+      brandLabel={project.client_name ?? 'Unassigned brand'}
+      title={
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={() => {
+            if (name.trim() && name !== project.name) void patch({ name: name.trim() });
+          }}
+          className="-ml-2 w-full rounded-md border border-transparent bg-transparent px-2 py-1 text-lg font-semibold text-text-primary transition-colors hover:border-nativz-border focus:border-accent focus:outline-none"
+        />
+      }
+      headerExtras={
+        <>
+          {saving && <Loader2 size={14} className="animate-spin text-text-muted" />}
+          <EditingShareButton
+            projectId={project.id}
+            hasVideos={(data?.videos.length ?? 0) > 0}
           />
-          <div className="min-w-0 flex-1">
-            <p className="text-xs text-text-muted">
-              {project.client_name ?? 'Unassigned brand'}
-            </p>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onBlur={() => {
-                if (name.trim() && name !== project.name) void patch({ name: name.trim() });
-              }}
-              className="-ml-2 w-full rounded-md border border-transparent bg-transparent px-2 py-1 text-lg font-semibold text-text-primary transition-colors hover:border-nativz-border focus:border-accent focus:outline-none"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            {saving && <Loader2 size={14} className="animate-spin text-text-muted" />}
-            <EditingShareButton
-              projectId={project.id}
-              hasVideos={(data?.videos.length ?? 0) > 0}
-            />
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="px-6 pt-3">
-          <SubNav
-            ariaLabel="Project sections"
-            items={[
-              { slug: 'details', label: 'Details' },
-              { slug: 'history', label: 'History' },
-            ] as const}
-            active={tab}
-            onChange={(s) => setTab(s)}
+        </>
+      }
+      tab={tab}
+      onTabChange={setTab}
+      tabsAriaLabel="Project sections"
+      history={
+        projectId && (
+          <ShareHistoryPanel
+            endpoint={`/api/admin/editing/projects/${projectId}/activity`}
           />
-        </div>
+        )
+      }
+      footer={
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={archive}
+          className="text-text-muted hover:text-[color:var(--status-danger)]"
+        >
+          <Archive size={13} />
+          Archive project
+        </Button>
+      }
+    >
+      <Section
+        label={`Edited videos${
+          data?.videos.length ? ` (${data.videos.length})` : ''
+        }`}
+      >
+        <EditedVideosBox
+          loading={loading}
+          videos={data?.videos ?? []}
+          dragActive={dragActive}
+          setDragActive={setDragActive}
+          onUploadFiles={(files) => void startUploads(files)}
+          onDelete={(id) => void deleteVideo(id)}
+        />
+      </Section>
 
-        {/* Body */}
-        {tab === 'history' ? (
-          <div className="flex-1 overflow-y-auto p-6">
-            {projectId && (
-              <ShareHistoryPanel
-                endpoint={`/api/admin/editing/projects/${projectId}/activity`}
-              />
-            )}
+      {uploads.length > 0 && (
+        <Section label="Uploads">
+          <div className="rounded-lg border border-nativz-border bg-surface p-3">
+            <ul className="space-y-1.5">
+              {uploads.map((j) => (
+                <UploadRow key={j.id} job={j} />
+              ))}
+            </ul>
           </div>
-        ) : (
-          <div className="flex-1 space-y-5 overflow-y-auto p-6">
-            <Section
-              label={`Edited videos${
-                data?.videos.length ? ` (${data.videos.length})` : ''
-              }`}
+        </Section>
+      )}
+
+      <Section label="Raw footage">
+        <div className="rounded-lg border border-nativz-border bg-surface p-3">
+          <input
+            value={driveUrl}
+            onChange={(e) => setDriveUrl(e.target.value)}
+            onBlur={() => {
+              const trimmed = driveUrl.trim();
+              void patch({ drive_folder_url: trimmed || null });
+            }}
+            placeholder="Paste a Google Drive folder link"
+            className="block w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+          />
+          {driveUrl && (
+            <a
+              href={driveUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-flex items-center gap-1 text-[12px] text-accent-text hover:underline"
             >
-              <EditedVideosBox
-                loading={loading}
-                videos={data?.videos ?? []}
-                dragActive={dragActive}
-                setDragActive={setDragActive}
-                onUploadFiles={(files) => void startUploads(files)}
-                onDelete={(id) => void deleteVideo(id)}
-              />
-            </Section>
-
-            {uploads.length > 0 && (
-              <Section label="Uploads">
-                <div className="rounded-lg border border-nativz-border bg-surface p-3">
-                  <ul className="space-y-1.5">
-                    {uploads.map((j) => (
-                      <UploadRow key={j.id} job={j} />
-                    ))}
-                  </ul>
-                </div>
-              </Section>
-            )}
-
-            <Section label="Raw footage">
-              <div className="rounded-lg border border-nativz-border bg-surface p-3">
-                <input
-                  value={driveUrl}
-                  onChange={(e) => setDriveUrl(e.target.value)}
-                  onBlur={() => {
-                    const trimmed = driveUrl.trim();
-                    void patch({ drive_folder_url: trimmed || null });
-                  }}
-                  placeholder="Paste a Google Drive folder link"
-                  className="block w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                />
-                {driveUrl && (
-                  <a
-                    href={driveUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-2 inline-flex items-center gap-1 text-[12px] text-accent-text hover:underline"
-                  >
-                    Open folder <ExternalLink size={11} />
-                  </a>
-                )}
-              </div>
-            </Section>
-
-            <Section label="Project settings">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <SideField label="Status">
-                  <ComboSelect
-                    value={status}
-                    onChange={(next) => {
-                      const value = next as EditingProjectStatus;
-                      setStatus(value);
-                      void patch({ status: value });
-                    }}
-                    options={STATUS_OPTIONS}
-                    searchable={false}
-                  />
-                </SideField>
-                <SideField label="Type">
-                  <ComboSelect
-                    value={type}
-                    onChange={(next) => {
-                      const value = next as EditingProjectType;
-                      setType(value);
-                      void patch({ project_type: value });
-                    }}
-                    options={TYPE_OPTIONS}
-                    searchable={false}
-                  />
-                </SideField>
-              </div>
-            </Section>
-
-            <Section label="Strategist">
-              <AssigneePicker
-                projectId={project.id}
-                role="strategist_id"
-                currentUserId={data?.project.strategist_id ?? project.strategist_id}
-                currentEmail={
-                  data?.project.strategist_email ?? project.strategist_email
-                }
-                variant="field"
-                onSaved={() => {
-                  void load();
-                  onChanged();
-                }}
-              />
-            </Section>
-
-            <Section label="Notes">
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                onBlur={() => {
-                  void patch({ notes: notes.trim() || null });
-                }}
-                rows={4}
-                placeholder="Brief, references, hand-off context..."
-                className="block w-full resize-none rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-              />
-            </Section>
-
-            <Section label="Project">
-              <div className="space-y-1 rounded-lg border border-nativz-border bg-surface p-3 text-[11px] text-text-muted">
-                <p>Created {formatTimestamp(project.created_at)}</p>
-                <p>Updated {formatTimestamp(project.updated_at)}</p>
-                {project.ready_at && <p>Marked ready {formatTimestamp(project.ready_at)}</p>}
-                {project.approved_at && (
-                  <p>Approved {formatTimestamp(project.approved_at)}</p>
-                )}
-                {project.scheduled_at && (
-                  <p>Done {formatTimestamp(project.scheduled_at)}</p>
-                )}
-              </div>
-            </Section>
-          </div>
-        )}
-
-        {/* Footer mirrors CalendarLinkDetail: secondary archive on the
-            right, no busy primary action since uploads/share/edits all
-            stamp inline. */}
-        <div className="flex items-center justify-end gap-2 border-t border-nativz-border px-6 py-3">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={archive}
-            className="text-text-muted hover:text-[color:var(--status-danger)]"
-          >
-            <Archive size={13} />
-            Archive project
-          </Button>
+              Open folder <ExternalLink size={11} />
+            </a>
+          )}
         </div>
-      </div>
-    </Dialog>
+      </Section>
+
+      <Section label="Project settings">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <SideField label="Status">
+            <ComboSelect
+              value={status}
+              onChange={(next) => {
+                const value = next as EditingProjectStatus;
+                setStatus(value);
+                void patch({ status: value });
+              }}
+              options={STATUS_OPTIONS}
+              searchable={false}
+            />
+          </SideField>
+          <SideField label="Type">
+            <ComboSelect
+              value={type}
+              onChange={(next) => {
+                const value = next as EditingProjectType;
+                setType(value);
+                void patch({ project_type: value });
+              }}
+              options={TYPE_OPTIONS}
+              searchable={false}
+            />
+          </SideField>
+        </div>
+      </Section>
+
+      <Section label="Strategist">
+        <AssigneePicker
+          projectId={project.id}
+          role="strategist_id"
+          currentUserId={data?.project.strategist_id ?? project.strategist_id}
+          currentEmail={
+            data?.project.strategist_email ?? project.strategist_email
+          }
+          variant="field"
+          onSaved={() => {
+            void load();
+            onChanged();
+          }}
+        />
+      </Section>
+
+      <Section label="Notes">
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          onBlur={() => {
+            void patch({ notes: notes.trim() || null });
+          }}
+          rows={4}
+          placeholder="Brief, references, hand-off context..."
+          className="block w-full resize-none rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+        />
+      </Section>
+
+      <Section label="Project">
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+          <Field label="Created">
+            <span className="text-text-secondary">
+              {formatTimestamp(project.created_at)}
+            </span>
+          </Field>
+          <Field label="Updated">
+            <span className="text-text-secondary">
+              {formatTimestamp(project.updated_at)}
+            </span>
+          </Field>
+          {project.ready_at && (
+            <Field label="Marked ready">
+              <span className="text-text-secondary">
+                {formatTimestamp(project.ready_at)}
+              </span>
+            </Field>
+          )}
+          {project.approved_at && (
+            <Field label="Approved">
+              <span className="text-text-secondary">
+                {formatTimestamp(project.approved_at)}
+              </span>
+            </Field>
+          )}
+          {project.scheduled_at && (
+            <Field label="Done">
+              <span className="text-text-secondary">
+                {formatTimestamp(project.scheduled_at)}
+              </span>
+            </Field>
+          )}
+        </dl>
+      </Section>
+    </ContentDetailDialog>
   );
-}
-
-
-function Section({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-2">
-      <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
-        {label}
-      </p>
-      {children}
-    </div>
-  );
-}
-
-function SideField({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <label className="block text-xs font-medium uppercase tracking-wide text-text-muted">
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-function formatTimestamp(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }

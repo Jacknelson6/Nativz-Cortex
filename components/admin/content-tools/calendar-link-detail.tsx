@@ -22,10 +22,14 @@ import {
 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { SubNav } from '@/components/ui/sub-nav';
-import { ClientLogo } from '@/components/clients/client-logo';
 import { ShareHistoryPanel } from './share-history-panel';
 import { EditedVideosBox, UploadRow } from './edited-videos-box';
+import {
+  ContentDetailDialog,
+  type DetailTab,
+} from './detail-dialog/dialog-shell';
+import { Section, Field } from './detail-dialog/section';
+import { formatRelative, formatTimestamp } from './detail-dialog/format';
 import type { EditingProjectVideo } from '@/lib/editing/types';
 import {
   enqueueUploads,
@@ -93,8 +97,8 @@ const EDITING_BRIDGE_CACHE = new Map<string, BridgedProject>();
 
 /**
  * Detail dialog for a calendar share link (rows with `kind === 'calendar'`
- * in the unified review table). Mirrors the look + feel of
- * `EditingProjectDetail` so the two row types feel like one product.
+ * in the unified review table). Built on the shared `ContentDetailDialog`
+ * chassis so it reads identically to `EditingProjectDetail`.
  *
  * Why a dialog instead of routing to `/c/<token>`:
  * Jack's flow is "I clicked on a brand row to look at the project, not
@@ -147,7 +151,7 @@ export function CalendarLinkDetail({
   const [markingFollowup, setMarkingFollowup] = useState(false);
   const [markingSent, setMarkingSent] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [tab, setTab] = useState<'details' | 'history'>('details');
+  const [tab, setTab] = useState<DetailTab>('details');
   // Recipients live on the detail panel itself (not just the send preview)
   // so admins see who'll receive the email *before* clicking send. Empty
   // state matters: if a brand has zero contacts the underlying /send route
@@ -528,6 +532,72 @@ export function CalendarLinkDetail({
         ? 'Add a contact to the brand profile to send the calendar.'
         : null;
 
+  const showFooter = tab === 'details' && (canSend || !isExpired);
+  const footer = showFooter ? (
+    <>
+      {/* Out-of-band send recorder. When the link went out via Gmail
+          or Slack instead of the in-app Send button, stamping it
+          here keeps DATE SENT honest in the table without firing
+          a duplicate email at the client. */}
+      {!isExpired && !isAbandoned && !hasBeenSent && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={markSent}
+          disabled={markingSent}
+          className="text-text-muted hover:text-text-primary"
+          title="Record an out-of-band send (Gmail, Slack, manual paste) without firing another email"
+        >
+          {markingSent ? 'Recording...' : 'Mark sent'}
+        </Button>
+      )}
+      {/* Out-of-band followup recorder. Useful when the chase happened
+          on Slack, text, or in person — stamps the table indicator
+          without firing another email at the client. Only surfaces
+          while the link is still live and pending action. */}
+      {!isExpired && !isAbandoned && hasBeenSent && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={markFollowedUp}
+          disabled={markingFollowup}
+          className="text-text-muted hover:text-text-primary"
+          title="Record an out-of-band nudge (Slack, text, in-person) without sending an email"
+        >
+          {markingFollowup ? 'Recording...' : 'Mark followed up'}
+        </Button>
+      )}
+      {!isExpired && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={revoke}
+          disabled={revoking}
+          className="text-status-danger hover:bg-status-danger/10"
+        >
+          {revoking ? 'Revoking...' : 'Revoke link'}
+        </Button>
+      )}
+      {canSend && (
+        <Button
+          type="button"
+          size="sm"
+          onClick={() =>
+            openSendPreview(hasBeenSent ? 'revised' : 'initial')
+          }
+          disabled={!!sendDisabledReason}
+          title={sendDisabledReason ?? undefined}
+        >
+          {hasBeenSent ? <RefreshCcw size={13} /> : <Send size={13} />}
+          {hasBeenSent ? 'Resend (revised)' : 'Send share link'}
+        </Button>
+      )}
+    </>
+  ) : null;
+
   return (
     <>
       <SendPreviewDialog
@@ -546,340 +616,242 @@ export function CalendarLinkDetail({
         onClose={closeSendPreview}
         onSend={confirmSend}
       />
-    {/* Both dialogs render at once when the preview is open. The native
-        <dialog> top-layer stack handles ordering, which avoids the
-        old bug where toggling open=false on this parent fired a
-        programmatic close event — that cascaded into the parent's
-        onClose prop, unmounted the whole tree, and dropped the preview
-        state before SendPreviewDialog could render. */}
-    <Dialog open={open} onClose={onClose} title="" maxWidth="2xl" bodyClassName="p-0">
-      {/* min-h locks the dialog at the height of the Details tab so
-          flipping to History (often shorter) doesn't shrink the card —
-          Jack flagged this as jarring. max-h is the soft viewport cap. */}
-      <div className="flex h-full max-h-[80vh] min-h-[640px] flex-col">
-        {/* Header */}
-        <div className="flex items-start gap-3 border-b border-nativz-border py-4 pl-6 pr-14">
-          <ClientLogo
-            src={link.client_logo_url}
-            name={link.client_name ?? 'Client'}
-            size="md"
+      {/* Both dialogs render at once when the preview is open. The native
+          <dialog> top-layer stack handles ordering, which avoids the
+          old bug where toggling open=false on this parent fired a
+          programmatic close event — that cascaded into the parent's
+          onClose prop, unmounted the whole tree, and dropped the preview
+          state before SendPreviewDialog could render. */}
+      <ContentDetailDialog
+        open={open}
+        onClose={onClose}
+        logoUrl={link.client_logo_url}
+        brandName={link.client_name ?? 'Client'}
+        brandLabel={link.client_name ?? 'Unassigned brand'}
+        title={
+          <p className="text-lg font-semibold text-text-primary">
+            {link.name && link.name.trim().length > 0 ? link.name : dateRange}
+          </p>
+        }
+        headerExtras={<StatusPill status={link.status} />}
+        tab={tab}
+        onTabChange={setTab}
+        tabsAriaLabel="Calendar link sections"
+        history={
+          <ShareHistoryPanel
+            endpoint={`/api/calendar/drops/${link.drop_id}/activity`}
+            emptyMessage="No activity yet. Mint a share link or send a notification to get started."
           />
-          <div className="min-w-0 flex-1">
-            <p className="text-xs text-text-muted">
-              {link.client_name ?? 'Unassigned brand'}
-            </p>
-            <p className="text-lg font-semibold text-text-primary">
-              {link.name && link.name.trim().length > 0 ? link.name : dateRange}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <StatusPill status={link.status} />
-          </div>
-        </div>
-
-        {/* Tabs: Details (default) vs History. History mirrors the
-            editing-project dialog and feeds off the drop activity API. */}
-        <div className="px-6 pt-3">
-          <SubNav
-            items={[
-              { slug: 'details', label: 'Details' },
-              { slug: 'history', label: 'History' },
-            ] as const}
-            active={tab}
-            onChange={(s) => setTab(s)}
-            ariaLabel="Calendar link sections"
-          />
-        </div>
-
-        {/* Body */}
-        {tab === 'history' ? (
-          <div className="flex-1 overflow-y-auto p-6">
-            <ShareHistoryPanel
-              endpoint={`/api/calendar/drops/${link.drop_id}/activity`}
-              emptyMessage="No activity yet. Mint a share link or send a notification to get started."
-            />
-          </div>
-        ) : (
-        <div className="flex-1 space-y-5 overflow-y-auto p-6">
-          {/* Share link — primary affordance. Sits up top so copying
-              the URL takes one click from the table click. */}
-          <Section label="Share link">
-            <div className="rounded-lg border border-nativz-border bg-surface p-3">
-              <div className="flex items-center gap-2">
-                <input
-                  readOnly
-                  value={shareUrl}
-                  onFocus={(e) => e.currentTarget.select()}
-                  className="block w-full truncate rounded-md border border-nativz-border bg-background px-3 py-2 font-mono text-[12px] text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={copyShareUrl}
-                  aria-label="Copy share link"
-                >
-                  <Copy size={13} />
-                  {copied ? 'Copied' : 'Copy'}
-                </Button>
-                <a
-                  href={shareUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex h-8 items-center gap-1 rounded-md bg-accent-surface/40 px-2.5 text-[12px] font-medium text-accent-text transition-colors hover:bg-accent-surface/60"
-                >
-                  Open
-                  <ExternalLink size={11} />
-                </a>
-              </div>
-              {(isExpired || isAbandoned) && (
-                <p className="mt-2 text-[11px] text-text-muted">
-                  {isExpired
-                    ? 'This link is expired. Visitors will see the expired page on next load.'
-                    : 'This link is marked abandoned. The client never approved or revised.'}
-                </p>
-              )}
+        }
+        footer={footer}
+      >
+        {/* Share link — primary affordance. Sits up top so copying
+            the URL takes one click from the table click. */}
+        <Section label="Share link">
+          <div className="rounded-lg border border-nativz-border bg-surface p-3">
+            <div className="flex items-center gap-2">
+              <input
+                readOnly
+                value={shareUrl}
+                onFocus={(e) => e.currentTarget.select()}
+                className="block w-full truncate rounded-md border border-nativz-border bg-background px-3 py-2 font-mono text-[12px] text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={copyShareUrl}
+                aria-label="Copy share link"
+              >
+                <Copy size={13} />
+                {copied ? 'Copied' : 'Copy'}
+              </Button>
+              <a
+                href={shareUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-8 items-center gap-1 rounded-md bg-accent-surface/40 px-2.5 text-[12px] font-medium text-accent-text transition-colors hover:bg-accent-surface/60"
+              >
+                Open
+                <ExternalLink size={11} />
+              </a>
             </div>
-            {hasBeenSent && link.last_sent_at && (
-              <p className="text-[11px] text-text-muted">
-                Last sent {formatRelative(link.last_sent_at)}
-                {link.send_count > 1 ? ` · ${link.send_count} sends` : ''}
+            {(isExpired || isAbandoned) && (
+              <p className="mt-2 text-[11px] text-text-muted">
+                {isExpired
+                  ? 'This link is expired. Visitors will see the expired page on next load.'
+                  : 'This link is marked abandoned. The client never approved or revised.'}
               </p>
             )}
-          </Section>
+          </div>
+          {hasBeenSent && link.last_sent_at && (
+            <p className="text-[11px] text-text-muted">
+              Last sent {formatRelative(link.last_sent_at)}
+              {link.send_count > 1 ? ` · ${link.send_count} sends` : ''}
+            </p>
+          )}
+        </Section>
 
-          {/* Recipients. Brand profile is the single source of truth, so
-              this list mirrors the brand's POC roster directly. The empty
-              state surfaces the actual reason a send would fail (no
-              contacts) instead of the previous silent-fail UX. */}
-          <Section
-            label={
-              contacts && contacts.length > 0
-                ? `Recipients (${contacts.length})`
-                : 'Recipients'
-            }
-          >
-            <div className="rounded-lg border border-nativz-border bg-surface p-3">
-              {contactsLoading ? (
-                <p className="text-[12px] text-text-muted">Loading recipients…</p>
-              ) : !contacts || contacts.length === 0 ? (
-                <div className="flex items-start gap-3">
-                  <Users size={14} className="mt-0.5 shrink-0 text-text-muted" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[12px] text-text-secondary">
-                      No contacts on the brand profile for {link.client_name ?? 'this brand'}.
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-text-muted">
-                      Add a POC on the brand profile before sending.
-                    </p>
-                  </div>
+        {/* Recipients. Brand profile is the single source of truth, so
+            this list mirrors the brand's POC roster directly. The empty
+            state surfaces the actual reason a send would fail (no
+            contacts) instead of the previous silent-fail UX. */}
+        <Section
+          label={
+            contacts && contacts.length > 0
+              ? `Recipients (${contacts.length})`
+              : 'Recipients'
+          }
+        >
+          <div className="rounded-lg border border-nativz-border bg-surface p-3">
+            {contactsLoading ? (
+              <p className="text-[12px] text-text-muted">Loading recipients…</p>
+            ) : !contacts || contacts.length === 0 ? (
+              <div className="flex items-start gap-3">
+                <Users size={14} className="mt-0.5 shrink-0 text-text-muted" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12px] text-text-secondary">
+                    No contacts on the brand profile for {link.client_name ?? 'this brand'}.
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-text-muted">
+                    Add a POC on the brand profile before sending.
+                  </p>
                 </div>
-              ) : (
-                <ul className="space-y-2">
-                  {contacts.map((c) => (
-                    <li
-                      key={c.id}
-                      className="flex items-center justify-between gap-3"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-[13px] text-text-primary">
-                          {c.name?.trim() ? c.name : c.email}
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {contacts.map((c) => (
+                  <li
+                    key={c.id}
+                    className="flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] text-text-primary">
+                        {c.name?.trim() ? c.name : c.email}
+                      </p>
+                      {c.name?.trim() && (
+                        <p className="truncate text-[11px] text-text-muted">
+                          {c.email}
                         </p>
-                        {c.name?.trim() && (
-                          <p className="truncate text-[11px] text-text-muted">
-                            {c.email}
-                          </p>
-                        )}
-                      </div>
-                      {c.role?.trim() && (
-                        <span className="shrink-0 text-[11px] text-text-muted">
-                          {c.role}
-                        </span>
                       )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </Section>
-
-          {/* Edited videos. Bridges the calendar share to an
-              editing_projects row via the shared drop_id, so the admin
-              can drop edited cuts straight onto a calendar without
-              bouncing through /admin/editing. The project row is
-              find-or-created on first upload — empty state is just the
-              drop zone. */}
-          <Section
-            label={`Edited videos${
-              bridge?.videos?.length ? ` (${bridge.videos.length})` : ''
-            }`}
-          >
-            <EditedVideosBox
-              loading={bridgeLoading || creatingProject}
-              videos={bridge?.videos ?? []}
-              dragActive={dragActive}
-              setDragActive={setDragActive}
-              onUploadFiles={(files) => void startUploads(files)}
-              onDelete={(id) => void deleteVideo(id)}
-            />
-          </Section>
-
-          {uploads.length > 0 && (
-            <Section label="Uploads">
-              <div className="rounded-lg border border-nativz-border bg-surface p-3">
-                <ul className="space-y-1.5">
-                  {uploads.map((j) => (
-                    <UploadRow key={j.id} job={j} />
-                  ))}
-                </ul>
-              </div>
-            </Section>
-          )}
-
-          {/* Counts: approved / revising / pending. Skipped when the
-              project has zero posts so the modal doesn't read as broken
-              for an empty calendar. */}
-          {link.post_count > 0 && (
-            <Section label={`Posts (${link.post_count})`}>
-              <div className="flex flex-wrap gap-2">
-                <Counter
-                  icon={<CheckCircle2 size={12} />}
-                  label="approved"
-                  value={link.approved_count}
-                  tone="success"
-                />
-                <Counter
-                  icon={<MessagesSquare size={12} />}
-                  label="revising"
-                  value={link.changes_count}
-                  tone="warning"
-                />
-                <Counter
-                  icon={<Eye size={12} />}
-                  label="pending"
-                  value={link.pending_count}
-                  tone="muted"
-                />
-              </div>
-            </Section>
-          )}
-
-          {/* Project metadata. Date range + last-viewed are the only
-              two fields that actually drive Jack's followup decision. */}
-          <Section label="Project">
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-              <Field label="Date range">
-                <span className="inline-flex items-center gap-1.5 text-text-secondary">
-                  <CalendarDays size={12} className="text-text-tertiary" />
-                  {dateRange}
-                </span>
-              </Field>
-              <Field label="Last viewed">
-                <span className="inline-flex items-center gap-1.5 text-text-secondary">
-                  <Clock3 size={12} className="text-text-tertiary" />
-                  {link.last_viewed_at ? formatRelative(link.last_viewed_at) : 'Never'}
-                </span>
-              </Field>
-              <Field label="Created">
-                <span className="text-text-secondary">
-                  {formatTimestamp(link.created_at)}
-                </span>
-              </Field>
-              <Field label="Expires">
-                <span className="text-text-secondary">
-                  {formatTimestamp(link.expires_at)}
-                </span>
-              </Field>
-              {link.followup_count > 0 && (
-                <Field label="Follow-ups sent">
-                  <span className="text-text-secondary">
-                    {link.followup_count}
-                    {link.last_followup_at ? ` (last ${formatRelative(link.last_followup_at)})` : ''}
-                  </span>
-                </Field>
-              )}
-              {link.abandoned_at && (
-                <Field label="Abandoned">
-                  <span className="text-text-secondary">
-                    {formatTimestamp(link.abandoned_at)}
-                  </span>
-                </Field>
-              )}
-            </dl>
-          </Section>
-
-        </div>
-        )}
-
-        {/* Footer actions. Revoke (destructive) sits to the left of the
-            primary Send/Resend CTA. Both are right-aligned so the
-            destructive button never lands closest to the close X. */}
-        {tab === 'details' && (canSend || !isExpired) && (
-          <div className="flex items-center justify-end gap-2 border-t border-nativz-border px-6 py-4">
-            {/* Out-of-band send recorder. When the link went out via Gmail
-                or Slack instead of the in-app Send button, stamping it
-                here keeps DATE SENT honest in the table without firing
-                a duplicate email at the client. */}
-            {!isExpired && !isAbandoned && !hasBeenSent && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={markSent}
-                disabled={markingSent}
-                className="text-text-muted hover:text-text-primary"
-                title="Record an out-of-band send (Gmail, Slack, manual paste) without firing another email"
-              >
-                {markingSent ? 'Recording...' : 'Mark sent'}
-              </Button>
-            )}
-            {/* Out-of-band followup recorder. Useful when the chase happened
-                on Slack, text, or in person — stamps the table indicator
-                without firing another email at the client. Only surfaces
-                while the link is still live and pending action. */}
-            {!isExpired && !isAbandoned && hasBeenSent && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={markFollowedUp}
-                disabled={markingFollowup}
-                className="text-text-muted hover:text-text-primary"
-                title="Record an out-of-band nudge (Slack, text, in-person) without sending an email"
-              >
-                {markingFollowup ? 'Recording...' : 'Mark followed up'}
-              </Button>
-            )}
-            {!isExpired && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={revoke}
-                disabled={revoking}
-                className="text-status-danger hover:bg-status-danger/10"
-              >
-                {revoking ? 'Revoking...' : 'Revoke link'}
-              </Button>
-            )}
-            {canSend && (
-              <Button
-                type="button"
-                size="sm"
-                onClick={() =>
-                  openSendPreview(hasBeenSent ? 'revised' : 'initial')
-                }
-                disabled={!!sendDisabledReason}
-                title={sendDisabledReason ?? undefined}
-              >
-                {hasBeenSent ? <RefreshCcw size={13} /> : <Send size={13} />}
-                {hasBeenSent ? 'Resend (revised)' : 'Send share link'}
-              </Button>
+                    </div>
+                    {c.role?.trim() && (
+                      <span className="shrink-0 text-[11px] text-text-muted">
+                        {c.role}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
+        </Section>
+
+        {/* Edited videos. Bridges the calendar share to an
+            editing_projects row via the shared drop_id, so the admin
+            can drop edited cuts straight onto a calendar without
+            bouncing through /admin/editing. The project row is
+            find-or-created on first upload — empty state is just the
+            drop zone. */}
+        <Section
+          label={`Edited videos${
+            bridge?.videos?.length ? ` (${bridge.videos.length})` : ''
+          }`}
+        >
+          <EditedVideosBox
+            loading={bridgeLoading || creatingProject}
+            videos={bridge?.videos ?? []}
+            dragActive={dragActive}
+            setDragActive={setDragActive}
+            onUploadFiles={(files) => void startUploads(files)}
+            onDelete={(id) => void deleteVideo(id)}
+          />
+        </Section>
+
+        {uploads.length > 0 && (
+          <Section label="Uploads">
+            <div className="rounded-lg border border-nativz-border bg-surface p-3">
+              <ul className="space-y-1.5">
+                {uploads.map((j) => (
+                  <UploadRow key={j.id} job={j} />
+                ))}
+              </ul>
+            </div>
+          </Section>
         )}
-      </div>
-    </Dialog>
+
+        {/* Counts: approved / revising / pending. Skipped when the
+            project has zero posts so the modal doesn't read as broken
+            for an empty calendar. */}
+        {link.post_count > 0 && (
+          <Section label={`Posts (${link.post_count})`}>
+            <div className="flex flex-wrap gap-2">
+              <Counter
+                icon={<CheckCircle2 size={12} />}
+                label="approved"
+                value={link.approved_count}
+                tone="success"
+              />
+              <Counter
+                icon={<MessagesSquare size={12} />}
+                label="revising"
+                value={link.changes_count}
+                tone="warning"
+              />
+              <Counter
+                icon={<Eye size={12} />}
+                label="pending"
+                value={link.pending_count}
+                tone="muted"
+              />
+            </div>
+          </Section>
+        )}
+
+        {/* Project metadata. Date range + last-viewed are the only
+            two fields that actually drive Jack's followup decision. */}
+        <Section label="Project">
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+            <Field label="Date range">
+              <span className="inline-flex items-center gap-1.5 text-text-secondary">
+                <CalendarDays size={12} className="text-text-tertiary" />
+                {dateRange}
+              </span>
+            </Field>
+            <Field label="Last viewed">
+              <span className="inline-flex items-center gap-1.5 text-text-secondary">
+                <Clock3 size={12} className="text-text-tertiary" />
+                {link.last_viewed_at ? formatRelative(link.last_viewed_at) : 'Never'}
+              </span>
+            </Field>
+            <Field label="Created">
+              <span className="text-text-secondary">
+                {formatTimestamp(link.created_at)}
+              </span>
+            </Field>
+            <Field label="Expires">
+              <span className="text-text-secondary">
+                {formatTimestamp(link.expires_at)}
+              </span>
+            </Field>
+            {link.followup_count > 0 && (
+              <Field label="Follow-ups sent">
+                <span className="text-text-secondary">
+                  {link.followup_count}
+                  {link.last_followup_at ? ` (last ${formatRelative(link.last_followup_at)})` : ''}
+                </span>
+              </Field>
+            )}
+            {link.abandoned_at && (
+              <Field label="Abandoned">
+                <span className="text-text-secondary">
+                  {formatTimestamp(link.abandoned_at)}
+                </span>
+              </Field>
+            )}
+          </dl>
+        </Section>
+      </ContentDetailDialog>
     </>
   );
 }
@@ -1050,40 +1022,6 @@ function SendPreviewDialog({
   );
 }
 
-function Section({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-2">
-      <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
-        {label}
-      </p>
-      {children}
-    </div>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="min-w-0 space-y-0.5">
-      <dt className="text-[11px] uppercase tracking-wide text-text-muted">
-        {label}
-      </dt>
-      <dd className="text-sm">{children}</dd>
-    </div>
-  );
-}
-
 function Counter({
   icon,
   label,
@@ -1161,28 +1099,4 @@ function formatDateRange(start: string | null, end: string | null): string {
     return `${sM} ${s.getDate()} to ${eM} ${e.getDate()}, ${s.getFullYear()}`;
   }
   return `${sM} ${s.getDate()}, ${s.getFullYear()} to ${eM} ${e.getDate()}, ${e.getFullYear()}`;
-}
-
-function formatRelative(iso: string): string {
-  const then = new Date(iso).getTime();
-  const now = Date.now();
-  const diff = Math.max(0, now - then);
-  const min = 60_000;
-  const hr = 60 * min;
-  const day = 24 * hr;
-  if (diff < hr) return `${Math.max(1, Math.round(diff / min))}m ago`;
-  if (diff < day) return `${Math.round(diff / hr)}h ago`;
-  if (diff < 7 * day) return `${Math.round(diff / day)}d ago`;
-  return new Date(iso).toLocaleDateString();
-}
-
-function formatTimestamp(iso: string | null): string {
-  if (!iso) return '';
-  return new Date(iso).toLocaleString('default', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }
