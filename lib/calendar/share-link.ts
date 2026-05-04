@@ -4,7 +4,7 @@ import { getPostingService } from '@/lib/posting';
 /**
  * Single source of truth for minting a content-drop share link.
  *
- * Jack's mental model is "the project IS the share link" — re-sharing
+ * Jack's mental model is "the project IS the share link", re-sharing
  * a brand should refresh the existing project row, not spawn a new one.
  * Migration 208 enforces that with a partial unique index
  * (`uniq_active_share_link_per_client`); this helper lets the call
@@ -21,7 +21,7 @@ import { getPostingService } from '@/lib/posting';
  *     refresh drops posts that were already approved and queued in
  *     Zernio, this helper now actively withdraws them. Without that
  *     step, an admin could "pull" a post from a share link without
- *     realizing Zernio still owned its publish slot — exactly what
+ *     realizing Zernio still owned its publish slot, exactly what
  *     happened to SafeStop. Already-published posts can't be unpublished
  *     and are surfaced via `unpublishableOrphans` instead.
  *
@@ -30,7 +30,7 @@ import { getPostingService } from '@/lib/posting';
  * comment history stays attached to the old `post_review_link_map`
  * pointers; nothing destructive happens to past review activity.
  *
- * The 30-day token TTL is renewed every refresh — the client gets a
+ * The 30-day token TTL is renewed every refresh; the client gets a
  * full review window each time we hand them a new cycle.
  */
 
@@ -78,7 +78,7 @@ export async function mintOrRefreshShareLink(
     .maybeSingle<{ id: string; token: string; included_post_ids: string[] | null }>();
 
   if (existing) {
-    // Diff old vs new included_post_ids — anything in the OLD set but
+    // Diff old vs new included_post_ids; anything in the OLD set but
     // not the new is an "orphan" that the refresh is implicitly
     // dropping. If we don't withdraw orphans from Zernio, an approved
     // post can keep its publish slot even after the admin pulls it
@@ -159,7 +159,7 @@ export async function mintOrRefreshShareLink(
  *   - status='draft' or anything else → no Zernio side effect needed,
  *     just leaves the row alone.
  *
- * Failures from Zernio are logged but non-fatal — better to ship the
+ * Failures from Zernio are logged but non-fatal; better to ship the
  * share-link refresh than to block on a single 5xx. The unhealthy rows
  * stay flagged via `late_post_id` until the next refresh retries them.
  */
@@ -188,7 +188,7 @@ async function cancelOrphanPostsInZernio(
     late_post_id: string | null;
   }>) {
     if (row.status === 'published' || row.status === 'partially_failed') {
-      // Already shipped on at least one platform — Zernio can't reverse
+      // Already shipped on at least one platform; Zernio can't reverse
       // that. Surface so the admin can manually delete from each platform.
       if (row.late_post_id) unpublishable.push(row.id);
       continue;
@@ -197,7 +197,7 @@ async function cancelOrphanPostsInZernio(
     if (!row.late_post_id) continue; // never reached Zernio, nothing to cancel
 
     if (row.status !== 'scheduled' && row.status !== 'publishing') {
-      // 'draft' or 'failed' — no live Zernio post.
+      // 'draft' or 'failed': no live Zernio post.
       continue;
     }
 
@@ -209,7 +209,7 @@ async function cancelOrphanPostsInZernio(
           err instanceof Error ? err.message : String(err)
         }`,
       );
-      // Don't `continue` — still revert the DB so the post stops looking
+      // Don't `continue`: still revert the DB so the post stops looking
       // "scheduled" in our UI. Zernio cleanup can be retried by another
       // admin action.
     }
