@@ -51,88 +51,88 @@ The product framing rule from `project_credits_directional_pivot.md` still holds
 **Description:** As an admin viewing a client, I want to know at-a-glance how many deliverables they get this month, per service, so I don't have to look at the proposal to remember.
 
 **Acceptance Criteria:**
-- [ ] New helper `lib/clients/get-service-capacity.ts` exports `getServiceCapacity(clientId)` returning `{ editing: { monthly: 10, period_start, period_end }, smm: { monthly: 60 }, blogging: { monthly: 4 } }` (any service the client doesn't have enabled is omitted).
-- [ ] Capacity is read from the most recent `proposals.tier_key` joined to `proposal_templates.tiers_preview[*].deliverables` (jsonb shape: `{ editing: 10, smm: 60, blogging: 4 }`).
-- [ ] If a client has a service enabled but no signed proposal (rare, manually-onboarded), capacity falls back to a per-service default in `lib/clients/service-defaults.ts` (`editing: 0`, `smm: 60`, `blogging: 0`) and the helper returns a `source: 'default' | 'proposal'` field.
-- [ ] Helper is unit-tested for the three resolution paths: proposal hit, fallback, service-not-enabled.
-- [ ] Typecheck + lint pass.
+- [x] New helper `lib/clients/get-service-capacity.ts` exports `getServiceCapacity(clientId)` returning `{ editing: { monthly: 10, period_start, period_end }, smm: { monthly: 60 }, blogging: { monthly: 4 } }` (any service the client doesn't have enabled is omitted).
+- [x] Capacity is read from the most recent `proposals.tier_key` joined to `proposal_templates.tiers_preview[*].deliverables` (jsonb shape: `{ editing: 10, smm: 60, blogging: 4 }`).
+- [x] If a client has a service enabled but no signed proposal (rare, manually-onboarded), capacity falls back to a per-service default in `lib/clients/service-defaults.ts` (`editing: 0`, `smm: 60`, `blogging: 0`) and the helper returns a `source: 'default' | 'proposal'` field.
+- [x] Helper is unit-tested for the three resolution paths: proposal hit, fallback, service-not-enabled.
+- [x] Typecheck + lint pass.
 
 ### US-002: Surface monthly capacity on client settings page
 
 **Description:** As an admin, I want a "This month's scope" panel on the client settings page so I can see capacity without leaving the page.
 
 **Acceptance Criteria:**
-- [ ] New `<ServiceCapacityPanel client={client} />` mounted at `/admin/clients/[slug]/settings` between the Access & services card and the Workspace modules card.
-- [ ] Panel renders one row per enabled service: service name, monthly target (e.g. "10 edited videos"), period dates, and a small badge `from proposal` or `from default`.
-- [ ] If the resolved capacity is 0, render an inline "Configure capacity in the signed proposal" hint with a link to the proposal record.
-- [ ] Visual density matches `IconCard` from the section card design system (h-9 w-9 accent swatch, 13px ? tooltip).
-- [ ] Verify in browser using dev-browser skill.
-- [ ] Typecheck + lint pass.
+- [x] New `<ServiceCapacityPanel client={client} />` mounted at `/admin/clients/[slug]/settings` between the Access & services card and the Workspace modules card.
+- [x] Panel renders one row per enabled service: service name, monthly target (e.g. "10 edited videos"), period dates, and a small badge `from proposal` or `from default`.
+- [x] If the resolved capacity is 0, render an inline "Configure capacity in the signed proposal" hint with a link to the proposal record.
+- [x] Visual density matches `IconCard` from the section card design system (h-9 w-9 accent swatch, 13px ? tooltip).
+- [x] Verify in browser using dev-browser skill.
+- [x] Typecheck + lint pass.
 
 ### US-003: Editor upload page shows "X of Y delivered this period"
 
 **Description:** As an editor uploading the final MUX video, I want to see how many deliverables this client has this period and how many are approved already so I know whether I'm in scope.
 
 **Acceptance Criteria:**
-- [ ] On the editor's upload surface (the MUX-final upload page; identify exact route during implementation), render a `<DeliverableProgress clientId={clientId} service="editing" />` strip above the upload form.
-- [ ] Strip shows: `{approved} / {capacity} delivered this period`, a subtle progress bar, and the period's start/end.
-- [ ] When `approved >= capacity`, the strip turns warning-styled and reads `{approved} / {capacity} delivered, {approved - capacity} over scope`.
-- [ ] When `capacity === 0` (no proposal / service not enabled), the strip is hidden entirely (don't shame the empty state).
-- [ ] Component reads from `GET /api/clients/[clientId]/capacity?service=editing` (new route; see FR-3).
-- [ ] Verify in browser using dev-browser skill.
-- [ ] Typecheck + lint pass.
+- [x] On the editor's upload surface (the MUX-final upload page; identify exact route during implementation), render a `<DeliverableProgress clientId={clientId} service="editing" />` strip above the upload form.
+- [x] Strip shows: `{approved} / {capacity} delivered this period`, a subtle progress bar, and the period's start/end.
+- [x] When `approved >= capacity`, the strip turns warning-styled and reads `{approved} / {capacity} delivered, {approved - capacity} over scope`.
+- [x] When `capacity === 0` (no proposal / service not enabled), the strip is hidden entirely (don't shame the empty state).
+- [x] Component reads from `GET /api/clients/[clientId]/capacity?service=editing` (new route; see FR-3).
+- [x] Verify in browser using dev-browser skill.
+- [x] Typecheck + lint pass.
 
 ### US-004: Auto-populate accounting period with approved editing rows
 
 **Description:** As a super-admin running payroll, I want the accounting period to already have a row per approved editing deliverable so I'm not transcribing from MUX share links.
 
 **Acceptance Criteria:**
-- [ ] New `lib/accounting/auto-populate-editing.ts` exports `autoPopulateEditingForPeriod(periodId)` which:
+- [x] New `lib/accounting/auto-populate-editing.ts` exports `autoPopulateEditingForPeriod(periodId)` which:
   - Reads all `deliverable_transactions` of `kind = 'consume'`, `charge_unit_kind = 'drop_video'`, `created_at` within the period
   - Groups by `(client_id, editor_user_id ?? team_member_id)`
   - For each group, upserts a `payroll_entries` row with `entry_type = 'editing'`, `video_count = group_size`, `amount_cents = group_size * editor_rate_cents`, `description` referencing the MUX share link bundle
   - Editor rate read from `team_members.cost_rate_cents_per_hour` (fallback: a configurable per-service default in `lib/accounting/presets.ts`)
-- [ ] Idempotent: re-running on the same period updates counts/amount on existing auto-rows rather than duplicating (use a stable composite key like `(period_id, client_id, editor_user_id, entry_type, source='auto')`).
-- [ ] Auto-rows render with a subtle `auto` chip in the entries grid; admins can edit them and the chip flips to `auto-edited`; admins can delete them and the row is excluded from re-sync until period close.
-- [ ] Surface "Sync editing from approved deliverables" button in the period detail header (super-admin only) that runs the auto-populate. Also fire automatically when a period is opened for the first time.
-- [ ] Typecheck + lint pass.
-- [ ] Verify in browser using dev-browser skill.
+- [x] Idempotent: re-running on the same period updates counts/amount on existing auto-rows rather than duplicating (use a stable composite key like `(period_id, client_id, editor_user_id, entry_type, source='auto')`).
+- [x] Auto-rows render with a subtle `auto` chip in the entries grid; admins can edit them and the chip flips to `auto-edited`; admins can delete them and the row is excluded from re-sync until period close (migration 237 tombstone).
+- [x] Surface "Sync editing from approved deliverables" button in the period detail header (super-admin only) that runs the auto-populate. Also fire automatically when a period is opened for the first time.
+- [x] Typecheck + lint pass.
+- [x] Verify in browser using dev-browser skill.
 
 ### US-005: Flag out-of-scope deliveries in editor + accounting views
 
 **Description:** As an admin, I want over-scope deliveries flagged so I can decide whether to charge the client, eat the cost, or expand the package, without approving them silently.
 
 **Acceptance Criteria:**
-- [ ] When `approved > capacity` for a `(client, service, period)`, surface a "X over scope" pill on:
+- [x] When `approved > capacity` for a `(client, service, period)`, surface a "X over scope" pill on:
   - `<DeliverableProgress>` strip (US-003)
   - `<ServiceCapacityPanel>` (US-002)
   - The client's row in the accounting period detail's editing tab
-- [ ] The pill links to a lightweight "Out of scope this period" dialog listing each over-scope deliverable with its approved-at timestamp and the editor.
-- [ ] Dialog has two read-only states only ("noted, will handle" / "open a credit pack"); no auto-charge in v1. Picking "open a credit pack" opens the existing top-up admin flow in a new tab.
-- [ ] Dialog state is persisted in a new `deliverable_overage_reviews` table (see schema in §7) so the same period doesn't re-prompt after a decision.
-- [ ] Typecheck + lint pass.
-- [ ] Verify in browser using dev-browser skill.
+- [x] The pill links to a lightweight "Out of scope this period" dialog listing each over-scope deliverable with its approved-at timestamp and the editor.
+- [x] Dialog has two read-only states only ("noted, will handle" / "open a credit pack"); no auto-charge in v1. Picking "open a credit pack" opens the existing top-up admin flow in a new tab.
+- [x] Dialog state is persisted in a new `deliverable_overage_reviews` table (see schema in §7) so the same period doesn't re-prompt after a decision.
+- [x] Typecheck + lint pass.
+- [x] Verify in browser using dev-browser skill.
 
 ### US-006: Remove Revenue from admin sidebar
 
 **Description:** As Jack, I want the Revenue entry gone from the sidebar because the Revenue Hub isn't where we focus right now.
 
 **Acceptance Criteria:**
-- [ ] Delete the `{ href: '/admin/revenue', label: 'Revenue', icon: CreditCard }` line from `components/layout/admin-sidebar.tsx` (currently line 170).
-- [ ] If `CreditCard` from `lucide-react` is no longer imported elsewhere in the file, remove the import. Otherwise leave it.
-- [ ] Do NOT delete the `/admin/revenue` route itself (still reachable by direct URL; we may resurrect later).
-- [ ] Verify in browser using dev-browser skill (sidebar renders without gap, no console error).
-- [ ] Typecheck + lint pass.
+- [x] Delete the `{ href: '/admin/revenue', label: 'Revenue', icon: CreditCard }` line from `components/layout/admin-sidebar.tsx` (currently line 170).
+- [x] If `CreditCard` from `lucide-react` is no longer imported elsewhere in the file, remove the import. Otherwise leave it.
+- [x] Do NOT delete the `/admin/revenue` route itself (still reachable by direct URL; we may resurrect later).
+- [x] Verify in browser using dev-browser skill (sidebar renders without gap, no console error).
+- [x] Typecheck + lint pass.
 
 ### US-007: Capacity reads in API routes are org-scoped
 
 **Description:** As a portal user, I should never see capacity data for a client outside my org (we don't currently expose this on the portal, but the API route must still scope correctly).
 
 **Acceptance Criteria:**
-- [ ] `GET /api/clients/[clientId]/capacity` performs the standard portal-scoping pattern from `CLAUDE.md` (admin = unfiltered; viewer = `eq('clients.organization_id', userData.organization_id)`).
-- [ ] Route validates `service` query param via Zod against the literal union `'editing' | 'smm' | 'blogging'`.
-- [ ] Response shape: `{ service, capacity, approved, period_start, period_end, source }`.
-- [ ] Typecheck + lint pass.
+- [x] `GET /api/clients/[clientId]/capacity` performs the standard portal-scoping pattern from `CLAUDE.md` (admin = unfiltered; viewer = `eq('clients.organization_id', userData.organization_id)`).
+- [x] Route validates `service` query param via Zod against the literal union `'editing' | 'smm' | 'blogging'`.
+- [x] Response shape: `{ service, capacity, approved, period_start, period_end, source }`.
+- [x] Typecheck + lint pass.
 
 ## 5. Functional Requirements
 
@@ -228,14 +228,12 @@ CREATE POLICY "admin_all" ON deliverable_overage_reviews
 - Out-of-scope dialog records ≥1 decision per overage event in real periods (proves the surface is being used, not bypassed).
 - Zero portal-facing surfaces show the word "credits" after this PRD lands (manual sweep).
 
-## 9. Open Questions
+## 9. Open Questions (Resolved)
 
-These are flagged for the implementation pass; they don't block starting the loop.
-
-- **OQ-1** Editor's upload page route — confirm during Phase 1 (likely under `/admin/...` with a token-gated public sibling). Search `mux` + `final_video_url` write paths to find it.
-- **OQ-2** Editor rate: is `team_members.cost_rate_cents_per_hour` always populated for active editors (Jed, Ken)? If not, set defaults during the migration's pre-check.
-- **OQ-3** Should the `deliverable_overage_reviews` unique constraint key on `(client, service, period)` allow an admin to reset a "noted" decision back to "open"? V1 = no (one decision per period); fine to revisit.
-- **OQ-4** Auto-attribution falls back to `team_members` when `editor_user_id` is null on a consume row. Confirm `team_members.id` is what `payroll_entries.team_member_id` already references.
+- **OQ-1** Editor's upload page route, resolved: DeliverableProgress strip mounts on the editor's MUX-final upload surface (Phase 5 shipped). The component is reusable and drives both the surface and the ServiceCapacityPanel.
+- **OQ-2** Editor rate, resolved: auto-populate engine reads `team_members.cost_rate_cents_per_hour` and falls back to `lib/accounting/presets.ts` defaults when the column is null. NULL `editor_user_id` consumes route to a seeded "Unattributed" team_member (`00000000-0000-0000-0000-0000000000ba`).
+- **OQ-3** Reset of "noted" decision, resolved: V1 keeps the unique constraint on `(client, service, period)`; one decision per period. Revisit if real periods produce a need.
+- **OQ-4** Auto-attribution reference, resolved: `payroll_entries.team_member_id` references `team_members.id`. US-004 soft-delete handler operates on the same column. No FK mismatch.
 
 ## 10. Phases (ralph-loop order)
 
