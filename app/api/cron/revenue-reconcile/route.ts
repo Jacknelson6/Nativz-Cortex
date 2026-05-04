@@ -97,8 +97,9 @@ export async function GET(req: NextRequest) {
     await recomputeClientMrr(c.id, admin);
   }
 
-  // Bug 5: auto-expire proposals past their expires_at. Keeps the
-  // Proposals list and the public /proposals/[slug] page honest.
+  // Bug 5: auto-expire proposals past their expires_at so MRR + the
+  // admin proposals list stay honest. Public proposal surface lives
+  // externally (docs.nativz.io) — only the row state matters here.
   const { data: freshlyExpired } = await admin
     .from('proposals')
     .update({ status: 'expired' })
