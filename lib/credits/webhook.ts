@@ -61,7 +61,7 @@ function resolveSlugFromMetadata(raw: string | undefined): DeliverableTypeSlug {
  * In-flight sessions from before the cutover still carry pack_size; map them
  * onto the closest SKU equivalent so we don't strand any payments.
  *
- * Returns null when nothing usable is on the session — caller bails with a
+ * Returns null when nothing usable is on the session , caller bails with a
  * structured log so we can backfill manually if it ever happens.
  */
 function resolveAddonFromMetadata(meta: Record<string, string>): {
@@ -139,7 +139,7 @@ async function resolveTopupRecipients(
  * `session.metadata.kind === 'credits'`. Anything else (proposal
  * checkout, future kinds) is routed elsewhere.
  *
- * Best-effort confirmation email — a Resend failure is logged but does
+ * Best-effort confirmation email , a Resend failure is logged but does
  * NOT roll back the grant. The client got their credits; the email is
  * a courtesy.
  */
@@ -170,7 +170,7 @@ export async function onCreditsCheckoutCompleted(
       ? session.payment_intent
       : session.payment_intent?.id ?? null;
 
-  // SLA modifiers (Rush) don't move a balance — record the purchase but skip
+  // SLA modifiers (Rush) don't move a balance , record the purchase but skip
   // the grant. Phase D wires the rush flag onto the linked deliverable; in
   // Phase B we just confirm receipt to the client and stop.
   const isModifier = sku.deliverable_type_slug === null;
@@ -193,7 +193,7 @@ export async function onCreditsCheckoutCompleted(
     });
 
     if (!isGranted(result)) {
-      // already_granted — webhook re-fired, nothing more to do (don't re-send
+      // already_granted , webhook re-fired, nothing more to do (don't re-send
       // the confirmation email, it would surface as a duplicate to the POC).
       return;
     }
@@ -220,7 +220,7 @@ export async function onCreditsCheckoutCompleted(
   }
 
   // Build the receipt url + the portal CTA. Stripe's hosted receipt is on
-  // the latest charge, which we fetch lazily — if it's not retrievable for
+  // the latest charge, which we fetch lazily , if it's not retrievable for
   // any reason we fall through to the portal link.
   let receiptUrl: string | null = null;
   if (paymentIntentId) {
@@ -312,7 +312,7 @@ interface MatchingGrant {
 
 /**
  * Look up the credits `grant_topup` row that paid for this charge. Returns
- * null when the charge isn't a credits flow (most common case — proposal
+ * null when the charge isn't a credits flow (most common case , proposal
  * checkouts also fire `charge.refunded`).
  *
  * We trust the grant row's `delta` as the canonical pack_size and use
@@ -359,7 +359,7 @@ async function findCreditsGrantForCharge(
  * refund event gets its own `expire` row keyed by `refund.id` so partial
  * refunds are additive.
  *
- * Returns silently when the charge isn't a credits charge — proposal
+ * Returns silently when the charge isn't a credits charge , proposal
  * checkouts share the event type.
  */
 export async function onCreditsChargeRefunded(
@@ -404,7 +404,7 @@ export async function onCreditsChargeRefunded(
 }
 
 /**
- * `charge.dispute.created` handler. A chargeback is a forced refund —
+ * `charge.dispute.created` handler. A chargeback is a forced refund:
  * same credit math, different idempotency key, different note tag.
  *
  * On `charge.dispute.closed` (won/lost) we do NOT auto-restore. If we
