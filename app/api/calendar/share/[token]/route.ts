@@ -324,8 +324,10 @@ async function handleShareGet(
     // active types yet (rare, brand-new client pre-cron); the pill hides
     // itself when no rows are present.
     balances,
-    // Phase D: feed the soft-block PreApprovalModal. addons + supportEmail
-    // never change per page-view, the modal hooks into them on demand.
+    // `addons` + `supportEmail` are no longer rendered on the share page
+    // (the over-scope PreApprovalModal was removed — clients should never
+    // see internal capacity limits). Kept on the response for now to stay
+    // backwards-compatible with any cached client bundles in flight.
     addons,
     supportEmail,
     drop: {
