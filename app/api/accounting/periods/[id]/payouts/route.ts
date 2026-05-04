@@ -26,7 +26,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { data: entries } = await ctx.adminClient
     .from('payroll_entries')
     .select('id, entry_type, team_member_id, payee_label, video_count, amount_cents, margin_cents, description')
-    .eq('period_id', periodId);
+    .eq('period_id', periodId)
+    .neq('source', 'auto-deleted');
 
   const memberIds = Array.from(
     new Set((entries ?? []).map((e) => e.team_member_id).filter(Boolean)),

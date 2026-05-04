@@ -41,6 +41,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .from('payroll_entries')
     .select('entry_type, team_member_id, payee_label, client_id, video_count, rate_cents, amount_cents, margin_cents, description, created_at')
     .eq('period_id', id)
+    .neq('source', 'auto-deleted')
     .order('entry_type')
     .order('created_at');
 

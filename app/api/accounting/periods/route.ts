@@ -57,7 +57,8 @@ export async function GET() {
     const { data: entries } = await ctx.adminClient
       .from('payroll_entries')
       .select('period_id, amount_cents, margin_cents')
-      .in('period_id', ids);
+      .in('period_id', ids)
+      .neq('source', 'auto-deleted');
     for (const e of entries ?? []) {
       const row = (totals[e.period_id] ??= { amount_cents: 0, margin_cents: 0, entry_count: 0 });
       row.amount_cents += e.amount_cents ?? 0;

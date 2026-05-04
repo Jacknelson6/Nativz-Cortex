@@ -60,7 +60,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
   if (periodStatus && periodStatus !== 'draft') {
     return NextResponse.json(
-      { error: 'Cannot edit entries in a locked or paid period — unlock it first' },
+      { error: 'Cannot edit entries in a locked or paid period; unlock it first' },
       { status: 400 },
     );
   }
@@ -71,7 +71,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const nextRateCents = parsed.data.rate_cents ?? (entry.rate_cents as number | null) ?? 0;
     if (nextVideoCount > 0 || nextRateCents > 0) {
       return NextResponse.json(
-        { error: 'Blogging entries are flat-amount only — video_count and rate_cents must be 0' },
+        { error: 'Blogging entries are flat-amount only; video_count and rate_cents must be 0' },
         { status: 400 },
       );
     }
@@ -106,9 +106,26 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   }
   if (periodStatus && periodStatus !== 'draft') {
     return NextResponse.json(
-      { error: 'Cannot delete entries from a locked or paid period — unlock it first' },
+      { error: 'Cannot delete entries from a locked or paid period; unlock it first' },
       { status: 400 },
     );
+  }
+
+  // Auto rows get a tombstone (`source = 'auto-deleted'`) instead of a hard
+  // delete so the next auto-populate run sees the slot is held and does not
+  // resurrect the row from the same approved consume rows. Manual + content-
+  // pipeline rows hard delete; their provenance does not regenerate them.
+  const entrySource = (entry as { source?: string | null }).source;
+  if (entrySource === 'auto' || entrySource === 'auto-edited') {
+    const { error } = await ctx.adminClient
+      .from('payroll_entries')
+      .update({ source: 'auto-deleted' })
+      .eq('id', id);
+    if (error) {
+      console.error('[accounting] soft-delete auto entry failed', error);
+      return NextResponse.json({ error: 'Failed to delete entry' }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, soft_deleted: true });
   }
 
   const { error } = await ctx.adminClient.from('payroll_entries').delete().eq('id', id);

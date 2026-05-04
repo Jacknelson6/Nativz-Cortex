@@ -112,7 +112,8 @@ export default async function EditorCrossPeriodPage({
     adminClient
       .from('payroll_entries')
       .select('id, entry_type, period_id, client_id, video_count, rate_cents, amount_cents, margin_cents, description, created_at')
-      .eq('team_member_id', memberId),
+      .eq('team_member_id', memberId)
+      .neq('source', 'auto-deleted'),
     adminClient
       .from('payroll_payouts')
       .select('id, period_id, wise_url, status, notes, paid_at')

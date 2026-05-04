@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
         error:
           period.status === 'paid'
             ? 'Cannot add entries to a paid period'
-            : 'Cannot add entries to a locked period — unlock it first',
+            : 'Cannot add entries to a locked period; unlock it first',
       },
       { status: 400 },
     );
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     ((parsed.data.video_count ?? 0) > 0 || (parsed.data.rate_cents ?? 0) > 0)
   ) {
     return NextResponse.json(
-      { error: 'Blogging entries are flat-amount only — video_count and rate_cents must be 0' },
+      { error: 'Blogging entries are flat-amount only; video_count and rate_cents must be 0' },
       { status: 400 },
     );
   }

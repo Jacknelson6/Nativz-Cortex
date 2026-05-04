@@ -30,7 +30,7 @@ export interface GridEntry {
   margin_cents: number;
   description: string | null;
   created_at: string;
-  source: 'manual' | 'auto' | 'auto-edited' | 'content_pipeline';
+  source: 'manual' | 'auto' | 'auto-edited' | 'auto-deleted' | 'content_pipeline';
 }
 
 interface DraftRow {

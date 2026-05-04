@@ -33,6 +33,7 @@ export default async function AccountingPeriodPage({ params }: { params: Promise
       .from('payroll_entries')
       .select('id, entry_type, team_member_id, payee_label, client_id, video_count, rate_cents, amount_cents, margin_cents, description, created_at, source')
       .eq('period_id', id)
+      .neq('source', 'auto-deleted')
       .order('created_at', { ascending: true }),
     adminClient
       .from('team_members')

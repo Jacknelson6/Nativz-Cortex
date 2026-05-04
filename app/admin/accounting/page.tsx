@@ -113,7 +113,8 @@ async function PeriodsTab({ adminClient }: { adminClient: ReturnType<typeof crea
     const { data: entries } = await adminClient
       .from('payroll_entries')
       .select('period_id, amount_cents, margin_cents')
-      .in('period_id', ids);
+      .in('period_id', ids)
+      .neq('source', 'auto-deleted');
     for (const e of (entries ?? []) as EntryRow[]) {
       const row = (totals[e.period_id] ??= { amount: 0, margin: 0, count: 0 });
       row.amount += e.amount_cents ?? 0;

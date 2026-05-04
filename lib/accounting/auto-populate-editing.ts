@@ -31,7 +31,7 @@ interface ExistingAutoRow {
   id: string;
   client_id: string | null;
   team_member_id: string | null;
-  source: 'auto' | 'auto-edited';
+  source: 'auto' | 'auto-edited' | 'auto-deleted';
 }
 
 const FALLBACK_RATE_CENTS = 4000;
@@ -53,7 +53,9 @@ function periodEndExclusive(endDate: string): string {
  *
  * Idempotent: re-running on the same period updates `video_count` and
  * `amount_cents` on existing `auto` rows, leaves `auto-edited` rows alone
- * (admin already touched them), and never touches `manual` rows.
+ * (admin already touched them), treats `auto-deleted` rows as tombstones
+ * (the slot is held; do not resurrect until the period closes), and never
+ * touches `manual` rows.
  *
  * Editor rate falls back to FALLBACK_RATE_CENTS when
  * `team_members.cost_rate_cents_per_hour` is NULL, so a never-configured
@@ -177,7 +179,7 @@ export async function autoPopulateEditingForPeriod(
     .select('id, client_id, team_member_id, source')
     .eq('period_id', period.id)
     .eq('entry_type', 'editing')
-    .in('source', ['auto', 'auto-edited'])
+    .in('source', ['auto', 'auto-edited', 'auto-deleted'])
     .returns<ExistingAutoRow[]>();
 
   const existingByKey = new Map<string, ExistingAutoRow>();
@@ -238,7 +240,7 @@ export async function autoPopulateEditingForPeriod(
       continue;
     }
 
-    if (existing.source === 'auto-edited') {
+    if (existing.source === 'auto-edited' || existing.source === 'auto-deleted') {
       result.skipped += 1;
       continue;
     }
