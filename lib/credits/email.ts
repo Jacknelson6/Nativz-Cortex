@@ -8,7 +8,7 @@
  *   - Overdraft:  balance transitions from `>= 0` to `< 0`.
  *
  * The transition guard (passing in `previousBalance`) is the cheap part.
- * The expensive part is the per-period flag — we use a conditional UPDATE
+ * The expensive part is the per-period flag, we use a conditional UPDATE
  * on `client_credit_balances` so concurrent consumes can't double-send.
  * Whichever process wins the UPDATE race owns the email send; the loser
  * sees zero rows updated and bails. This is the "we tried" semantics
@@ -30,7 +30,7 @@ import { getBrandFromAgency } from '@/lib/agency/detect';
 import { deliverableCopy } from '@/lib/deliverables/copy';
 import { getDeliverableTypeSlug } from '@/lib/deliverables/types-cache';
 
-// Same role exclusions as the revised-videos email — keep these in sync with
+// Same role exclusions as the revised-videos email; keep these in sync with
 // EXCLUDE_ROLE_PATTERNS in app/api/calendar/share/[token]/comment/route.ts and
 // app/api/cron/calendar-reminders/route.ts. Paid-media-only POCs don't care
 // about organic content; "Avoid bulk" is a manual flag for hand-curated comms.
@@ -47,8 +47,39 @@ interface ResolvedRecipients {
   fallbackUsed: boolean;
 }
 
-function firstName(full: string): string {
+/**
+ * Extract the first whitespace-delimited token from a contact's full name,
+ * trimmed. Empty / whitespace-only inputs fall through to the trimmed
+ * original (which may itself be empty), the email layer treats empty
+ * strings as "no first name available" rather than rendering "Hi ,".
+ */
+export function firstName(full: string): string {
   return (full.split(/\s+/)[0] || full).trim();
+}
+
+/**
+ * Pure transition classifier. Returns the threshold whose boundary the
+ * balance just crossed, or null when neither was crossed.
+ *
+ * Rules:
+ *   - low_balance: previousBalance >= 2 AND newBalance <= 1
+ *   - overdraft:   previousBalance >= 0 AND newBalance <  0
+ *   - overdraft takes precedence when both fired in the same consume
+ *     (a freak concurrent state could land us at -1 from a previous
+ *     balance of 1 or higher; we want the more severe notification).
+ *
+ * Exported for unit testing, the orchestrator calls this before any DB
+ * round-trip so the cheap path stays cheap.
+ */
+export function detectThreshold(
+  previousBalance: number,
+  newBalance: number,
+): Threshold | null {
+  const crossedLow = previousBalance >= 2 && newBalance <= 1;
+  const crossedOverdraft = previousBalance >= 0 && newBalance < 0;
+  if (crossedOverdraft) return 'overdraft';
+  if (crossedLow) return 'low_balance';
+  return null;
 }
 
 /**
@@ -57,7 +88,7 @@ function firstName(full: string): string {
  *   2. Filter out paid-media-only / avoid-bulk roles.
  *   3. Filter to rows with a non-empty email.
  *   4. If empty, fall back to contacts where `is_primary = true` (still
- *      respecting the exclude filter — a primary POC marked "avoid bulk"
+ *      respecting the exclude filter, a primary POC marked "avoid bulk"
  *      probably wants to stay quiet).
  *   5. Return `{ emails: [], ... }` when there's nothing usable; caller
  *      handles the "silent client" log.
@@ -133,7 +164,7 @@ interface MaybeNotifyArgs {
  * consumes can't double-send.
  *
  * Hooks call this in a `try/catch` because failures here must never block
- * the comment write — same semantics as `consumeForApproval` itself.
+ * the comment write; same semantics as `consumeForApproval` itself.
  */
 export async function maybeSendBalanceWarning(
   admin: SupabaseClient,
@@ -141,16 +172,9 @@ export async function maybeSendBalanceWarning(
 ): Promise<void> {
   const { clientId, previousBalance, newBalance, deliverableTypeId } = args;
 
-  // Detect transitions first — cheaper than any DB call.
-  const crossedLow = previousBalance >= 2 && newBalance <= 1;
-  const crossedOverdraft = previousBalance >= 0 && newBalance < 0;
-  if (!crossedLow && !crossedOverdraft) return;
-
-  // Overdraft takes precedence — if we crossed both in one consume (e.g.
-  // balance went 1 -> 0 in a single step is not overdraft, but a freak
-  // concurrent state could land us at -1 from 1), we want the more severe
-  // notification.
-  const threshold: Threshold = crossedOverdraft ? 'overdraft' : 'low_balance';
+  // Detect transitions first; cheaper than any DB call.
+  const threshold = detectThreshold(previousBalance, newBalance);
+  if (!threshold) return;
 
   // Need the period_id + monthly_allowance + agency for both the dedup
   // stamp and the email body. Single round-trip.
@@ -217,7 +241,7 @@ export async function maybeSendBalanceWarning(
     .maybeSingle<{ client_id: string }>();
 
   if (!stamped) {
-    // Lost the race — another concurrent consume just stamped. Bail.
+    // Lost the race; another concurrent consume just stamped. Bail.
     return;
   }
 
