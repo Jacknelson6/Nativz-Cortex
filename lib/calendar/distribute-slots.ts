@@ -6,7 +6,7 @@ interface DistributeInput {
   count: number;
   startDate: string;
   endDate: string;
-  // Retained for legacy callers but ignored — every slot is 12:00 America/Chicago.
+  // Retained for legacy callers but ignored; every slot is 12:00 America/Chicago.
   defaultTime?: string;
 }
 
@@ -43,7 +43,7 @@ export function distributeSlots(input: DistributeInput): string[] {
 }
 
 // Returns the UTC ISO string for 12:00 wall-clock America/Chicago on the given
-// date. Handles CST/CDT automatically via Intl — no hardcoded offset.
+// date. Handles CST/CDT automatically via Intl, no hardcoded offset.
 function chicagoNoonUtc(yyyyMmDd: string): string {
   const utcNoon = new Date(`${yyyyMmDd}T12:00:00Z`);
   const chicagoHour = parseInt(
