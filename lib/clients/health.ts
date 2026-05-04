@@ -39,7 +39,7 @@ export function getHealthColor(label: HealthLabel) {
 /**
  * Calculate a health score (0-100) for a client based on real business indicators.
  *
- * Shoot Status (50 pts) — Content Activity (30 pts) — Recency (20 pts)
+ * Shoot Status (50 pts), Content Activity (30 pts), Recency (20 pts).
  */
 export async function calculateClientHealth(clientId: string): Promise<ClientHealth> {
   const supabase = createAdminClient();
