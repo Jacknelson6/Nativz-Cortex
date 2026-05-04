@@ -94,7 +94,7 @@ export function ComptrollerReadonlyClient({ token, role, label, period, entries 
           <span className="font-medium text-text-primary capitalize">{period.status}</span>
           {period.paid_at ? <> · Paid {new Date(period.paid_at).toLocaleDateString()}</> : null}
           {/* Show "Locked <date>" only when the period is actually in the
-           *  locked status — previously gated on `locked_at` alone, which
+           *  locked status. Previously gated on `locked_at` alone, which
            *  stays populated after an unlock and surfaced "Locked 4/18/2026"
            *  on periods that were back in draft (SRL Goal 10 side bug). */}
           {!period.paid_at && period.status === 'locked' && period.locked_at ? (

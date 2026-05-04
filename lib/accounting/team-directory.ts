@@ -1,6 +1,6 @@
 /**
  * Accounting uses a narrower view of the team_members table than the rest
- * of the app — the table has years of duplicates (e.g. three rows for the
+ * of the app. The table has years of duplicates (e.g. three rows for the
  * same person created during separate invite flows) and "test" rows that
  * would clutter the payroll dropdowns. This helper dedupes by normalised
  * full_name and drops obvious junk.

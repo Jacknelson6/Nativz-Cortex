@@ -48,7 +48,7 @@ interface ImportDialogProps {
 
 type Stage = 'paste' | 'preview' | 'submitting';
 
-// Only editing is priced per unit — amount auto-computes from rate ×
+// Only editing is priced per unit. Amount auto-computes from rate ×
 // video_count and locks. SMM, affiliate, and blogging are flat payouts;
 // Amount is the only numeric field that matters for those.
 function hasPerUnitPricing(type: EntryType): boolean {

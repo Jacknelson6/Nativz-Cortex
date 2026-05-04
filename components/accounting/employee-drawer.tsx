@@ -38,7 +38,7 @@ interface EmployeeDrawerProps {
 /**
  * Right-side drawer that shows every payroll entry for one payee inside
  * one service, for the active period. Designed to replace the
- * collapse-in-place card — gives the reviewer a focused canvas with a
+ * collapse-in-place card. Gives the reviewer a focused canvas with a
  * real TOTAL footer and room to read descriptions + client names without
  * squishing the service tab.
  */

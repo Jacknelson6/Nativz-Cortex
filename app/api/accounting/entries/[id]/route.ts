@@ -65,7 +65,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     );
   }
 
-  // Blogging flat-amount rule — applied to the *resulting* entry shape.
+  // Blogging flat-amount rule, applied to the *resulting* entry shape.
   if (entry.entry_type === 'blogging') {
     const nextVideoCount = parsed.data.video_count ?? (entry.video_count as number | null) ?? 0;
     const nextRateCents = parsed.data.rate_cents ?? (entry.rate_cents as number | null) ?? 0;

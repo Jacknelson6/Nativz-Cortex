@@ -1,14 +1,14 @@
 /**
  * Mint + manage read-only payroll-view tokens for Comptroller / CEO access.
  *
- * POST /api/accounting/periods/[id]/view-tokens — mint a new token
+ * POST /api/accounting/periods/[id]/view-tokens: mint a new token
  *   body: { role: 'comptroller' | 'ceo', label?, days? }
  *   returns: { token, url, expires_at }
  *
- * GET  /api/accounting/periods/[id]/view-tokens — list active tokens for a period
+ * GET  /api/accounting/periods/[id]/view-tokens: list active tokens for a period
  *   returns: { tokens: [{ id, token, role, label, expires_at, first_viewed_at, viewer_email, revoked_at, created_at }] }
  *
- * DELETE /api/accounting/periods/[id]/view-tokens?token_id=<uuid> — revoke
+ * DELETE /api/accounting/periods/[id]/view-tokens?token_id=<uuid>: revoke
  *   returns: { success: true }
  */
 

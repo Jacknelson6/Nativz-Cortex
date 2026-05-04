@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Blogging is flat-amount only per team policy — reject attempts to stuff
+  // Blogging is flat-amount only per team policy. Reject attempts to stuff
   // per-video math onto a blogging entry so the drill-in drawer's totals stay
   // meaningful.
   if (

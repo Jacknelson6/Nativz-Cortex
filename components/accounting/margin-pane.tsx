@@ -50,7 +50,7 @@ export function MarginPane({ periodLabel, entries, clients, teamMembers }: Margi
   const clientById = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients]);
   const memberById = useMemo(() => new Map(teamMembers.map((m) => [m.id, m])), [teamMembers]);
 
-  // Pull editing entries only — that's the slice with a true revenue side.
+  // Pull editing entries only. That's the slice with a true revenue side.
   const editorRows = useMemo<EditorRow[]>(() => {
     const editorMap = new Map<string, EditorRow>();
 

@@ -1,6 +1,6 @@
 /**
  * Bi-monthly pay period math. Pay runs are 1st→15th and 16th→last-day-of-month.
- * All dates are treated as local ISO date strings (YYYY-MM-DD) — no timezone math.
+ * All dates are treated as local ISO date strings (YYYY-MM-DD), no timezone math.
  */
 
 export type PayrollHalf = 'first-half' | 'second-half';

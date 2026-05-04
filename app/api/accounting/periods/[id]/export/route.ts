@@ -4,12 +4,12 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { labelFor, centsToDollars } from '@/lib/accounting/periods';
 
 /**
- * GET /api/accounting/periods/[id]/export — CSV download of every entry in
+ * GET /api/accounting/periods/[id]/export: CSV download of every entry in
  * the period.
  *
- *   ?format=quickbooks (default) — five-column Bills shape that QuickBooks
+ *   ?format=quickbooks (default): five-column Bills shape that QuickBooks
  *     Online imports cleanly: Date, Vendor, Account, Memo, Amount.
- *   ?format=detailed — long-form columns for spreadsheet review.
+ *   ?format=detailed: long-form columns for spreadsheet review.
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

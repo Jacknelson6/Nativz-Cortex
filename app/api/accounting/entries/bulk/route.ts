@@ -28,7 +28,7 @@ const bodySchema = z.object({
 });
 
 /**
- * POST /api/accounting/entries/bulk — create many entries at once. Used
+ * POST /api/accounting/entries/bulk: create many entries at once. Used
  * by the import preview ("does this look right? confirm") flow.
  */
 export async function POST(request: NextRequest) {

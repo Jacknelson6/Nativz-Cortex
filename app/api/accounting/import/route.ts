@@ -3,7 +3,7 @@
  *
  * Takes a chunk of unstructured text (pasted from a Google Sheet, Notion,
  * Slack, whatever) and asks an LLM to structure it into proposed payroll
- * entries. Does NOT save anything — the client uses the preview to
+ * entries. Does NOT save anything. The client uses the preview to
  * confirm + edit, then posts to /api/accounting/entries/bulk.
  *
  * Body:
@@ -86,17 +86,17 @@ export async function POST(request: NextRequest) {
 
   const systemPrompt = `You parse pasted payroll data for a video-production agency. Extract line items from the text and return JSON.
 
-Return exactly this shape — no prose, no markdown fences:
+Return exactly this shape. No prose, no markdown fences:
 {
   "rows": [
     {
       "entry_type": "editing" | "smm" | "affiliate" | "blogging",
-      "payee_name": "string — the person or freelancer the payout is going to",
-      "client_name": "string | null — the client the work was for, or null",
+      "payee_name": "string. The person or freelancer the payout is going to",
+      "client_name": "string | null. The client the work was for, or null",
       "video_count": number (0 if not applicable),
       "rate_dollars": number | null (per-unit rate, if stated),
       "amount_dollars": number (total dollars owed for this line),
-      "description": "string | null — short note about the work"
+      "description": "string | null. Short note about the work"
     }
   ]
 }
@@ -107,7 +107,7 @@ Rules:
 - Skip rows that look like headers, sub-totals, grand totals, or blank lines.
 - Known team members (prefer exact matches): ${memberNames.join(', ') || '(none)'}.
 - Known clients (prefer exact matches): ${clientNames.join(', ') || '(none)'}.
-- If a payee / client isn't in the known list, return the name as-written anyway — the server will fall back to freeform labels.
+- If a payee / client isn't in the known list, return the name as-written anyway. The server will fall back to freeform labels.
 - Numbers: strip "$" and commas before parsing; return plain numbers.`;
 
   let completion;

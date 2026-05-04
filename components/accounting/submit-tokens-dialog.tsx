@@ -31,7 +31,7 @@ interface SubmitTokensDialogProps {
 /**
  * Per-period token directory. Admins mint one token per team member and
  * share the URL with them. The token scopes what the submitter can write
- * server-side — they can't re-use someone else's link.
+ * server-side, so they can't re-use someone else's link.
  */
 export function SubmitTokensDialog({
   open,
