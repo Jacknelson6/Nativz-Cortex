@@ -6,9 +6,11 @@ import { toast } from 'sonner';
 import {
   AlertTriangle,
   CheckCircle2,
+  Copy,
   ExternalLink,
   Loader2,
   RefreshCcw,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -43,17 +45,17 @@ const FILTERS: { slug: FilterMode; label: string }[] = [
   { slug: 'failed', label: 'Failed' },
 ];
 
-/**
- * Cross-brand posting history. Lists every scheduled post that has
- * reached a publish-stage state with its per-platform results so Jack
- * can scan "what went out / what broke" at a glance without opening
- * each calendar.
- */
+interface ErrorModalState {
+  row: HistoryRow;
+  platform?: HistoryPlatform;
+}
+
 export function PostingHistoryTab() {
   const [rows, setRows] = useState<HistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterMode>('all');
+  const [errorModal, setErrorModal] = useState<ErrorModalState | null>(null);
 
   async function load(silent = false) {
     if (!silent) setLoading(true);
@@ -140,33 +142,46 @@ export function PostingHistoryTab() {
             <thead className="bg-surface-hover/40 text-[11px] uppercase tracking-wide text-text-muted">
               <tr>
                 <th className="px-4 py-2 text-left font-medium">Brand</th>
-                <th className="px-4 py-2 text-left font-medium">Caption</th>
+                <th className="px-4 py-2 text-left font-medium">Dates</th>
                 <th className="px-4 py-2 text-left font-medium">Platforms</th>
                 <th className="px-4 py-2 text-left font-medium">Status</th>
-                <th className="px-4 py-2 text-left font-medium">When</th>
                 <th className="px-4 py-2" />
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
-                <HistoryRowItem key={row.id} row={row} />
+                <HistoryRowItem
+                  key={row.id}
+                  row={row}
+                  onShowError={(platform) => setErrorModal({ row, platform })}
+                />
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      {errorModal && (
+        <ErrorLogModal
+          state={errorModal}
+          onClose={() => setErrorModal(null)}
+        />
+      )}
     </div>
   );
 }
 
-function HistoryRowItem({ row }: { row: HistoryRow }) {
+function HistoryRowItem({
+  row,
+  onShowError,
+}: {
+  row: HistoryRow;
+  onShowError: (platform?: HistoryPlatform) => void;
+}) {
   const isPublished = row.status === 'published';
   const isPartial = row.status === 'partially_failed';
   const isFailed = row.status === 'failed';
   const isPublishing = row.status === 'publishing';
-
-  const when = row.published_at ?? row.scheduled_at;
-  const whenLabel = when ? formatWhen(when) : '—';
 
   return (
     <tr className="border-t border-nativz-border align-top transition-colors hover:bg-surface-hover/30">
@@ -187,10 +202,11 @@ function HistoryRowItem({ row }: { row: HistoryRow }) {
           </span>
         </div>
       </td>
-      <td className="max-w-xs px-4 py-3">
-        <p className="line-clamp-2 text-xs text-text-muted">
-          {row.caption || <span className="italic">No caption</span>}
-        </p>
+      <td className="px-4 py-3">
+        <DateColumn
+          scheduledAt={row.scheduled_at}
+          publishedAt={row.published_at}
+        />
       </td>
       <td className="px-4 py-3">
         <ul className="space-y-1">
@@ -222,12 +238,16 @@ function HistoryRowItem({ row }: { row: HistoryRow }) {
                         <ExternalLink size={10} />
                       </a>
                     )}
+                    {failed && p.failure_reason && (
+                      <button
+                        type="button"
+                        onClick={() => onShowError(p)}
+                        className="inline-flex items-center gap-0.5 rounded border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-300 transition-colors hover:bg-red-500/20"
+                      >
+                        Error
+                      </button>
+                    )}
                   </div>
-                  {failed && p.failure_reason && (
-                    <p className="break-words text-[10px] text-red-300/80">
-                      {p.failure_reason}
-                    </p>
-                  )}
                 </div>
               </li>
             );
@@ -245,12 +265,15 @@ function HistoryRowItem({ row }: { row: HistoryRow }) {
           isPublishing={isPublishing}
         />
         {row.failure_reason && (isFailed || isPartial) && (
-          <p className="mt-1 max-w-[14rem] break-words text-[10px] text-red-300/80">
-            {row.failure_reason}
-          </p>
+          <button
+            type="button"
+            onClick={() => onShowError()}
+            className="mt-1 inline-flex items-center gap-0.5 rounded border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-300 transition-colors hover:bg-red-500/20"
+          >
+            Error
+          </button>
         )}
       </td>
-      <td className="px-4 py-3 text-xs text-text-muted">{whenLabel}</td>
       <td className="px-4 py-3 text-right">
         {row.drop_id ? (
           <Link
@@ -265,6 +288,31 @@ function HistoryRowItem({ row }: { row: HistoryRow }) {
         )}
       </td>
     </tr>
+  );
+}
+
+function DateColumn({
+  scheduledAt,
+  publishedAt,
+}: {
+  scheduledAt: string | null;
+  publishedAt: string | null;
+}) {
+  return (
+    <div className="space-y-0.5 text-[11px] text-text-muted">
+      <div>
+        <span className="text-text-muted/70">Scheduled </span>
+        <span className="text-text-primary">
+          {scheduledAt ? formatFullDate(scheduledAt) : '—'}
+        </span>
+      </div>
+      <div>
+        <span className="text-text-muted/70">Published </span>
+        <span className="text-text-primary">
+          {publishedAt ? formatFullDate(publishedAt) : '—'}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -310,17 +358,125 @@ function StatusBadge({
   return null;
 }
 
-function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const sameDay = d.toDateString() === now.toDateString();
-  if (sameDay) {
-    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+function ErrorLogModal({
+  state,
+  onClose,
+}: {
+  state: ErrorModalState;
+  onClose: () => void;
+}) {
+  const { row, platform } = state;
+
+  const logText = useMemo(() => buildErrorLog(row, platform), [row, platform]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(logText);
+      toast.success('Error log copied');
+    } catch {
+      toast.error('Could not copy log');
+    }
   }
-  return d.toLocaleDateString([], {
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-2xl overflow-hidden rounded-xl border border-nativz-border bg-surface shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-nativz-border px-4 py-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-text-primary">
+              {platform
+                ? `${capitalize(platform.platform)} publish error`
+                : 'Publish error'}
+            </p>
+            <p className="truncate text-[11px] text-text-muted">
+              {row.client_name ?? 'Unknown brand'}
+              {platform?.username ? ` · @${platform.username}` : ''}
+            </p>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={copy}
+              className="inline-flex items-center gap-1 rounded-md border border-nativz-border bg-surface-hover px-2 py-1 text-xs text-text-primary transition-colors hover:bg-surface-hover/70"
+            >
+              <Copy size={12} />
+              Copy
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="rounded-md p-1 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+        <pre className="max-h-[60vh] overflow-auto bg-black/60 px-4 py-3 font-mono text-[11px] leading-relaxed text-red-200">
+{logText}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
+function buildErrorLog(row: HistoryRow, platform?: HistoryPlatform): string {
+  const lines: string[] = [];
+  lines.push(`# Publish error report`);
+  lines.push(`Brand:        ${row.client_name ?? '(unknown)'}`);
+  lines.push(`Post ID:      ${row.id}`);
+  if (row.drop_id) lines.push(`Drop ID:      ${row.drop_id}`);
+  lines.push(`Status:       ${row.status}`);
+  lines.push(`Scheduled:    ${row.scheduled_at ?? '—'}`);
+  lines.push(`Published:    ${row.published_at ?? '—'}`);
+  lines.push('');
+
+  if (platform) {
+    lines.push(`[${platform.platform}${platform.username ? ` @${platform.username}` : ''}] ${platform.status}`);
+    lines.push(platform.failure_reason ?? '(no failure reason recorded)');
+  } else {
+    if (row.failure_reason) {
+      lines.push(`[post-level]`);
+      lines.push(row.failure_reason);
+      lines.push('');
+    }
+    const failedPlatforms = row.platforms.filter((p) => p.status === 'failed');
+    for (const p of failedPlatforms) {
+      lines.push(`[${p.platform}${p.username ? ` @${p.username}` : ''}] ${p.status}`);
+      lines.push(p.failure_reason ?? '(no failure reason recorded)');
+      lines.push('');
+    }
+  }
+
+  return lines.join('\n').trimEnd();
+}
+
+function formatFullDate(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString([], {
     month: 'short',
     day: 'numeric',
+    year: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+function capitalize(s: string): string {
+  if (!s) return s;
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
