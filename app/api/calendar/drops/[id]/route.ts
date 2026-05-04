@@ -119,11 +119,63 @@ export async function GET(
     }
   }
 
+  // Pull live publish state for every post that's been scheduled. The drop
+  // tile needs:
+  //   1. Whether each post has actually published (so "past due" is real,
+  //      not a UI artifact of the planned date passing while we were waiting
+  //      on Mux/Zernio).
+  //   2. Per-platform success/failure breakdown so the tile can show which
+  //      legs went out and which broke without opening the post editor.
+  const scheduledPostIds = (videos ?? [])
+    .map((v) => v.scheduled_post_id)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0);
+  let postStatusByPostId: Record<string, {
+    status: string;
+    scheduled_at: string | null;
+    published_at: string | null;
+    failure_reason: string | null;
+    platforms: { platform: string; username: string | null; status: string; failure_reason: string | null; external_post_url: string | null }[];
+  }> = {};
+  if (scheduledPostIds.length > 0) {
+    const { data: postRows } = await admin
+      .from('scheduled_posts')
+      .select(`
+        id, status, scheduled_at, published_at, failure_reason,
+        scheduled_post_platforms (
+          status,
+          failure_reason,
+          external_post_url,
+          social_profiles ( platform, username )
+        )
+      `)
+      .in('id', scheduledPostIds);
+    for (const row of (postRows ?? []) as Array<Record<string, unknown>>) {
+      const platforms = ((row.scheduled_post_platforms as Array<Record<string, unknown>>) ?? []).map((spp) => {
+        const profile = spp.social_profiles as Record<string, unknown> | null;
+        return {
+          platform: (profile?.platform as string) ?? '',
+          username: (profile?.username as string | null) ?? null,
+          status: (spp.status as string) ?? 'pending',
+          failure_reason: (spp.failure_reason as string | null) ?? null,
+          external_post_url: (spp.external_post_url as string | null) ?? null,
+        };
+      });
+      postStatusByPostId[row.id as string] = {
+        status: row.status as string,
+        scheduled_at: (row.scheduled_at as string | null) ?? null,
+        published_at: (row.published_at as string | null) ?? null,
+        failure_reason: (row.failure_reason as string | null) ?? null,
+        platforms,
+      };
+    }
+  }
+
   return NextResponse.json({
     drop,
     videos: videos ?? [],
     commentsByPostId,
     revisionsCompletedByPostId,
     variantPlatforms,
+    postStatusByPostId,
   });
 }

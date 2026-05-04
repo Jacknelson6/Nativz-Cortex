@@ -7,6 +7,7 @@ import {
   Bell,
   Cable,
   FileText,
+  History,
   Megaphone,
   RefreshCcw,
   Tv,
@@ -36,6 +37,7 @@ import { ProjectsTableSkeleton } from './projects-table-skeleton';
 import { QuickScheduleTab } from './quick-schedule-tab';
 import { ConnectionsTab } from './connections-tab';
 import { NotificationsTab } from './notifications-tab';
+import { PostingHistoryTab } from './posting-history-tab';
 import { EditingNewProjectDialog } from './editing-new-project-dialog';
 import { EditingProjectDetail } from './editing-project-detail';
 import { CalendarLinkDetail } from './calendar-link-detail';
@@ -81,6 +83,7 @@ type ProjectTabSlug =
 type ContentToolsTab =
   | ProjectTabSlug
   | 'quick-schedule'
+  | 'history'
   | 'connections'
   | 'notifications';
 
@@ -235,6 +238,11 @@ const TABS: {
     slug: 'quick-schedule',
     label: 'Quick schedule',
     icon: <Wand2 className="size-3.5" />,
+  },
+  {
+    slug: 'history',
+    label: 'History',
+    icon: <History className="size-3.5" />,
   },
   {
     slug: 'connections',
@@ -540,6 +548,7 @@ export function ContentToolsShell() {
           </>
         )}
         {tab === 'quick-schedule' && <QuickScheduleTab />}
+        {tab === 'history' && <PostingHistoryTab />}
         {tab === 'connections' && <ConnectionsTab />}
         {tab === 'notifications' && <NotificationsTab />}
 
@@ -606,6 +615,8 @@ function describeSubtitle(tab: ContentToolsTab, filteredCount: number): string {
   switch (tab) {
     case 'quick-schedule':
       return 'Pull editor-approved videos out of Monday and queue them up';
+    case 'history':
+      return 'Every publish attempt across every brand, succeeded or failed';
     case 'connections':
       return 'Every integration the content pipeline depends on';
     case 'notifications':

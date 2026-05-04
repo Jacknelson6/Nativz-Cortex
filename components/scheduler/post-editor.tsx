@@ -5,6 +5,7 @@ import {
   X, Trash2, Sparkles, Bookmark,
   ChevronDown, Users, UserPlus, Image, Share2,
   Play, Pause, Volume2, VolumeX,
+  CheckCircle2, AlertCircle, ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GlassButton } from '@/components/ui/glass-button';
@@ -366,6 +367,63 @@ export function PostEditor({
             )}
           </div>
         </div>
+
+        {/* Publish results — visible once a publish has been attempted.
+            Per-platform status with success/failure + reason so the team
+            can see exactly which legs succeeded and which broke without
+            digging into the database. */}
+        {post && (post.status === 'partially_failed' || post.status === 'failed' || post.status === 'published') && post.platforms.some(p => p.status) && (
+          <div className="px-5 py-3 border-b border-nativz-border bg-surface-hover/30 shrink-0">
+            <p className="text-[11px] font-medium text-text-muted mb-2 uppercase tracking-wide">
+              Publish results
+            </p>
+            <ul className="space-y-1.5">
+              {post.platforms.map(p => {
+                const ok = p.status === 'published';
+                const failed = p.status === 'failed';
+                return (
+                  <li key={p.profile_id} className="flex items-start gap-2 text-xs">
+                    {ok ? (
+                      <CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" />
+                    ) : failed ? (
+                      <AlertCircle size={14} className="text-red-400 mt-0.5 shrink-0" />
+                    ) : (
+                      <div className="w-3.5 h-3.5 mt-0.5 shrink-0 rounded-full border border-text-muted" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-medium text-text-primary">
+                          {PLATFORM_ICONS[p.platform]}
+                        </span>
+                        {p.username && (
+                          <span className="text-text-muted">@{p.username}</span>
+                        )}
+                        <span className={`text-[10px] uppercase tracking-wide ${ok ? 'text-emerald-400' : failed ? 'text-red-400' : 'text-text-muted'}`}>
+                          {ok ? 'Posted' : failed ? 'Failed' : (p.status ?? 'pending')}
+                        </span>
+                        {ok && p.external_post_url && (
+                          <a
+                            href={p.external_post_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-0.5 text-[10px] text-accent-text hover:underline"
+                          >
+                            View <ExternalLink size={9} />
+                          </a>
+                        )}
+                      </div>
+                      {failed && p.failure_reason && (
+                        <p className="mt-0.5 text-[11px] text-red-400/80 break-words">
+                          {p.failure_reason}
+                        </p>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
 
         {/* Content — two-column layout */}
         <div className="flex-1 overflow-y-auto">

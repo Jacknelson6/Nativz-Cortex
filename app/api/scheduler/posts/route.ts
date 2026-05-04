@@ -257,6 +257,7 @@ export async function GET(request: NextRequest) {
           username: profile?.username ?? '',
           status: spp.status,
           external_post_url: spp.external_post_url,
+          failure_reason: spp.failure_reason ?? null,
         };
       });
 

@@ -322,6 +322,7 @@ async function handleGet(request: NextRequest) {
         // Update per-platform results
         let allPublished = true;
         let anyFailed = false;
+        const failedPlatformDetails: { platform: string; username: string | null; reason: string }[] = [];
 
         for (const platformResult of result.platforms) {
           // Zernio returns the late_account_id we sent it; translate
@@ -344,7 +345,15 @@ async function handleGet(request: NextRequest) {
           }
 
           if (platformResult.status !== 'published') allPublished = false;
-          if (platformResult.status === 'failed') anyFailed = true;
+          if (platformResult.status === 'failed') {
+            anyFailed = true;
+            const sppRecord = spp as { social_profiles?: { platform?: string; username?: string | null } } | undefined;
+            failedPlatformDetails.push({
+              platform: sppRecord?.social_profiles?.platform ?? platformResult.profileId,
+              username: sppRecord?.social_profiles?.username ?? null,
+              reason: platformResult.error ?? 'Unknown error',
+            });
+          }
         }
 
         // Update post status
@@ -363,6 +372,23 @@ async function handleGet(request: NextRequest) {
             updated_at: new Date().toISOString(),
           })
           .eq('id', post.id);
+
+        // PARTIAL-FAILURE NOTIFICATION
+        //
+        // When some platforms publish and others fail, the post never hits
+        // `'failed'` (so `sendFailureNotification` doesn't fire) and the cron
+        // doesn't retry partial-failures. Without this hook, the team gets
+        // zero signal that, e.g., 4 of 5 platforms didn't publish for a given
+        // post. We ping the OPS Chat space with a short summary so someone
+        // can manually retry or contact the platform — same channel as the
+        // full-failure path, framed as "partial" so it's not confused.
+        if (newStatus === 'partially_failed' && failedPlatformDetails.length > 0) {
+          try {
+            await sendPartialFailureNotification(adminClient, post, failedPlatformDetails);
+          } catch (notifyErr) {
+            console.error('Failed to send partial-failure notification:', notifyErr);
+          }
+        }
 
         publishedCount++;
       } catch (err) {
@@ -619,6 +645,33 @@ async function handleGet(request: NextRequest) {
 
 export const GET = withCronTelemetry({ route: '/api/cron/publish-posts' }, handleGet);
 
+/**
+ * Resolve the deep-link path for a publish-failure notification.
+ *
+ * Drop posts (the bulk of what we publish) live inside `/admin/calendar/{dropId}`
+ * because that's where the team actually reviews / re-cuts / re-approves
+ * calendar content. Falling back to `/admin/availability?post=...` (team
+ * availability page) was the old behaviour and is wrong for drop posts —
+ * it doesn't show the post in context, and there's nothing actionable on
+ * that page when a single post fails.
+ *
+ * Non-drop posts (quick-schedule / ads) fall back to the team availability
+ * page, which is the right surface for those.
+ */
+async function resolveFailureLinkPath(
+  adminClient: ReturnType<typeof createAdminClient>,
+  postId: string,
+): Promise<string> {
+  const { data: dropVideo } = await adminClient
+    .from('content_drop_videos')
+    .select('drop_id')
+    .eq('scheduled_post_id', postId)
+    .maybeSingle();
+  const dropId = (dropVideo as { drop_id?: string } | null)?.drop_id ?? null;
+  if (dropId) return `/admin/calendar/${dropId}`;
+  return `/admin/availability?post=${postId}`;
+}
+
 async function sendFailureNotification(
   adminClient: ReturnType<typeof createAdminClient>,
   post: Record<string, unknown>
@@ -642,18 +695,22 @@ async function sendFailureNotification(
     .eq('id', post.client_id)
     .single();
 
+  const clientName = client?.name ?? 'Unknown client';
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
-  const postUrl = `${appUrl}/admin/availability?post=${post.id}`;
+  const linkPath = await resolveFailureLinkPath(adminClient, post.id as string);
+  const postUrl = `${appUrl}${linkPath}`;
   const caption = ((post.caption as string) ?? '').substring(0, 100);
 
-  // Create in-app notification
+  // Create in-app notification. Title carries the client name so the bell
+  // dropdown is actionable at a glance (Jack's note: "it doesn't tell me
+  // which client or anything like that"). Body keeps caption + retry context.
   await adminClient.from('notifications').insert({
     recipient_user_id: createdBy,
     organization_id: null,
     type: 'report_published', // Reusing existing type for now
-    title: `Post failed to publish`,
-    body: `Post for ${client?.name ?? 'Unknown client'} failed after 3 retries: "${caption}..."`,
-    link_path: `/admin/availability?post=${post.id}`,
+    title: `Post failed to publish for ${clientName}`,
+    body: `Failed after 3 retries: "${caption}..."`,
+    link_path: linkPath,
     is_read: false,
     email_sent: false,
   });
@@ -668,7 +725,7 @@ async function sendFailureNotification(
     const reason = (post.failure_reason as string | null) ?? 'unknown error';
     const truncatedReason = reason.length > 280 ? reason.substring(0, 280) + '…' : reason;
     const text =
-      `🚨 *Post failed to publish* — ${client?.name ?? 'Unknown client'}\n` +
+      `🚨 *Post failed to publish for ${clientName}*\n` +
       `Caption: "${caption}${((post.caption as string) ?? '').length > 100 ? '…' : ''}"\n` +
       `Reason: ${truncatedReason}\n` +
       `${postUrl}`;
@@ -677,4 +734,71 @@ async function sendFailureNotification(
 
   // TODO: Send actual email via Resend/SendGrid when email service is configured
   console.log(`[PUBLISH FAILURE] userId=${post.created_by} postId=${post.id} clientId=${post.client_id} reason=${post.failure_reason}`);
+}
+
+/**
+ * Partial-failure notification.
+ *
+ * Fires when a post resolves to `partially_failed` — at least one platform
+ * shipped but at least one failed. The cron does NOT retry partial failures
+ * (the published platforms can't be unpublished, so re-running would dupe
+ * the successes), so without this hook the team gets zero signal that, e.g.,
+ * 4/5 platforms didn't post. Mirrors `sendFailureNotification`: in-app row
+ * for the creator + ops-channel Google Chat ping listing the failed legs.
+ */
+async function sendPartialFailureNotification(
+  adminClient: ReturnType<typeof createAdminClient>,
+  post: Record<string, unknown>,
+  failures: { platform: string; username: string | null; reason: string }[],
+) {
+  const createdBy = post.created_by as string | null;
+  if (!createdBy) return;
+
+  const { data: client } = await adminClient
+    .from('clients')
+    .select('name')
+    .eq('id', post.client_id)
+    .single();
+  const clientName = client?.name ?? 'Unknown client';
+
+  const caption = ((post.caption as string) ?? '').substring(0, 100);
+  const linkPath = await resolveFailureLinkPath(adminClient, post.id as string);
+
+  const platformList = failures
+    .map((f) => (f.username ? `${f.platform} (@${f.username})` : f.platform))
+    .join(', ');
+
+  await adminClient.from('notifications').insert({
+    recipient_user_id: createdBy,
+    organization_id: null,
+    type: 'report_published',
+    title: `Post partially failed to publish for ${clientName}`,
+    body: `${platformList} did not publish: "${caption}..."`,
+    link_path: linkPath,
+    is_read: false,
+    email_sent: false,
+  });
+
+  const opsWebhook = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
+  if (opsWebhook) {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+    const postUrl = `${appUrl}${linkPath}`;
+    const failureLines = failures
+      .map((f) => {
+        const who = f.username ? `${f.platform} (@${f.username})` : f.platform;
+        const reason = f.reason.length > 200 ? f.reason.substring(0, 200) + '…' : f.reason;
+        return `• ${who}: ${reason}`;
+      })
+      .join('\n');
+    const text =
+      `⚠️ *Post partially failed to publish for ${clientName}*\n` +
+      `Caption: "${caption}${((post.caption as string) ?? '').length > 100 ? '…' : ''}"\n` +
+      `${failureLines}\n` +
+      `${postUrl}`;
+    postToGoogleChatSafe(opsWebhook, { text }, `publish-partial ${post.id}`);
+  }
+
+  console.log(
+    `[PUBLISH PARTIAL] userId=${createdBy} postId=${post.id} clientId=${post.client_id} failed=${failures.length}`,
+  );
 }

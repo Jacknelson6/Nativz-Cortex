@@ -12,7 +12,14 @@ export interface CalendarPost {
   post_type: PostType;
   cover_image_url: string | null;
   thumbnail_url: string | null;
-  platforms: { platform: SocialPlatform; profile_id: string; username: string }[];
+  platforms: {
+    platform: SocialPlatform;
+    profile_id: string;
+    username: string;
+    status?: 'pending' | 'published' | 'failed';
+    external_post_url?: string | null;
+    failure_reason?: string | null;
+  }[];
   review_status: 'none' | 'pending' | 'approved' | 'changes_requested';
   media: { id: string; filename: string; storage_path: string; thumbnail_url: string | null; late_media_url: string | null; mime_type: string | null }[];
 }

@@ -12,6 +12,7 @@ import {
   ChevronUp,
   Copy,
   Eye,
+  ExternalLink,
   Hash,
   History,
   Link2,
@@ -64,12 +65,27 @@ interface DropComment {
   caption_after: string | null;
 }
 
+interface PostStatusBlock {
+  status: string;
+  scheduled_at: string | null;
+  published_at: string | null;
+  failure_reason: string | null;
+  platforms: {
+    platform: string;
+    username: string | null;
+    status: string;
+    failure_reason: string | null;
+    external_post_url: string | null;
+  }[];
+}
+
 interface DropResponse {
   drop: ContentDrop;
   videos: ContentDropVideo[];
   commentsByPostId: Record<string, DropComment[]>;
   revisionsCompletedByPostId: Record<string, string>;
   variantPlatforms: CaptionVariantPlatform[];
+  postStatusByPostId: Record<string, PostStatusBlock>;
 }
 
 interface ShareLinkView {
@@ -314,6 +330,11 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
                   : null
               }
               variantPlatforms={data.variantPlatforms ?? []}
+              postStatus={
+                v.scheduled_post_id
+                  ? data.postStatusByPostId?.[v.scheduled_post_id] ?? null
+                  : null
+              }
               onUpdated={refresh}
             />
           ))}
@@ -415,6 +436,7 @@ interface VideoCardProps {
   comments: DropComment[];
   revisionsCompletedAt: string | null;
   variantPlatforms: CaptionVariantPlatform[];
+  postStatus: PostStatusBlock | null;
   onUpdated: () => void;
 }
 
@@ -426,6 +448,7 @@ function VideoCard({
   comments,
   revisionsCompletedAt,
   variantPlatforms,
+  postStatus,
   onUpdated,
 }: VideoCardProps) {
   const [editing, setEditing] = useState(false);
@@ -603,8 +626,19 @@ function VideoCard({
           )}
         </div>
         {scheduled && (
-          <div className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/90 px-2 py-0.5 text-[11px] font-medium text-emerald-950">
-            <CheckCircle2 size={10} /> Scheduled
+          <div className="absolute left-2 top-2 flex flex-col items-start gap-1">
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/90 px-2 py-0.5 text-[11px] font-medium text-emerald-950">
+              <CheckCircle2 size={10} /> Scheduled
+            </span>
+            {postStatus &&
+              postStatus.scheduled_at &&
+              new Date(postStatus.scheduled_at) < new Date() &&
+              postStatus.status !== 'published' &&
+              postStatus.status !== 'publishing' && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/90 px-2 py-0.5 text-[11px] font-medium text-amber-950">
+                  <AlertTriangle size={10} /> Past due, reschedule
+                </span>
+              )}
           </div>
         )}
       </div>
@@ -648,6 +682,83 @@ function VideoCard({
             )}
           </div>
         )}
+
+        {postStatus &&
+          (postStatus.status === 'published' ||
+            postStatus.status === 'partially_failed' ||
+            postStatus.status === 'failed') &&
+          postStatus.platforms.length > 0 && (
+            <div className="rounded-lg border border-nativz-border bg-background/60 p-2.5">
+              <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-text-muted">
+                Publish results
+              </p>
+              <ul className="space-y-1">
+                {postStatus.platforms.map((p, idx) => {
+                  const ok = p.status === 'published';
+                  const failed = p.status === 'failed';
+                  return (
+                    <li
+                      key={`${p.platform}-${idx}`}
+                      className="flex items-start gap-1.5 text-[11px]"
+                    >
+                      {ok ? (
+                        <CheckCircle2
+                          size={12}
+                          className="mt-0.5 shrink-0 text-emerald-400"
+                        />
+                      ) : failed ? (
+                        <AlertTriangle
+                          size={12}
+                          className="mt-0.5 shrink-0 text-red-400"
+                        />
+                      ) : (
+                        <Loader2
+                          size={12}
+                          className="mt-0.5 shrink-0 text-text-muted"
+                        />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-medium capitalize text-text-primary">
+                            {p.platform}
+                          </span>
+                          {p.username && (
+                            <span className="text-text-muted">@{p.username}</span>
+                          )}
+                          <span
+                            className={
+                              ok
+                                ? 'text-emerald-300'
+                                : failed
+                                  ? 'text-red-300'
+                                  : 'text-text-muted'
+                            }
+                          >
+                            {ok ? 'published' : failed ? 'failed' : p.status}
+                          </span>
+                          {ok && p.external_post_url && (
+                            <a
+                              href={p.external_post_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-0.5 text-accent hover:underline"
+                            >
+                              View <ExternalLink size={10} />
+                            </a>
+                          )}
+                        </div>
+                        {failed && p.failure_reason && (
+                          <p className="mt-0.5 break-words text-[10px] text-red-300/80">
+                            {p.failure_reason}
+                          </p>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
 
         {editing ? (
           <div className="space-y-2">
