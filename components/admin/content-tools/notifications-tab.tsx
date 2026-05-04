@@ -4,8 +4,6 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
   AlertTriangle,
-  Bell,
-  Mail,
   RefreshCcw,
   Send,
   Inbox,
@@ -13,21 +11,15 @@ import {
 import { Button } from '@/components/ui/button';
 
 /**
- * Notifications tab. Two stacked panels in one column:
+ * Notifications tab. Single panel:
  *
- *   1. Recent activity feed -- last N transactional emails the
- *      content pipeline has fired (followups, revision notifies,
- *      final-call nudges). Pulled from `email_log` filtered by the
- *      calendar-related type keys; one row per send.
- *   2. POC contacts list -- "who gets notified when". Brand profile
- *      is the single source of truth for notification recipients;
- *      the cross-brand view here summarizes how many POCs each brand
- *      has registered, so an admin can spot brands with no contacts
- *      (which would skip all notifications).
+ *   Recent activity feed -- last N transactional emails the content
+ *   pipeline has fired (followups, revision notifies, final-call
+ *   nudges). Pulled from `email_messages` filtered by the calendar-
+ *   related type keys; one row per send.
  *
- * Each panel owns its own loading / error state so a contacts-API
- * regression can't block the activity feed from rendering, and vice
- * versa.
+ * Brand POCs are managed inside each client's settings page, so this
+ * tab no longer mirrors them.
  */
 
 type EmailKind =
@@ -48,17 +40,10 @@ interface ActivityRow {
   status: string | null;
 }
 
-interface ContactsSummaryRow {
-  clientId: string;
-  clientName: string;
-  total: number;
-}
-
 export function NotificationsTab() {
   return (
     <div className="space-y-4">
       <ActivityFeed />
-      <ContactsOverview />
     </div>
   );
 }
@@ -174,106 +159,6 @@ function ActivityFeed() {
                   </div>
                 )}
               </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function ContactsOverview() {
-  const [rows, setRows] = useState<ContactsSummaryRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  async function load() {
-    setLoading(true);
-    try {
-      const res = await fetch(
-        '/api/admin/content-tools/contacts-summary',
-        { cache: 'no-store' },
-      );
-      if (!res.ok) throw new Error(`Contacts summary unreachable (HTTP ${res.status})`);
-      const data = (await res.json()) as { rows: ContactsSummaryRow[] };
-      setRows(data.rows ?? []);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load contacts');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void load();
-  }, []);
-
-  return (
-    <div className="overflow-hidden rounded-xl border border-nativz-border bg-surface">
-      <div className="flex items-center gap-3 border-b border-nativz-border px-5 py-4">
-        <span className="flex size-9 items-center justify-center rounded-lg bg-accent-text/10 text-accent-text">
-          <Bell className="size-4" />
-        </span>
-        <div className="min-w-0">
-          <div className="text-sm font-semibold text-text-primary">
-            Brand profile contacts
-          </div>
-          <div className="mt-0.5 text-xs text-text-muted">
-            {loading
-              ? 'Loading...'
-              : `${rows.length} brand${rows.length === 1 ? '' : 's'} with at least one POC`}
-          </div>
-        </div>
-      </div>
-
-      {error && !loading && (
-        <div className="flex items-start gap-2 border-b border-status-danger/20 bg-status-danger/5 px-5 py-3 text-xs text-status-danger">
-          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-          <div className="min-w-0">
-            <div className="font-medium">Couldn&apos;t reach the contacts API.</div>
-            <div className="mt-0.5 text-status-danger/80">{error}</div>
-          </div>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="divide-y divide-nativz-border/60">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-3 px-5 py-3">
-              <div className="h-3 w-32 animate-pulse rounded bg-nativz-border" />
-              <div className="ml-auto h-3 w-20 animate-pulse rounded bg-nativz-border" />
-            </div>
-          ))}
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="px-5 py-10 text-center">
-          <Mail className="mx-auto mb-3 h-7 w-7 text-text-tertiary" />
-          <p className="text-sm text-text-secondary">
-            No brand POCs registered.
-          </p>
-          <p className="mt-1 text-xs text-text-muted">
-            Add contacts to each brand from its brand profile.
-          </p>
-        </div>
-      ) : (
-        <ul className="divide-y divide-nativz-border/60">
-          {rows.map((row) => (
-            <li
-              key={row.clientId}
-              className="flex items-center justify-between gap-3 px-5 py-3"
-            >
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium text-text-primary">
-                  {row.clientName}
-                </div>
-                <div className="mt-0.5 text-xs text-text-muted">
-                  {row.total} contact{row.total === 1 ? '' : 's'} on the brand profile
-                </div>
-              </div>
-              <span className="inline-flex items-center gap-1 rounded-full border border-status-success/30 bg-status-success/10 px-2 py-0.5 text-[11px] font-medium text-status-success">
-                Live
-              </span>
             </li>
           ))}
         </ul>

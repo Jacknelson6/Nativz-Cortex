@@ -10,7 +10,6 @@ import {
   History,
   Megaphone,
   RefreshCcw,
-  Tv,
   Wand2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -51,8 +50,6 @@ import { subscribeToCompletion } from '@/lib/editing/upload-store';
  *   All projects    - every share-link the agency has out (default).
  *   Organic social  - filtered to project_type = organic_content.
  *   Paid social     - filtered to project_type = social_ads.
- *   CTV             - filtered to project_type = ctv_ads.
- *   Other           - everything else (untyped or explicitly other).
  *   Quick schedule  - Monday "EM Approved" videos -> thumbnail extract
  *                     + transcribe + caption write -> kick off scheduler.
  *   Connections     - integration health (Drive / Monday / Resend /
@@ -77,8 +74,7 @@ import { subscribeToCompletion } from '@/lib/editing/upload-store';
 type ProjectTabSlug =
   | 'projects'
   | 'organic_social'
-  | 'paid_social'
-  | 'ctv';
+  | 'paid_social';
 
 type ContentToolsTab =
   | ProjectTabSlug
@@ -95,27 +91,18 @@ const PROJECT_TAB_FILTER: Record<ProjectTabSlug, ReviewProjectType | null> = {
   projects: null,
   organic_social: 'organic_content',
   paid_social: 'social_ads',
-  ctv: 'ctv_ads',
 };
 
-/**
- * Per-tab column visibility. Type-specific tabs hide the "Project
- * type" column because every row already shares the same type. Easy
- * to extend later when we want different shapes per tab (e.g. drop
- * "Last followup" on CTV because the cycle is longer there).
- */
 const PROJECT_TAB_HIDE: Record<ProjectTabSlug, ReviewHideableColumn[]> = {
   projects: [],
   organic_social: ['project_type'],
   paid_social: ['project_type'],
-  ctv: ['project_type'],
 };
 
 const PROJECT_TAB_LABEL: Record<ProjectTabSlug, string> = {
   projects: 'All projects',
   organic_social: 'Organic social',
   paid_social: 'Paid social',
-  ctv: 'CTV',
 };
 
 function isProjectTab(tab: ContentToolsTab): tab is ProjectTabSlug {
@@ -228,11 +215,6 @@ const TABS: {
     slug: 'paid_social',
     label: 'Paid social',
     icon: <BadgeDollarSign className="size-3.5" />,
-  },
-  {
-    slug: 'ctv',
-    label: 'CTV',
-    icon: <Tv className="size-3.5" />,
   },
   {
     slug: 'quick-schedule',
@@ -359,20 +341,13 @@ export function ContentToolsShell() {
     [allRows, sort],
   );
 
-  // Per-tab counts feed the badges in the top-level tab strip so Jack
-  // can see "11 organic social, 4 paid social, 0 CTV" at a glance.
-  // Counts include both calendar share links and editing projects so
-  // every row in the merged view is accounted for.
   const projectTabCounts = useMemo(() => {
     const counts: Record<ProjectTabSlug, number> = {
       projects: allRows.length,
       organic_social: 0,
       paid_social: 0,
-      ctv: 0,
     };
     for (const row of allRows) {
-      // Untyped/"other" rows still land in `All projects` but no longer
-      // get their own tab. Skip the per-type counters for them.
       const type: ReviewProjectType = row.project_type ?? 'other';
       switch (type) {
         case 'organic_content':
@@ -382,8 +357,6 @@ export function ContentToolsShell() {
           counts.paid_social += 1;
           break;
         case 'ctv_ads':
-          counts.ctv += 1;
-          break;
         case 'other':
           break;
       }
@@ -606,10 +579,7 @@ function describeSubtitle(tab: ContentToolsTab, filteredCount: number): string {
     if (tab === 'projects') {
       return `${filteredCount} ${word} across every brand`;
     }
-    // Preserve "CTV" casing; lowercase everything else so the
-    // sentence reads naturally ("5 organic social projects").
-    const raw = PROJECT_TAB_LABEL[tab];
-    const label = raw === 'CTV' ? 'CTV' : raw.toLowerCase();
+    const label = PROJECT_TAB_LABEL[tab].toLowerCase();
     return `${filteredCount} ${label} ${word}`;
   }
   switch (tab) {
