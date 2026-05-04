@@ -150,7 +150,7 @@ Landed on `main` 2026-05-04. Migration numbers bumped from PRD's 226 to 231/232 
 | `15ae828a` | `POST + GET /api/clients/[clientId]/ad-creatives/templates`: multipart upload, Zod metadata, file validation (10 MB / image mime allowlist), bucket write at `<clientId>/<templateId>.<ext>`, row insert with `extraction_status='pending'`, kicks worker via `after()` so the response returns in <500ms. GET supports `limit` query (default 500, max 1000). |
 | `a67dd26e` | `GET + DELETE /api/clients/[clientId]/ad-creatives/templates/[templateId]`: per-row fetch + best-effort storage cleanup (path reconstructed from public URL). |
 | `90f5bf5a` | `POST .../retry` endpoint + frontend wiring: gallery card now distinguishes pending / ready / failed via the new `extraction_status` column, falls back to the empty-schema heuristic for legacy rows, surfaces a coral retry banner + button on failed templates, and the polling loop re-fires once retry flips the row back to pending. Detail dialog gained an inline failure card with the truncated `extraction_error` and a Retry button. `app/(app)/ads/page.tsx` server query now selects the new columns. |
-| `<see next commit>` | Phase 1 cleanup: `app/(app)/ads/page.tsx` header comment updated to reflect actual shipped state. Legacy redirect at `app/admin/ad-creatives-v2/page.tsx` left intact, it's an intentional bookmark catcher, not orphaned. |
+| `d4af76a8` | Phase 1 cleanup: `app/(app)/ads/page.tsx` header comment updated to reflect actual shipped state. Legacy redirect at `app/admin/ad-creatives-v2/page.tsx` left intact, it's an intentional bookmark catcher, not orphaned. |
 
 ### Chat to gallery verification
 
