@@ -14,9 +14,9 @@
  * everything is sentence case and stripped of admin terminology.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
-import { Check, Loader2 } from 'lucide-react';
+import { AlertTriangle, Check, Loader2 } from 'lucide-react';
 import type { AgencyBrand } from '@/lib/agency/detect';
 import type { OnboardingScreen } from '@/lib/onboarding/screens';
 import type { OnboardingRow } from '@/lib/onboarding/types';
@@ -58,10 +58,31 @@ export function OnboardingStepper(props: Props) {
   const [completedAt, setCompletedAt] = useState<string | null>(initial.completed_at);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedFlash, setSavedFlash] = useState(false);
+  // Last attempted payload, kept for the Retry button after a network or
+  // server failure. Cleared on successful save.
+  const lastAttemptRef = useRef<Record<string, unknown> | null>(null);
+  const errorRef = useRef<HTMLDivElement | null>(null);
 
   const screen = screens[currentStep] ?? screens[screens.length - 1];
   const lastIndex = screens.length - 1;
   const isDone = currentStep >= lastIndex || status === 'completed';
+
+  // When a fresh error lands, scroll the banner into view so users on long
+  // screens (project_brief, content_prefs) actually see it.
+  useEffect(() => {
+    if (error && errorRef.current) {
+      errorRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [error]);
+
+  // Auto-dismiss the "Saved" pill after a beat. Short enough to feel like a
+  // confirmation, long enough to be readable on slow connections.
+  useEffect(() => {
+    if (!savedFlash) return;
+    const id = window.setTimeout(() => setSavedFlash(false), 1800);
+    return () => window.clearTimeout(id);
+  }, [savedFlash]);
 
   const progress = useMemo(() => ({
     pct: Math.round((Math.min(currentStep, lastIndex) / lastIndex) * 100),
@@ -79,6 +100,7 @@ export function OnboardingStepper(props: Props) {
   async function submitAndAdvance(value: Record<string, unknown> | null) {
     setSubmitting(true);
     setError(null);
+    lastAttemptRef.current = value;
     try {
       const next = Math.min(currentStep + 1, lastIndex);
       const body: Record<string, unknown> = {};
@@ -106,11 +128,20 @@ export function OnboardingStepper(props: Props) {
       setCurrentStep(data.onboarding.current_step ?? next);
       setStatus(data.onboarding.status);
       setCompletedAt(data.onboarding.completed_at ?? null);
+      lastAttemptRef.current = null;
+      // Skip the saved chip on the welcome screen — it's just an "I'm ready"
+      // ack with no answer to confirm. Showing "Saved" there feels off.
+      if (screen.step_state_key) setSavedFlash(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'unknown error');
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function retryLastSave() {
+    if (submitting) return;
+    submitAndAdvance(lastAttemptRef.current);
   }
 
   const screenValue = screen.step_state_key
@@ -122,8 +153,19 @@ export function OnboardingStepper(props: Props) {
       {/* Header */}
       <header className="flex items-center justify-between">
         <BrandLogo agency={agency} clientName={clientName} clientLogoUrl={clientLogoUrl} />
-        <div className="text-[11px] uppercase tracking-wide text-text-secondary">
-          {isDone ? 'Done' : `Step ${progress.current} of ${progress.total}`}
+        <div className="flex items-center gap-2">
+          {savedFlash ? (
+            <span
+              role="status"
+              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-medium text-emerald-300 transition-opacity"
+            >
+              <Check size={12} aria-hidden />
+              Saved
+            </span>
+          ) : null}
+          <div className="text-[11px] uppercase tracking-wide text-text-secondary">
+            {isDone ? 'Done' : `Step ${progress.current} of ${progress.total}`}
+          </div>
         </div>
       </header>
 
@@ -138,8 +180,21 @@ export function OnboardingStepper(props: Props) {
       {/* Screen body */}
       <main className="mt-10 flex-1">
         {error ? (
-          <div className="mb-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
-            {error}
+          <div
+            ref={errorRef}
+            role="alert"
+            className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200"
+          >
+            <AlertTriangle size={14} className="shrink-0" aria-hidden />
+            <span className="flex-1 min-w-0">{error}</span>
+            <button
+              type="button"
+              onClick={retryLastSave}
+              disabled={submitting}
+              className="shrink-0 rounded-md border border-rose-400/40 bg-rose-500/20 px-2.5 py-1 text-xs font-medium text-rose-100 transition hover:bg-rose-500/30 disabled:opacity-60"
+            >
+              {submitting ? 'Retrying...' : 'Retry'}
+            </button>
           </div>
         ) : null}
 
