@@ -528,9 +528,30 @@ export class ZernioPostingService implements PostingService {
       // this account in the last 24h, it returns 409 with `details.existingPostId`.
       // That post IS in Zernio, so the caller's draft is effectively recovered:
       // adopt the existing ID instead of re-throwing.
+      //
+      // Returning `platforms: []` here used to bite us — the cron's per-platform
+      // update loop iterates `result.platforms`, so an empty array meant
+      // `scheduled_post_platforms` rows stayed at `status='pending'` with no
+      // `external_post_url` forever, even though the post was live on Zernio.
+      // Fetch the existing post's real platform breakdown via getPostStatus so
+      // the caller can update per-platform rows correctly.
       const reused = parseZernioDuplicate(err);
       if (reused) {
-        return { externalPostId: reused, platforms: [] };
+        try {
+          const status = await this.getPostStatus(reused);
+          return { externalPostId: reused, platforms: status.platforms };
+        } catch (statusErr) {
+          // If the status fetch fails (e.g. Zernio transient), fall back to
+          // the legacy empty-platforms behavior so the parent post still
+          // adopts the existingPostId. The per-platform backfill can be
+          // patched up later, but losing the externalPostId here would
+          // re-throw and orphan the live Zernio post.
+          console.warn(
+            `[zernio.publishPost] adopted dupe ${reused} but getPostStatus failed:`,
+            statusErr,
+          );
+          return { externalPostId: reused, platforms: [] };
+        }
       }
       throw err;
     }

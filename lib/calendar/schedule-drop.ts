@@ -314,21 +314,42 @@ export async function publishScheduledPost(
   if (!videoUrl) throw new Error('Draft post is missing a media URL');
 
   // Pull the platforms this post is targeting + the brand's caption variants.
+  // Keep the spp row id + social_profile_id alongside the embedded profile so
+  // we can map Zernio's per-platform results (echoed back as late_account_id)
+  // to the right `scheduled_post_platforms` row for status updates below.
   const { data: platforms } = await admin
     .from('scheduled_post_platforms')
-    .select('social_profiles:social_profile_id (platform, late_account_id)')
+    .select('id, social_profile_id, social_profiles:social_profile_id (platform, late_account_id)')
     .eq('post_id', postId);
+  type SppRow = {
+    id: string;
+    social_profile_id: string;
+    social_profiles:
+      | { platform: SocialPlatform; late_account_id: string }
+      | { platform: SocialPlatform; late_account_id: string }[]
+      | null;
+  };
+  const sppRows = (platforms ?? []) as SppRow[];
   // Supabase types embedded joins as arrays; the FK is 1-to-1, so flatten.
-  const lateProfiles = (platforms ?? [])
+  const lateProfiles = sppRows
     .flatMap((p) => {
-      const sp = (p as unknown as { social_profiles: unknown }).social_profiles;
-      return Array.isArray(sp) ? sp : sp ? [sp] : [];
+      const sp = p.social_profiles;
+      const flat = Array.isArray(sp) ? sp : sp ? [sp] : [];
+      return flat.map((x) => ({ ...x, sppId: p.id, profileId: p.social_profile_id }));
     })
     .filter(
-      (p): p is { platform: SocialPlatform; late_account_id: string } =>
+      (p): p is { platform: SocialPlatform; late_account_id: string; sppId: string; profileId: string } =>
         !!p && typeof p === 'object' && 'late_account_id' in p && !!(p as { late_account_id: string }).late_account_id,
     );
   if (lateProfiles.length === 0) throw new Error('Draft post has no platforms');
+
+  // Reverse map for the per-platform update loop after publish: Zernio echoes
+  // back our `late_account_id` as `profileId` in PublishResult.platforms[],
+  // and we need to find the matching spp row to stamp external_post_url etc.
+  const lateIdToSppId = new Map<string, string>();
+  for (const p of lateProfiles) {
+    lateIdToSppId.set(p.late_account_id, p.sppId);
+  }
 
   // Look up caption variants on the originating drop video so per-platform
   // overrides survive the draft → publish handoff.
@@ -371,6 +392,25 @@ export async function publishScheduledPost(
     .from('scheduled_posts')
     .update({ status: 'scheduled', late_post_id: publish.externalPostId })
     .eq('id', postId);
+
+  // Backfill per-platform results so the admin scheduler UI shows the real
+  // platform-level status (publishedURL, error, etc.). Without this loop the
+  // `scheduled_post_platforms` rows stay at `status='pending'` indefinitely
+  // even though the post is live on Zernio — the bug that left ~16 stuck
+  // rows after the May 1 drop ship and the recovery sweep.
+  for (const platformResult of publish.platforms) {
+    const sppId = lateIdToSppId.get(platformResult.profileId);
+    if (!sppId) continue;
+    await admin
+      .from('scheduled_post_platforms')
+      .update({
+        status: platformResult.status === 'published' ? 'published' : 'failed',
+        external_post_id: platformResult.externalPostId ?? null,
+        external_post_url: platformResult.externalPostUrl ?? null,
+        failure_reason: platformResult.error ?? null,
+      })
+      .eq('id', sppId);
+  }
 
   return { alreadyPublished: false, externalPostId: publish.externalPostId };
 }
