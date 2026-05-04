@@ -6,7 +6,7 @@ import { extractTemplateSchema } from '@/lib/ad-creatives/extract-template-schem
 export const dynamic = 'force-dynamic';
 
 /**
- * POST /api/clients/[clientId]/ad-creatives/templates/[templateId]/retry
+ * POST /api/clients/[id]/ad-creatives/templates/[templateId]/retry
  *
  * Re-runs the vision pass on a template that previously hit
  * extraction_status='failed'. Flips the row back to 'pending' and
@@ -16,9 +16,9 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(
   _req: Request,
-  ctx: { params: Promise<{ clientId: string; templateId: string }> },
+  ctx: { params: Promise<{ id: string; templateId: string }> },
 ) {
-  const { clientId, templateId } = await ctx.params;
+  const { id: clientId, templateId } = await ctx.params;
   const guard = await requireAdmin();
   if (guard.error) return guard.error;
 

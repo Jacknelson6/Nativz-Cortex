@@ -21,7 +21,7 @@ const uploadSchema = z.object({
 });
 
 /**
- * GET /api/clients/[clientId]/ad-creatives/templates
+ * GET /api/clients/[id]/ad-creatives/templates
  *
  * Lists the brand's pattern-library templates ordered newest-first.
  * The polling loop in ad-template-library.tsx hits this every 3s while
@@ -30,9 +30,9 @@ const uploadSchema = z.object({
  */
 export async function GET(
   req: NextRequest,
-  ctx: { params: Promise<{ clientId: string }> },
+  ctx: { params: Promise<{ id: string }> },
 ) {
-  const { clientId } = await ctx.params;
+  const { id: clientId } = await ctx.params;
   const guard = await requireAdmin();
   if (guard.error) return guard.error;
 
@@ -56,7 +56,7 @@ export async function GET(
 }
 
 /**
- * POST /api/clients/[clientId]/ad-creatives/templates
+ * POST /api/clients/[id]/ad-creatives/templates
  *
  * Multipart upload of a reference screenshot. Writes the file to the
  * ad-template-references bucket, inserts the row with
@@ -67,9 +67,9 @@ export async function GET(
  */
 export async function POST(
   req: NextRequest,
-  ctx: { params: Promise<{ clientId: string }> },
+  ctx: { params: Promise<{ id: string }> },
 ) {
-  const { clientId } = await ctx.params;
+  const { id: clientId } = await ctx.params;
   const guard = await requireAdmin();
   if (guard.error) return guard.error;
 

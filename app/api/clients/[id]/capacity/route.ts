@@ -1,5 +1,5 @@
 /**
- * GET /api/clients/[clientId]/capacity
+ * GET /api/clients/[id]/capacity
  *
  * Returns per-service monthly deliverable capacity for a client (editing /
  * smm / blogging) along with the source of each number ("proposal" if a
@@ -21,18 +21,18 @@ import { getClientServiceCapacity } from '@/lib/clients/get-service-capacity';
 import { currentPeriod } from '@/lib/accounting/periods';
 
 const ParamsSchema = z.object({
-  clientId: z.string().uuid(),
+  id: z.string().uuid(),
 });
 
 export async function GET(
   _req: Request,
-  ctx: { params: Promise<{ clientId: string }> },
+  ctx: { params: Promise<{ id: string }> },
 ) {
   const parsed = ParamsSchema.safeParse(await ctx.params);
   if (!parsed.success) {
     return NextResponse.json({ error: 'invalid client id' }, { status: 400 });
   }
-  const { clientId } = parsed.data;
+  const { id: clientId } = parsed.data;
 
   const supabase = await createServerSupabaseClient();
   const {

@@ -16,7 +16,7 @@ import type { AdConcept } from '@/components/ad-creatives/ad-concept-gallery';
  * with extraction_status='pending', a Gemini vision pass via OpenRouter
  * fills prompt_schema in the background (see
  * lib/ad-creatives/extract-template-schema.ts), and the gallery polls
- * GET /api/clients/[clientId]/ad-creatives/templates every 3s until
+ * GET /api/clients/[id]/ad-creatives/templates every 3s until
  * everything settles to ready or failed. Failed rows expose a Retry
  * banner that POSTs to .../templates/[templateId]/retry.
  *

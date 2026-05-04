@@ -10,7 +10,7 @@ const TEMPLATE_SELECT =
   'id, client_id, name, reference_image_url, prompt_schema, aspect_ratio, ad_category, tags, extraction_status, extraction_error, created_at, updated_at';
 
 /**
- * GET /api/clients/[clientId]/ad-creatives/templates/[templateId]
+ * GET /api/clients/[id]/ad-creatives/templates/[templateId]
  *
  * Single-template fetch. Useful when the gallery polling loop wants
  * to refresh just one card after a retry instead of re-listing the
@@ -18,9 +18,9 @@ const TEMPLATE_SELECT =
  */
 export async function GET(
   _req: Request,
-  ctx: { params: Promise<{ clientId: string; templateId: string }> },
+  ctx: { params: Promise<{ id: string; templateId: string }> },
 ) {
-  const { clientId, templateId } = await ctx.params;
+  const { id: clientId, templateId } = await ctx.params;
   const guard = await requireAdmin();
   if (guard.error) return guard.error;
 
@@ -42,7 +42,7 @@ export async function GET(
 }
 
 /**
- * DELETE /api/clients/[clientId]/ad-creatives/templates/[templateId]
+ * DELETE /api/clients/[id]/ad-creatives/templates/[templateId]
  *
  * Removes the row plus any reference image stored under
  * ad-template-references/<clientId>/<templateId>.<ext>. The list
@@ -51,9 +51,9 @@ export async function GET(
  */
 export async function DELETE(
   _req: Request,
-  ctx: { params: Promise<{ clientId: string; templateId: string }> },
+  ctx: { params: Promise<{ id: string; templateId: string }> },
 ) {
-  const { clientId, templateId } = await ctx.params;
+  const { id: clientId, templateId } = await ctx.params;
   const guard = await requireAdmin();
   if (guard.error) return guard.error;
 

@@ -6,7 +6,7 @@ import { DeliverableProgress } from './deliverable-progress';
 
 /**
  * Fetcher wrapper for the editor's per-client editing-capacity strip on the
- * share-link review page. Owns the GET /api/clients/[clientId]/capacity
+ * share-link review page. Owns the GET /api/clients/[id]/capacity
  * lifecycle so the underlying `<DeliverableProgress>` stays a dumb
  * presentational component (storybook-friendly, server-renderable when given
  * pre-fetched data).
