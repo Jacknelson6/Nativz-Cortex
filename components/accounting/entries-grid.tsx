@@ -30,6 +30,7 @@ export interface GridEntry {
   margin_cents: number;
   description: string | null;
   created_at: string;
+  source: 'manual' | 'auto' | 'auto-edited' | 'content_pipeline';
 }
 
 interface DraftRow {
@@ -290,6 +291,9 @@ export function EntriesGrid({
       merged.rate_cents =
         merged.video_count > 0 ? Math.round(merged.amount_cents / merged.video_count) : 0;
     }
+    if (entry.source === 'auto') {
+      merged.source = 'auto-edited';
+    }
 
     const body: Record<string, unknown> = { ...patch };
     if (isEditing) {
@@ -378,6 +382,9 @@ export function EntriesGrid({
           merged.margin_cents = computeEditingMargin(merged, clientById);
           merged.rate_cents =
             merged.video_count > 0 ? Math.round(merged.amount_cents / merged.video_count) : 0;
+        }
+        if (entry.source === 'auto') {
+          merged.source = 'auto-edited';
         }
 
         const body: Record<string, unknown> = { ...patch };
@@ -718,15 +725,18 @@ function ExistingRow({
         </Cell>
       )}
       <Cell>
-        <PayeePicker
-          teamMemberId={entry.team_member_id}
-          payeeLabel={entry.payee_label}
-          teamMembers={teamMembers}
-          memberById={memberById}
-          readonly={readonly}
-          onPickMember={(id) => onPatch({ team_member_id: id, payee_label: null })}
-          onTypeLabel={(label) => onPatch({ team_member_id: null, payee_label: label })}
-        />
+        <div className="flex items-center gap-1.5">
+          <PayeePicker
+            teamMemberId={entry.team_member_id}
+            payeeLabel={entry.payee_label}
+            teamMembers={teamMembers}
+            memberById={memberById}
+            readonly={readonly}
+            onPickMember={(id) => onPatch({ team_member_id: id, payee_label: null })}
+            onTypeLabel={(label) => onPatch({ team_member_id: null, payee_label: label })}
+          />
+          <SourceChip source={entry.source} />
+        </div>
       </Cell>
       <Cell>
         <ClientPicker
@@ -942,6 +952,30 @@ function DraftRowUI({
 }
 
 // ── Cell shells ───────────────────────────────────────────────────────────
+
+function SourceChip({ source }: { source: GridEntry['source'] }) {
+  if (source === 'auto') {
+    return (
+      <span
+        className="inline-flex items-center rounded-full bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide text-emerald-300"
+        title="Auto-populated from approved deliverables. Editing this row marks it as auto-edited so re-sync won't overwrite your changes."
+      >
+        auto
+      </span>
+    );
+  }
+  if (source === 'auto-edited') {
+    return (
+      <span
+        className="inline-flex items-center rounded-full bg-amber-500/15 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide text-amber-300"
+        title="Started as an auto-row, then admin-edited. Excluded from re-sync overwrites."
+      >
+        auto-edited
+      </span>
+    );
+  }
+  return null;
+}
 
 function Cell({
   children,

@@ -31,7 +31,7 @@ export default async function AccountingPeriodPage({ params }: { params: Promise
       .single(),
     adminClient
       .from('payroll_entries')
-      .select('id, entry_type, team_member_id, payee_label, client_id, video_count, rate_cents, amount_cents, margin_cents, description, created_at')
+      .select('id, entry_type, team_member_id, payee_label, client_id, video_count, rate_cents, amount_cents, margin_cents, description, created_at, source')
       .eq('period_id', id)
       .order('created_at', { ascending: true }),
     adminClient
@@ -64,6 +64,7 @@ export default async function AccountingPeriodPage({ params }: { params: Promise
         initialEntries={entries ?? []}
         teamMembers={selectPayrollTeamMembers(team ?? [])}
         clients={clients ?? []}
+        isSuperAdmin={Boolean(userRow?.is_super_admin)}
       />
     </div>
   );

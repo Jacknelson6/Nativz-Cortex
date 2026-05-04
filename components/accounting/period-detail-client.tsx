@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Lock,
@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Sparkles,
   Link as LinkIcon,
+  RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -48,6 +49,7 @@ interface PeriodDetailClientProps {
   initialEntries: GridEntry[];
   teamMembers: TeamMember[];
   clients: Client[];
+  isSuperAdmin?: boolean;
 }
 
 const ENTRY_TYPE_LABELS: Record<EntryType, string> = {
@@ -72,6 +74,7 @@ export function PeriodDetailClient({
   initialEntries,
   teamMembers,
   clients,
+  isSuperAdmin = false,
 }: PeriodDetailClientProps) {
   const router = useRouter();
   const [entries, setEntries] = useState<GridEntry[]>(initialEntries);
@@ -80,6 +83,55 @@ export function PeriodDetailClient({
   const [linksOpen, setLinksOpen] = useState(false);
   const [comptrollerOpen, setComptrollerOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [syncingEditing, setSyncingEditing] = useState(false);
+  const autoFireRef = useRef(false);
+
+  const hasEditingAutoRow = useMemo(
+    () => entries.some((e) => e.entry_type === 'editing' && (e.source === 'auto' || e.source === 'auto-edited')),
+    [entries],
+  );
+
+  async function syncEditing(opts: { silent?: boolean } = {}) {
+    if (syncingEditing) return;
+    setSyncingEditing(true);
+    try {
+      const res = await fetch(`/api/accounting/periods/${period.id}/sync-editing`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (!opts.silent) toast.error(data.error ?? 'Sync failed');
+        return;
+      }
+      const { inserted = 0, updated = 0, skipped = 0 } = data ?? {};
+      if (!opts.silent) {
+        if (inserted + updated === 0) {
+          toast.message('Editing already in sync', {
+            description: skipped > 0 ? `${skipped} row${skipped === 1 ? '' : 's'} skipped (admin-edited or unresolved editor)` : 'No new approvals in this period yet.',
+          });
+        } else {
+          toast.success(
+            `${inserted} new, ${updated} updated${skipped ? `, ${skipped} skipped` : ''}`,
+          );
+        }
+      }
+      startTransition(() => router.refresh());
+    } catch {
+      if (!opts.silent) toast.error('Network error');
+    } finally {
+      setSyncingEditing(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    if (period.status !== 'draft') return;
+    if (hasEditingAutoRow) return;
+    if (autoFireRef.current) return;
+    autoFireRef.current = true;
+    void syncEditing({ silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSuperAdmin, period.status, hasEditingAutoRow]);
 
   const readonly = period.status !== 'draft';
 
@@ -158,6 +210,17 @@ export function PeriodDetailClient({
         <div className="flex flex-wrap gap-2 justify-end">
           {!readonly && (
             <>
+              {isSuperAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => syncEditing()}
+                  disabled={syncingEditing}
+                  title="Pulls approved deliverable consumes for this period and upserts editing payroll rows by (client, editor). Idempotent. Skips admin-edited rows."
+                >
+                  <RefreshCw size={14} className={syncingEditing ? 'animate-spin' : ''} /> Sync editing
+                </Button>
+              )}
               <Button variant="outline" size="sm" onClick={() => setLinksOpen(true)}>
                 <LinkIcon size={14} /> Submit links
               </Button>

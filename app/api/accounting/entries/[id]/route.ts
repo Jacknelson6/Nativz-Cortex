@@ -31,7 +31,7 @@ const updateSchema = z.object({
 async function loadEntryWithPeriodStatus(adminClient: ReturnType<typeof createAdminClient>, id: string) {
   const { data: entry } = await adminClient
     .from('payroll_entries')
-    .select('id, entry_type, period_id, video_count, rate_cents')
+    .select('id, entry_type, period_id, video_count, rate_cents, source')
     .eq('id', id)
     .single();
   if (!entry) return { entry: null, periodStatus: null as string | null };
@@ -77,9 +77,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
   }
 
+  const updatePayload: Record<string, unknown> = { ...parsed.data };
+  if ((entry as { source?: string | null }).source === 'auto') {
+    updatePayload.source = 'auto-edited';
+  }
+
   const { data, error } = await ctx.adminClient
     .from('payroll_entries')
-    .update(parsed.data)
+    .update(updatePayload)
     .eq('id', id)
     .select('*')
     .single();
