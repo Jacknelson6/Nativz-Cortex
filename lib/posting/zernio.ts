@@ -467,6 +467,23 @@ function unwrapPostPayload(raw: unknown): Record<string, unknown> {
   return inner ?? r;
 }
 
+/**
+ * Pull the late_account_id off a Zernio platform row. The publishPost response
+ * returns `accountId` as a flat string; the getPostStatus response returns it
+ * as a populated subdoc `{ _id, platform, username, ... }`. Handle both shapes
+ * so downstream callers always get the string ObjectId.
+ */
+function extractAccountIdFromPlatform(o: Record<string, unknown>): string | undefined {
+  const flat = pickString(o, 'accountId', 'account_id');
+  if (flat) return flat;
+  const sub = asRecord(o.accountId) ?? asRecord(o.account_id);
+  if (sub) {
+    const subId = pickString(sub, '_id', 'id');
+    if (subId) return subId;
+  }
+  return undefined;
+}
+
 function mapPublishPlatforms(
   raw: unknown,
 ): Array<{
@@ -483,13 +500,19 @@ function mapPublishPlatforms(
   return pl.map((x) => {
     const o = asRecord(x) ?? {};
     return {
-      id: pickString(o, 'id', '_id') ?? undefined,
-      accountId: pickString(o, 'accountId', 'account_id') ?? undefined,
+      // `platformPostId` is Zernio's first-class field for the published
+      // platform-side ID (e.g. Instagram media ID). Prefer it over the
+      // generic `_id` (which is the internal Zernio platform-row ID and
+      // less useful as `external_post_id`).
+      id: pickString(o, 'platformPostId', 'platform_post_id', 'id', '_id') ?? undefined,
+      accountId: extractAccountIdFromPlatform(o),
       platform: pickString(o, 'platform') ?? undefined,
       status: pickString(o, 'status') ?? undefined,
       platformPostUrl:
         pickString(o, 'platformPostUrl', 'platform_post_url', 'url') ?? undefined,
-      error: pickString(o, 'error', 'message') ?? undefined,
+      // `errorMessage` is the actual field Zernio populates on failed
+      // platform rows; legacy `error`/`message` kept as fallbacks.
+      error: pickString(o, 'errorMessage', 'error_message', 'error', 'message') ?? undefined,
     };
   });
 }

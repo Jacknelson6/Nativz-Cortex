@@ -2,6 +2,85 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { notifyZernioWebhookRecipients } from '@/lib/social/zernio-webhook-notify';
 import { markPlatformConnection } from '@/lib/onboarding/api';
+import { getPostingService } from '@/lib/posting';
+
+/**
+ * After Zernio fires a terminal post event (`post.published`,
+ * `post.partial_publish`, `post.failed`), pull the per-platform breakdown
+ * from `GET /posts/{id}` and write it into `scheduled_post_platforms`.
+ *
+ * Why this is on the webhook path: Zernio publishes on its own schedule
+ * and the webhook usually beats our 2-minute cron, so the cron's
+ * per-platform write loop never runs for these. Without this sync,
+ * `scheduled_post_platforms.status` stays `pending` and
+ * `external_post_url` stays NULL forever even though the parent flips
+ * to `published`. That's the bug that left 12+ recent posts stuck
+ * with no link rendering in the calendar/share UI.
+ *
+ * Idempotent: re-running on the same webhook overwrites with the same
+ * data. Best-effort: any error here is logged but does NOT fail the
+ * webhook (the parent status update already landed).
+ */
+async function syncPlatformRowsFromZernio(
+  adminClient: ReturnType<typeof createAdminClient>,
+  latePostId: string,
+): Promise<void> {
+  // Find the parent post + its per-platform rows with the late_account_id
+  // mapping needed to reverse Zernio's accountId echo.
+  const { data: parent } = await adminClient
+    .from('scheduled_posts')
+    .select('id')
+    .eq('late_post_id', latePostId)
+    .maybeSingle();
+  if (!parent) {
+    console.warn(
+      `[zernio-webhook] no scheduled_posts row for late_post_id=${latePostId}`,
+    );
+    return;
+  }
+  const { data: sppRows } = await adminClient
+    .from('scheduled_post_platforms')
+    .select('id, social_profile_id, social_profiles:social_profile_id (late_account_id, platform)')
+    .eq('post_id', parent.id);
+  if (!sppRows?.length) return;
+
+  // Build late_account_id → spp.id map
+  type Spp = {
+    id: string;
+    social_profile_id: string;
+    social_profiles:
+      | { late_account_id: string | null; platform: string | null }
+      | { late_account_id: string | null; platform: string | null }[]
+      | null;
+  };
+  const lateIdToSppId = new Map<string, string>();
+  for (const row of sppRows as Spp[]) {
+    const sp = row.social_profiles;
+    const flat = Array.isArray(sp) ? sp : sp ? [sp] : [];
+    for (const x of flat) {
+      if (x.late_account_id) lateIdToSppId.set(x.late_account_id, row.id);
+    }
+  }
+  if (lateIdToSppId.size === 0) return;
+
+  // Pull the actual breakdown from Zernio
+  const service = getPostingService();
+  const status = await service.getPostStatus(latePostId);
+
+  for (const platform of status.platforms) {
+    const sppId = lateIdToSppId.get(platform.profileId);
+    if (!sppId) continue;
+    await adminClient
+      .from('scheduled_post_platforms')
+      .update({
+        status: platform.status === 'published' ? 'published' : 'failed',
+        external_post_id: platform.externalPostId ?? null,
+        external_post_url: platform.externalPostUrl ?? null,
+        failure_reason: platform.error ?? null,
+      })
+      .eq('id', sppId);
+  }
+}
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
@@ -116,8 +195,18 @@ export async function POST(request: NextRequest) {
         if (postId) {
           await adminClient
             .from('scheduled_posts')
-            .update({ status: 'published' })
+            .update({ status: 'published', published_at: new Date().toISOString() })
             .eq('late_post_id', postId);
+          // Sync per-platform rows so the calendar / share UI shows the
+          // real Instagram/Facebook/etc URLs instead of stuck "pending".
+          try {
+            await syncPlatformRowsFromZernio(adminClient, postId);
+          } catch (syncErr) {
+            console.error(
+              `[zernio-webhook] post.published syncPlatformRowsFromZernio failed for ${postId}:`,
+              syncErr,
+            );
+          }
         }
         break;
       }
@@ -127,6 +216,14 @@ export async function POST(request: NextRequest) {
             .from('scheduled_posts')
             .update({ status: 'failed' })
             .eq('late_post_id', postId);
+          try {
+            await syncPlatformRowsFromZernio(adminClient, postId);
+          } catch (syncErr) {
+            console.error(
+              `[zernio-webhook] post.failed syncPlatformRowsFromZernio failed for ${postId}:`,
+              syncErr,
+            );
+          }
         }
 
         const failDetail =
@@ -174,6 +271,14 @@ export async function POST(request: NextRequest) {
             .from('scheduled_posts')
             .update({ status: 'partially_failed' })
             .eq('late_post_id', postId);
+          try {
+            await syncPlatformRowsFromZernio(adminClient, postId);
+          } catch (syncErr) {
+            console.error(
+              `[zernio-webhook] post.partial syncPlatformRowsFromZernio failed for ${postId}:`,
+              syncErr,
+            );
+          }
         }
         break;
       }
