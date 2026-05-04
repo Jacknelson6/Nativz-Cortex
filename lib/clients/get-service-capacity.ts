@@ -4,11 +4,13 @@ import {
   clientHasService,
   type ServiceKind,
 } from './service-defaults';
+import { getClientServiceUsage } from './get-service-usage';
 
 export type CapacitySource = 'proposal' | 'default' | 'not-subscribed';
 
 export interface ServiceCapacity {
   monthly: number;
+  delivered: number;
   source: CapacitySource;
   proposalId: string | null;
   tierId: string | null;
@@ -37,12 +39,20 @@ interface TierShape {
 }
 
 function notSubscribed(): ServiceCapacity {
-  return { monthly: 0, source: 'not-subscribed', proposalId: null, tierId: null, tierName: null };
+  return {
+    monthly: 0,
+    delivered: 0,
+    source: 'not-subscribed',
+    proposalId: null,
+    tierId: null,
+    tierName: null,
+  };
 }
 
 function fromDefault(kind: ServiceKind): ServiceCapacity {
   return {
     monthly: SERVICE_DEFAULT_MONTHLY[kind],
+    delivered: 0,
     source: 'default',
     proposalId: null,
     tierId: null,
@@ -59,6 +69,7 @@ function fromProposal(
   if (typeof monthly !== 'number' || monthly < 0) return fromDefault(kind);
   return {
     monthly,
+    delivered: 0,
     source: 'proposal',
     proposalId,
     tierId: tier.id ?? null,
@@ -81,17 +92,21 @@ export async function getClientServiceCapacity(
 ): Promise<ClientServiceCapacity> {
   const period = currentPeriodBounds();
 
-  const [{ data: client }, { data: proposal }] = await Promise.all([
-    supabase.from('clients').select('id, services').eq('id', clientId).maybeSingle(),
-    supabase
-      .from('proposals')
-      .select('id, tier_id, template_id, signed_at, status')
-      .eq('client_id', clientId)
-      .not('signed_at', 'is', null)
-      .order('signed_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
+  const [{ data: client }, { data: proposal }, editingUsage, smmUsage, bloggingUsage] =
+    await Promise.all([
+      supabase.from('clients').select('id, services').eq('id', clientId).maybeSingle(),
+      supabase
+        .from('proposals')
+        .select('id, tier_id, template_id, signed_at, status')
+        .eq('client_id', clientId)
+        .not('signed_at', 'is', null)
+        .order('signed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      getClientServiceUsage(supabase, clientId, 'editing'),
+      getClientServiceUsage(supabase, clientId, 'smm'),
+      getClientServiceUsage(supabase, clientId, 'blogging'),
+    ]);
 
   const services: string[] = (client?.services as string[] | null) ?? [];
 
@@ -108,10 +123,18 @@ export async function getClientServiceCapacity(
     if (tier) proposalId = proposal.id as string;
   }
 
+  const delivered: Record<ServiceKind, number> = {
+    editing: editingUsage.used,
+    smm: smmUsage.used,
+    blogging: bloggingUsage.used,
+  };
+
   function resolve(kind: ServiceKind): ServiceCapacity {
-    if (!clientHasService(services, kind)) return notSubscribed();
-    if (tier && proposalId) return fromProposal(kind, tier, proposalId);
-    return fromDefault(kind);
+    if (!clientHasService(services, kind)) {
+      return { ...notSubscribed(), delivered: delivered[kind] };
+    }
+    const base = tier && proposalId ? fromProposal(kind, tier, proposalId) : fromDefault(kind);
+    return { ...base, delivered: delivered[kind] };
   }
 
   return {

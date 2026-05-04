@@ -5,8 +5,10 @@ import { LifecycleStatePill } from '@/components/admin/revenue/status-pill';
 import { ProductionHero } from '@/components/deliverables/production-hero';
 import { ScopePanel } from '@/components/deliverables/scope-panel';
 import { AdminShell } from '@/components/deliverables/admin-shell';
+import { DeliverableProgress } from '@/components/deliverables/deliverable-progress';
 import { getDeliverableBalances } from '@/lib/deliverables/get-balances';
 import { inferScopeTier } from '@/lib/deliverables/scope';
+import { getClientServiceCapacity } from '@/lib/clients/get-service-capacity';
 import type { CreditTransactionRow } from '@/lib/credits/types';
 
 export const dynamic = 'force-dynamic';
@@ -58,7 +60,7 @@ export default async function ClientDeliverablesPage({
     .single();
   if (!client) notFound();
 
-  const [balances, txResult] = await Promise.all([
+  const [balances, txResult, capacity] = await Promise.all([
     getDeliverableBalances(admin, client.id),
     admin
       .from('credit_transactions')
@@ -69,6 +71,7 @@ export default async function ClientDeliverablesPage({
       .order('created_at', { ascending: false })
       .limit(TX_LIMIT)
       .returns<CreditTransactionRow[]>(),
+    getClientServiceCapacity(admin, client.id),
   ]);
 
   const txRows = txResult.data ?? [];
@@ -96,6 +99,15 @@ export default async function ClientDeliverablesPage({
         tierLabel={tier.label}
         tierBlurb={tier.blurb}
         balances={balances}
+      />
+
+      <DeliverableProgress
+        used={capacity.editing.delivered}
+        capacity={capacity.editing.monthly}
+        source={capacity.editing.source}
+        tierName={capacity.editing.tierName}
+        periodStart={capacity.periodStart}
+        periodEnd={capacity.periodEnd}
       />
 
       <ScopePanel tier={tier} balances={balances} />
