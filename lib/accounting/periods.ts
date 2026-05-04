@@ -41,7 +41,7 @@ export function periodFor(date: Date): PeriodBounds {
       startDate: isoDate(year, month, 1),
       endDate: isoDate(year, month, 15),
       half: 'first-half',
-      label: `${monthLabel(year, month)} · 1–15`,
+      label: `${monthLabel(year, month)} · 1-15`,
     };
   }
   const last = lastDayOfMonth(year, month);
@@ -49,7 +49,7 @@ export function periodFor(date: Date): PeriodBounds {
     startDate: isoDate(year, month, 16),
     endDate: isoDate(year, month, last),
     half: 'second-half',
-    label: `${monthLabel(year, month)} · 16–${last}`,
+    label: `${monthLabel(year, month)} · 16-${last}`,
   };
 }
 
@@ -65,7 +65,7 @@ export function nextPeriod(after: PeriodBounds = currentPeriod()): PeriodBounds 
       startDate: isoDate(y, m, 16),
       endDate: isoDate(y, m, last),
       half: 'second-half',
-      label: `${monthLabel(y, m)} · 16–${last}`,
+      label: `${monthLabel(y, m)} · 16-${last}`,
     };
   }
   const nextMonth = m === 12 ? 1 : m + 1;
@@ -74,15 +74,15 @@ export function nextPeriod(after: PeriodBounds = currentPeriod()): PeriodBounds 
     startDate: isoDate(nextYear, nextMonth, 1),
     endDate: isoDate(nextYear, nextMonth, 15),
     half: 'first-half',
-    label: `${monthLabel(nextYear, nextMonth)} · 1–15`,
+    label: `${monthLabel(nextYear, nextMonth)} · 1-15`,
   };
 }
 
 export function labelFor(startDate: string, half: PayrollHalf): string {
   const [y, m] = startDate.split('-').map(Number);
-  if (half === 'first-half') return `${monthLabel(y, m)} · 1–15`;
+  if (half === 'first-half') return `${monthLabel(y, m)} · 1-15`;
   const last = lastDayOfMonth(y, m);
-  return `${monthLabel(y, m)} · 16–${last}`;
+  return `${monthLabel(y, m)} · 16-${last}`;
 }
 
 export function dollarsToCents(input: string | number): number {
