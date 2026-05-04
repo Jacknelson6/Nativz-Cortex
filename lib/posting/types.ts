@@ -17,9 +17,16 @@ export interface SocialProfile {
   isActive: boolean;
 }
 
+export type PublishMediaItem = {
+  type: 'video' | 'image';
+  url: string;
+};
+
 export interface PublishPostInput {
-  /** Public URL to the video file */
-  videoUrl: string;
+  /** Public URL to the video file. Optional when mediaItems is provided (image / carousel posts). */
+  videoUrl?: string;
+  /** Ordered media items for carousel / multi-image posts. When present, takes precedence over videoUrl. */
+  mediaItems?: PublishMediaItem[];
   /** Caption / description text */
   caption: string;
   /** Hashtags to append (without # prefix) */

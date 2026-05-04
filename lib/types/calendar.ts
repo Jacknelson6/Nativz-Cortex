@@ -29,6 +29,7 @@ export interface ContentDrop {
   error_detail: string | null;
   created_at: string;
   updated_at: string;
+  media_type: 'video' | 'image';
 }
 
 // Lightweight per-video context: transcript + thumbnail are enough for caption
@@ -85,6 +86,7 @@ export interface ContentDropVideo {
   revised_video_url: string | null;
   revised_video_uploaded_at: string | null;
   revised_video_uploaded_by: string | null;
+  media_type: 'video' | 'image';
 }
 
 export interface ContentDropShareLink {

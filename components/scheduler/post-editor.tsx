@@ -110,6 +110,14 @@ export function PostEditor({
   const videoMime = post?.media?.[0]?.mime_type ?? defaultMedia?.mime_type ?? null;
   const isVideo = videoMime?.startsWith('video/') ?? false;
   const thumbnailUrl = post?.thumbnail_url ?? post?.cover_image_url ?? defaultMedia?.thumbnail_url ?? null;
+  // For carousel/image posts, render every asset in order. Single-image
+  // posts get a 1-element list; carousels get N (capped at 10 by IG/FB).
+  const imageAssets = !isVideo
+    ? (post?.media ?? [])
+        .map((m) => m.late_media_url)
+        .filter((u): u is string => !!u)
+    : [];
+  const isCarousel = imageAssets.length > 1;
 
   // Initialize from existing post or defaults
   useEffect(() => {
@@ -457,8 +465,8 @@ export function PostEditor({
         {/* Content — two-column layout */}
         <div className="flex-1 overflow-y-auto">
           <div className="flex flex-col md:flex-row">
-            {/* Left: Video preview */}
-            {(videoUrl || thumbnailUrl) && (
+            {/* Left: Video / image preview */}
+            {(videoUrl || thumbnailUrl || imageAssets.length > 0) && (
               <div className="md:w-[45%] shrink-0 p-5 flex flex-col items-center justify-start border-b md:border-b-0 md:border-r border-nativz-border">
                 {isVideo && videoUrl ? (
                   <div className="relative w-full rounded-xl overflow-hidden bg-black flex items-center justify-center group">
@@ -491,6 +499,32 @@ export function PostEditor({
                     >
                       {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
                     </button>
+                  </div>
+                ) : isCarousel ? (
+                  <div className="w-full space-y-2">
+                    <div className="rounded-xl overflow-hidden bg-black flex items-center justify-center">
+                      <img src={imageAssets[0]} alt="" className="max-h-[50vh] w-auto rounded-xl" />
+                    </div>
+                    <div className="flex gap-1.5 overflow-x-auto pb-1">
+                      {imageAssets.map((url, idx) => (
+                        <div
+                          key={url}
+                          className="relative shrink-0 w-14 h-14 rounded-md overflow-hidden bg-black ring-1 ring-nativz-border"
+                        >
+                          <img src={url} alt="" className="w-full h-full object-cover" />
+                          <span className="absolute bottom-0.5 right-0.5 px-1 rounded-sm bg-black/60 text-[9px] font-medium text-white">
+                            {idx + 1}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-text-muted text-center">
+                      Carousel · {imageAssets.length} images
+                    </p>
+                  </div>
+                ) : imageAssets[0] ? (
+                  <div className="w-full rounded-xl overflow-hidden bg-black flex items-center justify-center">
+                    <img src={imageAssets[0]} alt="" className="max-h-[55vh] w-auto rounded-xl" />
                   </div>
                 ) : thumbnailUrl ? (
                   <div className="w-full rounded-xl overflow-hidden bg-black flex items-center justify-center">

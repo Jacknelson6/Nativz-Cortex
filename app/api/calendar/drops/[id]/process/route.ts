@@ -2,8 +2,10 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ingestDrop } from '@/lib/calendar/ingest-drop';
+import { ingestDropImages } from '@/lib/calendar/ingest-images';
 import { analyzeDropVideos } from '@/lib/calendar/analyze-video';
 import { generateDropCaptions } from '@/lib/calendar/generate-caption';
+import { generateImageDropCaptions } from '@/lib/calendar/generate-image-caption';
 
 export const maxDuration = 300;
 
@@ -21,12 +23,52 @@ export async function POST(
   const admin = createAdminClient();
   const { data: drop } = await admin
     .from('content_drops')
-    .select('id, client_id, created_by, status')
+    .select('id, client_id, created_by, status, media_type')
     .eq('id', id)
     .single();
   if (!drop) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
+  const isImage = drop.media_type === 'image';
+
   try {
+    if (isImage) {
+      const ingest = await ingestDropImages(admin, { dropId: id, userId: drop.created_by });
+      if (ingest.processed === 0) {
+        await admin
+          .from('content_drops')
+          .update({ status: 'failed', error_detail: 'All images failed to ingest' })
+          .eq('id', id);
+        return NextResponse.json({ error: 'all images failed to ingest' }, { status: 500 });
+      }
+      await admin
+        .from('content_drops')
+        .update({
+          status: 'generating',
+          processed_videos: ingest.processed,
+          updated_at: new Date().toISOString(),
+          error_detail: ingest.failed > 0 ? `${ingest.failed} image(s) failed during ingestion` : null,
+        })
+        .eq('id', id);
+
+      const captions = await generateImageDropCaptions(admin, {
+        dropId: id,
+        clientId: drop.client_id,
+        userId: drop.created_by,
+        userEmail: user.email ?? undefined,
+      });
+      await admin
+        .from('content_drops')
+        .update({
+          status: captions.generated > 0 ? 'ready' : 'failed',
+          updated_at: new Date().toISOString(),
+          error_detail:
+            captions.failed > 0 ? `${captions.failed} caption(s) failed to generate` : null,
+        })
+        .eq('id', id);
+
+      return NextResponse.json({ ok: true, ingest, captions });
+    }
+
     const ingest = await ingestDrop(admin, { dropId: id, userId: drop.created_by });
     if (ingest.processed === 0) {
       await admin

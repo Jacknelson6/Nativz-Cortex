@@ -370,12 +370,22 @@ function buildPublishBody(input: PublishPostInput): Record<string, unknown> {
     (id) => (input.platformHints?.[id] ?? 'instagram') === 'tiktok',
   );
 
-  const mediaItem: Record<string, unknown> = {
-    type: 'video',
-    url: input.videoUrl,
-  };
-  if (input.coverImageUrl) {
-    mediaItem.thumbnail = input.coverImageUrl;
+  // Resolve the media payload. When mediaItems is provided (image carousels),
+  // honor it directly. Otherwise fall back to the legacy single-video shape.
+  // Image-only payloads bypass Reels-specific metadata further down.
+  const mediaItems: Record<string, unknown>[] = [];
+  let isImageOnly = false;
+  if (input.mediaItems && input.mediaItems.length > 0) {
+    for (const item of input.mediaItems) {
+      mediaItems.push({ type: item.type, url: item.url });
+    }
+    isImageOnly = input.mediaItems.every((m) => m.type === 'image');
+  } else if (input.videoUrl) {
+    const v: Record<string, unknown> = { type: 'video', url: input.videoUrl };
+    if (input.coverImageUrl) v.thumbnail = input.coverImageUrl;
+    mediaItems.push(v);
+  } else {
+    throw new Error('publishPost requires either mediaItems or videoUrl');
   }
 
   const platforms = input.platformProfileIds.map((accountId) => {
@@ -387,12 +397,14 @@ function buildPublishBody(input: PublishPostInput): Record<string, unknown> {
     }
 
     if (platform === 'instagram') {
+      // For image / carousel posts on Instagram, omit contentType so Zernio
+      // routes to feed/carousel instead of Reels (Reels is video-only).
       entry.platformSpecificData = {
-        contentType: 'reels',
+        ...(isImageOnly ? {} : { contentType: 'reels' }),
         // Default to true — most clients want the cross-post. Overrides
         // only flip false when explicitly disabled (e.g. brands that
         // gate the grid manually).
-        shareToFeed: input.instagramShareToFeed ?? true,
+        ...(isImageOnly ? {} : { shareToFeed: input.instagramShareToFeed ?? true }),
         ...(input.taggedPeople?.length ? { usersToTag: input.taggedPeople } : {}),
         ...(input.collaboratorHandles?.length ? { collaborators: input.collaboratorHandles } : {}),
       };
@@ -430,7 +442,7 @@ function buildPublishBody(input: PublishPostInput): Record<string, unknown> {
 
   const body: Record<string, unknown> = {
     content: caption,
-    mediaItems: [mediaItem],
+    mediaItems,
     platforms,
   };
 

@@ -61,6 +61,17 @@ interface SharedComment {
   timestamp_seconds: number | null;
 }
 
+interface SharedAsset {
+  id: string;
+  url: string | null;
+  thumbnail_url: string | null;
+  mime_type: string | null;
+  width: number | null;
+  height: number | null;
+  position: number;
+  status: string;
+}
+
 interface SharedPost {
   id: string;
   caption: string;
@@ -69,6 +80,11 @@ interface SharedPost {
   status: string;
   cover_image_url: string | null;
   video_url: string | null;
+  // 'video' (default, single video per post) or 'image' (1..N image assets in
+  // the assets[] array — single image when assets.length === 1, carousel when
+  // length > 1). Image posts skip the Mux/<video> branches entirely.
+  media_type: 'video' | 'image';
+  assets: SharedAsset[];
   tagged_people: string[];
   collaborator_handles: string[];
   // For ad / "other" project types we surface an editable title instead of
@@ -1083,6 +1099,142 @@ function VideoSurface({
   );
 }
 
+/**
+ * Image / carousel surface. Single image renders edge-to-edge. Multiple images
+ * (carousel, max 10 per IG/FB) render the active asset full-size with a
+ * thumbnail strip pinned to the bottom for navigation, plus a position pill in
+ * the corner ("3 / 7"). Aspect class mirrors VideoSurface so the wrapper card
+ * geometry stays identical between video and image posts.
+ */
+function ImageCarouselSurface({
+  post,
+  className,
+  aspectClass = 'aspect-[9/16]',
+}: {
+  post: Pick<SharedPost, 'assets' | 'cover_image_url'>;
+  className?: string;
+  aspectClass?: string;
+}) {
+  const assets = (post.assets ?? []).filter((a) => !!a.url);
+  const [activeIdx, setActiveIdx] = useState(0);
+
+  if (assets.length === 0) {
+    const fallback = post.cover_image_url;
+    if (fallback) {
+      return (
+        <div className={`relative ${aspectClass} w-full overflow-hidden bg-black ${className ?? ''}`}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={fallback} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        </div>
+      );
+    }
+    return (
+      <div className={`flex ${aspectClass} w-full items-center justify-center ${className ?? ''}`}>
+        <div className="text-center text-text-muted">
+          <Film className="mx-auto mb-2" size={32} />
+          <p className="text-sm">Image not available</p>
+        </div>
+      </div>
+    );
+  }
+
+  const idx = Math.min(activeIdx, assets.length - 1);
+  const active = assets[idx];
+  const isCarousel = assets.length > 1;
+
+  return (
+    <div className={`relative ${aspectClass} w-full overflow-hidden bg-black ${className ?? ''}`}>
+      {active.url && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={active.id}
+          src={active.url}
+          alt=""
+          className="absolute inset-0 h-full w-full object-contain"
+          draggable={false}
+        />
+      )}
+      {isCarousel && (
+        <>
+          <div className="absolute left-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-md ring-1 ring-white/15">
+            {idx + 1} / {assets.length}
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveIdx((i) => (i - 1 + assets.length) % assets.length)}
+            className="absolute left-2 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md ring-1 ring-white/15 transition hover:bg-black/65"
+            aria-label="Previous image"
+          >
+            <span aria-hidden>‹</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveIdx((i) => (i + 1) % assets.length)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md ring-1 ring-white/15 transition hover:bg-black/65"
+            aria-label="Next image"
+          >
+            <span aria-hidden>›</span>
+          </button>
+          <div className="absolute inset-x-0 bottom-0 flex justify-center gap-1.5 bg-gradient-to-t from-black/70 to-transparent px-3 py-2">
+            {assets.map((a, i) => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => setActiveIdx(i)}
+                aria-label={`Show image ${i + 1}`}
+                className={`h-1.5 w-6 rounded-full transition-colors ${
+                  i === idx ? 'bg-white' : 'bg-white/40 hover:bg-white/70'
+                }`}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Branches on post.media_type. Image posts skip the Mux/<video> machinery
+ * entirely and fall through to ImageCarouselSurface; video posts keep the
+ * existing VideoSurface (which handles Mux + legacy + processing overlay).
+ */
+function MediaSurface({
+  post,
+  className,
+  aspectClass,
+  aspectRatioStyle,
+  controls,
+  autoPlay,
+  onPlayerReady,
+}: {
+  post: SharedPost;
+  className?: string;
+  aspectClass?: string;
+  aspectRatioStyle?: string;
+  controls?: boolean;
+  autoPlay?: boolean | 'muted' | 'any';
+  onPlayerReady?: (handle: PlayerHandle | null) => void;
+}) {
+  if (post.media_type === 'image') {
+    // Image posts have no player — clear any previously-set handle so the
+    // composer's pin chip disappears for image-only cards.
+    if (onPlayerReady) onPlayerReady(null);
+    return <ImageCarouselSurface post={post} className={className} aspectClass={aspectClass} />;
+  }
+  return (
+    <VideoSurface
+      post={post}
+      className={className}
+      aspectClass={aspectClass}
+      aspectRatioStyle={aspectRatioStyle}
+      controls={controls}
+      autoPlay={autoPlay}
+      onPlayerReady={onPlayerReady}
+    />
+  );
+}
+
 function PostDetailModal({
   post,
   index,
@@ -1388,24 +1540,40 @@ function CalendarCell({
           } ${isDraggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
           title={post.caption.slice(0, 80)}
         >
-          {post.cover_image_url ? (
-            <img
-              src={post.cover_image_url}
-              alt=""
-              className="h-full w-full object-cover"
-              draggable={false}
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center">
-              <Film size={18} className="text-text-muted" />
-            </div>
-          )}
-          {post.video_url && (
+          {(() => {
+            const firstAssetUrl =
+              post.media_type === 'image'
+                ? post.assets.find((a) => !!a.url)?.url ?? null
+                : null;
+            const thumbUrl = firstAssetUrl ?? post.cover_image_url;
+            if (!thumbUrl) {
+              return (
+                <div className="flex h-full w-full items-center justify-center">
+                  <Film size={18} className="text-text-muted" />
+                </div>
+              );
+            }
+            return (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={thumbUrl}
+                alt=""
+                className="h-full w-full object-cover"
+                draggable={false}
+              />
+            );
+          })()}
+          {post.media_type !== 'image' && post.video_url && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <div className="flex h-7 w-7 items-center justify-center rounded-full bg-black/55 shadow ring-1 ring-white/20 backdrop-blur-sm">
                 <Play size={11} className="ml-px text-white" fill="white" />
               </div>
             </div>
+          )}
+          {post.media_type === 'image' && post.assets.length > 1 && (
+            <span className="absolute left-1 top-1 rounded-full bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white ring-1 ring-white/15">
+              {post.assets.length}
+            </span>
           )}
           {review === 'approved' && (
             <span className="absolute right-1 top-1 rounded-full bg-status-success p-0.5">
@@ -2163,7 +2331,7 @@ function PostCard({
       ref={videoSectionRef}
       className="relative h-full w-full"
     >
-      <VideoSurface
+      <MediaSurface
         post={post}
         className="block h-full w-full"
         aspectClass={
@@ -2185,7 +2353,7 @@ function PostCard({
           caption: small, contextual, doesn't compete with primary content.
           Backdrop blur keeps it readable over any frame; while uploading
           the button widens to show progress in-place. */}
-      {isEditor && (
+      {isEditor && post.media_type !== 'image' && (
         <button
           type="button"
           onClick={() => revisionInputRef.current?.click()}

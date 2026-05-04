@@ -15,6 +15,7 @@ import {
   ExternalLink,
   Hash,
   History,
+  Layers,
   Link2,
   Loader2,
   MessageSquare,
@@ -79,6 +80,11 @@ interface PostStatusBlock {
   }[];
 }
 
+interface PostAssetSummary {
+  count: number;
+  cover: string | null;
+}
+
 interface DropResponse {
   drop: ContentDrop;
   videos: ContentDropVideo[];
@@ -86,6 +92,7 @@ interface DropResponse {
   revisionsCompletedByPostId: Record<string, string>;
   variantPlatforms: CaptionVariantPlatform[];
   postStatusByPostId: Record<string, PostStatusBlock>;
+  postAssetsByPostId: Record<string, PostAssetSummary>;
 }
 
 interface ShareLinkView {
@@ -142,7 +149,17 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
   const [showShare, setShowShare] = useState(false);
   const [generatingShare, setGeneratingShare] = useState(false);
   const [shareLinks, setShareLinks] = useState<ShareLinkRow[]>([]);
+  const [selectedPostIds, setSelectedPostIds] = useState<string[]>([]);
+  const [grouping, setGrouping] = useState(false);
   const aliveRef = useRef(true);
+
+  const togglePostSelection = useCallback((postId: string) => {
+    setSelectedPostIds((prev) =>
+      prev.includes(postId) ? prev.filter((id) => id !== postId) : [...prev, postId],
+    );
+  }, []);
+
+  const clearSelection = useCallback(() => setSelectedPostIds([]), []);
 
   const refresh = useCallback(async () => {
     const res = await fetch(`/api/calendar/drops/${id}`);
@@ -212,6 +229,27 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  async function handleGroupCarousel() {
+    if (selectedPostIds.length < 2) return;
+    setGrouping(true);
+    try {
+      const res = await fetch(`/api/calendar/drops/${id}/posts/group`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postIds: selectedPostIds }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Group failed');
+      toast.success(`Combined ${selectedPostIds.length} posts into a carousel`);
+      setSelectedPostIds([]);
+      await refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Group failed');
+    } finally {
+      setGrouping(false);
+    }
+  }
+
   async function handleRevoke(linkId: string) {
     const ok = window.confirm('Revoke this link? Anyone with the URL will get a "link expired" page.');
     if (!ok) return;
@@ -258,6 +296,10 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
   const scheduled = drop.status === 'scheduled';
   const failed = drop.status === 'failed';
   const inFlight = IN_FLIGHT_DROP.includes(drop.status);
+  // Carousel grouping is only meaningful for image content calendars before
+  // scheduling — once posts are routed into Zernio they're frozen. We also
+  // hide selection on individual posts that have already been scheduled.
+  const carouselGroupingEnabled = drop.media_type === 'image' && ready;
 
   return (
     <div className="cortex-page-gutter max-w-6xl mx-auto space-y-6">
@@ -335,9 +377,42 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
                   ? data.postStatusByPostId?.[v.scheduled_post_id] ?? null
                   : null
               }
+              assetSummary={data.postAssetsByPostId?.[v.id] ?? null}
+              selectable={carouselGroupingEnabled && !v.scheduled_post_id}
+              selected={selectedPostIds.includes(v.id)}
+              onToggleSelect={() => togglePostSelection(v.id)}
               onUpdated={refresh}
             />
           ))}
+        </div>
+      )}
+
+      {selectedPostIds.length > 0 && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center px-4">
+          <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-nativz-border bg-surface/95 px-4 py-2.5 shadow-lg backdrop-blur">
+            <span className="text-sm text-text-primary">
+              {selectedPostIds.length} post{selectedPostIds.length === 1 ? '' : 's'} selected
+            </span>
+            <Button
+              variant="ghost"
+              onClick={clearSelection}
+              disabled={grouping}
+              className="text-text-secondary"
+            >
+              Clear
+            </Button>
+            <Button
+              onClick={handleGroupCarousel}
+              disabled={grouping || selectedPostIds.length < 2}
+            >
+              {grouping ? <Loader2 size={14} className="animate-spin" /> : <Layers size={14} />}
+              {grouping
+                ? 'Combining…'
+                : selectedPostIds.length < 2
+                  ? 'Select 2+ to combine'
+                  : `Combine into carousel`}
+            </Button>
+          </div>
         </div>
       )}
 
@@ -437,6 +512,10 @@ interface VideoCardProps {
   revisionsCompletedAt: string | null;
   variantPlatforms: CaptionVariantPlatform[];
   postStatus: PostStatusBlock | null;
+  assetSummary: PostAssetSummary | null;
+  selectable: boolean;
+  selected: boolean;
+  onToggleSelect: () => void;
   onUpdated: () => void;
 }
 
@@ -449,6 +528,10 @@ function VideoCard({
   revisionsCompletedAt,
   variantPlatforms,
   postStatus,
+  assetSummary,
+  selectable,
+  selected,
+  onToggleSelect,
   onUpdated,
 }: VideoCardProps) {
   const [editing, setEditing] = useState(false);
@@ -588,16 +671,22 @@ function VideoCard({
   const hasRevisedCut = !!video.revised_video_url;
   const showRevisionTools = scheduled && (review === 'changes_requested' || hasRevisedCut);
 
+  const isImagePost = video.media_type === 'image';
+  const carouselCount = assetSummary?.count ?? 0;
+  const previewUrl = video.thumbnail_url ?? assetSummary?.cover ?? null;
+
   return (
     <div
       id={video.scheduled_post_id ? `post-${video.scheduled_post_id}` : undefined}
-      className="overflow-hidden rounded-xl border border-nativz-border bg-surface scroll-mt-20 transition-shadow"
+      className={`overflow-hidden rounded-xl border bg-surface scroll-mt-20 transition-shadow ${
+        selected ? 'border-accent ring-2 ring-accent/40' : 'border-nativz-border'
+      }`}
     >
       <div className="relative aspect-[9/16] w-full bg-background">
-        {video.thumbnail_url ? (
+        {previewUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={video.thumbnail_url}
+            src={previewUrl}
             alt={video.drive_file_name}
             className="h-full w-full object-cover"
             loading="lazy"
@@ -607,8 +696,27 @@ function VideoCard({
             No thumbnail
           </div>
         )}
+        {selectable && (
+          <button
+            type="button"
+            onClick={onToggleSelect}
+            aria-label={selected ? 'Deselect post' : 'Select post for carousel'}
+            className={`absolute left-2 top-2 z-10 flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border transition-colors ${
+              selected
+                ? 'border-accent bg-accent text-white'
+                : 'border-white/40 bg-black/40 text-white/80 hover:bg-black/60'
+            }`}
+          >
+            {selected ? <CheckCircle size={14} /> : <span className="block h-3 w-3 rounded-sm border border-current" />}
+          </button>
+        )}
         <div className="absolute right-2 top-2 flex flex-col items-end gap-1">
           <VideoStatusPill status={video.status} />
+          {isImagePost && carouselCount > 1 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white">
+              <Layers size={10} /> Carousel · {carouselCount}
+            </span>
+          )}
           {review === 'approved' && (
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/90 px-2 py-0.5 text-[11px] font-medium text-emerald-950">
               <CheckCircle size={10} /> Approved

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { listVideosInFolder } from '@/lib/calendar/drive-folder';
+import { listMediaInFolder } from '@/lib/calendar/drive-folder';
 
 export async function GET(req: Request) {
   const supabase = await createServerSupabaseClient();
@@ -31,6 +31,7 @@ const CreateDropSchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   defaultPostTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  mediaType: z.enum(['video', 'image']).optional(),
 });
 
 export async function POST(req: Request) {
@@ -46,23 +47,28 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
   const { clientId, driveFolderUrl, startDate, endDate, defaultPostTime } = parsed.data;
+  const mediaType = parsed.data.mediaType ?? 'video';
   if (new Date(startDate) > new Date(endDate)) {
     return NextResponse.json({ error: 'startDate must be on or before endDate' }, { status: 400 });
   }
 
   let folderId: string;
-  let videos: { id: string; name: string; mimeType: string; size: number }[];
+  let files: { id: string; name: string; mimeType: string; size: number }[];
   try {
-    const result = await listVideosInFolder(user.id, driveFolderUrl);
+    const result = await listMediaInFolder(user.id, driveFolderUrl, mediaType);
     folderId = result.folderId;
-    videos = result.videos;
+    files = result.files;
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Drive listing failed';
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
-  if (videos.length === 0) {
-    return NextResponse.json({ error: 'No video files found in that folder.' }, { status: 400 });
+  if (files.length === 0) {
+    const noun = mediaType === 'image' ? 'image' : 'video';
+    return NextResponse.json(
+      { error: `No ${noun} files found in that folder.` },
+      { status: 400 },
+    );
   }
 
   const admin = createAdminClient();
@@ -76,8 +82,9 @@ export async function POST(req: Request) {
       start_date: startDate,
       end_date: endDate,
       default_post_time: defaultPostTime ?? '10:00',
-      total_videos: videos.length,
+      total_videos: files.length,
       status: 'ingesting',
+      media_type: mediaType,
     })
     .select('*')
     .single();
@@ -85,18 +92,56 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: dropErr?.message ?? 'Failed to create content calendar' }, { status: 500 });
   }
 
-  const videoRows = videos.map((v, idx) => ({
+  // For both kinds, content_drop_videos is the *post* row. Image drops start
+  // 1:1 with files (one image = one post); the carousel-grouping UI merges
+  // these post rows after ingestion. Video drops continue to be 1 file = 1 post.
+  const postRows = files.map((f, idx) => ({
     drop_id: drop.id,
-    drive_file_id: v.id,
-    drive_file_name: v.name,
-    mime_type: v.mimeType,
-    size_bytes: v.size,
+    drive_file_id: f.id,
+    drive_file_name: f.name,
+    mime_type: f.mimeType,
+    size_bytes: f.size,
     order_index: idx,
     status: 'pending',
+    media_type: mediaType,
   }));
-  const { error: vidErr } = await admin.from('content_drop_videos').insert(videoRows);
+  const { data: insertedPosts, error: vidErr } = await admin
+    .from('content_drop_videos')
+    .insert(postRows)
+    .select('id, drive_file_id');
   if (vidErr) {
     return NextResponse.json({ error: vidErr.message }, { status: 500 });
+  }
+
+  // Image drops: seed one asset row per post (position 0). The carousel UI
+  // later moves assets across posts so multiple images attach to a single
+  // drop_video. Video drops do NOT seed asset rows — they keep using the
+  // legacy video_url column on content_drop_videos.
+  if (mediaType === 'image' && insertedPosts && insertedPosts.length > 0) {
+    const fileById = new Map(files.map((f) => [f.id, f]));
+    const assetRows = insertedPosts
+      .map((post) => {
+        const file = fileById.get(post.drive_file_id);
+        if (!file) return null;
+        return {
+          drop_video_id: post.id,
+          drive_file_id: file.id,
+          drive_file_name: file.name,
+          mime_type: file.mimeType,
+          size_bytes: file.size,
+          position: 0,
+          status: 'pending',
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+    if (assetRows.length > 0) {
+      const { error: assetErr } = await admin
+        .from('content_drop_post_assets')
+        .insert(assetRows);
+      if (assetErr) {
+        return NextResponse.json({ error: assetErr.message }, { status: 500 });
+      }
+    }
   }
 
   // Fire-and-forget background processor. We deliberately don't await it

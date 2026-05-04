@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { getPostingService, type SocialPlatform } from '@/lib/posting';
 import type { CaptionVariants } from '@/lib/types/calendar';
 import { distributeSlots } from './distribute-slots';
+import { verifyAndReconcilePost } from './verify-post';
 
 interface ScheduleInput {
   dropId: string;
@@ -29,6 +30,17 @@ interface VideoRow {
   size_bytes: number | null;
   mime_type: string | null;
   order_index: number;
+  media_type: 'video' | 'image' | null;
+}
+
+interface PostAssetRow {
+  id: string;
+  asset_url: string | null;
+  thumbnail_url: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
+  drive_file_name: string;
+  position: number;
 }
 
 interface DropRow {
@@ -64,7 +76,7 @@ export async function scheduleDrop(
   const { data: rows } = await admin
     .from('content_drop_videos')
     .select(
-      'id, drop_id, video_url, thumbnail_url, draft_caption, draft_hashtags, caption_variants, drive_file_name, duration_seconds, size_bytes, mime_type, order_index',
+      'id, drop_id, video_url, thumbnail_url, draft_caption, draft_hashtags, caption_variants, drive_file_name, duration_seconds, size_bytes, mime_type, order_index, media_type',
     )
     .eq('drop_id', input.dropId)
     .eq('status', 'ready')
@@ -120,26 +132,72 @@ export async function scheduleDrop(
   for (const slot of slots) {
     const video = slot.video;
     try {
-      if (!video.video_url) throw new Error('Video URL missing');
       if (!video.draft_caption) throw new Error('Draft caption missing');
 
-      const { data: media, error: mediaErr } = await admin
-        .from('scheduler_media')
-        .insert({
-          client_id: (drop as DropRow).client_id,
-          uploaded_by: (drop as DropRow).created_by,
+      const isImage = video.media_type === 'image';
+
+      // Resolve the media payload. Video posts use the legacy single-file
+      // path (video_url on content_drop_videos). Image posts pull all
+      // assets from content_drop_post_assets ordered by position.
+      let mediaInserts: {
+        filename: string;
+        storage_path: string;
+        thumbnail_url: string | null;
+        duration_seconds: number | null;
+        file_size_bytes: number | null;
+        mime_type: string | null;
+        late_media_url: string;
+      }[];
+      let postType: 'reel' | 'image' | 'carousel';
+      let coverImageUrl: string | null;
+
+      if (isImage) {
+        const { data: assets } = await admin
+          .from('content_drop_post_assets')
+          .select('id, asset_url, thumbnail_url, mime_type, size_bytes, drive_file_name, position')
+          .eq('drop_video_id', video.id)
+          .eq('status', 'ready')
+          .order('position', { ascending: true });
+        const assetRows = ((assets ?? []) as PostAssetRow[]).filter((a) => a.asset_url);
+        if (assetRows.length === 0) throw new Error('No ready image assets to schedule');
+        mediaInserts = assetRows.map((a) => ({
+          filename: a.drive_file_name,
+          storage_path: a.asset_url as string,
+          thumbnail_url: a.thumbnail_url ?? a.asset_url,
+          duration_seconds: null,
+          file_size_bytes: a.size_bytes,
+          mime_type: a.mime_type,
+          late_media_url: a.asset_url as string,
+        }));
+        postType = assetRows.length > 1 ? 'carousel' : 'image';
+        coverImageUrl = assetRows[0].asset_url ?? null;
+      } else {
+        if (!video.video_url) throw new Error('Video URL missing');
+        mediaInserts = [{
           filename: video.drive_file_name,
           storage_path: video.video_url,
           thumbnail_url: video.thumbnail_url,
           duration_seconds: video.duration_seconds,
           file_size_bytes: video.size_bytes,
           mime_type: video.mime_type,
-          is_used: true,
           late_media_url: video.video_url,
-        })
-        .select('id')
-        .single();
-      if (mediaErr || !media) throw new Error(mediaErr?.message ?? 'Failed to insert media');
+        }];
+        postType = 'reel';
+        coverImageUrl = video.thumbnail_url;
+      }
+
+      const { data: insertedMedia, error: mediaErr } = await admin
+        .from('scheduler_media')
+        .insert(
+          mediaInserts.map((m) => ({
+            client_id: (drop as DropRow).client_id,
+            uploaded_by: (drop as DropRow).created_by,
+            ...m,
+            is_used: true,
+          })),
+        )
+        .select('id, late_media_url');
+      if (mediaErr || !insertedMedia) throw new Error(mediaErr?.message ?? 'Failed to insert media');
 
       // Always insert as 'draft' first. `publishScheduledPost` is the only
       // function that should ever flip a post to 'scheduled', and it requires
@@ -159,8 +217,8 @@ export async function scheduleDrop(
           hashtags: video.draft_hashtags ?? [],
           scheduled_at: slot.scheduledAt,
           status: 'draft',
-          cover_image_url: video.thumbnail_url,
-          post_type: 'reel',
+          cover_image_url: coverImageUrl,
+          post_type: postType,
         })
         .select('id')
         .single();
@@ -176,9 +234,14 @@ export async function scheduleDrop(
         .insert(platformInserts);
       if (platformErr) throw new Error(platformErr.message);
 
+      const linkRows = insertedMedia.map((m, idx) => ({
+        post_id: post.id,
+        media_id: m.id as string,
+        sort_order: idx,
+      }));
       const { error: linkErr } = await admin
         .from('scheduled_post_media')
-        .insert({ post_id: post.id, media_id: media.id, sort_order: 0 });
+        .insert(linkRows);
       if (linkErr) throw new Error(linkErr.message);
 
       await admin
@@ -238,7 +301,7 @@ export async function publishScheduledPost(
   const { data: post, error: postErr } = await admin
     .from('scheduled_posts')
     .select(
-      'id, client_id, caption, hashtags, scheduled_at, status, late_post_id, cover_image_url, ' +
+      'id, client_id, caption, hashtags, scheduled_at, status, late_post_id, cover_image_url, post_type, ' +
       'youtube_title, youtube_description, youtube_tags, youtube_privacy, youtube_made_for_kids, ' +
       'tiktok_allow_comment, tiktok_allow_duet, tiktok_allow_stitch, instagram_share_to_feed',
     )
@@ -252,6 +315,7 @@ export async function publishScheduledPost(
       status: string;
       late_post_id: string | null;
       cover_image_url: string | null;
+      post_type: string | null;
       youtube_title: string | null;
       youtube_description: string | null;
       youtube_tags: string[] | null;
@@ -302,16 +366,32 @@ export async function publishScheduledPost(
     };
   }
 
-  // Pull the linked media row to get the late_media_url for the actual file.
-  const { data: mediaLink } = await admin
+  // Pull all linked media rows in sort order. For video posts there's exactly
+  // one; for image carousels there are 1..10 in display order.
+  const { data: mediaLinks } = await admin
     .from('scheduled_post_media')
-    .select('media_id, scheduler_media:media_id (late_media_url)')
+    .select('media_id, sort_order, scheduler_media:media_id (late_media_url, mime_type)')
     .eq('post_id', postId)
-    .order('sort_order')
-    .limit(1)
-    .single<{ media_id: string; scheduler_media: { late_media_url: string | null } | null }>();
-  const videoUrl = mediaLink?.scheduler_media?.late_media_url ?? null;
-  if (!videoUrl) throw new Error('Draft post is missing a media URL');
+    .order('sort_order');
+  type MediaLink = {
+    media_id: string;
+    sort_order: number;
+    scheduler_media: { late_media_url: string | null; mime_type: string | null } | { late_media_url: string | null; mime_type: string | null }[] | null;
+  };
+  const links = (mediaLinks ?? []) as MediaLink[];
+  const flatMedia = links
+    .map((l) => {
+      const m = Array.isArray(l.scheduler_media) ? l.scheduler_media[0] : l.scheduler_media;
+      return m && m.late_media_url ? { url: m.late_media_url, mime: m.mime_type } : null;
+    })
+    .filter((m): m is { url: string; mime: string | null } => !!m);
+  if (flatMedia.length === 0) throw new Error('Draft post is missing a media URL');
+
+  const isImagePost = post.post_type === 'image' || post.post_type === 'carousel';
+  const mediaItems = isImagePost
+    ? flatMedia.map((m) => ({ type: 'image' as const, url: m.url }))
+    : undefined;
+  const videoUrl = isImagePost ? undefined : flatMedia[0].url;
 
   // Pull the platforms this post is targeting + the brand's caption variants.
   // Keep the spp row id + social_profile_id alongside the embedded profile so
@@ -367,6 +447,7 @@ export async function publishScheduledPost(
   const service = getPostingService();
   const publish = await service.publishPost({
     videoUrl,
+    mediaItems,
     caption: post.caption,
     hashtags: post.hashtags ?? [],
     coverImageUrl: post.cover_image_url ?? undefined,
@@ -398,18 +479,42 @@ export async function publishScheduledPost(
   // `scheduled_post_platforms` rows stay at `status='pending'` indefinitely
   // even though the post is live on Zernio — the bug that left ~16 stuck
   // rows after the May 1 drop ship and the recovery sweep.
+  let anyTimeoutFailure = false;
   for (const platformResult of publish.platforms) {
     const sppId = lateIdToSppId.get(platformResult.profileId);
     if (!sppId) continue;
+    const isFailed = platformResult.status !== 'published';
+    const reason = platformResult.error ?? null;
+    if (isFailed && reason && /timed out during platform|may have been published externally|gateway timeout/i.test(reason)) {
+      anyTimeoutFailure = true;
+    }
     await admin
       .from('scheduled_post_platforms')
       .update({
-        status: platformResult.status === 'published' ? 'published' : 'failed',
+        status: isFailed ? 'failed' : 'published',
         external_post_id: platformResult.externalPostId ?? null,
         external_post_url: platformResult.externalPostUrl ?? null,
-        failure_reason: platformResult.error ?? null,
+        failure_reason: reason,
       })
       .eq('id', sppId);
+  }
+
+  // If Zernio reported any "timed out — may have been published externally"
+  // legs, re-poll Zernio's authoritative status endpoint and reconcile. The
+  // platform usually accepts the post a few seconds after Zernio's wait
+  // window lapses, so a fresh GET /posts/{id} flips false-fails back to
+  // published. Failure here is non-fatal — the cron sweep is the safety net.
+  if (anyTimeoutFailure) {
+    try {
+      const result = await verifyAndReconcilePost(admin as unknown as ReturnType<typeof import('@/lib/supabase/admin').createAdminClient>, postId);
+      if (result.reconciledPlatforms > 0) {
+        console.log(
+          `[publishScheduledPost] auto-reconciled ${result.reconciledPlatforms} timeout(s) on ${postId}; new status=${result.newPostStatus}`,
+        );
+      }
+    } catch (verifyErr) {
+      console.error(`[publishScheduledPost] verify failed for ${postId}:`, verifyErr);
+    }
   }
 
   return { alreadyPublished: false, externalPostId: publish.externalPostId };

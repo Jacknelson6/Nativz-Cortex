@@ -57,6 +57,7 @@ interface DropVideoRow {
   id: string;
   scheduled_post_id: string | null;
   drive_file_name: string | null;
+  media_type: string | null;
   video_url: string | null;
   revised_video_url: string | null;
   revised_mp4_url: string | null;
@@ -66,6 +67,18 @@ interface DropVideoRow {
   mux_asset_id: string | null;
   mux_playback_id: string | null;
   mux_status: string | null;
+}
+
+interface PostAssetRow {
+  id: string;
+  drop_video_id: string;
+  asset_url: string | null;
+  thumbnail_url: string | null;
+  mime_type: string | null;
+  width: number | null;
+  height: number | null;
+  position: number;
+  status: string;
 }
 
 interface CommentAttachment {
@@ -164,7 +177,7 @@ async function handleShareGet(
       .in('id', link.included_post_ids),
     admin
       .from('content_drop_videos')
-      .select('id, scheduled_post_id, drive_file_name, video_url, revised_video_url, revised_mp4_url, revised_video_uploaded_at, revised_video_notify_pending, mux_upload_id, mux_asset_id, mux_playback_id, mux_status')
+      .select('id, scheduled_post_id, drive_file_name, media_type, video_url, revised_video_url, revised_mp4_url, revised_video_uploaded_at, revised_video_notify_pending, mux_upload_id, mux_asset_id, mux_playback_id, mux_status')
       .in('scheduled_post_id', link.included_post_ids),
   ]);
   if (!drop) return NextResponse.json({ error: 'content calendar missing' }, { status: 404 });
@@ -209,8 +222,28 @@ async function handleShareGet(
     }
   }
 
+  // Image / carousel posts store their assets in content_drop_post_assets
+  // (1..N rows per post, ordered by position). Pull them for any image-type
+  // drop_video rows in this share link so the viewer can render the carousel.
+  const imageVideoIds = videoRows
+    .filter((v) => v.media_type === 'image')
+    .map((v) => v.id);
+  const { data: assetRows } = imageVideoIds.length
+    ? await admin
+        .from('content_drop_post_assets')
+        .select('id, drop_video_id, asset_url, thumbnail_url, mime_type, width, height, position, status')
+        .in('drop_video_id', imageVideoIds)
+        .order('position', { ascending: true })
+    : { data: [] as PostAssetRow[] };
+  const assetsByVideo: Record<string, PostAssetRow[]> = {};
+  for (const a of (assetRows ?? []) as PostAssetRow[]) {
+    (assetsByVideo[a.drop_video_id] ||= []).push(a);
+  }
+
   const videoByPost: Record<string, string> = {};
   const filenameByPost: Record<string, string> = {};
+  const mediaTypeByPost: Record<string, 'video' | 'image'> = {};
+  const assetsByPost: Record<string, PostAssetRow[]> = {};
   const revisionByPost: Record<
     string,
     {
@@ -226,6 +259,10 @@ async function handleShareGet(
     const url = v.revised_video_url ?? v.video_url;
     if (url) videoByPost[v.scheduled_post_id] = url;
     if (v.drive_file_name) filenameByPost[v.scheduled_post_id] = v.drive_file_name;
+    mediaTypeByPost[v.scheduled_post_id] = v.media_type === 'image' ? 'image' : 'video';
+    if (v.media_type === 'image') {
+      assetsByPost[v.scheduled_post_id] = assetsByVideo[v.id] ?? [];
+    }
     revisionByPost[v.scheduled_post_id] = {
       revised_video_url: v.revised_video_url,
       revised_video_uploaded_at: v.revised_video_uploaded_at,
@@ -339,6 +376,17 @@ async function handleShareGet(
     posts: ((posts ?? []) as ScheduledPostRow[]).map((p) => {
       const rev = revisionByPost[p.id];
       const filename = filenameByPost[p.id] ?? null;
+      const mediaType = mediaTypeByPost[p.id] ?? 'video';
+      const assets = (assetsByPost[p.id] ?? []).map((a) => ({
+        id: a.id,
+        url: a.asset_url,
+        thumbnail_url: a.thumbnail_url,
+        mime_type: a.mime_type,
+        width: a.width,
+        height: a.height,
+        position: a.position,
+        status: a.status,
+      }));
       return {
         id: p.id,
         caption: p.caption,
@@ -347,6 +395,8 @@ async function handleShareGet(
         status: p.status,
         cover_image_url: p.cover_image_url,
         video_url: videoByPost[p.id] ?? null,
+        media_type: mediaType,
+        assets,
         tagged_people: p.tagged_people ?? [],
         collaborator_handles: p.collaborator_handles ?? [],
         // For ad-type / "other" projects, the viewer surfaces a per-creative

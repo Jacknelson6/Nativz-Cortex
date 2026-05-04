@@ -61,6 +61,37 @@ export async function uploadVideoBytes(
   return data.publicUrl;
 }
 
+export async function uploadImageAsset(
+  admin: SupabaseClient,
+  opts: {
+    dropId: string;
+    postId: string;
+    assetId: string;
+    buffer: Buffer;
+    mimeType: string;
+    ext: string;
+  },
+): Promise<string> {
+  const path = `drops/${opts.dropId}/${opts.postId}/${opts.assetId}.${opts.ext}`;
+  if (opts.buffer.byteLength <= SINGLE_PUT_LIMIT) {
+    await withRetry(`image upload ${path}`, async () => {
+      const { error } = await admin.storage
+        .from('scheduler-media')
+        .upload(path, opts.buffer, { contentType: opts.mimeType, upsert: true });
+      if (error) throw new Error(`Image upload failed: ${error.message}`);
+    });
+  } else {
+    await tusUpload({
+      bucket: 'scheduler-media',
+      path,
+      buffer: opts.buffer,
+      mimeType: opts.mimeType,
+    });
+  }
+  const { data } = admin.storage.from('scheduler-media').getPublicUrl(path);
+  return data.publicUrl;
+}
+
 export async function uploadThumbnail(
   admin: SupabaseClient,
   opts: { dropId: string; videoId: string; buffer: Buffer },

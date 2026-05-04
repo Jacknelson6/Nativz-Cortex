@@ -61,6 +61,25 @@ export async function GET(
       .eq('is_active', true),
   ]);
 
+  // Image drops: pull asset counts + cover thumbnails so the UI can show
+  // carousel badges and render image posts whose `videos.thumbnail_url` is
+  // null (only the asset rows have asset_url for image posts).
+  const postAssetsByPostId: Record<string, { count: number; cover: string | null }> = {};
+  if (drop.media_type === 'image' && (videos ?? []).length > 0) {
+    const postIds = (videos ?? []).map((v) => v.id);
+    const { data: assetRows } = await admin
+      .from('content_drop_post_assets')
+      .select('drop_video_id, position, asset_url, thumbnail_url')
+      .in('drop_video_id', postIds)
+      .order('position', { ascending: true });
+    for (const a of assetRows ?? []) {
+      const entry = postAssetsByPostId[a.drop_video_id] ?? { count: 0, cover: null };
+      entry.count += 1;
+      if (a.position === 0) entry.cover = a.thumbnail_url ?? a.asset_url ?? null;
+      postAssetsByPostId[a.drop_video_id] = entry;
+    }
+  }
+
   const variantPlatforms = Array.from(
     new Set(
       (socialProfiles ?? [])
@@ -129,7 +148,7 @@ export async function GET(
   const scheduledPostIds = (videos ?? [])
     .map((v) => v.scheduled_post_id)
     .filter((id): id is string => typeof id === 'string' && id.length > 0);
-  let postStatusByPostId: Record<string, {
+  const postStatusByPostId: Record<string, {
     status: string;
     scheduled_at: string | null;
     published_at: string | null;
@@ -177,5 +196,6 @@ export async function GET(
     revisionsCompletedByPostId,
     variantPlatforms,
     postStatusByPostId,
+    postAssetsByPostId,
   });
 }

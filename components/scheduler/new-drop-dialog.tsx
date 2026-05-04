@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Clock, FolderInput, Loader2, Plus } from 'lucide-react';
+import { Clock, FolderInput, Image as ImageIcon, Loader2, Plus, Video } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -19,6 +19,7 @@ export function NewDropDialog({ open, onClose, clientId, onCreated }: NewDropDia
   const weekLater = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   const [folderUrl, setFolderUrl] = useState('');
+  const [mediaType, setMediaType] = useState<'video' | 'image'>('video');
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(weekLater);
   const [defaultTime, setDefaultTime] = useState('10:00');
@@ -27,6 +28,7 @@ export function NewDropDialog({ open, onClose, clientId, onCreated }: NewDropDia
   useEffect(() => {
     if (!open) {
       setFolderUrl('');
+      setMediaType('video');
       setSubmitting(false);
     }
   }, [open]);
@@ -49,6 +51,7 @@ export function NewDropDialog({ open, onClose, clientId, onCreated }: NewDropDia
         body: JSON.stringify({
           clientId,
           driveFolderUrl: folderUrl.trim(),
+          mediaType,
           startDate,
           endDate,
           defaultPostTime: defaultTime,
@@ -69,6 +72,43 @@ export function NewDropDialog({ open, onClose, clientId, onCreated }: NewDropDia
     <Dialog open={open} onClose={onClose} title="New content calendar from Drive" maxWidth="lg">
       <div className="space-y-4">
         <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-text-secondary">Media type</label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setMediaType('video')}
+              disabled={submitting}
+              className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                mediaType === 'video'
+                  ? 'border-accent bg-accent/10 text-accent-text'
+                  : 'border-nativz-border bg-surface text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              <Video size={14} />
+              Videos
+            </button>
+            <button
+              type="button"
+              onClick={() => setMediaType('image')}
+              disabled={submitting}
+              className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                mediaType === 'image'
+                  ? 'border-accent bg-accent/10 text-accent-text'
+                  : 'border-nativz-border bg-surface text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              <ImageIcon size={14} />
+              Images
+            </button>
+          </div>
+          <p className="text-xs text-text-muted">
+            {mediaType === 'video'
+              ? 'Each video becomes one post. We auto-caption from the transcript and brand voice.'
+              : 'Each image becomes one post. Group multiple images into a carousel on the review board.'}
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
           <label className="block text-sm font-medium text-text-secondary">
             Google Drive folder
           </label>
@@ -83,7 +123,7 @@ export function NewDropDialog({ open, onClose, clientId, onCreated }: NewDropDia
             />
           </div>
           <p className="text-xs text-text-muted">
-            The folder must be shared so your connected Google account can read it. We&rsquo;ll caption every video in the folder and schedule them across the date range.
+            The folder must be shared so your connected Google account can read it. We&rsquo;ll caption every {mediaType === 'video' ? 'video' : 'image'} in the folder and schedule them across the date range.
           </p>
         </div>
 
