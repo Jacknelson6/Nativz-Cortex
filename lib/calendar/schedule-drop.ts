@@ -3,6 +3,8 @@ import { getPostingService, type SocialPlatform } from '@/lib/posting';
 import type { CaptionVariants } from '@/lib/types/calendar';
 import { distributeSlots } from './distribute-slots';
 import { verifyAndReconcilePost } from './verify-post';
+import { resolveScheduledPostMedia } from './resolve-media';
+import { getMux } from '@/lib/mux/client';
 
 interface ScheduleInput {
   dropId: string;
@@ -31,6 +33,9 @@ interface VideoRow {
   mime_type: string | null;
   order_index: number;
   media_type: 'video' | 'image' | null;
+  mux_asset_id: string | null;
+  mux_playback_id: string | null;
+  mux_status: string | null;
 }
 
 interface PostAssetRow {
@@ -76,7 +81,7 @@ export async function scheduleDrop(
   const { data: rows } = await admin
     .from('content_drop_videos')
     .select(
-      'id, drop_id, video_url, thumbnail_url, draft_caption, draft_hashtags, caption_variants, drive_file_name, duration_seconds, size_bytes, mime_type, order_index, media_type',
+      'id, drop_id, video_url, thumbnail_url, draft_caption, draft_hashtags, caption_variants, drive_file_name, duration_seconds, size_bytes, mime_type, order_index, media_type, mux_asset_id, mux_playback_id, mux_status',
     )
     .eq('drop_id', input.dropId)
     .eq('status', 'ready')
@@ -173,14 +178,36 @@ export async function scheduleDrop(
         coverImageUrl = assetRows[0].asset_url ?? null;
       } else {
         if (!video.video_url) throw new Error('Video URL missing');
+        // PRODUCER MUX INGESTION
+        //
+        // Push the original video into Mux at scheduling time so the publish-
+        // time payload ships from Mux (our paid hosting) instead of Supabase
+        // storage (egress costs + slower CDN). Mux pulls from `video.video_url`
+        // (already a fully-qualified public Supabase URL from
+        // `uploadVideoBytes`) so no extra signed-URL handling needed.
+        //
+        // The `capped-1080p.mp4` rendition lands ~1-5 min later via the
+        // `static_renditions.ready` webhook, which stamps `revised_mp4_url`
+        // (field reused for originals + revisions). Until then,
+        // `resolveScheduledPostMedia` throws "MP4 not ready" and the cron
+        // retries naturally. Idempotent — `ensureMuxAssetForVideo` short-
+        // circuits when `mux_playback_id` is already set, so re-scheduling
+        // doesn't duplicate ingestions.
+        //
+        // We KEEP the Supabase URL in `scheduler_media.late_media_url` as a
+        // legacy fallback. The resolver prioritises Mux but uses scheduler_media
+        // when no `mux_playback_id` is present, which protects rows from
+        // before this producer change shipped.
+        const playbackId = await ensureMuxAssetForVideo(admin, video);
+        const muxMp4Url = `https://stream.mux.com/${playbackId}/capped-1080p.mp4`;
         mediaInserts = [{
           filename: video.drive_file_name,
-          storage_path: video.video_url,
+          storage_path: muxMp4Url,
           thumbnail_url: video.thumbnail_url,
           duration_seconds: video.duration_seconds,
           file_size_bytes: video.size_bytes,
           mime_type: video.mime_type,
-          late_media_url: video.video_url,
+          late_media_url: muxMp4Url,
         }];
         postType = 'reel';
         coverImageUrl = video.thumbnail_url;
@@ -366,32 +393,18 @@ export async function publishScheduledPost(
     };
   }
 
-  // Pull all linked media rows in sort order. For video posts there's exactly
-  // one; for image carousels there are 1..10 in display order.
-  const { data: mediaLinks } = await admin
-    .from('scheduled_post_media')
-    .select('media_id, sort_order, scheduler_media:media_id (late_media_url, mime_type)')
-    .eq('post_id', postId)
-    .order('sort_order');
-  type MediaLink = {
-    media_id: string;
-    sort_order: number;
-    scheduler_media: { late_media_url: string | null; mime_type: string | null } | { late_media_url: string | null; mime_type: string | null }[] | null;
-  };
-  const links = (mediaLinks ?? []) as MediaLink[];
-  const flatMedia = links
-    .map((l) => {
-      const m = Array.isArray(l.scheduler_media) ? l.scheduler_media[0] : l.scheduler_media;
-      return m && m.late_media_url ? { url: m.late_media_url, mime: m.mime_type } : null;
-    })
-    .filter((m): m is { url: string; mime: string | null } => !!m);
-  if (flatMedia.length === 0) throw new Error('Draft post is missing a media URL');
-
-  const isImagePost = post.post_type === 'image' || post.post_type === 'carousel';
-  const mediaItems = isImagePost
-    ? flatMedia.map((m) => ({ type: 'image' as const, url: m.url }))
-    : undefined;
-  const videoUrl = isImagePost ? undefined : flatMedia[0].url;
+  // Resolve media payload via the shared Mux-aware resolver. This is the
+  // critical correctness step on the approval-driven publish path: video
+  // posts whose drop_video has a `revised_mp4_url` (Khen re-uploaded a
+  // corrected cut) MUST ship the revised render, not the original snapshot
+  // captured at scheduling time. The Weston Funding "wrong version posted"
+  // incident on 2026-05-04 happened because this path used to read directly
+  // from `scheduler_media.late_media_url` — the May 1 snapshot — and
+  // bypassed Khen's May 3 revision entirely. The resolver throws when the
+  // revision was uploaded but Mux's MP4 rendition isn't ready yet, so the
+  // caller (share-link approval / cron retry) bumps retry_count instead of
+  // shipping the wrong file.
+  const { videoUrl, mediaItems } = await resolveScheduledPostMedia(admin, postId, post.post_type);
 
   // Pull the platforms this post is targeting + the brand's caption variants.
   // Keep the spp row id + social_profile_id alongside the embedded profile so
@@ -479,22 +492,35 @@ export async function publishScheduledPost(
   // `scheduled_post_platforms` rows stay at `status='pending'` indefinitely
   // even though the post is live on Zernio — the bug that left ~16 stuck
   // rows after the May 1 drop ship and the recovery sweep.
+  //
+  // Zernio's PlatformResult.status is one of 'published' | 'scheduled' | 'failed'.
+  // Treating 'scheduled' as 'failed' (the prior behaviour) was wrong: 'scheduled'
+  // means Zernio accepted the leg and is still queued waiting for the platform
+  // to confirm. That's the spp 'pending' state. Only mark 'failed' when Zernio
+  // actually reported 'failed'. The Weston Funding TikTok+YT legs on 2026-05-04
+  // were 'scheduled' (still queued) but our DB showed them failed with NULL
+  // failure_reason — that was the conflation, not a real failure.
   let anyTimeoutFailure = false;
   for (const platformResult of publish.platforms) {
     const sppId = lateIdToSppId.get(platformResult.profileId);
     if (!sppId) continue;
-    const isFailed = platformResult.status !== 'published';
     const reason = platformResult.error ?? null;
-    if (isFailed && reason && /timed out during platform|may have been published externally|gateway timeout/i.test(reason)) {
+    if (platformResult.status === 'failed' && reason && /timed out during platform|may have been published externally|gateway timeout/i.test(reason)) {
       anyTimeoutFailure = true;
     }
+    const sppStatus =
+      platformResult.status === 'published'
+        ? 'published'
+        : platformResult.status === 'failed'
+          ? 'failed'
+          : 'pending';
     await admin
       .from('scheduled_post_platforms')
       .update({
-        status: isFailed ? 'failed' : 'published',
+        status: sppStatus,
         external_post_id: platformResult.externalPostId ?? null,
         external_post_url: platformResult.externalPostUrl ?? null,
-        failure_reason: reason,
+        failure_reason: platformResult.status === 'failed' ? reason : null,
       })
       .eq('id', sppId);
   }
@@ -518,6 +544,54 @@ export async function publishScheduledPost(
   }
 
   return { alreadyPublished: false, externalPostId: publish.externalPostId };
+}
+
+/**
+ * Ensure the original video is ingested into Mux. Idempotent — short-circuits
+ * if `mux_playback_id` is already set on the row.
+ *
+ * Triggers a URL-pull ingestion (`assets.create({inputs: [{url}]})`) using the
+ * already-public Supabase URL. Mux returns the asset + playback IDs
+ * synchronously; the `capped-1080p.mp4` static rendition lands minutes later
+ * via the `static_renditions.ready` webhook, which stamps `revised_mp4_url`
+ * on the row. The resolver throws "MP4 not ready" until then so the cron
+ * retry path handles the wait.
+ *
+ * Mux ingestion config:
+ *   - playback_policies: ['public'] — viewable without signed URLs
+ *   - mp4_support: 'capped-1080p'  — guarantees a single deterministic MP4 URL
+ *   - video_quality: 'basic'        — matches the revision pipeline; cheaper
+ */
+async function ensureMuxAssetForVideo(
+  admin: SupabaseClient,
+  video: VideoRow,
+): Promise<string> {
+  if (video.mux_playback_id) return video.mux_playback_id;
+  if (!video.video_url) throw new Error('Video URL missing');
+
+  const mux = getMux();
+  const asset = await mux.video.assets.create({
+    inputs: [{ url: video.video_url }],
+    playback_policies: ['public'],
+    mp4_support: 'capped-1080p',
+    video_quality: 'basic',
+  });
+
+  const playback = asset.playback_ids?.find((p) => p.policy === 'public');
+  if (!playback) {
+    throw new Error('Mux asset created but no public playback id returned');
+  }
+
+  await admin
+    .from('content_drop_videos')
+    .update({
+      mux_asset_id: asset.id,
+      mux_playback_id: playback.id,
+      mux_status: 'processing',
+    })
+    .eq('id', video.id);
+
+  return playback.id;
 }
 
 function pickActiveVariants(

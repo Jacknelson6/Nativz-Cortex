@@ -14,6 +14,22 @@ function looksLikeTimeout(reason: string | null | undefined): boolean {
   return TIMEOUT_PATTERNS.some((p) => p.test(reason));
 }
 
+/**
+ * A spp row is reconcile-eligible if it's marked 'failed' AND either:
+ *   - failure_reason matches a Zernio timeout pattern (real platform-side
+ *     uncertainty — the post may have published after the wait-window lapsed), OR
+ *   - failure_reason is NULL (the legacy conflation bug: Zernio reported
+ *     'scheduled' / queued and our publisher mapped it to 'failed' with no
+ *     reason. Those rows often end up published once the platform queue clears).
+ *
+ * Real, actionable failures always carry a reason string ('Caption too long',
+ * 'Account not connected', etc.) so this filter doesn't catch them.
+ */
+function isReconcileEligible(reason: string | null | undefined): boolean {
+  if (reason == null) return true;
+  return looksLikeTimeout(reason);
+}
+
 type AdminClient = ReturnType<typeof createAdminClient>;
 
 export interface VerifyResult {
@@ -75,10 +91,10 @@ export async function verifyAndReconcilePost(
     return { postId, reconciledPlatforms: 0, newPostStatus: null, reason: 'no-timeout-rows' };
   }
 
-  const hasTimeout = allRows.some(
-    (r) => r.status === 'failed' && looksLikeTimeout(r.failure_reason),
+  const hasReconcileable = allRows.some(
+    (r) => r.status === 'failed' && isReconcileEligible(r.failure_reason),
   );
-  if (!hasTimeout) {
+  if (!hasReconcileable) {
     return { postId, reconciledPlatforms: 0, newPostStatus: null, reason: 'no-timeout-rows' };
   }
 

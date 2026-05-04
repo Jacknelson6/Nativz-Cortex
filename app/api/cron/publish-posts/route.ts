@@ -6,21 +6,32 @@ import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 import { notifyAdmins } from '@/lib/notifications';
 import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
 import { verifyAndReconcilePost } from '@/lib/calendar/verify-post';
+import { resolveScheduledPostMedia } from '@/lib/calendar/resolve-media';
 import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
 
 const STALE_ALERT_PREFIX = 'Stale draft: scheduled time passed without approval';
 
 export const maxDuration = 300;
 
+// 1 initial attempt + 2 retries = 3 total attempts. After the third failure
+// the post is marked `failed` and the team is notified.
 const MAX_RETRIES = 3;
+// Fixed 30 minute delay between retries. Earlier we used exponential backoff
+// (2/4/8 min) which doubled-down on transient platform errors faster than the
+// upstream rate limits cleared. 30 min is long enough for most carrier-side
+// blips to resolve and short enough that the team still sees the recovery
+// happen on the same shift.
+const RETRY_DELAY_MS = 30 * 60 * 1000;
 const BATCH_SIZE = 5;
 
 /**
  * GET /api/cron/publish-posts
  *
  * Vercel cron job (every 2 minutes): publish scheduled posts that are due. Processes up to
- * 5 posts per run. Implements exponential backoff retry (up to 3 attempts). Sends an in-app
- * failure notification when all retries are exhausted. Requires CRON_SECRET bearer token.
+ * 5 posts per run. Retries failed posts every 30 minutes up to MAX_RETRIES total attempts.
+ * On `partially_failed` posts only the failed/pending platform legs are re-fired (already
+ * published legs are never republished). Sends an in-app failure notification when all
+ * retries are exhausted. Requires CRON_SECRET bearer token.
  *
  * @auth Bearer CRON_SECRET (Vercel cron)
  * @returns {{ message: string, published: number, failed: number }}
@@ -63,7 +74,10 @@ async function handleGet(request: NextRequest) {
           )
         )
       `)
-      .in('status', ['scheduled', 'publishing'])
+      // `partially_failed` is included so we can retry just the failed legs
+      // of a partial publish. The per-leg filter below ensures already-
+      // published platforms are never republished.
+      .in('status', ['scheduled', 'publishing', 'partially_failed'])
       .lte('scheduled_at', new Date().toISOString())
       .lt('retry_count', MAX_RETRIES)
       .order('scheduled_at', { ascending: true })
@@ -104,7 +118,7 @@ async function handleGet(request: NextRequest) {
           .update({ status: 'publishing', updated_at: claimNowIso })
           .eq('id', post.id)
           .eq('updated_at', post.updated_at)
-          .in('status', ['scheduled', 'publishing'])
+          .in('status', ['scheduled', 'publishing', 'partially_failed'])
           .select('id')
           .maybeSingle();
         if (!claimed) {
@@ -190,86 +204,15 @@ async function handleGet(request: NextRequest) {
           .update({ status: 'publishing', updated_at: new Date().toISOString() })
           .eq('id', post.id);
 
-        // Resolve which video URL to publish.
-        //
-        // Both the original cut and any revision live in Mux. The original
-        // is referenced by `content_drop_videos.mux_playback_id`; revisions
-        // by `revised_mp4_url` (already a stream.mux.com MP4 URL). Supabase
-        // Storage is a last-resort fallback for legacy rows that predate
-        // the Mux migration, behind that there's a known URL-doubling bug
-        // in `lib/calendar/schedule-drop.ts` that produces unfetchable URLs.
-        //
-        // Cases (priority order):
-        //   1. Revision uploaded but Mux MP4 rendition still rendering
-        //      (`revised_video_uploaded_at` set, `revised_mp4_url` null) →
-        //      throw, which bumps retry_count and re-queues with exponential
-        //      backoff. Mux's capped-1080p pack typically lands within ~1 min
-        //      of upload, so 3 retries (2/4/8 min) covers it. We MUST NOT
-        //      silently fall back to the original — that's the bug that
-        //      shipped unrevised content live.
-        //   2. Revision ready → publish `revised_mp4_url` (Mux MP4). Zernio
-        //      can't read HLS manifests, so we MUST use the static MP4 URL,
-        //      not the .m3u8 in `revised_video_url`.
-        //   3. No revision, original has `mux_playback_id` → publish the
-        //      Mux MP4 rendition for the original (`stream.mux.com/{id}/medium.mp4`).
-        //   4. No revision, no Mux ID (legacy row) → fall back to Supabase
-        //      Storage public URL.
-        const { data: revisionRow } = await adminClient
-          .from('content_drop_videos')
-          .select('revised_mp4_url, revised_video_uploaded_at, mux_playback_id')
-          .eq('scheduled_post_id', post.id)
-          .maybeSingle();
-        const revisionUploaded = revisionRow?.revised_video_uploaded_at != null;
-        const revisionReady = revisionRow?.revised_mp4_url != null;
-        if (revisionUploaded && !revisionReady) {
-          throw new Error(
-            'Revision pending: Mux MP4 rendition not ready yet. Cron will retry.',
-          );
-        }
-
-        const isImagePost = post.post_type === 'image' || post.post_type === 'carousel';
-
-        function resolveStoragePath(rawPath: string): string {
-          if (/^https?:\/\//i.test(rawPath)) return rawPath;
-          const { data: publicUrl } = adminClient.storage
-            .from('scheduler-media')
-            .getPublicUrl(rawPath);
-          return publicUrl.publicUrl;
-        }
-
-        let videoUrl: string | undefined;
-        let mediaItems: { type: 'video' | 'image'; url: string }[] | undefined;
-
-        if (isImagePost) {
-          const links = (post.scheduled_post_media ?? []) as Array<{
-            sort_order: number | null;
-            scheduler_media: { storage_path: string | null; mime_type: string | null } | null;
-          }>;
-          const ordered = [...links]
-            .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-            .map((l) => l.scheduler_media?.storage_path)
-            .filter((p): p is string => !!p)
-            .map(resolveStoragePath);
-          if (ordered.length === 0) throw new Error('No media attached to image post');
-          mediaItems = ordered.map((url) => ({ type: 'image' as const, url }));
-        } else if (revisionReady) {
-          videoUrl = revisionRow!.revised_mp4_url as string;
-        } else if (revisionRow?.mux_playback_id) {
-          // Prefer Mux for originals — Supabase Storage paths are unreliable
-          // due to the URL-doubling bug in schedule-drop.ts.
-          videoUrl = `https://stream.mux.com/${revisionRow.mux_playback_id}/medium.mp4`;
-        } else {
-          const media = post.scheduled_post_media?.[0]?.scheduler_media;
-          if (!media?.storage_path) {
-            throw new Error('No media attached to post');
-          }
-          // Defensive: there's a known bug in `lib/calendar/schedule-drop.ts`
-          // that stores the FULL public URL into `storage_path` instead of
-          // the relative bucket key. If we then call `getPublicUrl()` on a
-          // full URL we end up with `…/scheduler-media/https%3A//…` which
-          // 400s. Use the URL as-is when it already looks fully-qualified.
-          videoUrl = resolveStoragePath(media.storage_path);
-        }
+        // Resolve the publish-time media payload via the shared resolver.
+        // Mux-aware so revisions ship the rendered MP4 instead of the
+        // schedule-time snapshot. Throws when Mux MP4 isn't ready yet, which
+        // bumps retry_count via the catch block. See `lib/calendar/resolve-media.ts`.
+        const { videoUrl, mediaItems } = await resolveScheduledPostMedia(
+          adminClient,
+          post.id,
+          post.post_type,
+        );
 
         // Build platform profile map. Zernio expects its own MongoDB
         // ObjectId (`social_profiles.late_account_id`) as the platform
@@ -278,6 +221,14 @@ async function handleGet(request: NextRequest) {
         // late_account_id) -- they'd 400 anyway. Keep an internal
         // map so we can reverse-lookup the spp row when Zernio echoes
         // accountId back in the publish response.
+        //
+        // PER-LEG RETRY: only fire legs whose status is 'pending' or
+        // 'failed'. On a `partially_failed` retry, the platforms that
+        // already published stay in 'published' and we never re-fire them
+        // (re-firing would dupe the post on those platforms — exactly the
+        // double-publish bug we hit on May 1). On a fresh `scheduled` run
+        // every leg is 'pending' so this filter is a no-op for first
+        // attempts.
         type PlatformProfile = {
           profileId: string;
           lateAccountId: string;
@@ -287,6 +238,9 @@ async function handleGet(request: NextRequest) {
           post.scheduled_post_platforms ?? []
         )
           .map((spp: Record<string, unknown>): PlatformProfile | null => {
+            const sppStatus = (spp.status as string | null) ?? 'pending';
+            // Skip legs that already published — never re-fire them.
+            if (sppStatus !== 'pending' && sppStatus !== 'failed') return null;
             const profile = spp.social_profiles as Record<string, unknown> | null;
             const lateAccountId = (profile?.late_account_id ?? null) as string | null;
             if (!lateAccountId) return null;
@@ -357,9 +311,7 @@ async function handleGet(request: NextRequest) {
           instagramShareToFeed: p.instagram_share_to_feed ?? undefined,
         });
 
-        // Update per-platform results
-        let allPublished = true;
-        let anyFailed = false;
+        // Update per-platform results for the legs we just attempted.
         const failedPlatformDetails: { platform: string; username: string | null; reason: string }[] = [];
 
         for (const platformResult of result.platforms) {
@@ -371,20 +323,31 @@ async function handleGet(request: NextRequest) {
             (s: Record<string, unknown>) => s.social_profile_id === internalProfileId,
           );
           if (spp) {
+            // Zernio's PlatformResult.status is 'published' | 'scheduled' | 'failed'.
+            // 'scheduled' means Zernio accepted the leg and is still queued —
+            // the platform itself hasn't confirmed yet. Map that to spp 'pending'
+            // (still in flight) instead of the prior 'failed' which polluted the
+            // failure notifier and the calendar dots. The Weston Funding TikTok+YT
+            // legs on 2026-05-04 were 'scheduled' but our DB showed them failed
+            // with NULL failure_reason — that was the conflation, not a real failure.
+            const sppStatus =
+              platformResult.status === 'published'
+                ? 'published'
+                : platformResult.status === 'failed'
+                  ? 'failed'
+                  : 'pending';
             await adminClient
               .from('scheduled_post_platforms')
               .update({
-                status: platformResult.status === 'published' ? 'published' : 'failed',
+                status: sppStatus,
                 external_post_id: platformResult.externalPostId ?? null,
                 external_post_url: platformResult.externalPostUrl ?? null,
-                failure_reason: platformResult.error ?? null,
+                failure_reason: platformResult.status === 'failed' ? platformResult.error ?? null : null,
               })
               .eq('id', (spp as Record<string, unknown>).id);
           }
 
-          if (platformResult.status !== 'published') allPublished = false;
           if (platformResult.status === 'failed') {
-            anyFailed = true;
             const sppRecord = spp as { social_profiles?: { platform?: string; username?: string | null } } | undefined;
             failedPlatformDetails.push({
               platform: sppRecord?.social_profiles?.platform ?? platformResult.profileId,
@@ -394,33 +357,100 @@ async function handleGet(request: NextRequest) {
           }
         }
 
-        // Update post status
-        const newStatus = allPublished
-          ? 'published'
-          : anyFailed
-            ? 'partially_failed'
-            : 'published';
+        // Re-query the FULL spp set to derive true overall status. With per-
+        // leg retry we may have skipped already-published legs in this pass,
+        // so we cannot infer the post's overall state from `result.platforms`
+        // alone — we have to look at every spp row. allPublished requires
+        // every leg to be 'published'; anyFailed is true if at least one
+        // leg is 'failed' AFTER the per-leg updates above committed.
+        const { data: freshSppRows } = await adminClient
+          .from('scheduled_post_platforms')
+          .select('status')
+          .eq('post_id', post.id);
+        const sppStatuses = (freshSppRows ?? []).map(
+          (r) => (r as { status: string }).status,
+        );
+        const allPublished =
+          sppStatuses.length > 0 && sppStatuses.every((s) => s === 'published');
+        const anyFailed = sppStatuses.some((s) => s === 'failed');
+
+        // RETRY POLICY: when at least one leg failed and we still have
+        // retries left, re-queue the post for another publish attempt
+        // RETRY_DELAY_MS from now. Already-published legs are protected by
+        // the per-leg filter at the top of the loop. Only flip to terminal
+        // 'partially_failed' once retries are exhausted (the team can still
+        // retry manually after that, but the cron stops auto-trying).
+        const currentRetryCount = (post.retry_count ?? 0) as number;
+        const retriesRemaining = currentRetryCount + 1 < MAX_RETRIES;
+
+        let newStatus: 'published' | 'partially_failed' | 'scheduled';
+        let updatePayload: Record<string, unknown>;
+        if (allPublished) {
+          newStatus = 'published';
+          updatePayload = {
+            status: 'published',
+            external_post_id: result.externalPostId,
+            published_at: new Date().toISOString(),
+            failure_reason: null,
+            updated_at: new Date().toISOString(),
+          };
+        } else if (anyFailed && retriesRemaining) {
+          // Auto-retry partial failure in 30 min. Bump retry_count and push
+          // scheduled_at so the SELECT below picks it up on the next eligible
+          // cron tick. Stay in 'partially_failed' so the per-leg filter
+          // protects the legs that already shipped.
+          newStatus = 'partially_failed';
+          updatePayload = {
+            status: 'partially_failed',
+            external_post_id: result.externalPostId,
+            retry_count: currentRetryCount + 1,
+            scheduled_at: new Date(Date.now() + RETRY_DELAY_MS).toISOString(),
+            failure_reason: failedPlatformDetails.length
+              ? `Auto-retry in 30 min: ${failedPlatformDetails.map((f) => f.platform).join(', ')} failed`
+              : null,
+            updated_at: new Date().toISOString(),
+          };
+        } else if (anyFailed) {
+          // Retries exhausted — terminal partial failure.
+          newStatus = 'partially_failed';
+          updatePayload = {
+            status: 'partially_failed',
+            external_post_id: result.externalPostId,
+            retry_count: currentRetryCount + 1,
+            failure_reason: failedPlatformDetails.length
+              ? `${failedPlatformDetails.map((f) => f.platform).join(', ')} failed after ${MAX_RETRIES} attempts`
+              : null,
+            updated_at: new Date().toISOString(),
+          };
+        } else {
+          // No failures, but not every leg is 'published' yet (some 'pending'
+          // — Zernio queued them but the platform hasn't confirmed). Treat
+          // as published; verify-post sweep + Zernio webhooks reconcile the
+          // pending legs once they confirm.
+          newStatus = 'published';
+          updatePayload = {
+            status: 'published',
+            external_post_id: result.externalPostId,
+            published_at: new Date().toISOString(),
+            failure_reason: null,
+            updated_at: new Date().toISOString(),
+          };
+        }
 
         await adminClient
           .from('scheduled_posts')
-          .update({
-            status: newStatus,
-            external_post_id: result.externalPostId,
-            published_at: allPublished ? new Date().toISOString() : null,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updatePayload)
           .eq('id', post.id);
 
         // PARTIAL-FAILURE NOTIFICATION
         //
-        // When some platforms publish and others fail, the post never hits
-        // `'failed'` (so `sendFailureNotification` doesn't fire) and the cron
-        // doesn't retry partial-failures. Without this hook, the team gets
-        // zero signal that, e.g., 4 of 5 platforms didn't publish for a given
-        // post. We ping the OPS Chat space with a short summary so someone
-        // can manually retry or contact the platform — same channel as the
-        // full-failure path, framed as "partial" so it's not confused.
-        if (newStatus === 'partially_failed' && failedPlatformDetails.length > 0) {
+        // Only fire when retries are EXHAUSTED. Auto-retries in flight don't
+        // need to wake anyone up — most transient platform errors clear in
+        // 30 min. If we still have retries left, the failed legs will get
+        // another shot before the team is paged. Once retries are spent
+        // and at least one leg is still failed, ping ops so Jack can
+        // intervene.
+        if (newStatus === 'partially_failed' && !retriesRemaining && failedPlatformDetails.length > 0) {
           try {
             await sendPartialFailureNotification(adminClient, post, failedPlatformDetails);
           } catch (notifyErr) {
@@ -441,9 +471,11 @@ async function handleGet(request: NextRequest) {
             status: newStatus,
             retry_count: newRetryCount,
             failure_reason: err instanceof Error ? err.message : 'Unknown error',
-            // Exponential backoff: retry in 2^n minutes
+            // Fixed 30 min delay between retries (RETRY_DELAY_MS). Earlier
+            // we used exponential backoff (2/4/8 min) which retried into
+            // active rate limits faster than the upstream cleared them.
             scheduled_at: newStatus === 'scheduled'
-              ? new Date(Date.now() + Math.pow(2, newRetryCount) * 60 * 1000).toISOString()
+              ? new Date(Date.now() + RETRY_DELAY_MS).toISOString()
               : post.scheduled_at,
             updated_at: new Date().toISOString(),
           })
