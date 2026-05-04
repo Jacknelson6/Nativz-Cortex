@@ -1,5 +1,5 @@
 /**
- * requireCreditsAdmin — shared admin gate for /api/credits/* routes.
+ * requireCreditsAdmin, shared admin gate for /api/credits/* routes.
  *
  * Mirrors the role check used in app/admin/clients/[slug]/billing/page.tsx:
  *   `is_super_admin === true || role === 'admin' || role === 'super_admin'`.

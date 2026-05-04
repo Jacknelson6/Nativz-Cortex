@@ -1,5 +1,5 @@
 /**
- * ensureStripeCustomer — first-time customer onboarding for the credits flow.
+ * ensureStripeCustomer, first-time customer onboarding for the credits flow.
  *
  * The credits feature is the first surface that mints a Stripe customer for a
  * client we haven't billed before. Earlier surfaces (Revenue Hub) only ever
@@ -17,7 +17,7 @@
  * second `UPDATE ... WHERE stripe_customer_id IS NULL` fails to flip the
  * row, we re-read and return whatever the first invocation persisted. The
  * orphan customer record on the Stripe side is benign (no charges; Stripe
- * dashboard cleanup can purge it later) — picking a deterministic winner
+ * dashboard cleanup can purge it later); picking a deterministic winner
  * matters more than zero-orphan.
  */
 
@@ -85,7 +85,7 @@ export async function ensureStripeCustomer(
   });
 
   // Persist back. Conditional `is.null` so two concurrent calls can't both
-  // win — the loser re-reads the row and returns the winner's customer.
+  // win; the loser re-reads the row and returns the winner's customer.
   const { data: claimed } = await admin
     .from('clients')
     .update({ stripe_customer_id: customer.id })
@@ -113,7 +113,7 @@ export async function ensureStripeCustomer(
     throw new Error(`ensureStripeCustomer: client ${clientId} disappeared during update`);
   }
 
-  // Mirror into stripe_customers for Revenue Hub joins. Best-effort — the
+  // Mirror into stripe_customers for Revenue Hub joins. Best-effort: the
   // canonical link is `clients.stripe_customer_id`, mirror is denormalized.
   await admin
     .from('stripe_customers')
