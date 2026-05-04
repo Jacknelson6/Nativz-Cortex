@@ -58,10 +58,10 @@ export function getClientAbbreviationLabel(name: string, slug?: string | null): 
   return name;
 }
 
-/** Shared Tailwind classes: search query title in header — wrap relatively early. */
+/** Shared Tailwind classes: search query title in header. Wraps relatively early. */
 export const searchHeaderQueryClassName =
   'font-medium text-text-primary break-words [overflow-wrap:anywhere] max-w-[min(100%,14rem)] sm:max-w-[min(100%,18rem)]';
 
-/** Client segment next to query — short abbrev rarely needs width cap; full name wraps sooner. */
+/** Client segment next to query. Short abbrev rarely needs width cap; full name wraps sooner. */
 export const searchHeaderClientClassName =
   'break-words [overflow-wrap:anywhere] max-w-[min(100%,10rem)] sm:max-w-[min(100%,12rem)]';
