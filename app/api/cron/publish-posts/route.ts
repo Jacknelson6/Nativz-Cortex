@@ -189,27 +189,31 @@ async function handleGet(request: NextRequest) {
 
         // Resolve which video URL to publish.
         //
-        // The original cut sits in Supabase Storage (`scheduler-media`
-        // bucket, addressed via `scheduler_media.storage_path`). Revised cuts
-        // live in Mux only — uploaded by the client through the share-link
-        // revision flow, which writes to `content_drop_videos.revised_*`.
+        // Both the original cut and any revision live in Mux. The original
+        // is referenced by `content_drop_videos.mux_playback_id`; revisions
+        // by `revised_mp4_url` (already a stream.mux.com MP4 URL). Supabase
+        // Storage is a last-resort fallback for legacy rows that predate
+        // the Mux migration, behind that there's a known URL-doubling bug
+        // in `lib/calendar/schedule-drop.ts` that produces unfetchable URLs.
         //
-        // Three cases:
-        //   1. No revision row, or revision never uploaded → publish the
-        //      original from Storage (legacy behaviour).
-        //   2. Revision uploaded AND the Mux MP4 rendition has landed
-        //      (`revised_mp4_url` is non-null) → publish the revision MP4.
-        //      Zernio/Late ingest can't read HLS manifests, so we MUST use
-        //      the static MP4 URL, not the .m3u8 in `revised_video_url`.
-        //   3. Revision uploaded but MP4 rendition still rendering
-        //      (`revised_mp4_url` is null) → throw, which bumps retry_count
-        //      and re-queues with exponential backoff. Mux's capped-1080p
-        //      pack typically lands within ~1 min of upload, so 3 retries
-        //      (2/4/8 min) covers it. We MUST NOT silently fall back to the
-        //      original — that's the bug that shipped unrevised content live.
+        // Cases (priority order):
+        //   1. Revision uploaded but Mux MP4 rendition still rendering
+        //      (`revised_video_uploaded_at` set, `revised_mp4_url` null) →
+        //      throw, which bumps retry_count and re-queues with exponential
+        //      backoff. Mux's capped-1080p pack typically lands within ~1 min
+        //      of upload, so 3 retries (2/4/8 min) covers it. We MUST NOT
+        //      silently fall back to the original — that's the bug that
+        //      shipped unrevised content live.
+        //   2. Revision ready → publish `revised_mp4_url` (Mux MP4). Zernio
+        //      can't read HLS manifests, so we MUST use the static MP4 URL,
+        //      not the .m3u8 in `revised_video_url`.
+        //   3. No revision, original has `mux_playback_id` → publish the
+        //      Mux MP4 rendition for the original (`stream.mux.com/{id}/medium.mp4`).
+        //   4. No revision, no Mux ID (legacy row) → fall back to Supabase
+        //      Storage public URL.
         const { data: revisionRow } = await adminClient
           .from('content_drop_videos')
-          .select('revised_mp4_url, revised_video_uploaded_at')
+          .select('revised_mp4_url, revised_video_uploaded_at, mux_playback_id')
           .eq('scheduled_post_id', post.id)
           .maybeSingle();
         const revisionUploaded = revisionRow?.revised_video_uploaded_at != null;
@@ -223,15 +227,28 @@ async function handleGet(request: NextRequest) {
         let videoUrl: string;
         if (revisionReady) {
           videoUrl = revisionRow!.revised_mp4_url as string;
+        } else if (revisionRow?.mux_playback_id) {
+          // Prefer Mux for originals — Supabase Storage paths are unreliable
+          // due to the URL-doubling bug in schedule-drop.ts.
+          videoUrl = `https://stream.mux.com/${revisionRow.mux_playback_id}/medium.mp4`;
         } else {
           const media = post.scheduled_post_media?.[0]?.scheduler_media;
           if (!media?.storage_path) {
             throw new Error('No media attached to post');
           }
-          const { data: publicUrl } = adminClient.storage
-            .from('scheduler-media')
-            .getPublicUrl(media.storage_path);
-          videoUrl = publicUrl.publicUrl;
+          // Defensive: there's a known bug in `lib/calendar/schedule-drop.ts`
+          // that stores the FULL public URL into `storage_path` instead of
+          // the relative bucket key. If we then call `getPublicUrl()` on a
+          // full URL we end up with `…/scheduler-media/https%3A//…` which
+          // 400s. Use the URL as-is when it already looks fully-qualified.
+          if (/^https?:\/\//i.test(media.storage_path)) {
+            videoUrl = media.storage_path;
+          } else {
+            const { data: publicUrl } = adminClient.storage
+              .from('scheduler-media')
+              .getPublicUrl(media.storage_path);
+            videoUrl = publicUrl.publicUrl;
+          }
         }
 
         // Build platform profile map. Zernio expects its own MongoDB
