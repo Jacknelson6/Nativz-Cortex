@@ -8,13 +8,20 @@ import type { ReferenceAdRow } from '@/components/ad-creatives/ad-reference-libr
 import type { AdConcept } from '@/components/ad-creatives/ad-concept-gallery';
 
 /**
- * Ad Generator — replaces the old dev-facing form-page with a chat-led
- * workspace for admins. Phase 1: tab shell + per-client asset library.
- * Phase 2 wires the chat + gallery + template-image-to-JSON extraction.
+ * Ad Generator, chat-led workspace for admins. Brand-pill-scoped: the
+ * top-bar pill drives which client's library and concepts load.
  *
- * URL stays at /ads; the top-bar brand pill drives which
- * client's workspace renders. Legacy /admin/ad-creatives-v2/<uuid> URLs
- * are handled by middleware (see middleware.ts:LEGACY_AD_CREATIVES_CLIENT_ID).
+ * Phase 1 shipped the workspace shell (chat + gallery + library tabs).
+ * Phase 2 wired template-image-to-JSON extraction: uploads write rows
+ * with extraction_status='pending', a Gemini vision pass via OpenRouter
+ * fills prompt_schema in the background (see
+ * lib/ad-creatives/extract-template-schema.ts), and the gallery polls
+ * GET /api/clients/[clientId]/ad-creatives/templates every 3s until
+ * everything settles to ready or failed. Failed rows expose a Retry
+ * banner that POSTs to .../templates/[templateId]/retry.
+ *
+ * Legacy /admin/ad-creatives-v2 URLs redirect here (see
+ * app/admin/ad-creatives-v2/page.tsx).
  */
 export default async function AdCreativesPage() {
   const supabase = await createServerSupabaseClient();

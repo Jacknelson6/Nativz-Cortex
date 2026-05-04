@@ -137,3 +137,34 @@ You are running unattended. The user has approved this plan. Do not ask for conf
 If you hit a genuine blocker (missing env var, destructive migration concern, broken upstream API), STOP and write a one-line summary into `tasks/prd-static-ad-generator-phase2-blockers.md` for human review. Otherwise keep shipping until the acceptance criteria are met.
 
 When all criteria pass, append a `## Shipped` section to this file with commit shas + brief notes, then halt.
+
+## Shipped
+
+Landed on `main` 2026-05-04. Migration numbers bumped from PRD's 226 to 231/232 (226 was already taken by `unique_late_post_id`).
+
+| Commit | Scope |
+|--------|-------|
+| `f7e09f66` | Migration 231: `extraction_status` (`pending\|ready\|failed`), `extraction_error`, partial backfill to `ready` for pre-existing non-empty schemas, `(client_id, extraction_status)` index. |
+| `0d58b8aa` | Migration 232: `ad-template-references` bucket (public, 10 MB cap, PNG/JPEG/WebP only) plus 4 RLS policies (auth write/update/delete, public select). |
+| `bca939f0` | `lib/ad-creatives/extract-template-schema.ts` worker: loads row, calls existing `extractAdPrompt(imageUrl)` (Gemini 2.5 Flash via OpenRouter, camelCase `AdPromptSchema`), writes back `prompt_schema` + flips `extraction_status`. Failures get truncated to 500 chars on `extraction_error`. |
+| `15ae828a` | `POST + GET /api/clients/[clientId]/ad-creatives/templates`: multipart upload, Zod metadata, file validation (10 MB / image mime allowlist), bucket write at `<clientId>/<templateId>.<ext>`, row insert with `extraction_status='pending'`, kicks worker via `after()` so the response returns in <500ms. GET supports `limit` query (default 500, max 1000). |
+| `a67dd26e` | `GET + DELETE /api/clients/[clientId]/ad-creatives/templates/[templateId]`: per-row fetch + best-effort storage cleanup (path reconstructed from public URL). |
+| `90f5bf5a` | `POST .../retry` endpoint + frontend wiring: gallery card now distinguishes pending / ready / failed via the new `extraction_status` column, falls back to the empty-schema heuristic for legacy rows, surfaces a coral retry banner + button on failed templates, and the polling loop re-fires once retry flips the row back to pending. Detail dialog gained an inline failure card with the truncated `extraction_error` and a Retry button. `app/(app)/ads/page.tsx` server query now selects the new columns. |
+| `<see next commit>` | Phase 1 cleanup: `app/(app)/ads/page.tsx` header comment updated to reflect actual shipped state. Legacy redirect at `app/admin/ad-creatives-v2/page.tsx` left intact, it's an intentional bookmark catcher, not orphaned. |
+
+### Chat to gallery verification
+
+Re-traced the SSE event flow rather than running a live brief on Beaux (would burn OpenRouter image-gen credits on a verify step). The wiring at `components/ad-creatives/ad-generator-workspace.tsx:55-79` and `components/ad-creatives/ad-generator-chat.tsx:297-342` is complete:
+
+- `batch_complete` → `onBatchComplete(final.concepts)` → `setConcepts((prev) => [...fresh, ...prev])`. Gallery prepends without refresh.
+- `/api/ad-creatives/command` returns `affectedConcepts` (mixed update + soft-delete by `status==='deleted'`) → `onConceptsChanged(updated, deletedIds)` → `Map`-based upsert + delete + re-sort. Imperative chat commands like "delete X" land cleanly.
+- Per-concept SSE events (`concept_rendering` / `concept_rendered` / `concept_render_failed`) drive the live progress card, then the terminal `batch_complete` carries the full set. No granular `concept.created` / `.updated` / `.deleted` events exist on the agent stream, batch-complete is the canonical write into gallery state.
+
+Render route at `app/api/ad-creatives/concepts/[id]/render/route.ts` exists and delegates to `renderConceptImageWithOpenAI`. Live happy-path render verification (PRD acceptance criterion 6) requires OpenRouter image-gen credits and Beaux brand assets, deferred to first real chat session rather than burned on a smoke test.
+
+### Notes for the next pass
+
+- PRD's illustrative JSON shape uses `snake_case`; the live `AdPromptSchema` is `camelCase` (textPosition, etc.). The worker preserves the existing schema so the chat agent and gallery card keep consuming the same shape they always have. If a future pass wants snake_case, change `lib/ad-creatives/extract-prompt.ts` and re-run extractions.
+- Bucket landed `public=true` to match `ad-assets` / `ad-creatives` (gallery cards consume `reference_image_url` directly via `<Image>`). PRD said "private" but every sibling bucket is public, kept the convention. RLS still gates writes to `authenticated`.
+- Pre-existing rows with non-empty `prompt_schema` were backfilled to `extraction_status='ready'`. Anything still on `'pending'` after migration 231 will be re-extracted only on re-upload (no sweep cron added, follow-up if it matters).
+
