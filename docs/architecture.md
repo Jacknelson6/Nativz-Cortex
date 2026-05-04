@@ -50,6 +50,9 @@
 - `lib/instagram/` — Instagram API client
 - `lib/meta/` — Meta/Facebook API client and types
 - `lib/portal/get-portal-client.ts` — Resolve current portal user's client + org
+- `lib/clients/get-service-capacity.ts` - **Single source of truth for monthly deliverable capacity per client + service** (editing/smm/blogging). Resolves from latest signed proposal tier; falls back to `lib/clients/service-defaults.ts`. Read by the capacity API, ServiceCapacityPanel, DeliverableProgress strip, and the auto-populate engine.
+- `lib/accounting/auto-populate-editing.ts` - Upserts editing payroll rows from approved deliverable consumes (`source='auto'`); idempotent via the partial unique index from migration 234.
+- `lib/deliverables/get-period-over-scope.ts` - Per-client over-scope summary for a payroll period; powers the OverScopeStrip on the period detail editing tab.
 - `lib/brand.ts` — Nativz branding constants
 - `lib/tooltips.ts` — Tooltip content strings
 - `components/ui/` — Base UI primitives (Button, Card, Input, Badge, Select, Dialog, etc.)
