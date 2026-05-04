@@ -51,23 +51,28 @@ async function handleGet(request: NextRequest) {
   type FailedRow = {
     id: string;
     caption: string | null;
-    scheduled_for: string | null;
+    scheduled_at: string | null;
     failure_reason: string | null;
     retry_count: number | null;
-    drop_id: string | null;
-    content_drops: { client_id: string; clients: { name: string } | null } | null;
+    client_id: string | null;
+    clients: { name: string } | { name: string }[] | null;
   };
 
+  // scheduled_posts has its own `client_id` FK to `clients` — no need to
+  // hop through content_drops (which has no FK to scheduled_posts; the
+  // junction is content_drop_videos, which PostgREST can't auto-traverse).
+  // The previous content_drops!inner query errored silently and stamped
+  // zero rows, leaving health_alerted_at null forever.
   const { data: failedRows, error: failedErr } = await admin
     .from('scheduled_posts')
     .select(`
       id,
       caption,
-      scheduled_for,
+      scheduled_at,
       failure_reason,
       retry_count,
-      drop_id,
-      content_drops!inner ( client_id, clients!inner ( name ) )
+      client_id,
+      clients ( name )
     `)
     .in('status', ['failed', 'partially_failed'])
     .is('health_alerted_at', null)
@@ -77,14 +82,17 @@ async function handleGet(request: NextRequest) {
     console.error('[post-health] failed-posts query error:', failedErr);
   }
 
-  const failedPosts: PostHealthFailedPost[] = (failedRows ?? []).map((r) => ({
-    postId: r.id,
-    clientName: r.content_drops?.clients?.name ?? '(unknown client)',
-    caption: r.caption,
-    scheduledFor: r.scheduled_for,
-    failureReason: r.failure_reason,
-    retryCount: r.retry_count ?? 0,
-  }));
+  const failedPosts: PostHealthFailedPost[] = (failedRows ?? []).map((r) => {
+    const clientRow = Array.isArray(r.clients) ? r.clients[0] : r.clients;
+    return {
+      postId: r.id,
+      clientName: clientRow?.name ?? '(unknown client)',
+      caption: r.caption,
+      scheduledFor: r.scheduled_at,
+      failureReason: r.failure_reason,
+      retryCount: r.retry_count ?? 0,
+    };
+  });
 
   // ── 2. Find disconnected social profiles ──────────────────────────────────
 
