@@ -1,5 +1,5 @@
 /**
- * grantCredit / expireCredit — typed wrappers around the grant/expire RPCs.
+ * grantCredit / expireCredit, typed wrappers around the grant/expire RPCs.
  *
  * `grant_credit` handles admin manual grants AND Stripe top-ups. Key-based
  * dedup via the partial UNIQUE index on credit_transactions.idempotency_key
