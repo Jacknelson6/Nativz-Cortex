@@ -288,27 +288,26 @@ function PostChip({
             broke without opening the post. Only render once at least one
             platform has a known publish result; otherwise the chip alone
             communicates the state. */}
-        {(post.status === 'published' || post.status === 'partially_failed' || post.status === 'failed') && post.platforms.some(p => p.status) && (
-          <span className="mt-0.5 inline-flex items-center gap-0.5">
-            {post.platforms.map(p => {
-              const ok = p.status === 'published';
-              const failed = p.status === 'failed';
-              const dotClass = ok
-                ? 'bg-emerald-400'
-                : failed
-                  ? 'bg-red-400'
-                  : 'bg-text-muted/40';
-              const titleText = `${p.platform}${p.username ? ' @' + p.username : ''}: ${p.status ?? 'pending'}${failed && p.failure_reason ? ' — ' + p.failure_reason : ''}`;
-              return (
-                <span
-                  key={p.profile_id}
-                  className={`inline-block w-1.5 h-1.5 rounded-full ${dotClass}`}
-                  title={titleText}
-                />
-              );
-            })}
-          </span>
-        )}
+        {(post.status === 'published' || post.status === 'partially_failed' || post.status === 'failed') && (() => {
+          const resolved = post.platforms.filter(p => p.status === 'published' || p.status === 'failed');
+          if (resolved.length === 0) return null;
+          return (
+            <span className="mt-0.5 inline-flex items-center gap-0.5">
+              {resolved.map(p => {
+                const ok = p.status === 'published';
+                const dotClass = ok ? 'bg-emerald-400' : 'bg-red-400';
+                const titleText = `${p.platform}${p.username ? ' @' + p.username : ''}: ${p.status}${!ok && p.failure_reason ? ' — ' + p.failure_reason : ''}`;
+                return (
+                  <span
+                    key={p.profile_id}
+                    className={`inline-block w-1.5 h-1.5 rounded-full ${dotClass}`}
+                    title={titleText}
+                  />
+                );
+              })}
+            </span>
+          );
+        })()}
       </div>
     </button>
   );

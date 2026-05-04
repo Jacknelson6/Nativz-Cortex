@@ -5,6 +5,7 @@ import type { SocialPlatform } from '@/lib/posting/types';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 import { notifyAdmins } from '@/lib/notifications';
 import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
+import { verifyAndReconcilePost } from '@/lib/calendar/verify-post';
 import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
 
 const STALE_ALERT_PREFIX = 'Stale draft: scheduled time passed without approval';
@@ -54,9 +55,11 @@ async function handleGet(request: NextRequest) {
           )
         ),
         scheduled_post_media (
+          sort_order,
           scheduler_media (
             storage_path,
-            thumbnail_url
+            thumbnail_url,
+            mime_type
           )
         )
       `)
@@ -224,8 +227,32 @@ async function handleGet(request: NextRequest) {
           );
         }
 
-        let videoUrl: string;
-        if (revisionReady) {
+        const isImagePost = post.post_type === 'image' || post.post_type === 'carousel';
+
+        function resolveStoragePath(rawPath: string): string {
+          if (/^https?:\/\//i.test(rawPath)) return rawPath;
+          const { data: publicUrl } = adminClient.storage
+            .from('scheduler-media')
+            .getPublicUrl(rawPath);
+          return publicUrl.publicUrl;
+        }
+
+        let videoUrl: string | undefined;
+        let mediaItems: { type: 'video' | 'image'; url: string }[] | undefined;
+
+        if (isImagePost) {
+          const links = (post.scheduled_post_media ?? []) as Array<{
+            sort_order: number | null;
+            scheduler_media: { storage_path: string | null; mime_type: string | null } | null;
+          }>;
+          const ordered = [...links]
+            .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+            .map((l) => l.scheduler_media?.storage_path)
+            .filter((p): p is string => !!p)
+            .map(resolveStoragePath);
+          if (ordered.length === 0) throw new Error('No media attached to image post');
+          mediaItems = ordered.map((url) => ({ type: 'image' as const, url }));
+        } else if (revisionReady) {
           videoUrl = revisionRow!.revised_mp4_url as string;
         } else if (revisionRow?.mux_playback_id) {
           // Prefer Mux for originals — Supabase Storage paths are unreliable
@@ -241,14 +268,7 @@ async function handleGet(request: NextRequest) {
           // the relative bucket key. If we then call `getPublicUrl()` on a
           // full URL we end up with `…/scheduler-media/https%3A//…` which
           // 400s. Use the URL as-is when it already looks fully-qualified.
-          if (/^https?:\/\//i.test(media.storage_path)) {
-            videoUrl = media.storage_path;
-          } else {
-            const { data: publicUrl } = adminClient.storage
-              .from('scheduler-media')
-              .getPublicUrl(media.storage_path);
-            videoUrl = publicUrl.publicUrl;
-          }
+          videoUrl = resolveStoragePath(media.storage_path);
         }
 
         // Build platform profile map. Zernio expects its own MongoDB
@@ -318,6 +338,7 @@ async function handleGet(request: NextRequest) {
         };
         const result = await postingService.publishPost({
           videoUrl,
+          mediaItems,
           caption: post.caption ?? '',
           hashtags: post.hashtags ?? [],
           coverImageUrl: post.cover_image_url ?? undefined,
@@ -453,6 +474,7 @@ async function handleGet(request: NextRequest) {
     // `content_drop_videos`) so non-drop drafts stay untouched.
     let recoveredCount = 0;
     let recoveryFailedCount = 0;
+    let reconciledCount = 0;
     try {
       // Find every drop post that's in 'draft', then check approval state.
       const { data: draftPosts } = await adminClient
@@ -529,6 +551,44 @@ async function handleGet(request: NextRequest) {
       }
     } catch (recoverErr) {
       console.error('[publish-cron] approved-draft recovery sweep failed:', recoverErr);
+    }
+
+    // RECONCILE TIMEOUT FALSE-FAILS
+    //
+    // Zernio's publishPost wait-window can lapse before the platform
+    // (FB/TikTok/etc.) confirms acceptance. The leg gets marked failed with
+    // "Publishing timed out during platform API call. The post may have been
+    // published externally." but the platform actually did accept the post.
+    // We re-poll Zernio's authoritative GET /posts/{id} and flip those legs
+    // back to 'published'. Only acts on rows whose failure_reason matches a
+    // timeout pattern; real failures are left alone. Only flips failed →
+    // published, never the reverse.
+    try {
+      const cutoffIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data: reconcileCandidates } = await adminClient
+        .from('scheduled_posts')
+        .select('id')
+        .in('status', ['partially_failed', 'failed'])
+        .gte('updated_at', cutoffIso)
+        .not('late_post_id', 'is', null)
+        .limit(10);
+
+      for (const c of reconcileCandidates ?? []) {
+        const candidateId = (c as { id: string }).id;
+        try {
+          const result = await verifyAndReconcilePost(adminClient, candidateId);
+          if (result.reconciledPlatforms > 0) {
+            reconciledCount++;
+            console.log(
+              `[publish-cron] reconciled ${result.reconciledPlatforms} timeout(s) on ${candidateId}; new status=${result.newPostStatus}`,
+            );
+          }
+        } catch (err) {
+          console.error(`[publish-cron] reconcile failed for ${candidateId}:`, err);
+        }
+      }
+    } catch (reconcileErr) {
+      console.error('[publish-cron] reconcile sweep failed:', reconcileErr);
     }
 
     // STALE-DRAFT SCAN
@@ -653,6 +713,7 @@ async function handleGet(request: NextRequest) {
       failed: failedCount,
       recovered_approved: recoveredCount,
       recovery_failed: recoveryFailedCount,
+      reconciled: reconciledCount,
       stale_alerted: staleAlertedCount,
     });
   } catch (error) {
