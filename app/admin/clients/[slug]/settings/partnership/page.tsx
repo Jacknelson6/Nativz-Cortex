@@ -9,6 +9,7 @@ import {
 import { ClientAccessServicesPanel } from '@/components/clients/client-access-services-panel';
 import { RevisionWebhookSettings } from '@/components/clients/revision-webhook-settings';
 import { ContractWorkspace } from '@/components/clients/contract/contract-workspace';
+import { ServiceCapacityPanel } from '@/components/clients/service-capacity-panel';
 import {
   SettingsPageHeader,
   SettingsSectionHeader,
@@ -80,6 +81,7 @@ export default async function ClientSettingsPartnershipPage({
 
   const sections = [
     { id: 'access', label: 'Access & services' },
+    { id: 'capacity', label: 'Capacity' },
     ...(contractEnabled ? [{ id: 'contract', label: 'Contract' }] : []),
     { id: 'webhooks', label: 'Webhooks' },
   ];
@@ -103,7 +105,16 @@ export default async function ClientSettingsPartnershipPage({
         <ClientAccessServicesPanel slug={slug} />
       </section>
 
-      {/* 2. Contract — scoped deliverables + uploaded PDFs */}
+      {/* 2. Capacity — monthly deliverable counts per service */}
+      <section id="capacity" className="space-y-4 scroll-mt-24">
+        <SettingsSectionHeader
+          title="Capacity"
+          description="Monthly deliverables we owe this client per service, derived from their signed proposal tier."
+        />
+        <ServiceCapacityPanel clientId={client.id} />
+      </section>
+
+      {/* 3. Contract — scoped deliverables + uploaded PDFs */}
       {contractEnabled && (
         <section id="contract" className="space-y-4 scroll-mt-24">
           <SettingsSectionHeader
