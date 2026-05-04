@@ -30,6 +30,10 @@ interface PostEditorProps {
   defaultPostingTimezone?: string | null;
   onSave: (data: PostEditorData) => Promise<void>;
   onDelete: (postId: string) => Promise<void>;
+  /** Admin escape hatch: bypass the drop-post approval gate for the open
+   *  post and flip it from draft to scheduled. Optional, hidden if not
+   *  passed. */
+  onForcePublish?: (postId: string) => Promise<void>;
   /** 'admin' (default) shows delete + share-for-review. 'viewer' hides
    *  destructive + admin-only affordances; viewers can still edit
    *  caption, tags, collaborators and reschedule. */
@@ -60,6 +64,7 @@ export function PostEditor({
   defaultPostingTime,
   onSave,
   onDelete,
+  onForcePublish,
   mode = 'admin',
 }: PostEditorProps) {
   const isAdmin = mode === 'admin';
@@ -76,6 +81,7 @@ export function PostEditor({
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [forcing, setForcing] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
   const [selectingCover, setSelectingCover] = useState(false);
@@ -88,6 +94,14 @@ export function PostEditor({
     title: 'Delete post',
     description: 'Delete this post? This cannot be undone.',
     confirmLabel: 'Delete',
+    variant: 'danger',
+  });
+
+  const { confirm: confirmForce, dialog: forceDialog } = useConfirm({
+    title: 'Force publish (skip approval)',
+    description:
+      'This bypasses the share-link approval gate and flips the post to scheduled. The post will publish at its scheduled time. Use sparingly.',
+    confirmLabel: 'Force publish',
     variant: 'danger',
   });
 
@@ -194,6 +208,21 @@ export function PostEditor({
       toast.error('Failed to delete post');
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function handleForcePublish() {
+    if (!post || !onForcePublish) return;
+    const ok = await confirmForce();
+    if (!ok) return;
+    setForcing(true);
+    try {
+      await onForcePublish(post.id);
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to force publish');
+    } finally {
+      setForcing(false);
     }
   }
 
@@ -666,6 +695,18 @@ export function PostEditor({
                 Share for review
               </Button>
             )}
+            {isAdmin && isEditing && postStatus === 'draft' && onForcePublish && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleForcePublish}
+                disabled={forcing}
+                className="text-amber-400 hover:text-amber-300"
+              >
+                <AlertCircle size={12} />
+                {forcing ? 'Approving...' : 'Force publish'}
+              </Button>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {publishMode === 'draft' && (
@@ -683,6 +724,7 @@ export function PostEditor({
         </div>
       </Dialog>
       {deleteDialog}
+      {forceDialog}
     </>
   );
 }

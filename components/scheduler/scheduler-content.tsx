@@ -151,7 +151,7 @@ function SchedulerInner({
 
   async function handleSavePost(data: PostEditorData) {
     if (!selectedClientId) return;
-    const method = data.id ? 'PATCH' : 'POST';
+    const method = data.id ? 'PUT' : 'POST';
     const url = data.id
       ? `/api/scheduler/posts/${data.id}`
       : '/api/scheduler/posts';
@@ -213,6 +213,22 @@ function SchedulerInner({
     if (!res.ok) throw new Error('Failed to delete');
     toast.success('Post deleted');
     setPosts((prev) => prev.filter((p) => p.id !== postId));
+  }
+
+  async function handleForcePublish(postId: string) {
+    const res = await fetch(`/api/scheduler/posts/${postId}/force-approve`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error ?? 'Failed to force publish');
+    }
+    const data = await res.json();
+    toast.success(data.message ?? 'Approval bypassed. Post will publish on its scheduled time.');
+    if (selectedClientId) {
+      const { start, end } = getMonthGridRange(currentDate);
+      fetchPosts(selectedClientId, start, end);
+    }
   }
 
   const draftCount = posts.filter((p) => p.status === 'draft').length;
@@ -391,6 +407,7 @@ function SchedulerInner({
         defaultPostingTimezone={selectedClient?.default_posting_timezone}
         onSave={handleSavePost}
         onDelete={handleDeletePost}
+        onForcePublish={isAdmin ? handleForcePublish : undefined}
         mode={mode}
       />
 
