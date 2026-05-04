@@ -9,6 +9,7 @@ import { DeliverableProgress } from '@/components/deliverables/deliverable-progr
 import { getDeliverableBalances } from '@/lib/deliverables/get-balances';
 import { inferScopeTier } from '@/lib/deliverables/scope';
 import { getClientServiceCapacity } from '@/lib/clients/get-service-capacity';
+import { currentPeriod } from '@/lib/accounting/periods';
 import type { CreditTransactionRow } from '@/lib/credits/types';
 
 export const dynamic = 'force-dynamic';
@@ -77,6 +78,15 @@ export default async function ClientDeliverablesPage({
   const txRows = txResult.data ?? [];
   const tier = inferScopeTier(balances);
 
+  const cur = currentPeriod();
+  const { data: payrollPeriodRow } = await admin
+    .from('payroll_periods')
+    .select('id')
+    .eq('start_date', cur.startDate)
+    .eq('half', cur.half)
+    .maybeSingle();
+  const payrollPeriodId = (payrollPeriodRow?.id as string | undefined) ?? null;
+
   const lifecycleState =
     (client as { lifecycle_state?: string | null }).lifecycle_state ?? 'lead';
 
@@ -102,6 +112,9 @@ export default async function ClientDeliverablesPage({
       />
 
       <DeliverableProgress
+        clientId={client.id}
+        service="editing"
+        payrollPeriodId={payrollPeriodId}
         used={capacity.editing.delivered}
         capacity={capacity.editing.monthly}
         source={capacity.editing.source}

@@ -18,6 +18,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { isAdmin } from '@/lib/auth/permissions';
 import { getClientServiceCapacity } from '@/lib/clients/get-service-capacity';
+import { currentPeriod } from '@/lib/accounting/periods';
 
 const ParamsSchema = z.object({
   clientId: z.string().uuid(),
@@ -66,5 +67,19 @@ export async function GET(
   }
 
   const capacity = await getClientServiceCapacity(admin, clientId);
-  return NextResponse.json(capacity);
+
+  // Also resolve the payroll period containing today, so the over-scope pill
+  // can key its dialog state on a real period_id without a second round-trip.
+  const cur = currentPeriod();
+  const { data: payrollPeriod } = await admin
+    .from('payroll_periods')
+    .select('id')
+    .eq('start_date', cur.startDate)
+    .eq('half', cur.half)
+    .maybeSingle();
+
+  return NextResponse.json({
+    ...capacity,
+    currentPayrollPeriodId: (payrollPeriod?.id as string | undefined) ?? null,
+  });
 }

@@ -1,4 +1,6 @@
 import { Film, AlertTriangle } from 'lucide-react';
+import type { ServiceKind } from '@/lib/clients/service-defaults';
+import { OverageReviewPill } from './overage-review-pill';
 
 interface Props {
   used: number;
@@ -7,6 +9,12 @@ interface Props {
   tierName?: string | null;
   periodStart: string;
   periodEnd: string;
+  /** Required when payrollPeriodId is provided (to key the over-scope pill). */
+  clientId?: string;
+  /** Required when payrollPeriodId is provided (to key the over-scope pill). */
+  service?: ServiceKind;
+  /** Resolved payroll period for the over-scope review (null hides the pill). */
+  payrollPeriodId?: string | null;
 }
 
 /**
@@ -25,10 +33,14 @@ export function DeliverableProgress({
   tierName,
   periodStart,
   periodEnd,
+  clientId,
+  service,
+  payrollPeriodId,
 }: Props) {
   if (source === 'not-subscribed') return null;
 
   const overOrAt = capacity > 0 && used >= capacity;
+  const overCount = capacity > 0 && used > capacity ? used - capacity : 0;
   const ratio = capacity > 0 ? Math.min(1, used / capacity) : 0;
   const sourceLabel =
     source === 'proposal'
@@ -53,11 +65,21 @@ export function DeliverableProgress({
             </p>
           </div>
         </div>
-        <div className="flex items-baseline gap-1">
-          <span className="font-mono text-lg text-text-primary tabular-nums">
-            {used}
-          </span>
-          <span className="text-xs text-text-muted">/ {capacity}</span>
+        <div className="flex items-center gap-2">
+          {clientId && service && (
+            <OverageReviewPill
+              clientId={clientId}
+              service={service}
+              periodId={payrollPeriodId ?? null}
+              overCount={overCount}
+            />
+          )}
+          <div className="flex items-baseline gap-1">
+            <span className="font-mono text-lg text-text-primary tabular-nums">
+              {used}
+            </span>
+            <span className="text-xs text-text-muted">/ {capacity}</span>
+          </div>
         </div>
       </div>
 

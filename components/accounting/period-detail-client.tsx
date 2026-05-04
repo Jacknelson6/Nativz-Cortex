@@ -20,6 +20,8 @@ import { SubmitTokensDialog } from './submit-tokens-dialog';
 import { ComptrollerShareDialog } from './comptroller-share-dialog';
 import { EntriesGrid, type GridEntry } from './entries-grid';
 import { PayoutsPane } from './payouts-pane';
+import { OverScopeStrip } from './over-scope-strip';
+import type { PeriodOverScopeClient } from '@/lib/deliverables/get-period-over-scope';
 
 // DB still accepts 'override' and 'misc' (schema unchanged). They're
 // just not exposed as tabs in the UI per product call.
@@ -50,6 +52,8 @@ interface PeriodDetailClientProps {
   teamMembers: TeamMember[];
   clients: Client[];
   isSuperAdmin?: boolean;
+  /** Server-prefetched over-scope summary for the editing tab. */
+  editingOverScope?: PeriodOverScopeClient[];
 }
 
 const ENTRY_TYPE_LABELS: Record<EntryType, string> = {
@@ -75,6 +79,7 @@ export function PeriodDetailClient({
   teamMembers,
   clients,
   isSuperAdmin = false,
+  editingOverScope = [],
 }: PeriodDetailClientProps) {
   const router = useRouter();
   const [entries, setEntries] = useState<GridEntry[]>(initialEntries);
@@ -497,6 +502,7 @@ function EditingPane({
 
   return (
     <div className="space-y-4">
+      <OverScopeStrip periodId={periodId} />
       {editorGroups.length > 0 && (
         <SubNav
           items={subNavItems}

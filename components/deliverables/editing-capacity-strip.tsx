@@ -38,6 +38,7 @@ interface CapacityResponse {
   editing: CapacitySlice;
   smm: CapacitySlice;
   blogging: CapacitySlice;
+  currentPayrollPeriodId: string | null;
 }
 
 export function EditingCapacityStrip({ clientId, service }: Props) {
@@ -102,6 +103,9 @@ export function EditingCapacityStrip({ clientId, service }: Props) {
 
   return (
     <DeliverableProgress
+      clientId={clientId}
+      service={service}
+      payrollPeriodId={data.currentPayrollPeriodId}
       used={slice.delivered}
       capacity={slice.monthly}
       source={slice.source}

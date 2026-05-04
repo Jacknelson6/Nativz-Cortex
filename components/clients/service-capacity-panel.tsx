@@ -3,8 +3,13 @@
 import { useEffect, useState } from 'react';
 import { Loader2, Gauge, FileText, Film, Megaphone } from 'lucide-react';
 import { IconCard } from '@/components/ui/icon-card';
+import { OverageReviewPill } from '@/components/deliverables/overage-review-pill';
 import type { ClientServiceCapacity, ServiceCapacity } from '@/lib/clients/get-service-capacity';
 import type { ServiceKind } from '@/lib/clients/service-defaults';
+
+interface CapacityResponse extends ClientServiceCapacity {
+  currentPayrollPeriodId: string | null;
+}
 
 const SERVICE_META: Record<ServiceKind, { label: string; icon: typeof Film }> = {
   editing: { label: 'Editing', icon: Film },
@@ -39,7 +44,7 @@ interface Props {
 }
 
 export function ServiceCapacityPanel({ clientId }: Props) {
-  const [data, setData] = useState<ClientServiceCapacity | null>(null);
+  const [data, setData] = useState<CapacityResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,7 +57,7 @@ export function ServiceCapacityPanel({ clientId }: Props) {
           const body = await res.json().catch(() => ({}));
           throw new Error(body?.error ?? `Request failed (${res.status})`);
         }
-        const json = (await res.json()) as ClientServiceCapacity;
+        const json = (await res.json()) as CapacityResponse;
         if (!cancelled) setData(json);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load');
@@ -87,6 +92,8 @@ export function ServiceCapacityPanel({ clientId }: Props) {
             const cap = data[kind];
             const meta = SERVICE_META[kind];
             const Icon = meta.icon;
+            const overCount =
+              cap.monthly > 0 && cap.delivered > cap.monthly ? cap.delivered - cap.monthly : 0;
             return (
               <div
                 key={kind}
@@ -104,15 +111,22 @@ export function ServiceCapacityPanel({ clientId }: Props) {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <OverageReviewPill
+                    clientId={clientId}
+                    service={kind}
+                    periodId={data.currentPayrollPeriodId}
+                    overCount={overCount}
+                    variant="compact"
+                  />
                   <span
                     className={`rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${sourceTone(cap.source)}`}
                   >
                     {sourceLabel(cap.source, cap.tierName)}
                   </span>
                   <span className="font-mono text-base text-text-primary tabular-nums">
-                    {cap.monthly}
+                    {cap.delivered} / {cap.monthly}
                   </span>
-                  <span className="text-[11px] text-text-muted">/ mo</span>
+                  <span className="text-[11px] text-text-muted">this period</span>
                 </div>
               </div>
             );
