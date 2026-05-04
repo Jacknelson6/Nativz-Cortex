@@ -16,7 +16,8 @@ import { refreshAiSettings } from './actions';
 import { AiRoutingSection } from '@/components/settings/ai-routing-section';
 import { LlmCredentialsSection } from '@/components/settings/llm-credentials-section';
 import { ScraperVolumesSection } from '@/components/settings/scraper-volumes-section';
-import { NotificationsSection } from '@/components/settings/notifications-section';
+import { NotificationsTabContent } from '@/components/admin/settings/notifications-tab-content';
+import type { EmailHubClientOption } from '@/components/tools/email-hub/email-hub-client';
 import { AISettingsSkillsPanel } from './skills-panel';
 import { NOTIFICATION_REGISTRY } from '@/lib/notifications/registry';
 
@@ -53,9 +54,10 @@ export default async function AISettingsPage({
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  const [{ data: me }, { data: clients }, params] = await Promise.all([
+  const [{ data: me }, { data: clients }, { data: emailHubClientRows }, params] = await Promise.all([
     admin.from('users').select('role, is_super_admin').eq('id', user.id).single(),
     admin.from('clients').select('id, name, slug').eq('is_active', true).order('name'),
+    admin.from('clients').select('id, name, agency').order('name', { ascending: true }),
     searchParams,
   ]);
   if (me?.role !== 'admin' && !me?.is_super_admin) {
@@ -68,6 +70,11 @@ export default async function AISettingsPage({
   }
 
   const activeTab = resolveTab(rawTab);
+  const emailHubClients: EmailHubClientOption[] = (emailHubClientRows ?? []).map((c) => ({
+    id: c.id,
+    name: c.name,
+    agency: c.agency ?? null,
+  }));
 
   return (
     <div className="cortex-page-gutter max-w-6xl mx-auto space-y-8">
@@ -79,7 +86,7 @@ export default async function AISettingsPage({
 
       <SectionTabs tabs={AI_SETTINGS_TABS} active={activeTab} memoryKey="cortex:ai-settings:last-tab" />
 
-      <div>{renderTab(activeTab, clients ?? [])}</div>
+      <div>{renderTab(activeTab, clients ?? [], emailHubClients)}</div>
     </div>
   );
 }
@@ -94,6 +101,7 @@ function resolveTab(raw: string | undefined): AiSettingsTabSlug {
 function renderTab(
   slug: AiSettingsTabSlug,
   clients: Array<{ id: string; name: string; slug: string }>,
+  emailHubClients: EmailHubClientOption[],
 ): React.ReactNode {
   switch (slug) {
     case 'ai':
@@ -106,24 +114,20 @@ function renderTab(
       );
     case 'notifications':
       return (
-        <SectionPanel
-          title="Notifications"
-          description="Every automated email and chat ping Cortex sends. Toggle off, tune trigger windows, and preview each one for both brand modes."
-        >
-          <NotificationsSection
-            notifications={NOTIFICATION_REGISTRY.map((n) => ({
-              key: n.key,
-              label: n.label,
-              description: n.description,
-              kind: n.kind,
-              trigger: n.trigger,
-              cronSchedule: n.cronSchedule,
-              recipientLabel: n.recipientLabel,
-              params: n.params ?? null,
-              previewable: Boolean(n.preview),
-            }))}
-          />
-        </SectionPanel>
+        <NotificationsTabContent
+          clients={emailHubClients}
+          notifications={NOTIFICATION_REGISTRY.map((n) => ({
+            key: n.key,
+            label: n.label,
+            description: n.description,
+            kind: n.kind,
+            trigger: n.trigger,
+            cronSchedule: n.cronSchedule,
+            recipientLabel: n.recipientLabel,
+            params: n.params ?? null,
+            previewable: Boolean(n.preview),
+          }))}
+        />
       );
     case 'trend-finder':
       return (

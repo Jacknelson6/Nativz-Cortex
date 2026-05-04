@@ -21,7 +21,7 @@ test.describe('Tools section legacy redirects', () => {
   const legacyToNew: Array<[string, string]> = [
     ['/admin/accounting', '/admin/accounting'],
     ['/admin/users', '/admin/users'],
-    ['/admin/settings/production-updates', '/admin/notifications'],
+    ['/admin/settings/production-updates', '/admin/settings?tab=notifications'],
     ['/admin/team', '/admin/users'],
   ];
   for (const [legacy] of legacyToNew) {

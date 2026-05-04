@@ -28,7 +28,6 @@ const ADMIN_ONLY_PREFIXES = [
   '/admin/clients',
   '/admin/team',
   '/admin/users',
-  '/admin/notifications',
   '/admin/tools',
   '/admin/nerd',
   '/admin/presentations',

@@ -19,7 +19,6 @@ import {
   Users,
   BookUser,
   ShoppingBag,
-  Bell,
   Calendar,
   CalendarDays,
   ClipboardCheck,
@@ -152,9 +151,10 @@ const NAV_SECTIONS: NavSection[] = [
           { href: '/admin/clients', label: 'Clients', icon: Contact },
           // Cross-brand content command surface. Tabs cover share-link
           // oversight (Projects), Monday EM-approved queue (Quick schedule),
-          // integration health (Connections), and recent notifications. The
-          // brand-scoped Review subpage (Content > Review) still follows the
-          // active pill for single-brand views; this surface is agency-wide.
+          // integration health (Connections). The brand-scoped Review
+          // subpage (Content > Review) still follows the active pill for
+          // single-brand views; this surface is agency-wide. (Notification
+          // config absorbed into Settings on 2026-05-03.)
           { href: '/admin/content-tools', label: 'Content Tools', icon: ClipboardCheck },
           // Ad Generator lives in Admin (not Brand tools) because every run
           // burns Gemini 2.5 Flash Image credits — keep it behind the
@@ -168,7 +168,6 @@ const NAV_SECTIONS: NavSection[] = [
           { href: '/admin/availability', label: 'Availability', icon: Calendar },
           { href: '/admin/accounting', label: 'Accounting', icon: Receipt, superAdminOnly: true },
           { href: '/admin/revenue', label: 'Revenue', icon: CreditCard },
-          { href: '/admin/notifications', label: 'Notifications', icon: Bell },
           { href: '/admin/usage', label: 'Usage', icon: Gauge },
           { href: '/admin/settings', label: 'Settings', icon: SettingsIcon },
         ],
@@ -222,7 +221,6 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/users',
   '/admin/presentations',
   '/admin/analyze-social',
-  '/admin/notifications',
   '/admin/usage',
   // Cross-brand content tooling is operator-only; viewers see only
   // their own brand's links via the unified-shell `/review` route.

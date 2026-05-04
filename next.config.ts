@@ -30,6 +30,13 @@ const nextConfig: NextConfig = {
       // 2026-05-03). Aliases below keep old bookmarks working.
       { source: '/admin/scheduling', destination: '/admin/availability', permanent: false },
       { source: '/admin/scheduling/:path*', destination: '/admin/availability/:path*', permanent: false },
+      // Notifications hub absorbed into Settings on 2026-05-03. Banners /
+      // Contacts / Emails are sub-tabs of /admin/settings?tab=notifications;
+      // legacy ?tab= values map onto the new ?sub= key.
+      { source: '/admin/notifications', destination: '/admin/settings?tab=notifications', permanent: false },
+      { source: '/admin/notifications/banners', destination: '/admin/settings?tab=notifications&sub=banners', permanent: false },
+      { source: '/admin/notifications/contacts', destination: '/admin/settings?tab=notifications&sub=contacts', permanent: false },
+      { source: '/admin/notifications/emails', destination: '/admin/settings?tab=notifications&sub=emails', permanent: false },
 
       // Phase 2 — unified auth surface at the root. /login,
       // /forgot-password, /reset-password are the canonical entry points;

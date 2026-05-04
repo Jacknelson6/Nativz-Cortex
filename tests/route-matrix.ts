@@ -32,7 +32,6 @@ export const ADMIN_PROTECTED_ROUTES: string[] = [
   '/admin/tools',
   '/admin/users',
   '/admin/accounting',
-  '/admin/notifications',
   '/admin/competitor-tracking/ecom',
   '/admin/competitor-tracking/meta-ads',
 ];

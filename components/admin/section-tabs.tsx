@@ -32,18 +32,23 @@ interface SectionTabsProps<T extends readonly SectionTabDef[]> {
   active: T[number]['slug'];
   /** Optional localStorage key for "last tab" memory. */
   memoryKey?: string;
+  /** Search param to drive — defaults to `tab`. Use a different key
+   *  when nesting a SectionTabs inside another SectionTabs. */
+  paramKey?: string;
 }
 
 export function SectionTabs<T extends readonly SectionTabDef[]>({
   tabs,
   active,
   memoryKey,
+  paramKey,
 }: SectionTabsProps<T>) {
   return (
     <SubNavLinks
       items={tabs}
       active={active}
       memoryKey={memoryKey}
+      paramKey={paramKey}
       optimistic={false}
       ariaLabel="Section tabs"
     />
