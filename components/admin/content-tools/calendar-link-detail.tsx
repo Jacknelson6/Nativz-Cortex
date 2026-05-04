@@ -104,6 +104,7 @@ export function CalendarLinkDetail({
   const open = !!link;
   const [revoking, setRevoking] = useState(false);
   const [markingFollowup, setMarkingFollowup] = useState(false);
+  const [markingSent, setMarkingSent] = useState(false);
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState<'details' | 'history'>('details');
   // Recipients live on the detail panel itself (not just the send preview)
@@ -188,6 +189,31 @@ export function CalendarLinkDetail({
       setTimeout(() => setCopied(false), 1500);
     } catch {
       toast.error('Could not copy link');
+    }
+  }
+
+  async function markSent() {
+    if (markingSent || !link) return;
+    setMarkingSent(true);
+    try {
+      const res = await fetch(
+        `/api/calendar/share/${link.token}/mark-sent`,
+        { method: 'POST' },
+      );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof json?.error === 'string' ? json.error : 'Failed to record');
+      }
+      toast.success('Marked sent');
+      onSent?.({
+        first_sent_at: json.first_sent_at,
+        last_sent_at: json.last_sent_at,
+        send_count: json.send_count,
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to record');
+    } finally {
+      setMarkingSent(false);
     }
   }
 
@@ -581,6 +607,23 @@ export function CalendarLinkDetail({
             destructive button never lands closest to the close X. */}
         {tab === 'details' && (canSend || !isExpired) && (
           <div className="flex items-center justify-end gap-2 border-t border-nativz-border px-6 py-4">
+            {/* Out-of-band send recorder. When the link went out via Gmail
+                or Slack instead of the in-app Send button, stamping it
+                here keeps DATE SENT honest in the table without firing
+                a duplicate email at the client. */}
+            {!isExpired && !isAbandoned && !hasBeenSent && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={markSent}
+                disabled={markingSent}
+                className="text-text-muted hover:text-text-primary"
+                title="Record an out-of-band send (Gmail, Slack, manual paste) without firing another email"
+              >
+                {markingSent ? 'Recording...' : 'Mark sent'}
+              </Button>
+            )}
             {/* Out-of-band followup recorder. Useful when the chase happened
                 on Slack, text, or in person — stamps the table indicator
                 without firing another email at the client. Only surfaces

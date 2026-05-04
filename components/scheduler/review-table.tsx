@@ -939,6 +939,30 @@ function FollowupCell({
     return <span className="text-sm text-text-muted">—</span>;
   }
 
+  // Distinguish "calendar never went out" from "calendar went out but
+  // we haven't chased the client." Both used to render as a green "New"
+  // pill, which masked the case where the share link was created but
+  // never actually sent (Jack pasted a link into Gmail, the in-app Send
+  // button was never hit, and the column read as healthy).
+  if (!link.first_sent_at) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-nativz-border bg-surface px-2 py-0.5 text-xs font-medium text-text-muted">
+            <span className="size-1.5 rounded-full bg-text-muted" aria-hidden />
+            Not sent
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="w-56">
+          <div className="font-medium text-text-primary">Not sent yet</div>
+          <div className="mt-0.5 text-text-muted">
+            Open the project to send the share link, or hit Mark sent if it went out of-band.
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
   // Migration 200 backfilled `last_followup_at = created_at` for every
   // pre-existing share link, so the timestamp alone can't distinguish
   // "actually nudged N days ago" from "never followed up but was created
