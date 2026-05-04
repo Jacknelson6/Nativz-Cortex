@@ -263,12 +263,17 @@ function WelcomeScreen({
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <h1 className="text-3xl font-semibold text-text-primary">
+        <h1 className="text-[28px] leading-tight font-semibold text-text-primary sm:text-3xl">
           Welcome, {clientName}.
         </h1>
         <p className="text-base text-text-secondary">{intro}</p>
       </div>
-      <Button onClick={onStart} disabled={submitting} size="lg">
+      <Button
+        onClick={onStart}
+        disabled={submitting}
+        size="lg"
+        className="w-full sm:w-auto"
+      >
         {submitting ? (
           <>
             <Loader2 size={16} className="animate-spin" />
@@ -323,7 +328,9 @@ function DoneScreen({
           <Check size={20} />
         </div>
         <div className="space-y-2">
-          <h1 className="text-3xl font-semibold text-text-primary">All set.</h1>
+          <h1 className="text-[28px] leading-tight font-semibold text-text-primary sm:text-3xl">
+            All set.
+          </h1>
           <p className="text-base text-text-secondary">{message}</p>
         </div>
         {completedAt ? (

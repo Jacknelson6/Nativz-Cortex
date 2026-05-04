@@ -53,7 +53,9 @@ export function BrandBasicsScreen({ value, clientName, submitting, onSubmit }: P
       className="space-y-6"
     >
       <div className="space-y-2">
-        <h1 className="text-3xl font-semibold text-text-primary">Brand basics</h1>
+        <h1 className="text-[28px] leading-tight font-semibold text-text-primary sm:text-3xl">
+          Brand basics
+        </h1>
         <p className="text-base text-text-secondary">
           The fast facts about {clientName}. Two minutes, four boxes.
         </p>
@@ -104,8 +106,13 @@ export function BrandBasicsScreen({ value, clientName, submitting, onSubmit }: P
         />
       </div>
 
-      <div className="flex items-center justify-end">
-        <Button type="submit" size="lg" disabled={!canSubmit}>
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+        <Button
+          type="submit"
+          size="lg"
+          disabled={!canSubmit}
+          className="w-full sm:w-auto"
+        >
           {submitting ? (
             <>
               <Loader2 size={16} className="animate-spin" />

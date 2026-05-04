@@ -88,14 +88,16 @@ function renderValue(v: unknown): React.ReactNode {
     if (entries.length === 0) {
       return <span className="text-text-muted/60 italic">empty</span>;
     }
+    // On narrow widths we stack label-above-value so long URLs / handles
+    // don't get squeezed into a 1fr column inside an already-nested grid.
     return (
-      <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm">
+      <dl className="space-y-2 text-sm sm:grid sm:grid-cols-[max-content_1fr] sm:gap-x-3 sm:gap-y-1 sm:space-y-0">
         {entries.map(([k, vv]) => (
-          <div key={k} className="contents">
-            <dt className="text-[11px] uppercase tracking-wide text-text-secondary pt-0.5">
+          <div key={k} className="space-y-0.5 sm:contents">
+            <dt className="text-[11px] uppercase tracking-wide text-text-secondary sm:pt-0.5">
               {humanLabel(k)}
             </dt>
-            <dd className="text-foreground break-words">
+            <dd className="min-w-0 text-foreground break-words">
               {vv && typeof vv === 'object' ? renderValue(vv) : renderScalar(vv)}
             </dd>
           </div>

@@ -44,7 +44,9 @@ export function TurnaroundAckScreen({ value, submitting, onSubmit }: Props) {
       className="space-y-6"
     >
       <div className="space-y-2">
-        <h1 className="text-3xl font-semibold text-text-primary">How turnaround works</h1>
+        <h1 className="text-[28px] leading-tight font-semibold text-text-primary sm:text-3xl">
+          How turnaround works
+        </h1>
         <p className="text-base text-text-secondary">
           One quick read so we&apos;re on the same page about timelines.
         </p>
@@ -93,8 +95,13 @@ export function TurnaroundAckScreen({ value, submitting, onSubmit }: Props) {
         </span>
       </label>
 
-      <div className="flex items-center justify-end">
-        <Button type="submit" size="lg" disabled={!canSubmit}>
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+        <Button
+          type="submit"
+          size="lg"
+          disabled={!canSubmit}
+          className="w-full sm:w-auto"
+        >
           {submitting ? (
             <>
               <Loader2 size={16} className="animate-spin" />

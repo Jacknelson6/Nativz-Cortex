@@ -83,7 +83,9 @@ export function SocialConnectScreen({ value, platforms, submitting, onSubmit }: 
       className="space-y-6"
     >
       <div className="space-y-2">
-        <h1 className="text-3xl font-semibold text-text-primary">Your accounts</h1>
+        <h1 className="text-[28px] leading-tight font-semibold text-text-primary sm:text-3xl">
+          Your accounts
+        </h1>
         <p className="text-base text-text-secondary">
           Tell us where you live online. The handle is enough; the URL helps us audit faster.
         </p>
@@ -122,11 +124,16 @@ export function SocialConnectScreen({ value, platforms, submitting, onSubmit }: 
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-text-muted">
           {hasAny ? "We'll send a separate link to actually connect each account when you're ready." : "You can fill this in later."}
         </p>
-        <Button type="submit" size="lg" disabled={submitting}>
+        <Button
+          type="submit"
+          size="lg"
+          disabled={submitting}
+          className="w-full sm:w-auto"
+        >
           {submitting ? (
             <>
               <Loader2 size={16} className="animate-spin" />
