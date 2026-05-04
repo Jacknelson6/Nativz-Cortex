@@ -296,6 +296,7 @@ export function PeriodDetailClient({
           clients={clients}
           readonly={readonly}
           periodId={period.id}
+          overScope={editingOverScope}
           onLocalCreate={(e) => setEntries((prev) => [...prev, e])}
           onLocalUpdate={(e) =>
             setEntries((prev) => prev.map((x) => (x.id === e.id ? e : x)))
@@ -419,6 +420,7 @@ function EditingPane({
   clients,
   readonly,
   periodId,
+  overScope,
   onLocalCreate,
   onLocalUpdate,
   onLocalDelete,
@@ -428,6 +430,7 @@ function EditingPane({
   clients: Client[];
   readonly: boolean;
   periodId: string;
+  overScope: PeriodOverScopeClient[];
   onLocalCreate: (e: GridEntry) => void;
   onLocalUpdate: (e: GridEntry) => void;
   onLocalDelete: (id: string) => void;
@@ -502,7 +505,7 @@ function EditingPane({
 
   return (
     <div className="space-y-4">
-      <OverScopeStrip periodId={periodId} />
+      <OverScopeStrip periodId={periodId} rows={overScope} />
       {editorGroups.length > 0 && (
         <SubNav
           items={subNavItems}

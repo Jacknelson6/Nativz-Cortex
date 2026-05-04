@@ -1,17 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { OverageReviewPill } from '@/components/deliverables/overage-review-pill';
-
-interface OverScopeRow {
-  clientId: string;
-  clientName: string;
-  overCount: number;
-}
+import type { PeriodOverScopeClient } from '@/lib/deliverables/get-period-over-scope';
 
 interface Props {
   periodId: string;
+  rows: PeriodOverScopeClient[];
 }
 
 /**
@@ -20,43 +15,8 @@ interface Props {
  * period, with the existing review pill linked per row. Renders nothing when
  * no clients are over scope, so the tab stays clean in the common case.
  */
-export function OverScopeStrip({ periodId }: Props) {
-  const [rows, setRows] = useState<OverScopeRow[] | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const res = await fetch(`/api/accounting/periods/${periodId}/over-scope`);
-        if (!res.ok) {
-          if (!cancelled) setRows([]);
-          return;
-        }
-        const json = (await res.json()) as { clients: OverScopeRow[] };
-        if (!cancelled) setRows(json.clients ?? []);
-      } catch {
-        if (!cancelled) setRows([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [periodId]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 rounded-lg border border-nativz-border bg-surface px-3 py-2 text-xs text-text-muted">
-        <Loader2 size={12} className="animate-spin" />
-        Checking over-scope clients…
-      </div>
-    );
-  }
-
-  if (!rows || rows.length === 0) return null;
+export function OverScopeStrip({ periodId, rows }: Props) {
+  if (rows.length === 0) return null;
 
   return (
     <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2.5">
