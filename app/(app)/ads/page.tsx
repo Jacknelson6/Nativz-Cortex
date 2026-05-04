@@ -74,7 +74,7 @@ export default async function AdCreativesPage() {
       .limit(200),
     admin
       .from('ad_prompt_templates')
-      .select('id, name, reference_image_url, prompt_schema, aspect_ratio, ad_category, tags, created_at, updated_at')
+      .select('id, name, reference_image_url, prompt_schema, aspect_ratio, ad_category, tags, extraction_status, extraction_error, created_at, updated_at')
       .eq('client_id', clientId)
       .order('created_at', { ascending: false })
       .limit(500),

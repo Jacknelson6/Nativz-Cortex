@@ -2,13 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
-import { Upload, Loader2, Trash2, X } from 'lucide-react';
+import { Upload, Loader2, Trash2, X, AlertTriangle, RotateCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog } from '@/components/ui/dialog';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+export type ExtractionStatus = 'pending' | 'ready' | 'failed';
 
 export interface AdPromptTemplate {
   id: string;
@@ -18,6 +20,8 @@ export interface AdPromptTemplate {
   aspect_ratio: '1:1' | '4:5' | '9:16' | '16:9' | '1.91:1';
   ad_category: string | null;
   tags: string[] | null;
+  extraction_status?: ExtractionStatus;
+  extraction_error?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -107,6 +111,31 @@ export function AdTemplateLibrary({ clientId, initialTemplates }: Props) {
     setUploadOpen(false);
   }, []);
 
+  const handleRetry = useCallback(
+    async (id: string) => {
+      // Optimistically flip to pending so the spinner replaces the
+      // failed banner before the next poll fires.
+      setTemplates((current) =>
+        current.map((t) =>
+          t.id === id
+            ? { ...t, extraction_status: 'pending', extraction_error: null }
+            : t,
+        ),
+      );
+      try {
+        const res = await fetch(
+          `/api/clients/${clientId}/ad-creatives/templates/${id}/retry`,
+          { method: 'POST' },
+        );
+        if (!res.ok) throw new Error('retry failed');
+      } catch {
+        toast.error('Could not retry extraction');
+        void refetch();
+      }
+    },
+    [clientId, refetch],
+  );
+
   return (
     <div className="space-y-7">
       {/* ── Header strip ─────────────────────────────────────────────────── */}
@@ -142,6 +171,7 @@ export function AdTemplateLibrary({ clientId, initialTemplates }: Props) {
               template={t}
               onOpen={() => setOpenTemplateId(t.id)}
               onDelete={() => void handleDelete(t.id)}
+              onRetry={() => void handleRetry(t.id)}
             />
           ))}
         </div>
@@ -159,6 +189,7 @@ export function AdTemplateLibrary({ clientId, initialTemplates }: Props) {
         <TemplateDetailDialog
           template={openTemplate}
           onClose={() => setOpenTemplateId(null)}
+          onRetry={() => void handleRetry(openTemplate.id)}
         />
       )}
     </div>
@@ -199,12 +230,15 @@ function TemplateCard({
   template,
   onOpen,
   onDelete,
+  onRetry,
 }: {
   template: AdPromptTemplate;
   onOpen: () => void;
   onDelete: () => void;
+  onRetry: () => void;
 }) {
   const pending = isExtractionPending(template);
+  const failed = isExtractionFailed(template);
   const category = template.ad_category ?? 'other';
 
   return (
@@ -233,6 +267,36 @@ function TemplateCard({
                 Extracting
               </span>
             </div>
+          </div>
+        )}
+
+        {failed && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-bg/75 px-3 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-1 text-center">
+              <AlertTriangle size={18} className="text-nz-coral" />
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-nz-coral">
+                Extraction failed
+              </span>
+            </div>
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                onRetry();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  onRetry();
+                }
+              }}
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-accent px-3 py-1 text-[11px] font-medium text-white transition-colors hover:bg-accent/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400/60"
+            >
+              <RotateCw size={11} />
+              Retry
+            </span>
           </div>
         )}
 
@@ -508,11 +572,15 @@ function Field({
 function TemplateDetailDialog({
   template,
   onClose,
+  onRetry,
 }: {
   template: AdPromptTemplate;
   onClose: () => void;
+  onRetry: () => void;
 }) {
-  const pending = isExtractionPending(template);
+  const status = extractionState(template);
+  const pending = status === 'pending';
+  const failed = status === 'failed';
   const schemaPretty = useMemo(
     () => JSON.stringify(template.prompt_schema, null, 2),
     [template.prompt_schema],
@@ -571,7 +639,7 @@ function TemplateDetailDialog({
               >
                 Extracted spec
               </span>
-              <StatusDot pending={pending} />
+              <StatusDot status={status} />
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto bg-background px-5 py-4">
               {pending ? (
@@ -582,8 +650,32 @@ function TemplateDetailDialog({
                     style={{ fontFamily: BODY_FONT, fontWeight: 300 }}
                   >
                     Reading the layout, composition, typography, and color
-                    strategy. This usually takes 5–15s.
+                    strategy. This usually takes 5 to 15 seconds.
                   </p>
+                </div>
+              ) : failed ? (
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3 rounded-lg border border-nz-coral/40 bg-nz-coral/5 px-4 py-3">
+                    <AlertTriangle size={16} className="mt-0.5 shrink-0 text-nz-coral" />
+                    <div className="min-w-0 space-y-1">
+                      <p className="nz-eyebrow text-nz-coral">Extraction failed</p>
+                      <p
+                        className="text-sm text-text-secondary leading-relaxed"
+                        style={{ fontFamily: BODY_FONT, fontWeight: 300 }}
+                      >
+                        {template.extraction_error?.trim() ||
+                          'The vision model could not return a valid spec. Try again or upload a sharper reference.'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onRetry}
+                    className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-full bg-accent px-4 text-sm font-medium text-white transition-colors hover:bg-accent/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400/60"
+                  >
+                    <RotateCw size={13} />
+                    Retry extraction
+                  </button>
                 </div>
               ) : (
                 <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-snug text-text-secondary">
@@ -597,21 +689,24 @@ function TemplateDetailDialog({
   );
 }
 
-function StatusDot({ pending }: { pending: boolean }) {
+function StatusDot({ status }: { status: ExtractionStatus }) {
+  const dotClass =
+    status === 'pending'
+      ? 'bg-amber-400 animate-pulse'
+      : status === 'failed'
+        ? 'bg-nz-coral'
+        : 'bg-accent';
+  const textClass =
+    status === 'failed' ? 'text-nz-coral' : status === 'pending' ? 'text-text-secondary' : 'text-text-muted';
+  const label =
+    status === 'pending' ? 'Extracting' : status === 'failed' ? 'Failed' : 'Ready';
   return (
     <span className="inline-flex items-center gap-2">
+      <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotClass}`} />
       <span
-        aria-hidden
-        className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-          pending ? 'bg-amber-400 animate-pulse' : 'bg-accent'
-        }`}
-      />
-      <span
-        className={`font-mono text-[10px] uppercase tracking-[0.16em] ${
-          pending ? 'text-text-secondary' : 'text-text-muted'
-        }`}
+        className={`font-mono text-[10px] uppercase tracking-[0.16em] ${textClass}`}
       >
-        {pending ? 'Extracting' : 'Ready'}
+        {label}
       </span>
     </span>
   );
@@ -621,8 +716,21 @@ function StatusDot({ pending }: { pending: boolean }) {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function isExtractionPending(t: AdPromptTemplate): boolean {
+function extractionState(t: AdPromptTemplate): ExtractionStatus {
+  // The DB column landed in migration 231, so older rows can still
+  // arrive without it. Fall back to the prior heuristic (empty schema
+  // = pending) so the gallery doesn't pretend a half-migrated row is
+  // ready when it isn't.
+  if (t.extraction_status) return t.extraction_status;
   const s = t.prompt_schema;
-  if (!s || typeof s !== 'object') return true;
-  return Object.keys(s).length === 0;
+  if (!s || typeof s !== 'object') return 'pending';
+  return Object.keys(s).length === 0 ? 'pending' : 'ready';
+}
+
+function isExtractionPending(t: AdPromptTemplate): boolean {
+  return extractionState(t) === 'pending';
+}
+
+function isExtractionFailed(t: AdPromptTemplate): boolean {
+  return extractionState(t) === 'failed';
 }
