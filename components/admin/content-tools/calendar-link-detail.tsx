@@ -1,6 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { toast } from 'sonner';
 import {
   CalendarDays,
@@ -19,6 +25,14 @@ import { Button } from '@/components/ui/button';
 import { SubNav } from '@/components/ui/sub-nav';
 import { ClientLogo } from '@/components/clients/client-logo';
 import { ShareHistoryPanel } from './share-history-panel';
+import { EditedVideosBox, UploadRow } from './edited-videos-box';
+import type { EditingProjectVideo } from '@/lib/editing/types';
+import {
+  enqueueUploads,
+  getProjectUploads,
+  subscribe as subscribeUploads,
+  subscribeToCompletion,
+} from '@/lib/editing/upload-store';
 import type {
   ReviewLinkRow,
   ReviewLinkStatus,
@@ -63,6 +77,19 @@ interface ContactRow {
  * one dialog open.
  */
 const CONTACTS_CACHE = new Map<string, ContactRow[]>();
+
+/**
+ * Cache for the editing-project-id bridged to a given share token.
+ * Lookups by token because the dialog is keyed on the share row, not
+ * the underlying drop. The id is stable for the lifetime of the share
+ * link, so a single GET on first dialog open is enough; subsequent
+ * opens skip the round-trip.
+ */
+interface BridgedProject {
+  project: { id: string; name: string; status: string } | null;
+  videos: EditingProjectVideo[];
+}
+const EDITING_BRIDGE_CACHE = new Map<string, BridgedProject>();
 
 /**
  * Detail dialog for a calendar share link (rows with `kind === 'calendar'`
@@ -128,6 +155,15 @@ export function CalendarLinkDetail({
   const [contacts, setContacts] = useState<ContactRow[] | null>(null);
   const [contactsLoading, setContactsLoading] = useState(false);
 
+  // Editing-project bridge for the "Edited videos" Section. The share
+  // token's underlying drop_id maps to an `editing_projects.drop_id`
+  // row (find-or-create on first upload). Lazily-created so we don't
+  // spam the editing board with empty rows for every dialog open.
+  const [bridge, setBridge] = useState<BridgedProject | null>(null);
+  const [bridgeLoading, setBridgeLoading] = useState(false);
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+
   // Send preview / dialog state. `null` = closed; setting to a variant
   // pops the modal and kicks off the GET preview fetch.
   const [previewVariant, setPreviewVariant] = useState<SendVariant | null>(null);
@@ -189,6 +225,122 @@ export function CalendarLinkDetail({
       cancelled = true;
     };
   }, [open, clientId]);
+
+  const token = link?.token ?? null;
+
+  const loadBridge = useCallback(async () => {
+    if (!token) return;
+    const cached = EDITING_BRIDGE_CACHE.get(token) ?? null;
+    setBridge(cached);
+    if (cached === null) setBridgeLoading(true);
+    try {
+      const res = await fetch(
+        `/api/calendar/share/${token}/editing-project`,
+        { cache: 'no-store' },
+      );
+      if (!res.ok) throw new Error('failed');
+      const data = (await res.json()) as BridgedProject;
+      EDITING_BRIDGE_CACHE.set(token, data);
+      setBridge(data);
+    } catch {
+      // Stay on the cached payload (or null) on failure; the empty
+      // drop-zone state still works for upload-first flows.
+    } finally {
+      setBridgeLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (!open) return;
+    void loadBridge();
+  }, [open, loadBridge]);
+
+  // Refetch bridged videos when a background upload batch finishes for
+  // this project. Mirrors EditingProjectDetail so closing the dialog
+  // mid-upload doesn't lose progress visibility on reopen.
+  const projectId = bridge?.project?.id ?? null;
+  useEffect(() => {
+    if (!projectId) return;
+    return subscribeToCompletion((finished) => {
+      if (finished !== projectId) return;
+      void loadBridge();
+    });
+  }, [projectId, loadBridge]);
+
+  // Upload-store snapshot for this project. Uses the stable empty
+  // singleton when no project exists yet so the equality check stays
+  // happy and we don't infinite-loop on '' fallback.
+  const uploadsKey = projectId ?? '';
+  const getUploadsSnapshot = useCallback(
+    () => getProjectUploads(uploadsKey),
+    [uploadsKey],
+  );
+  const uploads = useSyncExternalStore(
+    subscribeUploads,
+    getUploadsSnapshot,
+    getUploadsSnapshot,
+  );
+
+  const startUploads = useCallback(
+    async (files: File[]) => {
+      if (!token || files.length === 0) return;
+      let id = bridge?.project?.id ?? null;
+      if (!id) {
+        // Find-or-create the bridged editing project on first drop.
+        // Lazy create avoids spamming /admin/editing with empty rows.
+        if (creatingProject) return;
+        setCreatingProject(true);
+        try {
+          const res = await fetch(
+            `/api/calendar/share/${token}/editing-project`,
+            { method: 'POST' },
+          );
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok || !json?.id) {
+            throw new Error(
+              typeof json?.error === 'string' ? json.error : 'Could not create project',
+            );
+          }
+          id = json.id as string;
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Could not start upload');
+          return;
+        } finally {
+          setCreatingProject(false);
+        }
+      }
+      enqueueUploads(id, files);
+      toast.info(
+        files.length === 1
+          ? 'Upload started, you can close this dialog'
+          : `${files.length} uploads started, you can close this dialog`,
+      );
+      // Refresh bridge so the new project + (eventually) videos render.
+      EDITING_BRIDGE_CACHE.delete(token);
+      void loadBridge();
+    },
+    [token, bridge?.project?.id, creatingProject, loadBridge],
+  );
+
+  const deleteVideo = useCallback(
+    async (videoId: string) => {
+      if (!projectId || !token) return;
+      if (!confirm('Delete this video? This cannot be undone.')) return;
+      try {
+        const res = await fetch(
+          `/api/admin/editing/projects/${projectId}/videos/${videoId}`,
+          { method: 'DELETE' },
+        );
+        if (!res.ok) throw new Error('Delete failed');
+        toast.success('Deleted');
+        EDITING_BRIDGE_CACHE.delete(token);
+        await loadBridge();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Delete failed');
+      }
+    },
+    [projectId, token, loadBridge],
+  );
 
   const shareUrl = useMemo(() => {
     if (!link?.token) return '';
@@ -550,6 +702,39 @@ export function CalendarLinkDetail({
               )}
             </div>
           </Section>
+
+          {/* Edited videos. Bridges the calendar share to an
+              editing_projects row via the shared drop_id, so the admin
+              can drop edited cuts straight onto a calendar without
+              bouncing through /admin/editing. The project row is
+              find-or-created on first upload — empty state is just the
+              drop zone. */}
+          <Section
+            label={`Edited videos${
+              bridge?.videos?.length ? ` (${bridge.videos.length})` : ''
+            }`}
+          >
+            <EditedVideosBox
+              loading={bridgeLoading || creatingProject}
+              videos={bridge?.videos ?? []}
+              dragActive={dragActive}
+              setDragActive={setDragActive}
+              onUploadFiles={(files) => void startUploads(files)}
+              onDelete={(id) => void deleteVideo(id)}
+            />
+          </Section>
+
+          {uploads.length > 0 && (
+            <Section label="Uploads">
+              <div className="rounded-lg border border-nativz-border bg-surface p-3">
+                <ul className="space-y-1.5">
+                  {uploads.map((j) => (
+                    <UploadRow key={j.id} job={j} />
+                  ))}
+                </ul>
+              </div>
+            </Section>
+          )}
 
           {/* Counts: approved / revising / pending. Skipped when the
               project has zero posts so the modal doesn't read as broken
