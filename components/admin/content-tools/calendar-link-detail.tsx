@@ -51,6 +51,20 @@ interface ContactRow {
 }
 
 /**
+ * Module-level cache for brand POC contacts. Keyed by clientId. Brand
+ * profile is the source of truth, so the recipients for a given brand
+ * almost never change between dialog opens. Without this, every time
+ * the admin clicks a row we re-hit /api/calendar/review/contacts and
+ * spinner-flash for ~250ms — Jack flagged this as "those should not
+ * have to reload every time."
+ *
+ * Strategy: cache hit shows instantly; we still revalidate in the
+ * background so a contact change on the brand profile lands within
+ * one dialog open.
+ */
+const CONTACTS_CACHE = new Map<string, ContactRow[]>();
+
+/**
  * Detail dialog for a calendar share link (rows with `kind === 'calendar'`
  * in the unified review table). Mirrors the look + feel of
  * `EditingProjectDetail` so the two row types feel like one product.
@@ -147,9 +161,13 @@ export function CalendarLinkDetail({
       setContacts(null);
       return;
     }
+    const cached = CONTACTS_CACHE.get(clientId) ?? null;
+    setContacts(cached);
     let cancelled = false;
     void (async () => {
-      setContactsLoading(true);
+      // Only show the spinner on a true cache miss. With a hit the
+      // list renders instantly and we silently revalidate underneath.
+      if (cached === null) setContactsLoading(true);
       try {
         const res = await fetch(
           `/api/calendar/review/contacts?clientId=${encodeURIComponent(clientId)}`,
@@ -157,9 +175,12 @@ export function CalendarLinkDetail({
         );
         if (!res.ok) throw new Error('failed');
         const data = (await res.json()) as { contacts: ContactRow[] };
-        if (!cancelled) setContacts(data.contacts ?? []);
+        if (cancelled) return;
+        const next = data.contacts ?? [];
+        CONTACTS_CACHE.set(clientId, next);
+        setContacts(next);
       } catch {
-        if (!cancelled) setContacts([]);
+        if (!cancelled && cached === null) setContacts([]);
       } finally {
         if (!cancelled) setContactsLoading(false);
       }
@@ -380,7 +401,10 @@ export function CalendarLinkDetail({
         onClose prop, unmounted the whole tree, and dropped the preview
         state before SendPreviewDialog could render. */}
     <Dialog open={open} onClose={onClose} title="" maxWidth="2xl" bodyClassName="p-0">
-      <div className="flex h-full max-h-[80vh] flex-col">
+      {/* min-h locks the dialog at the height of the Details tab so
+          flipping to History (often shorter) doesn't shrink the card —
+          Jack flagged this as jarring. max-h is the soft viewport cap. */}
+      <div className="flex h-full max-h-[80vh] min-h-[640px] flex-col">
         {/* Header */}
         <div className="flex items-start gap-3 border-b border-nativz-border py-4 pl-6 pr-14">
           <ClientLogo

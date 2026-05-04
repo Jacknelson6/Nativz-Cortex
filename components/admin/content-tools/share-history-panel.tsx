@@ -16,6 +16,21 @@ import {
 } from 'lucide-react';
 
 /**
+ * Module-level SWR-ish cache for activity feeds. Keyed by `endpoint`.
+ *
+ * Why module-level: the panel mounts/unmounts as the parent dialog
+ * toggles tabs ("Details" -> "History"). Without a cache, every tab
+ * flip burned a fresh GET and showed a spinner for ~300ms — Jack
+ * specifically called out that the History tab "should also be cached"
+ * so flipping back and forth feels instant.
+ *
+ * Strategy: cache hit renders the prior payload immediately AND kicks
+ * off a background refresh so the activity stays current. Cache miss
+ * shows the loading state once, then populates.
+ */
+const HISTORY_CACHE = new Map<string, ShareHistoryEvent[]>();
+
+/**
  * Shared "History" tab panel used by both EditingProjectDetail and
  * CalendarLinkDetail. Both endpoints return the same activity shape:
  *
@@ -83,21 +98,28 @@ export function ShareHistoryPanel({
   endpoint: string;
   emptyMessage?: string;
 }) {
-  const [events, setEvents] = useState<ShareHistoryEvent[] | null>(null);
+  const [events, setEvents] = useState<ShareHistoryEvent[] | null>(
+    () => HISTORY_CACHE.get(endpoint) ?? null,
+  );
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setEvents(null);
+    const cached = HISTORY_CACHE.get(endpoint) ?? null;
+    setEvents(cached);
     setError(null);
     (async () => {
       try {
         const res = await fetch(endpoint, { cache: 'no-store' });
         if (!res.ok) throw new Error('Failed to load activity');
         const body = (await res.json()) as { activity: ShareHistoryEvent[] };
-        if (!cancelled) setEvents(body.activity);
+        if (cancelled) return;
+        HISTORY_CACHE.set(endpoint, body.activity);
+        setEvents(body.activity);
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load');
+        if (!cancelled && cached === null) {
+          setError(err instanceof Error ? err.message : 'Failed to load');
+        }
       }
     })();
     return () => {
