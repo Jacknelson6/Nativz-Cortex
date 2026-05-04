@@ -5,6 +5,7 @@ import type { SocialPlatform } from '@/lib/posting/types';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 import { notifyAdmins } from '@/lib/notifications';
 import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
+import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
 
 const STALE_ALERT_PREFIX = 'Stale draft: scheduled time passed without approval';
 
@@ -656,6 +657,23 @@ async function sendFailureNotification(
     is_read: false,
     email_sent: false,
   });
+
+  // Google Chat ping to ops space — the in-app bell is too easy to miss for
+  // something as severe as "a scheduled post just failed forever". Goes to
+  // OPS_CHAT_WEBHOOK_URL so the whole team sees it, not just the creator.
+  // Failures should not be broadcast to the per-client chat space (the
+  // client doesn't need to see internal publish errors); ops only.
+  const opsWebhook = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
+  if (opsWebhook) {
+    const reason = (post.failure_reason as string | null) ?? 'unknown error';
+    const truncatedReason = reason.length > 280 ? reason.substring(0, 280) + '…' : reason;
+    const text =
+      `🚨 *Post failed to publish* — ${client?.name ?? 'Unknown client'}\n` +
+      `Caption: "${caption}${((post.caption as string) ?? '').length > 100 ? '…' : ''}"\n` +
+      `Reason: ${truncatedReason}\n` +
+      `${postUrl}`;
+    postToGoogleChatSafe(opsWebhook, { text }, `publish-failure ${post.id}`);
+  }
 
   // TODO: Send actual email via Resend/SendGrid when email service is configured
   console.log(`[PUBLISH FAILURE] userId=${post.created_by} postId=${post.id} clientId=${post.client_id} reason=${post.failure_reason}`);
