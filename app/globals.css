@@ -107,8 +107,11 @@ summary {
   --error-hover: #b91c1c;
 
   /* Status colors — tinted toward brand palette so they stop reading
-     as raw Tailwind. Use these in widgets instead of emerald-400 etc. */
-  --status-success:  #34D399;
+     as raw Tailwind. Use these in widgets instead of emerald-400 etc.
+     Success green sits at emerald-500 (was emerald-400) so white text on
+     a solid `bg-status-success` pill reads cleanly — the previous tone
+     looked pastel and washed out the "Approve" CTAs on the share page. */
+  --status-success:  #10B981;
   --status-warning:  #F5B961;
   --status-danger:   var(--nz-coral);
   --status-info:     var(--nz-cyan);
