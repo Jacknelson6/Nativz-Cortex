@@ -232,8 +232,12 @@ export function EditingProjectDetail({
   if (!open || !project) return null;
 
   return (
-    <Dialog open={open} onClose={onClose} title="" maxWidth="5xl" bodyClassName="p-0">
-      <div className="flex h-[80vh] min-h-[560px] flex-col">
+    <Dialog open={open} onClose={onClose} title="" maxWidth="2xl" bodyClassName="p-0">
+      {/* Single-column, narrower-card layout to match CalendarLinkDetail.
+          Jack prefers the calendar dialog's stacked Section pattern over
+          the old 2-column grid; min-h locks the body so flipping
+          Details -> History doesn't shrink the card. */}
+      <div className="flex h-full max-h-[80vh] min-h-[640px] flex-col">
         {/* Header */}
         <div className="flex items-start gap-3 border-b border-nativz-border py-4 pl-6 pr-14">
           <ClientLogo
@@ -260,15 +264,11 @@ export function EditingProjectDetail({
               projectId={project.id}
               hasVideos={(data?.videos.length ?? 0) > 0}
             />
-            <Button variant="ghost" size="sm" onClick={archive} aria-label="Archive">
-              <Archive size={14} />
-              <span className="hidden sm:inline">Archive</span>
-            </Button>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="px-6 pt-2">
+        <div className="px-6 pt-3">
           <SubNav
             ariaLabel="Project sections"
             items={[
@@ -290,10 +290,35 @@ export function EditingProjectDetail({
             )}
           </div>
         ) : (
-        <div className="grid flex-1 grid-cols-1 gap-6 overflow-y-auto p-6 lg:grid-cols-[1fr_320px]">
-          {/* Main column: raw footage link + edited videos */}
-          <div className="space-y-5">
-            <Section label={`Raw footage`}>
+          <div className="flex-1 space-y-5 overflow-y-auto p-6">
+            <Section
+              label={`Edited videos${
+                data?.videos.length ? ` (${data.videos.length})` : ''
+              }`}
+            >
+              <EditedVideosBox
+                loading={loading}
+                videos={data?.videos ?? []}
+                dragActive={dragActive}
+                setDragActive={setDragActive}
+                onUploadFiles={(files) => void startUploads(files)}
+                onDelete={(id) => void deleteVideo(id)}
+              />
+            </Section>
+
+            {uploads.length > 0 && (
+              <Section label="Uploads">
+                <div className="rounded-lg border border-nativz-border bg-surface p-3">
+                  <ul className="space-y-1.5">
+                    {uploads.map((j) => (
+                      <UploadRow key={j.id} job={j} />
+                    ))}
+                  </ul>
+                </div>
+              </Section>
+            )}
+
+            <Section label="Raw footage">
               <div className="rounded-lg border border-nativz-border bg-surface p-3">
                 <input
                   value={driveUrl}
@@ -318,64 +343,36 @@ export function EditingProjectDetail({
               </div>
             </Section>
 
-            <Section
-              label={`Edited videos${
-                data?.videos.length ? ` (${data.videos.length})` : ''
-              }`}
-            >
-              <EditedVideosBox
-                loading={loading}
-                videos={data?.videos ?? []}
-                dragActive={dragActive}
-                setDragActive={setDragActive}
-                onUploadFiles={(files) => void startUploads(files)}
-                onDelete={(id) => void deleteVideo(id)}
-              />
+            <Section label="Project settings">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <SideField label="Status">
+                  <ComboSelect
+                    value={status}
+                    onChange={(next) => {
+                      const value = next as EditingProjectStatus;
+                      setStatus(value);
+                      void patch({ status: value });
+                    }}
+                    options={STATUS_OPTIONS}
+                    searchable={false}
+                  />
+                </SideField>
+                <SideField label="Type">
+                  <ComboSelect
+                    value={type}
+                    onChange={(next) => {
+                      const value = next as EditingProjectType;
+                      setType(value);
+                      void patch({ project_type: value });
+                    }}
+                    options={TYPE_OPTIONS}
+                    searchable={false}
+                  />
+                </SideField>
+              </div>
             </Section>
 
-            {uploads.length > 0 && (
-              <div className="space-y-2 rounded-lg border border-nativz-border bg-surface p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
-                  Uploads
-                </p>
-                <ul className="space-y-1.5">
-                  {uploads.map((j) => (
-                    <UploadRow key={j.id} job={j} />
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-
-          {/* Side column */}
-          <div className="space-y-4">
-            <SideField label="Status">
-              <ComboSelect
-                value={status}
-                onChange={(next) => {
-                  const value = next as EditingProjectStatus;
-                  setStatus(value);
-                  void patch({ status: value });
-                }}
-                options={STATUS_OPTIONS}
-                searchable={false}
-              />
-            </SideField>
-
-            <SideField label="Type">
-              <ComboSelect
-                value={type}
-                onChange={(next) => {
-                  const value = next as EditingProjectType;
-                  setType(value);
-                  void patch({ project_type: value });
-                }}
-                options={TYPE_OPTIONS}
-                searchable={false}
-              />
-            </SideField>
-
-            <SideField label="Strategist">
+            <Section label="Strategist">
               <AssigneePicker
                 projectId={project.id}
                 role="strategist_id"
@@ -389,33 +386,52 @@ export function EditingProjectDetail({
                   onChanged();
                 }}
               />
-            </SideField>
+            </Section>
 
-            <SideField label="Notes">
+            <Section label="Notes">
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 onBlur={() => {
                   void patch({ notes: notes.trim() || null });
                 }}
-                rows={5}
+                rows={4}
                 placeholder="Brief, references, hand-off context..."
                 className="block w-full resize-none rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
               />
-            </SideField>
+            </Section>
 
-            <div className="space-y-2 rounded-lg border border-nativz-border bg-surface p-3 text-[11px] text-text-muted">
-              <p>Created {formatTimestamp(project.created_at)}</p>
-              <p>Updated {formatTimestamp(project.updated_at)}</p>
-              {project.ready_at && <p>Marked ready {formatTimestamp(project.ready_at)}</p>}
-              {project.approved_at && <p>Approved {formatTimestamp(project.approved_at)}</p>}
-              {project.scheduled_at && (
-                <p>Done {formatTimestamp(project.scheduled_at)}</p>
-              )}
-            </div>
+            <Section label="Project">
+              <div className="space-y-1 rounded-lg border border-nativz-border bg-surface p-3 text-[11px] text-text-muted">
+                <p>Created {formatTimestamp(project.created_at)}</p>
+                <p>Updated {formatTimestamp(project.updated_at)}</p>
+                {project.ready_at && <p>Marked ready {formatTimestamp(project.ready_at)}</p>}
+                {project.approved_at && (
+                  <p>Approved {formatTimestamp(project.approved_at)}</p>
+                )}
+                {project.scheduled_at && (
+                  <p>Done {formatTimestamp(project.scheduled_at)}</p>
+                )}
+              </div>
+            </Section>
           </div>
-        </div>
         )}
+
+        {/* Footer mirrors CalendarLinkDetail: secondary archive on the
+            right, no busy primary action since uploads/share/edits all
+            stamp inline. */}
+        <div className="flex items-center justify-end gap-2 border-t border-nativz-border px-6 py-3">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={archive}
+            className="text-text-muted hover:text-[color:var(--status-danger)]"
+          >
+            <Archive size={13} />
+            Archive project
+          </Button>
+        </div>
       </div>
     </Dialog>
   );
@@ -539,7 +555,7 @@ function EditedVideosBox({
         </div>
       ) : (
         <div className="space-y-2">
-          <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <ul className="grid grid-cols-1 gap-2">
             {videos.map((v) => (
               <VideoCard key={v.id} video={v} onDelete={() => onDelete(v.id)} />
             ))}
