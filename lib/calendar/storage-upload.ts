@@ -30,7 +30,7 @@ async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
       lastErr = err;
       if (!isTransient(err) || attempt === RETRY_DELAYS_MS.length - 1) throw err;
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[storage-upload] ${label} attempt ${attempt + 1} failed (transient): ${msg} — retrying`);
+      console.warn(`[storage-upload] ${label} attempt ${attempt + 1} failed (transient): ${msg}, retrying`);
     }
   }
   throw lastErr ?? new Error(`${label} failed`);
