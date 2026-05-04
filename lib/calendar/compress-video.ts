@@ -23,7 +23,7 @@ export interface CompressionResult {
 
 /**
  * Re-encode a video to a smaller H.264/AAC mp4 if it exceeds the upload
- * threshold. 1080p, CRF 26, AAC 128k — visually identical for short-form,
+ * threshold. 1080p, CRF 26, AAC 128k; visually identical for short-form,
  * lands well under 40MB even for 90-second clips. No-op for already-small
  * files so the cheap path stays cheap.
  */
