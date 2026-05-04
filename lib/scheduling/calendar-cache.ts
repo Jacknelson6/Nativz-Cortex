@@ -2,7 +2,7 @@
  * Calendar-events cache. Wraps `fetchEventsForPerson` with Next.js
  * `unstable_cache` so the per-person Google Calendar fetch survives across
  * Fluid Compute instances. Cached for 24h by default — admins can manually
- * invalidate via the Refresh button on /admin/scheduling, which calls
+ * invalidate via the Refresh button on /admin/availability, which calls
  * `revalidateTag(CALENDAR_EVENTS_CACHE_TAG)`.
  *
  * Why daily: Google Calendar is the source of truth, so we accept a small

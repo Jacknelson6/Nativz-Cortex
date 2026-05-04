@@ -25,9 +25,11 @@ const nextConfig: NextConfig = {
       { source: '/admin/pipeline', destination: '/admin/edits', permanent: false },
       { source: '/admin/pipeline/:path*', destination: '/admin/edits/:path*', permanent: false },
       // /admin/scheduler is the Zernio social-post scheduler (content
-      // calendar). /admin/scheduling is the cal.com-style team availability
-      // picker added 2026-04-26. They are now distinct directories with
-      // distinct pages — no redirect/rewrite between them.
+      // calendar). /admin/availability is the cal.com-style team
+      // availability picker (added 2026-04-26, renamed from /admin/scheduling
+      // 2026-05-03). Aliases below keep old bookmarks working.
+      { source: '/admin/scheduling', destination: '/admin/availability', permanent: false },
+      { source: '/admin/scheduling/:path*', destination: '/admin/availability/:path*', permanent: false },
 
       // Phase 2 — unified auth surface at the root. /login,
       // /forgot-password, /reset-password are the canonical entry points;

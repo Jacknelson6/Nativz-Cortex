@@ -208,7 +208,7 @@ export function NewSchedulingEventForm({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => router.push('/admin/scheduling')}
+              onClick={() => router.push('/admin/availability')}
             >
               All events
             </Button>
@@ -368,7 +368,7 @@ export function NewSchedulingEventForm({
         {configuredPeople.length === 0 ? (
           <div className="rounded-md border border-dashed border-nativz-border bg-background px-4 py-6 text-center text-xs text-text-muted">
             No scheduling people yet — add some in{' '}
-            <a href="/admin/scheduling/people" className="text-accent-text hover:underline">
+            <a href="/admin/availability/people" className="text-accent-text hover:underline">
               Scheduling → People
             </a>{' '}
             before creating an event.

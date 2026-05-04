@@ -75,7 +75,7 @@ export default async function AdminDashboardPage() {
             3-col (Nerd slightly wider) from lg up. */}
         <div className="grid grid-cols-1 gap-3 auto-rows-[140px] sm:grid-cols-2 lg:grid-cols-[1fr_1fr_minmax(220px,1.25fr)]">
           <BentoTile
-            href="/admin/scheduling"
+            href="/admin/availability"
             icon={<Calendar size={20} className="text-accent-text" />}
             label="Schedule content"
             description="Plan and publish content"

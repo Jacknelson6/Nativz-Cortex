@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 /**
  * Admin form to create a new team_scheduling_event. The "who can attend"
  * roster comes from `scheduling_people` — the canonical configured-people
- * list managed at /admin/scheduling/people. Each configured person is
+ * list managed at /admin/availability/people. Each configured person is
  * resolved to a real `users.id` via their workspace email aliases so the
  * event-create POST has a valid user_id for team_scheduling_event_members.
  *
@@ -28,7 +28,7 @@ export default async function NewSchedulingEventPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect('/auth/login?next=/admin/scheduling/new');
+  if (!user) redirect('/auth/login?next=/admin/availability/new');
 
   const admin = createAdminClient();
   const { data: me } = await admin
@@ -172,7 +172,7 @@ export default async function NewSchedulingEventPage({
     <div className="cortex-page-gutter max-w-2xl space-y-6">
       <header className="space-y-2">
         <Link
-          href="/admin/scheduling"
+          href="/admin/availability"
           className="inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-text-secondary transition-colors"
         >
           <ArrowLeft size={12} />

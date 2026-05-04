@@ -19,7 +19,7 @@ export const dynamic = 'force-dynamic';
  *   - events: every share-link picker the team has spun up for clients.
  *
  * Companion routes:
- *   - /admin/scheduling/new          — create a new event
+ *   - /admin/availability/new          — create a new event
  *   - /schedule/[token]              — public client picker
  *   - POST /api/scheduling/events    — admin create
  *   - GET  /api/schedule/[token]     — public freebusy + slots
@@ -57,7 +57,7 @@ export default async function SchedulingListPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect('/auth/login?next=/admin/scheduling');
+  if (!user) redirect('/auth/login?next=/admin/availability');
 
   const admin = createAdminClient();
   const [{ data: me }, params] = await Promise.all([
@@ -81,7 +81,7 @@ export default async function SchedulingListPage({
           <div className="flex items-center gap-2">
             <RefreshButton action={refreshScheduling} />
             <Link
-              href="/admin/scheduling/new"
+              href="/admin/availability/new"
               className="inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[var(--nz-btn-radius)] bg-accent px-4 py-2 text-sm font-medium text-white shadow-[var(--shadow-card)] transition-all duration-[var(--duration-fast)] ease-out hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98]"
             >
               <Plus size={14} />
@@ -139,7 +139,7 @@ async function EventsTab({
           Spin up a picker, share the link, and the client books a slot when everyone&apos;s free.
         </p>
         <Link
-          href="/admin/scheduling/new"
+          href="/admin/availability/new"
           className="mt-4 inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[var(--nz-btn-radius)] bg-accent px-4 py-2 text-sm font-medium text-white shadow-[var(--shadow-card)] transition-all duration-[var(--duration-fast)] ease-out hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98]"
         >
           <Plus size={14} />

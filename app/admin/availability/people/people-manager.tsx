@@ -135,7 +135,7 @@ export function PeopleManager() {
       <div className="mb-6 flex items-center justify-between gap-4">
         <div className="min-w-0">
           <Link
-            href="/admin/scheduling"
+            href="/admin/availability"
             className="mb-2 inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-text-secondary transition-colors"
           >
             <ArrowLeft size={12} />

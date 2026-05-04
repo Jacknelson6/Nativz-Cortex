@@ -21,7 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
  * events within a day pack into side-by-side lanes (interval-graph coloring) so
  * the visible width stays as wide as possible for non-overlapping events.
  *
- * People are managed at /admin/scheduling/people.
+ * People are managed at /admin/availability/people.
  */
 
 const DAYS_PER_PAGE = 4;
@@ -307,7 +307,7 @@ export function TeamAvailability() {
             <ChevronRight size={16} />
           </button>
           <Link
-            href="/admin/scheduling/people"
+            href="/admin/availability/people"
             className="ml-2 inline-flex items-center gap-1.5 rounded-md border border-nativz-border px-2.5 py-1.5 text-xs text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors"
             title="Manage scheduling people"
           >
@@ -437,7 +437,7 @@ function EmptyState() {
         view to start overlaying calendars.
       </p>
       <Link
-        href="/admin/scheduling/people"
+        href="/admin/availability/people"
         className="inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[var(--nz-btn-radius)] bg-accent px-3 py-1.5 text-sm font-medium text-white shadow-[var(--shadow-card)] transition-all duration-[var(--duration-fast)] ease-out hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98]"
       >
         <Settings size={12} />

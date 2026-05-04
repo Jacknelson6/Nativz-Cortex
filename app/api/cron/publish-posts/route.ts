@@ -580,7 +580,7 @@ async function handleGet(request: NextRequest) {
               type: 'post_needs_approval',
               title: 'Drop post past due without approval',
               body: `Post scheduled for ${new Date(row.scheduled_at).toLocaleString()} is still in draft (no approval comment). Caption: "${caption}${(row.caption ?? '').length > 80 ? '...' : ''}"`,
-              linkPath: `/admin/scheduling?post=${row.id}`,
+              linkPath: `/admin/availability?post=${row.id}`,
               clientId: row.client_id,
             });
             await adminClient
@@ -643,7 +643,7 @@ async function sendFailureNotification(
     .single();
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
-  const postUrl = `${appUrl}/admin/scheduling?post=${post.id}`;
+  const postUrl = `${appUrl}/admin/availability?post=${post.id}`;
   const caption = ((post.caption as string) ?? '').substring(0, 100);
 
   // Create in-app notification
@@ -653,7 +653,7 @@ async function sendFailureNotification(
     type: 'report_published', // Reusing existing type for now
     title: `Post failed to publish`,
     body: `Post for ${client?.name ?? 'Unknown client'} failed after 3 retries: "${caption}..."`,
-    link_path: `/admin/scheduling?post=${post.id}`,
+    link_path: `/admin/availability?post=${post.id}`,
     is_read: false,
     email_sent: false,
   });
