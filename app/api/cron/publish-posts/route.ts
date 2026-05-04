@@ -619,11 +619,12 @@ async function handleGet(request: NextRequest) {
           };
           const caption = (row.caption ?? '').substring(0, 80);
           try {
+            const linkPath = await resolveFailureLinkPath(adminClient, row.id);
             await notifyAdmins({
               type: 'post_needs_approval',
               title: 'Drop post past due without approval',
               body: `Post scheduled for ${new Date(row.scheduled_at).toLocaleString()} is still in draft (no approval comment). Caption: "${caption}${(row.caption ?? '').length > 80 ? '...' : ''}"`,
-              linkPath: `/admin/availability?post=${row.id}`,
+              linkPath,
               clientId: row.client_id,
             });
             await adminClient
@@ -693,50 +694,29 @@ async function sendFailureNotification(
   adminClient: ReturnType<typeof createAdminClient>,
   post: Record<string, unknown>
 ) {
-  // Get creator's email
-  const createdBy = post.created_by as string | null;
-  if (!createdBy) return;
+  const postId = post.id as string;
+  const clientId = post.client_id as string | null;
 
-  const { data: creator } = await adminClient
-    .from('users')
-    .select('email, full_name')
-    .eq('id', createdBy)
-    .single();
-
-  if (!creator?.email) return;
-
-  // Get client name
-  const { data: client } = await adminClient
-    .from('clients')
-    .select('name')
-    .eq('id', post.client_id)
-    .single();
-
+  const { data: client } = clientId
+    ? await adminClient.from('clients').select('name').eq('id', clientId).single()
+    : { data: null };
   const clientName = client?.name ?? 'Unknown client';
+
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
-  const linkPath = await resolveFailureLinkPath(adminClient, post.id as string);
+  const linkPath = await resolveFailureLinkPath(adminClient, postId);
   const postUrl = `${appUrl}${linkPath}`;
   const caption = ((post.caption as string) ?? '').substring(0, 100);
 
-  // Create in-app notification. Title carries the client name so the bell
-  // dropdown is actionable at a glance (Jack's note: "it doesn't tell me
-  // which client or anything like that"). Body keeps caption + retry context.
-  await adminClient.from('notifications').insert({
-    recipient_user_id: createdBy,
-    organization_id: null,
-    type: 'report_published', // Reusing existing type for now
+  // In-app bell: ping the assigned admins + owners. Previously only the
+  // creator was notified, which meant Jack missed teammates' failures.
+  await notifyAdmins({
+    type: 'post_failed',
     title: `Post failed to publish for ${clientName}`,
-    body: `Failed after 3 retries: "${caption}..."`,
-    link_path: linkPath,
-    is_read: false,
-    email_sent: false,
+    body: `Failed after 3 retries: "${caption}${((post.caption as string) ?? '').length > 100 ? '…' : ''}"`,
+    linkPath,
+    clientId: clientId ?? undefined,
   });
 
-  // Google Chat ping to ops space — the in-app bell is too easy to miss for
-  // something as severe as "a scheduled post just failed forever". Goes to
-  // OPS_CHAT_WEBHOOK_URL so the whole team sees it, not just the creator.
-  // Failures should not be broadcast to the per-client chat space (the
-  // client doesn't need to see internal publish errors); ops only.
   const opsWebhook = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
   if (opsWebhook) {
     const reason = (post.failure_reason as string | null) ?? 'unknown error';
@@ -746,11 +726,10 @@ async function sendFailureNotification(
       `Caption: "${caption}${((post.caption as string) ?? '').length > 100 ? '…' : ''}"\n` +
       `Reason: ${truncatedReason}\n` +
       `${postUrl}`;
-    postToGoogleChatSafe(opsWebhook, { text }, `publish-failure ${post.id}`);
+    postToGoogleChatSafe(opsWebhook, { text }, `publish-failure ${postId}`);
   }
 
-  // TODO: Send actual email via Resend/SendGrid when email service is configured
-  console.log(`[PUBLISH FAILURE] userId=${post.created_by} postId=${post.id} clientId=${post.client_id} reason=${post.failure_reason}`);
+  console.log(`[PUBLISH FAILURE] postId=${postId} clientId=${clientId} reason=${post.failure_reason}`);
 }
 
 /**
@@ -768,32 +747,27 @@ async function sendPartialFailureNotification(
   post: Record<string, unknown>,
   failures: { platform: string; username: string | null; reason: string }[],
 ) {
-  const createdBy = post.created_by as string | null;
-  if (!createdBy) return;
+  const postId = post.id as string;
+  const clientId = post.client_id as string | null;
 
-  const { data: client } = await adminClient
-    .from('clients')
-    .select('name')
-    .eq('id', post.client_id)
-    .single();
+  const { data: client } = clientId
+    ? await adminClient.from('clients').select('name').eq('id', clientId).single()
+    : { data: null };
   const clientName = client?.name ?? 'Unknown client';
 
   const caption = ((post.caption as string) ?? '').substring(0, 100);
-  const linkPath = await resolveFailureLinkPath(adminClient, post.id as string);
+  const linkPath = await resolveFailureLinkPath(adminClient, postId);
 
   const platformList = failures
     .map((f) => (f.username ? `${f.platform} (@${f.username})` : f.platform))
     .join(', ');
 
-  await adminClient.from('notifications').insert({
-    recipient_user_id: createdBy,
-    organization_id: null,
-    type: 'report_published',
+  await notifyAdmins({
+    type: 'post_failed',
     title: `Post partially failed to publish for ${clientName}`,
-    body: `${platformList} did not publish: "${caption}..."`,
-    link_path: linkPath,
-    is_read: false,
-    email_sent: false,
+    body: `${platformList} did not publish: "${caption}${((post.caption as string) ?? '').length > 100 ? '…' : ''}"`,
+    linkPath,
+    clientId: clientId ?? undefined,
   });
 
   const opsWebhook = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
@@ -812,10 +786,10 @@ async function sendPartialFailureNotification(
       `Caption: "${caption}${((post.caption as string) ?? '').length > 100 ? '…' : ''}"\n` +
       `${failureLines}\n` +
       `${postUrl}`;
-    postToGoogleChatSafe(opsWebhook, { text }, `publish-partial ${post.id}`);
+    postToGoogleChatSafe(opsWebhook, { text }, `publish-partial ${postId}`);
   }
 
   console.log(
-    `[PUBLISH PARTIAL] userId=${createdBy} postId=${post.id} clientId=${post.client_id} failed=${failures.length}`,
+    `[PUBLISH PARTIAL] postId=${postId} clientId=${clientId} failed=${failures.length}`,
   );
 }

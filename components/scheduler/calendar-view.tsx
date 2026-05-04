@@ -37,6 +37,25 @@ interface CalendarViewProps {
   onPostClick: (post: CalendarPost) => void;
   onDateClick: (date: Date) => void;
   onDropMedia: (date: Date, media: MediaItem) => void;
+  onMovePost?: (postId: string, newDate: Date) => void;
+}
+
+type DragPayload =
+  | ({ __kind: 'media' } & MediaItem)
+  | { __kind: 'post'; postId: string; scheduledAt: string | null };
+
+function parseDragPayload(e: React.DragEvent): DragPayload | null {
+  try {
+    const raw = e.dataTransfer.getData('application/json');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.__kind === 'post' && typeof parsed.postId === 'string') {
+      return parsed as DragPayload;
+    }
+    return { __kind: 'media', ...parsed } as DragPayload;
+  } catch {
+    return null;
+  }
 }
 
 export function CalendarView({
@@ -47,6 +66,7 @@ export function CalendarView({
   onPostClick,
   onDateClick,
   onDropMedia,
+  onMovePost,
 }: CalendarViewProps) {
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);
 
@@ -67,6 +87,7 @@ export function CalendarView({
         onPostClick={onPostClick}
         onDateClick={onDateClick}
         onDropMedia={onDropMedia}
+        onMovePost={onMovePost}
         today={today}
       />
     );
@@ -115,11 +136,14 @@ export function CalendarView({
   function handleDrop(e: React.DragEvent, date: Date) {
     e.preventDefault();
     setDragOverDate(null);
-    try {
-      const media = JSON.parse(e.dataTransfer.getData('application/json')) as MediaItem;
-      onDropMedia(date, media);
-    } catch {
-      // Invalid drop data
+    const payload = parseDragPayload(e);
+    if (!payload) return;
+    if (payload.__kind === 'post') {
+      onMovePost?.(payload.postId, date);
+    } else {
+      const { __kind, ...media } = payload;
+      void __kind;
+      onDropMedia(date, media as MediaItem);
     }
   }
 
@@ -219,6 +243,7 @@ function PostChip({
   const captionPreview = post.caption?.trim() || 'No caption';
   const tooltip = `${platformLabel} · ${captionPreview.slice(0, 200)}${captionPreview.length > 200 ? '…' : ''}`;
   const thumb = post.thumbnail_url ?? post.cover_image_url;
+  const draggable = post.status === 'draft' || post.status === 'scheduled';
 
   return (
     <button
@@ -226,8 +251,22 @@ function PostChip({
         e.stopPropagation();
         onClick();
       }}
+      draggable={draggable}
+      onDragStart={(e) => {
+        if (!draggable) return;
+        e.stopPropagation();
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData(
+          'application/json',
+          JSON.stringify({
+            __kind: 'post',
+            postId: post.id,
+            scheduledAt: post.scheduled_at,
+          }),
+        );
+      }}
       title={tooltip}
-      className="w-full flex items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-surface-hover transition-colors cursor-pointer"
+      className={`w-full flex items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-surface-hover transition-colors cursor-pointer ${draggable ? 'active:opacity-50' : ''}`}
     >
       {thumb ? (
         <img
@@ -312,6 +351,7 @@ function WeekView({
   onPostClick,
   onDateClick,
   onDropMedia,
+  onMovePost,
   today,
 }: {
   posts: CalendarPost[];
@@ -319,6 +359,7 @@ function WeekView({
   onPostClick: (post: CalendarPost) => void;
   onDateClick: (date: Date) => void;
   onDropMedia: (date: Date, media: MediaItem) => void;
+  onMovePost?: (postId: string, newDate: Date) => void;
   today: string;
 }) {
   // Get start of week (Monday)
@@ -359,10 +400,15 @@ function WeekView({
             onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
             onDrop={(e) => {
               e.preventDefault();
-              try {
-                const media = JSON.parse(e.dataTransfer.getData('application/json')) as MediaItem;
-                onDropMedia(date, media);
-              } catch { /* ignore */ }
+              const payload = parseDragPayload(e);
+              if (!payload) return;
+              if (payload.__kind === 'post') {
+                onMovePost?.(payload.postId, date);
+              } else {
+                const { __kind, ...media } = payload;
+                void __kind;
+                onDropMedia(date, media as MediaItem);
+              }
             }}
             className={`flex flex-col min-h-0 cursor-pointer ${isToday ? 'bg-accent-surface/10' : ''}`}
           >

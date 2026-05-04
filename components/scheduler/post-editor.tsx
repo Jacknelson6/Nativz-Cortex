@@ -498,26 +498,25 @@ export function PostEditor({
                   </div>
                 ) : null}
 
-                {/* Select Cover + Cover preview */}
-                <div className="w-full mt-3 space-y-2">
-                  {isVideo && videoUrl && (
-                    <Button size="sm" variant="ghost" onClick={handleSelectCover} className="w-full">
+                {/* Select Cover (cover is shown via video poster above) */}
+                {isVideo && videoUrl && (
+                  <div className="w-full mt-3 flex items-center gap-2">
+                    <Button size="sm" variant="ghost" onClick={handleSelectCover} className="flex-1">
                       <Image size={12} />
                       {coverImageUrl ? 'Change cover' : 'Select cover'}
                     </Button>
-                  )}
-                  {coverImageUrl && (
-                    <div className="relative">
-                      <img src={coverImageUrl} alt="Cover" className="w-full rounded-lg border border-nativz-border" />
-                      <button
+                    {coverImageUrl && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
                         onClick={() => setCoverImageUrl(null)}
-                        className="cursor-pointer absolute top-1 right-1 p-0.5 rounded-full bg-black/60 text-white hover:bg-black/80"
+                        className="text-text-muted"
                       >
                         <X size={12} />
-                      </button>
-                    </div>
-                  )}
-                </div>
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

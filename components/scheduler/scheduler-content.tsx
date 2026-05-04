@@ -239,6 +239,96 @@ function SchedulerInner({
     confirmLabel: 'Publish all',
   });
 
+  const { confirm: confirmPublishNow, dialog: publishNowDialog } = useConfirm({
+    title: 'Publish this post now?',
+    description: 'You dropped this on a past date. The post will go out on the next publish tick (within ~2 minutes). Approval gate will be bypassed for drafts.',
+    confirmLabel: 'Publish now',
+  });
+
+  async function handleMovePost(postId: string, newDate: Date) {
+    if (!isAdmin) return;
+    const post = posts.find((p) => p.id === postId);
+    if (!post) return;
+
+    // Preserve time-of-day from existing scheduled_at when present, else
+    // default to the client's preferred posting time or 9am.
+    const original = post.scheduled_at ? new Date(post.scheduled_at) : null;
+    const target = new Date(newDate);
+    if (original) {
+      target.setHours(original.getHours(), original.getMinutes(), 0, 0);
+    } else {
+      target.setHours(9, 0, 0, 0);
+    }
+
+    const isPastDue = target.getTime() <= Date.now();
+
+    // Same-day no-op guard: if the post already lives at the same minute,
+    // skip the round trip.
+    if (original && Math.abs(original.getTime() - target.getTime()) < 60_000) {
+      return;
+    }
+
+    if (isPastDue) {
+      const ok = await confirmPublishNow();
+      if (!ok) return;
+      try {
+        // Drafts: bypass the approval gate first so the cron will accept
+        // the row. Force-approve also flips draft → scheduled.
+        if (post.status === 'draft') {
+          const fa = await fetch(`/api/scheduler/posts/${postId}/force-approve`, {
+            method: 'POST',
+          });
+          if (!fa.ok) {
+            const err = await fa.json().catch(() => ({}));
+            throw new Error(err.error ?? 'Failed to bypass approval gate');
+          }
+        }
+
+        // Set scheduled_at to ~1 min ago so the next cron tick picks it up.
+        const publishAt = new Date(Date.now() - 60_000).toISOString();
+        const res = await fetch(`/api/scheduler/posts/${postId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scheduled_at: publishAt }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error ?? 'Failed to schedule for immediate publish');
+        }
+        toast.success('Queued for immediate publish.');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to publish');
+      } finally {
+        if (selectedClientId) {
+          const { start, end } = getMonthGridRange(currentDate);
+          fetchPosts(selectedClientId, start, end);
+        }
+      }
+      return;
+    }
+
+    // Future drop — just shift scheduled_at, status unchanged.
+    try {
+      const res = await fetch(`/api/scheduler/posts/${postId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scheduled_at: target.toISOString() }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? 'Failed to reschedule');
+      }
+      toast.success(`Moved to ${target.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to reschedule');
+    } finally {
+      if (selectedClientId) {
+        const { start, end } = getMonthGridRange(currentDate);
+        fetchPosts(selectedClientId, start, end);
+      }
+    }
+  }
+
   async function handlePublishAllDrafts() {
     if (!selectedClientId || draftCount === 0) return;
     const ok = await confirmPublishDrafts();
@@ -390,6 +480,7 @@ function SchedulerInner({
             onPostClick={handlePostClick}
             onDateClick={handleDateClick}
             onDropMedia={handleDropMedia}
+            onMovePost={isAdmin ? handleMovePost : undefined}
           />
         </div>
       </div>
@@ -456,6 +547,7 @@ function SchedulerInner({
       )}
 
       {isAdmin && publishDraftsDialog}
+      {isAdmin && publishNowDialog}
     </div>
   );
 }
