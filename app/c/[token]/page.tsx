@@ -22,6 +22,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import { BalancePill } from '@/components/deliverables/balance-pill';
+import { EditingCapacityStrip } from '@/components/deliverables/editing-capacity-strip';
 import { PreApprovalModal } from '@/components/deliverables/pre-approval-modal';
 import type { DeliverableBalance } from '@/lib/deliverables/get-balances';
 import type { AddonSku } from '@/lib/deliverables/addon-skus';
@@ -708,6 +709,15 @@ function SharedDropView({
       </header>
 
       <main className="mx-auto max-w-7xl px-3 py-4 sm:px-6 sm:py-6">
+        {data.isEditor && (
+          // Editor-only context strip. Shows how many edited videos this
+          // client has consumed against their monthly capacity before the
+          // editor uploads another final via the per-post Replace control
+          // below. Hidden for the client/portal viewer (internal accounting).
+          <div className="mb-4 sm:mb-6">
+            <EditingCapacityStrip clientId={data.clientId} service="editing" />
+          </div>
+        )}
         {viewMode === 'list' ? (
           <div className="mx-auto max-w-6xl space-y-3 sm:space-y-4">
             {sortedPosts.map((post, idx) => (
