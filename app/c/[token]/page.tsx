@@ -772,6 +772,7 @@ function SharedDropView({
         title={`Approve all ${unapprovedPosts.length} post${unapprovedPosts.length === 1 ? '' : 's'}?`}
         description="This signs off on every post that's still pending. Posts already marked changes requested will also be approved. You can still leave comments after."
         confirmLabel={approvingAll ? 'Approving…' : 'Approve all'}
+        variant="success"
         onConfirm={() => {
           setApproveAllOpen(false);
           void approveAll();

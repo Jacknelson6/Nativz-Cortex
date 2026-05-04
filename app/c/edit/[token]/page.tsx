@@ -568,6 +568,7 @@ function SharedReviewView({
         title={`Approve all ${unapprovedVideos.length} video${unapprovedVideos.length === 1 ? '' : 's'}?`}
         description="This signs off on every video that's still pending. Videos already marked changes requested will also be approved. You can still leave comments after."
         confirmLabel={approvingAll ? 'Approving…' : 'Approve all'}
+        variant="success"
         onConfirm={() => {
           setApproveAllOpen(false);
           void approveAll();

@@ -1,8 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useRef } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+
+type ConfirmVariant = 'danger' | 'default' | 'success';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -10,7 +12,7 @@ interface ConfirmDialogProps {
   description: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  variant?: 'danger' | 'default';
+  variant?: ConfirmVariant;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -52,6 +54,11 @@ export function ConfirmDialog({
             <AlertTriangle size={22} className="text-[color:var(--status-danger)]" />
           </div>
         )}
+        {variant === 'success' && (
+          <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-status-success/15">
+            <CheckCircle2 size={22} className="text-status-success" />
+          </div>
+        )}
         <h3 className="text-center text-sm font-semibold text-text-primary">{title}</h3>
         <p className="mt-2 text-center text-xs text-text-muted leading-relaxed">{description}</p>
         <div className="mt-5 flex gap-3">
@@ -60,7 +67,7 @@ export function ConfirmDialog({
           </Button>
           <Button
             ref={confirmRef}
-            variant={variant === 'danger' ? 'danger' : 'primary'}
+            variant={variant === 'danger' ? 'danger' : variant === 'success' ? 'success' : 'primary'}
             size="sm"
             className="flex-1"
             onClick={onConfirm}
@@ -80,7 +87,7 @@ interface UseConfirmOptions {
   title: string;
   description: string;
   confirmLabel?: string;
-  variant?: 'danger' | 'default';
+  variant?: ConfirmVariant;
 }
 
 export function useConfirm({ title, description, confirmLabel, variant }: UseConfirmOptions) {

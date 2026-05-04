@@ -1,7 +1,7 @@
 import { ButtonHTMLAttributes, forwardRef } from 'react';
 import { cn } from '@/lib/utils/cn';
 
-type Variant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+type Variant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success';
 type Size = 'xs' | 'sm' | 'md' | 'lg';
 type Shape = 'default' | 'pill';
 
@@ -21,6 +21,8 @@ const variantStyles: Record<Variant, string> = {
   outline: 'border border-nativz-border text-text-secondary hover:bg-surface-hover',
   ghost: 'text-text-secondary hover:bg-surface-hover hover:text-text-primary',
   danger: 'bg-[color:var(--error)] text-white hover:bg-[color:var(--error-hover)]',
+  success:
+    'bg-status-success text-white shadow-[var(--shadow-card)] hover:opacity-90 hover:shadow-[var(--shadow-card-hover)]',
 };
 
 const sizeStyles: Record<Size, string> = {
