@@ -36,7 +36,7 @@ export const TOOLTIPS: Record<string, TooltipDef> = {
   },
   conversation_intensity: {
     title: 'Conversation intensity',
-    description: 'How actively people are discussing this topic — measured by reply depth and discussion frequency.',
+    description: 'How actively people are discussing this topic, measured by reply depth and discussion frequency.',
   },
   brand_references: {
     title: 'Brand references',
@@ -48,11 +48,11 @@ export const TOOLTIPS: Record<string, TooltipDef> = {
   },
   content_opportunities: {
     title: 'Content opportunities',
-    description: 'Number of specific video ideas generated from the analysis — ready-to-use concepts your team can film.',
+    description: 'Number of specific video ideas generated from the analysis. Ready-to-use concepts your team can film.',
   },
   trending_topics: {
     title: 'Trending topics',
-    description: 'Distinct trending angles found within this topic — each with its own audience sentiment, discussion patterns, and video ideas.',
+    description: 'Distinct trending angles found within this topic, each with its own audience sentiment, discussion patterns, and video ideas.',
   },
   sources_analyzed: {
     title: 'Sources analyzed',
@@ -89,7 +89,7 @@ export const TOOLTIPS: Record<string, TooltipDef> = {
   },
   surprise: {
     title: 'Surprise',
-    description: 'Unexpected findings or reactions — content that caught people off guard.',
+    description: 'Unexpected findings or reactions, content that caught people off guard.',
   },
   sadness: {
     title: 'Sadness',
@@ -98,11 +98,11 @@ export const TOOLTIPS: Record<string, TooltipDef> = {
   // Content breakdown
   intentions: {
     title: 'Intentions',
-    description: 'What people intend to do — buy, learn, compare, or solve a problem related to this topic.',
+    description: 'What people intend to do: buy, learn, compare, or solve a problem related to this topic.',
   },
   categories: {
     title: 'Categories',
-    description: 'Content types being created — tutorials, reviews, news, opinion pieces, and more.',
+    description: 'Content types being created: tutorials, reviews, news, opinion pieces, and more.',
   },
   pillar_pct_of_content: {
     title: '% of content',
