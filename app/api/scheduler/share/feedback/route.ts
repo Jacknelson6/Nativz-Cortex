@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { z } from 'zod';
-import { getPostingService } from '@/lib/posting';
-import type { SocialPlatform } from '@/lib/posting/types';
+import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
 import { sendRevisionWebhook } from '@/lib/webhooks/revision-webhook';
 
 const FeedbackSchema = z.object({
@@ -138,87 +137,19 @@ export async function POST(request: NextRequest) {
       console.error('[revision-webhook] Error dispatching:', webhookErr);
     }
 
-    // When client approves a draft post, promote it to scheduled and sync to Late
+    // When the client approves a draft post, hand it off to the shared
+    // `publishScheduledPost` helper. That gives us the atomic CAS (closes the
+    // race between two simultaneous approvals firing duplicate Zernio
+    // tickets), Mux-aware media resolution (ships revised cuts instead of the
+    // stale snapshot — the May 4 Weston Funding bug), and per-platform spp
+    // status backfill. Inline `service.publishPost` here used to do none of
+    // those things; the consolidation also removes ~80 lines of drift between
+    // the two share-feedback paths (calendar + legacy SMM scheduler).
     if (parsed.data.status === 'approved') {
-      // Pull per-platform overrides (migration 218) so YouTube titles,
-      // TikTok interaction settings, etc. survive client approval.
-      const { data: postRow } = await adminClient
-        .from('scheduled_posts')
-        .select('id, status, caption, hashtags, scheduled_at, cover_image_url, tagged_people, collaborator_handles, youtube_title, youtube_description, youtube_tags, youtube_privacy, youtube_made_for_kids, tiktok_allow_comment, tiktok_allow_duet, tiktok_allow_stitch, instagram_share_to_feed')
-        .eq('id', parsed.data.post_id)
-        .single();
-
-      if (postRow && postRow.status === 'draft') {
-        await adminClient
-          .from('scheduled_posts')
-          .update({ status: 'scheduled', updated_at: new Date().toISOString() })
-          .eq('id', postRow.id);
-
-        // Sync to Late API
-        try {
-          const { data: platformLinks } = await adminClient
-            .from('scheduled_post_platforms')
-            .select('social_profile_id, social_profiles(id, platform, late_account_id)')
-            .eq('post_id', postRow.id);
-
-          const lateProfiles = (platformLinks ?? [])
-            .map((pl: Record<string, unknown>) => pl.social_profiles as { id: string; platform: string; late_account_id: string | null } | null)
-            .filter((p): p is { id: string; platform: string; late_account_id: string } => !!p?.late_account_id);
-
-          if (lateProfiles.length > 0) {
-            const { data: mediaRows } = await adminClient
-              .from('scheduled_post_media')
-              .select('scheduler_media(late_media_url)')
-              .eq('post_id', postRow.id)
-              .limit(1);
-
-            const mediaUrl = ((mediaRows?.[0] as Record<string, unknown>)?.scheduler_media as Record<string, unknown> | null)?.late_media_url as string ?? '';
-
-            const service = getPostingService();
-            const pr = postRow as typeof postRow & {
-              youtube_title: string | null;
-              youtube_description: string | null;
-              youtube_tags: string[] | null;
-              youtube_privacy: 'public' | 'unlisted' | 'private' | null;
-              youtube_made_for_kids: boolean | null;
-              tiktok_allow_comment: boolean | null;
-              tiktok_allow_duet: boolean | null;
-              tiktok_allow_stitch: boolean | null;
-              instagram_share_to_feed: boolean | null;
-            };
-            const lateResult = await service.publishPost({
-              videoUrl: mediaUrl,
-              caption: postRow.caption ?? '',
-              hashtags: postRow.hashtags ?? [],
-              platformProfileIds: lateProfiles.map(p => p.late_account_id),
-              platformHints: Object.fromEntries(
-                lateProfiles.map(p => [p.late_account_id, p.platform as SocialPlatform])
-              ),
-              scheduledAt: postRow.scheduled_at ?? undefined,
-              coverImageUrl: postRow.cover_image_url ?? undefined,
-              taggedPeople: postRow.tagged_people ?? [],
-              collaboratorHandles: postRow.collaborator_handles ?? [],
-              // Per-platform overrides (migration 218). Null → undefined so
-              // buildPublishBody applies its existing defaults.
-              youtubeTitle: pr.youtube_title ?? undefined,
-              youtubeDescription: pr.youtube_description ?? undefined,
-              youtubeTags: pr.youtube_tags ?? undefined,
-              youtubePrivacy: pr.youtube_privacy ?? undefined,
-              youtubeMadeForKids: pr.youtube_made_for_kids ?? undefined,
-              tiktokAllowComment: pr.tiktok_allow_comment ?? undefined,
-              tiktokAllowDuet: pr.tiktok_allow_duet ?? undefined,
-              tiktokAllowStitch: pr.tiktok_allow_stitch ?? undefined,
-              instagramShareToFeed: pr.instagram_share_to_feed ?? undefined,
-            });
-
-            await adminClient
-              .from('scheduled_posts')
-              .update({ late_post_id: lateResult.externalPostId })
-              .eq('id', postRow.id);
-          }
-        } catch (lateErr) {
-          console.error('Late API sync after approval error:', lateErr);
-        }
+      try {
+        await publishScheduledPost(adminClient, parsed.data.post_id);
+      } catch (publishErr) {
+        console.error('Approval publish error:', publishErr);
       }
     }
 

@@ -329,6 +329,7 @@ export async function publishScheduledPost(
     .from('scheduled_posts')
     .select(
       'id, client_id, caption, hashtags, scheduled_at, status, late_post_id, cover_image_url, post_type, ' +
+      'tagged_people, collaborator_handles, ' +
       'youtube_title, youtube_description, youtube_tags, youtube_privacy, youtube_made_for_kids, ' +
       'tiktok_allow_comment, tiktok_allow_duet, tiktok_allow_stitch, instagram_share_to_feed',
     )
@@ -343,6 +344,8 @@ export async function publishScheduledPost(
       late_post_id: string | null;
       cover_image_url: string | null;
       post_type: string | null;
+      tagged_people: string[] | null;
+      collaborator_handles: string[] | null;
       youtube_title: string | null;
       youtube_description: string | null;
       youtube_tags: string[] | null;
@@ -468,6 +471,8 @@ export async function publishScheduledPost(
     platformHints: Object.fromEntries(lateProfiles.map((p) => [p.late_account_id, p.platform])),
     captionByPlatform,
     scheduledAt: post.scheduled_at,
+    taggedPeople: post.tagged_people ?? undefined,
+    collaboratorHandles: post.collaborator_handles ?? undefined,
     // Per-platform overrides — undefined fields fall through to
     // buildPublishBody defaults (caption-derived YT title, share-to-feed=true,
     // TikTok interactions=true). See migration 218.
