@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/auth/permissions';
+import { cancelZernioTicketForPost } from '@/lib/calendar/cancel-zernio-ticket';
 
 const FinalizeSchema = z.object({
   uploadId: z.string().min(1),
@@ -97,6 +98,23 @@ export async function POST(
     .eq('id', video.id);
   if (updateErr) {
     return NextResponse.json({ error: updateErr.message }, { status: 500 });
+  }
+
+  // If the post was already approved + queued in Zernio, the ticket holds the
+  // OLD cut. Cancel it and reset the post to 'draft' so the next client
+  // approval comment fires a fresh ticket via `publishScheduledPost` with the
+  // revised MP4. No-op when the post had no ticket to begin with.
+  try {
+    const { cancelled } = await cancelZernioTicketForPost(admin, postId);
+    if (cancelled) {
+      console.log(`[mux-finalize] cancelled stale Zernio ticket for ${postId}`);
+    }
+  } catch (cancelErr) {
+    console.error(`[mux-finalize] failed to cancel Zernio ticket for ${postId}:`, cancelErr);
+    return NextResponse.json(
+      { error: cancelErr instanceof Error ? cancelErr.message : 'cancel failed' },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({ uploaded_at: nowIso });
