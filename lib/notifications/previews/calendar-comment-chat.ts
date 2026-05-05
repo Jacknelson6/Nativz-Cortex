@@ -45,10 +45,53 @@ export async function previewCalendarAllApprovedChat(): Promise<NotificationPrev
       <div class="room">Avondale Furnishings · Cortex bot</div>
       <div class="who">All 8 posts approved 🎉</div>
       <div class="body">
-        Every post in the latest content calendar has been approved. Nothing left to review — we'll publish on the scheduled dates.
+        Every post in the latest content calendar has been approved. Nothing left to review, we'll publish on the scheduled dates.
       </div>
       <a class="link" href="#">Open content calendar →</a>
     </div>
   `);
   return { subject: 'All-approved ping (chat)', html };
+}
+
+export async function previewEditingCommentChat(): Promise<NotificationPreviewResult> {
+  const html = chatFrame(`
+    <div class="card">
+      <div class="room">Avondale Furnishings · Cortex bot</div>
+      <div class="who">Megan Reed requested changes on May Reels Batch</div>
+      <div class="body">
+        <em>"Cut 2 needs the captions repositioned, they overlap the product. Otherwise the pacing on the rest looks great."</em>
+        <div style="margin-top:8px;font-size:12px;color:#9aa3b2;">on cut "Reel-02-walkthrough.mp4"</div>
+      </div>
+      <a class="link" href="#">Open editing review →</a>
+    </div>
+  `);
+  return { subject: 'Editing comment ping (chat)', html };
+}
+
+export async function previewCalendarAutoApproveChat(): Promise<NotificationPreviewResult> {
+  const html = chatFrame(`
+    <div class="card">
+      <div class="room">Cortex ops</div>
+      <div class="who">✅ Auto-approved 6 posts on Avondale Furnishings' calendar</div>
+      <div class="body">
+        No client activity for 9 days after the 3-stage follow-up cadence completed. Posts are queued to publish on their scheduled dates.
+      </div>
+      <a class="link" href="#">Open content calendar →</a>
+    </div>
+  `);
+  return { subject: 'Calendar auto-approve ping (chat)', html };
+}
+
+export async function previewEditingAutoApproveChat(): Promise<NotificationPreviewResult> {
+  const html = chatFrame(`
+    <div class="card">
+      <div class="room">Cortex ops</div>
+      <div class="who">✅ Auto-approved 4 cuts on Avondale Furnishings · May Reels Batch</div>
+      <div class="body">
+        No client activity for 9 days after the 3-stage follow-up cadence completed. Cuts are flagged approved and ready to deliver.
+      </div>
+      <a class="link" href="#">Open editing project →</a>
+    </div>
+  `);
+  return { subject: 'Editing auto-approve ping (chat)', html };
 }

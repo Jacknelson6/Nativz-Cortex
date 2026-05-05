@@ -1,9 +1,17 @@
-import { layout } from '@/lib/email/resend';
+import {
+  layout,
+  buildCalendarCadenceFollowupDraft,
+  buildEditingCadenceFollowupDraft,
+  type CadenceStage,
+} from '@/lib/email/resend';
 import type { AgencyBrand } from '@/lib/agency/detect';
 import type { NotificationPreviewResult } from '../registry';
 
 const SAMPLE_CLIENT = 'Avondale Furnishings';
+const SAMPLE_PROJECT = 'May Reels Batch';
+const SAMPLE_POC_FIRST_NAMES = ['Megan'];
 const SAMPLE_URL = 'https://cortex.nativz.io/c/sample-token';
+const SAMPLE_EDITING_URL = 'https://cortex.nativz.io/c/edit/sample-token';
 
 export async function previewCalendarNoOpenNudge(
   agency: AgencyBrand,
@@ -70,10 +78,9 @@ export async function previewCalendarRevisionsComplete(
 export async function previewEditingRevisionsComplete(
   agency: AgencyBrand,
 ): Promise<NotificationPreviewResult> {
-  const sampleProject = 'May Reels Batch';
   const html = layout(
-    `<p class="subtext">Hey ${SAMPLE_CLIENT}, we've worked through every change you flagged on ${sampleProject}. Hop back in to take a final look and approve the cuts you're happy with.</p>
-    <div class="button-wrap"><a href="${SAMPLE_URL}" class="button">Review the updated cuts &rarr;</a></div>`,
+    `<p class="subtext">Hey ${SAMPLE_CLIENT}, we've worked through every change you flagged on ${SAMPLE_PROJECT}. Hop back in to take a final look and approve the cuts you're happy with.</p>
+    <div class="button-wrap"><a href="${SAMPLE_EDITING_URL}" class="button">Review the updated cuts &rarr;</a></div>`,
     agency,
     {
       eyebrow: 'Revisions Complete',
@@ -81,7 +88,54 @@ export async function previewEditingRevisionsComplete(
     },
   );
   return {
-    subject: `Your ${sampleProject} revisions are ready to review`,
+    subject: `Your ${SAMPLE_PROJECT} revisions are ready to review`,
     html,
   };
+}
+
+function paragraphsFromMessage(message: string): string {
+  return message
+    .split(/\n{2,}/)
+    .map((p) => `<p class="subtext">${p}</p>`)
+    .join('\n');
+}
+
+export async function previewCalendarCadenceFollowup(
+  agency: AgencyBrand,
+  stage: CadenceStage = 1,
+): Promise<NotificationPreviewResult> {
+  const draft = buildCalendarCadenceFollowupDraft({
+    stage,
+    pocFirstNames: SAMPLE_POC_FIRST_NAMES,
+    clientName: SAMPLE_CLIENT,
+  });
+  const eyebrow = stage === 3 ? 'Final Call' : 'Calendar Check-In';
+  const ctaLabel = stage === 3 ? 'Open the calendar' : 'Review the posts';
+  const html = layout(
+    `${paragraphsFromMessage(draft.message)}
+     <div class="button-wrap"><a href="${SAMPLE_URL}" class="button">${ctaLabel} &rarr;</a></div>`,
+    agency,
+    { eyebrow, heroTitle: draft.heroTitle },
+  );
+  return { subject: draft.subject, html };
+}
+
+export async function previewEditingCadenceFollowup(
+  agency: AgencyBrand,
+  stage: CadenceStage = 1,
+): Promise<NotificationPreviewResult> {
+  const draft = buildEditingCadenceFollowupDraft({
+    stage,
+    pocFirstNames: SAMPLE_POC_FIRST_NAMES,
+    clientName: SAMPLE_CLIENT,
+    projectName: SAMPLE_PROJECT,
+  });
+  const eyebrow = stage === 3 ? 'Final Call' : 'Editing Check-In';
+  const html = layout(
+    `${paragraphsFromMessage(draft.message)}
+     <div class="button-wrap"><a href="${SAMPLE_EDITING_URL}" class="button">Review the cuts &rarr;</a></div>`,
+    agency,
+    { eyebrow, heroTitle: draft.heroTitle },
+  );
+  return { subject: draft.subject, html };
 }

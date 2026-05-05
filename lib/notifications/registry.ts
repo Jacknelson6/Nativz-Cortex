@@ -116,17 +116,29 @@ export const NOTIFICATION_REGISTRY: NotificationDefinition[] = [
     cronSchedule: '0 14 * * *',
     cronPath: '/api/cron/calendar-reminders',
     recipientLabel: 'Client primary contacts',
+    preview: async (agency) => {
+      const { previewCalendarCadenceFollowup } = await import(
+        './previews/calendar-reminders'
+      );
+      return previewCalendarCadenceFollowup(agency);
+    },
   },
   {
     key: 'calendar_auto_approve',
     label: 'Calendar auto-approve at T+216h',
     description:
-      'After the 3-stage follow-up cadence completes with no client activity, auto-approve every still-pending post on the share link and ping ops.',
-    kind: 'email',
+      'After the 3-stage follow-up cadence completes with no client activity, auto-approve every still-pending post on the share link and ping ops via Google Chat + in-app notification.',
+    kind: 'chat',
     trigger: 'cron',
     cronSchedule: '0 14 * * *',
     cronPath: '/api/cron/calendar-reminders',
     recipientLabel: 'Ops Google Chat space + admin notifications',
+    preview: async () => {
+      const { previewCalendarAutoApproveChat } = await import(
+        './previews/calendar-comment-chat'
+      );
+      return previewCalendarAutoApproveChat();
+    },
   },
   {
     key: 'editing_followup_cadence',
@@ -138,17 +150,29 @@ export const NOTIFICATION_REGISTRY: NotificationDefinition[] = [
     cronSchedule: '0 14 * * *',
     cronPath: '/api/cron/editing-reminders',
     recipientLabel: 'Client primary contacts',
+    preview: async (agency) => {
+      const { previewEditingCadenceFollowup } = await import(
+        './previews/calendar-reminders'
+      );
+      return previewEditingCadenceFollowup(agency);
+    },
   },
   {
     key: 'editing_auto_approve',
     label: 'Editing auto-approve at T+216h',
     description:
-      'After the 3-stage follow-up cadence completes with no client activity, auto-approve every still-pending video on the share link and ping ops.',
-    kind: 'email',
+      'After the 3-stage follow-up cadence completes with no client activity, auto-approve every still-pending video on the share link and ping ops via Google Chat + in-app notification.',
+    kind: 'chat',
     trigger: 'cron',
     cronSchedule: '0 14 * * *',
     cronPath: '/api/cron/editing-reminders',
     recipientLabel: 'Ops Google Chat space + admin notifications',
+    preview: async () => {
+      const { previewEditingAutoApproveChat } = await import(
+        './previews/calendar-comment-chat'
+      );
+      return previewEditingAutoApproveChat();
+    },
   },
   {
     key: 'editing_comment_chat',
@@ -158,6 +182,12 @@ export const NOTIFICATION_REGISTRY: NotificationDefinition[] = [
     kind: 'chat',
     trigger: 'event',
     recipientLabel: 'Client Google Chat space',
+    preview: async () => {
+      const { previewEditingCommentChat } = await import(
+        './previews/calendar-comment-chat'
+      );
+      return previewEditingCommentChat();
+    },
   },
   {
     key: 'calendar_revisions_complete',
