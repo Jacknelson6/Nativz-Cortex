@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import { Dialog } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
+import { thumbUrl } from '@/lib/calendar/thumb-url';
 
 // Load MuxPlayer client-only; the custom element registration explodes
 // during SSR.
@@ -878,7 +879,13 @@ function VideoCard({
   //      so the activity feed reflects the new cut, then refetch the page.
   async function uploadReplacementFile(file: File) {
     if (!isEditor) return;
-    if (!file.type.startsWith('video/')) {
+    const incomingIsImage = file.type.startsWith('image/');
+    const incomingIsVideo = file.type.startsWith('video/');
+    if (isImage && !incomingIsImage) {
+      toast.error('Choose an image file');
+      return;
+    }
+    if (!isImage && !incomingIsVideo) {
       toast.error('Choose a video file');
       return;
     }
@@ -913,6 +920,16 @@ function VideoCard({
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('PUT', uploadUrl);
+        // Supabase Storage signed-upload URLs (image branch) require the
+        // Content-Type header so the stored object carries the right MIME.
+        // Mux direct-upload URLs (video branch) infer from bytes and reject
+        // a Content-Type override on preflight.
+        if (initJson.kind === 'image') {
+          xhr.setRequestHeader(
+            'Content-Type',
+            file.type || 'application/octet-stream',
+          );
+        }
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable) {
             setUploadProgress(Math.round((e.loaded / e.total) * 100));
@@ -946,7 +963,9 @@ function VideoCard({
           body: JSON.stringify({
             videoId: newVideoId,
             authorName: authorName.trim() || 'Editor',
-            content: 're-uploaded the video',
+            content: incomingIsImage
+              ? 're-uploaded the image'
+              : 're-uploaded the video',
             status: 'video_revised',
             attachments: [],
             timestampSeconds: null,
@@ -956,7 +975,7 @@ function VideoCard({
         // Non-fatal — the upload itself succeeded.
       }
 
-      toast.success('New cut uploaded');
+      toast.success(incomingIsImage ? 'New image uploaded' : 'New cut uploaded');
       await onVideoReplaced();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Upload failed');
@@ -990,6 +1009,8 @@ function VideoCard({
     }
   }
 
+  const isImage = !!video.mime_type && video.mime_type.startsWith('image/');
+
   const headerBlock = (
     <div className="min-w-0 flex-1 space-y-2 sm:space-y-3">
       <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
@@ -1021,7 +1042,7 @@ function VideoCard({
       </div>
       <div className="space-y-1">
         <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-muted">
-          Video {index}
+          {isImage ? 'Image' : 'Video'} {index}
         </p>
         <h3 className="break-words text-[15px] font-medium leading-snug text-text-primary">
           {displayLabel}
@@ -1032,15 +1053,30 @@ function VideoCard({
 
   const muxStatus = video.mux_status ?? null;
   const muxProcessing =
-    muxStatus === 'pending' ||
-    muxStatus === 'uploading' ||
-    muxStatus === 'processing';
+    !isImage &&
+    (muxStatus === 'pending' ||
+      muxStatus === 'uploading' ||
+      muxStatus === 'processing');
   const muxPoster = video.mux_playback_id
     ? `https://image.mux.com/${video.mux_playback_id}/thumbnail.jpg?width=1280&fit_mode=preserve&time=1`
     : undefined;
+  const imageSrc = isImage && video.public_url ? thumbUrl(video.public_url, 1600) : null;
   const videoPanel = (
     <div ref={videoSectionRef} className="relative h-full w-full">
-      {video.mux_playback_id ? (
+      {isImage ? (
+        imageSrc ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imageSrc}
+            alt={displayLabel}
+            className="block h-full w-full bg-black object-contain"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-surface-hover">
+            <Loader2 className="h-6 w-6 animate-spin text-text-muted" />
+          </div>
+        )
+      ) : video.mux_playback_id ? (
         <MuxPlayer
           // MuxPlayer's ref points at the <mux-player> custom element
           // which exposes `currentTime` like an HTMLVideoElement, so the
@@ -1091,7 +1127,11 @@ function VideoCard({
           onClick={() => revisionInputRef.current?.click()}
           disabled={uploadingRevision || submitting || uploading}
           className="absolute right-2 top-2 inline-flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1.5 text-[11px] font-medium text-white backdrop-blur-md ring-1 ring-white/15 transition-all hover:bg-black/75 hover:ring-white/30 disabled:opacity-60"
-          title="Replace this video with a new upload"
+          title={
+            isImage
+              ? 'Replace this image with a new upload'
+              : 'Replace this video with a new upload'
+          }
         >
           {uploadingRevision ? (
             <Loader2 size={12} className="animate-spin" />
@@ -1112,7 +1152,7 @@ function VideoCard({
     <input
       ref={revisionInputRef}
       type="file"
-      accept="video/*"
+      accept={isImage ? 'image/*' : 'video/*'}
       className="hidden"
       onChange={(e) => {
         const f = e.target.files?.[0];
