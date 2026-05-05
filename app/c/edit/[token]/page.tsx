@@ -9,6 +9,7 @@ import {
   CalendarDays,
   CheckCircle,
   Clock,
+  Download,
   File as FileIcon,
   FileVideo,
   Film,
@@ -247,6 +248,7 @@ function SharedReviewView({
   const [pendingName, setPendingName] = useState('');
   const [approveAllOpen, setApproveAllOpen] = useState(false);
   const [approvingAll, setApprovingAll] = useState(false);
+  const [downloadingAll, setDownloadingAll] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -385,6 +387,57 @@ function SharedReviewView({
     }
   }
 
+  /**
+   * Sequentially download every cut. Browsers throttle (or popup-block)
+   * many simultaneous anchor clicks, so we serialize and surface
+   * progress through a single sticky toast.
+   */
+  async function handleDownloadAll() {
+    if (downloadingAll) return;
+    const targets = data.videos
+      .map((v, idx) => ({ video: v, idx, url: getDownloadUrl(v) }))
+      .filter((t): t is { video: SharedVideo; idx: number; url: string } =>
+        Boolean(t.url),
+      );
+    if (targets.length === 0) {
+      toast.error('Nothing to download yet.');
+      return;
+    }
+    setDownloadingAll(true);
+    const toastId = toast.loading(`Downloading 0 of ${targets.length}…`);
+    let done = 0;
+    let failed = 0;
+    try {
+      for (const t of targets) {
+        try {
+          await downloadAsset(t.url, getDownloadFilename(t.video, t.idx));
+          done++;
+        } catch {
+          failed++;
+        }
+        toast.loading(
+          `Downloading ${done + failed} of ${targets.length}…`,
+          { id: toastId },
+        );
+      }
+      if (failed === 0) {
+        toast.success(
+          `Downloaded ${done} file${done === 1 ? '' : 's'}`,
+          { id: toastId },
+        );
+      } else if (done === 0) {
+        toast.error('Could not download any files. Try again.', { id: toastId });
+      } else {
+        toast.error(
+          `Downloaded ${done}, ${failed} failed.`,
+          { id: toastId },
+        );
+      }
+    } finally {
+      setDownloadingAll(false);
+    }
+  }
+
   const total = data.videos.length;
   const approvedCount = data.videos.filter(
     (v) => latestReview(v.comments) === 'approved',
@@ -428,6 +481,27 @@ function SharedReviewView({
               </p>
             </div>
             <div className="flex items-center gap-2">
+              {total > 0 && (
+                <button
+                  type="button"
+                  onClick={handleDownloadAll}
+                  disabled={downloadingAll}
+                  className="inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3.5 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                  title={`Download all ${total} ${total === 1 ? 'file' : 'files'}`}
+                >
+                  {downloadingAll ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Download size={14} />
+                  )}
+                  <span className="hidden sm:inline">
+                    {downloadingAll ? 'Downloading…' : `Download all (${total})`}
+                  </span>
+                  <span className="sm:hidden">
+                    {downloadingAll ? '…' : `Download (${total})`}
+                  </span>
+                </button>
+              )}
               {unapprovedVideos.length > 0 && (
                 <button
                   type="button"
@@ -709,6 +783,7 @@ function VideoCard({
   const [uploadingRevision, setUploadingRevision] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const revisionInputRef = useRef<HTMLInputElement>(null);
+  const [downloading, setDownloading] = useState(false);
 
   const [removeOpen, setRemoveOpen] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -1065,12 +1140,14 @@ function VideoCard({
     <div ref={videoSectionRef} className="relative h-full w-full">
       {isImage ? (
         imageSrc ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imageSrc}
-            alt={displayLabel}
-            className="block h-full w-full bg-black object-contain"
-          />
+          <div className="flex h-full w-full items-center justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imageSrc}
+              alt={displayLabel}
+              className="block max-h-full max-w-full object-contain"
+            />
+          </div>
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-surface-hover">
             <Loader2 className="h-6 w-6 animate-spin text-text-muted" />
@@ -1121,30 +1198,65 @@ function VideoCard({
           <FileVideo className="h-10 w-10 text-text-muted" />
         </div>
       )}
-      {isEditor && (
-        <button
-          type="button"
-          onClick={() => revisionInputRef.current?.click()}
-          disabled={uploadingRevision || submitting || uploading}
-          className="absolute right-2 top-2 inline-flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1.5 text-[11px] font-medium text-white backdrop-blur-md ring-1 ring-white/15 transition-all hover:bg-black/75 hover:ring-white/30 disabled:opacity-60"
-          title={
-            isImage
-              ? 'Replace this image with a new upload'
-              : 'Replace this video with a new upload'
-          }
-        >
-          {uploadingRevision ? (
-            <Loader2 size={12} className="animate-spin" />
-          ) : (
-            <Upload size={12} />
-          )}
-          {uploadingRevision
-            ? uploadProgress !== null
-              ? `${uploadProgress}%`
-              : 'Uploading…'
-            : 'Replace'}
-        </button>
-      )}
+      <div className="absolute right-2 top-2 flex items-center gap-1.5">
+        {(() => {
+          const downloadUrl = getDownloadUrl(video);
+          if (!downloadUrl) return null;
+          return (
+            <button
+              type="button"
+              onClick={async () => {
+                if (downloading) return;
+                setDownloading(true);
+                try {
+                  await downloadAsset(
+                    downloadUrl,
+                    getDownloadFilename(video, index - 1),
+                  );
+                } catch {
+                  toast.error('Download failed.');
+                } finally {
+                  setDownloading(false);
+                }
+              }}
+              disabled={downloading}
+              className="inline-flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1.5 text-[11px] font-medium text-white backdrop-blur-md ring-1 ring-white/15 transition-all hover:bg-black/75 hover:ring-white/30 disabled:opacity-60"
+              title={isImage ? 'Download this image' : 'Download this video'}
+            >
+              {downloading ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <Download size={12} />
+              )}
+              {downloading ? 'Downloading…' : 'Download'}
+            </button>
+          );
+        })()}
+        {isEditor && (
+          <button
+            type="button"
+            onClick={() => revisionInputRef.current?.click()}
+            disabled={uploadingRevision || submitting || uploading}
+            className="inline-flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1.5 text-[11px] font-medium text-white backdrop-blur-md ring-1 ring-white/15 transition-all hover:bg-black/75 hover:ring-white/30 disabled:opacity-60"
+            title={
+              isImage
+                ? 'Replace this image with a new upload'
+                : 'Replace this video with a new upload'
+            }
+          >
+            {uploadingRevision ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <Upload size={12} />
+            )}
+            {uploadingRevision
+              ? uploadProgress !== null
+                ? `${uploadProgress}%`
+                : 'Uploading…'
+              : 'Replace'}
+          </button>
+        )}
+      </div>
     </div>
   );
 
@@ -1391,7 +1503,11 @@ function VideoCard({
       className={`flex flex-col overflow-hidden rounded-xl border border-nativz-border bg-surface md:flex-row ${heightPx}`}
     >
       {revisionInput}
-      <div className="aspect-[9/16] w-full bg-black md:h-full md:w-auto md:flex-shrink-0">
+      <div
+        className={`w-full md:h-full md:w-auto md:flex-shrink-0 ${
+          isImage ? 'aspect-square bg-surface' : 'aspect-[9/16] bg-black'
+        }`}
+      >
         {videoPanel}
       </div>
       <div className="flex flex-1 flex-col md:h-full md:min-w-0">
@@ -1820,6 +1936,51 @@ async function readJsonSafe(
     return JSON.parse(text) as Record<string, unknown>;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Resolves the best download URL for a shared asset.
+ *
+ *   - Mux videos → capped-1080p MP4 rendition (matches the upload's
+ *     `mp4_support: 'capped-1080p'` setting). HLS playback URLs aren't
+ *     useful as a direct download.
+ *   - Pre-Mux videos + images → the original Supabase Storage public URL.
+ */
+function getDownloadUrl(v: SharedVideo): string | null {
+  if (v.mux_playback_id) {
+    return `https://stream.mux.com/${v.mux_playback_id}/capped-1080p.mp4`;
+  }
+  return v.public_url ?? null;
+}
+
+function getDownloadFilename(v: SharedVideo, idx: number): string {
+  if (v.filename) return v.filename;
+  const isImage = (v.mime_type ?? '').startsWith('image/');
+  const ext = isImage ? 'png' : 'mp4';
+  return `cut-${idx + 1}.${ext}`;
+}
+
+/**
+ * Cross-origin friendly download: fetch as blob, mint an object URL, click
+ * a synthetic anchor. The `download` HTML attribute is ignored on most
+ * cross-origin assets (Mux, Supabase Storage public bucket), so we go via
+ * blob to guarantee an actual save instead of a navigation.
+ */
+async function downloadAsset(url: string, filename: string): Promise<void> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Download failed (${res.status})`);
+  const blob = await res.blob();
+  const objUrl = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement('a');
+    a.href = objUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(objUrl), 1500);
   }
 }
 

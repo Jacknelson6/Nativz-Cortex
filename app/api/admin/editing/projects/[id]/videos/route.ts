@@ -81,6 +81,19 @@ export async function POST(
       version = prev.version + 1;
       position = prev.position;
     }
+  } else {
+    // Bulk uploads from the editing dialog all post `position: 0` because
+    // the client doesn't know the project's current slot count. The share
+    // GET dedupes "latest cut per position," so without per-row positions
+    // every upload collapses into a single tile. Assign the next slot.
+    const { data: maxRow } = await admin
+      .from('editing_project_videos')
+      .select('position')
+      .eq('project_id', projectId)
+      .order('position', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    position = (maxRow?.position ?? -1) + 1;
   }
 
   const isImage = parsed.data.mime_type.startsWith('image/');

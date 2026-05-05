@@ -9,7 +9,6 @@ import {
 } from 'react';
 import { toast } from 'sonner';
 import {
-  Archive,
   CheckCheck,
   CheckCircle2,
   Copy,
@@ -21,6 +20,7 @@ import {
   MessagesSquare,
   RefreshCcw,
   Send,
+  Trash2,
   Users,
 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
@@ -596,8 +596,8 @@ export function EditingProjectDetail({
         onClick={archive}
         className="text-text-muted hover:text-[color:var(--status-danger)]"
       >
-        <Archive size={13} />
-        Archive project
+        <Trash2 size={13} />
+        Delete project
       </Button>
       {activeLink && showRevisionsCta && !isApproved && (
         <Button
@@ -624,7 +624,7 @@ export function EditingProjectDetail({
           disabled={minting}
         >
           {minting ? <Loader2 size={13} className="animate-spin" /> : <Link2 size={13} />}
-          {minting ? 'Minting...' : 'Mint share link'}
+          {minting ? 'Creating...' : 'Create share link'}
         </Button>
       )}
       {activeLink && !isApproved && (
@@ -852,7 +852,7 @@ export function EditingProjectDetail({
                       No active share link.
                     </p>
                     <p className="mt-0.5 text-[11px] text-text-muted">
-                      Mint one to share these cuts with the brand for review.
+                      Create one to share these cuts with the brand for review.
                     </p>
                   </div>
                   <Button
@@ -867,7 +867,7 @@ export function EditingProjectDetail({
                     ) : (
                       <Link2 size={13} />
                     )}
-                    {minting ? 'Minting...' : 'Mint share link'}
+                    {minting ? 'Creating...' : 'Create share link'}
                   </Button>
                 </div>
               ) : (
