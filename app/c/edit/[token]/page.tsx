@@ -1504,8 +1504,8 @@ function VideoCard({
     >
       {revisionInput}
       <div
-        className={`w-full md:h-full md:w-auto md:flex-shrink-0 ${
-          isImage ? 'aspect-square bg-surface' : 'aspect-[9/16] bg-black'
+        className={`aspect-[9/16] w-full md:h-full md:w-auto md:flex-shrink-0 ${
+          isImage ? 'bg-surface' : 'bg-black'
         }`}
       >
         {videoPanel}
