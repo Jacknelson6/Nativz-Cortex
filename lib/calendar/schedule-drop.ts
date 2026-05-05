@@ -5,6 +5,10 @@ import { distributeSlots } from './distribute-slots';
 import { verifyAndReconcilePost } from './verify-post';
 import { resolveScheduledPostMedia } from './resolve-media';
 import { preflightInstagramAspectForPost } from '@/lib/posting/validate-image-aspect';
+import {
+  isAccountLevelLegError,
+  markProfileDisconnectedFromLegFailure,
+} from '@/lib/posting/zernio-account-errors';
 import { getMux } from '@/lib/mux/client';
 
 interface ScheduleInput {
@@ -582,6 +586,21 @@ export async function publishScheduledPost(
         failure_reason: platformResult.status === 'failed' ? reason : null,
       })
       .eq('id', sppId);
+
+    if (platformResult.status === 'failed' && isAccountLevelLegError(reason)) {
+      try {
+        await markProfileDisconnectedFromLegFailure({
+          admin,
+          lateAccountId: platformResult.profileId,
+          reason: reason ?? 'unknown',
+        });
+      } catch (markErr) {
+        console.error(
+          `[publishScheduledPost] disconnect-mark failed for ${platformResult.profileId}:`,
+          markErr,
+        );
+      }
+    }
   }
 
   // If Zernio reported any "timed out — may have been published externally"

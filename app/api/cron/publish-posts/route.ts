@@ -9,6 +9,11 @@ import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
 import { verifyAndReconcilePost } from '@/lib/calendar/verify-post';
 import { resolveScheduledPostMedia } from '@/lib/calendar/resolve-media';
 import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import {
+  isAccountLevelLegError,
+  isZernioGlobalAuthError,
+  markProfileDisconnectedFromLegFailure,
+} from '@/lib/posting/zernio-account-errors';
 
 const STALE_ALERT_PREFIX = 'Stale draft: scheduled time passed without approval';
 
@@ -654,11 +659,33 @@ async function handleGet(request: NextRequest) {
 
           if (platformResult.status === 'failed') {
             const sppRecord = spp as { social_profiles?: { platform?: string; username?: string | null } } | undefined;
+            const reason = platformResult.error ?? 'Unknown error';
             failedPlatformDetails.push({
               platform: sppRecord?.social_profiles?.platform ?? platformResult.profileId,
               username: sppRecord?.social_profiles?.username ?? null,
-              reason: platformResult.error ?? 'Unknown error',
+              reason,
             });
+
+            // Account-level errors (token expired, permission denied, etc.)
+            // are deterministic — retrying the same payload with the same
+            // token keeps failing until the user reconnects. Flip the
+            // profile to inactive + fire a one-time disconnect notification
+            // so the team can ask the client to reconnect, instead of
+            // burning the rest of MAX_RETRIES on the same dead token.
+            if (isAccountLevelLegError(reason)) {
+              try {
+                await markProfileDisconnectedFromLegFailure({
+                  admin: adminClient,
+                  lateAccountId: platformResult.profileId,
+                  reason,
+                });
+              } catch (markErr) {
+                console.error(
+                  `[publish-posts] disconnect-mark failed for ${platformResult.profileId}:`,
+                  markErr,
+                );
+              }
+            }
           }
         }
 
@@ -779,6 +806,24 @@ async function handleGet(request: NextRequest) {
       } catch (err) {
         console.error(`Failed to publish post ${post.id}:`, err);
 
+        // Global Zernio auth failure (401/403). The post-level call itself
+        // was rejected, which on Zernio's API means our API key is bad —
+        // not a per-leg account issue. Notify Jack directly; per-leg
+        // disconnect handling above doesn't fire because the platforms
+        // array never came back.
+        if (isZernioGlobalAuthError(err)) {
+          try {
+            await notifyAdmins({
+              type: 'pipeline_alert',
+              title: 'Zernio API key rejected',
+              body: `Zernio returned ${err.status} during publishPost. Rotate ZERNIO_API_KEY and redeploy.`,
+              linkPath: '/admin/scheduler',
+            });
+          } catch (notifyErr) {
+            console.error('Failed to send Zernio API-key alert:', notifyErr);
+          }
+        }
+
         // Gap 6/A10: terminal-error short-circuit. A subset of error messages
         // signal "this will never succeed without operator intervention" —
         // retrying just delays the user-facing failure email and burns
@@ -787,7 +832,8 @@ async function handleGet(request: NextRequest) {
         const errMsg = err instanceof Error ? err.message : String(err);
         const isTerminal =
           /Mux asset errored/i.test(errMsg) ||
-          /Re-upload the video/i.test(errMsg);
+          /Re-upload the video/i.test(errMsg) ||
+          isZernioGlobalAuthError(err);
         const newRetryCount = isTerminal ? MAX_RETRIES : (post.retry_count ?? 0) + 1;
         const newStatus = newRetryCount >= MAX_RETRIES ? 'failed' : 'scheduled';
 
