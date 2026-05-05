@@ -984,7 +984,7 @@ function FollowupCell({
     : link.first_sent_at;
   const days = stamp ? daysSince(stamp) : null;
   const tone = followupTone(days);
-  const label = formatFollowupLabel(days, hasRealFollowup);
+  const label = formatFollowupLabel(stamp);
 
   const tooltipBody =
     days === null
@@ -1054,17 +1054,9 @@ function followupTone(days: number | null): { className: string; dot: string } {
   };
 }
 
-function formatFollowupLabel(
-  days: number | null,
-  hasRealFollowup: boolean,
-): string {
-  if (days === null) return 'New';
-  const elapsed =
-    days === 0 ? 'today' : days === 1 ? '1d ago' : `${days}d ago`;
-  // Prefix with "Sent" when no manual followup has been chased yet so
-  // the pill doesn't read like a recent nudge happened.
-  if (!hasRealFollowup) return days === 0 ? 'Sent today' : `Sent ${elapsed}`;
-  return days === 0 ? 'Today' : elapsed;
+function formatFollowupLabel(stamp: string | null): string {
+  if (!stamp) return 'New';
+  return formatShortDate(stamp);
 }
 
 /**
