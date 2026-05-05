@@ -30,6 +30,55 @@ import type {
 
 const DEFAULT_BASE = 'https://zernio.com/api/v1';
 
+/**
+ * Zernio's documented error envelope (per https://docs.zernio.com/guides/error-handling):
+ *   { error: { type, code, message, details? } }
+ *
+ * Surfaces the stable `type` and `code` fields so callers can branch on
+ * specific failure modes (rate-limited, platform_error, invalid_request_error,
+ * api_error) instead of regex-matching free-text messages. We capture the
+ * HTTP status too because Zernio's docs treat status + type as a pair.
+ */
+export class ZernioApiError extends Error {
+  readonly status: number;
+  readonly type?: string;
+  readonly code?: string;
+  readonly details?: unknown;
+
+  constructor(status: number, body: string) {
+    let parsedType: string | undefined;
+    let parsedCode: string | undefined;
+    let parsedMessage: string | undefined;
+    let parsedDetails: unknown;
+    try {
+      const parsed = JSON.parse(body) as { error?: Record<string, unknown> } | Record<string, unknown>;
+      const env =
+        (parsed as { error?: Record<string, unknown> }).error ??
+        (parsed as Record<string, unknown>);
+      if (env && typeof env === 'object') {
+        const t = (env as Record<string, unknown>).type;
+        const c = (env as Record<string, unknown>).code;
+        const m = (env as Record<string, unknown>).message;
+        parsedType = typeof t === 'string' ? t : undefined;
+        parsedCode = typeof c === 'string' ? c : undefined;
+        parsedMessage = typeof m === 'string' ? m : undefined;
+        parsedDetails = (env as Record<string, unknown>).details;
+      }
+    } catch {
+      // Body wasn't JSON — keep raw substring as the message.
+    }
+
+    const summary = parsedMessage ?? body.substring(0, 300);
+    const tag = [parsedType, parsedCode].filter(Boolean).join('/');
+    super(tag ? `Zernio ${tag} (${status}): ${summary}` : `Zernio API error (${status}): ${summary}`);
+    this.name = 'ZernioApiError';
+    this.status = status;
+    this.type = parsedType;
+    this.code = parsedCode;
+    this.details = parsedDetails;
+  }
+}
+
 const ANALYTICS_PLATFORMS: SocialPlatform[] = [
   'instagram',
   'tiktok',
@@ -100,7 +149,7 @@ async function zernioRequest<T>(path: string, options: RequestInit = {}, retryAt
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`Zernio API error (${response.status}): ${body.substring(0, 300)}`);
+    throw new ZernioApiError(response.status, body);
   }
 
   if (response.status === 204) return undefined as T;
@@ -519,6 +568,13 @@ function mapPublishPlatforms(
   if (!Array.isArray(pl)) return [];
   return pl.map((x) => {
     const o = asRecord(x) ?? {};
+    // Zernio surfaces structured `errorCode` + `errorType` alongside
+    // `errorMessage` on failed legs (per docs/error-handling). Prefer a
+    // composed "TIKTOK_THUMBNAIL_FAILED: ffmpeg packaging error" form so
+    // operators get the actionable code, not just the human sentence.
+    const errCode = pickString(o, 'errorCode', 'error_code', 'code');
+    const errMsg = pickString(o, 'errorMessage', 'error_message', 'error', 'message');
+    const composedError = errCode && errMsg ? `${errCode}: ${errMsg}` : errCode ?? errMsg ?? undefined;
     return {
       // `platformPostId` is Zernio's first-class field for the published
       // platform-side ID (e.g. Instagram media ID). Prefer it over the
@@ -530,9 +586,7 @@ function mapPublishPlatforms(
       status: pickString(o, 'status') ?? undefined,
       platformPostUrl:
         pickString(o, 'platformPostUrl', 'platform_post_url', 'url') ?? undefined,
-      // `errorMessage` is the actual field Zernio populates on failed
-      // platform rows; legacy `error`/`message` kept as fallbacks.
-      error: pickString(o, 'errorMessage', 'error_message', 'error', 'message') ?? undefined,
+      error: composedError,
     };
   });
 }
