@@ -31,7 +31,6 @@ import {
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { DeliverableProgressChip } from '@/components/calendar/deliverable-progress-chip';
 import type {
   CaptionVariantPlatform,
   CaptionVariants,
@@ -319,9 +318,6 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
           <p className="mt-1 text-sm text-text-secondary">
             {drop.processed_videos}/{drop.total_videos} videos · default {drop.default_post_time} UTC
           </p>
-          <div className="mt-2">
-            <DeliverableProgressChip clientId={drop.client_id} />
-          </div>
           {drop.error_detail && (
             <p className="mt-2 text-xs text-red-400">{drop.error_detail}</p>
           )}

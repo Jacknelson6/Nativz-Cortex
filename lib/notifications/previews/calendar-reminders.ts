@@ -66,3 +66,22 @@ export async function previewCalendarRevisionsComplete(
   );
   return { subject: 'Your revisions are ready to review', html };
 }
+
+export async function previewEditingRevisionsComplete(
+  agency: AgencyBrand,
+): Promise<NotificationPreviewResult> {
+  const sampleProject = 'May Reels Batch';
+  const html = layout(
+    `<p class="subtext">Hey ${SAMPLE_CLIENT}, we've worked through every change you flagged on ${sampleProject}. Hop back in to take a final look and approve the cuts you're happy with.</p>
+    <div class="button-wrap"><a href="${SAMPLE_URL}" class="button">Review the updated cuts &rarr;</a></div>`,
+    agency,
+    {
+      eyebrow: 'Revisions Complete',
+      heroTitle: 'Revisions complete',
+    },
+  );
+  return {
+    subject: `Your ${sampleProject} revisions are ready to review`,
+    html,
+  };
+}

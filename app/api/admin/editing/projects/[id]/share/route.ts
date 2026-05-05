@@ -91,7 +91,7 @@ export async function GET(
   const { data: links } = await admin
     .from('editing_project_share_links')
     .select(
-      'id, token, expires_at, created_at, last_viewed_at, archived_at, last_review_email_sent_at',
+      'id, token, expires_at, created_at, last_viewed_at, archived_at, last_review_email_sent_at, revisions_complete_notified_at',
     )
     .eq('project_id', id)
     .is('archived_at', null)
@@ -129,6 +129,29 @@ export async function GET(
     .gt('version', 1)
     .returns<VideoRow[]>();
 
+  // Pull every changes_requested comment scoped to these links so we can
+  // compute each link's "revisions complete" readiness for the modal CTA.
+  type ChangeRow = {
+    share_link_id: string;
+    metadata: Record<string, unknown> | null;
+  };
+  const { data: changeRows } = linkIds.length
+    ? await admin
+        .from('editing_project_review_comments')
+        .select('share_link_id, metadata')
+        .in('share_link_id', linkIds)
+        .eq('status', 'changes_requested')
+        .returns<ChangeRow[]>()
+    : { data: [] as ChangeRow[] };
+
+  const changesByLink: Record<string, { total: number; unresolved: number }> = {};
+  for (const c of changeRows ?? []) {
+    const bucket = (changesByLink[c.share_link_id] ||= { total: 0, unresolved: 0 });
+    bucket.total += 1;
+    const m = (c.metadata ?? {}) as Record<string, unknown>;
+    if (m.resolved !== true) bucket.unresolved += 1;
+  }
+
   const appUrl = resolveAppUrl(project.clients?.agency);
   const now = Date.now();
   const history = (links ?? []).map((row) => {
@@ -141,6 +164,16 @@ export async function GET(
         ? revisionRows.filter((v) => v.created_at > lastSent).length
         : 0;
     const kind: 'delivery' | 'rereview' = lastSent ? 'rereview' : 'delivery';
+
+    const counts = changesByLink[row.id as string] ?? { total: 0, unresolved: 0 };
+    const sentAt =
+      (row.revisions_complete_notified_at as string | null) ?? null;
+    let revisionsStatus: 'none' | 'unresolved' | 'ready_to_send' | 'sent';
+    if (counts.total === 0) revisionsStatus = 'none';
+    else if (sentAt) revisionsStatus = 'sent';
+    else if (counts.unresolved > 0) revisionsStatus = 'unresolved';
+    else revisionsStatus = 'ready_to_send';
+
     return {
       id: row.id,
       url: `${appUrl}/c/edit/${row.token}`,
@@ -152,6 +185,10 @@ export async function GET(
       view_count: allViews.length,
       pending_revision_count: pending,
       kind,
+      revisions_status: revisionsStatus,
+      revisions_total: counts.total,
+      revisions_unresolved: counts.unresolved,
+      revisions_complete_notified_at: sentAt,
       views: allViews.slice(0, 50).map((v) => ({
         viewed_at: v.viewed_at,
         viewer_name: v.viewer_name,

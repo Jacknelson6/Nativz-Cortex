@@ -3,19 +3,27 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useState,
   useSyncExternalStore,
 } from 'react';
 import { toast } from 'sonner';
 import {
   Archive,
+  CheckCheck,
   CheckCircle2,
+  Copy,
   Eye,
   ExternalLink,
+  Link2,
   Loader2,
   Mail,
   MessagesSquare,
+  RefreshCcw,
+  Send,
+  Users,
 } from 'lucide-react';
+import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ComboSelect } from '@/components/ui/combo-select';
 import {
@@ -27,7 +35,6 @@ import {
   type EditingProjectVideo,
 } from '@/lib/editing/types';
 import { AssigneePicker } from './assignee-picker';
-import { EditingShareButton } from './editing-share-button';
 import { ShareHistoryPanel } from './share-history-panel';
 import { EditedVideosBox, UploadRow } from './edited-videos-box';
 import {
@@ -57,16 +64,12 @@ import {
  * Detail panel for a single editing project. Drives:
  *
  *   - Inline rename, type change, status flip, notes
- *   - Drag-drop multi-video upload of edited cuts (signed URL -> direct
- *     PUT to Supabase Storage), with progress + per-video delete.
- *   - Raw footage as a single Drive folder URL link. The strategist /
- *     videographer drops a folder link rather than uploading bulk
- *     camera files into our bucket; storage cost + Supabase upload
- *     time make a folder link the right primitive there.
- *
- * The status enum runs editing -> need_approval -> revising -> approved
- * -> done (post-handoff to paid media). Selecting a status auto-stamps
- * the corresponding timestamp column server-side.
+ *   - Drag-drop multi-video upload of edited cuts
+ *   - Raw footage as a single Drive folder URL link
+ *   - Share link lifecycle: mint, copy, send/resend, revisions-complete,
+ *     revoke. The Send action mirrors the calendar pattern exactly: a
+ *     SendPreviewDialog with edit/preview render mode toggle, defaulting
+ *     to delivery vs re-review based on whether the link has been sent.
  */
 
 const STATUS_OPTIONS: { value: EditingProjectStatus; label: string }[] = (
@@ -80,12 +83,52 @@ const TYPE_OPTIONS: { value: EditingProjectType; label: string }[] = (
 interface DetailResponse {
   project: EditingProject;
   videos: EditingProjectVideo[];
-  // Raw videos collection is left over from the previous design where
-  // raw footage uploaded into Supabase. We've moved raw to a Drive
-  // folder URL on the project itself — kept the field nullable so the
-  // route continues to return whatever's in the table without breaking.
   raw_videos?: unknown[];
 }
+
+type SendVariant = 'delivery' | 'rereview';
+
+interface ShareLinkRow {
+  id: string;
+  url: string;
+  created_at: string;
+  expires_at: string;
+  last_viewed_at: string | null;
+  last_review_email_sent_at: string | null;
+  revoked: boolean;
+  view_count: number;
+  pending_revision_count: number;
+  kind: SendVariant;
+  revisions_status: 'none' | 'unresolved' | 'ready_to_send' | 'sent';
+  revisions_total: number;
+  revisions_unresolved: number;
+  revisions_complete_notified_at: string | null;
+}
+
+interface SendPreview {
+  subject: string;
+  message: string;
+  recipients: { email: string; name: string | null }[];
+  client_name: string;
+  project_name: string;
+  share_url: string;
+  kind: SendVariant;
+  pending_count: number;
+}
+
+interface ContactRow {
+  id: string;
+  email: string;
+  name: string | null;
+  role: string | null;
+}
+
+/**
+ * Module-level cache for brand POC contacts. Mirrors the calendar modal
+ * cache so reopening the dialog for a recently-viewed brand renders the
+ * recipient list instantly while we revalidate underneath.
+ */
+const CONTACTS_CACHE = new Map<string, ContactRow[]>();
 
 export function EditingProjectDetail({
   project,
@@ -108,24 +151,36 @@ export function EditingProjectDetail({
   const [dragActive, setDragActive] = useState(false);
   const [tab, setTab] = useState<DetailTab>('details');
 
-  // Past emails — replays the rendered HTML the recipients actually got, by
-  // reading from the `editing_share_link_emails` archive (migration 243). Same
-  // shape + viewer dialog as the SMM modal so the two surfaces feel identical.
+  // Share links + send preview state. The first non-revoked link is the
+  // current one; everything else is history (covered by the activity tab).
+  const [shareLinks, setShareLinks] = useState<ShareLinkRow[] | null>(null);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [minting, setMinting] = useState(false);
+  const [revoking, setRevoking] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [firingRevisions, setFiringRevisions] = useState(false);
+
+  const [previewVariant, setPreviewVariant] = useState<SendVariant | null>(null);
+  const [preview, setPreview] = useState<SendPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [subjectDraft, setSubjectDraft] = useState('');
+  const [messageDraft, setMessageDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const [renderMode, setRenderMode] = useState<'edit' | 'preview'>('edit');
+
+  // Recipients (brand POC roster) for the Recipients section.
+  const [contacts, setContacts] = useState<ContactRow[] | null>(null);
+  const [contactsLoading, setContactsLoading] = useState(false);
+
+  // Past emails archive.
   const [archivedEmails, setArchivedEmails] = useState<ArchivedEmail[] | null>(null);
   const [archivedLoading, setArchivedLoading] = useState(false);
   const [viewingEmail, setViewingEmail] = useState<ArchivedEmail | null>(null);
 
   const projectId = project?.id ?? null;
+  const clientId = project?.client_id ?? null;
 
-  // Read upload state from the module-scoped store. The store keeps
-  // running XHRs even if this dialog unmounts, so closing the dialog
-  // mid-upload doesn't cancel anything; reopening picks up where we
-  // left off.
-  // `getProjectUploads` returns a stable EMPTY singleton when no entry
-  // exists for the key, so passing '' for a closed dialog still gives us
-  // a referentially-stable snapshot, satisfying React's `Object.is`
-  // equality check and avoiding the infinite-render loop that a fresh
-  // `[]` literal would cause.
   const uploadsKey = projectId ?? '';
   const getSnapshot = useCallback(
     () => getProjectUploads(uploadsKey),
@@ -159,22 +214,74 @@ export function EditingProjectDetail({
     }
   }, [projectId]);
 
+  const loadShareLinks = useCallback(async () => {
+    if (!projectId) return;
+    setShareLoading(true);
+    try {
+      const res = await fetch(
+        `/api/admin/editing/projects/${projectId}/share`,
+        { cache: 'no-store' },
+      );
+      if (!res.ok) throw new Error('Failed to load share links');
+      const body = (await res.json()) as { links: ShareLinkRow[] };
+      setShareLinks(body.links ?? []);
+    } catch {
+      setShareLinks([]);
+    } finally {
+      setShareLoading(false);
+    }
+  }, [projectId]);
+
   useEffect(() => {
-    if (open) void load();
-    else {
+    if (open) {
+      void load();
+      void loadShareLinks();
+    } else {
       setData(null);
-      setTab('details'); // reset to default tab on close
+      setTab('details');
       setArchivedEmails(null);
       setViewingEmail(null);
-      // Don't clear uploads on close — they live in the module-scoped
-      // store and continue running in the background. The user can
-      // reopen the dialog to check progress; the store survives.
+      setShareLinks(null);
+      setPreviewVariant(null);
+      setPreview(null);
+      setPreviewError(null);
+      setCopied(false);
     }
-  }, [open, load]);
+  }, [open, load, loadShareLinks]);
 
-  // Lazy-load archived sends. Refetches on every open so a send that just
-  // fired surfaces without forcing a parent table refresh; errors stay
-  // quiet, the section just renders empty if the read fails.
+  // Brand POC contacts. Cache hit shows instantly; revalidate in background.
+  useEffect(() => {
+    if (!open || !clientId) {
+      setContacts(null);
+      return;
+    }
+    const cached = CONTACTS_CACHE.get(clientId) ?? null;
+    setContacts(cached);
+    let cancelled = false;
+    void (async () => {
+      if (cached === null) setContactsLoading(true);
+      try {
+        const res = await fetch(
+          `/api/calendar/review/contacts?clientId=${encodeURIComponent(clientId)}`,
+          { cache: 'no-store' },
+        );
+        if (!res.ok) throw new Error('failed');
+        const json = (await res.json()) as { contacts: ContactRow[] };
+        if (cancelled) return;
+        const next = json.contacts ?? [];
+        CONTACTS_CACHE.set(clientId, next);
+        setContacts(next);
+      } catch {
+        if (!cancelled && cached === null) setContacts([]);
+      } finally {
+        if (!cancelled) setContactsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, clientId]);
+
   const loadArchivedEmails = useCallback(async () => {
     if (!projectId) return;
     setArchivedLoading(true);
@@ -198,10 +305,6 @@ export function EditingProjectDetail({
     void loadArchivedEmails();
   }, [open, loadArchivedEmails]);
 
-  // When a background batch finishes for *this* project, refetch so
-  // the new videos show up on the next dialog open. Subscribe even
-  // while closed: the parent shell handles list refresh separately,
-  // but this keeps the dialog's local data fresh too.
   useEffect(() => {
     if (!projectId) return;
     return subscribeToCompletion((finishedProjectId) => {
@@ -275,282 +378,697 @@ export function EditingProjectDetail({
     );
   }
 
+  // First non-revoked link is the active one. The endpoint returns links
+  // ordered by created_at desc with archived filtered out, so the head
+  // element is the right pick when present.
+  const activeLink = useMemo<ShareLinkRow | null>(() => {
+    if (!shareLinks) return null;
+    return shareLinks.find((l) => !l.revoked) ?? null;
+  }, [shareLinks]);
+
+  const hasVideos = (data?.videos.length ?? 0) > 0;
+
+  async function mintShareLink() {
+    if (!projectId || minting) return;
+    setMinting(true);
+    try {
+      const res = await fetch(
+        `/api/admin/editing/projects/${projectId}/share`,
+        { method: 'POST' },
+      );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const err =
+          typeof json?.detail === 'string'
+            ? json.detail
+            : typeof json?.error === 'string'
+              ? json.error
+              : 'Could not mint link';
+        throw new Error(err);
+      }
+      toast.success('Share link created');
+      await loadShareLinks();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not mint link');
+    } finally {
+      setMinting(false);
+    }
+  }
+
+  async function copyShareUrl() {
+    if (!activeLink) return;
+    try {
+      await navigator.clipboard.writeText(activeLink.url);
+      setCopied(true);
+      toast.success('Link copied');
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error('Could not copy link');
+    }
+  }
+
+  async function revokeShareLink() {
+    if (!projectId || !activeLink || revoking) return;
+    if (
+      !confirm(
+        'Revoke this share link? Anyone who has it will see an "expired" page on next visit.',
+      )
+    ) {
+      return;
+    }
+    setRevoking(true);
+    try {
+      const res = await fetch(
+        `/api/admin/editing/projects/${projectId}/share?linkId=${activeLink.id}`,
+        { method: 'DELETE' },
+      );
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(typeof json.error === 'string' ? json.error : 'Failed to revoke');
+      }
+      toast.success('Link revoked');
+      await loadShareLinks();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to revoke');
+    } finally {
+      setRevoking(false);
+    }
+  }
+
+  async function fireRevisionsComplete() {
+    if (!projectId || !activeLink || firingRevisions) return;
+    if (
+      !confirm(
+        'Send the "revisions complete" email to the brand contacts? This fires immediately.',
+      )
+    ) {
+      return;
+    }
+    setFiringRevisions(true);
+    try {
+      const res = await fetch(
+        `/api/admin/editing/projects/${projectId}/share/${activeLink.id}/revisions-complete`,
+        { method: 'POST' },
+      );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          typeof json?.error === 'string' ? json.error : 'Send failed',
+        );
+      }
+      toast.success('Revisions-complete email sent');
+      await loadShareLinks();
+      void loadArchivedEmails();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Send failed');
+    } finally {
+      setFiringRevisions(false);
+    }
+  }
+
+  async function openSendPreview(variant: SendVariant) {
+    if (!projectId || !activeLink) return;
+    setPreviewVariant(variant);
+    setPreview(null);
+    setPreviewError(null);
+    setRenderMode('edit');
+    setPreviewLoading(true);
+    try {
+      const res = await fetch(
+        `/api/admin/editing/projects/${projectId}/share/${activeLink.id}/email`,
+        { cache: 'no-store' },
+      );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          typeof json?.error === 'string' ? json.error : 'Failed to load preview',
+        );
+      }
+      const dataPreview = json as SendPreview;
+      setPreview(dataPreview);
+      setSubjectDraft(dataPreview.subject);
+      setMessageDraft(dataPreview.message);
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : 'Failed to load preview');
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  function closeSendPreview() {
+    if (sending) return;
+    setPreviewVariant(null);
+    setPreview(null);
+    setPreviewError(null);
+  }
+
+  async function confirmSend() {
+    if (!projectId || !activeLink || !preview || !previewVariant || sending) return;
+    setSending(true);
+    try {
+      const res = await fetch(
+        `/api/admin/editing/projects/${projectId}/share/${activeLink.id}/email`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...(subjectDraft.trim() !== preview.subject.trim()
+              ? { subject: subjectDraft.trim() }
+              : {}),
+            ...(messageDraft.trim() !== preview.message.trim()
+              ? { message: messageDraft.trim() }
+              : {}),
+          }),
+        },
+      );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof json?.error === 'string' ? json.error : 'Send failed');
+      }
+      toast.success(
+        previewVariant === 'delivery'
+          ? 'Delivery email sent'
+          : 'Re-review email sent',
+      );
+      setPreviewVariant(null);
+      setPreview(null);
+      await loadShareLinks();
+      void loadArchivedEmails();
+      onChanged();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Send failed');
+    } finally {
+      setSending(false);
+    }
+  }
+
   if (!open || !project) return null;
 
-  return (
+  const sendDisabledReason = contactsLoading
+    ? null
+    : !contacts || contacts.length === 0
+      ? 'Add a contact to the brand profile to send the link.'
+      : null;
+
+  const showRevisionsCta =
+    activeLink?.revisions_status === 'ready_to_send' && !sendDisabledReason;
+  const hasBeenSent = !!activeLink?.last_review_email_sent_at;
+
+  const footer = (
     <>
-    <EmailArchiveDialog
-      email={viewingEmail}
-      onClose={() => setViewingEmail(null)}
-    />
-    <ContentDetailDialog
-      open={open}
-      onClose={onClose}
-      logoUrl={project.client_logo_url}
-      brandName={project.client_name ?? 'Client'}
-      brandLabel={project.client_name ?? 'Unassigned brand'}
-      title={
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={() => {
-            if (name.trim() && name !== project.name) void patch({ name: name.trim() });
-          }}
-          className="-ml-2 w-full rounded-md border border-transparent bg-transparent px-2 py-1 text-lg font-semibold text-text-primary transition-colors hover:border-nativz-border focus:border-accent focus:outline-none"
-        />
-      }
-      headerExtras={
-        <>
-          {saving && <Loader2 size={14} className="animate-spin text-text-muted" />}
-          <ContentKindBadge kind="editing" />
-          <UnifiedStatusPill status={unifiedStatusForEditingProject(status)} />
-          <EditingShareButton
-            projectId={project.id}
-            hasVideos={(data?.videos.length ?? 0) > 0}
-          />
-        </>
-      }
-      tab={tab}
-      onTabChange={setTab}
-      tabsAriaLabel="Project sections"
-      history={
-        projectId && (
-          <ShareHistoryPanel
-            endpoint={`/api/admin/editing/projects/${projectId}/activity`}
-          />
-        )
-      }
-      footer={
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={archive}
+        className="text-text-muted hover:text-[color:var(--status-danger)]"
+      >
+        <Archive size={13} />
+        Archive project
+      </Button>
+      {activeLink && !activeLink.revoked && (
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          onClick={archive}
-          className="text-text-muted hover:text-[color:var(--status-danger)]"
+          onClick={revokeShareLink}
+          disabled={revoking}
+          className="text-status-danger hover:bg-status-danger/10"
         >
-          <Archive size={13} />
-          Archive project
+          {revoking ? 'Revoking...' : 'Revoke link'}
         </Button>
-      }
-    >
-      <Section
-        label={`Edited videos${
-          data?.videos.length ? ` (${data.videos.length})` : ''
-        }`}
-      >
-        <EditedVideosBox
-          loading={loading}
-          videos={data?.videos ?? []}
-          dragActive={dragActive}
-          setDragActive={setDragActive}
-          onUploadFiles={(files) => void startUploads(files)}
-          onDelete={(id) => void deleteVideo(id)}
-        />
-      </Section>
-
-      {(data?.videos.length ?? 0) > 0 && (
-        <Section label="Review">
-          <ReviewCounters videos={data?.videos ?? []} />
-        </Section>
       )}
+      {activeLink && showRevisionsCta && (
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={fireRevisionsComplete}
+          disabled={firingRevisions}
+          title="Notify the brand that every revision request on this link is resolved."
+        >
+          {firingRevisions ? (
+            <Loader2 size={13} className="animate-spin" />
+          ) : (
+            <CheckCheck size={13} />
+          )}
+          {firingRevisions ? 'Sending...' : 'Send revisions complete'}
+        </Button>
+      )}
+      {!activeLink && hasVideos && (
+        <Button
+          type="button"
+          size="sm"
+          onClick={mintShareLink}
+          disabled={minting}
+        >
+          {minting ? <Loader2 size={13} className="animate-spin" /> : <Link2 size={13} />}
+          {minting ? 'Minting...' : 'Mint share link'}
+        </Button>
+      )}
+      {activeLink && (
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => openSendPreview(hasBeenSent ? 'rereview' : 'delivery')}
+          disabled={!!sendDisabledReason}
+          title={sendDisabledReason ?? undefined}
+        >
+          {hasBeenSent ? <RefreshCcw size={13} /> : <Send size={13} />}
+          {hasBeenSent ? 'Send re-review' : 'Send delivery'}
+        </Button>
+      )}
+    </>
+  );
 
-      {/* Past emails — replays the rendered HTML the recipients actually
-          got. Hidden until at least one row exists so fresh projects stay
-          compact. Same shape + viewer dialog as the SMM modal. */}
-      {archivedEmails && archivedEmails.length > 0 && (
-        <Section label={`Past emails (${archivedEmails.length})`}>
-          <ul className="divide-y divide-nativz-border overflow-hidden rounded-lg border border-nativz-border bg-surface">
-            {archivedEmails.map((e) => (
-              <li key={e.id}>
-                <button
+  return (
+    <>
+      <SendPreviewDialog
+        open={!!previewVariant}
+        variant={previewVariant ?? 'delivery'}
+        loading={previewLoading}
+        error={previewError}
+        preview={preview}
+        subject={subjectDraft}
+        message={messageDraft}
+        renderMode={renderMode}
+        sending={sending}
+        pendingCount={activeLink?.pending_revision_count ?? 0}
+        onChangeSubject={setSubjectDraft}
+        onChangeMessage={setMessageDraft}
+        onChangeRenderMode={setRenderMode}
+        onClose={closeSendPreview}
+        onSend={confirmSend}
+      />
+      <EmailArchiveDialog
+        email={viewingEmail}
+        onClose={() => setViewingEmail(null)}
+      />
+      <ContentDetailDialog
+        open={open}
+        onClose={onClose}
+        logoUrl={project.client_logo_url}
+        brandName={project.client_name ?? 'Client'}
+        brandLabel={project.client_name ?? 'Unassigned brand'}
+        title={
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => {
+              if (name.trim() && name !== project.name) void patch({ name: name.trim() });
+            }}
+            className="-ml-2 w-full rounded-md border border-transparent bg-transparent px-2 py-1 text-lg font-semibold text-text-primary transition-colors hover:border-nativz-border focus:border-accent focus:outline-none"
+          />
+        }
+        headerExtras={
+          <>
+            {saving && <Loader2 size={14} className="animate-spin text-text-muted" />}
+            <ContentKindBadge kind="editing" />
+            <UnifiedStatusPill status={unifiedStatusForEditingProject(status)} />
+          </>
+        }
+        tab={tab}
+        onTabChange={setTab}
+        tabsAriaLabel="Project sections"
+        history={
+          projectId && (
+            <ShareHistoryPanel
+              endpoint={`/api/admin/editing/projects/${projectId}/activity`}
+            />
+          )
+        }
+        footer={footer}
+      >
+        <Section
+          label={`Edited videos${
+            data?.videos.length ? ` (${data.videos.length})` : ''
+          }`}
+        >
+          <EditedVideosBox
+            loading={loading}
+            videos={data?.videos ?? []}
+            dragActive={dragActive}
+            setDragActive={setDragActive}
+            onUploadFiles={(files) => void startUploads(files)}
+            onDelete={(id) => void deleteVideo(id)}
+          />
+        </Section>
+
+        {(data?.videos.length ?? 0) > 0 && (
+          <Section label="Review">
+            <ReviewCounters videos={data?.videos ?? []} />
+          </Section>
+        )}
+
+        {/* Share link. Single primary affordance: copy + open + status
+            line. Empty state surfaces "Mint share link" inline when at
+            least one video exists; the no-videos case stays in the
+            EditedVideosBox empty state. */}
+        <Section label="Share link">
+          {shareLoading && shareLinks === null ? (
+            <p className="text-[12px] text-text-muted">Loading…</p>
+          ) : activeLink ? (
+            <div className="rounded-lg border border-nativz-border bg-surface p-3">
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={activeLink.url}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="block w-full truncate rounded-md border border-nativz-border bg-background px-3 py-2 font-mono text-[12px] text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+                <Button
                   type="button"
-                  onClick={() => setViewingEmail(e)}
-                  className="group flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-surface-hover"
+                  size="sm"
+                  variant="ghost"
+                  onClick={copyShareUrl}
+                  aria-label="Copy share link"
                 >
-                  <Mail
-                    size={14}
-                    className="shrink-0 text-text-muted group-hover:text-accent-text"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] text-text-primary">
-                      {e.subject}
+                  <Copy size={13} />
+                  {copied ? 'Copied' : 'Copy'}
+                </Button>
+                <a
+                  href={activeLink.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex h-8 items-center gap-1 rounded-md bg-accent-surface/40 px-2.5 text-[12px] font-medium text-accent-text transition-colors hover:bg-accent-surface/60"
+                >
+                  Open
+                  <ExternalLink size={11} />
+                </a>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-text-muted">
+                <span>
+                  {activeLink.view_count} {activeLink.view_count === 1 ? 'view' : 'views'}
+                </span>
+                {activeLink.last_viewed_at && (
+                  <span>· Last opened {formatRelative(activeLink.last_viewed_at)}</span>
+                )}
+                {activeLink.last_review_email_sent_at && (
+                  <span>· Last sent {formatRelative(activeLink.last_review_email_sent_at)}</span>
+                )}
+                {activeLink.kind === 'rereview' && activeLink.pending_revision_count > 0 && (
+                  <span className="text-accent-text">
+                    · {activeLink.pending_revision_count} new {activeLink.pending_revision_count === 1 ? 'revision' : 'revisions'} since last send
+                  </span>
+                )}
+                {activeLink.revisions_status === 'unresolved' && (
+                  <span className="text-status-warning">
+                    · {activeLink.revisions_unresolved} unresolved {activeLink.revisions_unresolved === 1 ? 'revision' : 'revisions'}
+                  </span>
+                )}
+                {activeLink.revisions_status === 'sent' && (
+                  <span className="text-status-success">· Revisions-complete sent</span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-nativz-border bg-surface p-3">
+              {hasVideos ? (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[12px] text-text-secondary">
+                      No active share link.
                     </p>
-                    <p className="truncate text-[11px] text-text-muted">
-                      {EMAIL_KIND_LABEL[e.kind] ?? e.kind} · {formatRelative(e.sent_at)}
-                      {e.sent_by_label ? ` · by ${e.sent_by_label}` : ''}
-                      {e.recipients.length > 0
-                        ? ` · ${e.recipients.length} ${e.recipients.length === 1 ? 'recipient' : 'recipients'}`
-                        : ''}
+                    <p className="mt-0.5 text-[11px] text-text-muted">
+                      Mint one to share these cuts with the brand for review.
                     </p>
                   </div>
-                  <ExternalLink
-                    size={12}
-                    className="shrink-0 text-text-muted opacity-0 transition-opacity group-hover:opacity-100"
-                  />
-                </button>
-              </li>
-            ))}
-          </ul>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={mintShareLink}
+                    disabled={minting}
+                    className="shrink-0"
+                  >
+                    {minting ? (
+                      <Loader2 size={13} className="animate-spin" />
+                    ) : (
+                      <Link2 size={13} />
+                    )}
+                    {minting ? 'Minting...' : 'Mint share link'}
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-[12px] text-text-muted">
+                  Upload at least one edited cut before minting a share link.
+                </p>
+              )}
+            </div>
+          )}
         </Section>
-      )}
-      {archivedLoading && !archivedEmails && (
-        <Section label="Past emails">
-          <p className="text-[12px] text-text-muted">Loading…</p>
-        </Section>
-      )}
 
-      {uploads.length > 0 && (
-        <Section label="Uploads">
+        {/* Recipients. Brand profile POC roster. Empty state surfaces the
+            actual reason a send would fail so admins fix it before clicking
+            Send instead of after. */}
+        <Section
+          label={
+            contacts && contacts.length > 0
+              ? `Recipients (${contacts.length})`
+              : 'Recipients'
+          }
+        >
           <div className="rounded-lg border border-nativz-border bg-surface p-3">
-            <ul className="space-y-1.5">
-              {uploads.map((j) => (
-                <UploadRow key={j.id} job={j} />
-              ))}
-            </ul>
+            {contactsLoading && !contacts ? (
+              <p className="text-[12px] text-text-muted">Loading recipients…</p>
+            ) : !contacts || contacts.length === 0 ? (
+              <div className="flex items-start gap-3">
+                <Users size={14} className="mt-0.5 shrink-0 text-text-muted" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12px] text-text-secondary">
+                    No contacts on the brand profile for{' '}
+                    {project.client_name ?? 'this brand'}.
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-text-muted">
+                    Add a POC on the brand profile before sending.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {contacts.map((c) => (
+                  <li
+                    key={c.id}
+                    className="flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] text-text-primary">
+                        {c.name?.trim() ? c.name : c.email}
+                      </p>
+                      {c.name?.trim() && (
+                        <p className="truncate text-[11px] text-text-muted">
+                          {c.email}
+                        </p>
+                      )}
+                    </div>
+                    {c.role?.trim() && (
+                      <span className="shrink-0 text-[11px] text-text-muted">
+                        {c.role}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </Section>
-      )}
 
-      <Section label="Raw footage">
-        <div className="rounded-lg border border-nativz-border bg-surface p-3">
-          <input
-            value={driveUrl}
-            onChange={(e) => setDriveUrl(e.target.value)}
+        {/* Past emails — replays the rendered HTML the recipients actually
+            got. Hidden until at least one row exists so fresh projects stay
+            compact. */}
+        {archivedEmails && archivedEmails.length > 0 && (
+          <Section label={`Past emails (${archivedEmails.length})`}>
+            <ul className="divide-y divide-nativz-border overflow-hidden rounded-lg border border-nativz-border bg-surface">
+              {archivedEmails.map((e) => (
+                <li key={e.id}>
+                  <button
+                    type="button"
+                    onClick={() => setViewingEmail(e)}
+                    className="group flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-surface-hover"
+                  >
+                    <Mail
+                      size={14}
+                      className="shrink-0 text-text-muted group-hover:text-accent-text"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13px] text-text-primary">
+                        {e.subject}
+                      </p>
+                      <p className="truncate text-[11px] text-text-muted">
+                        {EMAIL_KIND_LABEL[e.kind] ?? e.kind} · {formatRelative(e.sent_at)}
+                        {e.sent_by_label ? ` · by ${e.sent_by_label}` : ''}
+                        {e.recipients.length > 0
+                          ? ` · ${e.recipients.length} ${e.recipients.length === 1 ? 'recipient' : 'recipients'}`
+                          : ''}
+                      </p>
+                    </div>
+                    <ExternalLink
+                      size={12}
+                      className="shrink-0 text-text-muted opacity-0 transition-opacity group-hover:opacity-100"
+                    />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
+        {archivedLoading && !archivedEmails && (
+          <Section label="Past emails">
+            <p className="text-[12px] text-text-muted">Loading…</p>
+          </Section>
+        )}
+
+        {uploads.length > 0 && (
+          <Section label="Uploads">
+            <div className="rounded-lg border border-nativz-border bg-surface p-3">
+              <ul className="space-y-1.5">
+                {uploads.map((j) => (
+                  <UploadRow key={j.id} job={j} />
+                ))}
+              </ul>
+            </div>
+          </Section>
+        )}
+
+        <Section label="Raw footage">
+          <div className="rounded-lg border border-nativz-border bg-surface p-3">
+            <input
+              value={driveUrl}
+              onChange={(e) => setDriveUrl(e.target.value)}
+              onBlur={() => {
+                const trimmed = driveUrl.trim();
+                void patch({ drive_folder_url: trimmed || null });
+              }}
+              placeholder="Paste a Google Drive folder link"
+              className="block w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+            {driveUrl && (
+              <a
+                href={driveUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-flex items-center gap-1 text-[12px] text-accent-text hover:underline"
+              >
+                Open folder <ExternalLink size={11} />
+              </a>
+            )}
+          </div>
+        </Section>
+
+        <Section label="Project settings">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <SideField label="Status">
+              <ComboSelect
+                value={status}
+                onChange={(next) => {
+                  const value = next as EditingProjectStatus;
+                  setStatus(value);
+                  void patch({ status: value });
+                }}
+                options={STATUS_OPTIONS}
+                searchable={false}
+              />
+            </SideField>
+            <SideField label="Type">
+              <ComboSelect
+                value={type}
+                onChange={(next) => {
+                  const value = next as EditingProjectType;
+                  setType(value);
+                  void patch({ project_type: value });
+                }}
+                options={TYPE_OPTIONS}
+                searchable={false}
+              />
+            </SideField>
+          </div>
+        </Section>
+
+        <Section label="Team">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <SideField label="Strategist">
+              <AssigneePicker
+                projectId={project.id}
+                role="strategist_id"
+                currentUserId={
+                  data?.project.strategist_id ?? project.strategist_id
+                }
+                currentEmail={
+                  data?.project.strategist_email ?? project.strategist_email
+                }
+                variant="field"
+                onSaved={() => {
+                  void load();
+                  onChanged();
+                }}
+              />
+            </SideField>
+            <SideField label="Editor">
+              <AssigneePicker
+                projectId={project.id}
+                role="editor_id"
+                currentUserId={data?.project.editor_id ?? project.editor_id}
+                currentEmail={
+                  data?.project.editor_email ?? project.editor_email
+                }
+                variant="field"
+                onSaved={() => {
+                  void load();
+                  onChanged();
+                }}
+              />
+            </SideField>
+          </div>
+        </Section>
+
+        <Section label="Notes">
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
             onBlur={() => {
-              const trimmed = driveUrl.trim();
-              void patch({ drive_folder_url: trimmed || null });
+              void patch({ notes: notes.trim() || null });
             }}
-            placeholder="Paste a Google Drive folder link"
-            className="block w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+            rows={4}
+            placeholder="Brief, references, hand-off context..."
+            className="block w-full resize-none rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
           />
-          {driveUrl && (
-            <a
-              href={driveUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 inline-flex items-center gap-1 text-[12px] text-accent-text hover:underline"
-            >
-              Open folder <ExternalLink size={11} />
-            </a>
-          )}
-        </div>
-      </Section>
+        </Section>
 
-      <Section label="Project settings">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <SideField label="Status">
-            <ComboSelect
-              value={status}
-              onChange={(next) => {
-                const value = next as EditingProjectStatus;
-                setStatus(value);
-                void patch({ status: value });
-              }}
-              options={STATUS_OPTIONS}
-              searchable={false}
-            />
-          </SideField>
-          <SideField label="Type">
-            <ComboSelect
-              value={type}
-              onChange={(next) => {
-                const value = next as EditingProjectType;
-                setType(value);
-                void patch({ project_type: value });
-              }}
-              options={TYPE_OPTIONS}
-              searchable={false}
-            />
-          </SideField>
-        </div>
-      </Section>
-
-      <Section label="Team">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <SideField label="Strategist">
-            <AssigneePicker
-              projectId={project.id}
-              role="strategist_id"
-              currentUserId={
-                data?.project.strategist_id ?? project.strategist_id
-              }
-              currentEmail={
-                data?.project.strategist_email ?? project.strategist_email
-              }
-              variant="field"
-              onSaved={() => {
-                void load();
-                onChanged();
-              }}
-            />
-          </SideField>
-          <SideField label="Editor">
-            <AssigneePicker
-              projectId={project.id}
-              role="editor_id"
-              currentUserId={data?.project.editor_id ?? project.editor_id}
-              currentEmail={
-                data?.project.editor_email ?? project.editor_email
-              }
-              variant="field"
-              onSaved={() => {
-                void load();
-                onChanged();
-              }}
-            />
-          </SideField>
-        </div>
-      </Section>
-
-      <Section label="Notes">
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          onBlur={() => {
-            void patch({ notes: notes.trim() || null });
-          }}
-          rows={4}
-          placeholder="Brief, references, hand-off context..."
-          className="block w-full resize-none rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-        />
-      </Section>
-
-      <Section label="Project">
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-          <Field label="Created">
-            <span className="text-text-secondary">
-              {formatTimestamp(project.created_at)}
-            </span>
-          </Field>
-          <Field label="Updated">
-            <span className="text-text-secondary">
-              {formatTimestamp(project.updated_at)}
-            </span>
-          </Field>
-          {project.ready_at && (
-            <Field label="Marked ready">
+        <Section label="Project">
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+            <Field label="Created">
               <span className="text-text-secondary">
-                {formatTimestamp(project.ready_at)}
+                {formatTimestamp(project.created_at)}
               </span>
             </Field>
-          )}
-          {project.approved_at && (
-            <Field label="Approved">
+            <Field label="Updated">
               <span className="text-text-secondary">
-                {formatTimestamp(project.approved_at)}
+                {formatTimestamp(project.updated_at)}
               </span>
             </Field>
-          )}
-          {project.scheduled_at && (
-            <Field label="Done">
-              <span className="text-text-secondary">
-                {formatTimestamp(project.scheduled_at)}
-              </span>
-            </Field>
-          )}
-        </dl>
-      </Section>
-    </ContentDetailDialog>
+            {project.ready_at && (
+              <Field label="Marked ready">
+                <span className="text-text-secondary">
+                  {formatTimestamp(project.ready_at)}
+                </span>
+              </Field>
+            )}
+            {project.approved_at && (
+              <Field label="Approved">
+                <span className="text-text-secondary">
+                  {formatTimestamp(project.approved_at)}
+                </span>
+              </Field>
+            )}
+            {project.scheduled_at && (
+              <Field label="Done">
+                <span className="text-text-secondary">
+                  {formatTimestamp(project.scheduled_at)}
+                </span>
+              </Field>
+            )}
+          </dl>
+        </Section>
+      </ContentDetailDialog>
     </>
   );
 }
@@ -612,5 +1130,163 @@ function CounterPill({
       <span className="font-semibold">{value}</span>
       <span>{label}</span>
     </span>
+  );
+}
+
+function SendPreviewDialog({
+  open,
+  variant,
+  loading,
+  error,
+  preview,
+  subject,
+  message,
+  renderMode,
+  sending,
+  pendingCount,
+  onChangeSubject,
+  onChangeMessage,
+  onChangeRenderMode,
+  onClose,
+  onSend,
+}: {
+  open: boolean;
+  variant: SendVariant;
+  loading: boolean;
+  error: string | null;
+  preview: SendPreview | null;
+  subject: string;
+  message: string;
+  renderMode: 'edit' | 'preview';
+  sending: boolean;
+  pendingCount: number;
+  onChangeSubject: (v: string) => void;
+  onChangeMessage: (v: string) => void;
+  onChangeRenderMode: (m: 'edit' | 'preview') => void;
+  onClose: () => void;
+  onSend: () => void;
+}) {
+  const title = variant === 'delivery' ? 'Send delivery email' : 'Send re-review email';
+  const subtitle =
+    variant === 'delivery'
+      ? 'Notify the brand that the first cuts are ready to review.'
+      : pendingCount > 0
+        ? `Send an updated link with ${pendingCount} new ${pendingCount === 1 ? 'cut' : 'cuts'}.`
+        : 'Send a re-review prompt to the brand.';
+
+  return (
+    <Dialog open={open} onClose={onClose} title="" maxWidth="2xl" bodyClassName="p-0">
+      <div className="flex h-full max-h-[80vh] flex-col">
+        <div className="border-b border-nativz-border py-4 pl-6 pr-14">
+          <p className="text-lg font-semibold text-text-primary">{title}</p>
+          <p className="mt-0.5 text-xs text-text-muted">{subtitle}</p>
+        </div>
+
+        {loading ? (
+          <div className="flex-1 p-8 text-sm text-text-muted">Loading preview…</div>
+        ) : error ? (
+          <div className="flex-1 space-y-3 p-6 text-sm">
+            <p className="text-status-danger">{error}</p>
+            <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        ) : preview ? (
+          <>
+            <div className="flex-1 space-y-4 overflow-y-auto p-6">
+              <Section label={`Recipients (${preview.recipients.length})`}>
+                <div className="flex flex-wrap gap-1.5">
+                  {preview.recipients.map((r) => (
+                    <span
+                      key={r.email}
+                      className="inline-flex items-center gap-1 rounded-full border border-nativz-border bg-surface px-2.5 py-1 text-[11px] text-text-secondary"
+                      title={r.email}
+                    >
+                      <span className="font-medium text-text-primary">
+                        {r.name ?? r.email}
+                      </span>
+                      {r.name && <span className="text-text-muted">· {r.email}</span>}
+                    </span>
+                  ))}
+                </div>
+              </Section>
+
+              <div className="flex items-center gap-1 rounded-lg border border-nativz-border bg-background p-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() => onChangeRenderMode('edit')}
+                  className={`flex-1 rounded-md px-3 py-1.5 transition-colors ${
+                    renderMode === 'edit'
+                      ? 'bg-surface text-text-primary'
+                      : 'text-text-muted hover:text-text-secondary'
+                  }`}
+                >
+                  Edit copy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChangeRenderMode('preview')}
+                  className={`flex-1 rounded-md px-3 py-1.5 transition-colors ${
+                    renderMode === 'preview'
+                      ? 'bg-surface text-text-primary'
+                      : 'text-text-muted hover:text-text-secondary'
+                  }`}
+                >
+                  Rendered preview
+                </button>
+              </div>
+
+              {renderMode === 'edit' ? (
+                <>
+                  <Section label="Subject">
+                    <input
+                      value={subject}
+                      onChange={(e) => onChangeSubject(e.target.value)}
+                      className="block w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                    />
+                  </Section>
+                  <Section label="Message">
+                    <textarea
+                      value={message}
+                      onChange={(e) => onChangeMessage(e.target.value)}
+                      rows={10}
+                      className="block w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm leading-relaxed text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                    />
+                  </Section>
+                  <p className="text-[11px] text-text-muted">
+                    Edits stay scoped to this send. The default copy refreshes every time you reopen the dialog.
+                  </p>
+                </>
+              ) : (
+                <Section label="Rendered email">
+                  <p className="text-[11px] text-text-muted">
+                    The rendered email uses the default copy as a layout reference. Subject and message edits apply at send time.
+                  </p>
+                </Section>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-nativz-border px-6 py-4">
+              <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={sending}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={onSend}
+                disabled={sending || !subject.trim() || !message.trim()}
+              >
+                <Send size={13} />
+                {sending
+                  ? 'Sending…'
+                  : variant === 'delivery'
+                    ? `Send delivery to ${preview.recipients.length} ${preview.recipients.length === 1 ? 'recipient' : 'recipients'}`
+                    : `Send re-review to ${preview.recipients.length} ${preview.recipients.length === 1 ? 'recipient' : 'recipients'}`}
+              </Button>
+            </div>
+          </>
+        ) : null}
+      </div>
+    </Dialog>
   );
 }

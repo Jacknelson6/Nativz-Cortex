@@ -1981,6 +1981,73 @@ export async function sendEditingRereviewEmail(opts: {
   });
 }
 
+// ── Editing revisions-complete email ────────────────────────────────────────
+//
+// Editing-side counterpart to sendCalendarRevisionsCompleteEmail. Fires when
+// the admin marks the last open changes_requested as resolved and the project
+// is fully clean. Same shape as the calendar version (single CTA, "Revisions
+// Complete" eyebrow) so the two surfaces feel like one product.
+
+export function buildEditingRevisionsCompleteDraft(opts: {
+  pocFirstNames: string[];
+  clientName: string;
+  projectName: string;
+}): { subject: string; message: string } {
+  const greeting = greetingFor(opts.pocFirstNames, opts.clientName);
+  const subject = `Your ${opts.projectName} revisions are ready to review`;
+  const message =
+    `${greeting}, we've worked through every change you flagged on ${opts.projectName}. ` +
+    `Hop back in to take a final look and approve the cuts you're happy with.`;
+  return { subject, message };
+}
+
+export async function sendEditingRevisionsCompleteEmail(opts: {
+  to: string | string[];
+  pocFirstNames: string[];
+  clientName: string;
+  projectName: string;
+  shareUrl: string;
+  agency?: AgencyBrand;
+  clientId?: string;
+  projectId?: string;
+  subjectOverride?: string;
+  messageOverride?: string;
+}) {
+  const agency = opts.agency ?? 'nativz';
+  const draft = buildEditingRevisionsCompleteDraft({
+    pocFirstNames: opts.pocFirstNames,
+    clientName: opts.clientName,
+    projectName: opts.projectName,
+  });
+  const subject = opts.subjectOverride?.trim() || draft.subject;
+  const messageText = opts.messageOverride?.trim() || draft.message;
+  const bodyHtml = messageToHtmlParagraphs(messageText);
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: 'editing_revisions_complete',
+    agency,
+    to: opts.to,
+    clientId: opts.clientId,
+    subject,
+    html: layout(`
+      ${bodyHtml}
+      <div class="button-wrap">
+        <a href="${opts.shareUrl}" class="btn">Review the updated cuts</a>
+      </div>
+    `, agency, {
+      eyebrow: 'Revisions Complete',
+      heroTitle: 'Revisions complete',
+    }),
+    metadata: {
+      clientName: opts.clientName,
+      projectName: opts.projectName,
+      projectId: opts.projectId,
+      pocFirstNames: opts.pocFirstNames,
+      edited: !!(opts.subjectOverride || opts.messageOverride),
+    },
+  });
+}
+
 // ── Shoot brief reminder (48h pre-shoot internal nudge) ──────────────────
 
 function formatShootDateTime(iso: string): string {

@@ -2,6 +2,9 @@ import { NextResponse, after } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createNotification } from '@/lib/notifications/create';
+import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import { getBrandFromAgency } from '@/lib/agency/detect';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 export const dynamic = 'force-dynamic';
 
@@ -106,6 +109,8 @@ interface ShareLinkRow {
   project_id: string;
   expires_at: string;
   archived_at: string | null;
+  all_approved_notified_at: string | null;
+  revisions_complete_notified_at: string | null;
 }
 
 async function loadShareLink(
@@ -117,7 +122,9 @@ async function loadShareLink(
 > {
   const { data: link } = await admin
     .from('editing_project_share_links')
-    .select('id, project_id, expires_at, archived_at')
+    .select(
+      'id, project_id, expires_at, archived_at, all_approved_notified_at, revisions_complete_notified_at',
+    )
     .eq('token', token)
     .maybeSingle<ShareLinkRow>();
   if (!link) return { ok: false, error: 'not_found', status: 404 };
@@ -126,6 +133,72 @@ async function loadShareLink(
     return { ok: false, error: 'expired', status: 410 };
   }
   return { ok: true, link };
+}
+
+interface ProjectChatContext {
+  clientName: string;
+  projectName: string;
+  webhookUrl: string | null;
+  shareUrl: string;
+}
+
+async function loadProjectChatContext(
+  admin: ReturnType<typeof createAdminClient>,
+  projectId: string,
+  token: string,
+): Promise<ProjectChatContext> {
+  const { data: project } = await admin
+    .from('editing_projects')
+    .select('id, name, clients(name, agency)')
+    .eq('id', projectId)
+    .maybeSingle<{
+      id: string;
+      name: string;
+      clients: { name: string | null; agency: string | null } | null;
+    }>();
+
+  const clientName = project?.clients?.name ?? 'Client';
+  const projectName = project?.name ?? 'Project';
+  const brand = getBrandFromAgency(project?.clients?.agency ?? null);
+  const appUrl =
+    process.env.NODE_ENV !== 'production'
+      ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
+      : getCortexAppUrl(brand);
+  // No per-client chat webhook on editing yet, so the ops space is the
+  // only target. When it isn't configured, we just skip the chat ping.
+  const webhookUrl = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
+  return {
+    clientName,
+    projectName,
+    webhookUrl,
+    shareUrl: `${appUrl}/c/edit/${token}`,
+  };
+}
+
+async function checkAllVideosApproved(
+  admin: ReturnType<typeof createAdminClient>,
+  projectId: string,
+): Promise<boolean> {
+  const { data: videos } = await admin
+    .from('editing_project_videos')
+    .select('id')
+    .eq('project_id', projectId)
+    .returns<Array<{ id: string }>>();
+  const videoIds = (videos ?? []).map((v) => v.id);
+  if (videoIds.length === 0) return false;
+
+  const { data: approvals } = await admin
+    .from('editing_project_review_comments')
+    .select('video_id')
+    .in('video_id', videoIds)
+    .eq('status', 'approved')
+    .returns<Array<{ video_id: string | null }>>();
+  const approvedSet = new Set(
+    (approvals ?? [])
+      .map((a) => a.video_id)
+      .filter((id): id is string => !!id),
+  );
+  return videoIds.every((id) => approvedSet.has(id));
 }
 
 export async function POST(
@@ -219,6 +292,30 @@ export async function POST(
     );
   }
 
+  // For approved-status events, claim the right to post the celebration
+  // ping atomically. Two concurrent approvers (or a single double-click)
+  // would otherwise both pass a non-atomic "is everyone approved?" SELECT
+  // and post twice. Only the request that flips all_approved_notified_at
+  // NULL → timestamp wins. The DELETE handler clears the stamp when an
+  // approval is removed, so re-approval can fire again.
+  let allApprovedClaim: 'won' | 'lost' | 'not-yet' = 'not-yet';
+  if (finalStatus === 'approved') {
+    const everyoneApproved = await checkAllVideosApproved(
+      admin,
+      link.project_id,
+    );
+    if (everyoneApproved) {
+      const { data: claimed } = await admin
+        .from('editing_project_share_links')
+        .update({ all_approved_notified_at: new Date().toISOString() })
+        .eq('id', link.id)
+        .is('all_approved_notified_at', null)
+        .select('id')
+        .maybeSingle();
+      allApprovedClaim = claimed ? 'won' : 'lost';
+    }
+  }
+
   // Notify Jack (admin) so they can pull up the project. Mirrors the
   // calendar share notification pattern, minus the Monday + Zernio
   // legs that don't apply here. We skip notifications for the
@@ -236,10 +333,81 @@ export async function POST(
       } catch (err) {
         console.error('Editing comment notification failed:', err);
       }
+
+      try {
+        await postEditingChatForComment({
+          admin,
+          link,
+          token,
+          finalStatus,
+          authorName: parsed.data.authorName.trim(),
+          content: trimmedContent,
+          attachments: parsed.data.attachments ?? [],
+          allApprovedClaim,
+        });
+      } catch (err) {
+        console.error('Editing comment chat ping failed:', err);
+      }
     });
   }
 
   return NextResponse.json({ comment: inserted });
+}
+
+async function postEditingChatForComment(args: {
+  admin: ReturnType<typeof createAdminClient>;
+  link: ShareLinkRow;
+  token: string;
+  finalStatus: 'approved' | 'changes_requested' | 'comment' | 'video_revised';
+  authorName: string;
+  content: string;
+  attachments: Array<{
+    url: string;
+    filename: string;
+    mime_type: string;
+    size_bytes: number;
+  }>;
+  allApprovedClaim: 'won' | 'lost' | 'not-yet';
+}) {
+  const { webhookUrl, clientName, projectName, shareUrl } =
+    await loadProjectChatContext(args.admin, args.link.project_id, args.token);
+  if (!webhookUrl) return;
+
+  if (
+    args.finalStatus === 'comment' ||
+    args.finalStatus === 'changes_requested'
+  ) {
+    const verb =
+      args.finalStatus === 'changes_requested'
+        ? 'requested changes'
+        : 'commented';
+    const trimmed = args.content.trim();
+    const quotedBlock = trimmed
+      ? '\n' +
+        trimmed
+          .split('\n')
+          .map((line) => `> ${line}`)
+          .join('\n')
+      : '';
+    const attachmentBlock =
+      args.attachments.length > 0
+        ? '\n\n' +
+          args.attachments.map((a) => `📎 ${a.filename}\n${a.url}`).join('\n\n')
+        : '';
+    const text = `*${args.authorName}* ${verb} on ${clientName} · ${projectName}:${quotedBlock}${attachmentBlock}\n\n${shareUrl}`;
+    postToGoogleChatSafe(
+      webhookUrl,
+      { text },
+      `editing-comment ${args.link.id}`,
+    );
+  } else if (args.allApprovedClaim === 'won') {
+    const text = `🎉 All cuts in ${clientName} · ${projectName} are approved.\n${shareUrl}`;
+    postToGoogleChatSafe(
+      webhookUrl,
+      { text },
+      `editing-all-approved ${args.link.id}`,
+    );
+  }
 }
 
 export async function DELETE(
@@ -268,9 +436,9 @@ export async function DELETE(
 
   const { data: comment } = await admin
     .from('editing_project_review_comments')
-    .select('id, project_id')
+    .select('id, project_id, status')
     .eq('id', parsed.data.commentId)
-    .maybeSingle<{ id: string; project_id: string }>();
+    .maybeSingle<{ id: string; project_id: string; status: string }>();
   if (!comment) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
@@ -287,6 +455,16 @@ export async function DELETE(
     .eq('id', comment.id);
   if (delErr) {
     return NextResponse.json({ error: delErr.message }, { status: 500 });
+  }
+
+  // Approval revoked → clear the all-approved dedup stamp so a future
+  // re-approval can fire the celebration ping again. Other status rows
+  // (changes_requested, comment, video_revised) don't affect the stamp.
+  if (comment.status === 'approved') {
+    await admin
+      .from('editing_project_share_links')
+      .update({ all_approved_notified_at: null })
+      .eq('id', link.id);
   }
 
   return NextResponse.json({ ok: true, commentId: comment.id });
@@ -367,7 +545,80 @@ export async function PATCH(
       { status: 500 },
     );
   }
+
+  // After the toggle, see if this transition closed the revision pass for
+  // the entire share link. We only fire the "all revisions ready, please
+  // re-review" chat ping when unresolved goes from N>0 to 0, and dedup via
+  // `revisions_complete_notified_at` so toggling doesn't spam. If the
+  // editor un-marks one (unresolved 0 → 1), the stamp is cleared so the
+  // next completion fires again.
+  after(async () => {
+    try {
+      await maybeFireEditingRevisionsCompleteNotification(admin, {
+        link,
+        token,
+      });
+    } catch (err) {
+      console.error('Editing revisions-complete notify check failed:', err);
+    }
+  });
+
   return NextResponse.json({ comment: updated });
+}
+
+async function maybeFireEditingRevisionsCompleteNotification(
+  admin: ReturnType<typeof createAdminClient>,
+  args: { link: ShareLinkRow; token: string },
+) {
+  // Count `changes_requested` rows scoped to this share link. We could
+  // scope by project, but the share link is the user-facing surface and
+  // matches calendar's behaviour (per-link dedup stamp).
+  const { data: changeRows } = await admin
+    .from('editing_project_review_comments')
+    .select('id, metadata')
+    .eq('share_link_id', args.link.id)
+    .eq('status', 'changes_requested')
+    .returns<Array<{ id: string; metadata: Record<string, unknown> | null }>>();
+
+  const total = changeRows?.length ?? 0;
+  if (total === 0) return; // never had revisions, nothing to wrap up
+
+  const unresolved = (changeRows ?? []).filter((c) => {
+    const m = (c.metadata ?? {}) as Record<string, unknown>;
+    return m.resolved !== true;
+  }).length;
+
+  if (unresolved > 0) {
+    // Editor un-marked something, reset dedup so a future completion fires.
+    if (args.link.revisions_complete_notified_at) {
+      await admin
+        .from('editing_project_share_links')
+        .update({ revisions_complete_notified_at: null })
+        .eq('id', args.link.id);
+    }
+    return;
+  }
+
+  if (args.link.revisions_complete_notified_at) return;
+
+  const { webhookUrl, clientName, projectName, shareUrl } =
+    await loadProjectChatContext(admin, args.link.project_id, args.token);
+
+  if (webhookUrl) {
+    const text =
+      `✅ All revisions are ready for *${clientName} · ${projectName}*.\n` +
+      `Take another look and approve the cuts that are good to go:\n${shareUrl}`;
+    postToGoogleChatSafe(
+      webhookUrl,
+      { text },
+      `editing-revisions-complete ${args.link.id}`,
+    );
+  }
+
+  await admin
+    .from('editing_project_share_links')
+    .update({ revisions_complete_notified_at: new Date().toISOString() })
+    .eq('id', args.link.id);
 }
 
 async function notifyAdminsOfComment(

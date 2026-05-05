@@ -196,6 +196,36 @@ export const NOTIFICATION_REGISTRY: NotificationDefinition[] = [
     },
   },
   {
+    key: 'editing_revisions_complete',
+    label: 'Editing revisions complete email',
+    description:
+      'Auto-email to the client when the editing team marks all outstanding revisions as complete on an editing project share link.',
+    kind: 'email',
+    trigger: 'event',
+    recipientLabel: 'Client primary contact',
+    preview: async (agency) => {
+      const { previewEditingRevisionsComplete } = await import(
+        './previews/calendar-reminders'
+      );
+      return previewEditingRevisionsComplete(agency);
+    },
+  },
+  {
+    key: 'editing_all_approved_chat',
+    label: 'Editing all-approved Chat ping',
+    description:
+      'Single Google Chat post when every video on an editing project share link has been approved.',
+    kind: 'chat',
+    trigger: 'event',
+    recipientLabel: 'Ops Google Chat space',
+    preview: async () => {
+      const { previewCalendarAllApprovedChat } = await import(
+        './previews/calendar-comment-chat'
+      );
+      return previewCalendarAllApprovedChat();
+    },
+  },
+  {
     key: 'topic_search_notify',
     label: 'Topic search ready',
     description: 'Email when an async topic search finishes generating ideas.',
