@@ -201,8 +201,12 @@ export async function middleware(request: NextRequest) {
     // Public content-calendar review surface — share-token-gated. The /c/[token]
     // page is server-rendered and the /api/calendar/share/[token]/* routes
     // validate the token on every request, so neither needs an auth session.
+    // Same shape for the editing-project review surface at /c/edit/[token]:
+    // /api/editing/share/[token]/* validate the share token on every hit, no
+    // Supabase auth session required (clients have no account).
     pathname.startsWith('/c/') ||
     pathname.startsWith('/api/calendar/share/') ||
+    pathname.startsWith('/api/editing/share/') ||
     // Self-serve connection invite. The /connect/invite/[token] page and
     // /api/public/connection-invites/[token]/* routes are gated by the
     // invite token row, no auth session needed.
