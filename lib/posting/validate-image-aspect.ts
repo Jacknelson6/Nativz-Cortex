@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { SocialPlatform } from '@/lib/posting/types';
 
 export interface AspectRule {
@@ -87,4 +88,102 @@ export async function probeImageDimensions(
   } catch {
     return null;
   }
+}
+
+/**
+ * Pre-flight an image/carousel post against Instagram's aspect-ratio rule.
+ *
+ * Loads every linked scheduler_media row, probes any image with NULL
+ * dimensions via Sharp, backfills the dims so future runs skip the probe,
+ * then checks the carousel against the IG rule. Returns the first violation
+ * or null when everything's in range.
+ *
+ * Both publish paths (cron sweep + approval-driven `publishScheduledPost`)
+ * call this before handing the post to Zernio. Without it, Zernio returns
+ * a hard 400 and we burn 3 retry attempts plus a "posting health alert"
+ * email before the post is marked failed. Pre-rejecting the IG leg keeps
+ * the retry quota for transient failures and lets the other platforms
+ * (TikTok, Facebook, LinkedIn) publish uninterrupted.
+ *
+ * Only checks if `postType` is 'image' or 'carousel'. Returns null for
+ * video/reel posts (Instagram applies its own crop on Reels). Returns null
+ * if no media rows are attached, which lets the caller surface a clearer
+ * error elsewhere instead of misattributing the failure to aspect ratio.
+ */
+export async function preflightInstagramAspectForPost(
+  admin: SupabaseClient,
+  postId: string,
+  postType: string | null,
+): Promise<ImageAspectIssue | null> {
+  const isImagePost = postType === 'image' || postType === 'carousel';
+  if (!isImagePost) return null;
+
+  const { data: mediaRows } = await admin
+    .from('scheduled_post_media')
+    .select(
+      'sort_order, scheduler_media:media_id (id, width, height, late_media_url, storage_path)',
+    )
+    .eq('post_id', postId)
+    .order('sort_order');
+
+  type MediaJoinRow = {
+    scheduler_media:
+      | {
+          id: string;
+          width: number | null;
+          height: number | null;
+          late_media_url: string | null;
+          storage_path: string | null;
+        }
+      | {
+          id: string;
+          width: number | null;
+          height: number | null;
+          late_media_url: string | null;
+          storage_path: string | null;
+        }[]
+      | null;
+  };
+  const carouselRows = ((mediaRows ?? []) as MediaJoinRow[])
+    .map((r) =>
+      Array.isArray(r.scheduler_media) ? r.scheduler_media[0] : r.scheduler_media,
+    )
+    .filter(
+      (
+        m,
+      ): m is {
+        id: string;
+        width: number | null;
+        height: number | null;
+        late_media_url: string | null;
+        storage_path: string | null;
+      } => m != null,
+    );
+
+  if (carouselRows.length === 0) return null;
+
+  const carousel: { width: number | null; height: number | null }[] = [];
+  for (const m of carouselRows) {
+    if (m.width != null && m.height != null) {
+      carousel.push({ width: m.width, height: m.height });
+      continue;
+    }
+    const url = m.late_media_url ?? m.storage_path ?? null;
+    if (!url) {
+      carousel.push({ width: null, height: null });
+      continue;
+    }
+    const probed = await probeImageDimensions(url);
+    if (probed) {
+      carousel.push(probed);
+      await admin
+        .from('scheduler_media')
+        .update({ width: probed.width, height: probed.height })
+        .eq('id', m.id);
+    } else {
+      carousel.push({ width: null, height: null });
+    }
+  }
+
+  return validateCarouselForPlatform('instagram', carousel);
 }

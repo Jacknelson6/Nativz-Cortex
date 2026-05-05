@@ -2,10 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getPostingService } from '@/lib/posting';
 import type { SocialPlatform } from '@/lib/posting/types';
-import {
-  probeImageDimensions,
-  validateCarouselForPlatform,
-} from '@/lib/posting/validate-image-aspect';
+import { preflightInstagramAspectForPost } from '@/lib/posting/validate-image-aspect';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 import { notifyAdmins } from '@/lib/notifications';
 import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
@@ -238,6 +235,30 @@ async function handleGet(request: NextRequest) {
           lateAccountId: string;
           platform: SocialPlatform;
         };
+        // Stamp legs whose social profile is NOT connected to Zernio (NULL
+        // late_account_id) as 'failed' with a clear reason BEFORE filtering.
+        // Silently dropping them (the prior behaviour) hid the root cause —
+        // the spp row stayed 'pending' forever, the calendar UI showed no
+        // failure, and the team had no breadcrumb that "Reconnect Zernio"
+        // was the fix. Now the leg-level failure_reason names the platform
+        // and the publishing UX has a real signal.
+        const unconnectedFailures: { platform: string; username: string | null; reason: string }[] = [];
+        for (const spp of (post.scheduled_post_platforms ?? []) as Record<string, unknown>[]) {
+          const sppStatus = (spp.status as string | null) ?? 'pending';
+          if (sppStatus !== 'pending' && sppStatus !== 'failed') continue;
+          const profile = spp.social_profiles as Record<string, unknown> | null;
+          const lateAccountId = (profile?.late_account_id ?? null) as string | null;
+          if (lateAccountId) continue;
+          const platformName = (profile?.platform as string | null) ?? 'unknown';
+          const username = (profile?.username as string | null) ?? null;
+          const reason = `${platformName} profile is not connected to Zernio (no late_account_id). Reconnect the profile in social settings before retrying.`;
+          await adminClient
+            .from('scheduled_post_platforms')
+            .update({ status: 'failed', failure_reason: reason })
+            .eq('id', spp.id as string);
+          unconnectedFailures.push({ platform: platformName, username, reason });
+        }
+
         const platformProfiles: PlatformProfile[] = (
           post.scheduled_post_platforms ?? []
         )
@@ -259,6 +280,30 @@ async function handleGet(request: NextRequest) {
           );
 
         if (platformProfiles.length === 0) {
+          // Every leg either already shipped (skip) or has no late_account_id
+          // (just stamped failed above). Mark the post terminal so we don't
+          // retry forever, and surface the real reason on the parent row.
+          if (unconnectedFailures.length > 0) {
+            const reason = unconnectedFailures
+              .map((f) => `${f.platform}: not connected to Zernio`)
+              .join(' | ');
+            await adminClient
+              .from('scheduled_posts')
+              .update({
+                status: 'partially_failed',
+                retry_count: MAX_RETRIES,
+                failure_reason: reason,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', post.id);
+            try {
+              await sendPartialFailureNotification(adminClient, post, unconnectedFailures);
+            } catch (notifyErr) {
+              console.error('Failed to send unconnected-profile notification:', notifyErr);
+            }
+            failedCount++;
+            continue;
+          }
           throw new Error(
             'No connected social profiles to publish to (missing late_account_id). Reconnect the social profile via Zernio.',
           );
@@ -417,84 +462,19 @@ async function handleGet(request: NextRequest) {
         }
 
         // PRE-FLIGHT: image posts targeting Instagram must satisfy the
-        // 0.75–1.91 feed aspect rule, otherwise Zernio returns a hard 400 and
+        // 0.75-1.91 feed aspect rule, otherwise Zernio returns a hard 400 and
         // we burn 3 retries plus a "posting health alert" email before the
         // post is marked failed. Pre-rejecting the IG leg here keeps the
         // retry quota for transient failures and lets the other platforms
-        // (TikTok, Facebook, LinkedIn) publish uninterrupted.
-        const preFlightFailures: { platform: string; username: string | null; reason: string }[] = [];
-        const isImagePost = post.post_type === 'image' || post.post_type === 'carousel';
-        if (isImagePost && platformProfiles.some((p: PlatformProfile) => p.platform === 'instagram')) {
-          const { data: mediaRows } = await adminClient
-            .from('scheduled_post_media')
-            .select(
-              'sort_order, scheduler_media:media_id (id, width, height, late_media_url, storage_path)',
-            )
-            .eq('post_id', post.id)
-            .order('sort_order');
-          type MediaJoinRow = {
-            scheduler_media:
-              | {
-                  id: string;
-                  width: number | null;
-                  height: number | null;
-                  late_media_url: string | null;
-                  storage_path: string | null;
-                }
-              | {
-                  id: string;
-                  width: number | null;
-                  height: number | null;
-                  late_media_url: string | null;
-                  storage_path: string | null;
-                }[]
-              | null;
-          };
-          const carouselRows = ((mediaRows ?? []) as MediaJoinRow[])
-            .map((r) =>
-              Array.isArray(r.scheduler_media) ? r.scheduler_media[0] : r.scheduler_media,
-            )
-            .filter(
-              (
-                m,
-              ): m is {
-                id: string;
-                width: number | null;
-                height: number | null;
-                late_media_url: string | null;
-                storage_path: string | null;
-              } => m != null,
-            );
-
-          // Probe + backfill any image with NULL width/height. Most existing
-          // rows pre-date the upload-time dimension capture, so this is the
-          // path that catches Landshark-style 9:16 source files. Probes run
-          // sequentially per carousel — image carousels are at most 10 frames
-          // and Sharp metadata is sub-100ms per image.
-          const carousel: { width: number | null; height: number | null }[] = [];
-          for (const m of carouselRows) {
-            if (m.width != null && m.height != null) {
-              carousel.push({ width: m.width, height: m.height });
-              continue;
-            }
-            const url = m.late_media_url ?? m.storage_path ?? null;
-            if (!url) {
-              carousel.push({ width: null, height: null });
-              continue;
-            }
-            const probed = await probeImageDimensions(url);
-            if (probed) {
-              carousel.push(probed);
-              await adminClient
-                .from('scheduler_media')
-                .update({ width: probed.width, height: probed.height })
-                .eq('id', m.id);
-            } else {
-              carousel.push({ width: null, height: null });
-            }
-          }
-
-          const igIssue = validateCarouselForPlatform('instagram', carousel);
+        // (TikTok, Facebook, LinkedIn) publish uninterrupted. Helper lives
+        // in lib/posting/validate-image-aspect.ts so the approval-driven
+        // path uses identical logic.
+        const preFlightFailures: { platform: string; username: string | null; reason: string }[] = [
+          ...unconnectedFailures,
+        ];
+        const targetsInstagram = platformProfiles.some((p: PlatformProfile) => p.platform === 'instagram');
+        if (targetsInstagram) {
+          const igIssue = await preflightInstagramAspectForPost(adminClient, post.id, post.post_type);
           if (igIssue) {
             const igLegs = platformProfiles.filter((pp) => pp.platform === 'instagram');
             for (const leg of igLegs) {
@@ -528,18 +508,19 @@ async function handleGet(request: NextRequest) {
         }
 
         if (platformProfiles.length === 0) {
-          // Every leg was pre-rejected (e.g. IG-only post with bad ratio).
-          // Mark the post terminal-failed and surface the reason. Skip the
-          // retry path because the input is deterministic — re-running won't
-          // help.
-          const reason =
-            preFlightFailures[0]?.reason ?? 'No publishable platforms after pre-flight checks.';
+          // Every leg was pre-rejected (e.g. IG-only post with bad ratio, or
+          // every profile is unconnected). Mark the post terminal-failed and
+          // surface the reason. Skip the retry path because the input is
+          // deterministic — re-running won't help.
+          const reasonText = preFlightFailures.length
+            ? preFlightFailures.map((f) => `${f.platform}: ${f.reason}`).join(' | ')
+            : 'No publishable platforms after pre-flight checks.';
           await adminClient
             .from('scheduled_posts')
             .update({
               status: 'partially_failed',
               retry_count: MAX_RETRIES,
-              failure_reason: reason,
+              failure_reason: reasonText,
               updated_at: new Date().toISOString(),
             })
             .eq('id', post.id);
@@ -692,8 +673,12 @@ async function handleGet(request: NextRequest) {
             late_post_id: result.externalPostId,
             retry_count: currentRetryCount + 1,
             scheduled_at: new Date(Date.now() + RETRY_DELAY_MS).toISOString(),
+            // Gap 4: include per-platform reason text. Prior version
+            // emitted only the platform names, so the admin UI showed
+            // "Auto-retry in 30 min: tiktok, linkedin failed" with no
+            // hint at why — operators had to dig into Zernio dashboards.
             failure_reason: failedPlatformDetails.length
-              ? `Auto-retry in 30 min: ${failedPlatformDetails.map((f) => f.platform).join(', ')} failed`
+              ? `Auto-retry in 30 min: ${failedPlatformDetails.map((f) => `${f.platform}: ${f.reason ?? 'unknown error'}`).join(' | ')}`
               : null,
             updated_at: new Date().toISOString(),
           };
@@ -705,7 +690,7 @@ async function handleGet(request: NextRequest) {
             late_post_id: result.externalPostId,
             retry_count: currentRetryCount + 1,
             failure_reason: failedPlatformDetails.length
-              ? `${failedPlatformDetails.map((f) => f.platform).join(', ')} failed after ${MAX_RETRIES} attempts`
+              ? `${failedPlatformDetails.map((f) => `${f.platform}: ${f.reason ?? 'unknown error'}`).join(' | ')} (after ${MAX_RETRIES} attempts)`
               : null,
             updated_at: new Date().toISOString(),
           };
@@ -749,7 +734,16 @@ async function handleGet(request: NextRequest) {
       } catch (err) {
         console.error(`Failed to publish post ${post.id}:`, err);
 
-        const newRetryCount = (post.retry_count ?? 0) + 1;
+        // Gap 6/A10: terminal-error short-circuit. A subset of error messages
+        // signal "this will never succeed without operator intervention" —
+        // retrying just delays the user-facing failure email and burns
+        // retry budget. When we see one, jump straight to MAX_RETRIES so
+        // the next branch flips status='failed' and emails the team.
+        const errMsg = err instanceof Error ? err.message : String(err);
+        const isTerminal =
+          /Mux asset errored/i.test(errMsg) ||
+          /Re-upload the video/i.test(errMsg);
+        const newRetryCount = isTerminal ? MAX_RETRIES : (post.retry_count ?? 0) + 1;
         const newStatus = newRetryCount >= MAX_RETRIES ? 'failed' : 'scheduled';
 
         await adminClient

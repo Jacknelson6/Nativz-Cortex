@@ -153,6 +153,39 @@ export async function POST(request: NextRequest) {
           .from('scheduled_posts')
           .update({ late_post_id: lateResult.externalPostId })
           .eq('id', post.id);
+
+        // Gap 5: backfill scheduled_post_platforms with the per-platform
+        // Zernio result. Without this, the `pending` rows we inserted at
+        // line 88 stayed `pending` forever even after Zernio confirmed
+        // success or rejected the leg — admin UI showed "in progress" on
+        // legs that were already live, and failed legs surfaced no reason.
+        // Mirrors the loop in lib/calendar/schedule-drop.ts after
+        // service.publishPost. Mapping is via late_account_id → social_profile.id
+        // (Zernio echoes our late_account_id as `profileId`).
+        const lateIdToProfileId = new Map<string, string>();
+        for (const p of lateProfiles) {
+          if (p.late_account_id) lateIdToProfileId.set(p.late_account_id, p.id);
+        }
+        for (const platformResult of lateResult.platforms) {
+          const profileId = lateIdToProfileId.get(platformResult.profileId);
+          if (!profileId) continue;
+          const sppStatus =
+            platformResult.status === 'published'
+              ? 'published'
+              : platformResult.status === 'failed'
+                ? 'failed'
+                : 'pending';
+          await adminClient
+            .from('scheduled_post_platforms')
+            .update({
+              status: sppStatus,
+              external_post_id: platformResult.externalPostId ?? null,
+              external_post_url: platformResult.externalPostUrl ?? null,
+              failure_reason: platformResult.status === 'failed' ? (platformResult.error ?? null) : null,
+            })
+            .eq('post_id', post.id)
+            .eq('social_profile_id', profileId);
+        }
       }
     } catch (lateErr) {
       // Log but don't fail — local record is saved, Late sync can be retried

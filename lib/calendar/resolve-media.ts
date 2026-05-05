@@ -104,6 +104,18 @@ export async function resolveScheduledPostMedia(
   }
 
   const finalRevisionReady = row?.revised_mp4_url != null;
+
+  // Gap 6/A10: if Mux flipped the asset to `errored`, the rendition is
+  // never going to land. The previous code threw "MP4 not ready yet. Cron
+  // will retry." for this state too, which means we'd burn 3 retries +
+  // a posting health alert before giving up — and the failure_reason
+  // surfaced to the user said "not ready yet" instead of "asset broken".
+  // Throw a distinct terminal-flavoured error so the catch site stamps a
+  // useful reason and operators know they need to re-upload, not wait.
+  if (row?.mux_status === 'errored') {
+    throw new Error('Mux asset errored — original or revision failed to encode. Re-upload the video before retrying.');
+  }
+
   if (revisionUploaded && !finalRevisionReady) {
     throw new Error('Revision pending: Mux MP4 rendition not ready yet. Cron will retry.');
   }

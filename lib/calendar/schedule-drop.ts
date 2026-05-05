@@ -4,6 +4,7 @@ import type { CaptionVariants } from '@/lib/types/calendar';
 import { distributeSlots } from './distribute-slots';
 import { verifyAndReconcilePost } from './verify-post';
 import { resolveScheduledPostMedia } from './resolve-media';
+import { preflightInstagramAspectForPost } from '@/lib/posting/validate-image-aspect';
 import { getMux } from '@/lib/mux/client';
 
 interface ScheduleInput {
@@ -435,23 +436,68 @@ export async function publishScheduledPost(
   };
   const sppRows = (platforms ?? []) as SppRow[];
   // Supabase types embedded joins as arrays; the FK is 1-to-1, so flatten.
-  const lateProfiles = sppRows
-    .flatMap((p) => {
-      const sp = p.social_profiles;
-      const flat = Array.isArray(sp) ? sp : sp ? [sp] : [];
-      return flat.map((x) => ({ ...x, sppId: p.id, profileId: p.social_profile_id }));
-    })
-    .filter(
-      (p): p is { platform: SocialPlatform; late_account_id: string; sppId: string; profileId: string } =>
-        !!p && typeof p === 'object' && 'late_account_id' in p && !!(p as { late_account_id: string }).late_account_id,
-    );
-  if (lateProfiles.length === 0) throw new Error('Draft post has no platforms');
+  const flatProfiles = sppRows.flatMap((p) => {
+    const sp = p.social_profiles;
+    const flat = Array.isArray(sp) ? sp : sp ? [sp] : [];
+    return flat.map((x) => ({ ...x, sppId: p.id, profileId: p.social_profile_id }));
+  });
+
+  // Gap 2/A1 (approval path): stamp legs whose social_profile is missing a
+  // late_account_id as `failed` with a clear reason BEFORE silently filtering
+  // them. The cron path used to drop these legs without a trace; the approval
+  // path inherited the same bug. If a brand disconnects a profile after a
+  // post is drafted, the leg now surfaces in the UI + notifications instead
+  // of vanishing.
+  for (const p of flatProfiles) {
+    if (p.late_account_id) continue;
+    const reason = `${p.platform} profile is not connected to Zernio (no late_account_id). Reconnect the profile in social settings before retrying.`;
+    await admin
+      .from('scheduled_post_platforms')
+      .update({ status: 'failed', failure_reason: reason })
+      .eq('id', p.sppId);
+  }
+
+  const lateProfiles = flatProfiles.filter(
+    (p): p is { platform: SocialPlatform; late_account_id: string; sppId: string; profileId: string } =>
+      !!p && typeof p === 'object' && 'late_account_id' in p && !!(p as { late_account_id: string }).late_account_id,
+  );
+  if (lateProfiles.length === 0) throw new Error('Draft post has no connected platforms (every leg is missing late_account_id)');
+
+  // Gap 1: Instagram aspect-ratio preflight on the approval path.
+  // The cron sweep gates IG legs on the 0.75-1.91 ratio range before handing
+  // off to Zernio (Zernio returns a hard 400 outside that band). The approval
+  // path used to skip this check entirely, so an IG-targeted post with a
+  // square crop that read 0.74:1 due to JPEG header rounding would publish
+  // through this path, fail at Zernio, and burn 3 retries before giving up.
+  // Mirror the cron behaviour: if IG is in the leg list and the carousel
+  // violates the rule, drop IG and continue with the other platforms.
+  const targetsInstagram = lateProfiles.some((p) => p.platform === 'instagram');
+  let droppedIgLegs: { sppId: string; reason: string }[] = [];
+  let filteredLateProfiles = lateProfiles;
+  if (targetsInstagram) {
+    const igIssue = await preflightInstagramAspectForPost(admin, postId, post.post_type);
+    if (igIssue) {
+      droppedIgLegs = lateProfiles
+        .filter((p) => p.platform === 'instagram')
+        .map((p) => ({ sppId: p.sppId, reason: igIssue.reason }));
+      for (const drop of droppedIgLegs) {
+        await admin
+          .from('scheduled_post_platforms')
+          .update({ status: 'failed', failure_reason: drop.reason })
+          .eq('id', drop.sppId);
+      }
+      filteredLateProfiles = lateProfiles.filter((p) => p.platform !== 'instagram');
+      if (filteredLateProfiles.length === 0) {
+        throw new Error(`Instagram preflight failed and no other platforms targeted: ${igIssue.reason}`);
+      }
+    }
+  }
 
   // Reverse map for the per-platform update loop after publish: Zernio echoes
   // back our `late_account_id` as `profileId` in PublishResult.platforms[],
   // and we need to find the matching spp row to stamp external_post_url etc.
   const lateIdToSppId = new Map<string, string>();
-  for (const p of lateProfiles) {
+  for (const p of filteredLateProfiles) {
     lateIdToSppId.set(p.late_account_id, p.sppId);
   }
 
@@ -465,7 +511,7 @@ export async function publishScheduledPost(
 
   const captionByPlatform = pickActiveVariants(
     video?.caption_variants ?? null,
-    lateProfiles,
+    filteredLateProfiles,
   );
 
   const service = getPostingService();
@@ -475,8 +521,8 @@ export async function publishScheduledPost(
     caption: post.caption,
     hashtags: post.hashtags ?? [],
     coverImageUrl: post.cover_image_url ?? undefined,
-    platformProfileIds: lateProfiles.map((p) => p.late_account_id),
-    platformHints: Object.fromEntries(lateProfiles.map((p) => [p.late_account_id, p.platform])),
+    platformProfileIds: filteredLateProfiles.map((p) => p.late_account_id),
+    platformHints: Object.fromEntries(filteredLateProfiles.map((p) => [p.late_account_id, p.platform])),
     captionByPlatform,
     scheduledAt: post.scheduled_at,
     taggedPeople: post.tagged_people ?? undefined,
