@@ -19,6 +19,9 @@ interface ShareLinkRow {
   id: string;
   expires_at: string;
   followup_count: number | null;
+  first_sent_at: string | null;
+  last_sent_at: string | null;
+  send_count: number | null;
 }
 
 export async function POST(
@@ -41,7 +44,7 @@ export async function POST(
   const admin = createAdminClient();
   const { data: link } = await admin
     .from('content_drop_share_links')
-    .select('id, expires_at, followup_count')
+    .select('id, expires_at, followup_count, first_sent_at, last_sent_at, send_count')
     .eq('token', token)
     .single<ShareLinkRow>();
   if (!link) {
@@ -53,9 +56,29 @@ export async function POST(
 
   const nowIso = new Date().toISOString();
   const nextCount = (link.followup_count ?? 0) + 1;
+  // Marking a followup implies the calendar already went out (you can't
+  // chase what was never sent). If `first_sent_at` is null at this point
+  // the admin sent it out-of-band but skipped the in-app Mark sent step,
+  // so backfill it now. Otherwise the table column reads "Not sent" even
+  // though there's a recorded followup, which is what Jack flagged.
+  const update: {
+    last_followup_at: string;
+    followup_count: number;
+    first_sent_at?: string;
+    last_sent_at?: string;
+    send_count?: number;
+  } = {
+    last_followup_at: nowIso,
+    followup_count: nextCount,
+  };
+  if (!link.first_sent_at) {
+    update.first_sent_at = nowIso;
+    update.last_sent_at = link.last_sent_at ?? nowIso;
+    update.send_count = (link.send_count ?? 0) + 1;
+  }
   const { error: stampError } = await admin
     .from('content_drop_share_links')
-    .update({ last_followup_at: nowIso, followup_count: nextCount })
+    .update(update)
     .eq('id', link.id);
   if (stampError) {
     return NextResponse.json({ error: stampError.message }, { status: 500 });
@@ -65,5 +88,8 @@ export async function POST(
     ok: true,
     last_followup_at: nowIso,
     followup_count: nextCount,
+    first_sent_at: link.first_sent_at ?? nowIso,
+    last_sent_at: update.last_sent_at ?? link.last_sent_at,
+    send_count: update.send_count ?? link.send_count ?? 0,
   });
 }

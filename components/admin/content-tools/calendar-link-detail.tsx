@@ -462,6 +462,16 @@ export function CalendarLinkDetail({
         last_followup_at: json.last_followup_at,
         followup_count: json.followup_count,
       });
+      // The endpoint backfills first_sent_at when it's null (a followup
+      // implies the calendar went out). Propagate that so the table's
+      // DATE SENT column and unified status pill update without a refetch.
+      if (json.first_sent_at && !link.first_sent_at) {
+        onSent?.({
+          first_sent_at: json.first_sent_at,
+          last_sent_at: json.last_sent_at ?? json.first_sent_at,
+          send_count: json.send_count ?? 1,
+        });
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to record');
     } finally {

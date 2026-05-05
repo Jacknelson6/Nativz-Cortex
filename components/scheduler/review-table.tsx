@@ -52,6 +52,12 @@ import type {
   ReviewLinkStatus,
   ReviewProjectType,
 } from '@/components/scheduler/review-board';
+import {
+  unifiedStatusForEditingProject,
+  unifiedStatusForShareLink,
+  UNIFIED_STATUS_LABEL,
+  type UnifiedStatus,
+} from '@/lib/content-tools/unified-status';
 
 /**
  * `/review` workspace — two subpages on a single tab strip:
@@ -1062,80 +1068,82 @@ function formatFollowupLabel(
 }
 
 /**
- * Editing-project specific status metadata. Mirrors `EDITING_STATUS_LABEL`
- * in `lib/editing/types.ts` so the table pill and the detail dialog show
- * the *same* label for the same row. Tones reuse the calendar palette so
- * the existing colour vocabulary still reads correctly:
- *   - editing      → blue (in flight, mirrors revising/info)
- *   - need_approval → yellow (waiting for client)
- *   - revising     → blue (client requested changes)
- *   - approved     → green (client signed off)
- *   - done         → green (handed off, with "Done" copy)
- *   - archived     → red (dead)
+ * Tone palette for the unified 4-state pill, mirroring
+ * `components/admin/content-tools/detail-dialog/unified-status-pill.tsx`
+ * so the table reads identically to the dialog header. Source of truth
+ * for the labels themselves is `UNIFIED_STATUS_LABEL`.
  */
-const EDITING_STATUS_META: Record<
-  NonNullable<ReviewLinkRow['editing_status']>,
-  { label: string; tone: string; description: string }
-> = {
-  editing: {
-    label: 'Editing',
-    tone: 'border-accent-text/30 bg-accent-text/10 text-accent-text',
-    description: 'Editor is working on the cuts.',
+const UNIFIED_TONE: Record<UnifiedStatus, { tone: string; description: string }> = {
+  ready_to_send: {
+    tone: 'border-text-muted/20 bg-text-muted/10 text-text-secondary',
+    description: 'Nothing has been shared with the client yet.',
   },
-  need_approval: {
-    label: 'Needs approval',
+  needs_approval: {
     tone: 'border-status-warning/30 bg-status-warning/10 text-status-warning',
     description: 'Sent to the client, awaiting first approval.',
   },
   revising: {
-    label: 'Revising',
     tone: 'border-accent-text/30 bg-accent-text/10 text-accent-text',
-    description: 'Client requested changes; editor is revising.',
+    description: 'Client requested changes; admin is iterating.',
   },
   approved: {
-    label: 'Approved',
     tone: 'border-status-success/30 bg-status-success/10 text-status-success',
-    description: 'Every video signed off by the client.',
-  },
-  done: {
-    label: 'Done',
-    tone: 'border-status-success/30 bg-status-success/10 text-status-success',
-    description: 'Handed off to paid media / scheduling.',
-  },
-  archived: {
-    label: 'Archived',
-    tone: 'border-status-danger/30 bg-status-danger/10 text-status-danger',
-    description: 'Project archived. Will not ship.',
+    description: 'Every deliverable signed off by the client.',
   },
 };
 
 /**
- * Status pill, colored badge with a tooltip explaining the stage.
- *
- * For editing-project rows, prefers the raw `editing_status` over the
- * mapped `status` so the pill reads identically to the detail dialog
- * (no more "Editing" in the dialog vs "Ready for review" in the table).
+ * Status pill — the table mirrors the detail-dialog header so a row's
+ * pill always reads identically to the pill on its open dialog. Both
+ * surfaces use `unifiedStatusFor…` (4 states: ready_to_send, needs_
+ * approval, revising, approved). Terminal calendar links (abandoned /
+ * expired) get a second red badge alongside the unified pill, exactly
+ * how the dialog stacks them.
  */
 function StatusPill({ link }: { link: ReviewLinkRow }) {
-  const editingMeta =
+  const unified: UnifiedStatus =
     link.kind === 'editing' && link.editing_status
-      ? EDITING_STATUS_META[link.editing_status]
-      : null;
-  const meta = editingMeta ?? STATUS_META[link.status];
+      ? unifiedStatusForEditingProject(link.editing_status)
+      : unifiedStatusForShareLink({
+          status: link.status,
+          first_sent_at: link.first_sent_at,
+        });
+  const tone = UNIFIED_TONE[unified];
+  const isTerminalCalendar =
+    link.kind !== 'editing' &&
+    (link.status === 'abandoned' || link.status === 'expired');
+  const terminalMeta = isTerminalCalendar ? STATUS_META[link.status] : null;
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${meta.tone}`}
-        >
-          {meta.label}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top" className="w-56">
-        <div className="font-medium text-text-primary">{meta.label}</div>
-        <div className="mt-0.5 text-text-muted">{meta.description}</div>
-      </TooltipContent>
-    </Tooltip>
+    <span className="inline-flex items-center gap-1.5">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${tone.tone}`}
+          >
+            {UNIFIED_STATUS_LABEL[unified]}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="w-56">
+          <div className="font-medium text-text-primary">{UNIFIED_STATUS_LABEL[unified]}</div>
+          <div className="mt-0.5 text-text-muted">{tone.description}</div>
+        </TooltipContent>
+      </Tooltip>
+      {terminalMeta && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium ${terminalMeta.tone}`}
+            >
+              {terminalMeta.label}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="w-56">
+            <div className="font-medium text-text-primary">{terminalMeta.label}</div>
+            <div className="mt-0.5 text-text-muted">{terminalMeta.description}</div>
+          </TooltipContent>
+        </Tooltip>
+      )}
+    </span>
   );
 }
 
