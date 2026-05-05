@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
     return NextResponse.json({
       link,
-      url: `${appUrl}/shared/calendar/${link.token}`,
+      url: `${appUrl}/s/${link.token}`,
     });
   } catch (error) {
     console.error('POST /api/scheduler/share error:', error);

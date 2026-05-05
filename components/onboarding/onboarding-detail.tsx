@@ -56,8 +56,8 @@ function formatTime(iso: string): string {
 }
 
 function shareUrl(token: string): string {
-  if (typeof window === 'undefined') return `/onboarding/${token}`;
-  return `${window.location.origin}/onboarding/${token}`;
+  if (typeof window === 'undefined') return `/s/${token}`;
+  return `${window.location.origin}/s/${token}`;
 }
 
 export function OnboardingDetail(props: {

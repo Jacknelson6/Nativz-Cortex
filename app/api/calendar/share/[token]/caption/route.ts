@@ -128,7 +128,7 @@ async function notifyOfCaptionEdit(
     agency: drop.clients?.agency ?? null,
   });
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
-  const shareUrl = `${appUrl}/c/${token}`;
+  const shareUrl = `${appUrl}/s/${token}`;
 
   const truncate = (s: string, max = 280) =>
     s.length > max ? `${s.slice(0, max)}…` : s;

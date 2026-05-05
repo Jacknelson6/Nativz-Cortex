@@ -100,7 +100,7 @@ async function main() {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://cortex.nativz.io';
   const dropUrl = shareLink?.token
-    ? `${appUrl}/c/${shareLink.token}`
+    ? `${appUrl}/s/${shareLink.token}`
     : shareLink?.drop_id
       ? `${appUrl}/admin/calendar/${shareLink.drop_id}`
       : `${appUrl}/admin/calendar`;

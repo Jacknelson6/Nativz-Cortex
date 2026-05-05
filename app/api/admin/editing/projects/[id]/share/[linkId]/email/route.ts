@@ -124,7 +124,7 @@ async function loadEmailContext(projectId: string, linkId: string) {
   const eligible = await getClientNotificationRecipients(admin, clientId);
 
   const appUrl = resolveAppUrl(project.clients?.agency);
-  const shareUrl = `${appUrl}/c/edit/${link.token}`;
+  const shareUrl = `${appUrl}/s/${link.token}`;
 
   // Compute "videos uploaded since the last send" so the dialog can switch
   // between Send delivery vs Send re-review and surface a count badge. Null

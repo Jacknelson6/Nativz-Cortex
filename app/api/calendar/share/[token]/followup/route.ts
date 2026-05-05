@@ -163,7 +163,7 @@ export async function POST(
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
-  const shareUrl = `${appUrl}/c/${token}`;
+  const shareUrl = `${appUrl}/s/${token}`;
   const recipients = eligible.map((c) => c.email);
   const pocFirstNames = eligible.map((c) => firstName(c.name));
 

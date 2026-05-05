@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
           reviewerName: parsed.data.author_name,
           comment: parsed.data.content,
           status: parsed.data.status,
-          postUrl: `${appUrl}/shared/calendar/${parsed.data.share_token}`,
+          postUrl: `${appUrl}/s/${parsed.data.share_token}`,
         });
       }
     } catch (webhookErr) {

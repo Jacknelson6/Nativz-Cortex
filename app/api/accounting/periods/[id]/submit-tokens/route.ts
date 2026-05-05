@@ -45,7 +45,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       expires_at: row.expires_at,
       last_used_at: row.last_used_at,
       use_count: row.use_count,
-      url: `${baseUrl}/submit-payroll/${row.token}`,
+      url: `${baseUrl}/s/${row.token}`,
     })),
   });
 }

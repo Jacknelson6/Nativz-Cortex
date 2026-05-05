@@ -183,7 +183,7 @@ async function main() {
     reviewMap,
   });
 
-  const shareUrl = `${APP_URL}/c/${shareLink.token}`;
+  const shareUrl = `${APP_URL}/s/${shareLink.token}`;
 
   step('Done');
   console.log(`  Admin calendar:    ${APP_URL}/admin/calendar/${drop.id}`);

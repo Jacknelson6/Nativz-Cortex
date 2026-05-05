@@ -622,7 +622,7 @@ function ReviewTableRow({
       onOpenCalendarLink(link);
       return;
     }
-    window.open(`/c/${link.token}`, '_blank', 'noopener,noreferrer');
+    window.open(`/s/${link.token}`, '_blank', 'noopener,noreferrer');
   }
 
   const rowBody = (

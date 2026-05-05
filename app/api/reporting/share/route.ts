@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     }
 
     const origin = new URL(request.url).origin;
-    const url = `${origin}/shared/report/${data.token}`;
+    const url = `${origin}/s/${data.token}`;
 
     return NextResponse.json({ id: data.id, token: data.token, url });
   } catch (error) {

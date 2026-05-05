@@ -150,7 +150,7 @@ async function handleGet(request: NextRequest) {
     const appUrl = process.env.NODE_ENV !== 'production'
       ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
       : getCortexAppUrl(brand);
-    const shareUrl = `${appUrl}/c/edit/${link.token}`;
+    const shareUrl = `${appUrl}/s/${link.token}`;
     const projectName = project.name?.trim() || client.name;
     const pocFirstNames = recipients.map((c) => firstName(c.name));
 

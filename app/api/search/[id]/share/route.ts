@@ -50,7 +50,7 @@ export async function GET(
     return NextResponse.json({
       shared: true,
       token: link.token,
-      url: `${baseUrl}/shared/search/${link.token}`,
+      url: `${baseUrl}/s/${link.token}`,
       expires_at: link.expires_at,
     });
   } catch (error) {
@@ -121,7 +121,7 @@ export async function POST(
     return NextResponse.json({
       shared: true,
       token,
-      url: `${baseUrl}/shared/search/${token}`,
+      url: `${baseUrl}/s/${token}`,
     });
   } catch (error) {
     console.error('POST /api/search/[id]/share error:', error);

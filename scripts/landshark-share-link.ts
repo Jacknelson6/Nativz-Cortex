@@ -53,7 +53,7 @@ async function main() {
     reviewMap,
   });
 
-  const shareUrl = `${APP_URL}/c/${result.token}`;
+  const shareUrl = `${APP_URL}/s/${result.token}`;
   console.log(`\n  Public share URL:  ${shareUrl}`);
   console.log(`  Refreshed:         ${result.refreshed}`);
   console.log(`  Drop ID:           ${DROP_ID}`);

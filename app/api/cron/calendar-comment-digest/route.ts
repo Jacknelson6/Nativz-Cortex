@@ -198,7 +198,7 @@ async function handleGet(request: NextRequest) {
   const groups: CalendarDigestClientGroup[] = Array.from(byClient.values()).map((g) => ({
     clientName: g.clientName,
     dropUrl: g.shareToken
-      ? `${appUrl}/c/${g.shareToken}`
+      ? `${appUrl}/s/${g.shareToken}`
       : g.dropId
         ? `${appUrl}/admin/calendar/${g.dropId}`
         : `${appUrl}/admin/calendar`,
@@ -271,7 +271,7 @@ async function handleGet(request: NextRequest) {
     groups.push({
       clientName: `${g.clientName} · Editing`,
       dropUrl: token
-        ? `${appUrl}/c/edit/${token}`
+        ? `${appUrl}/s/${token}`
         : `${appUrl}/admin/editing/projects/${g.projectId}`,
       ctaLabel: `Review ${g.projectName}`,
       comments: g.comments,

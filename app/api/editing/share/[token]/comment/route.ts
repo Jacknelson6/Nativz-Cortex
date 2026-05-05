@@ -172,7 +172,7 @@ async function loadProjectChatContext(
     clientName,
     projectName,
     webhookUrl,
-    shareUrl: `${appUrl}/c/edit/${token}`,
+    shareUrl: `${appUrl}/s/${token}`,
   };
 }
 

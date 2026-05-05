@@ -81,7 +81,7 @@ export function ComptrollerShareDialog({ open, onClose, periodId, periodLabel }:
   }
 
   async function handleCopy(token: string) {
-    const url = `${window.location.origin}/comptroller/${token}`;
+    const url = `${window.location.origin}/s/${token}`;
     try {
       await navigator.clipboard.writeText(url);
       toast.success('Copied');

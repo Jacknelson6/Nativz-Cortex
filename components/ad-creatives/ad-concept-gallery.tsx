@@ -863,8 +863,8 @@ function ShareTokenRowCard({
 }) {
   const url =
     typeof window !== 'undefined'
-      ? `${window.location.origin}/shared/ad-creatives/${token.token}`
-      : `/shared/ad-creatives/${token.token}`;
+      ? `${window.location.origin}/s/${token.token}`
+      : `/s/${token.token}`;
   const isDead =
     !!token.revoked_at || (!!token.expires_at && new Date(token.expires_at) < new Date());
   const status = token.revoked_at

@@ -217,7 +217,7 @@ export async function runCalendarPipeline(
           postIds,
           reviewMap,
         });
-        shareUrl = `${appUrl}/c/${link.token}`;
+        shareUrl = `${appUrl}/s/${link.token}`;
       } catch (err) {
         console.warn(
           `      share link mint failed: ${err instanceof Error ? err.message : String(err)}`,

@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
   const origin = req.nextUrl.origin;
   return NextResponse.json({
     shareToken: row,
-    url: `${origin}/shared/ad-creatives/${row.token}`,
+    url: `${origin}/s/${row.token}`,
   });
 }
 

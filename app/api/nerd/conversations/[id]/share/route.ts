@@ -46,7 +46,7 @@ export async function POST(
   return NextResponse.json({
     shared: true,
     token,
-    url: `${baseUrl}/shared/nerd/${token}`,
+    url: `${baseUrl}/s/${token}`,
   });
 }
 
@@ -75,7 +75,7 @@ export async function GET(
   return NextResponse.json({
     shared: true,
     token: link.token,
-    url: `${baseUrl}/shared/nerd/${link.token}`,
+    url: `${baseUrl}/s/${link.token}`,
     expires_at: link.expires_at,
   });
 }

@@ -176,7 +176,7 @@ export async function GET(
 
     return {
       id: row.id,
-      url: `${appUrl}/c/edit/${row.token}`,
+      url: `${appUrl}/s/${row.token}`,
       created_at: row.created_at,
       expires_at: row.expires_at,
       last_viewed_at: row.last_viewed_at,

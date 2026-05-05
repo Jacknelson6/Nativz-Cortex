@@ -128,7 +128,7 @@ export async function POST(
     agency: drop?.clients?.agency ?? null,
   });
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
-  const shareUrl = `${appUrl}/c/${token}`;
+  const shareUrl = `${appUrl}/s/${token}`;
 
   const { data: editorRow } = await admin
     .from('users')

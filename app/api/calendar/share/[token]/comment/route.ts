@@ -476,7 +476,7 @@ async function maybeFireRevisionsCompleteNotification(
     agency: drop?.clients?.agency ?? null,
   });
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
-  const shareUrl = `${appUrl}/c/${args.token}`;
+  const shareUrl = `${appUrl}/s/${args.token}`;
 
   if (chatWebhookUrl) {
     const text =
@@ -550,7 +550,7 @@ async function notifyAdminsOfComment(
   // so phones (mobile-blocked from /admin/*) can open them.
   const linkPath = `/admin/calendar/${drop.id}`;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
-  const shareUrl = `${appUrl}/c/${shareToken}`;
+  const shareUrl = `${appUrl}/s/${shareToken}`;
 
   // In-app: every admin user gets the bell ping. Was previously hard-coded
   // to jack@nativz.io, which meant no other editor on the team saw revision

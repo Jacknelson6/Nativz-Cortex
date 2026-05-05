@@ -156,7 +156,7 @@ async function handleGet(request: NextRequest) {
     const appUrl = process.env.NODE_ENV !== 'production'
       ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
       : getCortexAppUrl(brand);
-    const shareUrl = `${appUrl}/c/${link.token}`;
+    const shareUrl = `${appUrl}/s/${link.token}`;
     const pocFirstNames = recipients.map((c) => firstName(c.name));
 
     // Auto-approve sweep at T+216h. Fires once per link and stamps

@@ -57,7 +57,7 @@ async function main() {
   if (existing) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://cortex.nativz.io';
     console.log(`\nExisting share link found:`);
-    console.log(`  ${appUrl}/c/${existing.token}`);
+    console.log(`  ${appUrl}/s/${existing.token}`);
     console.log(`  expires: ${existing.expires_at}`);
     return;
   }
@@ -94,7 +94,7 @@ async function main() {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://cortex.nativz.io';
   console.log(`\n✓ Share link minted:`);
-  console.log(`  ${appUrl}/c/${shareLink.token}`);
+  console.log(`  ${appUrl}/s/${shareLink.token}`);
   console.log(`  expires: ${shareLink.expires_at}`);
 }
 

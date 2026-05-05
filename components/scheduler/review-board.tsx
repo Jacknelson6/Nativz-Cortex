@@ -299,7 +299,7 @@ function ReviewCard({
   const isExpired = link.status === 'expired';
   const dateRange = formatDateRange(link.drop_start, link.drop_end);
   const lastViewed = link.last_viewed_at ? formatRelative(link.last_viewed_at) : null;
-  const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/c/${link.token}` : `/c/${link.token}`;
+  const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/s/${link.token}` : `/s/${link.token}`;
 
   async function copyLink() {
     try {
@@ -403,7 +403,7 @@ function ReviewCard({
             </button>
           )}
           <Link
-            href={`/c/${link.token}`}
+            href={`/s/${link.token}`}
             target="_blank"
             rel="noreferrer"
             className="inline-flex h-7 items-center gap-1 rounded-md bg-accent-surface/40 px-2 text-[11px] font-medium text-accent-text transition-colors hover:bg-accent-surface/60"

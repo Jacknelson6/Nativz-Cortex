@@ -71,7 +71,7 @@ export async function POST(
   const appUrl = resolveAppUrl(drop.clients?.agency);
   return NextResponse.json({
     link: { id: link.id, token: link.token, expires_at: link.expires_at },
-    url: `${appUrl}/c/${link.token}`,
+    url: `${appUrl}/s/${link.token}`,
     refreshed: link.refreshed,
     // Orphan stats let the calendar UI flash a "X posts pulled from
     // Zernio queue" toast when refreshing a share link drops posts that
@@ -133,7 +133,7 @@ export async function GET(
     const allViews = viewsByLink[row.id as string] ?? [];
     return {
       id: row.id,
-      url: `${appUrl}/c/${row.token}`,
+      url: `${appUrl}/s/${row.token}`,
       post_count: Array.isArray(row.included_post_ids) ? row.included_post_ids.length : 0,
       created_at: row.created_at,
       last_viewed_at: row.last_viewed_at,

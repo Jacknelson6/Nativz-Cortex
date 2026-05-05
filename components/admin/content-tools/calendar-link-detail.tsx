@@ -414,8 +414,8 @@ export function CalendarLinkDetail({
 
   const shareUrl = useMemo(() => {
     if (!link?.token) return '';
-    if (typeof window === 'undefined') return `/c/${link.token}`;
-    return `${window.location.origin}/c/${link.token}`;
+    if (typeof window === 'undefined') return `/s/${link.token}`;
+    return `${window.location.origin}/s/${link.token}`;
   }, [link?.token]);
 
   if (!open || !link) return null;

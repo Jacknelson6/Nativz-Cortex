@@ -229,7 +229,7 @@ async function main() {
     .single();
   if (slErr || !shareLink) throw new Error(`content_drop_share_links insert: ${slErr?.message}`);
 
-  const shareUrl = `${APP_URL}/c/${shareLink.token}`;
+  const shareUrl = `${APP_URL}/s/${shareLink.token}`;
   console.log(`  ${shareUrl}`);
 
   if (TEST_COMMENT) {

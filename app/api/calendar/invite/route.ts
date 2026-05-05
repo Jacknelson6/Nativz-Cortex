@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
     }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
-    const url = `${appUrl}/shared/calendar-connect/${invite_token}`;
+    const url = `${appUrl}/s/${invite_token}`;
 
     return NextResponse.json({ token: invite_token, url });
   } catch (error) {

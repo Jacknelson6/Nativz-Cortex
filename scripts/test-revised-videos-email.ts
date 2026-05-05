@@ -182,7 +182,7 @@ async function main() {
 
   const agency = getBrandFromAgency(client.agency);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
-  const shareUrl = `${appUrl}/c/${link.token}`;
+  const shareUrl = `${appUrl}/s/${link.token}`;
 
   // POC first names, pull a real list so the greeting reads like the real
   // email, but the recipient is the test address. Falls back to "Jack" if

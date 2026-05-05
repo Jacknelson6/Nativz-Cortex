@@ -150,7 +150,7 @@ export async function POST(
   const projectName = project.name?.trim() || clientName;
   const brand = getBrandFromAgency(project.clients?.agency ?? null);
   const appUrl = resolveAppUrl(project.clients?.agency);
-  const shareUrl = `${appUrl}/c/edit/${link.token}`;
+  const shareUrl = `${appUrl}/s/${link.token}`;
 
   const recipients = await getClientNotificationRecipients(admin, clientId);
   if (recipients.length === 0) {

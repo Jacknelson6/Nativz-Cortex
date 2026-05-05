@@ -85,7 +85,7 @@ export async function POST(
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
-    const inviteUrl = `${baseUrl}/shared/join/${invite.token}`;
+    const inviteUrl = `${baseUrl}/s/${invite.token}`;
 
     // Get inviter's name for the email
     const { data: inviter } = await adminClient

@@ -39,7 +39,7 @@ function resolveShareUrl(brand: 'nativz' | 'anderson', token: string): string {
     process.env.NODE_ENV !== 'production'
       ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
       : getCortexAppUrl(brand);
-  return `${appUrl}/c/${token}`;
+  return `${appUrl}/s/${token}`;
 }
 
 const VariantSchema = z.enum(['initial', 'revised']);

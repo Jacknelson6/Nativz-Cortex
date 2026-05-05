@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
         id: inv.id,
         token: inv.token,
         email: inv.email ?? null,
-        invite_url: `${baseUrl}/join/${inv.token}`,
+        invite_url: `${baseUrl}/s/${inv.token}`,
         status,
         expires_at: inv.expires_at,
         used_at: inv.used_at,
@@ -176,7 +176,7 @@ export async function POST(request: NextRequest) {
     // regardless of which host the admin fired the request from.
     const agency = getBrandFromAgency(client.agency);
     const baseUrl = getCortexAppUrl(agency);
-    const inviteUrl = `${baseUrl}/join/${invite.token}`;
+    const inviteUrl = `${baseUrl}/s/${invite.token}`;
 
     // If the admin supplied an email, send the branded invite directly.
     // Agency is resolved from the client's `agency` text field — new brands

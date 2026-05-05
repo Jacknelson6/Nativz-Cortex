@@ -188,7 +188,7 @@ async function maybeSendRevisionsCompleteEmail(opts: {
     ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
     : getCortexAppUrl(brand);
   const newestLink = opts.shareLinks[0] as ShareLinkWithClient;
-  const shareUrl = `${appUrl}/c/${newestLink.token}`;
+  const shareUrl = `${appUrl}/s/${newestLink.token}`;
 
   const { data: portalUsers } = await opts.admin
     .from('user_client_access')

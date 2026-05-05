@@ -154,7 +154,7 @@ export default async function ClientSettingsInfoPage({
       id: inv.id,
       token: inv.token,
       email: inv.email ?? null,
-      invite_url: `${inviteBaseUrl}/join/${inv.token}`,
+      invite_url: `${inviteBaseUrl}/s/${inv.token}`,
       status,
       expires_at: inv.expires_at,
       used_at: inv.used_at,
