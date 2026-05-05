@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { listMediaInFolder } from '@/lib/calendar/drive-folder';
+import { getActiveBrand } from '@/lib/active-brand';
 
 export async function GET(req: Request) {
   const supabase = await createServerSupabaseClient();
@@ -50,6 +51,24 @@ export async function POST(req: Request) {
   const mediaType = parsed.data.mediaType ?? 'video';
   if (new Date(startDate) > new Date(endDate)) {
     return NextResponse.json({ error: 'startDate must be on or before endDate' }, { status: 400 });
+  }
+
+  // Brand-context guard. The body's clientId can lag the brand pill during
+  // the optimistic-then-router.refresh window, which previously let drops
+  // file under whichever brand was active *before* the user picked the
+  // current one. Reject the mismatch outright instead of silently filing
+  // the drop under the wrong brand and generating off-brand captions.
+  const active = await getActiveBrand();
+  if (active.brand && active.brand.id !== clientId) {
+    return NextResponse.json(
+      {
+        error:
+          'brand_mismatch: active brand does not match the supplied clientId. Refresh the page and try again.',
+        activeBrandId: active.brand.id,
+        suppliedClientId: clientId,
+      },
+      { status: 409 },
+    );
   }
 
   let folderId: string;

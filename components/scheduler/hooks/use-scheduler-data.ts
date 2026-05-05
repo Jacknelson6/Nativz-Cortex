@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
+import { useActiveBrand } from '@/lib/admin/active-client-context';
 import type { CalendarPost, MediaItem, ClientOption, ConnectedProfile } from '../types';
 
 export function useSchedulerData(
@@ -11,14 +12,20 @@ export function useSchedulerData(
 ) {
   const searchParams = useSearchParams();
   const urlClientId = searchParams.get('client_id');
+  // Optimistic brand id from the top-bar pill. This flips the moment the
+  // user picks a brand, before the server roundtrip + router.refresh that
+  // would update `initialClientId`. Using it as the source of truth closes
+  // the race window where the dialog could capture the previous brand and
+  // file a drop under the wrong client.
+  const { brand: activeBrand } = useActiveBrand();
 
   const hasInitial = !!initialClients?.length;
   const [clients, setClients] = useState<ClientOption[]>(initialClients ?? []);
-  // Precedence: explicit URL param > server-resolved active brand >
-  // first client in the list. Binding to the active brand lets the calendar
-  // mirror whatever the top-bar pill shows on first paint.
+  // Precedence: explicit URL param > optimistic active brand > server seed >
+  // first client. The optimistic brand wins so the dialog and downstream
+  // fetches always reflect the pill the user is looking at.
   const [selectedClientId, setSelectedClientId] = useState<string | null>(
-    urlClientId ?? initialClientId ?? (initialClients?.[0]?.id ?? null),
+    urlClientId ?? activeBrand?.id ?? initialClientId ?? (initialClients?.[0]?.id ?? null),
   );
   const [posts, setPosts] = useState<CalendarPost[]>([]);
   const [media, setMedia] = useState<MediaItem[]>([]);
@@ -26,20 +33,19 @@ export function useSchedulerData(
   const [loading, setLoading] = useState(!hasInitial);
   const [mediaLoading, setMediaLoading] = useState(false);
 
-  // Brand-pill → calendar one-way sync. When the top-bar brand pill changes,
-  // it triggers `router.refresh()`, which re-runs the calendar server
-  // component with a new `initialClientId`. The state set above only fires
-  // once, so we mirror later changes here. Calendar dropdown picks set
-  // `selectedClientId` directly and aren't affected by this effect because
-  // a pill change is what moves `initialClientId`, not the dropdown.
+  // Pill-driven sync. Subscribe to the optimistic active brand so the
+  // calendar reacts the instant the user picks a brand, not after the
+  // server roundtrip. The previous implementation waited for
+  // `initialClientId` to refresh, which left a race window during which
+  // the New Drop dialog could capture the prior brand id.
   useEffect(() => {
-    if (initialClientId && initialClientId !== selectedClientId) {
-      setSelectedClientId(initialClientId);
+    if (activeBrand?.id && activeBrand.id !== selectedClientId) {
+      setSelectedClientId(activeBrand.id);
     }
-    // selectedClientId intentionally omitted — we only want to sync when the
-    // server-provided active brand changes, not on every dropdown pick.
+    // selectedClientId intentionally omitted — only the pill should drive
+    // this effect; in-page picks set selectedClientId directly.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialClientId]);
+  }, [activeBrand?.id]);
 
   // Fetch clients on mount (skip if server-provided)
   useEffect(() => {
