@@ -205,6 +205,7 @@ const PostBodySchema = z
     variant: VariantSchema,
     subject: z.string().trim().min(1).max(200).optional(),
     message: z.string().trim().min(1).max(5000).optional(),
+    cc: z.array(z.string().email()).max(10).optional(),
   })
   .strict();
 
@@ -257,6 +258,7 @@ export async function POST(
   // payload. A failed send must not pretend the calendar went out.
   const result = await sendCalendarShareSendEmail({
     to: recipients,
+    cc: parsed.data.cc,
     pocFirstNames,
     clientName,
     shareUrl,
