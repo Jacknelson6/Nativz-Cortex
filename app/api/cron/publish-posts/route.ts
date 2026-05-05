@@ -273,6 +273,143 @@ async function handleGet(request: NextRequest) {
           lateIdToProfileId[p.lateAccountId] = p.profileId;
         });
 
+        // DUPE GUARD — if Zernio already has this post queued
+        // (`late_post_id` set from a prior cron tick or schedule-time
+        // queueing), re-running publishPost would create a SECOND Zernio
+        // post on the same calendar slot. Probe Zernio for the existing
+        // post and reconcile each leg from its authoritative response
+        // instead of re-publishing.
+        //
+        // Mapping: Zernio's PlatformResult.status `published` → spp
+        // 'published', `failed` → 'failed', `scheduled` (Zernio-queued
+        // but platform hasn't confirmed) → 'pending'. If Zernio returns
+        // null/errors, clear `late_post_id` so the next tick re-publishes
+        // fresh — that handles the case where the queued copy was
+        // cancelled (or never created).
+        if (post.late_post_id) {
+          let zernioStatus: Awaited<ReturnType<typeof postingService.getPostStatus>> | null = null;
+          try {
+            zernioStatus = await postingService.getPostStatus(post.late_post_id as string);
+          } catch (probeErr) {
+            console.warn(
+              `[publish-cron] getPostStatus failed for ${post.id} (late_post_id=${post.late_post_id}); clearing and re-publishing next tick`,
+              probeErr,
+            );
+          }
+
+          if (!zernioStatus) {
+            await adminClient
+              .from('scheduled_posts')
+              .update({
+                late_post_id: null,
+                status: 'scheduled',
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', post.id);
+            console.log(`[publish-cron] cleared stale late_post_id for ${post.id}`);
+            continue;
+          }
+
+          const failedDetails: { platform: string; username: string | null; reason: string }[] = [];
+          for (const z of zernioStatus.platforms) {
+            const internalProfileId = lateIdToProfileId[z.profileId] ?? z.profileId;
+            const spp = (post.scheduled_post_platforms ?? []).find(
+              (s: Record<string, unknown>) => s.social_profile_id === internalProfileId,
+            );
+            if (!spp) continue;
+            const sppStatus =
+              z.status === 'published'
+                ? 'published'
+                : z.status === 'failed'
+                  ? 'failed'
+                  : 'pending';
+            await adminClient
+              .from('scheduled_post_platforms')
+              .update({
+                status: sppStatus,
+                external_post_id: z.externalPostId ?? null,
+                external_post_url: z.externalPostUrl ?? null,
+                failure_reason: z.status === 'failed' ? z.error ?? null : null,
+              })
+              .eq('id', (spp as Record<string, unknown>).id);
+
+            if (z.status === 'failed') {
+              const sppRecord = spp as { social_profiles?: { platform?: string; username?: string | null } };
+              failedDetails.push({
+                platform: sppRecord.social_profiles?.platform ?? z.profileId,
+                username: sppRecord.social_profiles?.username ?? null,
+                reason: z.error ?? 'Unknown error from Zernio',
+              });
+            }
+          }
+
+          const { data: freshSppRows } = await adminClient
+            .from('scheduled_post_platforms')
+            .select('status')
+            .eq('post_id', post.id);
+          const sppStatuses = (freshSppRows ?? []).map(
+            (r) => (r as { status: string }).status,
+          );
+          const allPublished =
+            sppStatuses.length > 0 && sppStatuses.every((s) => s === 'published');
+          const anyFailed = sppStatuses.some((s) => s === 'failed');
+          const anyPending = sppStatuses.some((s) => s === 'pending');
+
+          const currentRetryCount = (post.retry_count ?? 0) as number;
+          const retriesRemaining = currentRetryCount + 1 < MAX_RETRIES;
+
+          let probeNewStatus: 'published' | 'partially_failed' | 'scheduled';
+          let probeUpdate: Record<string, unknown>;
+          if (allPublished) {
+            probeNewStatus = 'published';
+            probeUpdate = {
+              status: 'published',
+              published_at: new Date().toISOString(),
+              failure_reason: null,
+              updated_at: new Date().toISOString(),
+            };
+          } else if (anyFailed && !anyPending) {
+            probeNewStatus = 'partially_failed';
+            probeUpdate = {
+              status: 'partially_failed',
+              retry_count: currentRetryCount + 1,
+              failure_reason: failedDetails.length
+                ? `${failedDetails.map((f) => f.platform).join(', ')} failed (Zernio probe)`
+                : null,
+              updated_at: new Date().toISOString(),
+            };
+          } else {
+            // At least one leg still pending — Zernio hasn't fired all
+            // platforms yet. Stay scheduled so the next tick probes again
+            // (no retry bump, no scheduled_at push). Acts like the
+            // verify-post sweep but bound to this row.
+            probeNewStatus = 'scheduled';
+            probeUpdate = {
+              status: 'scheduled',
+              updated_at: new Date().toISOString(),
+            };
+          }
+
+          await adminClient
+            .from('scheduled_posts')
+            .update(probeUpdate)
+            .eq('id', post.id);
+
+          if (probeNewStatus === 'partially_failed' && !retriesRemaining && failedDetails.length > 0) {
+            try {
+              await sendPartialFailureNotification(adminClient, post, failedDetails);
+            } catch (notifyErr) {
+              console.error('Failed to send partial-failure notification (Zernio probe):', notifyErr);
+            }
+          }
+
+          if (allPublished) publishedCount++;
+          console.log(
+            `[publish-cron] reconciled ${post.id} from Zernio late_post_id=${post.late_post_id} → ${probeNewStatus}`,
+          );
+          continue;
+        }
+
         // Publish via posting service.
         //
         // Per-platform overrides (migration 218) live on the same
