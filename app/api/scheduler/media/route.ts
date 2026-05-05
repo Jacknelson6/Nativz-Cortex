@@ -11,6 +11,8 @@ const ConfirmUploadSchema = z.object({
   file_size_bytes: z.number(),
   mime_type: z.string(),
   thumbnail_url: z.string().nullable().optional(),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
 });
 
 /**
@@ -67,6 +69,8 @@ export async function POST(request: NextRequest) {
           thumbnail_url: data.thumbnail_url ?? null,
           file_size_bytes: data.file_size_bytes,
           mime_type: data.mime_type,
+          width: data.width ?? null,
+          height: data.height ?? null,
           is_used: false,
         })
         .select()

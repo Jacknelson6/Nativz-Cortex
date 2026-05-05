@@ -91,10 +91,15 @@ export function MediaLibrary({
         xhr.send(file);
       });
 
-      // Step 3: Generate thumbnail
+      // Step 3: Generate thumbnail + capture intrinsic dimensions. Capturing
+      // width/height for images here lets the publish-cron's pre-flight reject
+      // bad-aspect images (e.g. 9:16 → Instagram feed) before Zernio retries
+      // 3 times and pages the team. Video dims aren't part of the rule yet.
       let thumbnailUrl: string | null = null;
+      let dims: { width: number; height: number } | null = null;
       if (file.type.startsWith('image/')) {
         thumbnailUrl = publicUrl;
+        dims = await readImageDimensions(file);
       } else if (file.type.startsWith('video/')) {
         thumbnailUrl = await generateVideoThumbnail(file);
       }
@@ -111,6 +116,7 @@ export function MediaLibrary({
           file_size_bytes: file.size,
           mime_type: file.type,
           thumbnail_url: thumbnailUrl,
+          ...(dims ? { width: dims.width, height: dims.height } : {}),
         }),
       });
       if (!confirmRes.ok) throw new Error('Failed to save media record');
@@ -124,6 +130,27 @@ export function MediaLibrary({
       setUploadProgress(0);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
+  }
+
+  /** Read intrinsic pixel dimensions from an image File. */
+  function readImageDimensions(file: File): Promise<{ width: number; height: number } | null> {
+    return new Promise((resolve) => {
+      const img = document.createElement('img');
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const dims =
+          img.naturalWidth && img.naturalHeight
+            ? { width: img.naturalWidth, height: img.naturalHeight }
+            : null;
+        URL.revokeObjectURL(url);
+        resolve(dims);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(null);
+      };
+      img.src = url;
+    });
   }
 
   /** Extract a thumbnail frame from a video file as a data URL */

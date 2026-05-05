@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getPostingService } from '@/lib/posting';
 import type { SocialPlatform } from '@/lib/posting/types';
+import {
+  probeImageDimensions,
+  validateCarouselForPlatform,
+} from '@/lib/posting/validate-image-aspect';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 import { notifyAdmins } from '@/lib/notifications';
 import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
@@ -412,6 +416,142 @@ async function handleGet(request: NextRequest) {
           continue;
         }
 
+        // PRE-FLIGHT: image posts targeting Instagram must satisfy the
+        // 0.75–1.91 feed aspect rule, otherwise Zernio returns a hard 400 and
+        // we burn 3 retries plus a "posting health alert" email before the
+        // post is marked failed. Pre-rejecting the IG leg here keeps the
+        // retry quota for transient failures and lets the other platforms
+        // (TikTok, Facebook, LinkedIn) publish uninterrupted.
+        const preFlightFailures: { platform: string; username: string | null; reason: string }[] = [];
+        const isImagePost = post.post_type === 'image' || post.post_type === 'carousel';
+        if (isImagePost && platformProfiles.some((p: PlatformProfile) => p.platform === 'instagram')) {
+          const { data: mediaRows } = await adminClient
+            .from('scheduled_post_media')
+            .select(
+              'sort_order, scheduler_media:media_id (id, width, height, late_media_url, storage_path)',
+            )
+            .eq('post_id', post.id)
+            .order('sort_order');
+          type MediaJoinRow = {
+            scheduler_media:
+              | {
+                  id: string;
+                  width: number | null;
+                  height: number | null;
+                  late_media_url: string | null;
+                  storage_path: string | null;
+                }
+              | {
+                  id: string;
+                  width: number | null;
+                  height: number | null;
+                  late_media_url: string | null;
+                  storage_path: string | null;
+                }[]
+              | null;
+          };
+          const carouselRows = ((mediaRows ?? []) as MediaJoinRow[])
+            .map((r) =>
+              Array.isArray(r.scheduler_media) ? r.scheduler_media[0] : r.scheduler_media,
+            )
+            .filter(
+              (
+                m,
+              ): m is {
+                id: string;
+                width: number | null;
+                height: number | null;
+                late_media_url: string | null;
+                storage_path: string | null;
+              } => m != null,
+            );
+
+          // Probe + backfill any image with NULL width/height. Most existing
+          // rows pre-date the upload-time dimension capture, so this is the
+          // path that catches Landshark-style 9:16 source files. Probes run
+          // sequentially per carousel — image carousels are at most 10 frames
+          // and Sharp metadata is sub-100ms per image.
+          const carousel: { width: number | null; height: number | null }[] = [];
+          for (const m of carouselRows) {
+            if (m.width != null && m.height != null) {
+              carousel.push({ width: m.width, height: m.height });
+              continue;
+            }
+            const url = m.late_media_url ?? m.storage_path ?? null;
+            if (!url) {
+              carousel.push({ width: null, height: null });
+              continue;
+            }
+            const probed = await probeImageDimensions(url);
+            if (probed) {
+              carousel.push(probed);
+              await adminClient
+                .from('scheduler_media')
+                .update({ width: probed.width, height: probed.height })
+                .eq('id', m.id);
+            } else {
+              carousel.push({ width: null, height: null });
+            }
+          }
+
+          const igIssue = validateCarouselForPlatform('instagram', carousel);
+          if (igIssue) {
+            const igLegs = platformProfiles.filter((pp) => pp.platform === 'instagram');
+            for (const leg of igLegs) {
+              const spp = (post.scheduled_post_platforms ?? []).find(
+                (s: Record<string, unknown>) => s.social_profile_id === leg.profileId,
+              );
+              if (spp) {
+                await adminClient
+                  .from('scheduled_post_platforms')
+                  .update({
+                    status: 'failed',
+                    failure_reason: igIssue.reason,
+                  })
+                  .eq('id', (spp as Record<string, unknown>).id);
+                const sppRecord = spp as { social_profiles?: { username?: string | null } };
+                preFlightFailures.push({
+                  platform: 'instagram',
+                  username: sppRecord.social_profiles?.username ?? null,
+                  reason: igIssue.reason,
+                });
+              }
+            }
+            // Drop the IG legs so we don't ship them to Zernio.
+            const filtered = platformProfiles.filter((pp) => pp.platform !== 'instagram');
+            platformProfiles.length = 0;
+            platformProfiles.push(...filtered);
+            console.warn(
+              `[publish-cron] pre-flight rejected IG leg(s) for ${post.id}: ${igIssue.reason}`,
+            );
+          }
+        }
+
+        if (platformProfiles.length === 0) {
+          // Every leg was pre-rejected (e.g. IG-only post with bad ratio).
+          // Mark the post terminal-failed and surface the reason. Skip the
+          // retry path because the input is deterministic — re-running won't
+          // help.
+          const reason =
+            preFlightFailures[0]?.reason ?? 'No publishable platforms after pre-flight checks.';
+          await adminClient
+            .from('scheduled_posts')
+            .update({
+              status: 'partially_failed',
+              retry_count: MAX_RETRIES,
+              failure_reason: reason,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', post.id);
+          try {
+            await sendPartialFailureNotification(adminClient, post, preFlightFailures);
+          } catch (notifyErr) {
+            console.error('Failed to send pre-flight failure notification:', notifyErr);
+          }
+          failedCount++;
+          continue;
+        }
+
         // Publish via posting service.
         //
         // Per-platform overrides (migration 218) live on the same
@@ -494,6 +634,14 @@ async function handleGet(request: NextRequest) {
               reason: platformResult.error ?? 'Unknown error',
             });
           }
+        }
+
+        // Fold pre-flight rejections (e.g. Instagram aspect-ratio violations)
+        // into the same failure list so the team-notify email + failure_reason
+        // text on `scheduled_posts` cite the actual cause instead of a generic
+        // "Instagram failed."
+        if (preFlightFailures.length > 0) {
+          failedPlatformDetails.push(...preFlightFailures);
         }
 
         // Re-query the FULL spp set to derive true overall status. With per-
