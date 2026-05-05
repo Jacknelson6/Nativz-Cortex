@@ -61,9 +61,9 @@ export interface NotificationDefinition {
 export const NOTIFICATION_REGISTRY: NotificationDefinition[] = [
   {
     key: 'calendar_comment_digest',
-    label: 'Daily content calendar digest',
+    label: 'Daily review digest (calendar + editing)',
     description:
-      'Daily summary of every comment, approval, and revision request from the past 24h on client content calendars.',
+      'Daily summary of every comment, approval, and revision request from the past 24h across content calendars and editing project share links.',
     kind: 'email',
     trigger: 'cron',
     cronSchedule: '0 13 * * *',
@@ -107,78 +107,57 @@ export const NOTIFICATION_REGISTRY: NotificationDefinition[] = [
     },
   },
   {
-    key: 'calendar_no_open_nudge',
-    label: 'Reminder — share link not opened',
+    key: 'calendar_followup_cadence',
+    label: 'Calendar follow-up cadence (3-stage, no comments left)',
     description:
-      'Email nudge when the client has not opened the most recent share link within the configured window.',
+      'Anchored on the most recent client-facing send. T+72h follow-up 1, T+120h follow-up 2, T+168h follow-up 3 (final call). Any comment, approval, or change request from the reviewer cancels the cadence.',
     kind: 'email',
     trigger: 'cron',
     cronSchedule: '0 14 * * *',
     cronPath: '/api/cron/calendar-reminders',
-    recipientLabel: 'Client primary contact',
-    params: {
-      windowHours: {
-        label: 'Hours before reminder',
-        description: 'How long after the share link is sent (with no opens) before the email fires.',
-        type: 'duration_hours',
-        default: 48,
-        min: 4,
-        max: 240,
-      },
-    },
-    preview: async (agency) => {
-      const { previewCalendarNoOpenNudge } = await import('./previews/calendar-reminders');
-      return previewCalendarNoOpenNudge(agency);
-    },
+    recipientLabel: 'Client primary contacts',
   },
   {
-    key: 'calendar_no_action_nudge',
-    label: 'Reminder — opened but no action',
+    key: 'calendar_auto_approve',
+    label: 'Calendar auto-approve at T+216h',
     description:
-      'Email nudge when the client has opened the share link but left no approvals or revisions within the window.',
+      'After the 3-stage follow-up cadence completes with no client activity, auto-approve every still-pending post on the share link and ping ops.',
     kind: 'email',
     trigger: 'cron',
     cronSchedule: '0 14 * * *',
     cronPath: '/api/cron/calendar-reminders',
-    recipientLabel: 'Client primary contact',
-    params: {
-      windowHours: {
-        label: 'Hours before reminder',
-        description: 'How long after the share link is sent (no approvals AND no revisions) before the email fires.',
-        type: 'duration_hours',
-        default: 72,
-        min: 4,
-        max: 240,
-      },
-    },
-    preview: async (agency) => {
-      const { previewCalendarNoActionNudge } = await import('./previews/calendar-reminders');
-      return previewCalendarNoActionNudge(agency);
-    },
+    recipientLabel: 'Ops Google Chat space + admin notifications',
   },
   {
-    key: 'calendar_final_call',
-    label: 'Final call before publishing',
+    key: 'editing_followup_cadence',
+    label: 'Editing follow-up cadence (3-stage, no comments left)',
     description:
-      '24h before the earliest scheduled post, email + chat the client (and chat us) that content is shipping unless we hear back.',
+      'Anchored on the most recent editing share-link send. T+72h follow-up 1, T+120h follow-up 2, T+168h follow-up 3 (last check). Any reviewer comment, approval, or change request cancels the cadence.',
     kind: 'email',
     trigger: 'cron',
     cronSchedule: '0 14 * * *',
-    cronPath: '/api/cron/calendar-reminders',
-    recipientLabel: 'Client primary contact + both chat spaces',
-    params: {
-      hoursBeforeFirstPost: {
-        label: 'Hours before first scheduled post',
-        type: 'duration_hours',
-        default: 24,
-        min: 2,
-        max: 168,
-      },
-    },
-    preview: async (agency) => {
-      const { previewCalendarFinalCall } = await import('./previews/calendar-reminders');
-      return previewCalendarFinalCall(agency);
-    },
+    cronPath: '/api/cron/editing-reminders',
+    recipientLabel: 'Client primary contacts',
+  },
+  {
+    key: 'editing_auto_approve',
+    label: 'Editing auto-approve at T+216h',
+    description:
+      'After the 3-stage follow-up cadence completes with no client activity, auto-approve every still-pending video on the share link and ping ops.',
+    kind: 'email',
+    trigger: 'cron',
+    cronSchedule: '0 14 * * *',
+    cronPath: '/api/cron/editing-reminders',
+    recipientLabel: 'Ops Google Chat space + admin notifications',
+  },
+  {
+    key: 'editing_comment_chat',
+    label: 'Editing comment Chat ping (per comment)',
+    description:
+      'Real-time Google Chat post to the client space when a reviewer leaves a comment, approval, or change request on an editing project share link.',
+    kind: 'chat',
+    trigger: 'event',
+    recipientLabel: 'Client Google Chat space',
   },
   {
     key: 'calendar_revisions_complete',

@@ -1,32 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
-  sendCalendarNoOpenReminderEmail,
-  sendCalendarNoActionReminderEmail,
-  sendCalendarFinalCallEmail,
+  sendCalendarCadenceFollowupEmail,
+  type CadenceStage,
 } from '@/lib/email/resend';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 import { getNotificationSetting } from '@/lib/notifications/get-setting';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
-import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
+import { getClientNotificationRecipients } from '@/lib/email/notification-recipients';
+import { archiveShareLinkEmail } from '@/lib/content-tools/archive-share-email';
+import { notifyAdmins } from '@/lib/notifications';
 
 export const maxDuration = 60;
-
-const EXCLUDE_CONTACT_ROLES = [/paid media only/i, /avoid bulk/i];
 
 /**
  * GET /api/cron/calendar-reminders
  *
- * Three nudge types per share link, each fires at most once. Suppressed when:
- *   • pending count == 0 (everything is approved or actively in our court), or
- *   • another share link on the same drop already nudged that type recently.
+ * Unified follow-up cadence on content_drop_share_links. Anchor is
+ * `last_sent_at` (the most recent client-facing send). When the client
+ * has left zero comments / approvals / change requests since that send,
+ * we step through:
  *
- *   1. no_open_nudge      — share link not opened   (default 48h after sent)
- *   2. no_action_nudge    — opened, posts still pending (default 72h)
- *   3. final_call         — Xh before earliest scheduled post
- *                           (email client + chat client + chat us)
+ *   T+72h  → followup 1   ("just wanted to follow up")
+ *   T+120h → followup 2   ("just in case you missed this")
+ *   T+168h → followup 3   ("final call before we publish")
+ *   T+216h → auto-approve every still-pending post on the link
+ *
+ * Any reviewer activity in the window cancels the cadence for that link.
+ * Each send also drops an in-app Cortex notification ("Sent follow-up N
+ * to {client}") and a Google Chat ping into the ops space so we can
+ * track follow-up volume centrally.
  *
  * @auth Bearer CRON_SECRET (Vercel cron)
  */
@@ -37,10 +42,9 @@ async function handleGet(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const [noOpenSetting, noActionSetting, finalCallSetting] = await Promise.all([
-    getNotificationSetting('calendar_no_open_nudge'),
-    getNotificationSetting('calendar_no_action_nudge'),
-    getNotificationSetting('calendar_final_call'),
+  const [cadenceSetting, autoApproveSetting] = await Promise.all([
+    getNotificationSetting('calendar_followup_cadence'),
+    getNotificationSetting('calendar_auto_approve'),
   ]);
 
   const admin = createAdminClient();
@@ -50,13 +54,14 @@ async function handleGet(request: NextRequest) {
     drop_id: string;
     token: string;
     included_post_ids: string[];
-    created_at: string;
+    last_sent_at: string | null;
     last_viewed_at: string | null;
-    no_open_nudge_sent_at: string | null;
-    no_action_nudge_sent_at: string | null;
-    final_call_sent_at: string | null;
-    revisions_ops_nudged_at: string | null;
+    followup_1_sent_at: string | null;
+    followup_2_sent_at: string | null;
+    followup_3_sent_at: string | null;
+    auto_approved_at: string | null;
     followup_count: number | null;
+    archived_at: string | null;
     expires_at: string;
     content_drops: {
       id: string;
@@ -65,7 +70,6 @@ async function handleGet(request: NextRequest) {
         id: string;
         name: string;
         agency: string | null;
-        chat_webhook_url: string | null;
       } | null;
     } | null;
   };
@@ -77,21 +81,24 @@ async function handleGet(request: NextRequest) {
       drop_id,
       token,
       included_post_ids,
-      created_at,
+      last_sent_at,
       last_viewed_at,
-      no_open_nudge_sent_at,
-      no_action_nudge_sent_at,
-      final_call_sent_at,
-      revisions_ops_nudged_at,
+      followup_1_sent_at,
+      followup_2_sent_at,
+      followup_3_sent_at,
+      auto_approved_at,
       followup_count,
+      archived_at,
       expires_at,
       content_drops!inner (
         id,
         client_id,
-        clients!inner ( id, name, agency, chat_webhook_url )
+        clients!inner ( id, name, agency )
       )
     `)
-    .or('no_open_nudge_sent_at.is.null,no_action_nudge_sent_at.is.null,final_call_sent_at.is.null,revisions_ops_nudged_at.is.null')
+    .is('auto_approved_at', null)
+    .is('archived_at', null)
+    .not('last_sent_at', 'is', null)
     .gt('expires_at', new Date().toISOString())
     .returns<ShareLinkRow[]>();
 
@@ -101,329 +108,203 @@ async function handleGet(request: NextRequest) {
   }
 
   const now = Date.now();
-  const sent = { no_open: 0, no_action: 0, final_call: 0, skipped: 0 };
+  const counts = { stage1: 0, stage2: 0, stage3: 0, autoApproved: 0, skipped: 0 };
 
   for (const link of shareLinks ?? []) {
     const client = link.content_drops?.clients;
-    if (!client) continue;
+    if (!client || !link.last_sent_at) {
+      counts.skipped += 1;
+      continue;
+    }
+
+    const sentMs = new Date(link.last_sent_at).getTime();
+    const ageHours = (now - sentMs) / (1000 * 60 * 60);
+    if (ageHours < 72) {
+      counts.skipped += 1;
+      continue;
+    }
+
+    // Any reviewer activity since the last send cancels the cadence.
+    const hasActivity = await hasClientActivitySince(
+      admin,
+      link.included_post_ids,
+      link.last_sent_at,
+    );
+    if (hasActivity) {
+      counts.skipped += 1;
+      continue;
+    }
+
+    // What's still in the client's court? If everything is approved or
+    // sitting in our court (revisions to deliver), we don't nudge.
+    const { pending, total, hasRevisionFeedback } = await countPendingPosts(
+      admin,
+      link.included_post_ids,
+    );
+    if (pending === 0 || hasRevisionFeedback) {
+      counts.skipped += 1;
+      continue;
+    }
+
+    const recipients = await getClientNotificationRecipients(admin, client.id);
+    if (recipients.length === 0) {
+      counts.skipped += 1;
+      continue;
+    }
 
     const brand = getBrandFromAgency(client.agency);
     const appUrl = process.env.NODE_ENV !== 'production'
       ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
       : getCortexAppUrl(brand);
     const shareUrl = `${appUrl}/c/${link.token}`;
+    const pocFirstNames = recipients.map((c) => firstName(c.name));
 
-    // Recipients: portal users (role=viewer) first; fall back to eligible
-    // contacts when the client hasn't onboarded any portal users yet.
-    const { data: portalUsers } = await admin
-      .from('user_client_access')
-      .select('users!inner(email, role)')
-      .eq('client_id', client.id)
-      .returns<{ users: { email: string; role: string } | null }[]>();
-    let recipientEmails = Array.from(
-      new Set(
-        (portalUsers ?? [])
-          .map((r) => r.users?.email)
-          .filter((e): e is string => !!e),
-      ),
-    );
-
-    if (recipientEmails.length === 0) {
-      const { data: contacts } = await admin
-        .from('contacts')
-        .select('email, role')
-        .eq('client_id', client.id)
-        .returns<{ email: string | null; role: string | null }[]>();
-      recipientEmails = Array.from(
-        new Set(
-          (contacts ?? [])
-            .filter((c) => !!c.email)
-            .filter((c) => !EXCLUDE_CONTACT_ROLES.some((re) => re.test(c.role ?? '')))
-            .map((c) => c.email!.trim())
-            .filter((e) => e.length > 0),
-        ),
-      );
-    }
-
-    if (recipientEmails.length === 0) {
-      sent.skipped += 1;
+    // Auto-approve sweep at T+216h. Fires once per link and stamps
+    // auto_approved_at so we never re-enter for this link.
+    if (ageHours >= 216 && autoApproveSetting.enabled) {
+      const autoApproved = await autoApprovePending(admin, {
+        link,
+        client,
+        shareUrl,
+        pending,
+        total,
+      });
+      if (autoApproved) counts.autoApproved += 1;
+      else counts.skipped += 1;
       continue;
     }
 
-    // The single source of truth: how many posts in this link still need
-    // the client's eyes. Drives whether we email at all and what the copy
-    // says. Replaces the old binary "any-action / ball-in-court" guards.
-    const {
-      pending,
-      total,
-      hasRevisionFeedback,
-      ourCourtCount,
-      oldestOurCourtAt,
-    } = await countPendingPosts(admin, link.included_post_ids);
-    const sentMs = new Date(link.created_at).getTime();
-    const ageHours = (now - sentMs) / (1000 * 60 * 60);
+    let stage: CadenceStage | null = null;
+    if (ageHours >= 168 && !link.followup_3_sent_at) stage = 3;
+    else if (ageHours >= 120 && !link.followup_2_sent_at) stage = 2;
+    else if (ageHours >= 72 && !link.followup_1_sent_at) stage = 1;
 
-    // ── Ops nudge: revisions sitting in our court ───────────────────
-    //
-    // When the client leaves revisions and we've sat on them for
-    // OPS_NUDGE_HOURS, ping ops chat once. The stamp clears in
-    // revision/complete when the drop becomes clean, so the next
-    // round of feedback can re-trigger.
-    const OPS_NUDGE_HOURS = 48;
-    if (
-      ourCourtCount > 0
-      && !link.revisions_ops_nudged_at
-      && oldestOurCourtAt
-      && (now - new Date(oldestOurCourtAt).getTime()) / (1000 * 60 * 60) >= OPS_NUDGE_HOURS
-    ) {
-      const oldestHours = Math.round(
-        (now - new Date(oldestOurCourtAt).getTime()) / (1000 * 60 * 60),
-      );
-      const noun = ourCourtCount === 1 ? 'post' : 'posts';
-      postToGoogleChatSafe(
-        process.env.OPS_CHAT_WEBHOOK_URL ?? null,
-        {
-          text:
-            `🛠 Revisions overdue — *${client.name}* has ${ourCourtCount} ${noun} `
-            + `awaiting our edits (oldest ${oldestHours}h ago). ${shareUrl}`,
-        },
-        `revisions_ops:${link.id}`,
-      );
+    if (stage === null) {
+      counts.skipped += 1;
+      continue;
+    }
+
+    if (!cadenceSetting.enabled) {
+      counts.skipped += 1;
+      continue;
+    }
+
+    try {
+      const result = await sendCalendarCadenceFollowupEmail({
+        to: recipients.map((c) => c.email),
+        stage,
+        pocFirstNames,
+        clientName: client.name,
+        shareUrl,
+        agency: brand,
+        clientId: client.id,
+        dropId: link.drop_id,
+      });
+      if (!result.ok) {
+        console.error('calendar-reminders: send failed:', result.error);
+        continue;
+      }
+
+      const subjectByStage: Record<CadenceStage, string> = {
+        1: `Following up on ${client.name}'s content calendar`,
+        2: `Quick check-in on ${client.name}'s content calendar`,
+        3: `Final call before we publish ${client.name}'s content calendar`,
+      };
+      const archiveKindByStage: Record<
+        CadenceStage,
+        'auto_followup_open' | 'auto_followup_action' | 'auto_followup_final'
+      > = {
+        1: 'auto_followup_open',
+        2: 'auto_followup_action',
+        3: 'auto_followup_final',
+      };
+
+      await archiveShareLinkEmail(admin, {
+        shareLinkId: link.id,
+        kind: archiveKindByStage[stage],
+        subject: subjectByStage[stage],
+        htmlBody: result.html,
+        recipients: recipients.map((r) => ({ email: r.email, name: r.name })),
+        sentBy: null,
+      });
+
+      const stampIso = new Date().toISOString();
+      const stampField = `followup_${stage}_sent_at` as const;
       await admin
         .from('content_drop_share_links')
-        .update({ revisions_ops_nudged_at: new Date().toISOString() })
+        .update({
+          [stampField]: stampIso,
+          last_followup_at: stampIso,
+          followup_count: (link.followup_count ?? 0) + 1,
+        })
         .eq('id', link.id);
-    }
 
-    // Suppress all client-facing nudges when:
-    //   • nothing is pending (everything approved or in our court), or
-    //   • the client has left ANY revision feedback in this drop. Their
-    //     comment on one post often applies to others, so we'd rather wait
-    //     for them to come back on their own than badger them to review
-    //     posts they may have implicitly addressed already.
-    if (pending === 0 || hasRevisionFeedback) {
-      const stamps: Record<string, string> = {};
-      const nowIso = new Date().toISOString();
-      if (!link.no_open_nudge_sent_at) stamps.no_open_nudge_sent_at = nowIso;
-      if (!link.no_action_nudge_sent_at) stamps.no_action_nudge_sent_at = nowIso;
-      if (!link.final_call_sent_at) stamps.final_call_sent_at = nowIso;
-      if (Object.keys(stamps).length > 0) {
-        await admin
-          .from('content_drop_share_links')
-          .update(stamps)
-          .eq('id', link.id);
-      }
-      sent.skipped += 1;
-      continue;
-    }
-
-    // ── 1. no_open_nudge ────────────────────────────────────────────────
-    if (
-      noOpenSetting.enabled
-      && !link.no_open_nudge_sent_at
-      && link.last_viewed_at === null
-      && ageHours >= toNumber(noOpenSetting.params.windowHours, 48)
-    ) {
-      const dropAlreadyNudged = await alreadyNudgedDrop(
-        admin,
-        link.drop_id,
-        link.id,
-        'no_open_nudge_sent_at',
+      // Ops chat ping so the team can track follow-up volume.
+      const opsWebhook = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
+      const stageLabel = stage === 3 ? 'Final call' : `Follow-up ${stage}`;
+      postToGoogleChatSafe(
+        opsWebhook,
+        {
+          text: `📣 ${stageLabel} sent to *${client.name}*, ${pending}/${total} posts still pending. ${shareUrl}`,
+        },
+        `cadence_ops:${link.id}:${stage}`,
       );
-      if (dropAlreadyNudged) {
-        await admin
-          .from('content_drop_share_links')
-          .update({ no_open_nudge_sent_at: new Date().toISOString() })
-          .eq('id', link.id);
-        sent.skipped += 1;
-      } else {
-        try {
-          await Promise.all(
-            recipientEmails.map((to) => sendCalendarNoOpenReminderEmail({
-              to,
-              clientName: client.name,
-              shareUrl,
-              hours: Math.round(ageHours),
-              pending,
-              total,
-              agency: brand,
-              clientId: client.id,
-              dropId: link.drop_id,
-            })),
-          );
-          const stampIso = new Date().toISOString();
-          await admin
-            .from('content_drop_share_links')
-            .update({
-              no_open_nudge_sent_at: stampIso,
-              // Automated nudges are followups too. Bump the deliverables-table
-              // counter alongside the dedicated stamp so the "Last Followup"
-              // column reflects the most recent contact, not just manual sends.
-              last_followup_at: stampIso,
-              followup_count: (link.followup_count ?? 0) + 1,
-            })
-            .eq('id', link.id);
-          sent.no_open += 1;
-        } catch (e) {
-          console.error('calendar-reminders: no_open send failed:', e);
-        }
-      }
-    }
 
-    // ── 2. no_action_nudge ──────────────────────────────────────────────
-    if (
-      noActionSetting.enabled
-      && !link.no_action_nudge_sent_at
-      && link.last_viewed_at !== null
-      && ageHours >= toNumber(noActionSetting.params.windowHours, 72)
-    ) {
-      const dropAlreadyNudged = await alreadyNudgedDrop(
-        admin,
-        link.drop_id,
-        link.id,
-        'no_action_nudge_sent_at',
-      );
-      if (dropAlreadyNudged) {
-        await admin
-          .from('content_drop_share_links')
-          .update({ no_action_nudge_sent_at: new Date().toISOString() })
-          .eq('id', link.id);
-        sent.skipped += 1;
-      } else {
-        try {
-          await Promise.all(
-            recipientEmails.map((to) => sendCalendarNoActionReminderEmail({
-              to,
-              clientName: client.name,
-              shareUrl,
-              hours: Math.round(ageHours),
-              pending,
-              total,
-              agency: brand,
-              clientId: client.id,
-              dropId: link.drop_id,
-            })),
-          );
-          const stampIso = new Date().toISOString();
-          await admin
-            .from('content_drop_share_links')
-            .update({
-              no_action_nudge_sent_at: stampIso,
-              last_followup_at: stampIso,
-              followup_count: (link.followup_count ?? 0) + 1,
-            })
-            .eq('id', link.id);
-          sent.no_action += 1;
-        } catch (e) {
-          console.error('calendar-reminders: no_action send failed:', e);
-        }
-      }
-    }
+      // In-app Cortex notification for the team. notifyAdmins scopes to
+      // members assigned to this client + owners.
+      await notifyAdmins({
+        type: 'followup_sent',
+        clientId: client.id,
+        title: `${stageLabel} sent to ${client.name}`,
+        body: `${pending} of ${total} posts still need their eyes.`,
+        linkPath: `/admin/calendar/${link.drop_id}`,
+      });
 
-    // ── 3. final_call ───────────────────────────────────────────────────
-    if (
-      finalCallSetting.enabled
-      && !link.final_call_sent_at
-    ) {
-      const earliestPostAt = await getEarliestScheduledPostAt(admin, link.included_post_ids);
-      if (earliestPostAt) {
-        const firstMs = new Date(earliestPostAt).getTime();
-        const hoursUntilFirst = (firstMs - now) / (1000 * 60 * 60);
-        const window = toNumber(finalCallSetting.params.hoursBeforeFirstPost, 24);
-        if (hoursUntilFirst > 0 && hoursUntilFirst <= window) {
-          const dropAlreadyNudged = await alreadyNudgedDrop(
-            admin,
-            link.drop_id,
-            link.id,
-            'final_call_sent_at',
-          );
-          if (dropAlreadyNudged) {
-            await admin
-              .from('content_drop_share_links')
-              .update({ final_call_sent_at: new Date().toISOString() })
-              .eq('id', link.id);
-            sent.skipped += 1;
-          } else {
-            const firstPostLabel = formatPostDateTime(earliestPostAt);
-            try {
-              await Promise.all(
-                recipientEmails.map((to) => sendCalendarFinalCallEmail({
-                  to,
-                  clientName: client.name,
-                  shareUrl,
-                  firstPostAt: firstPostLabel,
-                  pending,
-                  total,
-                  agency: brand,
-                  clientId: client.id,
-                  dropId: link.drop_id,
-                })),
-              );
-              const finalCallWebhook = await resolveTeamChatWebhook(admin, {
-                primaryUrl: client.chat_webhook_url,
-                agency: client.agency,
-              });
-              postToGoogleChatSafe(
-                finalCallWebhook,
-                {
-                  text: `*Final call before publishing* — ${pending} of ${total} ${pending === 1 ? 'post' : 'posts'} still pending. Your first scheduled post goes live ${firstPostLabel}. ${shareUrl}`,
-                },
-                `final_call:${link.id}`,
-              );
-              const opsWebhook = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
-              postToGoogleChatSafe(
-                opsWebhook,
-                {
-                  text: `📣 Final-call ping sent to *${client.name}* — ${pending}/${total} pending, first post ${firstPostLabel}. ${shareUrl}`,
-                },
-                `final_call_ops:${link.id}`,
-              );
-              const stampIso = new Date().toISOString();
-              await admin
-                .from('content_drop_share_links')
-                .update({
-                  final_call_sent_at: stampIso,
-                  last_followup_at: stampIso,
-                  followup_count: (link.followup_count ?? 0) + 1,
-                })
-                .eq('id', link.id);
-              sent.final_call += 1;
-            } catch (e) {
-              console.error('calendar-reminders: final_call send failed:', e);
-            }
-          }
-        }
-      }
+      if (stage === 1) counts.stage1 += 1;
+      if (stage === 2) counts.stage2 += 1;
+      if (stage === 3) counts.stage3 += 1;
+    } catch (e) {
+      console.error('calendar-reminders: send loop error:', e);
     }
   }
 
   return NextResponse.json({
-    message: 'reminder sweep complete',
+    message: 'cadence sweep complete',
     scanned: shareLinks?.length ?? 0,
-    ...sent,
+    ...counts,
   });
 }
 
-function toNumber(v: number | string | boolean | string[], fallback: number): number {
-  if (typeof v === 'number') return v;
-  if (typeof v === 'string') {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : fallback;
-  }
-  return fallback;
+function firstName(full: string | null | undefined): string {
+  if (!full) return 'there';
+  const trimmed = full.trim();
+  if (!trimmed) return 'there';
+  return (trimmed.split(/\s+/)[0] || trimmed).trim();
 }
 
 /**
- * For each post in `postIds`, find its newest meaningful comment
- * (`approved` or `changes_requested`) and decide whose court it's in:
- *   • approved                                    → done, ignore
- *   • changes_requested newer than revisions_completed_at → ours, ignore
- *   • changes_requested older than the marker     → back in client's court, pending
- *   • no comments                                 → pending
- *
- * Returns the count of "pending" posts (need the client's eyes) so the
- * cron can decide whether to nudge AND surface the count in the email.
+ * True if any reviewer comment exists on a post in this link since
+ * `since`. Reviewer activity = any row in `post_review_comments` with
+ * status approved / changes_requested / comment, joined through
+ * `post_review_links`. Editor force-approve writes the same shape, but
+ * those are rare and the cadence cancelling on them is the conservative
+ * behaviour anyway.
  */
+async function hasClientActivitySince(
+  admin: ReturnType<typeof createAdminClient>,
+  postIds: string[],
+  since: string,
+): Promise<boolean> {
+  if (postIds.length === 0) return false;
+  const { count } = await admin
+    .from('post_review_comments')
+    .select('id, post_review_links!inner(post_id)', { count: 'exact', head: true })
+    .in('status', ['approved', 'changes_requested', 'comment'])
+    .in('post_review_links.post_id', postIds)
+    .gt('created_at', since);
+  return (count ?? 0) > 0;
+}
+
 async function countPendingPosts(
   admin: ReturnType<typeof createAdminClient>,
   postIds: string[],
@@ -431,19 +312,9 @@ async function countPendingPosts(
   pending: number;
   total: number;
   hasRevisionFeedback: boolean;
-  ourCourtCount: number;
-  oldestOurCourtAt: string | null;
 }> {
   const total = postIds.length;
-  if (total === 0) {
-    return {
-      pending: 0,
-      total: 0,
-      hasRevisionFeedback: false,
-      ourCourtCount: 0,
-      oldestOurCourtAt: null,
-    };
-  }
+  if (total === 0) return { pending: 0, total: 0, hasRevisionFeedback: false };
 
   type Row = {
     created_at: string;
@@ -461,7 +332,6 @@ async function countPendingPosts(
     .order('created_at', { ascending: false })
     .returns<Row[]>();
 
-  // Latest comment per post (data is already ordered DESC, so first hit wins).
   const latestByPost = new Map<
     string,
     { status: 'approved' | 'changes_requested'; created_at: string; revisions_completed_at: string | null }
@@ -482,8 +352,6 @@ async function countPendingPosts(
   }
 
   let pending = 0;
-  let ourCourtCount = 0;
-  let oldestOurCourtAt: string | null = null;
   for (const id of postIds) {
     const latest = latestByPost.get(id);
     if (!latest) {
@@ -493,71 +361,174 @@ async function countPendingPosts(
     if (latest.status === 'approved') continue;
     const completedAt = latest.revisions_completed_at;
     if (!completedAt || new Date(latest.created_at) > new Date(completedAt)) {
-      // Latest is changes_requested with no matching revision-complete marker
-      // (or older one) — ball is in OUR court, not the client's.
-      ourCourtCount += 1;
-      if (!oldestOurCourtAt || new Date(latest.created_at) < new Date(oldestOurCourtAt)) {
-        oldestOurCourtAt = latest.created_at;
-      }
+      // changes_requested with no revision-complete marker → ours, not theirs
       continue;
     }
-    // We delivered revisions after the changes_requested → client owes us.
     pending += 1;
   }
 
-  return { pending, total, hasRevisionFeedback, ourCourtCount, oldestOurCourtAt };
+  return { pending, total, hasRevisionFeedback };
 }
 
 /**
- * Drop-level dedupe. If another share link on the same drop already sent
- * this nudge type within the last 7 days, skip and stamp this link so we
- * don't keep evaluating. Prevents re-mint flows from double-emailing
- * clients who got the same nudge through the prior link.
+ * Auto-approve every still-pending post on the link by minting a synthetic
+ * review link + an approved review comment authored by Cortex, then
+ * flipping `draft` posts to `scheduled` so the publish cron can ship
+ * them. Mirrors `force-approve` but in bulk and without an admin user.
+ *
+ * Returns true if at least one post got auto-approved.
  */
-async function alreadyNudgedDrop(
+async function autoApprovePending(
   admin: ReturnType<typeof createAdminClient>,
-  dropId: string,
-  excludeLinkId: string,
-  column: 'no_open_nudge_sent_at' | 'no_action_nudge_sent_at' | 'final_call_sent_at',
+  args: {
+    link: {
+      id: string;
+      drop_id: string;
+      included_post_ids: string[];
+      last_sent_at: string | null;
+    };
+    client: { id: string; name: string };
+    shareUrl: string;
+    pending: number;
+    total: number;
+  },
 ): Promise<boolean> {
-  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const { data } = await admin
-    .from('content_drop_share_links')
-    .select('id')
-    .eq('drop_id', dropId)
-    .neq('id', excludeLinkId)
-    .not(column, 'is', null)
-    .gte(column, since)
-    .limit(1);
-  return (data?.length ?? 0) > 0;
-}
+  const { link, client } = args;
 
-async function getEarliestScheduledPostAt(
-  admin: ReturnType<typeof createAdminClient>,
-  postIds: string[],
-): Promise<string | null> {
-  if (postIds.length === 0) return null;
-  const { data } = await admin
+  // Re-derive which post ids are still pending (defensive: between
+  // cadence checks and now an admin could have force-approved one).
+  const { pending: stillPending } = await countPendingPosts(
+    admin,
+    link.included_post_ids,
+  );
+  if (stillPending === 0) {
+    // Nothing to do, but stamp so we don't re-enter.
+    await admin
+      .from('content_drop_share_links')
+      .update({ auto_approved_at: new Date().toISOString() })
+      .eq('id', link.id);
+    return false;
+  }
+
+  // Walk each post and mint approval rows for the ones still pending.
+  type LatestRow = {
+    status: 'approved' | 'changes_requested';
+    created_at: string;
+    post_review_links:
+      | { post_id: string; revisions_completed_at: string | null }
+      | { post_id: string; revisions_completed_at: string | null }[]
+      | null;
+  };
+  const { data: latestRows } = await admin
+    .from('post_review_comments')
+    .select('status, created_at, post_review_links!inner(post_id, revisions_completed_at)')
+    .in('status', ['approved', 'changes_requested'])
+    .in('post_review_links.post_id', link.included_post_ids)
+    .order('created_at', { ascending: false })
+    .returns<LatestRow[]>();
+
+  const latestByPost = new Map<string, LatestRow>();
+  for (const row of latestRows ?? []) {
+    const join = Array.isArray(row.post_review_links)
+      ? row.post_review_links[0] ?? null
+      : row.post_review_links;
+    if (!join) continue;
+    if (latestByPost.has(join.post_id)) continue;
+    latestByPost.set(join.post_id, row);
+  }
+
+  const pendingPostIds: string[] = [];
+  for (const postId of link.included_post_ids) {
+    const latest = latestByPost.get(postId);
+    if (!latest) {
+      pendingPostIds.push(postId);
+      continue;
+    }
+    if (latest.status === 'approved') continue;
+    const join = Array.isArray(latest.post_review_links)
+      ? latest.post_review_links[0] ?? null
+      : latest.post_review_links;
+    const completedAt = join?.revisions_completed_at ?? null;
+    if (!completedAt || new Date(latest.created_at) > new Date(completedAt)) {
+      // Ball is in our court, don't auto-approve over the top of an
+      // unhandled change request.
+      continue;
+    }
+    pendingPostIds.push(postId);
+  }
+
+  if (pendingPostIds.length === 0) {
+    await admin
+      .from('content_drop_share_links')
+      .update({ auto_approved_at: new Date().toISOString() })
+      .eq('id', link.id);
+    return false;
+  }
+
+  const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
+  const linkInserts = pendingPostIds.map((postId) => ({
+    post_id: postId,
+    expires_at: expiresAt,
+  }));
+  const { data: mintedLinks } = await admin
+    .from('post_review_links')
+    .insert(linkInserts)
+    .select('id, post_id')
+    .returns<Array<{ id: string; post_id: string }>>();
+
+  if (!mintedLinks || mintedLinks.length === 0) {
+    console.error('calendar-reminders: auto-approve failed to mint review links');
+    return false;
+  }
+
+  const noteDate = new Date().toISOString().slice(0, 10);
+  const commentInserts = mintedLinks.map((m) => ({
+    review_link_id: m.id,
+    author_name: 'Cortex auto-approve',
+    content: `Auto-approved on ${noteDate} after no client activity for 9 days.`,
+    status: 'approved' as const,
+  }));
+  await admin.from('post_review_comments').insert(commentInserts);
+
+  await admin
     .from('scheduled_posts')
-    .select('scheduled_at')
-    .in('id', postIds)
-    .not('scheduled_at', 'is', null)
-    .gte('scheduled_at', new Date().toISOString())
-    .order('scheduled_at', { ascending: true })
-    .limit(1)
-    .maybeSingle<{ scheduled_at: string }>();
-  return data?.scheduled_at ?? null;
-}
+    .update({
+      status: 'scheduled',
+      failure_reason: null,
+      retry_count: 0,
+      updated_at: new Date().toISOString(),
+    })
+    .in('id', pendingPostIds)
+    .eq('status', 'draft');
 
-function formatPostDateTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString('en-US', {
-    weekday: 'long',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: 'America/Chicago',
-    timeZoneName: 'short',
+  // Stamp the link + claim the all-approved chat right atomically.
+  const stampIso = new Date().toISOString();
+  await admin
+    .from('content_drop_share_links')
+    .update({
+      auto_approved_at: stampIso,
+      last_followup_at: stampIso,
+    })
+    .eq('id', link.id);
+
+  const opsWebhook = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
+  postToGoogleChatSafe(
+    opsWebhook,
+    {
+      text: `✅ Auto-approved *${pendingPostIds.length}* posts on *${client.name}*'s calendar, no client activity for 9 days. ${args.shareUrl}`,
+    },
+    `cadence_ops_auto_approve:${link.id}`,
+  );
+
+  await notifyAdmins({
+    type: 'followup_sent',
+    clientId: client.id,
+    title: `Auto-approved ${pendingPostIds.length} posts on ${client.name}`,
+    body: `No client activity for 9 days. Posts will publish on their scheduled times.`,
+    linkPath: `/admin/calendar/${link.drop_id}`,
   });
+
+  return true;
 }
 
 export const GET = withCronTelemetry(

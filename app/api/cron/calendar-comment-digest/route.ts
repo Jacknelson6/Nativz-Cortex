@@ -30,13 +30,33 @@ type CommentRow = {
   } | null;
 };
 
+type EditingCommentRow = {
+  id: string;
+  share_link_id: string | null;
+  author_name: string;
+  content: string;
+  status: 'approved' | 'changes_requested' | 'comment' | 'video_revised';
+  created_at: string;
+  project_id: string;
+  editing_projects: {
+    id: string;
+    name: string | null;
+    client_id: string;
+    clients: { id: string; name: string } | null;
+  } | null;
+  editing_project_videos: { id: string; filename: string | null } | null;
+};
+
 /**
  * GET /api/cron/calendar-comment-digest
  *
- * Daily digest of last 24h of post_review_comments, grouped by client, emailed
- * to Jack at 8 AM CT (13:00 UTC during CDT). Real-time per-comment notifications
- * happen via Google Chat (handled in the share-link comment route); this digest
- * is the email summary so nothing is missed.
+ * Daily digest of last 24h of reviewer activity across BOTH surfaces
+ * (calendar `post_review_comments` + editing
+ * `editing_project_review_comments`), grouped by client × surface,
+ * emailed to Jack at 8 AM CT (13:00 UTC during CDT). Real-time
+ * per-comment notifications happen via Google Chat (handled in the
+ * respective share-link comment routes); this digest is the email
+ * summary so nothing is missed.
  *
  * @auth Bearer CRON_SECRET (Vercel cron)
  */
@@ -55,35 +75,65 @@ async function handleGet(request: NextRequest) {
   const admin = createAdminClient();
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: comments, error } = await admin
-    .from('post_review_comments')
-    .select(`
-      id,
-      review_link_id,
-      author_name,
-      content,
-      status,
-      created_at,
-      post_review_links!inner (
-        post_id,
-        scheduled_posts!inner (
+  const [calendarRes, editingRes] = await Promise.all([
+    admin
+      .from('post_review_comments')
+      .select(`
+        id,
+        review_link_id,
+        author_name,
+        content,
+        status,
+        created_at,
+        post_review_links!inner (
+          post_id,
+          scheduled_posts!inner (
+            id,
+            caption,
+            client_id,
+            clients!inner ( id, name )
+          )
+        )
+      `)
+      .gte('created_at', since)
+      .order('created_at', { ascending: true })
+      .returns<CommentRow[]>(),
+    admin
+      .from('editing_project_review_comments')
+      .select(`
+        id,
+        share_link_id,
+        author_name,
+        content,
+        status,
+        created_at,
+        project_id,
+        editing_projects!inner (
           id,
-          caption,
+          name,
           client_id,
           clients!inner ( id, name )
-        )
-      )
-    `)
-    .gte('created_at', since)
-    .order('created_at', { ascending: true })
-    .returns<CommentRow[]>();
+        ),
+        editing_project_videos ( id, filename )
+      `)
+      .gte('created_at', since)
+      .in('status', ['approved', 'changes_requested', 'comment'])
+      .order('created_at', { ascending: true })
+      .returns<EditingCommentRow[]>(),
+  ]);
 
-  if (error) {
-    console.error('calendar-comment-digest: query failed:', error);
+  if (calendarRes.error) {
+    console.error('calendar-comment-digest: calendar query failed:', calendarRes.error);
+    return NextResponse.json({ error: 'query failed' }, { status: 500 });
+  }
+  if (editingRes.error) {
+    console.error('calendar-comment-digest: editing query failed:', editingRes.error);
     return NextResponse.json({ error: 'query failed' }, { status: 500 });
   }
 
-  if (!comments || comments.length === 0) {
+  const comments = calendarRes.data ?? [];
+  const editingComments = editingRes.data ?? [];
+  if (comments.length === 0 && editingComments.length === 0) {
     return NextResponse.json({ message: 'no comments in window', sent: 0 });
   }
 
@@ -116,7 +166,7 @@ async function handleGet(request: NextRequest) {
     }
   }
 
-  // Group by client_id.
+  // Group calendar comments by client_id.
   const byClient = new Map<string, { clientName: string; shareToken: string | null; dropId: string | null; comments: CalendarDigestComment[] }>();
   for (const c of comments) {
     const sp = c.post_review_links?.scheduled_posts;
@@ -155,6 +205,79 @@ async function handleGet(request: NextRequest) {
     comments: g.comments,
   }));
 
+  // Editing-side grouping: one section per project so each CTA opens the
+  // right cut. Resolve the most-recent live share link per project so the
+  // section deep-links into the mobile-friendly review URL.
+  const projectIds = Array.from(
+    new Set(
+      editingComments
+        .map((c) => c.project_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+
+  const projectIdToShareToken: Record<string, string> = {};
+  if (projectIds.length > 0) {
+    const { data: editingShareLinks } = await admin
+      .from('editing_project_share_links')
+      .select('project_id, token, archived_at, created_at')
+      .in('project_id', projectIds)
+      .is('archived_at', null)
+      .order('created_at', { ascending: false })
+      .returns<{ project_id: string; token: string; archived_at: string | null; created_at: string }[]>();
+    for (const sl of editingShareLinks ?? []) {
+      if (!projectIdToShareToken[sl.project_id]) {
+        projectIdToShareToken[sl.project_id] = sl.token;
+      }
+    }
+  }
+
+  // Group editing comments by project (keyed project_id), each section gets
+  // its own CTA pointing at that project's share link.
+  const byProject = new Map<string, { clientName: string; projectName: string; projectId: string; comments: CalendarDigestComment[] }>();
+  for (const c of editingComments) {
+    const proj = c.editing_projects;
+    const client = proj?.clients;
+    if (!proj || !client) continue;
+    const projectName = proj.name?.trim() || `${client.name} edit`;
+    const filename = c.editing_project_videos?.filename ?? null;
+    const captionPreview = filename
+      ? filename.slice(0, 80) + (filename.length > 80 ? '…' : '')
+      : 'Project-level note';
+    const contentPreview = c.content.slice(0, 200) + (c.content.length > 200 ? '…' : '');
+    // Fold the editing-only `video_revised` status into a plain comment for
+    // digest presentation (it shouldn't reach here thanks to the .in() filter,
+    // but the type union allows it so collapse defensively).
+    const status: CalendarDigestComment['status'] =
+      c.status === 'video_revised' ? 'comment' : c.status;
+    const entry = byProject.get(proj.id) ?? {
+      clientName: client.name,
+      projectName,
+      projectId: proj.id,
+      comments: [],
+    };
+    entry.comments.push({
+      authorName: c.author_name,
+      status,
+      contentPreview,
+      captionPreview,
+      createdAt: c.created_at,
+    });
+    byProject.set(proj.id, entry);
+  }
+
+  for (const g of byProject.values()) {
+    const token = projectIdToShareToken[g.projectId];
+    groups.push({
+      clientName: `${g.clientName} · Editing`,
+      dropUrl: token
+        ? `${appUrl}/c/edit/${token}`
+        : `${appUrl}/admin/editing/projects/${g.projectId}`,
+      ctaLabel: `Review ${g.projectName}`,
+      comments: g.comments,
+    });
+  }
+
   // Window label: "Apr 27 → Apr 28" (sender's local — fine for an internal digest)
   const now = new Date();
   const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -175,8 +298,9 @@ async function handleGet(request: NextRequest) {
   return NextResponse.json({
     message: `digest sent to ${DIGEST_RECIPIENT}`,
     sent: 1,
-    totalComments: comments.length,
-    clients: groups.length,
+    calendarComments: comments.length,
+    editingComments: editingComments.length,
+    sections: groups.length,
   });
 }
 

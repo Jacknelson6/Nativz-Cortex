@@ -5,6 +5,7 @@ import { createNotification } from '@/lib/notifications/create';
 import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
+import { getNotificationSetting } from '@/lib/notifications/get-setting';
 
 export const dynamic = 'force-dynamic';
 
@@ -375,12 +376,17 @@ async function postEditingChatForComment(args: {
 
   if (
     args.finalStatus === 'comment' ||
-    args.finalStatus === 'changes_requested'
+    args.finalStatus === 'changes_requested' ||
+    args.finalStatus === 'approved'
   ) {
+    const setting = await getNotificationSetting('editing_comment_chat');
+    if (!setting.enabled) return;
     const verb =
       args.finalStatus === 'changes_requested'
         ? 'requested changes'
-        : 'commented';
+        : args.finalStatus === 'approved'
+          ? 'approved'
+          : 'commented';
     const trimmed = args.content.trim();
     const quotedBlock = trimmed
       ? '\n' +
@@ -400,7 +406,11 @@ async function postEditingChatForComment(args: {
       { text },
       `editing-comment ${args.link.id}`,
     );
-  } else if (args.allApprovedClaim === 'won') {
+  }
+
+  if (args.allApprovedClaim === 'won') {
+    const setting = await getNotificationSetting('editing_all_approved_chat');
+    if (!setting.enabled) return;
     const text = `🎉 All cuts in ${clientName} · ${projectName} are approved.\n${shareUrl}`;
     postToGoogleChatSafe(
       webhookUrl,

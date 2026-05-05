@@ -100,6 +100,10 @@
       "schedule": "0 14 * * *"
     },
     {
+      "path": "/api/cron/editing-reminders",
+      "schedule": "0 14 * * *"
+    },
+    {
       "path": "/api/cron/post-health",
       "schedule": "*/30 * * * *"
     },

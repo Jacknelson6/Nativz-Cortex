@@ -826,6 +826,10 @@ export interface CalendarDigestClientGroup {
   clientName: string;
   dropUrl: string;
   comments: CalendarDigestComment[];
+  /** Optional label override for the per-section CTA. Defaults to "Open
+   *  {clientName}'s calendar". Editing-surface sections pass
+   *  "Review {project name}" so the button reads naturally. */
+  ctaLabel?: string;
 }
 
 export async function sendCalendarCommentDigestEmail(opts: {
@@ -876,7 +880,7 @@ export async function sendCalendarCommentDigestEmail(opts: {
           <p style="margin:0;color:${brand.textMuted};font-size:12px;">${g.comments.length} ${g.comments.length === 1 ? 'note' : 'notes'} this window</p>
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">${rows}</table>
           <div class="button-wrap" style="margin:18px 0 0;text-align:left;">
-            <a href="${g.dropUrl}" class="button">Open ${safeClient}'s calendar &rarr;</a>
+            <a href="${g.dropUrl}" class="button">${escapeHtml(g.ctaLabel ?? `Open ${g.clientName}'s calendar`)} &rarr;</a>
           </div>
         </div>`;
     })
@@ -2348,6 +2352,177 @@ export async function sendDeliverableAddonReceiptEmail(opts: {
       quantity: opts.quantity,
       newBalance: opts.newBalance,
       amountPaidCents: opts.amountPaidCents,
+    },
+  });
+}
+
+// ── Unified follow-up cadence (calendar + editing) ─────────────────────────
+//
+// Three stage-aware emails per surface. Stages 1 + 2 share copy; stage 3
+// diverges by surface (calendar = "final call before publishing", editing =
+// "last check before we mark as approved"). Same /api/cron handlers fire
+// each stage at T+72h / T+120h / T+168h after the most recent share-link
+// send, when the client has left no comments / approvals / change requests
+// in that window.
+
+export type CadenceStage = 1 | 2 | 3;
+
+function calendarStageCopy(stage: CadenceStage, greeting: string, clientName: string) {
+  if (stage === 1) {
+    return {
+      subject: `Following up on ${clientName}'s content calendar`,
+      heroTitle: 'Just wanted to follow up.',
+      message:
+        `${greeting}, just wanted to follow up on the latest content calendar for ${clientName}. ` +
+        `Wanted to make sure you saw it. Whenever you have a few minutes, take a look and either approve the posts or drop comments where anything needs to change.`,
+    };
+  }
+  if (stage === 2) {
+    return {
+      subject: `Quick check-in on ${clientName}'s content calendar`,
+      heroTitle: 'Just in case you missed this.',
+      message:
+        `${greeting}, just in case you didn't see the last note. We want to make sure the latest content calendar for ${clientName} got in front of you. ` +
+        `Whenever you have a few minutes, take a look and either approve the posts or drop comments where anything needs to change.`,
+    };
+  }
+  return {
+    subject: `Final call before we publish ${clientName}'s content calendar`,
+    heroTitle: 'Final call before we publish.',
+    message:
+      `${greeting}, just wanted to check in one last time before we start publishing the latest content calendar for ${clientName}. ` +
+      `If we don't hear back, we'll go ahead and ship the posts on the dates you saw in the calendar. ` +
+      `If anything still needs your eyes, hit reply or drop a comment now.`,
+  };
+}
+
+function editingStageCopy(stage: CadenceStage, greeting: string, projectName: string) {
+  if (stage === 1) {
+    return {
+      subject: `Following up on ${projectName}`,
+      heroTitle: 'Just wanted to follow up.',
+      message:
+        `${greeting}, just wanted to follow up on ${projectName}. ` +
+        `Wanted to make sure you saw the cuts we sent over. Whenever you have a few minutes, take a look and either approve the videos or drop comments where anything needs to change.`,
+    };
+  }
+  if (stage === 2) {
+    return {
+      subject: `Quick check-in on ${projectName}`,
+      heroTitle: 'Just in case you missed this.',
+      message:
+        `${greeting}, just in case you didn't see the last note. We want to make sure the cuts on ${projectName} got in front of you. ` +
+        `Whenever you have a few minutes, take a look and either approve the videos or drop comments where anything needs to change.`,
+    };
+  }
+  return {
+    subject: `Last check before we mark ${projectName} approved`,
+    heroTitle: 'Last check before we mark this approved.',
+    message:
+      `${greeting}, just wanted to check in one last time before we mark ${projectName} as approved. ` +
+      `If we don't hear back, we'll consider the cuts good as-is. ` +
+      `If anything still needs your eyes, hit reply or drop a comment now.`,
+  };
+}
+
+export function buildCalendarCadenceFollowupDraft(opts: {
+  stage: CadenceStage;
+  pocFirstNames: string[];
+  clientName: string;
+}): { subject: string; message: string; heroTitle: string } {
+  const greeting = greetingFor(opts.pocFirstNames, opts.clientName);
+  return calendarStageCopy(opts.stage, greeting, opts.clientName);
+}
+
+export function buildEditingCadenceFollowupDraft(opts: {
+  stage: CadenceStage;
+  pocFirstNames: string[];
+  clientName: string;
+  projectName: string;
+}): { subject: string; message: string; heroTitle: string } {
+  const greeting = greetingFor(opts.pocFirstNames, opts.clientName);
+  return editingStageCopy(opts.stage, greeting, opts.projectName);
+}
+
+export async function sendCalendarCadenceFollowupEmail(opts: {
+  to: string | string[];
+  stage: CadenceStage;
+  pocFirstNames: string[];
+  clientName: string;
+  shareUrl: string;
+  agency?: AgencyBrand;
+  clientId?: string;
+  dropId?: string;
+}) {
+  const agency = opts.agency ?? 'nativz';
+  const draft = buildCalendarCadenceFollowupDraft({
+    stage: opts.stage,
+    pocFirstNames: opts.pocFirstNames,
+    clientName: opts.clientName,
+  });
+  const eyebrow = opts.stage === 3 ? 'Final Call' : 'Calendar Check-In';
+  const ctaLabel = opts.stage === 3 ? 'Open the calendar' : 'Review the posts';
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: `calendar_cadence_followup_${opts.stage}`,
+    agency,
+    to: opts.to,
+    clientId: opts.clientId,
+    dropId: opts.dropId,
+    subject: draft.subject,
+    html: layout(
+      `${messageToHtmlParagraphs(draft.message)}
+       <div class="button-wrap"><a href="${opts.shareUrl}" class="btn">${ctaLabel}</a></div>`,
+      agency,
+      { eyebrow, heroTitle: draft.heroTitle },
+    ),
+    metadata: {
+      clientName: opts.clientName,
+      pocFirstNames: opts.pocFirstNames,
+      stage: opts.stage,
+    },
+  });
+}
+
+export async function sendEditingCadenceFollowupEmail(opts: {
+  to: string | string[];
+  stage: CadenceStage;
+  pocFirstNames: string[];
+  clientName: string;
+  projectName: string;
+  shareUrl: string;
+  agency?: AgencyBrand;
+  clientId?: string;
+  projectId?: string;
+}) {
+  const agency = opts.agency ?? 'nativz';
+  const draft = buildEditingCadenceFollowupDraft({
+    stage: opts.stage,
+    pocFirstNames: opts.pocFirstNames,
+    clientName: opts.clientName,
+    projectName: opts.projectName,
+  });
+  const eyebrow = opts.stage === 3 ? 'Final Call' : 'Editing Check-In';
+  const ctaLabel = opts.stage === 3 ? 'Review the cuts' : 'Review the cuts';
+  return sendAndLog({
+    category: 'transactional',
+    typeKey: `editing_cadence_followup_${opts.stage}`,
+    agency,
+    to: opts.to,
+    clientId: opts.clientId,
+    subject: draft.subject,
+    html: layout(
+      `${messageToHtmlParagraphs(draft.message)}
+       <div class="button-wrap"><a href="${opts.shareUrl}" class="btn">${ctaLabel}</a></div>`,
+      agency,
+      { eyebrow, heroTitle: draft.heroTitle },
+    ),
+    metadata: {
+      clientName: opts.clientName,
+      projectName: opts.projectName,
+      projectId: opts.projectId,
+      pocFirstNames: opts.pocFirstNames,
+      stage: opts.stage,
     },
   });
 }
