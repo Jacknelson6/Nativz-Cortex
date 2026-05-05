@@ -207,6 +207,15 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/c/') ||
     pathname.startsWith('/api/calendar/share/') ||
     pathname.startsWith('/api/editing/share/') ||
+    // Other share-token-gated public surfaces. Each route validates the
+    // token on every hit; minting endpoints in the same file (POST in
+    // /api/scheduler/share + /api/scheduler/review) do their own
+    // supabase.auth.getUser() check, so allowlisting the prefix only
+    // removes the middleware-level gate, not the per-route auth.
+    pathname.startsWith('/api/schedule/') ||
+    pathname.startsWith('/api/scheduler/share') ||
+    pathname.startsWith('/api/scheduler/review') ||
+    pathname.startsWith('/api/reporting/shared/') ||
     // Self-serve connection invite. The /connect/invite/[token] page and
     // /api/public/connection-invites/[token]/* routes are gated by the
     // invite token row, no auth session needed.
