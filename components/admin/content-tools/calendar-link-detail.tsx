@@ -15,6 +15,7 @@ import {
   Copy,
   ExternalLink,
   Eye,
+  Mail,
   MessagesSquare,
   Send,
   RefreshCcw,
@@ -72,6 +73,29 @@ interface ContactRow {
   name: string | null;
   role: string | null;
 }
+
+interface ArchivedEmail {
+  id: string;
+  kind: string;
+  subject: string;
+  html_body: string;
+  plain_body: string | null;
+  recipients: { email: string; name?: string | null }[];
+  sent_by: string | null;
+  sent_by_label: string | null;
+  sent_at: string;
+}
+
+const EMAIL_KIND_LABEL: Record<string, string> = {
+  initial: 'Initial send',
+  resend: 'Resend',
+  manual_followup: 'Manual followup',
+  auto_followup_open: 'Auto followup (open nudge)',
+  auto_followup_action: 'Auto followup (action nudge)',
+  auto_followup_final: 'Auto followup (final)',
+  all_approved: 'All approved',
+  revisions_complete: 'Revisions complete',
+};
 
 /**
  * Module-level cache for brand POC contacts. Keyed by clientId. Brand
@@ -187,6 +211,15 @@ export function CalendarLinkDetail({
   // dialog opens "ready to tweak the subject", not "ready to send".
   const [renderMode, setRenderMode] = useState<'edit' | 'preview'>('edit');
 
+  // Archived email touchpoints. Lazily loaded on dialog open from the
+  // `share_link_emails` table — populated by the writer wired into the
+  // send/followup/notify-revisions routes. The sub-dialog renders a
+  // single archived row's stored HTML body so the modal can replay
+  // exactly what the recipient saw.
+  const [archivedEmails, setArchivedEmails] = useState<ArchivedEmail[] | null>(null);
+  const [archivedLoading, setArchivedLoading] = useState(false);
+  const [viewingEmail, setViewingEmail] = useState<ArchivedEmail | null>(null);
+
   // Reset transient UI state when a new link is opened.
   useEffect(() => {
     if (open) {
@@ -263,6 +296,36 @@ export function CalendarLinkDetail({
     if (!open) return;
     void loadBridge();
   }, [open, loadBridge]);
+
+  // Lazy-load the archived emails for this share link. Refetches on every
+  // open so a send/followup that just fired shows up without forcing a
+  // parent table refresh. Errors stay quiet — the section just renders
+  // empty if the read fails.
+  const loadArchivedEmails = useCallback(async () => {
+    if (!token) return;
+    setArchivedLoading(true);
+    try {
+      const res = await fetch(`/api/calendar/share/${token}/emails`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) throw new Error('failed');
+      const data = (await res.json()) as { emails: ArchivedEmail[] };
+      setArchivedEmails(data.emails ?? []);
+    } catch {
+      setArchivedEmails([]);
+    } finally {
+      setArchivedLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (!open) {
+      setArchivedEmails(null);
+      setViewingEmail(null);
+      return;
+    }
+    void loadArchivedEmails();
+  }, [open, loadArchivedEmails]);
 
   // Refetch bridged videos when a background upload batch finishes for
   // this project. Mirrors EditingProjectDetail so closing the dialog
@@ -519,6 +582,9 @@ export function CalendarLinkDetail({
       });
       setPreviewVariant(null);
       setPreview(null);
+      // Refresh the archive list so the just-sent email appears in
+      // "Past emails" without a parent reload.
+      void loadArchivedEmails();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Send failed');
     } finally {
@@ -620,6 +686,10 @@ export function CalendarLinkDetail({
         onChangeRenderMode={setRenderMode}
         onClose={closeSendPreview}
         onSend={confirmSend}
+      />
+      <EmailArchiveDialog
+        email={viewingEmail}
+        onClose={() => setViewingEmail(null)}
       />
       {/* Both dialogs render at once when the preview is open. The native
           <dialog> top-layer stack handles ordering, which avoids the
@@ -764,6 +834,51 @@ export function CalendarLinkDetail({
             )}
           </div>
         </Section>
+
+        {/* Past emails — replays exactly what the recipient saw,
+            keyed by share link. Hidden until at least one row exists so
+            the modal stays compact for fresh links. */}
+        {archivedEmails && archivedEmails.length > 0 && (
+          <Section label={`Past emails (${archivedEmails.length})`}>
+            <ul className="divide-y divide-nativz-border overflow-hidden rounded-lg border border-nativz-border bg-surface">
+              {archivedEmails.map((e) => (
+                <li key={e.id}>
+                  <button
+                    type="button"
+                    onClick={() => setViewingEmail(e)}
+                    className="group flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-surface-hover"
+                  >
+                    <Mail
+                      size={14}
+                      className="shrink-0 text-text-muted group-hover:text-accent-text"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13px] text-text-primary">
+                        {e.subject}
+                      </p>
+                      <p className="truncate text-[11px] text-text-muted">
+                        {EMAIL_KIND_LABEL[e.kind] ?? e.kind} · {formatRelative(e.sent_at)}
+                        {e.sent_by_label ? ` · by ${e.sent_by_label}` : ''}
+                        {e.recipients.length > 0
+                          ? ` · ${e.recipients.length} ${e.recipients.length === 1 ? 'recipient' : 'recipients'}`
+                          : ''}
+                      </p>
+                    </div>
+                    <ExternalLink
+                      size={12}
+                      className="shrink-0 text-text-muted opacity-0 transition-opacity group-hover:opacity-100"
+                    />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
+        {archivedLoading && !archivedEmails && (
+          <Section label="Past emails">
+            <p className="text-[12px] text-text-muted">Loading…</p>
+          </Section>
+        )}
 
         {/* Edited videos. Bridges the calendar share to an
             editing_projects row via the shared drop_id, so the admin
@@ -1036,6 +1151,77 @@ function SendPreviewDialog({
           </>
         ) : null}
       </div>
+    </Dialog>
+  );
+}
+
+function EmailArchiveDialog({
+  email,
+  onClose,
+}: {
+  email: ArchivedEmail | null;
+  onClose: () => void;
+}) {
+  const open = !!email;
+  return (
+    <Dialog open={open} onClose={onClose} title="" maxWidth="2xl" bodyClassName="p-0">
+      {email ? (
+        <div className="flex h-full max-h-[80vh] flex-col">
+          <div className="border-b border-nativz-border py-4 pl-6 pr-14">
+            <p className="text-lg font-semibold text-text-primary">
+              {email.subject}
+            </p>
+            <p className="mt-0.5 text-xs text-text-muted">
+              {EMAIL_KIND_LABEL[email.kind] ?? email.kind} ·{' '}
+              {formatTimestamp(email.sent_at)}
+              {email.sent_by_label ? ` · sent by ${email.sent_by_label}` : ''}
+            </p>
+          </div>
+
+          <div className="flex-1 space-y-4 overflow-y-auto p-6">
+            <Section label={`Recipients (${email.recipients.length})`}>
+              {email.recipients.length === 0 ? (
+                <p className="text-xs text-text-muted">No recipients recorded.</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {email.recipients.map((r) => (
+                    <span
+                      key={r.email}
+                      className="inline-flex items-center gap-1 rounded-full border border-nativz-border bg-surface px-2.5 py-1 text-[11px] text-text-secondary"
+                      title={r.email}
+                    >
+                      <span className="font-medium text-text-primary">
+                        {r.name ?? r.email}
+                      </span>
+                      {r.name && (
+                        <span className="text-text-muted">· {r.email}</span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </Section>
+
+            <Section label="Rendered email">
+              <iframe
+                title="Archived email"
+                srcDoc={email.html_body}
+                sandbox=""
+                className="h-[480px] w-full rounded-md border border-nativz-border bg-white"
+              />
+              <p className="mt-2 text-[11px] text-text-muted">
+                Exact HTML that was delivered. Sandboxed: links and scripts are inert.
+              </p>
+            </Section>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 border-t border-nativz-border px-6 py-4">
+            <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </Dialog>
   );
 }

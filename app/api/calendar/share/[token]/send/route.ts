@@ -11,6 +11,7 @@ import {
   sendCalendarShareSendEmail,
 } from '@/lib/email/resend';
 import { getClientNotificationRecipients } from '@/lib/email/notification-recipients';
+import { archiveShareLinkEmail } from '@/lib/content-tools/archive-share-email';
 
 /**
  * GET /api/calendar/share/[token]/send?variant=initial|revised
@@ -116,6 +117,7 @@ async function loadSendContext(token: string) {
 
   return {
     admin,
+    userId: user.id,
     link,
     clientId,
     clientName,
@@ -224,7 +226,7 @@ export async function POST(
   const ctxResult = await loadSendContext(token);
   if ('error' in ctxResult) return ctxResult.error;
 
-  const { admin, link, clientId, clientName, agency, eligible, postCount, startDate, endDate } = ctxResult;
+  const { admin, userId, link, clientId, clientName, agency, eligible, postCount, startDate, endDate } = ctxResult;
 
   if (eligible.length === 0) {
     return NextResponse.json(
@@ -236,6 +238,20 @@ export async function POST(
   const shareUrl = resolveShareUrl(agency, token);
   const recipients = eligible.map((c) => c.email);
   const pocFirstNames = eligible.map((c) => firstName(c.name));
+
+  // Recompute the draft locally so we have the resolved subject for the
+  // archive write below; the send helper applies the same fallback chain
+  // (override → draft default), so this stays in sync.
+  const draft = buildCalendarShareSendDraft({
+    variant: parsed.data.variant,
+    pocFirstNames,
+    clientName,
+    postCount,
+    startDate,
+    endDate,
+    agency,
+  });
+  const resolvedSubject = parsed.data.subject?.trim() || draft.subject;
 
   // Send first; only stamp the timestamps if Resend actually accepted the
   // payload. A failed send must not pretend the calendar went out.
@@ -281,6 +297,18 @@ export async function POST(
   if (stampError) {
     return NextResponse.json({ error: stampError.message }, { status: 500 });
   }
+
+  // Best-effort archive of the rendered email so the unified review modal
+  // can replay "what was actually said" against this share link. A failed
+  // archive must not bubble: the send already happened.
+  await archiveShareLinkEmail(admin, {
+    shareLinkId: link.id,
+    kind: link.first_sent_at ? 'resend' : 'initial',
+    subject: resolvedSubject,
+    htmlBody: result.html,
+    recipients: eligible.map((c) => ({ email: c.email, name: c.name })),
+    sentBy: userId,
+  });
 
   return NextResponse.json({
     ok: true,

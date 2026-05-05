@@ -10,6 +10,7 @@ import { getBrandFromAgency } from '@/lib/agency/detect';
 import { sendCalendarRevisedVideosEmail } from '@/lib/email/resend';
 import { syncMondayApprovalForDrop } from '@/lib/monday/calendar-approval';
 import { summarizeRevisionEdits } from '@/lib/calendar/summarize-revisions';
+import { archiveShareLinkEmail } from '@/lib/content-tools/archive-share-email';
 
 // Same role exclusions as scripts/send-calendar-batch.ts, keep these in sync.
 // Paid-media-only POCs don't care about organic content; "Avoid bulk" is a
@@ -262,6 +263,23 @@ export async function POST(
           '[notify-revisions] revised-videos email failed:',
           result.error,
         );
+      } else {
+        // Best-effort archive of the rendered body for the unified review
+        // modal. Subject mirrors the helper's deterministic format so we
+        // don't have to plumb it back through the return value.
+        const word = pendingForLink.length === 1 ? 'video' : 'videos';
+        const subject = `${clientName}: revised ${word} ready for review`;
+        await archiveShareLinkEmail(admin, {
+          shareLinkId: link.id,
+          kind: 'revisions_complete',
+          subject,
+          htmlBody: result.html,
+          recipients: eligibleContacts.map((c) => ({
+            email: c.email!,
+            name: c.name,
+          })),
+          sentBy: user.id,
+        });
       }
     } catch (err) {
       console.error('[notify-revisions] revised-videos email threw:', err);

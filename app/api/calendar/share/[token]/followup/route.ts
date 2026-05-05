@@ -9,6 +9,7 @@ import {
   sendCalendarFollowupEmail,
 } from '@/lib/email/resend';
 import { getClientNotificationRecipients } from '@/lib/email/notification-recipients';
+import { archiveShareLinkEmail } from '@/lib/content-tools/archive-share-email';
 
 /**
  * GET /api/calendar/share/[token]/followup
@@ -89,6 +90,7 @@ async function loadFollowupContext(token: string) {
 
   return {
     admin,
+    userId: user.id,
     link,
     clientId,
     clientName,
@@ -151,7 +153,7 @@ export async function POST(
   const ctxResult = await loadFollowupContext(token);
   if ('error' in ctxResult) return ctxResult.error;
 
-  const { admin, link, clientId, clientName, agency, eligible } = ctxResult;
+  const { admin, userId, link, clientId, clientName, agency, eligible } = ctxResult;
 
   if (eligible.length === 0) {
     return NextResponse.json(
@@ -164,6 +166,12 @@ export async function POST(
   const shareUrl = `${appUrl}/c/${token}`;
   const recipients = eligible.map((c) => c.email);
   const pocFirstNames = eligible.map((c) => firstName(c.name));
+
+  // Resolve subject locally so the archive write below can record what
+  // actually went out (the helper applies the same override → default
+  // fallback, so this stays in sync).
+  const draft = buildCalendarFollowupDraft({ pocFirstNames, clientName });
+  const resolvedSubject = parsed.data.subject?.trim() || draft.subject;
 
   // Send the email first; only stamp `last_followup_at` if it actually
   // went out, so a Resend outage doesn't quietly reset the clock.
@@ -195,6 +203,17 @@ export async function POST(
   if (stampError) {
     return NextResponse.json({ error: stampError.message }, { status: 500 });
   }
+
+  // Best-effort archive of the rendered email body for the unified review
+  // modal. A failed insert must not bubble — the email already went out.
+  await archiveShareLinkEmail(admin, {
+    shareLinkId: link.id,
+    kind: 'manual_followup',
+    subject: resolvedSubject,
+    htmlBody: result.html,
+    recipients: eligible.map((c) => ({ email: c.email, name: c.name })),
+    sentBy: userId,
+  });
 
   return NextResponse.json({
     ok: true,
