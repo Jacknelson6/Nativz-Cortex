@@ -3,7 +3,7 @@
  *
  * Lives outside React so the uploads keep running after the detail
  * dialog unmounts. Jack closes the dialog while a 10-file batch is
- * uploading? The TUS uploads keep going against this singleton; when he
+ * uploading? The PUTs keep going against this singleton; when he
  * reopens the dialog, the same in-flight jobs are still there with
  * up-to-date progress because the dialog reads via
  * `useSyncExternalStore`.
@@ -15,15 +15,13 @@
  * the editing board can refetch its list to show the new video count
  * without needing the dialog to be open.
  *
- * Transport: TUS resumable uploads against
- * `<supabase>/storage/v1/upload/resumable` so big edited cuts (>50MB)
- * don't bounce off the project's single-request body cap on the regular
- * /object endpoint. Auth uses the browser session's access token.
+ * Transport: Mux direct uploads — server mints a one-shot upload URL
+ * (`mux.video.uploads.create()`); browser PUTs the file bytes straight
+ * to Mux via XHR (so we get progress events). Mux's webhooks then
+ * hydrate `mux_asset_id`/`mux_playback_id` on the row. Bytes never
+ * touch our infra, so Vercel's body limits and Supabase's bucket size
+ * cap stop being concerns.
  */
-
-import * as tus from 'tus-js-client';
-import { createClient } from '@/lib/supabase/client';
-import { getSupabaseUrl } from '@/lib/supabase/public-env';
 
 export interface UploadJob {
   id: string;
@@ -81,16 +79,12 @@ export function subscribeToCompletion(
   };
 }
 
-/** Empty array singleton so unused project ids return a stable
- *  reference (avoids re-render storms in useSyncExternalStore). */
 const EMPTY: UploadJob[] = [];
 
 export function getProjectUploads(projectId: string): UploadJob[] {
   return state.get(projectId) ?? EMPTY;
 }
 
-/** Drop completed/error rows for one project. The dialog's "Clear"
- *  affordance + the post-batch cleanup both call this. */
 export function clearCompleted(projectId: string): void {
   const cur = state.get(projectId);
   if (!cur) return;
@@ -124,58 +118,34 @@ function appendJobs(projectId: string, jobs: UploadJob[]): void {
 }
 
 /**
- * TUS resumable upload to Supabase Storage. Used instead of a plain
- * signed-URL PUT because the regular `/object` endpoint enforces the
- * project's "Global file size limit" (50MB by default), which silently
- * 413s on edited cuts that are routinely 50-200MB. The TUS endpoint at
- * `/storage/v1/upload/resumable` bypasses that cap and chunks the body.
- *
- * Auth: needs the browser user's bearer token. Anon key alone gets
- * 401'd by storage RLS, and the signed-upload token can't be wired
- * through TUS metadata.
+ * PUT the file bytes directly to a Mux direct-upload URL via XHR so we
+ * get upload progress events. Fetch's streams API doesn't expose upload
+ * progress in browsers, so XHR is still the right tool here.
  */
-function uploadWithProgress(opts: {
-  bucket: string;
-  storagePath: string;
+function putToMux(opts: {
+  uploadUrl: string;
   file: File;
-  accessToken: string;
   onProgress: (pct: number) => void;
 }): Promise<void> {
-  const supabaseUrl = getSupabaseUrl();
   return new Promise((resolve, reject) => {
-    const upload = new tus.Upload(opts.file, {
-      endpoint: `${supabaseUrl}/storage/v1/upload/resumable`,
-      retryDelays: [0, 1500, 3000, 5000, 10000],
-      headers: {
-        authorization: `Bearer ${opts.accessToken}`,
-        'x-upsert': 'true',
-      },
-      uploadDataDuringCreation: true,
-      removeFingerprintOnSuccess: true,
-      metadata: {
-        bucketName: opts.bucket,
-        objectName: opts.storagePath,
-        contentType: opts.file.type || 'application/octet-stream',
-        cacheControl: '3600',
-      },
-      // 6MB matches the calendar uploader and is well above Supabase's
-      // 5MB minimum chunk requirement.
-      chunkSize: 6 * 1024 * 1024,
-      onProgress: (bytesUploaded, bytesTotal) => {
-        if (!bytesTotal) return;
-        const pct = Math.min(99, Math.floor((bytesUploaded / bytesTotal) * 100));
-        opts.onProgress(pct);
-      },
-      onSuccess: () => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', opts.uploadUrl);
+    xhr.upload.addEventListener('progress', (e) => {
+      if (!e.lengthComputable) return;
+      const pct = Math.min(99, Math.round((e.loaded / e.total) * 100));
+      opts.onProgress(pct);
+    });
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
         opts.onProgress(100);
         resolve();
-      },
-      onError: (err) => {
-        const message = err instanceof Error ? err.message : String(err);
-        reject(new Error(`tus upload failed: ${message}`));
-      },
-    });
-    upload.start();
+      } else {
+        reject(new Error(`Mux upload failed (${xhr.status})`));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Network error during upload'));
+    xhr.onabort = () => reject(new Error('Upload aborted'));
+    xhr.send(opts.file);
   });
 }
 
@@ -183,7 +153,7 @@ async function runOne(projectId: string, file: File, jobId: string): Promise<voi
   try {
     patchJob(projectId, jobId, { state: 'signing' });
 
-    // Step 1: insert placeholder row + reserve storage path on the server.
+    // Step 1: server-side row insert + Mux upload mint.
     const signRes = await fetch(
       `/api/admin/editing/projects/${projectId}/videos`,
       {
@@ -204,44 +174,30 @@ async function runOne(projectId: string, file: File, jobId: string): Promise<voi
       throw new Error(err?.detail ?? err?.error ?? 'sign failed');
     }
     const signed = (await signRes.json()) as {
-      storage_path: string;
-      bucket?: string;
+      video_id: string;
+      upload_id: string;
+      upload_url: string;
     };
-
-    // Step 2: pull the user's session token so TUS can authenticate.
-    const supabase = createClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      throw new Error('no active session — please sign back in');
-    }
 
     patchJob(projectId, jobId, { state: 'uploading' });
 
-    await uploadWithProgress({
-      bucket: signed.bucket ?? 'editing-media',
-      storagePath: signed.storage_path,
+    await putToMux({
+      uploadUrl: signed.upload_url,
       file,
-      accessToken: session.access_token,
       onProgress: (pct) => patchJob(projectId, jobId, { progress: pct }),
     });
 
+    // The webhook (or the share-page reconciler on next read) flips the
+    // row from 'uploading' -> 'processing' -> 'ready'. We mark the job
+    // 'done' once Mux has acknowledged the bytes; the player UI knows
+    // how to show the processing state from `mux_status`.
     patchJob(projectId, jobId, { state: 'done', progress: 100 });
   } catch (err) {
     const detail = err instanceof Error ? err.message : 'upload failed';
     patchJob(projectId, jobId, { state: 'error', detail });
-    // Surface to the user via toast at the call site (the store doesn't
-    // know about sonner). Errors stay in the row for visibility.
   }
 }
 
-/**
- * Enqueue a batch of files for a project. Returns immediately with the
- * generated job ids; uploads run sequentially in the background and
- * mutate the store as they progress. Subscribe via
- * `subscribeToCompletion` to know when a project's last batch finishes.
- */
 export function enqueueUploads(projectId: string, files: File[]): string[] {
   if (files.length === 0) return [];
   const jobs: UploadJob[] = files.map((f) => ({
@@ -276,9 +232,6 @@ export function enqueueUploads(projectId: string, files: File[]): string[] {
   return jobs.map((j) => j.id);
 }
 
-/** True if any job for this project is still in-flight (queued/signing/
- *  uploading/finalizing). Used for the "n uploading" pill on the
- *  project list row. */
 export function hasActiveUploads(projectId: string): boolean {
   const cur = state.get(projectId);
   if (!cur) return false;

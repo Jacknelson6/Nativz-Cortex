@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 /**
  * GET  /api/admin/editing/projects
  *   Lists every non-archived editing project, joined with client name +
- *   logo + assignee email + a video_count rollup. The /admin/editing
+ *   logo + editor email + a video_count rollup. The /admin/editing
  *   board calls this on load and after every mutation.
  *
  *   ?status=ready    only rows where status=in_review
@@ -59,13 +59,13 @@ export async function GET(req: Request) {
   let query = admin
     .from('editing_projects')
     .select(
-      `id, client_id, name, project_type, status, assignee_id,
+      `id, client_id, name, project_type, status, editor_id,
        videographer_id, strategist_id, project_brief, shoot_date,
        drive_folder_url, notes,
        drop_id, created_by, created_at, updated_at, ready_at, approved_at,
        scheduled_at, archived_at,
        client:clients!editing_projects_client_id_fkey(name, slug, logo_url),
-       assignee:team_members!editing_projects_assignee_id_fkey(email, full_name),
+       editor:team_members!editing_projects_editor_id_fkey(email, full_name),
        videographer:team_members!editing_projects_videographer_id_fkey(email, full_name),
        strategist:team_members!editing_projects_strategist_id_fkey(email, full_name),
        videos:editing_project_videos(count),
@@ -96,9 +96,9 @@ export async function GET(req: Request) {
     name: row.name,
     project_type: row.project_type,
     status: row.status,
-    assignee_id: row.assignee_id,
-    assignee_email: row.assignee?.email ?? null,
-    assignee_name: row.assignee?.full_name ?? null,
+    editor_id: row.editor_id,
+    editor_email: row.editor?.email ?? null,
+    editor_name: row.editor?.full_name ?? null,
     videographer_id: row.videographer_id ?? null,
     videographer_email: row.videographer?.email ?? null,
     videographer_name: row.videographer?.full_name ?? null,
@@ -140,11 +140,11 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
 
-  // assignee_id now FKs into team_members (migration 212), so translate
-  // the current admin's auth user id to their team_members row if there
-  // is one. If the admin doesn't have a roster entry (e.g. a
-  // super-admin with no team_members row) we leave it null and let the
-  // user pick later.
+  // editor_id now FKs into team_members (migration 212, renamed from
+  // assignee_id in migration 240), so translate the current admin's
+  // auth user id to their team_members row if there is one. If the
+  // admin doesn't have a roster entry (e.g. a super-admin with no
+  // team_members row) we leave it null and let the user pick later.
   const { data: teamRow } = await admin
     .from('team_members')
     .select('id')
@@ -152,7 +152,7 @@ export async function POST(req: Request) {
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
-  const defaultAssigneeId = (teamRow?.id as string | undefined) ?? null;
+  const defaultEditorId = (teamRow?.id as string | undefined) ?? null;
 
   const { data, error } = await admin
     .from('editing_projects')
@@ -163,7 +163,7 @@ export async function POST(req: Request) {
       drive_folder_url: parsed.data.drive_folder_url ?? null,
       notes: parsed.data.notes ?? null,
       created_by: user.id,
-      assignee_id: defaultAssigneeId,
+      editor_id: defaultEditorId,
     })
     .select('id')
     .single();

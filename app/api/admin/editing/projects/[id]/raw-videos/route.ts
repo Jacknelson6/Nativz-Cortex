@@ -3,27 +3,20 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/auth/permissions';
-import {
-  createEditingUploadUrl,
-  getEditingPublicUrl,
-  sanitizeFilename,
-} from '@/lib/editing/storage';
+import { getMux } from '@/lib/mux/client';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/admin/editing/projects/:id/raw-videos
  *
- * Sibling of the edited-video upload endpoint. Same two-step pattern:
- * insert a placeholder `editing_project_raw_videos` row, mint a Supabase
- * signed-upload URL, return the URL + token for direct browser PUT.
+ * Sibling of the edited-video upload endpoint. Mints a Mux direct-upload
+ * URL and inserts a placeholder `editing_project_raw_videos` row stamped
+ * with `mux_upload_id` + `mux_status='uploading'`. Browser PUTs bytes
+ * directly to Mux; the webhook fills in asset/playback ids later.
  *
- * Storage path prefix is `editing/<project_id>/raw/<raw_video_id>/<file>`
- * so raw clips never collide with edited cuts in the same bucket.
- *
- * No `replace_video_id` on raws. Raw footage is append-only - if the
- * videographer mis-uploads a clip they delete it via DELETE, then
- * re-upload as a fresh row.
+ * No `replace_video_id` here — raw footage is append-only. If the
+ * videographer mis-uploads a clip they DELETE then re-upload as a new row.
  */
 
 const CreateRawVideoBody = z.object({
@@ -63,8 +56,29 @@ export async function POST(
     .maybeSingle();
   if (!project) return NextResponse.json({ error: 'project_not_found' }, { status: 404 });
 
-  // Step 1: insert the row (placeholder storage_path so we have a uuid
-  // to slot into the storage path).
+  const headerOrigin = req.headers.get('origin');
+  const corsOrigin =
+    headerOrigin || process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin;
+
+  let upload;
+  try {
+    const mux = getMux();
+    upload = await mux.video.uploads.create({
+      cors_origin: corsOrigin,
+      new_asset_settings: {
+        playback_policies: ['public'],
+        video_quality: 'basic',
+        mp4_support: 'capped-1080p',
+      },
+    });
+  } catch (err) {
+    console.error(`Mux raw upload mint failed (cors_origin=${corsOrigin}, project=${projectId}):`, err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Could not start upload' },
+      { status: 502 },
+    );
+  }
+
   const { data: row, error } = await admin
     .from('editing_project_raw_videos')
     .insert({
@@ -73,8 +87,9 @@ export async function POST(
       mime_type: parsed.data.mime_type,
       size_bytes: parsed.data.size_bytes,
       label: parsed.data.label ?? null,
-      storage_path: 'pending',
       uploaded_by: user.id,
+      mux_upload_id: upload.id,
+      mux_status: 'uploading',
     })
     .select('id')
     .single();
@@ -85,29 +100,6 @@ export async function POST(
     );
   }
 
-  const storagePath = `editing/${projectId}/raw/${row.id}/${sanitizeFilename(parsed.data.filename)}`;
-
-  let signed;
-  try {
-    signed = await createEditingUploadUrl(admin, storagePath);
-  } catch (err) {
-    await admin.from('editing_project_raw_videos').delete().eq('id', row.id);
-    return NextResponse.json(
-      { error: 'sign_failed', detail: err instanceof Error ? err.message : 'sign failed' },
-      { status: 502 },
-    );
-  }
-
-  await admin
-    .from('editing_project_raw_videos')
-    .update({
-      storage_path: signed.path,
-      public_url: getEditingPublicUrl(admin, signed.path),
-    })
-    .eq('id', row.id);
-
-  // Bump the parent project's updated_at so the videographer board
-  // re-sorts and the editor sees fresh raws.
   await admin
     .from('editing_projects')
     .update({ updated_at: new Date().toISOString() })
@@ -115,10 +107,7 @@ export async function POST(
 
   return NextResponse.json({
     raw_video_id: row.id,
-    storage_path: signed.path,
-    signed_url: signed.signedUrl,
-    upload_token: signed.token,
-    bucket: 'editing-media',
-    public_url: getEditingPublicUrl(admin, signed.path),
+    upload_id: upload.id,
+    upload_url: upload.url,
   });
 }

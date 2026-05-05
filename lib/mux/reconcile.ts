@@ -2,14 +2,26 @@ import { getMux } from './client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
- * Pull-mode reconciler for a single content_drop_videos row that's
- * mid-Mux-pipeline. Used both by:
- *   - the share-link GET handler (self-heals any in-flight rows on
- *     every page view, so the webhook landing or not is no longer a
- *     correctness dependency — it's just a speed optimisation)
- *   - the one-shot scripts/reconcile-mux-uploads.ts script
+ * Pull-mode reconciler for a single Mux-backed video row that's
+ * mid-pipeline. Self-heals any in-flight rows on every relevant page
+ * view, so the webhook landing or not is just a speed optimisation,
+ * not a correctness dependency.
  *
- * Returns the patch we wrote (or null if nothing changed).
+ * Used by:
+ *   - share-link GET handlers (SMM + editing) on every page view
+ *   - scripts/reconcile-mux-uploads.ts (one-shot sweeper)
+ *
+ * The two video-row schemas differ:
+ *   - content_drop_videos has revised_video_url / revised_mp4_url
+ *     columns the publish cron consumes (Zernio + Late ingest don't
+ *     read HLS manifests, so we keep the static MP4 url separate).
+ *   - editing_project_videos / editing_project_raw_videos derive their
+ *     playback URLs from mux_playback_id at read time — no URL columns.
+ *
+ * To keep both flows on one reconciler, the caller passes a
+ * `ReconcileBinding` that says which table to write and (optionally)
+ * which URL columns to stamp. Returns the patch we wrote, or null if
+ * nothing changed.
  */
 export type ReconcileTarget = {
   id: string;
@@ -27,14 +39,36 @@ export type ReconcilePatch = {
   revised_mp4_url?: string;
 };
 
+export type ReconcileBinding = {
+  /** Postgres table name to UPDATE. */
+  table: string;
+  /**
+   * Where to stamp the playback URLs once the asset is ready. SMM uses
+   * `revised_video_url`/`revised_mp4_url`; editing tables omit this and
+   * let consumers derive URLs from mux_playback_id at render time.
+   */
+  urlFields?: {
+    hlsColumn: string;
+    mp4Column: string;
+  };
+};
+
+const DEFAULT_BINDING: ReconcileBinding = {
+  table: 'content_drop_videos',
+  urlFields: {
+    hlsColumn: 'revised_video_url',
+    mp4Column: 'revised_mp4_url',
+  },
+};
+
 export async function reconcileMuxRow(
   admin: SupabaseClient,
   row: ReconcileTarget,
+  binding: ReconcileBinding = DEFAULT_BINDING,
 ): Promise<ReconcilePatch | null> {
   const mux = getMux();
   let assetId = row.mux_asset_id;
 
-  // Step 1: derive asset id from upload if we don't have it.
   if (!assetId && row.mux_upload_id) {
     try {
       const upload = await mux.video.uploads.retrieve(row.mux_upload_id);
@@ -50,7 +84,6 @@ export async function reconcileMuxRow(
   }
   if (!assetId) return null;
 
-  // Step 2: pull asset state.
   let asset;
   try {
     asset = await mux.video.assets.retrieve(assetId);
@@ -66,42 +99,53 @@ export async function reconcileMuxRow(
   const publicId = asset.playback_ids?.find((p) => p.policy === 'public');
   const playbackId = publicId?.id ?? null;
 
-  const patch: ReconcilePatch = { mux_asset_id: assetId };
+  const patch: ReconcilePatch & Record<string, unknown> = { mux_asset_id: assetId };
   if (asset.status === 'ready' && playbackId) {
     patch.mux_status = 'ready';
     patch.mux_playback_id = playbackId;
-    patch.revised_video_url = `https://stream.mux.com/${playbackId}.m3u8`;
+    if (binding.urlFields) {
+      patch[binding.urlFields.hlsColumn] = `https://stream.mux.com/${playbackId}.m3u8`;
+    }
   } else if (asset.status === 'errored') {
     patch.mux_status = 'errored';
   } else {
     patch.mux_status = 'processing';
   }
 
-  // Static MP4 rendition. The publish cron requires this — Zernio / Late
-  // ingest can't read HLS manifests. Mux exposes it at a stable URL once
-  // static_renditions.status flips to 'ready'. We stamp it independently of
+  // Static MP4 rendition. The publish cron requires this for SMM rows
+  // (Zernio / Late can't read HLS manifests). Stamped independently of
   // mux_status so a partial state (HLS ready, MP4 still rendering) is
-  // observable instead of being collapsed into a single boolean.
-  if (playbackId && asset.static_renditions?.status === 'ready' && !row.revised_mp4_url) {
-    patch.revised_mp4_url = `https://stream.mux.com/${playbackId}/capped-1080p.mp4`;
+  // observable rather than collapsed into one boolean. Editing tables
+  // don't need an MP4 column, so we only stamp it when the binding
+  // says where to put it.
+  if (
+    playbackId &&
+    asset.static_renditions?.status === 'ready' &&
+    binding.urlFields &&
+    !row.revised_mp4_url
+  ) {
+    patch[binding.urlFields.mp4Column] = `https://stream.mux.com/${playbackId}/capped-1080p.mp4`;
   }
 
-  // Skip the write if every field already matches — avoids needless
-  // contention on hot rows.
   const noChange =
     patch.mux_status === row.mux_status &&
     patch.mux_asset_id === row.mux_asset_id &&
     patch.mux_playback_id === undefined &&
-    patch.revised_mp4_url === undefined;
+    (!binding.urlFields ||
+      patch[binding.urlFields.mp4Column] === undefined);
   if (noChange) return null;
 
   const { error } = await admin
-    .from('content_drop_videos')
+    .from(binding.table)
     .update(patch)
     .eq('id', row.id);
   if (error) {
-    console.warn('[mux-reconcile] update failed', { rowId: row.id, err: error.message });
+    console.warn('[mux-reconcile] update failed', {
+      rowId: row.id,
+      table: binding.table,
+      err: error.message,
+    });
     return null;
   }
-  return patch;
+  return patch as ReconcilePatch;
 }

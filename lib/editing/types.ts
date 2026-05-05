@@ -35,6 +35,16 @@ export interface EditingProjectVideo {
   uploaded_by: string | null;
   created_at: string;
   /**
+   * Mux pipeline state. New uploads (post-migration 242) flow through
+   * Mux: server mints a direct upload, browser PUTs bytes, webhook fills
+   * `mux_asset_id` / `mux_playback_id`. Render layer prefers the Mux
+   * playback id over `public_url` when present.
+   */
+  mux_upload_id?: string | null;
+  mux_asset_id?: string | null;
+  mux_playback_id?: string | null;
+  mux_status?: 'pending' | 'uploading' | 'processing' | 'ready' | 'errored' | null;
+  /**
    * Latest reviewer verdict for this cut, derived from
    * `editing_project_review_comments` (newest non-resolved row that
    * isn't a plain comment / video_revised event). Server-computed;
@@ -62,6 +72,10 @@ export interface EditingProjectRawVideo {
   label: string | null;
   uploaded_by: string | null;
   created_at: string;
+  mux_upload_id?: string | null;
+  mux_asset_id?: string | null;
+  mux_playback_id?: string | null;
+  mux_status?: 'pending' | 'uploading' | 'processing' | 'ready' | 'errored' | null;
 }
 
 export interface EditingProject {
@@ -73,14 +87,15 @@ export interface EditingProject {
   name: string;
   project_type: EditingProjectType;
   status: EditingProjectStatus;
-  assignee_id: string | null;
-  assignee_email: string | null;
-  assignee_name: string | null;
+  editor_id: string | null;
+  editor_email: string | null;
+  editor_name: string | null;
   /**
    * Pipeline role assignments (added in migration 203, repointed to
-   * `team_members` in migration 212). All optional; not every project
-   * has all three roles wired the moment it lands. `assignee_id` is the
-   * legacy editor slot, kept for backward compat.
+   * `team_members` in migration 212, `assignee_id` renamed to
+   * `editor_id` in migration 240 to align with the unified review
+   * modal contract). All optional; not every project has every role
+   * wired the moment it lands.
    */
   videographer_id: string | null;
   videographer_email: string | null;

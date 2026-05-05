@@ -420,7 +420,7 @@ async function notifyAdminsOfComment(
   const linkPath = `/admin/editing?project=${project.id}`;
 
   // In-app: Jack only (matches calendar pattern). Future: route by
-  // project assignee / strategist.
+  // project editor / strategist.
   const { data: jack } = await admin
     .from('users')
     .select('id')

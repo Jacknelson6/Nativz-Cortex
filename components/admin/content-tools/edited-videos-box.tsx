@@ -162,14 +162,18 @@ export function UploadRow({ job }: { job: UploadJob }) {
 }
 
 /**
- * Renders a small first-frame preview for an uploaded edit. We don't
- * have a worker that pre-generates thumbnail_url yet, so without this
- * we'd fall through to a generic file icon for every video. A muted
- * <video> with #t=0.1 makes the browser fetch only the first ~100ms
- * and paint that frame, enough to recognize the cut at a glance.
+ * Renders a small first-frame preview for an uploaded edit. Mux-backed
+ * rows expose a free thumbnail at `image.mux.com/{playbackId}/thumbnail.jpg`
+ * once the asset is ready; legacy Supabase-Storage rows fall back to
+ * the `#t=0.1` first-frame trick on the public URL. Pre-Mux-ready or
+ * still-uploading rows show a generic file icon.
  */
 function VideoThumb({ video }: { video: EditingProjectVideo }) {
-  const previewSrc = video.public_url ? `${video.public_url}#t=0.1` : null;
+  const muxThumb = video.mux_playback_id
+    ? `https://image.mux.com/${video.mux_playback_id}/thumbnail.jpg?width=120&fit_mode=preserve&time=0.1`
+    : null;
+  const fallbackVideoSrc =
+    !muxThumb && video.public_url ? `${video.public_url}#t=0.1` : null;
   return (
     <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-surface-hover">
       {video.thumbnail_url ? (
@@ -179,9 +183,16 @@ function VideoThumb({ video }: { video: EditingProjectVideo }) {
           alt=""
           className="h-full w-full object-cover"
         />
-      ) : previewSrc ? (
+      ) : muxThumb ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={muxThumb}
+          alt=""
+          className="h-full w-full object-cover"
+        />
+      ) : fallbackVideoSrc ? (
         <video
-          src={previewSrc}
+          src={fallbackVideoSrc}
           className="h-full w-full object-cover"
           preload="metadata"
           muted
@@ -203,12 +214,40 @@ function VideoCard({
 }) {
   const sizeLabel = video.size_bytes ? formatBytes(video.size_bytes) : '';
   const status = video.review_status ?? null;
+  const muxStatus = video.mux_status ?? null;
+  // Prefer Mux HLS once playback id is wired; fall back to the legacy
+  // Supabase Storage public_url for pre-Mux rows. The "open" anchor on
+  // an HLS .m3u8 won't play in vanilla browsers but it's a useful
+  // diagnostic link for editors during the migration window.
+  const openUrl = video.mux_playback_id
+    ? `https://stream.mux.com/${video.mux_playback_id}.m3u8`
+    : video.public_url ?? null;
+  const muxBadge =
+    muxStatus === 'uploading' || muxStatus === 'processing' || muxStatus === 'pending'
+      ? 'Processing'
+      : muxStatus === 'errored'
+        ? 'Failed'
+        : null;
   return (
     <li className="group flex items-center gap-3 rounded-lg border border-nativz-border bg-background p-3">
       <VideoThumb video={video} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className="truncate text-sm text-text-primary">{video.filename}</p>
+          {muxBadge && (
+            <span
+              className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                muxBadge === 'Failed'
+                  ? 'bg-[color:var(--status-danger)]/10 text-[color:var(--status-danger)]'
+                  : 'bg-surface-hover text-text-muted'
+              }`}
+            >
+              {muxBadge !== 'Failed' && (
+                <Loader2 size={10} className="animate-spin" />
+              )}
+              {muxBadge}
+            </span>
+          )}
           {status === 'approved' && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
               <CheckCircle2 size={10} /> Approved
@@ -226,9 +265,9 @@ function VideoCard({
         </p>
       </div>
       <div className="flex items-center gap-1">
-        {video.public_url && (
+        {openUrl && (
           <a
-            href={video.public_url}
+            href={openUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="rounded-md p-1.5 text-text-muted opacity-0 transition-opacity hover:bg-surface-hover hover:text-text-primary group-hover:opacity-100"

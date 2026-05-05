@@ -2,8 +2,11 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { isAdmin } from '@/lib/auth/permissions';
+import { reconcileMuxRow, type ReconcileTarget } from '@/lib/mux/reconcile';
 
 export const dynamic = 'force-dynamic';
+
+const EDITING_VIDEO_BINDING = { table: 'editing_project_videos' } as const;
 
 /**
  * GET /api/editing/share/:token
@@ -109,7 +112,7 @@ export async function GET(
       admin
         .from('editing_project_videos')
         .select(
-          'id, filename, public_url, drive_file_id, mime_type, duration_s, thumbnail_url, version, position, created_at',
+          'id, filename, public_url, drive_file_id, mime_type, duration_s, thumbnail_url, version, position, created_at, mux_upload_id, mux_asset_id, mux_playback_id, mux_status',
         )
         .eq('project_id', link.project_id)
         .order('position', { ascending: true })
@@ -127,26 +130,78 @@ export async function GET(
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
 
+  // Pull-mode self-heal: reconcile any Mux-backed rows that are still
+  // mid-pipeline against the Mux API before building the response. Same
+  // rationale as the SMM share endpoint - keeps webhook delivery a speed
+  // optimisation, not a correctness dependency. Editing rows derive their
+  // playback URL from `mux_playback_id` at render time, so we pass a
+  // urlFields-less binding and skip the SMM-only revised_* writes.
+  type EditingVideoRow = {
+    id: string;
+    filename: string | null;
+    public_url: string | null;
+    drive_file_id: string | null;
+    mime_type: string | null;
+    duration_s: number | null;
+    thumbnail_url: string | null;
+    version: number;
+    position: number | null;
+    created_at: string;
+    mux_upload_id: string | null;
+    mux_asset_id: string | null;
+    mux_playback_id: string | null;
+    mux_status: string | null;
+  };
+  const videoRows = (rawVideos ?? []) as EditingVideoRow[];
+  const inFlight = videoRows.filter(
+    (v) =>
+      (v.mux_status === 'processing' || v.mux_status === 'uploading') &&
+      v.mux_upload_id != null,
+  );
+  if (inFlight.length > 0) {
+    try {
+      const patches = await Promise.all(
+        inFlight.map((row) =>
+          reconcileMuxRow(admin, row as ReconcileTarget, EDITING_VIDEO_BINDING),
+        ),
+      );
+      inFlight.forEach((row, i) => {
+        const patch = patches[i];
+        if (!patch) return;
+        if (patch.mux_status !== undefined) row.mux_status = patch.mux_status;
+        if (patch.mux_asset_id !== undefined) row.mux_asset_id = patch.mux_asset_id;
+        if (patch.mux_playback_id !== undefined) row.mux_playback_id = patch.mux_playback_id;
+      });
+    } catch (err) {
+      console.warn('[editing-share-get] mux reconcile batch failed; skipping', {
+        count: inFlight.length,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   // Surface only the latest cut per `position` slot. Older revisions stay
   // in the table for editor history but the public review page should
   // show one polished tile per intended deliverable.
   const seenPositions = new Set<number>();
-  const videos = (rawVideos ?? []).flatMap((v) => {
-    const pos = (v.position as number | null) ?? 0;
+  const videos = videoRows.flatMap((v) => {
+    const pos = v.position ?? 0;
     if (seenPositions.has(pos)) return [];
     seenPositions.add(pos);
     return [
       {
-        id: v.id as string,
-        filename: v.filename as string | null,
-        public_url: v.public_url as string | null,
-        drive_file_id: v.drive_file_id as string | null,
-        mime_type: v.mime_type as string | null,
-        duration_s: v.duration_s as number | null,
-        thumbnail_url: v.thumbnail_url as string | null,
-        version: v.version as number,
+        id: v.id,
+        filename: v.filename,
+        public_url: v.public_url,
+        drive_file_id: v.drive_file_id,
+        mime_type: v.mime_type,
+        duration_s: v.duration_s,
+        thumbnail_url: v.thumbnail_url,
+        version: v.version,
         position: pos,
-        created_at: v.created_at as string,
+        created_at: v.created_at,
+        mux_playback_id: v.mux_playback_id,
+        mux_status: v.mux_status,
       },
     ];
   });

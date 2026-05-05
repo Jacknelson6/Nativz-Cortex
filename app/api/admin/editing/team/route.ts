@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
  *
  * Returns the agency roster as picker options for the editing project
  * detail panel. The three role assignments on `editing_projects`
- * (`assignee_id` / `videographer_id` / `strategist_id`) FK into
+ * (`editor_id` / `videographer_id` / `strategist_id`) FK into
  * `team_members` (migration 213), which is the canonical agency-people
  * table and includes folks without auth accounts (Jaime, Jashan, Jed,
  * Khen, Kiet, etc.).

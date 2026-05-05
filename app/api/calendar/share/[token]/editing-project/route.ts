@@ -175,7 +175,7 @@ export async function POST(
 
   // Match the create flow used by POST /api/admin/editing/projects:
   // resolve the current admin to a team_members row so the project has
-  // a sensible default assignee instead of falling to NULL.
+  // a sensible default editor instead of falling to NULL.
   const { data: teamRow } = await admin
     .from('team_members')
     .select('id')
@@ -192,7 +192,7 @@ export async function POST(
       name,
       project_type: 'organic_content',
       created_by: user.id,
-      assignee_id: (teamRow?.id as string | undefined) ?? null,
+      editor_id: (teamRow?.id as string | undefined) ?? null,
     })
     .select('id')
     .single();

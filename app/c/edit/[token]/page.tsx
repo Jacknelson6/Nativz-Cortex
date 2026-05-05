@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { use, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -25,6 +26,12 @@ import { toast } from 'sonner';
 import { Dialog } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
+
+// Load MuxPlayer client-only; the custom element registration explodes
+// during SSR.
+const MuxPlayer = dynamic(() => import('@mux/mux-player-react'), {
+  ssr: false,
+});
 
 /**
  * Public review page for an editing project.
@@ -84,6 +91,19 @@ interface SharedVideo {
   version: number | null;
   position: number | null;
   created_at: string;
+  /**
+   * Mux pipeline state. Render layer prefers `mux_playback_id` over
+   * `public_url` when present; pre-Mux rows still play via the legacy
+   * Supabase Storage URL.
+   */
+  mux_playback_id: string | null;
+  mux_status:
+    | 'pending'
+    | 'uploading'
+    | 'processing'
+    | 'ready'
+    | 'errored'
+    | null;
   comments: SharedComment[];
 }
 
@@ -850,8 +870,10 @@ function VideoCard({
 
   // Editor-only "Replace" — three-step flow:
   //   1) POST /api/admin/editing/projects/:id/videos with replace_video_id
-  //      → server inserts a new placeholder row + signed upload URL.
-  //   2) PUT bytes directly to the signed URL.
+  //      → server mints a Mux direct upload + inserts a placeholder row.
+  //   2) PUT file bytes straight to the Mux upload URL (no Content-Type
+  //      header — Mux infers it). The webhook flips mux_status to ready
+  //      once Mux finishes packaging.
   //   3) POST /api/editing/share/:token/comment with status='video_revised'
   //      so the activity feed reflects the new cut, then refetch the page.
   async function uploadReplacementFile(file: File) {
@@ -878,20 +900,19 @@ function VideoCard({
         },
       );
       const initJson = await initRes.json().catch(() => null);
-      if (!initRes.ok || !initJson?.signed_url) {
+      if (!initRes.ok || !initJson?.upload_url) {
         throw new Error(
           typeof initJson?.error === 'string'
             ? initJson.error
             : 'Could not start upload',
         );
       }
-      const uploadUrl = initJson.signed_url as string;
+      const uploadUrl = initJson.upload_url as string;
       const newVideoId = initJson.video_id as string;
 
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('PUT', uploadUrl);
-        if (file.type) xhr.setRequestHeader('Content-Type', file.type);
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable) {
             setUploadProgress(Math.round((e.loaded / e.total) * 100));
@@ -1009,9 +1030,35 @@ function VideoCard({
     </div>
   );
 
+  const muxStatus = video.mux_status ?? null;
+  const muxProcessing =
+    muxStatus === 'pending' ||
+    muxStatus === 'uploading' ||
+    muxStatus === 'processing';
+  const muxPoster = video.mux_playback_id
+    ? `https://image.mux.com/${video.mux_playback_id}/thumbnail.jpg?width=1280&fit_mode=preserve&time=1`
+    : undefined;
   const videoPanel = (
     <div ref={videoSectionRef} className="relative h-full w-full">
-      {video.public_url ? (
+      {video.mux_playback_id ? (
+        <MuxPlayer
+          // MuxPlayer's ref points at the <mux-player> custom element
+          // which exposes `currentTime` like an HTMLVideoElement, so the
+          // existing comment-timestamp wiring still works.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ref={videoElRef as any}
+          playbackId={video.mux_playback_id}
+          poster={muxPoster}
+          streamType="on-demand"
+          playsInline
+          className="block h-full w-full bg-black"
+          style={{
+            ['--media-object-fit' as string]: 'contain',
+            aspectRatio: 'auto',
+          }}
+          onLoadedMetadata={() => setPlayerReady(true)}
+        />
+      ) : video.public_url ? (
         <video
           ref={videoElRef}
           src={video.public_url}
@@ -1021,6 +1068,18 @@ function VideoCard({
           className="block h-full w-full bg-black object-contain"
           onLoadedMetadata={() => setPlayerReady(true)}
         />
+      ) : muxProcessing ? (
+        <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-surface-hover text-text-muted">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <p className="text-xs">Processing video…</p>
+        </div>
+      ) : muxStatus === 'errored' ? (
+        <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-surface-hover">
+          <AlertTriangle className="h-6 w-6 text-[color:var(--status-danger)]" />
+          <p className="text-xs text-[color:var(--status-danger)]">
+            Upload failed
+          </p>
+        </div>
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-surface-hover">
           <FileVideo className="h-10 w-10 text-text-muted" />

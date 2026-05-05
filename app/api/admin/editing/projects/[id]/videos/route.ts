@@ -3,28 +3,27 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/auth/permissions';
-import {
-  buildEditingStoragePath,
-  createEditingUploadUrl,
-  getEditingPublicUrl,
-} from '@/lib/editing/storage';
+import { getMux } from '@/lib/mux/client';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/admin/editing/projects/:id/videos
  *
- * Two-step upload pattern:
- *   1. Client POSTs `{ filename, mime_type, size_bytes, position }`.
- *      Server inserts a placeholder `editing_project_videos` row with
- *      `storage_path` pre-computed, then returns a one-shot Supabase
- *      signed-upload URL + token.
- *   2. Client PUTs bytes directly to the signed URL via
- *      `uploadToSignedUrl(path, token, file)`. No bytes ever touch
- *      Vercel Functions, so 50MB Function-body limits don't apply.
+ * Inserts a placeholder `editing_project_videos` row, mints a Mux
+ * direct-upload URL, and stamps `mux_upload_id` + `mux_status='uploading'`
+ * on the row so the webhook can reconcile the asset back to it later.
  *
- * On retry / re-upload of the same filename, the client sends
- * `replaceVideoId` to overwrite that row's storage path + bump version.
+ * The browser PUTs the file bytes directly to Mux (bypassing Vercel's
+ * 4.5MB Function body limit). On success the asset.created /
+ * asset.ready webhooks fill in `mux_asset_id` / `mux_playback_id`. The
+ * share-page consumer also self-heals via the pull reconciler if the
+ * webhook is delayed.
+ *
+ * On retry / re-upload the client sends `replace_video_id` to keep the
+ * slot/position but bump `version`. Original row is left intact for
+ * history (and to avoid storage churn — the old Mux asset can be GC'd
+ * later if we care).
  */
 
 const CreateVideoBody = z.object({
@@ -32,9 +31,6 @@ const CreateVideoBody = z.object({
   mime_type: z.string().min(1).max(100),
   size_bytes: z.number().int().nonnegative(),
   position: z.number().int().nonnegative().default(0),
-  /** When set, mark the video as a new revision of an existing one
-   *  (bumps version, keeps the slot/position). Original file stays in
-   *  storage so we have history. */
   replace_video_id: z.string().uuid().optional(),
 });
 
@@ -60,7 +56,7 @@ export async function POST(
 
   const { data: project } = await admin
     .from('editing_projects')
-    .select('id, status')
+    .select('id')
     .eq('id', projectId)
     .maybeSingle();
   if (!project) return NextResponse.json({ error: 'project_not_found' }, { status: 404 });
@@ -79,7 +75,36 @@ export async function POST(
     }
   }
 
-  // 1. Insert the row first so we have a uuid to use in the path.
+  // CORS origin — Mux's preflight check on the PUT compares the browser's
+  // origin to whatever we register. Prefer the inbound `Origin` header
+  // (the exact value the browser will send); fall back to NEXT_PUBLIC_APP_URL,
+  // then a synthetic origin from req.url. See SMM mux-upload route for the
+  // longer write-up — same constraint applies here.
+  const headerOrigin = req.headers.get('origin');
+  const corsOrigin =
+    headerOrigin || process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin;
+
+  let upload;
+  try {
+    const mux = getMux();
+    upload = await mux.video.uploads.create({
+      cors_origin: corsOrigin,
+      new_asset_settings: {
+        playback_policies: ['public'],
+        video_quality: 'basic',
+        // Capped 1080p MP4 rendition matches the SMM flow. Keeps the
+        // door open for an editing-side download/export of the cut.
+        mp4_support: 'capped-1080p',
+      },
+    });
+  } catch (err) {
+    console.error(`Mux upload mint failed (cors_origin=${corsOrigin}, project=${projectId}):`, err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Could not start upload' },
+      { status: 502 },
+    );
+  }
+
   const { data: row, error } = await admin
     .from('editing_project_videos')
     .insert({
@@ -89,8 +114,9 @@ export async function POST(
       size_bytes: parsed.data.size_bytes,
       position,
       version,
-      storage_path: 'pending',
       uploaded_by: user.id,
+      mux_upload_id: upload.id,
+      mux_status: 'uploading',
     })
     .select('id')
     .single();
@@ -98,34 +124,7 @@ export async function POST(
     return NextResponse.json({ error: 'insert_failed', detail: error?.message }, { status: 500 });
   }
 
-  const storagePath = buildEditingStoragePath({
-    projectId,
-    videoId: row.id,
-    filename: parsed.data.filename,
-  });
-
-  let signed;
-  try {
-    signed = await createEditingUploadUrl(admin, storagePath);
-  } catch (err) {
-    // Roll back the placeholder so we don't leave a "pending" row.
-    await admin.from('editing_project_videos').delete().eq('id', row.id);
-    return NextResponse.json(
-      { error: 'sign_failed', detail: err instanceof Error ? err.message : 'sign failed' },
-      { status: 502 },
-    );
-  }
-
-  await admin
-    .from('editing_project_videos')
-    .update({
-      storage_path: signed.path,
-      public_url: getEditingPublicUrl(admin, signed.path),
-    })
-    .eq('id', row.id);
-
-  // Auto-flip the project from draft -> draft (no-op) but stamp
-  // updated_at via the trigger so the editing board re-sorts.
+  // Bump updated_at so the editing board re-sorts.
   await admin
     .from('editing_projects')
     .update({ updated_at: new Date().toISOString() })
@@ -133,10 +132,7 @@ export async function POST(
 
   return NextResponse.json({
     video_id: row.id,
-    storage_path: signed.path,
-    signed_url: signed.signedUrl,
-    upload_token: signed.token,
-    bucket: 'editing-media',
-    public_url: getEditingPublicUrl(admin, signed.path),
+    upload_id: upload.id,
+    upload_url: upload.url,
   });
 }

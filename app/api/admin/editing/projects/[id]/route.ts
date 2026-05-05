@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * GET    /api/admin/editing/projects/:id   one project + its videos
- * PATCH  /api/admin/editing/projects/:id   rename, retype, change status, set assignee
+ * PATCH  /api/admin/editing/projects/:id   rename, retype, change status, set role assignments
  * DELETE /api/admin/editing/projects/:id   archive (soft delete) - flips status=archived,
  *                                          stamps archived_at, leaves rows + storage intact
  */
@@ -24,7 +24,7 @@ const PatchBody = z
     status: z
       .enum(['editing', 'need_approval', 'revising', 'approved', 'done', 'archived'])
       .optional(),
-    assignee_id: z.string().uuid().nullable().optional(),
+    editor_id: z.string().uuid().nullable().optional(),
     videographer_id: z.string().uuid().nullable().optional(),
     strategist_id: z.string().uuid().nullable().optional(),
     project_brief: z.string().max(8000).nullable().optional(),
@@ -65,7 +65,7 @@ export async function GET(
     .select(
       `*,
        client:clients!editing_projects_client_id_fkey(id, name, slug, logo_url),
-       assignee:team_members!editing_projects_assignee_id_fkey(id, email, full_name, avatar_url),
+       editor:team_members!editing_projects_editor_id_fkey(id, email, full_name, avatar_url),
        videographer:team_members!editing_projects_videographer_id_fkey(id, email, full_name, avatar_url),
        strategist:team_members!editing_projects_strategist_id_fkey(id, email, full_name, avatar_url)`,
     )
@@ -79,7 +79,7 @@ export async function GET(
   // `project.strategist_email`/`strategist_name` etc. directly,
   // matching the list-route shape (and the EditingProject type).
   const r = row as Record<string, unknown> & {
-    assignee?: { email?: string | null; full_name?: string | null } | null;
+    editor?: { email?: string | null; full_name?: string | null } | null;
     videographer?: { email?: string | null; full_name?: string | null } | null;
     strategist?: { email?: string | null; full_name?: string | null } | null;
     client?: { name?: string | null; slug?: string | null; logo_url?: string | null } | null;
@@ -89,8 +89,8 @@ export async function GET(
     client_name: r.client?.name ?? null,
     client_slug: r.client?.slug ?? null,
     client_logo_url: r.client?.logo_url ?? null,
-    assignee_email: r.assignee?.email ?? null,
-    assignee_name: r.assignee?.full_name ?? null,
+    editor_email: r.editor?.email ?? null,
+    editor_name: r.editor?.full_name ?? null,
     videographer_email: r.videographer?.email ?? null,
     videographer_name: r.videographer?.full_name ?? null,
     strategist_email: r.strategist?.email ?? null,

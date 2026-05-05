@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { reconcileMuxRow, type ReconcileTarget } from '@/lib/mux/reconcile';
 
 export interface ResolvedMedia {
   videoUrl?: string;
@@ -66,25 +67,52 @@ export async function resolveScheduledPostMedia(
 
   const { data: revisionRow } = await admin
     .from('content_drop_videos')
-    .select('revised_mp4_url, revised_video_uploaded_at, mux_playback_id')
+    .select('id, revised_mp4_url, revised_video_uploaded_at, mux_playback_id, mux_upload_id, mux_asset_id, mux_status')
     .eq('scheduled_post_id', postId)
     .maybeSingle<{
+      id: string;
       revised_mp4_url: string | null;
       revised_video_uploaded_at: string | null;
       mux_playback_id: string | null;
+      mux_upload_id: string | null;
+      mux_asset_id: string | null;
+      mux_status: string | null;
     }>();
 
-  const revisionUploaded = revisionRow?.revised_video_uploaded_at != null;
-  const revisionReady = revisionRow?.revised_mp4_url != null;
-  if (revisionUploaded && !revisionReady) {
+  let row = revisionRow;
+  const revisionUploaded = row?.revised_video_uploaded_at != null;
+  const revisionReady = row?.revised_mp4_url != null;
+
+  // Self-heal: if Mux pipeline state suggests the asset *should* be ready
+  // but no URL is stamped, actively probe Mux before giving up. Webhooks
+  // miss occasionally — pull-mode reconcile catches those rows so the
+  // publish path doesn't sit on retry-loop until someone notices.
+  if (row && !revisionReady && (revisionUploaded || row.mux_playback_id || row.mux_asset_id || row.mux_upload_id)) {
+    const target: ReconcileTarget = {
+      id: row.id,
+      mux_upload_id: row.mux_upload_id,
+      mux_asset_id: row.mux_asset_id,
+      mux_status: row.mux_status,
+      revised_mp4_url: row.revised_mp4_url,
+    };
+    const patch = await reconcileMuxRow(admin, target);
+    if (patch?.revised_mp4_url) {
+      row = { ...row, revised_mp4_url: patch.revised_mp4_url };
+    } else if (patch?.mux_playback_id) {
+      row = { ...row, mux_playback_id: patch.mux_playback_id };
+    }
+  }
+
+  const finalRevisionReady = row?.revised_mp4_url != null;
+  if (revisionUploaded && !finalRevisionReady) {
     throw new Error('Revision pending: Mux MP4 rendition not ready yet. Cron will retry.');
   }
 
-  if (revisionReady) {
-    return { videoUrl: revisionRow!.revised_mp4_url as string };
+  if (finalRevisionReady) {
+    return { videoUrl: row!.revised_mp4_url as string };
   }
 
-  if (revisionRow?.mux_playback_id) {
+  if (row?.mux_playback_id) {
     // Producer ingested into Mux but the `capped-1080p.mp4` static rendition
     // isn't ready yet. We deliberately do NOT guess a URL here — assets are
     // created with `mp4_support: 'capped-1080p'`, so the only correct path

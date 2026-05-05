@@ -11,7 +11,7 @@ import {
 
 /**
  * Inline picker for the three role slots on an editing project
- * (`strategist_id`, `videographer_id`, `assignee_id` aka editor).
+ * (`strategist_id`, `videographer_id`, `editor_id`).
  *
  * Used in two surfaces:
  *   - PipelineTable role cells -> "compact" variant: pill button only,
@@ -71,10 +71,10 @@ async function fetchMembers(roleTag: string): Promise<TeamMember[]> {
   return p;
 }
 
-export type AssigneeRole = 'assignee_id' | 'videographer_id' | 'strategist_id';
+export type AssigneeRole = 'editor_id' | 'videographer_id' | 'strategist_id';
 
 const ROLE_LABEL: Record<AssigneeRole, string> = {
-  assignee_id: 'Editor',
+  editor_id: 'Editor',
   videographer_id: 'Videographer',
   strategist_id: 'Strategist',
 };
@@ -85,7 +85,7 @@ const ROLE_LABEL: Record<AssigneeRole, string> = {
  * shows people whose tag matches the slot they're filling.
  */
 const ROLE_TAG: Record<AssigneeRole, string> = {
-  assignee_id: 'editor',
+  editor_id: 'editor',
   videographer_id: 'videographer',
   strategist_id: 'strategist',
 };
