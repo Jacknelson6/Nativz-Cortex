@@ -579,6 +579,13 @@ export function EditingProjectDetail({
   const showRevisionsCta =
     activeLink?.revisions_status === 'ready_to_send' && !sendDisabledReason;
   const hasBeenSent = !!activeLink?.last_review_email_sent_at;
+  // Project is in a terminal approved state — hide the Send re-review /
+  // revisions-complete CTAs so we don't burn an email on a closed loop.
+  // Archive stays available; the unified pill carries the "Approved" signal.
+  const isApproved =
+    project.status === 'approved' ||
+    project.status === 'done' ||
+    project.status === 'archived';
 
   const footer = (
     <>
@@ -592,7 +599,7 @@ export function EditingProjectDetail({
         <Archive size={13} />
         Archive project
       </Button>
-      {activeLink && showRevisionsCta && (
+      {activeLink && showRevisionsCta && !isApproved && (
         <Button
           type="button"
           variant="secondary"
@@ -609,7 +616,7 @@ export function EditingProjectDetail({
           {firingRevisions ? 'Sending...' : 'Send revisions complete'}
         </Button>
       )}
-      {!activeLink && hasVideos && (
+      {!activeLink && hasVideos && !isApproved && (
         <Button
           type="button"
           size="sm"
@@ -620,7 +627,7 @@ export function EditingProjectDetail({
           {minting ? 'Minting...' : 'Mint share link'}
         </Button>
       )}
-      {activeLink && (
+      {activeLink && !isApproved && (
         <Button
           type="button"
           size="sm"

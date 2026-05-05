@@ -422,6 +422,7 @@ export function CalendarLinkDetail({
 
   const isExpired = link.status === 'expired';
   const isAbandoned = link.status === 'abandoned';
+  const isApproved = link.status === 'approved';
   const dateRange = formatDateRange(link.drop_start, link.drop_end);
 
   async function copyShareUrl() {
@@ -604,8 +605,10 @@ export function CalendarLinkDetail({
 
   const hasBeenSent = !!link.first_sent_at;
   // Hide send actions on terminal links — there's nothing to chase, and
-  // clicking through would burn an email on a closed loop.
-  const canSend = !isExpired && !isAbandoned && link.post_count > 0;
+  // clicking through would burn an email on a closed loop. Approved is
+  // also terminal: every post got a green check, so no resend / followup
+  // makes sense — the unified pill already tells the story.
+  const canSend = !isExpired && !isAbandoned && !isApproved && link.post_count > 0;
   const sendDisabledReason =
     contactsLoading
       ? null
