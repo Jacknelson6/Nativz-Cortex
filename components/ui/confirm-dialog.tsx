@@ -45,7 +45,16 @@ export function ConfirmDialog({
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-[color:var(--nz-ink)]/70 backdrop-blur-sm"
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+      onMouseDown={(e) => {
+        // Backdrop dismissal: only fire when the click started on the
+        // backdrop itself, not on the panel.
+        if (e.target === e.currentTarget) onCancel();
+        // Stop the mousedown from bubbling so a clickable ancestor
+        // (e.g. a card with `onClick={onNavigate}`) doesn't react to
+        // clicks inside the dialog.
+        e.stopPropagation();
+      }}
+      onClick={(e) => e.stopPropagation()}
       onKeyDown={handleKeyDown}
     >
       <div className="w-full max-w-sm rounded-xl border border-nativz-border bg-surface p-6 shadow-xl animate-[popIn_200ms_ease-out]">
