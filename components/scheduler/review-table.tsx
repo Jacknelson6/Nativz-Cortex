@@ -968,21 +968,24 @@ function FollowupCell({
   // "actually nudged N days ago" from "never followed up but was created
   // N days ago." `followup_count` is the only field that increments on a
   // real send (see /api/calendar/share/[token]/followup), so treat 0 as
-  // "no followup sent" regardless of what the timestamp says.
+  // "no followup sent" regardless of what the timestamp says. When no
+  // real followup has happened we fall back to `first_sent_at` so the
+  // pill still shows concrete elapsed time ("Sent 3d ago") instead of
+  // a vague "New" badge — the staleness clock is the same either way.
   const hasRealFollowup = (link.followup_count ?? 0) > 0;
-  const stamp = hasRealFollowup ? link.last_followup_at : null;
+  const stamp = hasRealFollowup
+    ? link.last_followup_at
+    : link.first_sent_at;
   const days = stamp ? daysSince(stamp) : null;
   const tone = followupTone(days);
-  const label = formatFollowupLabel(days);
+  const label = formatFollowupLabel(days, hasRealFollowup);
 
   const tooltipBody =
     days === null
       ? 'No followups sent yet.'
-      : `${days === 0 ? 'Less than a day' : `${days} day${days === 1 ? '' : 's'}`} since the last nudge.${
-          link.followup_count > 0
-            ? ` ${link.followup_count} followup${link.followup_count === 1 ? '' : 's'} sent.`
-            : ''
-        }`;
+      : hasRealFollowup
+        ? `${days === 0 ? 'Less than a day' : `${days} day${days === 1 ? '' : 's'}`} since the last nudge. ${link.followup_count} followup${link.followup_count === 1 ? '' : 's'} sent.`
+        : `Calendar sent ${days === 0 ? 'less than a day' : `${days} day${days === 1 ? '' : 's'}`} ago. No followups yet.`;
 
   // Read-only indicator. The actual followup-send action lives in the
   // detail dialog now, so the table row stays a glanceable summary
@@ -1045,11 +1048,17 @@ function followupTone(days: number | null): { className: string; dot: string } {
   };
 }
 
-function formatFollowupLabel(days: number | null): string {
+function formatFollowupLabel(
+  days: number | null,
+  hasRealFollowup: boolean,
+): string {
   if (days === null) return 'New';
-  if (days === 0) return 'Today';
-  if (days === 1) return '1d ago';
-  return `${days}d ago`;
+  const elapsed =
+    days === 0 ? 'today' : days === 1 ? '1d ago' : `${days}d ago`;
+  // Prefix with "Sent" when no manual followup has been chased yet so
+  // the pill doesn't read like a recent nudge happened.
+  if (!hasRealFollowup) return days === 0 ? 'Sent today' : `Sent ${elapsed}`;
+  return days === 0 ? 'Today' : elapsed;
 }
 
 /**
