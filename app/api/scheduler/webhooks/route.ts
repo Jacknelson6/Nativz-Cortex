@@ -272,6 +272,29 @@ export async function POST(request: NextRequest) {
     const data = dataObj ?? {};
     const adminClient = createAdminClient();
 
+    // Idempotency: Zernio at-least-once delivery (per docs, 7 retries
+    // with exponential backoff up to 24h). Dedupe via the X-Zernio-Event-Id
+    // header (preferred) or top-level `id` in the payload. A unique-
+    // violation on insert means we've seen this event already — respond
+    // 2xx immediately so Zernio drops it from its retry queue.
+    const eventId =
+      request.headers.get('x-zernio-event-id') ??
+      request.headers.get('x-late-event-id') ??
+      (typeof body.id === 'string' ? body.id : '');
+    if (eventId) {
+      const { error: dedupeErr } = await adminClient
+        .from('zernio_webhook_events')
+        .insert({ event_id: eventId, event_type: event });
+      if (dedupeErr) {
+        // Postgres 23505 is the unique-violation; anything else is
+        // unexpected but we still process to avoid losing real events.
+        if ((dedupeErr as { code?: string }).code === '23505') {
+          return NextResponse.json({ received: true, deduped: true });
+        }
+        console.error('[zernio-webhook] dedupe insert failed:', dedupeErr);
+      }
+    }
+
     switch (event) {
       case 'post.published': {
         if (postId) {
