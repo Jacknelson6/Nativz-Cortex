@@ -12,6 +12,7 @@ import {
   sendEditingRereviewEmail,
 } from '@/lib/email/resend';
 import { getClientNotificationRecipients } from '@/lib/email/notification-recipients';
+import { archiveEditingShareLinkEmail } from '@/lib/content-tools/archive-editing-share-email';
 
 export const dynamic = 'force-dynamic';
 
@@ -147,6 +148,7 @@ async function loadEmailContext(projectId: string, linkId: string) {
 
   return {
     admin,
+    userId: user.id,
     link,
     clientId,
     clientName,
@@ -240,6 +242,7 @@ export async function POST(
 
   const {
     admin,
+    userId,
     link,
     clientId,
     clientName,
@@ -264,6 +267,24 @@ export async function POST(
 
   const recipients = eligible.map((c) => c.email);
   const pocFirstNames = eligible.map((c) => firstName(c.name));
+
+  // Recompute the draft locally so we can capture the resolved subject for the
+  // archive row. The send helpers apply the same `override → default` fallback
+  // internally, so this stays in lockstep without an extra param.
+  const draft =
+    kind === 'rereview'
+      ? buildEditingRereviewDraft({
+          pocFirstNames,
+          clientName,
+          projectName,
+          pendingCount: pendingRevisionCount,
+        })
+      : buildEditingDeliverableDraft({
+          pocFirstNames,
+          clientName,
+          projectName,
+        });
+  const resolvedSubject = parsed.data.subject?.trim() || draft.subject;
 
   const result =
     kind === 'rereview'
@@ -307,6 +328,18 @@ export async function POST(
     .from('editing_project_share_links')
     .update({ last_review_email_sent_at: sentAt })
     .eq('id', link.id);
+
+  // Archive the rendered HTML so the editing modal's Past emails section can
+  // replay the exact body. Best-effort: a failed insert here MUST NOT roll
+  // back the send.
+  await archiveEditingShareLinkEmail(admin, {
+    shareLinkId: link.id,
+    kind: kind === 'rereview' ? 'rereview' : 'delivery',
+    subject: resolvedSubject,
+    htmlBody: result.html,
+    recipients: eligible.map((c) => ({ email: c.email, name: c.name })),
+    sentBy: userId,
+  });
 
   return NextResponse.json({
     ok: true,

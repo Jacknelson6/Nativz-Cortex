@@ -13,6 +13,7 @@ import {
   Eye,
   ExternalLink,
   Loader2,
+  Mail,
   MessagesSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -34,7 +35,12 @@ import {
   type DetailTab,
 } from './detail-dialog/dialog-shell';
 import { Field, Section, SideField } from './detail-dialog/section';
-import { formatTimestamp } from './detail-dialog/format';
+import { formatRelative, formatTimestamp } from './detail-dialog/format';
+import {
+  EmailArchiveDialog,
+  EMAIL_KIND_LABEL,
+  type ArchivedEmail,
+} from './detail-dialog/email-archive-dialog';
 import {
   ContentKindBadge,
   UnifiedStatusPill,
@@ -102,6 +108,13 @@ export function EditingProjectDetail({
   const [dragActive, setDragActive] = useState(false);
   const [tab, setTab] = useState<DetailTab>('details');
 
+  // Past emails — replays the rendered HTML the recipients actually got, by
+  // reading from the `editing_share_link_emails` archive (migration 243). Same
+  // shape + viewer dialog as the SMM modal so the two surfaces feel identical.
+  const [archivedEmails, setArchivedEmails] = useState<ArchivedEmail[] | null>(null);
+  const [archivedLoading, setArchivedLoading] = useState(false);
+  const [viewingEmail, setViewingEmail] = useState<ArchivedEmail | null>(null);
+
   const projectId = project?.id ?? null;
 
   // Read upload state from the module-scoped store. The store keeps
@@ -151,11 +164,39 @@ export function EditingProjectDetail({
     else {
       setData(null);
       setTab('details'); // reset to default tab on close
+      setArchivedEmails(null);
+      setViewingEmail(null);
       // Don't clear uploads on close — they live in the module-scoped
       // store and continue running in the background. The user can
       // reopen the dialog to check progress; the store survives.
     }
   }, [open, load]);
+
+  // Lazy-load archived sends. Refetches on every open so a send that just
+  // fired surfaces without forcing a parent table refresh; errors stay
+  // quiet, the section just renders empty if the read fails.
+  const loadArchivedEmails = useCallback(async () => {
+    if (!projectId) return;
+    setArchivedLoading(true);
+    try {
+      const res = await fetch(
+        `/api/admin/editing/projects/${projectId}/emails`,
+        { cache: 'no-store' },
+      );
+      if (!res.ok) throw new Error('failed');
+      const body = (await res.json()) as { emails: ArchivedEmail[] };
+      setArchivedEmails(body.emails ?? []);
+    } catch {
+      setArchivedEmails([]);
+    } finally {
+      setArchivedLoading(false);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!open) return;
+    void loadArchivedEmails();
+  }, [open, loadArchivedEmails]);
 
   // When a background batch finishes for *this* project, refetch so
   // the new videos show up on the next dialog open. Subscribe even
@@ -237,6 +278,11 @@ export function EditingProjectDetail({
   if (!open || !project) return null;
 
   return (
+    <>
+    <EmailArchiveDialog
+      email={viewingEmail}
+      onClose={() => setViewingEmail(null)}
+    />
     <ContentDetailDialog
       open={open}
       onClose={onClose}
@@ -305,6 +351,51 @@ export function EditingProjectDetail({
       {(data?.videos.length ?? 0) > 0 && (
         <Section label="Review">
           <ReviewCounters videos={data?.videos ?? []} />
+        </Section>
+      )}
+
+      {/* Past emails — replays the rendered HTML the recipients actually
+          got. Hidden until at least one row exists so fresh projects stay
+          compact. Same shape + viewer dialog as the SMM modal. */}
+      {archivedEmails && archivedEmails.length > 0 && (
+        <Section label={`Past emails (${archivedEmails.length})`}>
+          <ul className="divide-y divide-nativz-border overflow-hidden rounded-lg border border-nativz-border bg-surface">
+            {archivedEmails.map((e) => (
+              <li key={e.id}>
+                <button
+                  type="button"
+                  onClick={() => setViewingEmail(e)}
+                  className="group flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-surface-hover"
+                >
+                  <Mail
+                    size={14}
+                    className="shrink-0 text-text-muted group-hover:text-accent-text"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] text-text-primary">
+                      {e.subject}
+                    </p>
+                    <p className="truncate text-[11px] text-text-muted">
+                      {EMAIL_KIND_LABEL[e.kind] ?? e.kind} · {formatRelative(e.sent_at)}
+                      {e.sent_by_label ? ` · by ${e.sent_by_label}` : ''}
+                      {e.recipients.length > 0
+                        ? ` · ${e.recipients.length} ${e.recipients.length === 1 ? 'recipient' : 'recipients'}`
+                        : ''}
+                    </p>
+                  </div>
+                  <ExternalLink
+                    size={12}
+                    className="shrink-0 text-text-muted opacity-0 transition-opacity group-hover:opacity-100"
+                  />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+      {archivedLoading && !archivedEmails && (
+        <Section label="Past emails">
+          <p className="text-[12px] text-text-muted">Loading…</p>
         </Section>
       )}
 
@@ -460,6 +551,7 @@ export function EditingProjectDetail({
         </dl>
       </Section>
     </ContentDetailDialog>
+    </>
   );
 }
 
