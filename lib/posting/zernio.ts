@@ -453,12 +453,19 @@ function buildPublishBody(input: PublishPostInput): Record<string, unknown> {
     // — so they stay hardcoded. The interaction toggles below ARE
     // user-facing per migration 218; default to true to preserve
     // existing behavior when the override is unset.
+    //
+    // We deliberately do NOT pass a custom cover image URL here. TikTok
+    // via Zernio supports `video_cover_timestamp_ms` only — sending the
+    // undocumented `video_cover_image_url` we used previously crashed
+    // Zernio's ffmpeg thumbnail-stitch step deterministically (Joseph
+    // Pytcher's Weston Funding post 46a94566 was stuck for hours at
+    // PRE_FFMPEG_THUMBNAIL_STITCH on every retry). Letting TikTok pick
+    // the first frame is the documented default.
     body.tiktokSettings = {
       privacy_level: 'PUBLIC_TO_EVERYONE',
       allow_comment: input.tiktokAllowComment ?? true,
       allow_duet: input.tiktokAllowDuet ?? true,
       allow_stitch: input.tiktokAllowStitch ?? true,
-      ...(input.coverImageUrl ? { video_cover_image_url: input.coverImageUrl } : {}),
       content_preview_confirmed: true,
       express_consent_given: true,
     };
