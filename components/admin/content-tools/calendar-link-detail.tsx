@@ -188,6 +188,7 @@ export function CalendarLinkDetail({
   const [subjectDraft, setSubjectDraft] = useState('');
   const [messageDraft, setMessageDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [ccSelf, setCcSelf] = useState(false);
   // Render toggle: edit the source copy, or eyeball the rendered HTML
   // exactly the way the recipient will see it. Defaults to edit so the
   // dialog opens "ready to tweak the subject", not "ready to send".
@@ -498,6 +499,7 @@ export function CalendarLinkDetail({
     setPreview(null);
     setPreviewError(null);
     setRenderMode('edit');
+    setCcSelf(false);
     setPreviewLoading(true);
     try {
       const res = await fetch(
@@ -546,6 +548,7 @@ export function CalendarLinkDetail({
           ...(messageDraft.trim() !== preview.message.trim()
             ? { message: messageDraft.trim() }
             : {}),
+          ...(ccSelf ? { cc_self: true } : {}),
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -663,9 +666,11 @@ export function CalendarLinkDetail({
         message={messageDraft}
         renderMode={renderMode}
         sending={sending}
+        ccSelf={ccSelf}
         onChangeSubject={setSubjectDraft}
         onChangeMessage={setMessageDraft}
         onChangeRenderMode={setRenderMode}
+        onChangeCcSelf={setCcSelf}
         onClose={closeSendPreview}
         onSend={confirmSend}
       />
@@ -981,9 +986,11 @@ function SendPreviewDialog({
   message,
   renderMode,
   sending,
+  ccSelf,
   onChangeSubject,
   onChangeMessage,
   onChangeRenderMode,
+  onChangeCcSelf,
   onClose,
   onSend,
 }: {
@@ -996,9 +1003,11 @@ function SendPreviewDialog({
   message: string;
   renderMode: 'edit' | 'preview';
   sending: boolean;
+  ccSelf: boolean;
   onChangeSubject: (v: string) => void;
   onChangeMessage: (v: string) => void;
   onChangeRenderMode: (m: 'edit' | 'preview') => void;
+  onChangeCcSelf: (v: boolean) => void;
   onClose: () => void;
   onSend: () => void;
 }) {
@@ -1049,6 +1058,15 @@ function SendPreviewDialog({
                     </span>
                   ))}
                 </div>
+                <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-[11px] text-text-secondary">
+                  <input
+                    type="checkbox"
+                    checked={ccSelf}
+                    onChange={(e) => onChangeCcSelf(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded border-nativz-border bg-background text-accent focus:ring-1 focus:ring-accent"
+                  />
+                  CC me on this email
+                </label>
               </Section>
 
               {/* Toggle: edit copy vs render preview */}

@@ -118,6 +118,7 @@ async function loadSendContext(token: string) {
   return {
     admin,
     userId: user.id,
+    userEmail: user.email ?? null,
     link,
     clientId,
     clientName,
@@ -206,6 +207,10 @@ const PostBodySchema = z
     subject: z.string().trim().min(1).max(200).optional(),
     message: z.string().trim().min(1).max(5000).optional(),
     cc: z.array(z.string().email()).max(10).optional(),
+    // Server-resolved CC: when true, the admin who clicked Send is added
+    // to the cc[] list. Avoids exposing the admin's email to the client
+    // bundle just so the dialog can render a "CC me" checkbox.
+    cc_self: z.boolean().optional(),
   })
   .strict();
 
@@ -227,7 +232,7 @@ export async function POST(
   const ctxResult = await loadSendContext(token);
   if ('error' in ctxResult) return ctxResult.error;
 
-  const { admin, userId, link, clientId, clientName, agency, eligible, postCount, startDate, endDate } = ctxResult;
+  const { admin, userId, userEmail, link, clientId, clientName, agency, eligible, postCount, startDate, endDate } = ctxResult;
 
   if (eligible.length === 0) {
     return NextResponse.json(
@@ -239,6 +244,15 @@ export async function POST(
   const shareUrl = resolveShareUrl(agency, token);
   const recipients = eligible.map((c) => c.email);
   const pocFirstNames = eligible.map((c) => firstName(c.name));
+
+  // Build the cc[] list. Server-resolved `cc_self` adds the admin's own
+  // email; we de-dupe against `to` so the admin doesn't double-receive
+  // when they're already on the brand contacts list.
+  const ccCandidates = new Set<string>();
+  for (const addr of parsed.data.cc ?? []) ccCandidates.add(addr.toLowerCase());
+  if (parsed.data.cc_self && userEmail) ccCandidates.add(userEmail.toLowerCase());
+  for (const r of recipients) ccCandidates.delete(r.toLowerCase());
+  const ccList = Array.from(ccCandidates);
 
   // Recompute the draft locally so we have the resolved subject for the
   // archive write below; the send helper applies the same fallback chain
@@ -258,7 +272,7 @@ export async function POST(
   // payload. A failed send must not pretend the calendar went out.
   const result = await sendCalendarShareSendEmail({
     to: recipients,
-    cc: parsed.data.cc,
+    cc: ccList.length > 0 ? ccList : undefined,
     pocFirstNames,
     clientName,
     shareUrl,
