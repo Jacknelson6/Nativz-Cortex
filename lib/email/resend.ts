@@ -1720,7 +1720,7 @@ export async function sendPostHealthAlertEmail(opts: {
       ${failedPosts.map((p) => card(`
         <div style="font-size:14px;font-weight:700;color:${brand.textPrimary};margin:0 0 4px;">${escapeAlertHtml(p.clientName)}</div>
         <div style="font-size:12px;color:${brand.textMuted};margin:0 0 ${p.caption || p.failureReason ? '8px' : '0'};">
-          ${p.scheduledFor ? new Date(p.scheduledFor).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : 'no scheduled time'} · retries: ${p.retryCount}
+          ${p.scheduledFor ? `${new Date(p.scheduledFor).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Chicago' })} CT` : 'no scheduled time'} · retries: ${p.retryCount}
         </div>
         ${p.caption ? `<div style="font-size:13px;line-height:1.55;color:${brand.textBody};margin:0 0 ${p.failureReason ? '8px' : '0'};">${escapeAlertHtml(truncateAlert(p.caption, 120))}</div>` : ''}
         ${p.failureReason ? `<div style="display:inline-block;padding:6px 10px;border-radius:6px;background:${failureRedBg};color:${failureRed};font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.45;">${escapeAlertHtml(truncateAlert(p.failureReason, 240))}</div>` : ''}
