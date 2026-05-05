@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import type { CalendarPost } from './types';
+import { thumbUrl } from '@/lib/calendar/thumb-url';
 
 interface SharePostsDialogProps {
   open: boolean;
@@ -146,7 +147,7 @@ export function SharePostsDialog({
 
               {post.thumbnail_url || post.cover_image_url ? (
                 <img
-                  src={post.thumbnail_url ?? post.cover_image_url ?? ''}
+                  src={thumbUrl(post.thumbnail_url ?? post.cover_image_url, 80) ?? ''}
                   alt=""
                   className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
                 />

@@ -4,26 +4,34 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/auth/permissions';
 import { getMux } from '@/lib/mux/client';
+import {
+  buildEditingStoragePath,
+  createEditingUploadUrl,
+  getEditingPublicUrl,
+} from '@/lib/editing/storage';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/admin/editing/projects/:id/videos
  *
- * Inserts a placeholder `editing_project_videos` row, mints a Mux
- * direct-upload URL, and stamps `mux_upload_id` + `mux_status='uploading'`
- * on the row so the webhook can reconcile the asset back to it later.
+ * Inserts a placeholder `editing_project_videos` row and mints an upload
+ * URL the browser PUTs file bytes against. Branches on MIME type:
  *
- * The browser PUTs the file bytes directly to Mux (bypassing Vercel's
- * 4.5MB Function body limit). On success the asset.created /
- * asset.ready webhooks fill in `mux_asset_id` / `mux_playback_id`. The
- * share-page consumer also self-heals via the pull reconciler if the
- * webhook is delayed.
+ *   - Videos → Mux direct-upload (bytes go straight to Mux, webhook
+ *     reconciles `mux_asset_id`/`mux_playback_id` later). Bypasses
+ *     Vercel's 4.5MB body limit and gives us HLS playback + per-asset
+ *     MP4 renditions.
+ *
+ *   - Images (static post drops, carousel slides) → Supabase Storage
+ *     signed-upload URL against the `editing-media` bucket. No Mux
+ *     pipeline needed — the public URL is directly renderable. Row is
+ *     stamped with `storage_path` + `public_url` + `mux_status='ready'`
+ *     so the existing video UI treats it as immediately playable.
  *
  * On retry / re-upload the client sends `replace_video_id` to keep the
  * slot/position but bump `version`. Original row is left intact for
- * history (and to avoid storage churn — the old Mux asset can be GC'd
- * later if we care).
+ * history.
  */
 
 const CreateVideoBody = z.object({
@@ -75,11 +83,77 @@ export async function POST(
     }
   }
 
-  // CORS origin — Mux's preflight check on the PUT compares the browser's
-  // origin to whatever we register. Prefer the inbound `Origin` header
-  // (the exact value the browser will send); fall back to NEXT_PUBLIC_APP_URL,
-  // then a synthetic origin from req.url. See SMM mux-upload route for the
-  // longer write-up — same constraint applies here.
+  const isImage = parsed.data.mime_type.startsWith('image/');
+
+  if (isImage) {
+    // Image branch: insert row, mint signed Supabase Storage upload URL,
+    // patch row with storage_path + public_url. The browser PUTs bytes
+    // straight to Storage; no Mux pipeline involved.
+    const { data: row, error: insertErr } = await admin
+      .from('editing_project_videos')
+      .insert({
+        project_id: projectId,
+        filename: parsed.data.filename,
+        mime_type: parsed.data.mime_type,
+        size_bytes: parsed.data.size_bytes,
+        position,
+        version,
+        uploaded_by: user.id,
+        mux_status: 'ready',
+      })
+      .select('id')
+      .single();
+    if (insertErr || !row) {
+      return NextResponse.json(
+        { error: 'insert_failed', detail: insertErr?.message },
+        { status: 500 },
+      );
+    }
+
+    const storagePath = buildEditingStoragePath({
+      projectId,
+      videoId: row.id,
+      filename: parsed.data.filename,
+    });
+
+    let signed;
+    try {
+      signed = await createEditingUploadUrl(admin, storagePath);
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : 'sign_failed' },
+        { status: 502 },
+      );
+    }
+
+    const publicUrl = getEditingPublicUrl(admin, storagePath);
+
+    const { error: updateErr } = await admin
+      .from('editing_project_videos')
+      .update({ storage_path: storagePath, public_url: publicUrl })
+      .eq('id', row.id);
+    if (updateErr) {
+      return NextResponse.json(
+        { error: 'update_failed', detail: updateErr.message },
+        { status: 500 },
+      );
+    }
+
+    await admin
+      .from('editing_projects')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', projectId);
+
+    return NextResponse.json({
+      kind: 'image',
+      video_id: row.id,
+      upload_url: signed.signedUrl,
+    });
+  }
+
+  // Video branch: Mux direct upload. CORS origin must match the browser's
+  // Origin header on the PUT preflight; prefer the inbound Origin, fall
+  // back to NEXT_PUBLIC_APP_URL, then the request URL's origin.
   const headerOrigin = req.headers.get('origin');
   const corsOrigin =
     headerOrigin || process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin;
@@ -131,6 +205,7 @@ export async function POST(
     .eq('id', projectId);
 
   return NextResponse.json({
+    kind: 'video',
     video_id: row.id,
     upload_id: upload.id,
     upload_url: upload.url,

@@ -20,6 +20,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import type { DeliverableBalance } from '@/lib/deliverables/get-balances';
 import type { AddonSku } from '@/lib/deliverables/addon-skus';
+import { thumbUrl } from '@/lib/calendar/thumb-url';
 
 // Mux Player is a heavy web-component-backed React component. Dynamic-import
 // with ssr:false keeps it out of the initial server bundle and avoids
@@ -1122,7 +1123,7 @@ function ImageCarouselSurface({
       return (
         <div className={`relative ${aspectClass} w-full overflow-hidden bg-black ${className ?? ''}`}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={fallback} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <img src={thumbUrl(fallback, 1080) ?? fallback} alt="" className="absolute inset-0 h-full w-full object-cover" />
         </div>
       );
     }
@@ -1146,7 +1147,7 @@ function ImageCarouselSurface({
         // eslint-disable-next-line @next/next/no-img-element
         <img
           key={active.id}
-          src={active.url}
+          src={thumbUrl(active.url, 1080) ?? active.url}
           alt=""
           className="absolute inset-0 h-full w-full object-contain"
           draggable={false}
@@ -1543,8 +1544,8 @@ function CalendarCell({
               post.media_type === 'image'
                 ? post.assets.find((a) => !!a.url)?.url ?? null
                 : null;
-            const thumbUrl = firstAssetUrl ?? post.cover_image_url;
-            if (!thumbUrl) {
+            const posterSrc = firstAssetUrl ?? post.cover_image_url;
+            if (!posterSrc) {
               return (
                 <div className="flex h-full w-full items-center justify-center">
                   <Film size={18} className="text-text-muted" />
@@ -1554,7 +1555,7 @@ function CalendarCell({
             return (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={thumbUrl}
+                src={thumbUrl(posterSrc, 80) ?? ''}
                 alt=""
                 className="h-full w-full object-cover"
                 draggable={false}

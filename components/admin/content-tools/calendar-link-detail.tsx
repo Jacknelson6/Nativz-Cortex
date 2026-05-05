@@ -9,9 +9,7 @@ import {
 } from 'react';
 import { toast } from 'sonner';
 import {
-  CalendarDays,
   CheckCircle2,
-  Clock3,
   Copy,
   ExternalLink,
   Eye,
@@ -29,7 +27,7 @@ import {
   ContentDetailDialog,
   type DetailTab,
 } from './detail-dialog/dialog-shell';
-import { Section, Field } from './detail-dialog/section';
+import { Section } from './detail-dialog/section';
 import { formatRelative, formatTimestamp } from './detail-dialog/format';
 import {
   ContentKindBadge,
@@ -133,10 +131,19 @@ export function CalendarLinkDetail({
   onRevoked,
   onSent,
   onFollowupRecorded,
+  onRefreshed,
 }: {
   link: ReviewLinkRow | null;
   onClose: () => void;
-  onRevoked: () => void;
+  /** @deprecated Revoke is no longer surfaced; kept for callers that
+   *  still pass it without triggering a TS break. */
+  onRevoked?: () => void;
+  /**
+   * Called after the admin clicks "Refresh link" and the backend extends
+   * `expires_at` 30 days forward. Parent table can patch the row's
+   * expiry inline instead of refetching.
+   */
+  onRefreshed?: (patch: { expires_at: string }) => void;
   /**
    * Called after a successful send/resend. Parent should re-fetch the
    * row so DATE SENT (`first_sent_at`) and the variant default flip
@@ -158,7 +165,13 @@ export function CalendarLinkDetail({
   }) => void;
 }) {
   const open = !!link;
-  const [revoking, setRevoking] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  // Optimistic override for the displayed expiry after a successful
+  // "Refresh link" action. Cleared on dialog open. Lets the inline
+  // expiry text update instantly without forcing the parent table to
+  // refetch the row.
+  const [expiresOverride, setExpiresOverride] = useState<string | null>(null);
+  const [refreshedThisSession, setRefreshedThisSession] = useState(false);
   const [markingFollowup, setMarkingFollowup] = useState(false);
   const [markingSent, setMarkingSent] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -211,6 +224,8 @@ export function CalendarLinkDetail({
       setPreviewVariant(null);
       setPreview(null);
       setPreviewError(null);
+      setExpiresOverride(null);
+      setRefreshedThisSession(false);
     }
   }, [open, link?.id]);
 
@@ -479,27 +494,27 @@ export function CalendarLinkDetail({
     }
   }
 
-  async function revoke() {
-    if (revoking || !link) return;
-    if (!confirm('Revoke this share link? Anyone who has it will see an "expired" page on next visit.')) {
-      return;
-    }
-    setRevoking(true);
+  async function refreshLink() {
+    if (refreshing || !link) return;
+    setRefreshing(true);
     try {
-      const res = await fetch(`/api/calendar/share/${link.token}/revoke`, {
+      const res = await fetch(`/api/calendar/share/${link.token}/extend`, {
         method: 'POST',
       });
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error(typeof json.error === 'string' ? json.error : 'Failed to revoke');
+        throw new Error(
+          typeof json?.error === 'string' ? json.error : 'Failed to refresh',
+        );
       }
-      toast.success('Link revoked');
-      onRevoked();
-      onClose();
+      toast.success('Link refreshed');
+      setExpiresOverride(json.expires_at);
+      setRefreshedThisSession(true);
+      onRefreshed?.({ expires_at: json.expires_at });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to revoke');
+      toast.error(err instanceof Error ? err.message : 'Failed to refresh');
     } finally {
-      setRevoking(false);
+      setRefreshing(false);
     }
   }
 
@@ -598,7 +613,7 @@ export function CalendarLinkDetail({
         ? 'Add a contact to the brand profile to send the calendar.'
         : null;
 
-  const showFooter = tab === 'details' && (canSend || !isExpired);
+  const showFooter = tab === 'details' && canSend;
   const footer = showFooter ? (
     <>
       {/* Out-of-band send recorder. When the link went out via Gmail
@@ -633,18 +648,6 @@ export function CalendarLinkDetail({
           title="Record an out-of-band nudge (Slack, text, in-person) without sending an email"
         >
           {markingFollowup ? 'Recording...' : 'Mark followed up'}
-        </Button>
-      )}
-      {!isExpired && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={revoke}
-          disabled={revoking}
-          className="text-status-danger hover:bg-status-danger/10"
-        >
-          {revoking ? 'Revoking...' : 'Revoke link'}
         </Button>
       )}
       {canSend && (
@@ -728,10 +731,42 @@ export function CalendarLinkDetail({
             emptyMessage="No activity yet. Mint a share link or send a notification to get started."
           />
         }
+        videos={
+          <>
+            <Section
+              label={`Edited videos${
+                bridge?.videos?.length ? ` (${bridge.videos.length})` : ''
+              }`}
+            >
+              <EditedVideosBox
+                loading={bridgeLoading || creatingProject}
+                videos={bridge?.videos ?? []}
+                dragActive={dragActive}
+                setDragActive={setDragActive}
+                onUploadFiles={(files) => void startUploads(files)}
+                onDelete={(id) => void deleteVideo(id)}
+              />
+            </Section>
+            {uploads.length > 0 && (
+              <Section label="Uploads">
+                <div className="rounded-lg border border-nativz-border bg-surface p-3">
+                  <ul className="space-y-1.5">
+                    {uploads.map((j) => (
+                      <UploadRow key={j.id} job={j} />
+                    ))}
+                  </ul>
+                </div>
+              </Section>
+            )}
+          </>
+        }
         footer={footer}
       >
         {/* Share link — primary affordance. Sits up top so copying
-            the URL takes one click from the table click. */}
+            the URL takes one click from the table click. The Refresh
+            button extends `expires_at` 30 days forward (clears
+            `abandoned_at`) so an expired/abandoned link can be revived
+            without minting a new token, preserving comments/views. */}
         <Section label="Share link">
           <div className="rounded-lg border border-nativz-border bg-surface p-3">
             <div className="flex items-center gap-2">
@@ -760,8 +795,24 @@ export function CalendarLinkDetail({
                 Open
                 <ExternalLink size={11} />
               </a>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={refreshLink}
+                disabled={refreshing}
+                aria-label="Refresh share link"
+                title="Push expiry 30 days forward (preserves comments and history)"
+              >
+                <RefreshCcw size={13} />
+                {refreshing
+                  ? 'Refreshing...'
+                  : refreshedThisSession
+                    ? 'Refreshed'
+                    : 'Refresh'}
+              </Button>
             </div>
-            {(isExpired || isAbandoned) && (
+            {(isExpired || isAbandoned) && !refreshedThisSession && (
               <p className="mt-2 text-[11px] text-text-muted">
                 {isExpired
                   ? 'This link is expired. Visitors will see the expired page on next load.'
@@ -769,12 +820,12 @@ export function CalendarLinkDetail({
               </p>
             )}
           </div>
-          {hasBeenSent && link.last_sent_at && (
-            <p className="text-[11px] text-text-muted">
-              Last sent {formatRelative(link.last_sent_at)}
-              {link.send_count > 1 ? ` · ${link.send_count} sends` : ''}
-            </p>
-          )}
+          <p className="text-[11px] text-text-muted">
+            Expires {formatTimestamp(expiresOverride ?? link.expires_at)}
+            {hasBeenSent && link.last_sent_at
+              ? ` · last sent ${formatRelative(link.last_sent_at)}${link.send_count > 1 ? ` (${link.send_count} sends)` : ''}`
+              : ''}
+          </p>
         </Section>
 
         {/* Recipients. Brand profile is the single source of truth, so
@@ -877,39 +928,6 @@ export function CalendarLinkDetail({
           </Section>
         )}
 
-        {/* Edited videos. Bridges the calendar share to an
-            editing_projects row via the shared drop_id, so the admin
-            can drop edited cuts straight onto a calendar without
-            bouncing through /admin/editing. The project row is
-            find-or-created on first upload — empty state is just the
-            drop zone. */}
-        <Section
-          label={`Edited videos${
-            bridge?.videos?.length ? ` (${bridge.videos.length})` : ''
-          }`}
-        >
-          <EditedVideosBox
-            loading={bridgeLoading || creatingProject}
-            videos={bridge?.videos ?? []}
-            dragActive={dragActive}
-            setDragActive={setDragActive}
-            onUploadFiles={(files) => void startUploads(files)}
-            onDelete={(id) => void deleteVideo(id)}
-          />
-        </Section>
-
-        {uploads.length > 0 && (
-          <Section label="Uploads">
-            <div className="rounded-lg border border-nativz-border bg-surface p-3">
-              <ul className="space-y-1.5">
-                {uploads.map((j) => (
-                  <UploadRow key={j.id} job={j} />
-                ))}
-              </ul>
-            </div>
-          </Section>
-        )}
-
         {/* Counts: approved / revising / pending. Skipped when the
             project has zero posts so the modal doesn't read as broken
             for an empty calendar. */}
@@ -937,50 +955,6 @@ export function CalendarLinkDetail({
             </div>
           </Section>
         )}
-
-        {/* Project metadata. Date range + last-viewed are the only
-            two fields that actually drive Jack's followup decision. */}
-        <Section label="Project">
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-            <Field label="Date range">
-              <span className="inline-flex items-center gap-1.5 text-text-secondary">
-                <CalendarDays size={12} className="text-text-tertiary" />
-                {dateRange}
-              </span>
-            </Field>
-            <Field label="Last viewed">
-              <span className="inline-flex items-center gap-1.5 text-text-secondary">
-                <Clock3 size={12} className="text-text-tertiary" />
-                {link.last_viewed_at ? formatRelative(link.last_viewed_at) : 'Never'}
-              </span>
-            </Field>
-            <Field label="Created">
-              <span className="text-text-secondary">
-                {formatTimestamp(link.created_at)}
-              </span>
-            </Field>
-            <Field label="Expires">
-              <span className="text-text-secondary">
-                {formatTimestamp(link.expires_at)}
-              </span>
-            </Field>
-            {link.followup_count > 0 && (
-              <Field label="Follow-ups sent">
-                <span className="text-text-secondary">
-                  {link.followup_count}
-                  {link.last_followup_at ? ` (last ${formatRelative(link.last_followup_at)})` : ''}
-                </span>
-              </Field>
-            )}
-            {link.abandoned_at && (
-              <Field label="Abandoned">
-                <span className="text-text-secondary">
-                  {formatTimestamp(link.abandoned_at)}
-                </span>
-              </Field>
-            )}
-          </dl>
-        </Section>
       </ContentDetailDialog>
     </>
   );

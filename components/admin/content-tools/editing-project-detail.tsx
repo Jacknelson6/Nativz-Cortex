@@ -41,7 +41,7 @@ import {
   ContentDetailDialog,
   type DetailTab,
 } from './detail-dialog/dialog-shell';
-import { Field, Section, SideField } from './detail-dialog/section';
+import { Section, SideField } from './detail-dialog/section';
 import { formatRelative, formatTimestamp } from './detail-dialog/format';
 import {
   EmailArchiveDialog,
@@ -156,7 +156,12 @@ export function EditingProjectDetail({
   const [shareLinks, setShareLinks] = useState<ShareLinkRow[] | null>(null);
   const [shareLoading, setShareLoading] = useState(false);
   const [minting, setMinting] = useState(false);
-  const [revoking, setRevoking] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  // Optimistic override for the displayed expiry after a successful
+  // "Refresh link" action. Cleared when the dialog opens. Lets the
+  // inline expiry text update instantly without a parent refetch.
+  const [expiresOverride, setExpiresOverride] = useState<string | null>(null);
+  const [refreshedThisSession, setRefreshedThisSession] = useState(false);
   const [copied, setCopied] = useState(false);
   const [firingRevisions, setFiringRevisions] = useState(false);
 
@@ -236,6 +241,8 @@ export function EditingProjectDetail({
     if (open) {
       void load();
       void loadShareLinks();
+      setExpiresOverride(null);
+      setRefreshedThisSession(false);
     } else {
       setData(null);
       setTab('details');
@@ -427,31 +434,30 @@ export function EditingProjectDetail({
     }
   }
 
-  async function revokeShareLink() {
-    if (!projectId || !activeLink || revoking) return;
-    if (
-      !confirm(
-        'Revoke this share link? Anyone who has it will see an "expired" page on next visit.',
-      )
-    ) {
-      return;
-    }
-    setRevoking(true);
+  async function refreshLink() {
+    if (!projectId || !activeLink || refreshing) return;
+    setRefreshing(true);
     try {
       const res = await fetch(
-        `/api/admin/editing/projects/${projectId}/share?linkId=${activeLink.id}`,
-        { method: 'DELETE' },
+        `/api/admin/editing/projects/${projectId}/share/${activeLink.id}/extend`,
+        { method: 'POST' },
       );
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error(typeof json.error === 'string' ? json.error : 'Failed to revoke');
+        throw new Error(
+          typeof json?.error === 'string' ? json.error : 'Failed to refresh',
+        );
       }
-      toast.success('Link revoked');
-      await loadShareLinks();
+      toast.success('Link refreshed');
+      setExpiresOverride(json.expires_at);
+      setRefreshedThisSession(true);
+      // Refetch in the background so the activity panel + canonical
+      // expiry land without forcing a full reload.
+      void loadShareLinks();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to revoke');
+      toast.error(err instanceof Error ? err.message : 'Failed to refresh');
     } finally {
-      setRevoking(false);
+      setRefreshing(false);
     }
   }
 
@@ -586,18 +592,6 @@ export function EditingProjectDetail({
         <Archive size={13} />
         Archive project
       </Button>
-      {activeLink && !activeLink.revoked && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={revokeShareLink}
-          disabled={revoking}
-          className="text-status-danger hover:bg-status-danger/10"
-        >
-          {revoking ? 'Revoking...' : 'Revoke link'}
-        </Button>
-      )}
       {activeLink && showRevisionsCta && (
         <Button
           type="button"
@@ -697,90 +691,126 @@ export function EditingProjectDetail({
             />
           )
         }
+        videos={
+          <>
+            <Section
+              label={`Edited videos${
+                data?.videos.length ? ` (${data.videos.length})` : ''
+              }`}
+            >
+              <EditedVideosBox
+                loading={loading}
+                videos={data?.videos ?? []}
+                dragActive={dragActive}
+                setDragActive={setDragActive}
+                onUploadFiles={(files) => void startUploads(files)}
+                onDelete={(id) => void deleteVideo(id)}
+              />
+            </Section>
+
+            {(data?.videos.length ?? 0) > 0 && (
+              <Section label="Review">
+                <ReviewCounters videos={data?.videos ?? []} />
+              </Section>
+            )}
+
+            {uploads.length > 0 && (
+              <Section label="Uploads">
+                <div className="rounded-lg border border-nativz-border bg-surface p-3">
+                  <ul className="space-y-1.5">
+                    {uploads.map((j) => (
+                      <UploadRow key={j.id} job={j} />
+                    ))}
+                  </ul>
+                </div>
+              </Section>
+            )}
+          </>
+        }
         footer={footer}
       >
-        <Section
-          label={`Edited videos${
-            data?.videos.length ? ` (${data.videos.length})` : ''
-          }`}
-        >
-          <EditedVideosBox
-            loading={loading}
-            videos={data?.videos ?? []}
-            dragActive={dragActive}
-            setDragActive={setDragActive}
-            onUploadFiles={(files) => void startUploads(files)}
-            onDelete={(id) => void deleteVideo(id)}
-          />
-        </Section>
 
-        {(data?.videos.length ?? 0) > 0 && (
-          <Section label="Review">
-            <ReviewCounters videos={data?.videos ?? []} />
-          </Section>
-        )}
-
-        {/* Share link. Single primary affordance: copy + open + status
-            line. Empty state surfaces "Mint share link" inline when at
-            least one video exists; the no-videos case stays in the
+        {/* Share link. Single primary affordance: copy + open + refresh.
+            Refresh extends `expires_at` 30 days forward so the link stays
+            live without minting a new token (preserves comments/views).
+            Empty state surfaces "Mint share link" inline when at least
+            one video exists; the no-videos case stays in the
             EditedVideosBox empty state. */}
         <Section label="Share link">
           {shareLoading && shareLinks === null ? (
             <p className="text-[12px] text-text-muted">Loading…</p>
           ) : activeLink ? (
-            <div className="rounded-lg border border-nativz-border bg-surface p-3">
-              <div className="flex items-center gap-2">
-                <input
-                  readOnly
-                  value={activeLink.url}
-                  onFocus={(e) => e.currentTarget.select()}
-                  className="block w-full truncate rounded-md border border-nativz-border bg-background px-3 py-2 font-mono text-[12px] text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={copyShareUrl}
-                  aria-label="Copy share link"
-                >
-                  <Copy size={13} />
-                  {copied ? 'Copied' : 'Copy'}
-                </Button>
-                <a
-                  href={activeLink.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex h-8 items-center gap-1 rounded-md bg-accent-surface/40 px-2.5 text-[12px] font-medium text-accent-text transition-colors hover:bg-accent-surface/60"
-                >
-                  Open
-                  <ExternalLink size={11} />
-                </a>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-text-muted">
-                <span>
-                  {activeLink.view_count} {activeLink.view_count === 1 ? 'view' : 'views'}
-                </span>
-                {activeLink.last_viewed_at && (
-                  <span>· Last opened {formatRelative(activeLink.last_viewed_at)}</span>
-                )}
-                {activeLink.last_review_email_sent_at && (
-                  <span>· Last sent {formatRelative(activeLink.last_review_email_sent_at)}</span>
-                )}
-                {activeLink.kind === 'rereview' && activeLink.pending_revision_count > 0 && (
-                  <span className="text-accent-text">
-                    · {activeLink.pending_revision_count} new {activeLink.pending_revision_count === 1 ? 'revision' : 'revisions'} since last send
+            <>
+              <div className="rounded-lg border border-nativz-border bg-surface p-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    readOnly
+                    value={activeLink.url}
+                    onFocus={(e) => e.currentTarget.select()}
+                    className="block w-full truncate rounded-md border border-nativz-border bg-background px-3 py-2 font-mono text-[12px] text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={copyShareUrl}
+                    aria-label="Copy share link"
+                  >
+                    <Copy size={13} />
+                    {copied ? 'Copied' : 'Copy'}
+                  </Button>
+                  <a
+                    href={activeLink.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-8 items-center gap-1 rounded-md bg-accent-surface/40 px-2.5 text-[12px] font-medium text-accent-text transition-colors hover:bg-accent-surface/60"
+                  >
+                    Open
+                    <ExternalLink size={11} />
+                  </a>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={refreshLink}
+                    disabled={refreshing}
+                    aria-label="Refresh share link"
+                    title="Push expiry 30 days forward (preserves comments and history)"
+                  >
+                    <RefreshCcw size={13} />
+                    {refreshing
+                      ? 'Refreshing...'
+                      : refreshedThisSession
+                        ? 'Refreshed'
+                        : 'Refresh'}
+                  </Button>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-text-muted">
+                  <span>
+                    {activeLink.view_count} {activeLink.view_count === 1 ? 'view' : 'views'}
                   </span>
-                )}
-                {activeLink.revisions_status === 'unresolved' && (
-                  <span className="text-status-warning">
-                    · {activeLink.revisions_unresolved} unresolved {activeLink.revisions_unresolved === 1 ? 'revision' : 'revisions'}
-                  </span>
-                )}
-                {activeLink.revisions_status === 'sent' && (
-                  <span className="text-status-success">· Revisions-complete sent</span>
-                )}
+                  {activeLink.last_review_email_sent_at && (
+                    <span>· Last sent {formatRelative(activeLink.last_review_email_sent_at)}</span>
+                  )}
+                  {activeLink.kind === 'rereview' && activeLink.pending_revision_count > 0 && (
+                    <span className="text-accent-text">
+                      · {activeLink.pending_revision_count} new {activeLink.pending_revision_count === 1 ? 'revision' : 'revisions'} since last send
+                    </span>
+                  )}
+                  {activeLink.revisions_status === 'unresolved' && (
+                    <span className="text-status-warning">
+                      · {activeLink.revisions_unresolved} unresolved {activeLink.revisions_unresolved === 1 ? 'revision' : 'revisions'}
+                    </span>
+                  )}
+                  {activeLink.revisions_status === 'sent' && (
+                    <span className="text-status-success">· Revisions-complete sent</span>
+                  )}
+                </div>
               </div>
-            </div>
+              <p className="text-[11px] text-text-muted">
+                Expires {formatTimestamp(expiresOverride ?? activeLink.expires_at)}
+              </p>
+            </>
           ) : (
             <div className="rounded-lg border border-dashed border-nativz-border bg-surface p-3">
               {hasVideos ? (
@@ -917,18 +947,6 @@ export function EditingProjectDetail({
           </Section>
         )}
 
-        {uploads.length > 0 && (
-          <Section label="Uploads">
-            <div className="rounded-lg border border-nativz-border bg-surface p-3">
-              <ul className="space-y-1.5">
-                {uploads.map((j) => (
-                  <UploadRow key={j.id} job={j} />
-                ))}
-              </ul>
-            </div>
-          </Section>
-        )}
-
         <Section label="Raw footage">
           <div className="rounded-lg border border-nativz-border bg-surface p-3">
             <input
@@ -1033,41 +1051,6 @@ export function EditingProjectDetail({
           />
         </Section>
 
-        <Section label="Project">
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-            <Field label="Created">
-              <span className="text-text-secondary">
-                {formatTimestamp(project.created_at)}
-              </span>
-            </Field>
-            <Field label="Updated">
-              <span className="text-text-secondary">
-                {formatTimestamp(project.updated_at)}
-              </span>
-            </Field>
-            {project.ready_at && (
-              <Field label="Marked ready">
-                <span className="text-text-secondary">
-                  {formatTimestamp(project.ready_at)}
-                </span>
-              </Field>
-            )}
-            {project.approved_at && (
-              <Field label="Approved">
-                <span className="text-text-secondary">
-                  {formatTimestamp(project.approved_at)}
-                </span>
-              </Field>
-            )}
-            {project.scheduled_at && (
-              <Field label="Done">
-                <span className="text-text-secondary">
-                  {formatTimestamp(project.scheduled_at)}
-                </span>
-              </Field>
-            )}
-          </dl>
-        </Section>
       </ContentDetailDialog>
     </>
   );

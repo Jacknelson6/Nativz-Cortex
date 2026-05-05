@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import type { CalendarPost, CalendarViewMode, MediaItem } from './types';
 import { CHIP_STATUS_LABEL, PLATFORM_BORDER_COLOR, PLATFORM_ICONS, STATUS_CONFIG } from './types';
 import type { PostStatus, SocialPlatform } from '@/lib/types/scheduler';
+import { thumbUrl } from '@/lib/calendar/thumb-url';
 
 interface ChipPost {
   post: CalendarPost;
@@ -242,7 +243,7 @@ function PostChip({
   const platformLabel = platform ? PLATFORM_ICONS[platform] : 'No platform';
   const captionPreview = post.caption?.trim() || 'No caption';
   const tooltip = `${platformLabel} · ${captionPreview.slice(0, 200)}${captionPreview.length > 200 ? '…' : ''}`;
-  const thumb = post.thumbnail_url ?? post.cover_image_url;
+  const thumb = thumbUrl(post.thumbnail_url ?? post.cover_image_url, 80);
   const draggable = post.status === 'draft' || post.status === 'scheduled';
 
   return (
@@ -457,7 +458,7 @@ function ListView({ posts, onPostClick }: { posts: CalendarPost[]; onPostClick: 
             >
               {post.thumbnail_url || post.cover_image_url ? (
                 <img
-                  src={post.thumbnail_url ?? post.cover_image_url ?? ''}
+                  src={thumbUrl(post.thumbnail_url ?? post.cover_image_url, 160) ?? ''}
                   alt=""
                   className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
                 />

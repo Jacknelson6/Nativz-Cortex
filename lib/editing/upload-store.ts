@@ -118,18 +118,24 @@ function appendJobs(projectId: string, jobs: UploadJob[]): void {
 }
 
 /**
- * PUT the file bytes directly to a Mux direct-upload URL via XHR so we
- * get upload progress events. Fetch's streams API doesn't expose upload
- * progress in browsers, so XHR is still the right tool here.
+ * PUT the file bytes directly to a signed upload URL via XHR so we get
+ * upload progress events. Fetch's streams API doesn't expose upload
+ * progress in browsers, so XHR is still the right tool here. Used for
+ * both Mux direct uploads (videos) and Supabase Storage signed uploads
+ * (images); the only difference is whether we set a Content-Type header.
  */
-function putToMux(opts: {
+function putBytes(opts: {
   uploadUrl: string;
   file: File;
+  contentType?: string;
   onProgress: (pct: number) => void;
 }): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', opts.uploadUrl);
+    if (opts.contentType) {
+      xhr.setRequestHeader('Content-Type', opts.contentType);
+    }
     xhr.upload.addEventListener('progress', (e) => {
       if (!e.lengthComputable) return;
       const pct = Math.min(99, Math.round((e.loaded / e.total) * 100));
@@ -140,7 +146,7 @@ function putToMux(opts: {
         opts.onProgress(100);
         resolve();
       } else {
-        reject(new Error(`Mux upload failed (${xhr.status})`));
+        reject(new Error(`Upload failed (${xhr.status})`));
       }
     };
     xhr.onerror = () => reject(new Error('Network error during upload'));
@@ -173,24 +179,30 @@ async function runOne(projectId: string, file: File, jobId: string): Promise<voi
         | null;
       throw new Error(err?.detail ?? err?.error ?? 'sign failed');
     }
-    const signed = (await signRes.json()) as {
-      video_id: string;
-      upload_id: string;
-      upload_url: string;
-    };
+    const signed = (await signRes.json()) as
+      | { kind: 'video'; video_id: string; upload_id: string; upload_url: string }
+      | { kind: 'image'; video_id: string; upload_url: string };
 
     patchJob(projectId, jobId, { state: 'uploading' });
 
-    await putToMux({
+    await putBytes({
       uploadUrl: signed.upload_url,
       file,
+      // Supabase Storage signed-upload URLs require Content-Type so the
+      // stored object carries the correct MIME for browser rendering;
+      // Mux direct-upload URLs don't (Mux infers from bytes), and adding
+      // one breaks the preflight allowlist.
+      contentType:
+        signed.kind === 'image' ? file.type || 'application/octet-stream' : undefined,
       onProgress: (pct) => patchJob(projectId, jobId, { progress: pct }),
     });
 
-    // The webhook (or the share-page reconciler on next read) flips the
-    // row from 'uploading' -> 'processing' -> 'ready'. We mark the job
-    // 'done' once Mux has acknowledged the bytes; the player UI knows
-    // how to show the processing state from `mux_status`.
+    // For videos: the webhook (or share-page reconciler on next read)
+    // flips the row 'uploading' -> 'processing' -> 'ready'. We mark the
+    // job 'done' once bytes are uploaded; the player UI handles the
+    // processing state via `mux_status`.
+    // For images: the row was already inserted with `mux_status='ready'`,
+    // so once bytes land it's immediately renderable.
     patchJob(projectId, jobId, { state: 'done', progress: 100 });
   } catch (err) {
     const detail = err instanceof Error ? err.message : 'upload failed';

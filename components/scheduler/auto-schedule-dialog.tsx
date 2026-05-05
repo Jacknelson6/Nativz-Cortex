@@ -7,6 +7,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import type { ConnectedProfile, MediaItem } from './types';
 import { PLATFORM_ICONS } from './types';
+import { thumbUrl } from '@/lib/calendar/thumb-url';
 
 interface AutoScheduleDialogProps {
   open: boolean;
@@ -203,7 +204,7 @@ export function AutoScheduleDialog({
                         }`}
                       >
                         {item.thumbnail_url ? (
-                          <img src={item.thumbnail_url} alt={item.filename} className="w-full h-full object-cover" />
+                          <img src={thumbUrl(item.thumbnail_url, 160) ?? ''} alt={item.filename} className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full bg-surface-hover flex items-center justify-center">
                             <Film size={14} className="text-text-muted" />

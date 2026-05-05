@@ -14,6 +14,11 @@ import {
 import { Button } from '@/components/ui/button';
 import type { EditingProjectVideo } from '@/lib/editing/types';
 import type { UploadJob } from '@/lib/editing/upload-store';
+import { thumbUrl } from '@/lib/calendar/thumb-url';
+
+function isImageVideo(v: Pick<EditingProjectVideo, 'mime_type'>): boolean {
+  return !!v.mime_type && v.mime_type.startsWith('image/');
+}
 
 /**
  * Edited videos uploader + grid. Shared between EditingProjectDetail
@@ -47,11 +52,11 @@ export function EditedVideosBox({
   function handleDrop(e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault();
     setDragActive(false);
-    const files = Array.from(e.dataTransfer.files).filter((f) =>
-      f.type.startsWith('video/'),
+    const files = Array.from(e.dataTransfer.files).filter(
+      (f) => f.type.startsWith('video/') || f.type.startsWith('image/'),
     );
     if (files.length === 0) {
-      toast.error('Drop video files only');
+      toast.error('Drop video or image files only');
       return;
     }
     onUploadFiles(files);
@@ -74,7 +79,7 @@ export function EditedVideosBox({
       <input
         ref={inputRef}
         type="file"
-        accept="video/*"
+        accept="video/*,image/*"
         multiple
         className="hidden"
         onChange={(e) => {
@@ -92,7 +97,7 @@ export function EditedVideosBox({
       ) : empty ? (
         <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
           <Upload size={18} className="text-text-muted" />
-          <p className="text-sm text-text-primary">Drop video files here</p>
+          <p className="text-sm text-text-primary">Drop videos or images here</p>
           <Button
             variant="outline"
             size="sm"
@@ -162,24 +167,38 @@ export function UploadRow({ job }: { job: UploadJob }) {
 }
 
 /**
- * Renders a small first-frame preview for an uploaded edit. Mux-backed
- * rows expose a free thumbnail at `image.mux.com/{playbackId}/thumbnail.jpg`
- * once the asset is ready; legacy Supabase-Storage rows fall back to
- * the `#t=0.1` first-frame trick on the public URL. Pre-Mux-ready or
- * still-uploading rows show a generic file icon.
+ * Renders a small preview for an uploaded edit. Image rows render
+ * `public_url` through the storage transform helper for fast loads;
+ * Mux-backed video rows use `image.mux.com/.../thumbnail.jpg`; legacy
+ * Supabase-Storage video rows fall back to the `#t=0.1` first-frame
+ * trick on the public URL. Pre-Mux-ready or still-uploading rows show
+ * a generic file icon.
  */
 function VideoThumb({ video }: { video: EditingProjectVideo }) {
-  const muxThumb = video.mux_playback_id
-    ? `https://image.mux.com/${video.mux_playback_id}/thumbnail.jpg?width=120&fit_mode=preserve&time=0.1`
-    : null;
+  const isImage = isImageVideo(video);
+  const imageThumb =
+    isImage && video.public_url ? thumbUrl(video.public_url, 120) : null;
+  const muxThumb =
+    !isImage && video.mux_playback_id
+      ? `https://image.mux.com/${video.mux_playback_id}/thumbnail.jpg?width=120&fit_mode=preserve&time=0.1`
+      : null;
   const fallbackVideoSrc =
-    !muxThumb && video.public_url ? `${video.public_url}#t=0.1` : null;
+    !isImage && !muxThumb && video.public_url
+      ? `${video.public_url}#t=0.1`
+      : null;
   return (
     <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-surface-hover">
       {video.thumbnail_url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={video.thumbnail_url}
+          alt=""
+          className="h-full w-full object-cover"
+        />
+      ) : imageThumb ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={imageThumb}
           alt=""
           className="h-full w-full object-cover"
         />

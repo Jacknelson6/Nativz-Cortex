@@ -8,6 +8,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { thumbUrl } from '@/lib/calendar/thumb-url';
 
 interface SharedPost {
   id: string;
@@ -260,7 +261,7 @@ export default function SharedCalendarPage({
                           }`}
                         >
                           {post.thumbnail_url ? (
-                            <img src={post.thumbnail_url} alt="" className="w-5 h-5 rounded object-cover flex-shrink-0" />
+                            <img src={thumbUrl(post.thumbnail_url, 60) ?? ''} alt="" className="w-5 h-5 rounded object-cover flex-shrink-0" />
                           ) : (
                             <div className="w-5 h-5 rounded bg-surface-hover flex-shrink-0 flex items-center justify-center">
                               <Film size={10} className="text-text-muted" />
@@ -379,7 +380,7 @@ function PostDetail({
         {/* Thumbnail */}
         {post.thumbnail_url && (
           <div className="rounded-lg overflow-hidden bg-surface-hover mb-3 aspect-[9/16] max-w-[200px]">
-            <img src={post.thumbnail_url} alt="" className="w-full h-full object-cover" />
+            <img src={thumbUrl(post.thumbnail_url, 400) ?? ''} alt="" className="w-full h-full object-cover" />
           </div>
         )}
 
