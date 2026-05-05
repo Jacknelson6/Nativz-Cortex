@@ -21,7 +21,7 @@ import type { PlatformSource } from '@/lib/types/search';
 import type { MoodboardItem, TranscriptSegment } from '@/lib/types/moodboard';
 import { formatCompactCount, formatRelativeTime } from '@/lib/utils/format';
 import { engagementRatePercent } from '@/lib/search/source-mention-utils';
-import { PlatformBadgeSearch } from '@/components/search/platform-icon';
+import { PlatformIcon } from '@/components/search/platform-icon';
 import { parseVisionClipBreakdown } from '@/components/moodboard/vision-clip-breakdown-panel';
 import { AddToNoteButton } from '@/components/results/add-to-note-button';
 
@@ -399,7 +399,7 @@ export function TikTokEmbedCarousel({
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-2 text-sm text-text-secondary">
-                    <PlatformBadgeSearch platform={source.platform} size="sm" /> Platform
+                    <PlatformIcon platform={source.platform} size={14} className="text-text-muted" /> Platform
                   </span>
                   <span className="text-sm font-medium capitalize text-text-primary">{source.platform}</span>
                 </div>

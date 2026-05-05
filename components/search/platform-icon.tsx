@@ -50,13 +50,16 @@ interface PlatformIconProps {
   showLabel?: boolean;
 }
 
-export function PlatformIcon({ platform, size = 14, showLabel = false }: PlatformIconProps) {
+export function PlatformIcon({ platform, size = 14, showLabel = false, className }: PlatformIconProps) {
   const config = PLATFORM_CONFIG[platform];
   if (!config) return null;
   const Icon = config.icon;
 
+  // `className` overrides the brand color so this glyph can sit in
+  // muted-icon rows (e.g. detail lists where every leading icon is
+  // `text-text-muted`) without the colored swatch background.
   return (
-    <span className={`inline-flex items-center gap-1.5 ${config.color}`}>
+    <span className={cn('inline-flex items-center gap-1.5', className ?? config.color)}>
       <Icon size={size} />
       {showLabel && <span className="text-xs font-medium">{config.label}</span>}
     </span>
