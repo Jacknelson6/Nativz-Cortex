@@ -18,7 +18,6 @@ import { toast } from 'sonner';
 import { Dialog } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
-import { BalancePill } from '@/components/deliverables/balance-pill';
 import type { DeliverableBalance } from '@/lib/deliverables/get-balances';
 import type { AddonSku } from '@/lib/deliverables/addon-skus';
 
@@ -560,7 +559,6 @@ function SharedDropView({
                 <p className="text-sm text-text-secondary sm:text-base">
                   {total} post{total !== 1 ? 's' : ''} to review · scheduled {formatDropDateRange(data.drop.start_date, data.drop.end_date)}
                 </p>
-                <BalancePill balances={data.balances} />
               </div>
             </div>
             <div className="flex items-center gap-2">
