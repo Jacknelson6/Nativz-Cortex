@@ -135,6 +135,11 @@ function putBytes(opts: {
     xhr.open('PUT', opts.uploadUrl);
     if (opts.contentType) {
       xhr.setRequestHeader('Content-Type', opts.contentType);
+      // Supabase Storage signed-upload URLs require x-upsert; without it
+      // the endpoint returns 400. Mux direct uploads don't accept extra
+      // headers (would break preflight) so we only set this on the image
+      // branch, which is also the only path where contentType is set.
+      xhr.setRequestHeader('x-upsert', 'true');
     }
     xhr.upload.addEventListener('progress', (e) => {
       if (!e.lengthComputable) return;

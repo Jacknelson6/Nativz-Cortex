@@ -97,7 +97,7 @@ export function EditedVideosBox({
       ) : empty ? (
         <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
           <Upload size={18} className="text-text-muted" />
-          <p className="text-sm text-text-primary">Drop videos or images here</p>
+          <p className="text-sm text-text-primary">Drop media here</p>
           <Button
             variant="outline"
             size="sm"

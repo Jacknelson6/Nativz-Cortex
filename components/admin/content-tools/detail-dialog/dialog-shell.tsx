@@ -27,11 +27,11 @@ import { ClientLogo } from '@/components/clients/client-logo';
  * `pl-6 pr-14` to keep the title clear of the close button on the right.
  */
 
-export type DetailTab = 'details' | 'videos' | 'history';
+export type DetailTab = 'details' | 'media' | 'history';
 
 const TABS = [
   { slug: 'details', label: 'Details' },
-  { slug: 'videos', label: 'Videos' },
+  { slug: 'media', label: 'Media' },
   { slug: 'history', label: 'History' },
 ] as const;
 
@@ -47,7 +47,7 @@ export function ContentDetailDialog({
   onTabChange,
   tabsAriaLabel,
   history,
-  videos,
+  media,
   footer,
   children,
 }: {
@@ -70,11 +70,11 @@ export function ContentDetailDialog({
   tabsAriaLabel: string;
   /** Body content for the History tab. */
   history: ReactNode;
-  /** Body content for the Videos tab — uploaded edited deliverables and
-   *  the drop zone for new uploads. Pass `null` if videos aren't
-   *  applicable for this row (none of our current row types skip it, but
-   *  the slot is optional so future row types can opt out). */
-  videos?: ReactNode;
+  /** Body content for the Media tab — raw footage link, uploaded edited
+   *  deliverables, and the drop zone for new uploads. Pass `null` if the
+   *  tab isn't applicable for this row (none of our current row types
+   *  skip it, but the slot is optional so future row types can opt out). */
+  media?: ReactNode;
   /** Footer slot. The chassis adds the bordered/padded wrapper when this
    *  is truthy; pass `null` to omit the footer entirely. */
   footer?: ReactNode;
@@ -109,8 +109,8 @@ export function ContentDetailDialog({
         {/* Body */}
         {tab === 'history' ? (
           <div className="flex-1 overflow-y-auto p-6">{history}</div>
-        ) : tab === 'videos' ? (
-          <div className="flex-1 space-y-5 overflow-y-auto p-6">{videos}</div>
+        ) : tab === 'media' ? (
+          <div className="flex-1 space-y-5 overflow-y-auto p-6">{media}</div>
         ) : (
           <div className="flex-1 space-y-5 overflow-y-auto p-6">{children}</div>
         )}

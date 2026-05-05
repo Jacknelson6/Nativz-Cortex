@@ -734,7 +734,7 @@ export function CalendarLinkDetail({
             emptyMessage="No activity yet. Mint a share link or send a notification to get started."
           />
         }
-        videos={
+        media={
           <>
             <Section
               label={`Edited videos${

@@ -698,8 +698,33 @@ export function EditingProjectDetail({
             />
           )
         }
-        videos={
+        media={
           <>
+            <Section label="Raw footage">
+              <div className="rounded-lg border border-nativz-border bg-surface p-3">
+                <input
+                  value={driveUrl}
+                  onChange={(e) => setDriveUrl(e.target.value)}
+                  onBlur={() => {
+                    const trimmed = driveUrl.trim();
+                    void patch({ drive_folder_url: trimmed || null });
+                  }}
+                  placeholder="Paste a Google Drive folder link"
+                  className="block w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+                {driveUrl && (
+                  <a
+                    href={driveUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1 text-[12px] text-accent-text hover:underline"
+                  >
+                    Open folder <ExternalLink size={11} />
+                  </a>
+                )}
+              </div>
+            </Section>
+
             <Section
               label={`Edited videos${
                 data?.videos.length ? ` (${data.videos.length})` : ''
@@ -953,31 +978,6 @@ export function EditingProjectDetail({
             <p className="text-[12px] text-text-muted">Loading…</p>
           </Section>
         )}
-
-        <Section label="Raw footage">
-          <div className="rounded-lg border border-nativz-border bg-surface p-3">
-            <input
-              value={driveUrl}
-              onChange={(e) => setDriveUrl(e.target.value)}
-              onBlur={() => {
-                const trimmed = driveUrl.trim();
-                void patch({ drive_folder_url: trimmed || null });
-              }}
-              placeholder="Paste a Google Drive folder link"
-              className="block w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-            />
-            {driveUrl && (
-              <a
-                href={driveUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2 inline-flex items-center gap-1 text-[12px] text-accent-text hover:underline"
-              >
-                Open folder <ExternalLink size={11} />
-              </a>
-            )}
-          </div>
-        </Section>
 
         <Section label="Project settings">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
