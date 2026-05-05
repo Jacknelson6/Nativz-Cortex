@@ -16,12 +16,18 @@ interface NewDropDialogProps {
 
 export function NewDropDialog({ open, onClose, clientId, onCreated }: NewDropDialogProps) {
   const today = new Date().toISOString().slice(0, 10);
-  const weekLater = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  // Default to the last day of the start month so 10ish posts land roughly
+  // every 3 days instead of bunched into a single week.
+  const endOfStartMonth = (() => {
+    const now = new Date();
+    const last = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
+    return last.toISOString().slice(0, 10);
+  })();
 
   const [folderUrl, setFolderUrl] = useState('');
   const [mediaType, setMediaType] = useState<'video' | 'image'>('video');
   const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(weekLater);
+  const [endDate, setEndDate] = useState(endOfStartMonth);
   const [defaultTime, setDefaultTime] = useState('10:00');
   const [submitting, setSubmitting] = useState(false);
 
