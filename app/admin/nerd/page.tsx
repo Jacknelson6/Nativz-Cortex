@@ -13,7 +13,12 @@ import { MentionAutocomplete, type MentionOption } from '@/components/ai/mention
 import { ConversationSidebar } from '@/components/nerd/conversation-sidebar';
 import { TopicSearchContextRail } from '@/components/nerd/topic-search-context-rail';
 import { SlashCommandMenu, filterSlashCommands } from '@/components/nerd/slash-command-menu';
-import { getAllCommands, getCommand, type SlashCommand } from '@/lib/nerd/slash-commands';
+import { getCommand, type SlashCommand } from '@/lib/nerd/slash-commands';
+import {
+  useSlashCommands,
+  expandSkillCommand,
+  type UnifiedSlashCommand,
+} from '@/lib/nerd/use-slash-commands';
 import { toast } from 'sonner';
 import { detectArtifactType, extractArtifactTitle } from '@/lib/artifacts/types';
 import { ConversationShareButton } from '@/components/ai/conversation-share-button';
@@ -47,11 +52,29 @@ export default function NerdPage() {
   const [mentionQuery, setMentionQuery] = useState('');
   const [activeMentions, setActiveMentions] = useState<Array<{ type: 'client' | 'team_member'; id: string; name: string; slug?: string }>>([]);
 
-  // Slash command state
+  // Slash command state. The unified list (built-ins + user-installed
+  // skills) comes from /api/nerd/slash-commands via useSlashCommands().
+  // The catalog popover already used this hook; pulling it in here means
+  // typed-in `/` autocomplete also surfaces skills the user added in
+  // /admin/nerd/settings, not just hardcoded built-ins.
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
   const [slashActiveIndex, setSlashActiveIndex] = useState(0);
-  const slashCommands = useMemo(() => getAllCommands(), []);
+  const { commands: unifiedSlashCommands } = useSlashCommands();
+  const unifiedSlashRef = useRef<UnifiedSlashCommand[]>([]);
+  useEffect(() => {
+    unifiedSlashRef.current = unifiedSlashCommands;
+  }, [unifiedSlashCommands]);
+  const slashCommands = useMemo(
+    () =>
+      unifiedSlashCommands.map((c) => ({
+        name: c.name,
+        description: c.description,
+        type: c.type,
+        example: c.example ?? undefined,
+      })),
+    [unifiedSlashCommands],
+  );
   const filteredSlashCommands = useMemo(
     () => filterSlashCommands(slashQuery, slashCommands),
     [slashQuery, slashCommands],
@@ -209,6 +232,16 @@ export default function NerdPage() {
   }, [input]);
 
   function handleSlashSelect(cmd: { name: string; type: string }) {
+    // Skill-sourced commands live in the unified list, not the in-memory
+    // built-in registry. Look there first; fall back to getCommand() for
+    // built-ins so they keep their bespoke expandPrompt / handler logic.
+    const unified = unifiedSlashRef.current.find((c) => c.name === cmd.name);
+    if (unified?.source === 'skill') {
+      setInput(expandSkillCommand(unified, ''));
+      setShowSlashMenu(false);
+      return;
+    }
+
     const command = getCommand(cmd.name);
     if (!command) return;
 
@@ -310,8 +343,18 @@ export default function NerdPage() {
       const spaceIdx = content.indexOf(' ');
       const cmdName = spaceIdx > 0 ? content.slice(1, spaceIdx) : content.slice(1);
       const cmdArgs = spaceIdx > 0 ? content.slice(spaceIdx + 1).trim() : '';
-      const cmd = getCommand(cmdName);
 
+      // Skill commands live only in the unified list. Expand client-side
+      // and recurse so the chat receives the rendered prompt.
+      const unified = unifiedSlashRef.current.find((c) => c.name === cmdName);
+      if (unified?.source === 'skill') {
+        setInput('');
+        setShowSlashMenu(false);
+        handleSend(expandSkillCommand(unified, cmdArgs));
+        return;
+      }
+
+      const cmd = getCommand(cmdName);
       if (cmd) {
         setInput('');
         setShowSlashMenu(false);
