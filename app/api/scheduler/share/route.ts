@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getBrandFromAgency } from '@/lib/agency/detect';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 import { z } from 'zod';
 
 const CreateShareLinkSchema = z.object({
@@ -53,11 +55,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create share link' }, { status: 500 });
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
-    return NextResponse.json({
-      link,
-      url: `${appUrl}/s/${link.token}`,
-    });
+    const { data: clientRow } = await adminClient
+      .from('clients')
+      .select('agency')
+      .eq('id', parsed.data.client_id)
+      .maybeSingle<{ agency: string | null }>();
+    const url = `${getCortexAppUrl(getBrandFromAgency(clientRow?.agency ?? null))}/s/${link.token}`;
+    return NextResponse.json({ link, url });
   } catch (error) {
     console.error('POST /api/scheduler/share error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

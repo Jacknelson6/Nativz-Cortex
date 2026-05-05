@@ -168,7 +168,9 @@ export function NewSchedulingEventForm({
         toast.error(json.error ?? `Failed (${res.status})`);
         return;
       }
-      const fullUrl = `${window.location.origin}${json.share_url}`;
+      const fullUrl = json.share_url.startsWith('http')
+        ? json.share_url
+        : `${window.location.origin}${json.share_url}`;
       setCreatedShareUrl(fullUrl);
       toast.success('Event created');
     } catch (err) {

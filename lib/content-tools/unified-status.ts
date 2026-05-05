@@ -56,19 +56,34 @@ export function unifiedStatusForEditingProject(
   }
 }
 
+/**
+ * Map a calendar share-link's raw state to one of the 4 unified buckets.
+ *
+ * Approval and revision state always win over send-state — once every
+ * post in the bundle is approved, the pill must read "Approved" even if
+ * the admin never clicked Send (e.g. they ran the whole flow inside the
+ * dialog or marked posts approved manually). Same for "Revising": the
+ * moment a comment lands, that's what the pill reflects.
+ *
+ * Send-state only matters for the unsent / sent-and-waiting split:
+ *
+ *   - all approved              → 'approved'
+ *   - any revising              → 'revising'
+ *   - never sent (no email out) → 'ready_to_send'
+ *   - sent, not all approved    → 'needs_approval'
+ *
+ * Jack's state machine spec (2026-05-05):
+ *   not started -> editing -> ready to send -> need approval -> revising OR approved
+ */
 export function unifiedStatusForShareLink(input: {
   status: ReviewLinkStatus;
   first_sent_at: string | null;
 }): UnifiedStatus {
+  // Terminal states win over send-state. A 10/10 approved bundle is
+  // "Approved" whether or not it was ever emailed (the previous logic
+  // forced these rows to read "Ready to send" forever).
+  if (input.status === 'approved') return 'approved';
+  if (input.status === 'revising') return 'revising';
   if (!input.first_sent_at) return 'ready_to_send';
-  switch (input.status) {
-    case 'approved':
-      return 'approved';
-    case 'revising':
-      return 'revising';
-    case 'ready_for_review':
-    case 'abandoned':
-    case 'expired':
-      return 'needs_approval';
-  }
+  return 'needs_approval';
 }

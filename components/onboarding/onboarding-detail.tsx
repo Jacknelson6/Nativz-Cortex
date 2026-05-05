@@ -26,6 +26,8 @@ import type {
 import type { OnboardingScreen } from '@/lib/onboarding/screens';
 import type { ProgressDescriptor } from '@/lib/onboarding/api';
 import { StepStateView } from './step-state-view';
+import { getBrandFromAgency } from '@/lib/agency/detect';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 interface ClientLite {
   id: string;
@@ -55,9 +57,11 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleString();
 }
 
-function shareUrl(token: string): string {
-  if (typeof window === 'undefined') return `/s/${token}`;
-  return `${window.location.origin}/s/${token}`;
+// Always resolve via the client's agency host so an Anderson client
+// gets a cortex.andersoncollaborative.com link and a Nativz client gets
+// cortex.nativz.io, regardless of which dashboard host the admin opened.
+function shareUrl(token: string, agency: string | null): string {
+  return `${getCortexAppUrl(getBrandFromAgency(agency))}/s/${token}`;
 }
 
 export function OnboardingDetail(props: {
@@ -111,7 +115,7 @@ export function OnboardingDetail(props: {
 
   async function copyShareLink() {
     try {
-      await navigator.clipboard.writeText(shareUrl(row.share_token));
+      await navigator.clipboard.writeText(shareUrl(row.share_token, client?.agency ?? null));
     } catch {
       // ignore
     }
@@ -155,7 +159,7 @@ export function OnboardingDetail(props: {
                 Copy link
               </Button>
               <a
-                href={shareUrl(row.share_token)}
+                href={shareUrl(row.share_token, client?.agency ?? null)}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-text-secondary hover:bg-background hover:text-foreground transition-colors"

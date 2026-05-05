@@ -5,6 +5,8 @@ import { createNotification } from '@/lib/notifications/create';
 import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
 import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
+import { getBrandFromAgency } from '@/lib/agency/detect';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 import { formatPostTimeForChat } from '@/lib/chat/format-post-time';
 import { isMondayConfigured } from '@/lib/monday/client';
 import {
@@ -475,8 +477,7 @@ async function maybeFireRevisionsCompleteNotification(
     primaryUrl: drop?.clients?.chat_webhook_url ?? null,
     agency: drop?.clients?.agency ?? null,
   });
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
-  const shareUrl = `${appUrl}/s/${args.token}`;
+  const shareUrl = `${getCortexAppUrl(getBrandFromAgency(drop?.clients?.agency ?? null))}/s/${args.token}`;
 
   if (chatWebhookUrl) {
     const text =
@@ -549,8 +550,7 @@ async function notifyAdminsOfComment(
   // In-app links go to the admin view; chat links go to the public share view
   // so phones (mobile-blocked from /admin/*) can open them.
   const linkPath = `/admin/calendar/${drop.id}`;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
-  const shareUrl = `${appUrl}/s/${shareToken}`;
+  const shareUrl = `${getCortexAppUrl(getBrandFromAgency(drop.clients?.agency ?? null))}/s/${shareToken}`;
 
   // In-app: every admin user gets the bell ping. Was previously hard-coded
   // to jack@nativz.io, which meant no other editor on the team saw revision

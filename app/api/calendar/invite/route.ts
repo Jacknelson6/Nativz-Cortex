@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { randomBytes } from 'crypto';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getBrandFromAgency } from '@/lib/agency/detect';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 const DISPLAY_COLORS = [
   '#3b82f6',
@@ -60,12 +62,18 @@ export async function POST(request: NextRequest) {
 
     const { contact_id } = parsed.data;
 
-    // Look up the contact's name for display_name
+    // Look up the contact's name + client agency so the invite URL resolves
+    // to the right brand host (Anderson clients → andersoncollaborative.com,
+    // Nativz → nativz.io).
     const { data: contact, error: contactError } = await adminClient
       .from('contacts')
-      .select('id, name')
+      .select('id, name, clients(agency)')
       .eq('id', contact_id)
-      .single();
+      .single<{
+        id: string;
+        name: string | null;
+        clients: { agency: string | null } | null;
+      }>();
 
     if (contactError || !contact) {
       return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
@@ -94,8 +102,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create invite' }, { status: 500 });
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
-    const url = `${appUrl}/s/${invite_token}`;
+    const url = `${getCortexAppUrl(getBrandFromAgency(contact.clients?.agency ?? null))}/s/${invite_token}`;
 
     return NextResponse.json({ token: invite_token, url });
   } catch (error) {

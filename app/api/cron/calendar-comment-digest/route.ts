@@ -7,6 +7,8 @@ import {
 } from '@/lib/email/resend';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 import { getNotificationSetting } from '@/lib/notifications/get-setting';
+import { getBrandFromAgency } from '@/lib/agency/detect';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 export const maxDuration = 60;
 
@@ -25,7 +27,7 @@ type CommentRow = {
       id: string;
       caption: string | null;
       client_id: string;
-      clients: { id: string; name: string } | null;
+      clients: { id: string; name: string; agency: string | null } | null;
     } | null;
   } | null;
 };
@@ -42,7 +44,7 @@ type EditingCommentRow = {
     id: string;
     name: string | null;
     client_id: string;
-    clients: { id: string; name: string } | null;
+    clients: { id: string; name: string; agency: string | null } | null;
   } | null;
   editing_project_videos: { id: string; filename: string | null } | null;
 };
@@ -91,7 +93,7 @@ async function handleGet(request: NextRequest) {
             id,
             caption,
             client_id,
-            clients!inner ( id, name )
+            clients!inner ( id, name, agency )
           )
         )
       `)
@@ -112,7 +114,7 @@ async function handleGet(request: NextRequest) {
           id,
           name,
           client_id,
-          clients!inner ( id, name )
+          clients!inner ( id, name, agency )
         ),
         editing_project_videos ( id, filename )
       `)
@@ -166,8 +168,11 @@ async function handleGet(request: NextRequest) {
     }
   }
 
-  // Group calendar comments by client_id.
-  const byClient = new Map<string, { clientName: string; shareToken: string | null; dropId: string | null; comments: CalendarDigestComment[] }>();
+  // Group calendar comments by client_id. Each client's CTA must resolve
+  // to that client's branded Cortex host (Anderson clients land on AC,
+  // Nativz clients on the Nativz host) so the link in the digest matches
+  // wherever the share link was originally minted.
+  const byClient = new Map<string, { clientName: string; agency: string | null; shareToken: string | null; dropId: string | null; comments: CalendarDigestComment[] }>();
   for (const c of comments) {
     const sp = c.post_review_links?.scheduled_posts;
     const client = sp?.clients;
@@ -176,6 +181,7 @@ async function handleGet(request: NextRequest) {
     const contentPreview = c.content.slice(0, 200) + (c.content.length > 200 ? '…' : '');
     const entry = byClient.get(client.id) ?? {
       clientName: client.name,
+      agency: client.agency,
       shareToken: postIdToShareToken[sp.id] ?? null,
       dropId: postIdToDropId[sp.id] ?? null,
       comments: [],
@@ -192,18 +198,20 @@ async function handleGet(request: NextRequest) {
     byClient.set(client.id, entry);
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://cortex.nativz.io';
   // Prefer the share-link URL so the digest works on phones (admin routes are
   // mobile-blocked). Fall back to the admin calendar if no share link exists.
-  const groups: CalendarDigestClientGroup[] = Array.from(byClient.values()).map((g) => ({
-    clientName: g.clientName,
-    dropUrl: g.shareToken
-      ? `${appUrl}/s/${g.shareToken}`
-      : g.dropId
-        ? `${appUrl}/admin/calendar/${g.dropId}`
-        : `${appUrl}/admin/calendar`,
-    comments: g.comments,
-  }));
+  const groups: CalendarDigestClientGroup[] = Array.from(byClient.values()).map((g) => {
+    const appUrl = getCortexAppUrl(getBrandFromAgency(g.agency));
+    return {
+      clientName: g.clientName,
+      dropUrl: g.shareToken
+        ? `${appUrl}/s/${g.shareToken}`
+        : g.dropId
+          ? `${appUrl}/admin/calendar/${g.dropId}`
+          : `${appUrl}/admin/calendar`,
+      comments: g.comments,
+    };
+  });
 
   // Editing-side grouping: one section per project so each CTA opens the
   // right cut. Resolve the most-recent live share link per project so the
@@ -234,7 +242,7 @@ async function handleGet(request: NextRequest) {
 
   // Group editing comments by project (keyed project_id), each section gets
   // its own CTA pointing at that project's share link.
-  const byProject = new Map<string, { clientName: string; projectName: string; projectId: string; comments: CalendarDigestComment[] }>();
+  const byProject = new Map<string, { clientName: string; agency: string | null; projectName: string; projectId: string; comments: CalendarDigestComment[] }>();
   for (const c of editingComments) {
     const proj = c.editing_projects;
     const client = proj?.clients;
@@ -252,6 +260,7 @@ async function handleGet(request: NextRequest) {
       c.status === 'video_revised' ? 'comment' : c.status;
     const entry = byProject.get(proj.id) ?? {
       clientName: client.name,
+      agency: client.agency,
       projectName,
       projectId: proj.id,
       comments: [],
@@ -268,6 +277,7 @@ async function handleGet(request: NextRequest) {
 
   for (const g of byProject.values()) {
     const token = projectIdToShareToken[g.projectId];
+    const appUrl = getCortexAppUrl(getBrandFromAgency(g.agency));
     groups.push({
       clientName: `${g.clientName} · Editing`,
       dropUrl: token

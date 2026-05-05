@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/auth/permissions';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
+import { createEditingShareLink } from '@/lib/editing/share-link';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,39 +33,32 @@ export async function POST(
   if (!(await isAdmin(user.id))) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
 
   const admin = createAdminClient();
-  const { data: project } = await admin
-    .from('editing_projects')
-    .select('id, clients(agency)')
-    .eq('id', id)
-    .single<{ id: string; clients: { agency: string | null } | null }>();
-  if (!project) return NextResponse.json({ error: 'not_found' }, { status: 404 });
-
-  const { count } = await admin
-    .from('editing_project_videos')
-    .select('id', { count: 'exact', head: true })
-    .eq('project_id', id);
-  if (!count || count === 0) {
+  const result = await createEditingShareLink(admin, id, user.id);
+  if ('error' in result) {
+    if (result.error === 'project_not_found') {
+      return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    }
+    if (result.error === 'no_videos') {
+      return NextResponse.json(
+        { error: 'no_videos', detail: 'Upload at least one edited cut before sharing.' },
+        { status: 400 },
+      );
+    }
     return NextResponse.json(
-      { error: 'no_videos', detail: 'Upload at least one edited cut before sharing.' },
-      { status: 400 },
-    );
-  }
-
-  const { data: link, error } = await admin
-    .from('editing_project_share_links')
-    .insert({ project_id: id, created_by: user.id })
-    .select('id, token, expires_at, created_at')
-    .single();
-  if (error || !link) {
-    return NextResponse.json(
-      { error: 'create_failed', detail: error?.message ?? 'Failed to mint link' },
+      { error: 'create_failed', detail: result.error },
       { status: 500 },
     );
   }
 
+  const { link } = result;
   return NextResponse.json({
-    link,
-    url: `${resolveAppUrl(project.clients?.agency)}/s/${link.token}`,
+    link: {
+      id: link.id,
+      token: link.token,
+      expires_at: link.expires_at,
+      created_at: link.created_at,
+    },
+    url: link.url,
   });
 }
 

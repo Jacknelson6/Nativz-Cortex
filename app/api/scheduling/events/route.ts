@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getBrandFromAgency } from '@/lib/agency/detect';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -131,11 +133,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to add members' }, { status: 500 });
   }
 
+  let shareUrl = `/s/${event.share_token}`;
+  if (body.client_id) {
+    const { data: c } = await auth.admin
+      .from('clients')
+      .select('agency')
+      .eq('id', body.client_id)
+      .maybeSingle();
+    shareUrl = `${getCortexAppUrl(getBrandFromAgency(c?.agency ?? null))}/s/${event.share_token}`;
+  }
+
   return NextResponse.json({
     ok: true,
     id: event.id,
     share_token: event.share_token,
-    share_url: `/s/${event.share_token}`,
+    share_url: shareUrl,
   });
 }
 

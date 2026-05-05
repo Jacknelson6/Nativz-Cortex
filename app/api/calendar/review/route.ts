@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/auth/permissions';
+import { getBrandFromAgency } from '@/lib/agency/detect';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,7 +86,7 @@ export async function GET(req: Request) {
   const clientIds = Array.from(new Set(drops.map((d) => d.client_id)));
   const { data: clients } = await admin
     .from('clients')
-    .select('id, name, slug, logo_url')
+    .select('id, name, slug, logo_url, agency')
     .in('id', clientIds);
   const clientById = new Map((clients ?? []).map((c) => [c.id, c]));
 
@@ -177,9 +179,15 @@ export async function GET(req: Request) {
       send_count?: number | null;
     };
 
+    const brand = getBrandFromAgency(
+      (client as { agency?: string | null } | undefined)?.agency ?? null,
+    );
+    const shareUrl = `${getCortexAppUrl(brand)}/s/${link.token}`;
+
     return {
       id: link.id,
       token: link.token,
+      share_url: shareUrl,
       drop_id: link.drop_id,
       drop_start: drop?.start_date ?? null,
       drop_end: drop?.end_date ?? null,

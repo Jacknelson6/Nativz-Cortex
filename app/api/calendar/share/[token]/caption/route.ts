@@ -5,6 +5,8 @@ import { createNotification } from '@/lib/notifications/create';
 import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { formatPostTimeForChat } from '@/lib/chat/format-post-time';
+import { getBrandFromAgency } from '@/lib/agency/detect';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 const BodySchema = z.object({
   postId: z.string().uuid(),
@@ -127,8 +129,7 @@ async function notifyOfCaptionEdit(
     primaryUrl: drop.clients?.chat_webhook_url ?? null,
     agency: drop.clients?.agency ?? null,
   });
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
-  const shareUrl = `${appUrl}/s/${token}`;
+  const shareUrl = `${getCortexAppUrl(getBrandFromAgency(drop.clients?.agency ?? null))}/s/${token}`;
 
   const truncate = (s: string, max = 280) =>
     s.length > max ? `${s.slice(0, max)}…` : s;

@@ -40,6 +40,17 @@ export type ReviewLinkStatus =
 export interface ReviewLinkRow {
   id: string;
   token: string;
+  /**
+   * Pre-resolved public share URL on the client's branded host
+   * (cortex.nativz.io vs cortex.andersoncollaborative.com). The API
+   * picks the host based on the brand's `clients.agency`, so the
+   * dialog/copy CTA must use this verbatim instead of stitching
+   * `window.location.origin` (which would always be the host the
+   * admin is currently logged into, not the client's brand).
+   * Empty string for `kind === 'editing'` rows (editing flow opens
+   * the detail dialog directly, no public share URL).
+   */
+  share_url: string;
   drop_id: string;
   drop_start: string | null;
   drop_end: string | null;
@@ -299,7 +310,13 @@ function ReviewCard({
   const isExpired = link.status === 'expired';
   const dateRange = formatDateRange(link.drop_start, link.drop_end);
   const lastViewed = link.last_viewed_at ? formatRelative(link.last_viewed_at) : null;
-  const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/s/${link.token}` : `/s/${link.token}`;
+  // API resolves share_url to the client's branded host. Only fall back
+  // to current-origin stitching for legacy rows that pre-date the field.
+  const shareUrl =
+    link.share_url ||
+    (typeof window !== 'undefined'
+      ? `${window.location.origin}/s/${link.token}`
+      : `/s/${link.token}`);
 
   async function copyLink() {
     try {

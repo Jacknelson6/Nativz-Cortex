@@ -412,11 +412,17 @@ export function CalendarLinkDetail({
     [projectId, token, loadBridge],
   );
 
+  // Always use the API-resolved share_url so the link points at the
+  // client's branded host (Nativz vs Anderson Collaborative). Falling
+  // back to window.location.origin would silently mint an Anderson
+  // client a Nativz URL whenever Jack is logged into nativz.io.
   const shareUrl = useMemo(() => {
-    if (!link?.token) return '';
+    if (!link) return '';
+    if (link.share_url) return link.share_url;
+    if (!link.token) return '';
     if (typeof window === 'undefined') return `/s/${link.token}`;
     return `${window.location.origin}/s/${link.token}`;
-  }, [link?.token]);
+  }, [link]);
 
   if (!open || !link) return null;
 

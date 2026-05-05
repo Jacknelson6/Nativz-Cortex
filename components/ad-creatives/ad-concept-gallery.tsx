@@ -707,6 +707,14 @@ interface ShareTokenRow {
   expires_at: string | null;
   revoked_at: string | null;
   created_at: string;
+  /**
+   * API-resolved public URL on the client's branded host
+   * (cortex.nativz.io vs cortex.andersoncollaborative.com). The card
+   * MUST use this verbatim — falling back to `window.location.origin`
+   * would mint an Anderson client a Nativz URL whenever the admin
+   * happens to be on the Nativz host.
+   */
+  share_url?: string;
 }
 
 function ShareDialog({ clientId, onClose }: { clientId: string; onClose: () => void }) {
@@ -862,9 +870,10 @@ function ShareTokenRowCard({
   onRevoke: () => void;
 }) {
   const url =
-    typeof window !== 'undefined'
+    token.share_url ||
+    (typeof window !== 'undefined'
       ? `${window.location.origin}/s/${token.token}`
-      : `/s/${token.token}`;
+      : `/s/${token.token}`);
   const isDead =
     !!token.revoked_at || (!!token.expires_at && new Date(token.expires_at) < new Date());
   const status = token.revoked_at

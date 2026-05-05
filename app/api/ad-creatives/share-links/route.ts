@@ -3,6 +3,21 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateShareToken } from '@/lib/ad-creatives/share-token';
+import { getBrandFromAgency } from '@/lib/agency/detect';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
+
+async function shareUrlForClient(
+  admin: ReturnType<typeof createAdminClient>,
+  clientId: string,
+  token: string,
+): Promise<string> {
+  const { data: c } = await admin
+    .from('clients')
+    .select('agency')
+    .eq('id', clientId)
+    .maybeSingle();
+  return `${getCortexAppUrl(getBrandFromAgency(c?.agency ?? null))}/s/${token}`;
+}
 
 const createSchema = z.object({
   clientId: z.string().uuid(),
@@ -83,10 +98,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const origin = req.nextUrl.origin;
+  const url = await shareUrlForClient(admin, clientId, row.token);
   return NextResponse.json({
-    shareToken: row,
-    url: `${origin}/s/${row.token}`,
+    shareToken: { ...row, share_url: url },
+    url,
   });
 }
 
@@ -123,5 +138,17 @@ export async function GET(req: NextRequest) {
     .order('created_at', { ascending: false })
     .limit(100);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ shareTokens: data ?? [] });
+
+  // Resolve once per client; every row points at the same brand host.
+  const { data: c } = await admin
+    .from('clients')
+    .select('agency')
+    .eq('id', clientId)
+    .maybeSingle();
+  const base = getCortexAppUrl(getBrandFromAgency(c?.agency ?? null));
+  const shareTokens = (data ?? []).map((row) => ({
+    ...row,
+    share_url: `${base}/s/${row.token}`,
+  }));
+  return NextResponse.json({ shareTokens });
 }

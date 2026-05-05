@@ -376,6 +376,23 @@ export async function POST(
     sentBy: userId,
   });
 
+  // Manual delivery should also tick the linked monthly slot so the board's
+  // target-vs-actual readout matches whether Jack hit the button or the
+  // Mux-webhook auto-deliver path did.
+  if (kind === 'delivery') {
+    const { data: projectSlot } = await admin
+      .from('editing_projects')
+      .select('month_slot_id')
+      .eq('id', projectId)
+      .maybeSingle<{ month_slot_id: string | null }>();
+    if (projectSlot?.month_slot_id) {
+      await admin
+        .from('monthly_deliverable_slots')
+        .update({ status: 'delivered', delivered_at: sentAt })
+        .eq('id', projectSlot.month_slot_id);
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     kind,

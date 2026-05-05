@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getBrandFromAgency } from '@/lib/agency/detect';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 import { z } from 'zod';
 
 const CreateReviewLinkSchema = z.object({
@@ -44,10 +46,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create review link' }, { status: 500 });
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+    // Resolve the right Cortex host for this post's brand so the link in
+    // the response matches the agency the client is associated with
+    // (Anderson posts must land on cortex.andersoncollaborative.com, not
+    // the Nativz host).
+    const { data: postRow } = await adminClient
+      .from('scheduled_posts')
+      .select('clients(agency)')
+      .eq('id', parsed.data.post_id)
+      .maybeSingle<{ clients: { agency: string | null } | null }>();
+    const brand = getBrandFromAgency(postRow?.clients?.agency ?? null);
     return NextResponse.json({
       link,
-      url: `${appUrl}/s/${link.token}`,
+      url: `${getCortexAppUrl(brand)}/s/${link.token}`,
     });
   } catch (error) {
     console.error('POST /api/scheduler/review error:', error);

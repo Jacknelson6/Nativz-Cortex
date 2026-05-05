@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getBrandFromAgency } from '@/lib/agency/detect';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 import { z } from 'zod';
 import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
 import { sendRevisionWebhook } from '@/lib/webhooks/revision-webhook';
@@ -110,7 +112,7 @@ export async function POST(request: NextRequest) {
     try {
       const { data: clientRow } = await adminClient
         .from('clients')
-        .select('name, revision_webhook_url')
+        .select('name, agency, revision_webhook_url')
         .eq('id', shareLink.client_id)
         .single();
 
@@ -122,14 +124,14 @@ export async function POST(request: NextRequest) {
           .eq('id', parsed.data.post_id)
           .single();
 
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+        const brand = getBrandFromAgency(clientRow.agency ?? null);
         void sendRevisionWebhook(clientRow.revision_webhook_url, {
           clientName: clientRow.name,
           postCaption: postForWebhook?.caption ?? 'No caption',
           reviewerName: parsed.data.author_name,
           comment: parsed.data.content,
           status: parsed.data.status,
-          postUrl: `${appUrl}/s/${parsed.data.share_token}`,
+          postUrl: `${getCortexAppUrl(brand)}/s/${parsed.data.share_token}`,
         });
       }
     } catch (webhookErr) {
