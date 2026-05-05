@@ -120,6 +120,16 @@ export interface EditingProject {
   video_count: number;
   /** Count of raw clips uploaded via editing_project_raw_videos. */
   raw_video_count: number;
+  /**
+   * Rolled-up client-facing send timestamps across the project's share
+   * links. `first_sent_at` / `last_sent_at` come from the per-send
+   * `editing_share_link_emails` archive, with the share-link bookmark
+   * (`last_review_email_sent_at`) as fallback. Powers the unified
+   * review table's "Date sent" column for editing rows.
+   */
+  first_sent_at: string | null;
+  last_sent_at: string | null;
+  send_count: number;
 }
 
 export const EDITING_STATUS_LABEL: Record<EditingProjectStatus, string> = {

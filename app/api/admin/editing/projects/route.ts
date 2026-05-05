@@ -87,6 +87,65 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'db_error', detail: error.message }, { status: 500 });
   }
 
+  // Roll up client-facing send timestamps so the unified review table can
+  // show "Date sent" for editing projects. Truth source is the per-send
+  // archive (`editing_share_link_emails.sent_at`); we fall back to the
+  // share-link bookmark (`last_review_email_sent_at`) when the archive
+  // insert was skipped (it's best-effort - see share/[linkId]/email).
+  const projectIds = (data ?? []).map((r) => (r as { id: string }).id);
+  const sendStats = new Map<
+    string,
+    { first_sent_at: string | null; last_sent_at: string | null; send_count: number }
+  >();
+  if (projectIds.length) {
+    const { data: linkRows } = await admin
+      .from('editing_project_share_links')
+      .select('id, project_id, last_review_email_sent_at')
+      .in('project_id', projectIds);
+    const links = (linkRows ?? []) as Array<{
+      id: string;
+      project_id: string;
+      last_review_email_sent_at: string | null;
+    }>;
+    const linkToProject = new Map(links.map((l) => [l.id, l.project_id]));
+    const linkIds = links.map((l) => l.id);
+    const archiveRows = linkIds.length
+      ? (
+          await admin
+            .from('editing_share_link_emails')
+            .select('share_link_id, sent_at')
+            .in('share_link_id', linkIds)
+        ).data ?? []
+      : [];
+    for (const r of archiveRows as Array<{ share_link_id: string; sent_at: string }>) {
+      const pid = linkToProject.get(r.share_link_id);
+      if (!pid) continue;
+      const cur = sendStats.get(pid) ?? {
+        first_sent_at: null,
+        last_sent_at: null,
+        send_count: 0,
+      };
+      cur.send_count += 1;
+      if (!cur.first_sent_at || r.sent_at < cur.first_sent_at) cur.first_sent_at = r.sent_at;
+      if (!cur.last_sent_at || r.sent_at > cur.last_sent_at) cur.last_sent_at = r.sent_at;
+      sendStats.set(pid, cur);
+    }
+    // Fallback: for any link whose archive insert was lost, fold its
+    // bookmark into the project's stats so the column doesn't go blank.
+    for (const link of links) {
+      if (!link.last_review_email_sent_at) continue;
+      const cur = sendStats.get(link.project_id) ?? {
+        first_sent_at: null,
+        last_sent_at: null,
+        send_count: 0,
+      };
+      const ts = link.last_review_email_sent_at;
+      if (!cur.first_sent_at || ts < cur.first_sent_at) cur.first_sent_at = ts;
+      if (!cur.last_sent_at || ts > cur.last_sent_at) cur.last_sent_at = ts;
+      sendStats.set(link.project_id, cur);
+    }
+  }
+
   const projects: EditingProject[] = (data ?? []).map((row: any) => ({
     id: row.id,
     client_id: row.client_id,
@@ -119,6 +178,9 @@ export async function GET(req: Request) {
     archived_at: row.archived_at,
     video_count: Array.isArray(row.videos) ? row.videos[0]?.count ?? 0 : 0,
     raw_video_count: Array.isArray(row.raw_videos) ? row.raw_videos[0]?.count ?? 0 : 0,
+    first_sent_at: sendStats.get(row.id)?.first_sent_at ?? null,
+    last_sent_at: sendStats.get(row.id)?.last_sent_at ?? null,
+    send_count: sendStats.get(row.id)?.send_count ?? 0,
   }));
 
   return NextResponse.json({ projects });
