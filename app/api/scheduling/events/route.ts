@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
     ok: true,
     id: event.id,
     share_token: event.share_token,
-    share_url: `/schedule/${event.share_token}`,
+    share_url: `/s/${event.share_token}`,
   });
 }
 

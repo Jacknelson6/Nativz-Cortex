@@ -86,7 +86,7 @@ function inviteUrl(brand: 'nativz' | 'anderson', token: string): string {
         'https://cortex.andersoncollaborative.com'
       : process.env.PROPOSALS_PUBLIC_HOST_NATIVZ ??
         'https://cortex.nativz.io';
-  return `${host.replace(/\/+$/, '')}/connect/invite/${token}`;
+  return `${host.replace(/\/+$/, '')}/s/${token}`;
 }
 
 function inviteHtml(opts: {

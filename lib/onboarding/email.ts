@@ -85,7 +85,7 @@ function shareUrl(agency: AgencyBrand, token: string): string {
   const base = process.env.NODE_ENV !== 'production'
     ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
     : getCortexAppUrl(agency);
-  return `${base}/onboarding/${token}`;
+  return `${base}/s/${token}`;
 }
 
 async function loadClient(clientId: string): Promise<ClientCtx> {

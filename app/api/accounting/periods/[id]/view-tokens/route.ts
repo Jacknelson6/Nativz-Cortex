@@ -97,7 +97,7 @@ export async function POST(
 
   return NextResponse.json({
     ...data,
-    url: `${publicBaseUrl()}/comptroller/${data.token}`,
+    url: `${publicBaseUrl()}/s/${data.token}`,
   });
 }
 

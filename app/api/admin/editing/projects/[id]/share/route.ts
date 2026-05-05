@@ -64,7 +64,7 @@ export async function POST(
 
   return NextResponse.json({
     link,
-    url: `${resolveAppUrl(project.clients?.agency)}/c/edit/${link.token}`,
+    url: `${resolveAppUrl(project.clients?.agency)}/s/${link.token}`,
   });
 }
 
