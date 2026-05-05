@@ -146,6 +146,25 @@ async function loadEmailContext(projectId: string, linkId: string) {
     ? 'rereview'
     : 'delivery';
 
+  // Pull every asset's mime_type so we can pick "cuts/Watch the cuts" copy
+  // for video projects vs "work/Review the work" for static-ad shoots.
+  // image/* → static, video/* (or null mime, which means a Mux upload that
+  // hasn't reconciled) → video. If both kinds coexist we pick 'mixed' which
+  // also uses the generic "work" wording.
+  const { data: assetRows } = await admin
+    .from('editing_project_videos')
+    .select('mime_type')
+    .eq('project_id', project.id);
+  let hasImage = false;
+  let hasVideo = false;
+  for (const r of assetRows ?? []) {
+    const m = (r as { mime_type: string | null }).mime_type ?? '';
+    if (m.startsWith('image/')) hasImage = true;
+    else hasVideo = true;
+  }
+  const contentKind: 'video' | 'static' | 'mixed' =
+    hasImage && !hasVideo ? 'static' : hasImage && hasVideo ? 'mixed' : 'video';
+
   return {
     admin,
     userId: user.id,
@@ -159,6 +178,7 @@ async function loadEmailContext(projectId: string, linkId: string) {
     shareUrl,
     kind,
     pendingRevisionCount,
+    contentKind,
   } as const;
 }
 
@@ -177,6 +197,7 @@ export async function GET(
     shareUrl,
     kind,
     pendingRevisionCount,
+    contentKind,
   } = ctxResult;
   if (eligible.length === 0) {
     return NextResponse.json(
@@ -196,21 +217,27 @@ export async function GET(
           clientName,
           projectName,
           pendingCount: pendingRevisionCount,
+          contentKind,
         })
       : buildEditingDeliverableDraft({
           pocFirstNames,
           clientName,
           projectName,
+          contentKind,
         });
 
   return NextResponse.json({
     subject: draft.subject,
     message: draft.message,
+    cta_label: draft.ctaLabel,
+    eyebrow: draft.eyebrow,
+    hero_title: draft.heroTitle,
     recipients: eligible.map((c) => ({ email: c.email, name: c.name })),
     client_name: clientName,
     project_name: projectName,
     share_url: shareUrl,
     kind,
+    content_kind: contentKind,
     pending_count: pendingRevisionCount,
   });
 }
@@ -219,6 +246,7 @@ const PostBodySchema = z
   .object({
     subject: z.string().trim().min(1).max(200).optional(),
     message: z.string().trim().min(1).max(5000).optional(),
+    cta_label: z.string().trim().min(1).max(80).optional(),
   })
   .strict();
 
@@ -253,6 +281,7 @@ export async function POST(
     shareUrl,
     kind,
     pendingRevisionCount,
+    contentKind,
   } = ctxResult;
 
   if (eligible.length === 0) {
@@ -278,11 +307,13 @@ export async function POST(
           clientName,
           projectName,
           pendingCount: pendingRevisionCount,
+          contentKind,
         })
       : buildEditingDeliverableDraft({
           pocFirstNames,
           clientName,
           projectName,
+          contentKind,
         });
   const resolvedSubject = parsed.data.subject?.trim() || draft.subject;
 
@@ -298,8 +329,10 @@ export async function POST(
           agency,
           clientId,
           projectId,
+          contentKind,
           subjectOverride: parsed.data.subject,
           messageOverride: parsed.data.message,
+          ctaLabelOverride: parsed.data.cta_label,
         })
       : await sendEditingDeliverableEmail({
           to: recipients,
@@ -310,8 +343,10 @@ export async function POST(
           agency,
           clientId,
           projectId,
+          contentKind,
           subjectOverride: parsed.data.subject,
           messageOverride: parsed.data.message,
+          ctaLabelOverride: parsed.data.cta_label,
         });
 
   if (!result.ok) {

@@ -285,6 +285,9 @@ export function EditingShareButton({
 interface DeliverableDraft {
   subject: string;
   message: string;
+  cta_label: string;
+  eyebrow: string;
+  hero_title: string;
   recipients: { email: string; name: string | null }[];
   client_name: string;
   project_name: string;
@@ -294,6 +297,12 @@ interface DeliverableDraft {
    * delivery has gone out (so the dialog title + button + body switch).
    */
   kind: 'delivery' | 'rereview';
+  /**
+   * `video` keeps the "cuts / Watch the cuts" copy. `static` projects
+   * (PNG/JPEG drops, ad shoots) and `mixed` projects switch to the
+   * generic "work / Review the work" wording.
+   */
+  content_kind: 'video' | 'static' | 'mixed';
   /**
    * Number of `version > 1` videos uploaded since the last review email.
    * Surfaced in the dialog header so the admin sees what they're sending.
@@ -324,6 +333,7 @@ function SendToClientDialog({
   const [draft, setDraft] = useState<DeliverableDraft | null>(null);
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
+  const [ctaLabel, setCtaLabel] = useState('');
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
@@ -344,6 +354,7 @@ function SendToClientDialog({
         setDraft(data);
         setSubject(data.subject);
         setMessage(data.message);
+        setCtaLabel(data.cta_label);
       } catch (err) {
         if (!cancelled) {
           setLoadError(err instanceof Error ? err.message : 'Could not load draft');
@@ -370,6 +381,7 @@ function SendToClientDialog({
           body: JSON.stringify({
             subject: subject.trim(),
             message: message.trim(),
+            cta_label: ctaLabel.trim(),
           }),
         },
       );
@@ -401,14 +413,20 @@ function SendToClientDialog({
     !loading &&
     !loadError &&
     subject.trim().length > 0 &&
-    message.trim().length > 0;
+    message.trim().length > 0 &&
+    ctaLabel.trim().length > 0;
 
   const isRereview = draft?.kind === 'rereview';
-  const dialogTitle = isRereview ? 'Send re-review email' : 'Send cuts for review';
+  const isStatic = draft?.content_kind === 'static';
+  const isMixed = draft?.content_kind === 'mixed';
+  const dialogTitle = isRereview
+    ? 'Send re-review email'
+    : isStatic || isMixed
+      ? 'Send work for review'
+      : 'Send cuts for review';
   const sendLabel = isRereview ? 'Send re-review' : 'Send';
-  const helperCopy = isRereview
-    ? 'Blank lines start a new paragraph. The branded layout and the “Watch the revised cuts” button are added automatically.'
-    : 'Blank lines start a new paragraph. The branded layout and the “Watch the cuts” button are added automatically.';
+  const helperCopy =
+    'Blank lines start a new paragraph. The branded layout is added automatically — edit the button label below if needed.';
 
   return (
     <Dialog open onClose={onClose} title={dialogTitle} maxWidth="xl">
@@ -475,6 +493,35 @@ function SendToClientDialog({
               {helperCopy}
             </span>
           </label>
+
+          <label className="block">
+            <span className="text-xs font-medium uppercase tracking-wider text-text-muted">
+              Button label
+            </span>
+            <input
+              type="text"
+              value={ctaLabel}
+              onChange={(e) => setCtaLabel(e.target.value)}
+              className="mt-1 block w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:border-accent-text focus:outline-none focus:ring-1 focus:ring-accent-text"
+              maxLength={80}
+            />
+          </label>
+
+          {draft ? (
+            <div className="rounded-md border border-nativz-border bg-background/50 px-3 py-2 text-xs text-text-muted">
+              <div className="font-medium uppercase tracking-wider text-text-muted">
+                Email header preview
+              </div>
+              <div className="mt-1.5 space-y-0.5 text-text-secondary">
+                <div>
+                  <span className="text-text-muted">Eyebrow:</span> {draft.eyebrow}
+                </div>
+                <div>
+                  <span className="text-text-muted">Hero title:</span> {draft.hero_title}
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           <div className="flex items-center justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={onClose} disabled={sending}>

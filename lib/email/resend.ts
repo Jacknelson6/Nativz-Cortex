@@ -1828,18 +1828,52 @@ function renderRevisionsCard(bullets: string[], agency: AgencyBrand): string {
 // paste it into Slack or DMs. Logged via sendAndLog so the Email Hub UI
 // shows delivery + open status alongside calendar emails.
 
+/**
+ * `contentKind` swaps "cuts / watch each video / Watch the cuts" copy for
+ * "work / review each piece / Review the work" when the project has no
+ * video assets (static-ad shoots, carousel slides). `mixed` projects get
+ * the generic "work" wording too. Defaults to 'video' for backwards
+ * compatibility — pre-existing call sites that don't pass kind keep the
+ * cuts-flavoured copy.
+ */
+export type EditingContentKind = 'video' | 'static' | 'mixed';
+
 export function buildEditingDeliverableDraft(opts: {
   pocFirstNames: string[];
   clientName: string;
   projectName: string;
-}): { subject: string; message: string } {
+  contentKind?: EditingContentKind;
+}): {
+  subject: string;
+  message: string;
+  ctaLabel: string;
+  eyebrow: string;
+  heroTitle: string;
+} {
   const greeting = greetingFor(opts.pocFirstNames, opts.clientName);
-  const subject = `Your ${opts.projectName} cuts are ready for review`;
-  const message =
-    `${greeting}, the latest cuts for ${opts.projectName} are ready for your review. ` +
-    `Tap the button below to watch each video and either approve it or drop comments where you'd like changes.\n\n` +
-    `Once you've signed off we'll get everything packaged for delivery.`;
-  return { subject, message };
+  const kind = opts.contentKind ?? 'video';
+  if (kind === 'video') {
+    return {
+      subject: `Your ${opts.projectName} cuts are ready for review`,
+      message:
+        `${greeting}, the latest cuts for ${opts.projectName} are ready for your review. ` +
+        `Tap the button below to watch each video and either approve it or drop comments where you'd like changes.\n\n` +
+        `Once you've signed off we'll get everything packaged for delivery.`,
+      ctaLabel: 'Watch the cuts',
+      eyebrow: 'Cuts Delivered',
+      heroTitle: `${opts.projectName} cuts ready for review`,
+    };
+  }
+  return {
+    subject: `Your ${opts.projectName} is ready for review`,
+    message:
+      `${greeting}, the latest work for ${opts.projectName} is ready for your review. ` +
+      `Tap the button below to review each piece and either approve it or drop comments where you'd like changes.\n\n` +
+      `Once you've signed off we'll get everything packaged for delivery.`,
+    ctaLabel: 'Review the work',
+    eyebrow: 'Work Delivered',
+    heroTitle: `${opts.projectName} ready for review`,
+  };
 }
 
 export async function sendEditingDeliverableEmail(opts: {
@@ -1851,19 +1885,24 @@ export async function sendEditingDeliverableEmail(opts: {
   agency?: AgencyBrand;
   clientId?: string;
   projectId?: string;
+  contentKind?: EditingContentKind;
   /** Admin-edited subject from the draft dialog. Falls back to the default. */
   subjectOverride?: string;
   /** Admin-edited body (plain text, blank-line separated paragraphs). */
   messageOverride?: string;
+  /** Admin-edited CTA button label. Falls back to the kind-aware default. */
+  ctaLabelOverride?: string;
 }) {
   const agency = opts.agency ?? 'nativz';
   const draft = buildEditingDeliverableDraft({
     pocFirstNames: opts.pocFirstNames,
     clientName: opts.clientName,
     projectName: opts.projectName,
+    contentKind: opts.contentKind,
   });
   const subject = opts.subjectOverride?.trim() || draft.subject;
   const messageText = opts.messageOverride?.trim() || draft.message;
+  const ctaLabel = opts.ctaLabelOverride?.trim() || draft.ctaLabel;
   const bodyHtml = messageToHtmlParagraphs(messageText);
   return sendAndLog({
     category: 'transactional',
@@ -1875,18 +1914,19 @@ export async function sendEditingDeliverableEmail(opts: {
     html: layout(`
       ${bodyHtml}
       <div class="button-wrap">
-        <a href="${opts.shareUrl}" class="btn">Watch the cuts</a>
+        <a href="${opts.shareUrl}" class="btn">${ctaLabel}</a>
       </div>
     `, agency, {
-      eyebrow: 'Cuts Delivered',
-      heroTitle: `${opts.projectName} cuts ready for review`,
+      eyebrow: draft.eyebrow,
+      heroTitle: draft.heroTitle,
     }),
     metadata: {
       clientName: opts.clientName,
       projectName: opts.projectName,
       projectId: opts.projectId,
       pocFirstNames: opts.pocFirstNames,
-      edited: !!(opts.subjectOverride || opts.messageOverride),
+      contentKind: opts.contentKind ?? 'video',
+      edited: !!(opts.subjectOverride || opts.messageOverride || opts.ctaLabelOverride),
     },
   });
 }
@@ -1907,21 +1947,52 @@ export function buildEditingRereviewDraft(opts: {
   clientName: string;
   projectName: string;
   pendingCount: number;
-}): { subject: string; message: string } {
+  contentKind?: EditingContentKind;
+}): {
+  subject: string;
+  message: string;
+  ctaLabel: string;
+  eyebrow: string;
+  heroTitle: string;
+} {
   const greeting = greetingFor(opts.pocFirstNames, opts.clientName);
-  const cutWord = opts.pendingCount === 1 ? 'cut' : 'cuts';
-  const subject =
-    opts.pendingCount > 0
-      ? `Revised ${opts.projectName} ${cutWord} ready for re-review`
-      : `Re-review ready for ${opts.projectName}`;
-  const body =
-    opts.pendingCount > 0
-      ? `${greeting}, we worked through the notes and re-uploaded ${opts.pendingCount} revised ${cutWord} for ${opts.projectName}. ` +
-        `Tap the button below to watch the new versions and either approve them or drop more comments.\n\n` +
-        `Thanks for the quick turn on the last round.`
-      : `${greeting}, the revised ${opts.projectName} cuts are ready for another look. ` +
-        `Tap the button below to watch the new versions and either approve them or drop more comments.`;
-  return { subject, message: body };
+  const kind = opts.contentKind ?? 'video';
+  if (kind === 'video') {
+    const cutWord = opts.pendingCount === 1 ? 'cut' : 'cuts';
+    return {
+      subject:
+        opts.pendingCount > 0
+          ? `Revised ${opts.projectName} ${cutWord} ready for re-review`
+          : `Re-review ready for ${opts.projectName}`,
+      message:
+        opts.pendingCount > 0
+          ? `${greeting}, we worked through the notes and re-uploaded ${opts.pendingCount} revised ${cutWord} for ${opts.projectName}. ` +
+            `Tap the button below to watch the new versions and either approve them or drop more comments.\n\n` +
+            `Thanks for the quick turn on the last round.`
+          : `${greeting}, the revised ${opts.projectName} cuts are ready for another look. ` +
+            `Tap the button below to watch the new versions and either approve them or drop more comments.`,
+      ctaLabel: 'Watch the revised cuts',
+      eyebrow: 'Revised Cuts Ready',
+      heroTitle: `${opts.projectName} revisions ready`,
+    };
+  }
+  const pieceWord = opts.pendingCount === 1 ? 'piece' : 'pieces';
+  return {
+    subject:
+      opts.pendingCount > 0
+        ? `Revised ${opts.projectName} ${pieceWord} ready for re-review`
+        : `Re-review ready for ${opts.projectName}`,
+    message:
+      opts.pendingCount > 0
+        ? `${greeting}, we worked through the notes and re-uploaded ${opts.pendingCount} revised ${pieceWord} for ${opts.projectName}. ` +
+          `Tap the button below to review the new versions and either approve them or drop more comments.\n\n` +
+          `Thanks for the quick turn on the last round.`
+        : `${greeting}, the revised ${opts.projectName} work is ready for another look. ` +
+          `Tap the button below to review the new versions and either approve them or drop more comments.`,
+    ctaLabel: 'Review the revised work',
+    eyebrow: 'Revisions Ready',
+    heroTitle: `${opts.projectName} revisions ready`,
+  };
 }
 
 export async function sendEditingRereviewEmail(opts: {
@@ -1939,10 +2010,13 @@ export async function sendEditingRereviewEmail(opts: {
   agency?: AgencyBrand;
   clientId?: string;
   projectId?: string;
+  contentKind?: EditingContentKind;
   /** Admin-edited subject from the draft dialog. Falls back to the default. */
   subjectOverride?: string;
   /** Admin-edited body (plain text, blank-line separated paragraphs). */
   messageOverride?: string;
+  /** Admin-edited CTA button label. Falls back to the kind-aware default. */
+  ctaLabelOverride?: string;
 }) {
   const agency = opts.agency ?? 'nativz';
   const draft = buildEditingRereviewDraft({
@@ -1950,9 +2024,11 @@ export async function sendEditingRereviewEmail(opts: {
     clientName: opts.clientName,
     projectName: opts.projectName,
     pendingCount: opts.pendingCount,
+    contentKind: opts.contentKind,
   });
   const subject = opts.subjectOverride?.trim() || draft.subject;
   const messageText = opts.messageOverride?.trim() || draft.message;
+  const ctaLabel = opts.ctaLabelOverride?.trim() || draft.ctaLabel;
   const bodyHtml = messageToHtmlParagraphs(messageText);
   const summaryBullets = opts.summaryBullets ?? [];
   const summarySection = renderRevisionsCard(summaryBullets, agency);
@@ -1967,11 +2043,11 @@ export async function sendEditingRereviewEmail(opts: {
       ${bodyHtml}
       ${summarySection}
       <div class="button-wrap">
-        <a href="${opts.shareUrl}" class="btn">Watch the revised cuts</a>
+        <a href="${opts.shareUrl}" class="btn">${ctaLabel}</a>
       </div>
     `, agency, {
-      eyebrow: 'Revised Cuts Ready',
-      heroTitle: `${opts.projectName} revisions ready`,
+      eyebrow: draft.eyebrow,
+      heroTitle: draft.heroTitle,
     }),
     metadata: {
       clientName: opts.clientName,
@@ -1980,7 +2056,8 @@ export async function sendEditingRereviewEmail(opts: {
       pocFirstNames: opts.pocFirstNames,
       pendingCount: opts.pendingCount,
       summaryBulletsCount: summaryBullets.length,
-      edited: !!(opts.subjectOverride || opts.messageOverride),
+      contentKind: opts.contentKind ?? 'video',
+      edited: !!(opts.subjectOverride || opts.messageOverride || opts.ctaLabelOverride),
     },
   });
 }
