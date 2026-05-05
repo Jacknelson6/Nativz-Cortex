@@ -40,7 +40,7 @@ async function syncPlatformRowsFromZernio(
   }
   const { data: sppRows } = await adminClient
     .from('scheduled_post_platforms')
-    .select('id, social_profile_id, social_profiles:social_profile_id (late_account_id, platform)')
+    .select('id, social_profile_id, status, external_post_url, social_profiles:social_profile_id (late_account_id, platform)')
     .eq('post_id', parent.id);
   if (!sppRows?.length) return;
 
@@ -48,28 +48,36 @@ async function syncPlatformRowsFromZernio(
   type Spp = {
     id: string;
     social_profile_id: string;
+    status: string;
+    external_post_url: string | null;
     social_profiles:
       | { late_account_id: string | null; platform: string | null }
       | { late_account_id: string | null; platform: string | null }[]
       | null;
   };
-  const lateIdToSppId = new Map<string, string>();
+  const sppByLateId = new Map<string, Spp>();
   for (const row of sppRows as Spp[]) {
     const sp = row.social_profiles;
     const flat = Array.isArray(sp) ? sp : sp ? [sp] : [];
     for (const x of flat) {
-      if (x.late_account_id) lateIdToSppId.set(x.late_account_id, row.id);
+      if (x.late_account_id) sppByLateId.set(x.late_account_id, row);
     }
   }
-  if (lateIdToSppId.size === 0) return;
+  if (sppByLateId.size === 0) return;
 
   // Pull the actual breakdown from Zernio
   const service = getPostingService();
   const status = await service.getPostStatus(latePostId);
 
   for (const platform of status.platforms) {
-    const sppId = lateIdToSppId.get(platform.profileId);
-    if (!sppId) continue;
+    const spp = sppByLateId.get(platform.profileId);
+    if (!spp) continue;
+    // Don't downgrade a leg that already published — Zernio's webhook can
+    // arrive after we've already reconciled the row from a different
+    // late_post_id (per-leg retry creates new Zernio posts but the older
+    // legs keep their existing external_post_url). Stomp would erase the
+    // public URL and confuse the calendar UI.
+    if (spp.status === 'published' && platform.status !== 'published') continue;
     await adminClient
       .from('scheduled_post_platforms')
       .update({
@@ -78,8 +86,82 @@ async function syncPlatformRowsFromZernio(
         external_post_url: platform.externalPostUrl ?? null,
         failure_reason: platform.error ?? null,
       })
-      .eq('id', sppId);
+      .eq('id', spp.id);
   }
+}
+
+/**
+ * Derive parent post status from the per-leg statuses after a webhook sync.
+ *
+ * Why this exists: Zernio fires `post.failed` whenever ANY leg failed in its
+ * post, even when 3 of 4 platforms succeeded. The naive webhook handler used
+ * to slam `scheduled_posts.status = 'failed'`, which stomped the cron's
+ * `partially_failed` (still retrying) state. The cron's main publish loop
+ * only picks up `scheduled | publishing | partially_failed`, so a stomped
+ * row would never auto-retry — the failed leg was silently abandoned.
+ *
+ * This helper reads the spp rows after sync and writes the correct
+ * aggregate. Mirrors the cron's status logic:
+ *   - All legs published → `published`
+ *   - Any failed + any published → `partially_failed`
+ *   - All failed → `failed`
+ *   - Any pending → leave parent alone (cron will resolve it)
+ *
+ * IMPORTANT: never downgrade `published` to anything else. Webhooks can
+ * arrive out-of-order; if we already saw `post.published` and reconciled,
+ * a late `post.failed` for an earlier per-leg retry must not erase that.
+ */
+async function reconcileParentStatusFromSpp(
+  adminClient: ReturnType<typeof createAdminClient>,
+  latePostId: string,
+): Promise<void> {
+  const { data: parent } = await adminClient
+    .from('scheduled_posts')
+    .select('id, status, retry_count, scheduled_at')
+    .eq('late_post_id', latePostId)
+    .maybeSingle();
+  if (!parent) return;
+
+  const { data: rows } = await adminClient
+    .from('scheduled_post_platforms')
+    .select('status')
+    .eq('post_id', (parent as { id: string }).id);
+  const statuses = (rows ?? []).map((r) => (r as { status: string }).status);
+  if (statuses.length === 0) return;
+
+  const allPublished = statuses.every((s) => s === 'published');
+  const anyPending = statuses.some((s) => s === 'pending');
+  const anyFailed = statuses.some((s) => s === 'failed');
+  const anyPublished = statuses.some((s) => s === 'published');
+  const currentStatus = (parent as { status: string }).status;
+
+  // Never downgrade a `published` parent.
+  if (currentStatus === 'published' && !allPublished) {
+    return;
+  }
+  // Pending legs mean a per-leg retry is still in flight — let the cron
+  // own this row's status.
+  if (anyPending) return;
+
+  let next: 'published' | 'partially_failed' | 'failed' | null = null;
+  if (allPublished) next = 'published';
+  else if (anyFailed && anyPublished) next = 'partially_failed';
+  else if (anyFailed && !anyPublished) next = 'failed';
+
+  if (!next || next === currentStatus) return;
+
+  const update: Record<string, unknown> = {
+    status: next,
+    updated_at: new Date().toISOString(),
+  };
+  if (next === 'published') {
+    update.published_at = new Date().toISOString();
+    update.failure_reason = null;
+  }
+  await adminClient
+    .from('scheduled_posts')
+    .update(update)
+    .eq('id', (parent as { id: string }).id);
 }
 
 function asRecord(v: unknown): Record<string, unknown> | null {
@@ -193,34 +275,42 @@ export async function POST(request: NextRequest) {
     switch (event) {
       case 'post.published': {
         if (postId) {
-          await adminClient
-            .from('scheduled_posts')
-            .update({ status: 'published', published_at: new Date().toISOString() })
-            .eq('late_post_id', postId);
-          // Sync per-platform rows so the calendar / share UI shows the
-          // real Instagram/Facebook/etc URLs instead of stuck "pending".
+          // Sync per-platform rows first, THEN derive parent status from the
+          // spp rows. Avoids the prior race where the webhook stamped
+          // `published` based purely on event type but the spp rows weren't
+          // yet reconciled, leaving "all legs pending" but parent="published".
           try {
             await syncPlatformRowsFromZernio(adminClient, postId);
+            await reconcileParentStatusFromSpp(adminClient, postId);
           } catch (syncErr) {
             console.error(
-              `[zernio-webhook] post.published syncPlatformRowsFromZernio failed for ${postId}:`,
+              `[zernio-webhook] post.published sync/reconcile failed for ${postId}:`,
               syncErr,
             );
+            // Last-ditch fallback so the publish event isn't lost entirely.
+            await adminClient
+              .from('scheduled_posts')
+              .update({ status: 'published', published_at: new Date().toISOString() })
+              .eq('late_post_id', postId);
           }
         }
         break;
       }
       case 'post.failed': {
         if (postId) {
-          await adminClient
-            .from('scheduled_posts')
-            .update({ status: 'failed' })
-            .eq('late_post_id', postId);
+          // Per-leg fanout: Zernio fires `post.failed` for any per-leg
+          // retry that fails — even though 3 of 4 platforms may have
+          // already published from earlier passes. Trusting the event
+          // type and slamming status='failed' stomped the cron's
+          // `partially_failed` (still retrying) state, blocking any
+          // further auto-retry. Now we sync spp rows and let
+          // reconcileParentStatusFromSpp pick the right aggregate.
           try {
             await syncPlatformRowsFromZernio(adminClient, postId);
+            await reconcileParentStatusFromSpp(adminClient, postId);
           } catch (syncErr) {
             console.error(
-              `[zernio-webhook] post.failed syncPlatformRowsFromZernio failed for ${postId}:`,
+              `[zernio-webhook] post.failed sync/reconcile failed for ${postId}:`,
               syncErr,
             );
           }
@@ -257,27 +347,42 @@ export async function POST(request: NextRequest) {
       }
       case 'post.scheduled': {
         if (postId) {
-          await adminClient
+          // Only honour `post.scheduled` if the parent isn't already
+          // resolved. Per-leg retry creates new Zernio posts that briefly
+          // emit `scheduled` events; without this guard a late-arriving
+          // event would downgrade `published`/`partially_failed` to
+          // `scheduled` and re-enter the cron's publish loop, double-
+          // posting already-published legs.
+          const { data: parent } = await adminClient
             .from('scheduled_posts')
-            .update({ status: 'scheduled' })
-            .eq('late_post_id', postId);
+            .select('status')
+            .eq('late_post_id', postId)
+            .maybeSingle();
+          const cur = (parent as { status?: string } | null)?.status;
+          if (cur && cur !== 'published' && cur !== 'partially_failed' && cur !== 'failed') {
+            await adminClient
+              .from('scheduled_posts')
+              .update({ status: 'scheduled' })
+              .eq('late_post_id', postId);
+          }
         }
         break;
       }
       case 'post.partial_publish':
       case 'post.partial': {
         if (postId) {
-          await adminClient
-            .from('scheduled_posts')
-            .update({ status: 'partially_failed' })
-            .eq('late_post_id', postId);
           try {
             await syncPlatformRowsFromZernio(adminClient, postId);
+            await reconcileParentStatusFromSpp(adminClient, postId);
           } catch (syncErr) {
             console.error(
-              `[zernio-webhook] post.partial syncPlatformRowsFromZernio failed for ${postId}:`,
+              `[zernio-webhook] post.partial sync/reconcile failed for ${postId}:`,
               syncErr,
             );
+            await adminClient
+              .from('scheduled_posts')
+              .update({ status: 'partially_failed' })
+              .eq('late_post_id', postId);
           }
         }
         break;
