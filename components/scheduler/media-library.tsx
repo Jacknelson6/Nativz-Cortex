@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { toast } from 'sonner';
 import type { MediaItem, ConnectedProfile } from './types';
+import { planAutoCrop, computeCenterCrop } from '@/lib/posting/auto-crop-image';
 
 interface MediaLibraryProps {
   clientId: string | null;
@@ -63,16 +64,46 @@ export function MediaLibrary({
     setUploadProgress(0);
 
     try {
-      // Step 1: Get presigned URL from our API
+      // Step 1 (image only): measure intrinsic dims first so we can decide
+      // whether to auto-crop before uploading. This is what makes "1080x1090
+      // becomes 1080x1080" possible without a second upload round-trip.
+      let effectiveFile: File = file;
+      let dims: { width: number; height: number } | null = null;
+      let cropApplied: { from: string; to: string } | null = null;
+
+      if (file.type.startsWith('image/')) {
+        const sourceDims = await readImageDimensions(file);
+        if (sourceDims) {
+          const plan = planAutoCrop(sourceDims.width, sourceDims.height);
+          if (plan) {
+            const cropped = await cropImageFile(file, sourceDims, plan.targetRatio);
+            if (cropped) {
+              effectiveFile = cropped.file;
+              dims = { width: cropped.width, height: cropped.height };
+              cropApplied = {
+                from: `${sourceDims.width}x${sourceDims.height}`,
+                to: `${cropped.width}x${cropped.height} (${plan.label})`,
+              };
+            }
+          }
+          if (!dims) dims = sourceDims;
+        }
+      }
+
+      // Step 2: Get presigned URL using effectiveFile's type/name
       const urlRes = await fetch('/api/scheduler/media', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'get-upload-url', contentType: file.type, filename: file.name }),
+        body: JSON.stringify({
+          action: 'get-upload-url',
+          contentType: effectiveFile.type,
+          filename: effectiveFile.name,
+        }),
       });
       if (!urlRes.ok) throw new Error('Failed to get upload URL');
       const { uploadUrl, publicUrl } = await urlRes.json();
 
-      // Step 2: Upload directly to Late CDN with progress
+      // Step 3: Upload effectiveFile (possibly cropped) directly to Zernio CDN
       const xhr = new XMLHttpRequest();
       xhr.upload.addEventListener('progress', (evt) => {
         if (evt.lengthComputable) {
@@ -87,41 +118,41 @@ export function MediaLibrary({
         };
         xhr.onerror = () => reject(new Error('Upload failed'));
         xhr.open('PUT', uploadUrl);
-        xhr.setRequestHeader('Content-Type', file.type);
-        xhr.send(file);
+        xhr.setRequestHeader('Content-Type', effectiveFile.type);
+        xhr.send(effectiveFile);
       });
 
-      // Step 3: Generate thumbnail + capture intrinsic dimensions. Capturing
-      // width/height for images here lets the publish-cron's pre-flight reject
-      // bad-aspect images (e.g. 9:16 → Instagram feed) before Zernio retries
-      // 3 times and pages the team. Video dims aren't part of the rule yet.
+      // Step 4: Thumbnail + (for video) backfill dims later. For images, the
+      // public URL itself IS the thumbnail.
       let thumbnailUrl: string | null = null;
-      let dims: { width: number; height: number } | null = null;
-      if (file.type.startsWith('image/')) {
+      if (effectiveFile.type.startsWith('image/')) {
         thumbnailUrl = publicUrl;
-        dims = await readImageDimensions(file);
-      } else if (file.type.startsWith('video/')) {
-        thumbnailUrl = await generateVideoThumbnail(file);
+      } else if (effectiveFile.type.startsWith('video/')) {
+        thumbnailUrl = await generateVideoThumbnail(effectiveFile);
       }
 
-      // Step 4: Confirm upload in our DB
+      // Step 5: Confirm upload in our DB
       const confirmRes = await fetch('/api/scheduler/media', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'confirm-upload',
           client_id: clientId,
-          filename: file.name,
+          filename: effectiveFile.name,
           public_url: publicUrl,
-          file_size_bytes: file.size,
-          mime_type: file.type,
+          file_size_bytes: effectiveFile.size,
+          mime_type: effectiveFile.type,
           thumbnail_url: thumbnailUrl,
           ...(dims ? { width: dims.width, height: dims.height } : {}),
         }),
       });
       if (!confirmRes.ok) throw new Error('Failed to save media record');
 
-      toast.success('Media uploaded');
+      if (cropApplied) {
+        toast.success(`Auto-cropped ${cropApplied.from} to ${cropApplied.to}`);
+      } else {
+        toast.success('Media uploaded');
+      }
       onUploadComplete();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Upload failed');
@@ -129,6 +160,55 @@ export function MediaLibrary({
       setUploading(false);
       setUploadProgress(0);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  /**
+   * Center-crop an image File to a target aspect ratio using a canvas.
+   * Returns null if the browser fails to decode or canvas.toBlob errors out;
+   * the caller falls back to uploading the original.
+   */
+  async function cropImageFile(
+    file: File,
+    source: { width: number; height: number },
+    targetRatio: number,
+  ): Promise<{ file: File; width: number; height: number } | null> {
+    try {
+      const crop = computeCenterCrop(source.width, source.height, targetRatio);
+      const objectUrl = URL.createObjectURL(file);
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const i = document.createElement('img');
+        i.onload = () => resolve(i);
+        i.onerror = () => reject(new Error('image decode failed'));
+        i.src = objectUrl;
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = crop.width;
+      canvas.height = crop.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        URL.revokeObjectURL(objectUrl);
+        return null;
+      }
+      ctx.drawImage(img, crop.x, crop.y, crop.width, crop.height, 0, 0, crop.width, crop.height);
+      URL.revokeObjectURL(objectUrl);
+
+      const mime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+      const quality = mime === 'image/jpeg' ? 0.92 : undefined;
+      const blob: Blob | null = await new Promise((resolve) =>
+        canvas.toBlob(resolve, mime, quality),
+      );
+      if (!blob) return null;
+
+      const ext = mime === 'image/png' ? 'png' : 'jpg';
+      const base = file.name.replace(/\.[^.]+$/, '');
+      return {
+        file: new File([blob], `${base}.cropped.${ext}`, { type: mime }),
+        width: crop.width,
+        height: crop.height,
+      };
+    } catch {
+      return null;
     }
   }
 

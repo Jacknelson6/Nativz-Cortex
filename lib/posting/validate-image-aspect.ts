@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { SocialPlatform } from '@/lib/posting/types';
+import { planAutoCrop, computeCenterCrop } from '@/lib/posting/auto-crop-image';
+import { getPostingService } from '@/lib/posting';
 
 export interface AspectRule {
   min: number;
@@ -164,26 +166,108 @@ export async function preflightInstagramAspectForPost(
 
   const carousel: { width: number | null; height: number | null }[] = [];
   for (const m of carouselRows) {
+    let dims: { width: number | null; height: number | null };
     if (m.width != null && m.height != null) {
-      carousel.push({ width: m.width, height: m.height });
-      continue;
-    }
-    const url = m.late_media_url ?? m.storage_path ?? null;
-    if (!url) {
-      carousel.push({ width: null, height: null });
-      continue;
-    }
-    const probed = await probeImageDimensions(url);
-    if (probed) {
-      carousel.push(probed);
-      await admin
-        .from('scheduler_media')
-        .update({ width: probed.width, height: probed.height })
-        .eq('id', m.id);
+      dims = { width: m.width, height: m.height };
     } else {
-      carousel.push({ width: null, height: null });
+      const url = m.late_media_url ?? m.storage_path ?? null;
+      if (!url) {
+        carousel.push({ width: null, height: null });
+        continue;
+      }
+      const probed = await probeImageDimensions(url);
+      if (probed) {
+        dims = probed;
+        await admin
+          .from('scheduler_media')
+          .update({ width: probed.width, height: probed.height })
+          .eq('id', m.id);
+      } else {
+        carousel.push({ width: null, height: null });
+        continue;
+      }
     }
+
+    // Hard-rescue: only fires when source ratio is *outside* IG's 0.75-1.91
+    // bounds (strict mode skips the soft-snap). Without this, Zernio rejects
+    // the IG leg with a deterministic 400 and we burn 3 retries plus a
+    // posting health alert before the post is marked failed. Soft-snap stays
+    // client-side so we don't silently re-crop legacy artwork the user has
+    // already approved.
+    if (dims.width != null && dims.height != null) {
+      const plan = planAutoCrop(dims.width, dims.height, { strict: true });
+      if (plan) {
+        const cropUrl = m.late_media_url ?? m.storage_path ?? null;
+        if (cropUrl) {
+          const rescued = await rescueCropOnZernio({
+            admin,
+            mediaId: m.id,
+            sourceUrl: cropUrl,
+            sourceWidth: dims.width,
+            sourceHeight: dims.height,
+            targetRatio: plan.targetRatio,
+          });
+          if (rescued) dims = rescued;
+        }
+      }
+    }
+
+    carousel.push(dims);
   }
 
   return validateCarouselForPlatform('instagram', carousel);
+}
+
+/**
+ * Download the image, sharp-extract a center crop to the planned ratio,
+ * re-upload via Zernio's presign endpoint, and persist the new URL + dims
+ * onto the scheduler_media row. Returns the new dims on success, null on
+ * any failure (callers fall through to the original dims, which means
+ * the IG pre-flight will surface the existing aspect issue).
+ */
+async function rescueCropOnZernio(args: {
+  admin: SupabaseClient;
+  mediaId: string;
+  sourceUrl: string;
+  sourceWidth: number;
+  sourceHeight: number;
+  targetRatio: number;
+}): Promise<{ width: number; height: number } | null> {
+  try {
+    const res = await fetch(args.sourceUrl);
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+
+    const crop = computeCenterCrop(args.sourceWidth, args.sourceHeight, args.targetRatio);
+    const sharp = (await import('sharp')).default;
+    const cropped = await sharp(buf)
+      .extract({ left: crop.x, top: crop.y, width: crop.width, height: crop.height })
+      .jpeg({ quality: 92 })
+      .toBuffer();
+
+    const filename = `auto-cropped-${args.mediaId}-${Date.now()}.jpg`;
+    const service = getPostingService();
+    const { uploadUrl, publicUrl } = await service.getMediaUploadUrl('image/jpeg', filename);
+
+    const putRes = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'image/jpeg' },
+      body: new Uint8Array(cropped),
+    });
+    if (!putRes.ok) return null;
+
+    await args.admin
+      .from('scheduler_media')
+      .update({
+        late_media_url: publicUrl,
+        width: crop.width,
+        height: crop.height,
+        mime_type: 'image/jpeg',
+      })
+      .eq('id', args.mediaId);
+
+    return { width: crop.width, height: crop.height };
+  } catch {
+    return null;
+  }
 }
