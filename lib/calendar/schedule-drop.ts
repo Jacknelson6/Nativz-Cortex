@@ -396,6 +396,14 @@ export async function publishScheduledPost(
     };
   }
 
+  // Everything past the atomic CAS runs inside a guard that resets the row
+  // back to 'draft' on any throw. Without it, a transient Zernio/Mux failure
+  // leaves the row stuck in the intermediate 'publishing' state forever
+  // (Landshark May 4: 12 image posts approved at 17:32 CDT all stuck because
+  // `service.publishPost` threw, the caller logged but didn't reset, and the
+  // cron's CAS only flips 'draft' → 'publishing'). Re-raise so callers
+  // (share-feedback, comment, cron) keep their existing error semantics.
+  try {
   // Resolve media payload via the shared Mux-aware resolver. This is the
   // critical correctness step on the approval-driven publish path: video
   // posts whose drop_video has a `revised_mp4_url` (Khen re-uploaded a
@@ -549,6 +557,14 @@ export async function publishScheduledPost(
   }
 
   return { alreadyPublished: false, externalPostId: publish.externalPostId };
+  } catch (publishErr) {
+    await admin
+      .from('scheduled_posts')
+      .update({ status: 'draft', updated_at: new Date().toISOString() })
+      .eq('id', postId)
+      .eq('status', 'publishing');
+    throw publishErr;
+  }
 }
 
 /**

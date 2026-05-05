@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import Image from 'next/image';
 import { Upload, X, Film, Filter, Trash2, Calendar, CheckCircle2, MousePointerClick } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -339,18 +340,24 @@ export function MediaLibrary({
                   }`}
                 >
                   {item.thumbnail_url ? (
-                    <img
+                    <Image
                       src={item.thumbnail_url}
                       alt={item.filename}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
+                      fill
+                      sizes="180px"
+                      quality={70}
+                      className="object-cover"
+                      unoptimized={false}
                     />
                   ) : item.mime_type?.startsWith('image/') && item.late_media_url ? (
-                    <img
+                    <Image
                       src={item.late_media_url}
                       alt={item.filename}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
+                      fill
+                      sizes="180px"
+                      quality={70}
+                      className="object-cover"
+                      unoptimized={false}
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
