@@ -535,6 +535,25 @@ async function handleGet(request: NextRequest) {
 
         // Publish via posting service.
         //
+        // Why we use `publishPost` (POST /posts) for retries rather than
+        // Zernio's `posts.retryPost()` (POST /posts/{id}/retry):
+        //   - /retry replays the ORIGINAL payload Zernio stored at first
+        //     publish time. If we shipped a buggy field (e.g. the
+        //     undocumented `video_cover_image_url` on TikTok that crashed
+        //     ffmpeg-thumbnail-stitch deterministically for Joseph
+        //     Pytcher's Weston Funding post), /retry just replays the
+        //     crash forever.
+        //   - Building a fresh `publishPost` call with only the
+        //     failed/pending legs (per-leg filter above) lets payload
+        //     fixes propagate the next time the cron tick runs, and the
+        //     already-published legs are protected by the spp-status
+        //     filter so we never double-publish them.
+        //   - The `late_post_id` rotates on each retry; that's acceptable
+        //     because we treat the most-recent attempt as authoritative.
+        // `retryPost()` remains available on the service for a future
+        // admin "Force Zernio-side retry" affordance where the operator
+        // is sure the original payload is fine.
+        //
         // Per-platform overrides (migration 218) live on the same
         // `scheduled_posts` row. NULL means "use buildPublishBody's
         // defaults", so we pass `?? undefined` to keep that fallthrough
