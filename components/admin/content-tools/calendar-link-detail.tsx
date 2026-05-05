@@ -737,7 +737,7 @@ export function CalendarLinkDetail({
         media={
           <>
             <Section
-              label={`Edited videos${
+              label={`Deliverables${
                 bridge?.videos?.length ? ` (${bridge.videos.length})` : ''
               }`}
             >

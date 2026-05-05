@@ -726,7 +726,7 @@ export function EditingProjectDetail({
             </Section>
 
             <Section
-              label={`Edited videos${
+              label={`Deliverables${
                 data?.videos.length ? ` (${data.videos.length})` : ''
               }`}
             >
