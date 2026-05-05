@@ -77,12 +77,13 @@ function buildLlmStages(
 ): Stage[] {
   const n = Math.max(1, subtopicCount);
   const liveWeb = webResearch === 'searxng' || webResearch === 'openrouter';
-  // Target ~4m31s total run so the bar's pacing matches real averages.
-  const perSubtopic = liveWeb ? 40_000 : 35_000;
+  // Target ~2m15s total run on the default 3-subtopic config so the bar's
+  // pacing matches real averages.
+  const perSubtopic = liveWeb ? 18_000 : 16_000;
   const researchBlock = perSubtopic * n;
-  const mergeMs = 22_000;
-  const ideasMs = 20_000;
-  const reportMs = liveWeb ? 111_000 : 121_000;
+  const mergeMs = 11_000;
+  const ideasMs = 10_000;
+  const reportMs = liveWeb ? 60_000 : 66_000;
   const totalEst = researchBlock + mergeMs + ideasMs + reportMs;
 
   const stages: Stage[] = [];
