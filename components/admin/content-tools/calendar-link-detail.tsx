@@ -30,6 +30,11 @@ import {
 } from './detail-dialog/dialog-shell';
 import { Section, Field } from './detail-dialog/section';
 import { formatRelative, formatTimestamp } from './detail-dialog/format';
+import {
+  ContentKindBadge,
+  UnifiedStatusPill,
+} from './detail-dialog/unified-status-pill';
+import { unifiedStatusForShareLink } from '@/lib/content-tools/unified-status';
 import type { EditingProjectVideo } from '@/lib/editing/types';
 import {
   enqueueUploads,
@@ -633,7 +638,20 @@ export function CalendarLinkDetail({
             {link.name && link.name.trim().length > 0 ? link.name : dateRange}
           </p>
         }
-        headerExtras={<StatusPill status={link.status} />}
+        headerExtras={
+          <>
+            <ContentKindBadge kind="calendar" />
+            <UnifiedStatusPill
+              status={unifiedStatusForShareLink({
+                status: link.status,
+                first_sent_at: link.first_sent_at,
+              })}
+            />
+            {(isExpired || isAbandoned) && (
+              <StatusPill status={link.status} />
+            )}
+          </>
+        }
         tab={tab}
         onTabChange={setTab}
         tabsAriaLabel="Calendar link sections"

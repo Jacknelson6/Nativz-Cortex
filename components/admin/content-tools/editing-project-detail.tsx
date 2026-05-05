@@ -7,7 +7,14 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { toast } from 'sonner';
-import { Archive, ExternalLink, Loader2 } from 'lucide-react';
+import {
+  Archive,
+  CheckCircle2,
+  Eye,
+  ExternalLink,
+  Loader2,
+  MessagesSquare,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ComboSelect } from '@/components/ui/combo-select';
 import {
@@ -28,6 +35,11 @@ import {
 } from './detail-dialog/dialog-shell';
 import { Field, Section, SideField } from './detail-dialog/section';
 import { formatTimestamp } from './detail-dialog/format';
+import {
+  ContentKindBadge,
+  UnifiedStatusPill,
+} from './detail-dialog/unified-status-pill';
+import { unifiedStatusForEditingProject } from '@/lib/content-tools/unified-status';
 import {
   enqueueUploads,
   getProjectUploads,
@@ -244,6 +256,8 @@ export function EditingProjectDetail({
       headerExtras={
         <>
           {saving && <Loader2 size={14} className="animate-spin text-text-muted" />}
+          <ContentKindBadge kind="editing" />
+          <UnifiedStatusPill status={unifiedStatusForEditingProject(status)} />
           <EditingShareButton
             projectId={project.id}
             hasVideos={(data?.videos.length ?? 0) > 0}
@@ -287,6 +301,12 @@ export function EditingProjectDetail({
           onDelete={(id) => void deleteVideo(id)}
         />
       </Section>
+
+      {(data?.videos.length ?? 0) > 0 && (
+        <Section label="Review">
+          <ReviewCounters videos={data?.videos ?? []} />
+        </Section>
+      )}
 
       {uploads.length > 0 && (
         <Section label="Uploads">
@@ -354,20 +374,41 @@ export function EditingProjectDetail({
         </div>
       </Section>
 
-      <Section label="Strategist">
-        <AssigneePicker
-          projectId={project.id}
-          role="strategist_id"
-          currentUserId={data?.project.strategist_id ?? project.strategist_id}
-          currentEmail={
-            data?.project.strategist_email ?? project.strategist_email
-          }
-          variant="field"
-          onSaved={() => {
-            void load();
-            onChanged();
-          }}
-        />
+      <Section label="Team">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <SideField label="Strategist">
+            <AssigneePicker
+              projectId={project.id}
+              role="strategist_id"
+              currentUserId={
+                data?.project.strategist_id ?? project.strategist_id
+              }
+              currentEmail={
+                data?.project.strategist_email ?? project.strategist_email
+              }
+              variant="field"
+              onSaved={() => {
+                void load();
+                onChanged();
+              }}
+            />
+          </SideField>
+          <SideField label="Editor">
+            <AssigneePicker
+              projectId={project.id}
+              role="editor_id"
+              currentUserId={data?.project.editor_id ?? project.editor_id}
+              currentEmail={
+                data?.project.editor_email ?? project.editor_email
+              }
+              variant="field"
+              onSaved={() => {
+                void load();
+                onChanged();
+              }}
+            />
+          </SideField>
+        </div>
       </Section>
 
       <Section label="Notes">
@@ -419,5 +460,65 @@ export function EditingProjectDetail({
         </dl>
       </Section>
     </ContentDetailDialog>
+  );
+}
+
+function ReviewCounters({ videos }: { videos: EditingProjectVideo[] }) {
+  let approved = 0;
+  let changes = 0;
+  let pending = 0;
+  for (const v of videos) {
+    if (v.review_status === 'approved') approved += 1;
+    else if (v.review_status === 'changes_requested') changes += 1;
+    else pending += 1;
+  }
+  return (
+    <div className="flex flex-wrap gap-2">
+      <CounterPill
+        icon={<CheckCircle2 size={12} />}
+        label="approved"
+        value={approved}
+        tone="success"
+      />
+      <CounterPill
+        icon={<MessagesSquare size={12} />}
+        label="revising"
+        value={changes}
+        tone="warning"
+      />
+      <CounterPill
+        icon={<Eye size={12} />}
+        label="pending"
+        value={pending}
+        tone="muted"
+      />
+    </div>
+  );
+}
+
+function CounterPill({
+  icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  tone: 'success' | 'warning' | 'muted';
+}) {
+  const toneClasses: Record<typeof tone, string> = {
+    success: 'border-status-success/20 bg-status-success/10 text-status-success',
+    warning: 'border-status-warning/20 bg-status-warning/10 text-status-warning',
+    muted: 'border-nativz-border bg-surface text-text-secondary',
+  };
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${toneClasses[tone]}`}
+    >
+      {icon}
+      <span className="font-semibold">{value}</span>
+      <span>{label}</span>
+    </span>
   );
 }
