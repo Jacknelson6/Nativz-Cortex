@@ -112,6 +112,7 @@ const PLATFORM_MAP: Record<string, SocialPlatform> = {
   instagram: 'instagram',
   tiktok: 'tiktok',
   youtube: 'youtube',
+  linkedin: 'linkedin',
 };
 
 function todayIsoDate(): string {

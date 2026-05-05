@@ -374,7 +374,9 @@ async function handleGet(request: NextRequest) {
               status: 'partially_failed',
               retry_count: currentRetryCount + 1,
               failure_reason: failedDetails.length
-                ? `${failedDetails.map((f) => f.platform).join(', ')} failed (Zernio probe)`
+                ? failedDetails
+                    .map((f) => `${f.platform}: ${f.reason}`)
+                    .join(' | ') + ' (Zernio probe)'
                 : null,
               updated_at: new Date().toISOString(),
             };
@@ -526,7 +528,7 @@ async function handleGet(request: NextRequest) {
           newStatus = 'published';
           updatePayload = {
             status: 'published',
-            external_post_id: result.externalPostId,
+            late_post_id: result.externalPostId,
             published_at: new Date().toISOString(),
             failure_reason: null,
             updated_at: new Date().toISOString(),
@@ -539,7 +541,7 @@ async function handleGet(request: NextRequest) {
           newStatus = 'partially_failed';
           updatePayload = {
             status: 'partially_failed',
-            external_post_id: result.externalPostId,
+            late_post_id: result.externalPostId,
             retry_count: currentRetryCount + 1,
             scheduled_at: new Date(Date.now() + RETRY_DELAY_MS).toISOString(),
             failure_reason: failedPlatformDetails.length
@@ -552,7 +554,7 @@ async function handleGet(request: NextRequest) {
           newStatus = 'partially_failed';
           updatePayload = {
             status: 'partially_failed',
-            external_post_id: result.externalPostId,
+            late_post_id: result.externalPostId,
             retry_count: currentRetryCount + 1,
             failure_reason: failedPlatformDetails.length
               ? `${failedPlatformDetails.map((f) => f.platform).join(', ')} failed after ${MAX_RETRIES} attempts`
@@ -567,7 +569,7 @@ async function handleGet(request: NextRequest) {
           newStatus = 'published';
           updatePayload = {
             status: 'published',
-            external_post_id: result.externalPostId,
+            late_post_id: result.externalPostId,
             published_at: new Date().toISOString(),
             failure_reason: null,
             updated_at: new Date().toISOString(),
