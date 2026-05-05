@@ -418,17 +418,43 @@ async function handleGet(request: NextRequest) {
               updated_at: new Date().toISOString(),
             };
           } else if (anyFailed && !anyPending) {
-            probeNewStatus = 'partially_failed';
-            probeUpdate = {
-              status: 'partially_failed',
-              retry_count: currentRetryCount + 1,
-              failure_reason: failedDetails.length
-                ? failedDetails
-                    .map((f) => `${f.platform}: ${f.reason}`)
-                    .join(' | ') + ' (Zernio probe)'
-                : null,
-              updated_at: new Date().toISOString(),
-            };
+            // Zernio's stored copy has permanently-failed legs. Probing
+            // the same post again will return the same failure forever
+            // (Zernio doesn't auto-recover failed legs within a post).
+            // If we still have retry budget, drop late_post_id and re-
+            // schedule so the next cron tick takes the publish path with
+            // current code. The per-leg filter (`status !== 'pending' &&
+            // status !== 'failed' → skip`) guarantees only the failed legs
+            // re-fire; already-published legs stay protected.
+            //
+            // This is what makes payload-bug fixes (e.g. da02ba93 dropping
+            // the bad `video_cover_image_url` TikTok field) actually
+            // propagate to stuck posts instead of needing manual rescue.
+            if (retriesRemaining) {
+              probeNewStatus = 'scheduled';
+              probeUpdate = {
+                status: 'scheduled',
+                late_post_id: null,
+                retry_count: currentRetryCount + 1,
+                scheduled_at: new Date(Date.now() + RETRY_DELAY_MS).toISOString(),
+                updated_at: new Date().toISOString(),
+              };
+              console.log(
+                `[publish-cron] cleared late_post_id on partially-failed probe for ${post.id} (retry ${currentRetryCount + 1}/${MAX_RETRIES}); failed legs will re-publish with current payload`,
+              );
+            } else {
+              probeNewStatus = 'partially_failed';
+              probeUpdate = {
+                status: 'partially_failed',
+                retry_count: currentRetryCount + 1,
+                failure_reason: failedDetails.length
+                  ? failedDetails
+                      .map((f) => `${f.platform}: ${f.reason}`)
+                      .join(' | ') + ' (Zernio probe)'
+                  : null,
+                updated_at: new Date().toISOString(),
+              };
+            }
           } else {
             // At least one leg still pending — Zernio hasn't fired all
             // platforms yet. Stay scheduled so the next tick probes again
