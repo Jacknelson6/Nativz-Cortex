@@ -162,10 +162,6 @@ const nextConfig: NextConfig = {
       // the directory name still differs from the label. API routes
       // (`/api/scheduler/**`) are intentionally left alone — scheduler
       // provider webhooks hit them by exact URL.
-      //
-      // /admin/scheduling now has its own directory (team availability picker
-      // added 2026-04-26) — no rewrite. /admin/scheduler is the Zernio
-      // social-post calendar; the two are distinct surfaces.
       { source: '/admin/edits', destination: '/admin/pipeline' },
       { source: '/admin/edits/:path*', destination: '/admin/pipeline/:path*' },
     ];

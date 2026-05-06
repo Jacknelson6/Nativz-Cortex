@@ -3,11 +3,8 @@
 /**
  * Kickoff pick screen.
  *
- * Client picks a date + time for their kickoff call. We don't enforce
- * team availability here in the public stepper, that gates server-side
- * once we wire calendar API; for now we collect their first-choice
- * slot and a couple of optional alternates so the AM has something to
- * counter-propose against.
+ * Client picks a date + time for their kickoff call plus optional notes;
+ * the AM confirms or counter-proposes by email.
  */
 
 import { useState } from 'react';

@@ -43,7 +43,7 @@ export interface OnboardingScreen {
  *   2 social_connect -> Zernio OAuth per platform in `platforms`
  *   3 content_prefs -> cadence, content pillars, do/don't list
  *   4 audience_tone -> persona + tone descriptors
- *   5 kickoff_pick  -> calendar slot pick (gates on team availability)
+ *   5 kickoff_pick  -> preferred kickoff slot + notes
  *   6 done         -> handoff message, what happens next
  */
 const SMM_SCREENS: readonly OnboardingScreen[] = [
