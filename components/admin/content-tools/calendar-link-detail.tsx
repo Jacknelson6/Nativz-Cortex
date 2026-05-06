@@ -23,6 +23,7 @@ import {
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ComboSelect } from '@/components/ui/combo-select';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { ShareHistoryPanel } from './share-history-panel';
 import { EditedVideosBox, UploadRow } from './edited-videos-box';
 import {
@@ -221,6 +222,16 @@ export function CalendarLinkDetail({
   const [markingFollowup, setMarkingFollowup] = useState(false);
   const [markingSent, setMarkingSent] = useState(false);
   const [markingAllApproved, setMarkingAllApproved] = useState(false);
+  const remainingToApprove =
+    (link?.pending_count ?? 0) + (link?.changes_count ?? 0);
+  const { confirm: confirmApproveAll, dialog: approveAllDialog } = useConfirm({
+    title: 'Mark all as approved?',
+    description: link
+      ? `Approve every still-pending post (${remainingToApprove} of ${link.post_count}). They'll publish to Zernio just as if the client clicked approve.`
+      : '',
+    confirmLabel: 'Approve all',
+    variant: 'success',
+  });
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState<DetailTab>('details');
   // Recipients live on the detail panel itself (not just the send preview)
@@ -606,12 +617,30 @@ export function CalendarLinkDetail({
     if (markingAllApproved || !link) return;
     const remaining = link.pending_count + link.changes_count;
     if (remaining <= 0) return;
-    const confirmed = confirm(
-      `Approve every still-pending post (${remaining} of ${link.post_count})? ` +
-        `This will publish them to Zernio just as if the client clicked approve.`,
-    );
-    if (!confirmed) return;
+    const ok = await confirmApproveAll();
+    if (!ok) return;
+
+    // Snapshot for rollback if the bulk request hard-fails.
+    const prevCounts = {
+      approved_count: link.approved_count,
+      changes_count: link.changes_count,
+      pending_count: link.pending_count,
+      status: link.status,
+    };
+
+    // Optimistic patch — Jack wants the UI to feel instant; per-post
+    // Zernio publishes happen in the background.
     setMarkingAllApproved(true);
+    onApprovedAll?.({
+      approved_count: link.post_count,
+      changes_count: 0,
+      pending_count: 0,
+      status: 'approved',
+    });
+    toast.success(
+      `Approved ${remaining} post${remaining === 1 ? '' : 's'}`,
+    );
+
     try {
       const res = await fetch(
         `/api/calendar/share/${link.token}/approve-all`,
@@ -621,17 +650,14 @@ export function CalendarLinkDetail({
       if (!res.ok) {
         throw new Error(typeof json?.error === 'string' ? json.error : 'Failed to approve');
       }
-      const approvedNow = Number(json.approved ?? 0);
       const failed = Number(json.failed ?? 0);
-      if (failed > 0 && approvedNow === 0) {
-        toast.error('Could not approve any posts. Try again.');
-      } else if (failed > 0) {
-        toast.error(`Approved ${approvedNow}, ${failed} failed.`);
-      } else if (approvedNow === 0) {
-        toast.info('Everything was already approved.');
-      } else {
-        toast.success(`Approved ${approvedNow} post${approvedNow === 1 ? '' : 's'}`);
+      if (failed > 0) {
+        toast.error(
+          `${failed} post${failed === 1 ? '' : 's'} failed to publish. Check the activity log.`,
+        );
       }
+      // Reconcile with server-truth counters in case some posts failed
+      // (the optimistic patch assumed all succeeded).
       onApprovedAll?.({
         approved_count: Number(json.approved_count ?? link.approved_count),
         changes_count: Number(json.changes_count ?? link.changes_count),
@@ -639,6 +665,8 @@ export function CalendarLinkDetail({
         status: (json.status as ReviewLinkStatus) ?? link.status,
       });
     } catch (err) {
+      // Hard failure — roll back the optimistic patch.
+      onApprovedAll?.(prevCounts);
       toast.error(err instanceof Error ? err.message : 'Failed to approve');
     } finally {
       setMarkingAllApproved(false);
@@ -843,6 +871,7 @@ export function CalendarLinkDetail({
 
   return (
     <>
+      {approveAllDialog}
       <SendPreviewDialog
         open={!!previewVariant}
         variant={previewVariant ?? 'initial'}
