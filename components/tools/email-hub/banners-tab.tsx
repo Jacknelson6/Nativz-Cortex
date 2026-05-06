@@ -19,6 +19,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { SkeletonRows } from '@/components/ui/loading-skeletons';
 import { LabeledInput } from './contacts-tab';
 import type { EmailHubClientOption } from './email-hub-client';
@@ -253,6 +254,12 @@ export function BannersTab({ clients }: Props) {
   const banners = data?.banners ?? [];
   const [editing, setEditing] = useState<Banner | null>(null);
   const [creating, setCreating] = useState(false);
+  const { confirm: confirmDeleteBanner, dialog: deleteBannerDialog } = useConfirm({
+    title: 'Delete this banner?',
+    description: 'This cannot be undone.',
+    confirmLabel: 'Delete',
+    variant: 'danger',
+  });
 
   async function save(id: string | null, payload: Partial<Banner>) {
     const url = id ? `/api/admin/banners/${id}` : '/api/admin/banners';
@@ -289,7 +296,8 @@ export function BannersTab({ clients }: Props) {
   }
 
   async function remove(id: string) {
-    if (!confirm('Delete this banner? This cannot be undone.')) return;
+    const ok = await confirmDeleteBanner();
+    if (!ok) return;
     const res = await fetch(`/api/admin/banners/${id}`, { method: 'DELETE' });
     if (!res.ok) {
       const body = await res.json().catch(() => null);
@@ -359,6 +367,7 @@ export function BannersTab({ clients }: Props) {
           onSave={(payload) => save(editing?.id ?? null, payload)}
         />
       )}
+      {deleteBannerDialog}
     </section>
   );
 }

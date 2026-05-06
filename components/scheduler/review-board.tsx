@@ -14,6 +14,7 @@ import {
   RefreshCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
@@ -357,6 +358,12 @@ function ReviewCard({
   onChange: () => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const { confirm: confirmRevoke, dialog: revokeDialog } = useConfirm({
+    title: 'Revoke this share link?',
+    description: 'Anyone who has it will see an "expired" page on next visit.',
+    confirmLabel: 'Revoke',
+    variant: 'danger',
+  });
   const isExpired = link.status === 'expired';
   const dateRange = formatDateRange(link.drop_start, link.drop_end);
   const lastViewed = link.last_viewed_at ? formatRelative(link.last_viewed_at) : null;
@@ -382,9 +389,8 @@ function ReviewCard({
 
   async function revoke() {
     if (busy) return;
-    if (!confirm('Revoke this share link? Anyone who has it will see an "expired" page on next visit.')) {
-      return;
-    }
+    const ok = await confirmRevoke();
+    if (!ok) return;
     setBusy(true);
     try {
       const res = await fetch(`/api/calendar/share/${link.token}/revoke`, { method: 'POST' });
@@ -483,6 +489,7 @@ function ReviewCard({
           </Link>
         </div>
       </footer>
+      {revokeDialog}
     </article>
   );
 }

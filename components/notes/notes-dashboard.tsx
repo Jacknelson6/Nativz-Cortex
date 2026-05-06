@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, User as UserIcon, Building2, Users, StickyNote, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { NewNoteModal } from './new-note-modal';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 interface BoardCard {
   id: string;
@@ -58,6 +59,12 @@ export function NotesDashboard({
   const router = useRouter();
   const [boards, setBoards] = useState<BoardCard[] | null>(null);
   const [newOpen, setNewOpen] = useState(false);
+  const { confirm: confirmDeleteNote, dialog: deleteNoteDialog } = useConfirm({
+    title: 'Delete this note?',
+    description: "This can't be undone.",
+    confirmLabel: 'Delete',
+    variant: 'danger',
+  });
 
   // The fetch filter: portal uses its hard-bound client id; admin uses
   // the session brand when pinned. One source of truth for the query.
@@ -87,7 +94,11 @@ export function NotesDashboard({
   );
 
   async function handleDelete(boardId: string, boardName: string) {
-    if (!window.confirm(`Delete "${boardName}"? This can't be undone.`)) return;
+    const ok = await confirmDeleteNote({
+      title: `Delete "${boardName}"?`,
+      description: "This can't be undone.",
+    });
+    if (!ok) return;
     // Optimistic removal — re-load on error so the tile reappears.
     const prev = boards;
     setBoards((cur) => (cur ?? []).filter((b) => b.id !== boardId));
@@ -148,6 +159,7 @@ export function NotesDashboard({
           router.push(`${routePrefix}/notes/${id}`);
         }}
       />
+      {deleteNoteDialog}
     </div>
   );
 }

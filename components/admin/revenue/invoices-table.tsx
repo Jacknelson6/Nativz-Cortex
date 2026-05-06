@@ -7,6 +7,7 @@ import { formatCents, dollarsToCents, centsToDollars } from '@/lib/format/money'
 import { InvoiceStatusPill } from './status-pill';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 type Invoice = {
   id: string;
@@ -30,6 +31,12 @@ export function InvoicesTable() {
   const [busyRow, setBusyRow] = useState<string | null>(null);
   const [refunding, setRefunding] = useState<Invoice | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const { confirm: confirmSendReminder, dialog: sendReminderDialog } = useConfirm({
+    title: 'Send payment reminder?',
+    description: 'The customer will receive an email from Stripe.',
+    confirmLabel: 'Send',
+    variant: 'success',
+  });
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -51,7 +58,11 @@ export function InvoicesTable() {
   }, [refresh]);
 
   async function sendReminder(inv: Invoice) {
-    if (!confirm(`Send payment reminder for invoice ${inv.number ?? inv.id}?`)) return;
+    const ok = await confirmSendReminder({
+      title: `Send reminder for invoice ${inv.number ?? inv.id}?`,
+      description: 'The customer will receive an email from Stripe.',
+    });
+    if (!ok) return;
     setBusyRow(inv.id);
     const res = await fetch(`/api/revenue/invoices/${inv.id}/remind`, { method: 'POST' });
     setBusyRow(null);
@@ -198,6 +209,7 @@ export function InvoicesTable() {
           }}
         />
       ) : null}
+      {sendReminderDialog}
     </div>
   );
 }

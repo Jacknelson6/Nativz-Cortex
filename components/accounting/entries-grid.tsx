@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Trash2, Sparkles, Check, Loader2, AlertCircle, X, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { dollarsToCents } from '@/lib/accounting/periods';
 import { getPreset } from '@/lib/accounting/presets';
 import { extractWiseUrl } from '@/lib/accounting/wise';
@@ -103,6 +104,13 @@ export function EntriesGrid({
   const [errorExisting, setErrorExisting] = useState<Map<string, string>>(new Map());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkApplying, setBulkApplying] = useState(false);
+
+  const { confirm: confirmBulkDelete, dialog: bulkDeleteDialog } = useConfirm({
+    title: 'Delete rows?',
+    description: "This can't be undone.",
+    confirmLabel: 'Delete',
+    variant: 'danger',
+  });
 
   const memberById = useMemo(() => new Map(teamMembers.map((m) => [m.id, m])), [teamMembers]);
   const clientById = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients]);
@@ -424,9 +432,11 @@ export function EntriesGrid({
   async function deleteBulk() {
     if (selected.size === 0) return;
     const ids = Array.from(selected);
-    if (!confirm(`Delete ${ids.length} ${ids.length === 1 ? 'row' : 'rows'}? This can't be undone.`)) {
-      return;
-    }
+    const ok = await confirmBulkDelete({
+      title: `Delete ${ids.length} ${ids.length === 1 ? 'row' : 'rows'}?`,
+      description: "This can't be undone.",
+    });
+    if (!ok) return;
     setBulkApplying(true);
 
     const snapshot = entries.filter((e) => selected.has(e.id));
@@ -628,6 +638,7 @@ export function EntriesGrid({
           </Button>
         </div>
       )}
+      {bulkDeleteDialog}
     </div>
   );
 }

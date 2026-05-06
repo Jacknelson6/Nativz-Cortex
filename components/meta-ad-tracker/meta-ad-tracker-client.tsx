@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ComboSelect } from '@/components/ui/combo-select';
 import { Dialog } from '@/components/ui/dialog';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 /**
  * NAT-53 — Meta Ad Library tracker UI. Reuses the thumbnails-grid style
@@ -83,6 +84,12 @@ export function MetaAdTrackerClient({
   const [addOpen, setAddOpen] = useState(false);
   const [refreshingIds, setRefreshingIds] = useState<Set<string>>(new Set());
   const [showInactive, setShowInactive] = useState(false);
+  const { confirm: confirmStopTracking, dialog: stopTrackingDialog } = useConfirm({
+    title: 'Stop tracking this page?',
+    description: 'All stored creatives will be removed.',
+    confirmLabel: 'Stop tracking',
+    variant: 'danger',
+  });
 
   const loadPages = useCallback(async (id: string) => {
     setLoading(true);
@@ -137,7 +144,11 @@ export function MetaAdTrackerClient({
 
   async function handleDelete(page: TrackedPage) {
     const label = page.page_name ?? page.page_id ?? page.library_url;
-    if (!confirm(`Stop tracking ${label}? All stored creatives will be removed.`)) return;
+    const ok = await confirmStopTracking({
+      title: `Stop tracking ${label}?`,
+      description: 'All stored creatives will be removed.',
+    });
+    if (!ok) return;
     const res = await fetch(`/api/meta-ad-tracker/pages?id=${page.id}`, { method: 'DELETE' });
     if (!res.ok) {
       const d = await res.json().catch(() => ({}));
@@ -241,6 +252,7 @@ export function MetaAdTrackerClient({
           }}
         />
       )}
+      {stopTrackingDialog}
     </div>
   );
 }

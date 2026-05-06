@@ -15,6 +15,7 @@ import {
 import { SkeletonRows, InlineSpinner } from '@/components/ui/loading-skeletons';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { TONE_PILL } from './_status-tokens';
 
 type Contact = {
@@ -216,6 +217,12 @@ function ContactRow({ contact, onChanged }: { contact: Contact; onChanged: () =>
     const parts = src.split(/\s+|@/).filter(Boolean);
     return (parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '');
   }, [contact]);
+  const { confirm: confirmDeleteContact, dialog: deleteContactDialog } = useConfirm({
+    title: 'Delete this contact?',
+    description: 'This cannot be undone.',
+    confirmLabel: 'Delete',
+    variant: 'danger',
+  });
 
   async function toggleSub() {
     const res = await fetch(`/api/admin/email-hub/contacts/${contact.id}`, {
@@ -232,7 +239,11 @@ function ContactRow({ contact, onChanged }: { contact: Contact; onChanged: () =>
   }
 
   async function remove() {
-    if (!confirm(`Delete ${contact.email}? This cannot be undone.`)) return;
+    const ok = await confirmDeleteContact({
+      title: `Delete ${contact.email}?`,
+      description: 'This cannot be undone.',
+    });
+    if (!ok) return;
     const res = await fetch(`/api/admin/email-hub/contacts/${contact.id}`, { method: 'DELETE' });
     if (!res.ok) {
       const body = await res.json().catch(() => null);
@@ -288,6 +299,7 @@ function ContactRow({ contact, onChanged }: { contact: Contact; onChanged: () =>
           Delete
         </button>
       </div>
+      {deleteContactDialog}
     </li>
   );
 }

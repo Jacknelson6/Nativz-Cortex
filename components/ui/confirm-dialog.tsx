@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -17,6 +17,13 @@ interface ConfirmDialogProps {
   onCancel: () => void;
 }
 
+/**
+ * Branded confirm dialog. Renders as a native `<dialog>` so it joins the
+ * browser's top-layer — that's the only way to sit above another open
+ * `<dialog>` (e.g. `ContentDetailDialog`). z-index can't climb into the
+ * top-layer; only opening another `<dialog>.showModal()` after the first
+ * stacks above it. See https://html.spec.whatwg.org/multipage/interaction.html#top-layer
+ */
 export function ConfirmDialog({
   open,
   title,
@@ -27,37 +34,48 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
 
+  // Drive the native dialog imperatively. `showModal()` is what enrolls
+  // us in the top-layer; .close() removes us. Calling these on every
+  // open transition keeps stacking right when this dialog opens on top
+  // of another already-open `<dialog>`.
   useEffect(() => {
-    if (open) confirmRef.current?.focus();
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (open && !dialog.open) {
+      dialog.showModal();
+      confirmRef.current?.focus();
+    } else if (!open && dialog.open) {
+      dialog.close();
+    }
   }, [open]);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel();
+  const handleCancel = useCallback(
+    (e: React.SyntheticEvent<HTMLDialogElement>) => {
+      // Native ESC dispatches a `cancel` event; intercept so onCancel
+      // fires our promise resolver instead of leaving the parent stuck.
+      e.preventDefault();
+      onCancel();
     },
     [onCancel],
   );
 
-  if (!open) return null;
+  function handleBackdropMouseDown(e: React.MouseEvent<HTMLDialogElement>) {
+    // Native `<dialog>` reports clicks on the backdrop as clicks where
+    // e.target === the dialog element itself (the panel sits inside).
+    if (e.target === dialogRef.current) onCancel();
+  }
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-[color:var(--nz-ink)]/70 backdrop-blur-sm"
-      onMouseDown={(e) => {
-        // Backdrop dismissal: only fire when the click started on the
-        // backdrop itself, not on the panel.
-        if (e.target === e.currentTarget) onCancel();
-        // Stop the mousedown from bubbling so a clickable ancestor
-        // (e.g. a card with `onClick={onNavigate}`) doesn't react to
-        // clicks inside the dialog.
-        e.stopPropagation();
-      }}
-      onClick={(e) => e.stopPropagation()}
-      onKeyDown={handleKeyDown}
+    <dialog
+      ref={dialogRef}
+      onCancel={handleCancel}
+      onMouseDown={handleBackdropMouseDown}
+      className="m-auto w-full max-w-sm rounded-xl border border-nativz-border bg-surface p-0 shadow-xl backdrop:bg-[color:var(--nz-ink)]/70 backdrop:backdrop-blur-sm"
     >
-      <div className="w-full max-w-sm rounded-xl border border-nativz-border bg-surface p-6 shadow-xl animate-[popIn_200ms_ease-out]">
+      <div className="p-6 animate-[popIn_200ms_ease-out]">
         {variant === 'danger' && (
           <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--status-danger)]/15">
             <AlertTriangle size={22} className="text-[color:var(--status-danger)]" />
@@ -85,25 +103,36 @@ export function ConfirmDialog({
           </Button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }
-
-// Hook for easy confirm dialog usage
-import { useState } from 'react';
 
 interface UseConfirmOptions {
   title: string;
   description: string;
   confirmLabel?: string;
+  cancelLabel?: string;
   variant?: ConfirmVariant;
 }
 
-export function useConfirm({ title, description, confirmLabel, variant }: UseConfirmOptions) {
+/**
+ * Promise-returning confirm hook. Usage:
+ *
+ *   const { confirm, dialog } = useConfirm({ title: '…', description: '…' });
+ *   const ok = await confirm();   // resolves true on Confirm, false otherwise
+ *   return <>{dialog}…</>;
+ *
+ * For dynamic copy (counters, names), pass options that depend on state
+ * — they re-bind on each render. Or call `confirm({ title, description })`
+ * to override per-call.
+ */
+export function useConfirm(options: UseConfirmOptions) {
   const [promise, setPromise] = useState<{ resolve: (value: boolean) => void } | null>(null);
+  const [overrides, setOverrides] = useState<Partial<UseConfirmOptions> | null>(null);
 
-  function confirm(): Promise<boolean> {
+  function confirm(perCall?: Partial<UseConfirmOptions>): Promise<boolean> {
     return new Promise((resolve) => {
+      setOverrides(perCall ?? null);
       setPromise({ resolve });
     });
   }
@@ -118,13 +147,16 @@ export function useConfirm({ title, description, confirmLabel, variant }: UseCon
     setPromise(null);
   }
 
+  const merged = { ...options, ...(overrides ?? {}) };
+
   const dialog = (
     <ConfirmDialog
       open={promise !== null}
-      title={title}
-      description={description}
-      confirmLabel={confirmLabel}
-      variant={variant}
+      title={merged.title}
+      description={merged.description}
+      confirmLabel={merged.confirmLabel}
+      cancelLabel={merged.cancelLabel}
+      variant={merged.variant}
       onConfirm={handleConfirm}
       onCancel={handleCancel}
     />

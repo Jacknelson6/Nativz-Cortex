@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils/cn';
 import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import type { HistoryItem } from '@/lib/research/history';
 import { folderIconClass, type TopicSearchFolder } from '@/lib/research/topic-search-folders';
 import { researchHistorySidebarSectionTitleClass } from '@/components/research/research-history-sidebar-section-title';
@@ -256,6 +257,13 @@ function FolderRowDroppable({
 
   const isDragActive = Boolean(active);
 
+  const { confirm: confirmDeleteSearch, dialog: deleteSearchDialog } = useConfirm({
+    title: 'Delete this search?',
+    description: 'It will be removed from your history.',
+    confirmLabel: 'Delete',
+    variant: 'danger',
+  });
+
   return (
     <li ref={droppable ? setNodeRef : undefined}>
       <button
@@ -368,7 +376,8 @@ function FolderRowDroppable({
                     className={menuItemClass}
                     onSelect={() => {
                       void (async () => {
-                        if (!window.confirm('Delete this search from history?')) return;
+                        const ok = await confirmDeleteSearch();
+                        if (!ok) return;
                         const endpoint = `/api/search/${item.id}`;
                         const res = await fetch(endpoint, { method: 'DELETE' });
                         if (res.ok) {
@@ -397,6 +406,7 @@ function FolderRowDroppable({
           ) : null}
         </ul>
       ) : null}
+      {deleteSearchDialog}
     </li>
   );
 }

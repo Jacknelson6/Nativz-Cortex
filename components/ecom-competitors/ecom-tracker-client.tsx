@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ComboSelect } from '@/components/ui/combo-select';
 import { Dialog } from '@/components/ui/dialog';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 /**
  * NAT-51 — ecom competitor tracker UI. Pairs with the NAT-21 backend:
@@ -107,6 +108,12 @@ export function EcomTrackerClient({
   const [loading, setLoading] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [refreshingIds, setRefreshingIds] = useState<Set<string>>(new Set());
+  const { confirm: confirmRemoveCompetitor, dialog: removeCompetitorDialog } = useConfirm({
+    title: 'Remove from tracking?',
+    description: 'You can add them back anytime.',
+    confirmLabel: 'Remove',
+    variant: 'danger',
+  });
 
   const loadCompetitors = useCallback(async (id: string) => {
     setLoading(true);
@@ -157,7 +164,11 @@ export function EcomTrackerClient({
   }
 
   async function handleDelete(competitor: EcomCompetitor) {
-    if (!confirm(`Remove ${competitor.display_name ?? competitor.domain} from tracking?`)) return;
+    const ok = await confirmRemoveCompetitor({
+      title: `Remove ${competitor.display_name ?? competitor.domain}?`,
+      description: 'They will be removed from tracking. You can add them back anytime.',
+    });
+    if (!ok) return;
     const res = await fetch(`/api/ecom-competitors?id=${competitor.id}`, { method: 'DELETE' });
     if (!res.ok) {
       const d = await res.json().catch(() => ({}));
@@ -249,6 +260,7 @@ export function EcomTrackerClient({
           }}
         />
       )}
+      {removeCompetitorDialog}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { EmailTemplateRail } from './email-template-rail';
 import { EmailBodyPreview } from './email-body-preview';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 export interface Recipient {
   id: string;
@@ -47,6 +48,12 @@ export function EmailComposerModal({
 
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleAt, setScheduleAt] = useState('');
+  const { confirm: confirmDeleteTemplate, dialog: deleteTemplateDialog } = useConfirm({
+    title: 'Delete this template?',
+    description: "This can't be undone.",
+    confirmLabel: 'Delete',
+    variant: 'danger',
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -91,7 +98,11 @@ export function EmailComposerModal({
 
   async function deleteTemplate(t: EmailTemplate) {
     if (!t.id) return;
-    if (!confirm(`Delete template "${t.name}"? This can't be undone.`)) return;
+    const ok = await confirmDeleteTemplate({
+      title: `Delete template "${t.name}"?`,
+      description: "This can't be undone.",
+    });
+    if (!ok) return;
     const r = await fetch(`/api/admin/email-templates/${t.id}`, { method: 'DELETE' });
     if (r.ok) {
       toast.success('Template deleted');
@@ -388,6 +399,7 @@ export function EmailComposerModal({
             </div>
           </footer>
         </main>
+        {deleteTemplateDialog}
     </Dialog>
   );
 }

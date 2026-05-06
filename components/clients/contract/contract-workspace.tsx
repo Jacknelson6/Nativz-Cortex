@@ -6,6 +6,7 @@ import { FileText, Download, MoreVertical, Plus } from 'lucide-react';
 import { UploadContractModal } from './upload-contract-modal';
 import { EditContractModal } from './edit-contract-modal';
 import type { DeliverableInput } from './deliverable-row';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 interface ContractRow {
   id: string;
@@ -46,6 +47,12 @@ export function ContractWorkspace({
   const router = useRouter();
   const [uploadOpen, setUploadOpen] = useState(false);
   const [editing, setEditing] = useState<ContractRow | null>(null);
+  const { confirm: confirmDeleteContract, dialog: deleteContractDialog } = useConfirm({
+    title: 'Delete this contract?',
+    description: 'Deliverables will be removed and services recomputed.',
+    confirmLabel: 'Delete',
+    variant: 'danger',
+  });
 
   const activeContracts = initialContracts.filter((c) => c.status === 'active');
   const pastContracts = initialContracts.filter((c) => c.status !== 'active');
@@ -78,7 +85,8 @@ export function ContractWorkspace({
   }
 
   async function handleDelete(contractId: string) {
-    if (!confirm('Delete this contract? Deliverables will be removed and services recomputed.')) return;
+    const ok = await confirmDeleteContract();
+    if (!ok) return;
     await fetch(`/api/clients/${slug}/contracts/${contractId}`, { method: 'DELETE' });
     router.refresh();
   }
@@ -199,6 +207,7 @@ export function ContractWorkspace({
           onSaved={refresh}
         />
       )}
+      {deleteContractDialog}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { Check, Copy, Loader2, Trash2, Shield, Crown } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 interface TokenRow {
   id: string;
@@ -35,6 +36,12 @@ export function ComptrollerShareDialog({ open, onClose, periodId, periodLabel }:
   const [loading, setLoading] = useState(false);
   const [minting, setMinting] = useState<'comptroller' | 'ceo' | null>(null);
   const [label, setLabel] = useState('');
+  const { confirm: confirmRevokeShare, dialog: revokeShareDialog } = useConfirm({
+    title: 'Revoke this link?',
+    description: 'The Comptroller / CEO will see an "expired" page next time they open it.',
+    confirmLabel: 'Revoke',
+    variant: 'danger',
+  });
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -91,7 +98,8 @@ export function ComptrollerShareDialog({ open, onClose, periodId, periodLabel }:
   }
 
   async function handleRevoke(id: string) {
-    if (!confirm('Revoke this link? The Comptroller / CEO will see an "expired" page next time they open it.')) return;
+    const ok = await confirmRevokeShare();
+    if (!ok) return;
     const res = await fetch(`/api/accounting/periods/${periodId}/view-tokens?token_id=${id}`, {
       method: 'DELETE',
     });
@@ -223,6 +231,7 @@ export function ComptrollerShareDialog({ open, onClose, periodId, periodLabel }:
           )}
         </div>
       </div>
+      {revokeShareDialog}
     </Dialog>
   );
 }

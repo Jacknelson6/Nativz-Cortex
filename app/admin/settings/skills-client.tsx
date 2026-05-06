@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils/cn';
 
 /**
@@ -160,8 +161,19 @@ export function AISettingsSkillsClient({
     }
   }
 
+  const { confirm: confirmDelete, dialog: deleteDialog } = useConfirm({
+    title: 'Delete skill?',
+    description: 'This action cannot be undone.',
+    confirmLabel: 'Delete',
+    variant: 'danger',
+  });
+
   async function handleDelete(skill: Skill) {
-    if (!confirm(`Delete "${skill.name}"? This can't be undone.`)) return;
+    const ok = await confirmDelete({
+      title: `Delete "${skill.name}"?`,
+      description: "This can't be undone.",
+    });
+    if (!ok) return;
     try {
       const res = await fetch('/api/nerd/skills', {
         method: 'DELETE',
@@ -335,6 +347,7 @@ export function AISettingsSkillsClient({
           }}
         />
       )}
+      {deleteDialog}
     </div>
   );
 }

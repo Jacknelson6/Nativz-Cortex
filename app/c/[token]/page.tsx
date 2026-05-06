@@ -2037,6 +2037,51 @@ function PostCard({
       return;
     }
 
+    // Optimistic flow: paint a temp comment into the parent immediately so
+    // the approve / changes_requested chip flips state without waiting on
+    // the round trip. On success we swap the temp row for the real one; on
+    // failure we yank the temp row and surface the error. Keeps the UI
+    // responsive on slow networks while still reconciling with the server.
+    const tempId = `temp-${
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2)
+    }`;
+    const trimmedAuthor = authorName.trim();
+    const resolvedContent =
+      commentText.trim() || (status === 'approved' ? 'Approved' : '');
+    const anchorSeconds = readCurrentAnchorSeconds();
+    const snapshotAttachments = pendingAttachments;
+    const tempComment: SharedComment = {
+      id: tempId,
+      review_link_id: '',
+      author_name: trimmedAuthor,
+      content: resolvedContent,
+      // Reflect the user's intent locally; the server may auto-upgrade
+      // changes_requested → approved on its side, which we reconcile when
+      // the real comment lands.
+      status,
+      created_at: new Date().toISOString(),
+      attachments: snapshotAttachments,
+      caption_before: null,
+      caption_after: null,
+      metadata: {},
+      timestamp_seconds: anchorSeconds,
+    };
+
+    onCommentAdded(tempComment);
+    // Reset composer immediately — the user already committed to the action,
+    // and seeing the temp chip while the field is still full feels laggy.
+    setCommentText('');
+    setPendingAttachments([]);
+    setPinEnabled(true);
+    setComposerExpanded(false);
+    // Optimistic toast. The server may auto-upgrade changes_requested →
+    // approved; we patch the toast in the success branch if that happens.
+    const optimisticToastId = toast.success(
+      status === 'approved' ? 'Post approved' : 'Revision added',
+    );
+
     setSubmitting(true);
     try {
       const res = await fetch(`/api/calendar/share/${token}/comment`, {
@@ -2044,45 +2089,45 @@ function PostCard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           postId: post.id,
-          authorName: authorName.trim(),
-          content:
-            commentText.trim() ||
-            (status === 'approved' ? 'Approved' : ''),
+          authorName: trimmedAuthor,
+          content: resolvedContent,
           status,
-          attachments: pendingAttachments,
+          attachments: snapshotAttachments,
           // Server only honors this for `comment` / `changes_requested`; the
           // approval path strips it. Sending unconditionally keeps the
           // client free of duplicate "should I include this?" branching.
-          // Read fresh from the player so the pin reflects wherever the
-          // timeline was at submit, not whenever the chip last rendered.
-          timestampSeconds: readCurrentAnchorSeconds(),
+          timestampSeconds: anchorSeconds,
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Failed to submit');
       const savedComment = json.comment as SharedComment;
+      // Swap the temp row for the real one. Two-step (remove → add) so the
+      // identity-by-id helpers stay simple — no need for an `upsertComment`.
+      onCommentRemoved(tempId);
       onCommentAdded(savedComment);
-      setCommentText('');
-      setPendingAttachments([]);
-      // Re-enable the live pin for the next draft. If the user dismissed it
-      // earlier, they get a fresh chance with the new comment.
-      setPinEnabled(true);
-      // Collapse the composer so the next interaction starts from rest.
-      setComposerExpanded(false);
       // Server may auto-upgrade a "changes_requested" submission to "approved"
       // when the body reads like an approval ("approved", "love this", etc.).
-      // Reflect the actual recorded status in the toast so the user isn't
-      // confused when their "revision" turns into a green checkmark.
+      // Patch the toast we already showed so the user isn't confused when
+      // their "revision" turns into a green checkmark.
       const wasAutoApproved = status !== 'approved' && savedComment.status === 'approved';
-      toast.success(
-        wasAutoApproved
-          ? 'Looked like an approval — marked approved'
-          : status === 'approved'
-            ? 'Post approved'
-            : 'Revision added',
-      );
+      if (wasAutoApproved) {
+        toast.success('Looked like an approval — marked approved', {
+          id: optimisticToastId,
+        });
+      }
     } catch (err) {
+      // Roll back: pull the temp row, dismiss the optimistic toast, and
+      // surface the real error so the user can retry.
+      onCommentRemoved(tempId);
+      toast.dismiss(optimisticToastId);
       toast.error(err instanceof Error ? err.message : 'Failed to submit');
+      // Restore composer state so the user doesn't lose their note. Pin
+      // stays enabled (the default) since we already reset it on optimistic
+      // submit; that matches the "fresh draft" intent if they retry.
+      setCommentText(resolvedContent === 'Approved' ? '' : resolvedContent);
+      setPendingAttachments(snapshotAttachments);
+      if (status === 'changes_requested') setComposerExpanded(true);
     } finally {
       setSubmitting(false);
     }

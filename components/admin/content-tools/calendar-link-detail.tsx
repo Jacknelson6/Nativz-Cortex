@@ -232,6 +232,12 @@ export function CalendarLinkDetail({
     confirmLabel: 'Approve all',
     variant: 'success',
   });
+  const { confirm: confirmDeleteVideo, dialog: deleteVideoDialog } = useConfirm({
+    title: 'Delete this video?',
+    description: 'This cannot be undone.',
+    confirmLabel: 'Delete',
+    variant: 'danger',
+  });
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState<DetailTab>('details');
   // Recipients live on the detail panel itself (not just the send preview)
@@ -483,7 +489,8 @@ export function CalendarLinkDetail({
   const deleteVideo = useCallback(
     async (videoId: string) => {
       if (!projectId || !token) return;
-      if (!confirm('Delete this video? This cannot be undone.')) return;
+      const ok = await confirmDeleteVideo();
+      if (!ok) return;
       try {
         const res = await fetch(
           `/api/admin/editing/projects/${projectId}/videos/${videoId}`,
@@ -497,7 +504,7 @@ export function CalendarLinkDetail({
         toast.error(err instanceof Error ? err.message : 'Delete failed');
       }
     },
-    [projectId, token, loadBridge],
+    [projectId, token, loadBridge, confirmDeleteVideo],
   );
 
   // Always use the API-resolved share_url so the link points at the
@@ -872,6 +879,7 @@ export function CalendarLinkDetail({
   return (
     <>
       {approveAllDialog}
+      {deleteVideoDialog}
       <SendPreviewDialog
         open={!!previewVariant}
         variant={previewVariant ?? 'initial'}

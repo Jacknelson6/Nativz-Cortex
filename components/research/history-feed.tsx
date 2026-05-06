@@ -30,6 +30,7 @@ import {
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -351,6 +352,13 @@ export function HistoryFeed({
   const [selectedTopicSearchIds, setSelectedTopicSearchIds] = useState<Set<string>>(new Set());
   /** Checkboxes and bulk actions only after user chooses “Select” from the row menu. */
   const [selectionModeActive, setSelectionModeActive] = useState(false);
+
+  const { confirm: confirmBulkDeleteHistory, dialog: bulkDeleteHistoryDialog } = useConfirm({
+    title: 'Delete items?',
+    description: 'These items will be removed from your history.',
+    confirmLabel: 'Delete',
+    variant: 'danger',
+  });
 
   const {
     folders: topicSearchFolders,
@@ -681,7 +689,11 @@ export function HistoryFeed({
   const deleteAllSelected = useCallback(async () => {
     const ids = [...selectedTopicSearchIds];
     if (ids.length === 0) return;
-    if (!window.confirm(`Delete ${ids.length} items from history?`)) return;
+    const ok = await confirmBulkDeleteHistory({
+      title: `Delete ${ids.length} item${ids.length === 1 ? '' : 's'}?`,
+      description: 'They will be removed from your history.',
+    });
+    if (!ok) return;
 
     // Optimistic: hide all rows immediately and clear selection. Run deletes
     // in parallel; rollback any that fail.
@@ -721,7 +733,7 @@ export function HistoryFeed({
     } else {
       toast.success('Removed from history');
     }
-  }, [mergedItems, onItemDeleted, selectedTopicSearchIds]);
+  }, [mergedItems, onItemDeleted, selectedTopicSearchIds, confirmBulkDeleteHistory]);
 
   const filtered = useMemo(() => {
     return mergedItems.filter((item) => {
@@ -1427,6 +1439,7 @@ export function HistoryFeed({
       ) : (
         content
       )}
+      {bulkDeleteHistoryDialog}
     </div>
   );
 }

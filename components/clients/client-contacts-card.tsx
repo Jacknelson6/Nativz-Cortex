@@ -24,6 +24,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog } from '@/components/ui/dialog';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { EmptyState } from '@/components/shared/empty-state';
 import { toast } from 'sonner';
@@ -132,6 +133,12 @@ export function ClientContactsCard({
 
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const { confirm: confirmRemovePortal, dialog: removePortalDialog } = useConfirm({
+    title: 'Remove portal access?',
+    description: 'They will lose access to this client portal.',
+    confirmLabel: 'Remove',
+    variant: 'danger',
+  });
 
   const reload = useCallback(async () => {
     try {
@@ -449,7 +456,11 @@ export function ClientContactsCard({
 
   async function handleRemovePortalAccess(row: MergedRow) {
     if (!row.portalUser) return;
-    if (!confirm(`Remove ${row.portalUser.full_name} from this client's portal? They will lose access.`)) return;
+    const ok = await confirmRemovePortal({
+      title: `Remove ${row.portalUser.full_name}?`,
+      description: "They will lose access to this client's portal.",
+    });
+    if (!ok) return;
     setBusyAction(`portal:${row.key}`);
     try {
       const res = await fetch(`/api/clients/${clientId}/portal-users/${row.portalUser.id}`, { method: 'DELETE' });
@@ -605,6 +616,7 @@ export function ClientContactsCard({
           </div>
         </div>
       </Dialog>
+      {removePortalDialog}
     </>
   );
 }

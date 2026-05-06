@@ -31,6 +31,7 @@ import {
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import type {
   CaptionVariantPlatform,
   CaptionVariants,
@@ -152,6 +153,13 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
   const [grouping, setGrouping] = useState(false);
   const aliveRef = useRef(true);
 
+  const { confirm: confirmRevoke, dialog: revokeDialog } = useConfirm({
+    title: 'Revoke this link?',
+    description: 'Anyone with the URL will get a "link expired" page.',
+    confirmLabel: 'Revoke',
+    variant: 'danger',
+  });
+
   const togglePostSelection = useCallback((postId: string) => {
     setSelectedPostIds((prev) =>
       prev.includes(postId) ? prev.filter((id) => id !== postId) : [...prev, postId],
@@ -250,7 +258,7 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
   }
 
   async function handleRevoke(linkId: string) {
-    const ok = window.confirm('Revoke this link? Anyone with the URL will get a "link expired" page.');
+    const ok = await confirmRevoke();
     if (!ok) return;
     try {
       const res = await fetch(`/api/calendar/drops/${id}/share/${linkId}/revoke`, { method: 'POST' });
@@ -442,6 +450,7 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
           <p className="text-xs text-text-muted">Expires in 30 days.</p>
         </div>
       </Dialog>
+      {revokeDialog}
     </div>
   );
 }

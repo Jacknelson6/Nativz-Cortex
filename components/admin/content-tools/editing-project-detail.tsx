@@ -26,6 +26,7 @@ import {
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ComboSelect } from '@/components/ui/combo-select';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
   EDITING_STATUS_LABEL,
   EDITING_TYPE_LABEL,
@@ -183,6 +184,25 @@ export function EditingProjectDetail({
   const [archivedEmails, setArchivedEmails] = useState<ArchivedEmail[] | null>(null);
   const [archivedLoading, setArchivedLoading] = useState(false);
   const [viewingEmail, setViewingEmail] = useState<ArchivedEmail | null>(null);
+
+  const { confirm: confirmArchive, dialog: archiveDialog } = useConfirm({
+    title: 'Archive this project?',
+    description: 'You can restore it later.',
+    confirmLabel: 'Archive',
+    variant: 'danger',
+  });
+  const { confirm: confirmDeleteVideo, dialog: deleteVideoDialog } = useConfirm({
+    title: 'Delete this video?',
+    description: 'This cannot be undone.',
+    confirmLabel: 'Delete',
+    variant: 'danger',
+  });
+  const { confirm: confirmFireRevisions, dialog: fireRevisionsDialog } = useConfirm({
+    title: 'Send the "revisions complete" email?',
+    description: 'It fires immediately to the brand contacts.',
+    confirmLabel: 'Send',
+    variant: 'success',
+  });
 
   const projectId = project?.id ?? null;
   const clientId = project?.client_id ?? null;
@@ -345,7 +365,8 @@ export function EditingProjectDetail({
 
   async function archive() {
     if (!projectId) return;
-    if (!confirm('Archive this project? You can restore it later.')) return;
+    const ok = await confirmArchive();
+    if (!ok) return;
     try {
       const res = await fetch(`/api/admin/editing/projects/${projectId}`, {
         method: 'DELETE',
@@ -361,7 +382,8 @@ export function EditingProjectDetail({
 
   async function deleteVideo(videoId: string) {
     if (!projectId) return;
-    if (!confirm('Delete this video? This cannot be undone.')) return;
+    const ok = await confirmDeleteVideo();
+    if (!ok) return;
     try {
       const res = await fetch(
         `/api/admin/editing/projects/${projectId}/videos/${videoId}`,
@@ -464,13 +486,8 @@ export function EditingProjectDetail({
 
   async function fireRevisionsComplete() {
     if (!projectId || !activeLink || firingRevisions) return;
-    if (
-      !confirm(
-        'Send the "revisions complete" email to the brand contacts? This fires immediately.',
-      )
-    ) {
-      return;
-    }
+    const ok = await confirmFireRevisions();
+    if (!ok) return;
     setFiringRevisions(true);
     try {
       const res = await fetch(
@@ -1058,6 +1075,9 @@ export function EditingProjectDetail({
         </Section>
 
       </ContentDetailDialog>
+      {archiveDialog}
+      {deleteVideoDialog}
+      {fireRevisionsDialog}
     </>
   );
 }

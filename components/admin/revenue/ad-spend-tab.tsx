@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { formatCents, dollarsToCents } from '@/lib/format/money';
 
 type Platform = 'meta' | 'google' | 'tiktok' | 'youtube' | 'other';
@@ -33,6 +34,12 @@ export function AdSpendTab({ clients }: { clients: ClientOption[] }) {
     period_month: firstOfThisMonth(),
     spend_dollars: '',
     notes: '',
+  });
+  const { confirm: confirmDeleteAdSpend, dialog: deleteAdSpendDialog } = useConfirm({
+    title: 'Delete this ad spend entry?',
+    description: "This can't be undone.",
+    confirmLabel: 'Delete',
+    variant: 'danger',
   });
 
   const refresh = useCallback(async () => {
@@ -85,7 +92,8 @@ export function AdSpendTab({ clients }: { clients: ClientOption[] }) {
   }
 
   async function remove(id: string) {
-    if (!confirm('Delete this ad spend entry?')) return;
+    const ok = await confirmDeleteAdSpend();
+    if (!ok) return;
     const res = await fetch('/api/revenue/ad-spend', {
       method: 'DELETE',
       headers: { 'content-type': 'application/json' },
@@ -236,6 +244,7 @@ export function AdSpendTab({ clients }: { clients: ClientOption[] }) {
           </tbody>
         </table>
       </div>
+      {deleteAdSpendDialog}
     </div>
   );
 }

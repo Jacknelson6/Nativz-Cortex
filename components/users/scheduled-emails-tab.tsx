@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils/cn';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 interface ScheduledRow {
   id: string;
@@ -31,6 +32,12 @@ const STATUS_STYLES: Record<ScheduledRow['status'], string> = {
 export function ScheduledEmailsTab() {
   const [rows, setRows] = useState<ScheduledRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const { confirm: confirmCancelSend, dialog: cancelSendDialog } = useConfirm({
+    title: 'Cancel this scheduled send?',
+    description: 'It will not be delivered.',
+    confirmLabel: 'Cancel send',
+    variant: 'danger',
+  });
 
   async function load() {
     const r = await fetch('/api/admin/scheduled-emails');
@@ -52,7 +59,8 @@ export function ScheduledEmailsTab() {
   }, []);
 
   async function cancel(id: string) {
-    if (!confirm('Cancel this scheduled send?')) return;
+    const ok = await confirmCancelSend();
+    if (!ok) return;
     const r = await fetch(`/api/admin/scheduled-emails/${id}`, { method: 'DELETE' });
     if (r.ok) {
       toast.success('Cancelled');
@@ -104,6 +112,7 @@ export function ScheduledEmailsTab() {
           ))}
         </tbody>
       </table>
+      {cancelSendDialog}
     </div>
   );
 }
