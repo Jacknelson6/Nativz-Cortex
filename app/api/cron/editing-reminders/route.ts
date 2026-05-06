@@ -61,6 +61,8 @@ async function handleGet(request: NextRequest) {
     all_approved_notified_at: string | null;
     archived_at: string | null;
     expires_at: string;
+    last_followup_at: string | null;
+    followup_count: number | null;
     editing_projects: {
       id: string;
       name: string | null;
@@ -89,6 +91,8 @@ async function handleGet(request: NextRequest) {
       all_approved_notified_at,
       archived_at,
       expires_at,
+      last_followup_at,
+      followup_count,
       editing_projects!inner (
         id,
         name,
@@ -229,9 +233,14 @@ async function handleGet(request: NextRequest) {
 
       const stampIso = new Date().toISOString();
       const stampField = `followup_${stage}_sent_at` as const;
+      const nextCount = (link.followup_count ?? 0) + 1;
       await admin
         .from('editing_project_share_links')
-        .update({ [stampField]: stampIso })
+        .update({
+          [stampField]: stampIso,
+          last_followup_at: stampIso,
+          followup_count: nextCount,
+        })
         .eq('id', link.id);
 
       const opsWebhook = process.env.OPS_CHAT_WEBHOOK_URL ?? null;

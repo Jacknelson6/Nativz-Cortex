@@ -130,6 +130,15 @@ export interface EditingProject {
   first_sent_at: string | null;
   last_sent_at: string | null;
   send_count: number;
+  /**
+   * Most recent followup nudge timestamp + count, rolled up across the
+   * project's share links. Followup = manual re-review send or any
+   * cadence stage from `/api/cron/editing-reminders`. Initial
+   * deliverable sends do NOT count toward `followup_count`. Drives the
+   * unified review table's "Last followup" column for editing rows.
+   */
+  last_followup_at: string | null;
+  followup_count: number;
 }
 
 export const EDITING_STATUS_LABEL: Record<EditingProjectStatus, string> = {

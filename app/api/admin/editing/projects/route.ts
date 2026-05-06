@@ -95,17 +95,27 @@ export async function GET(req: Request) {
   const projectIds = (data ?? []).map((r) => (r as { id: string }).id);
   const sendStats = new Map<
     string,
-    { first_sent_at: string | null; last_sent_at: string | null; send_count: number }
+    {
+      first_sent_at: string | null;
+      last_sent_at: string | null;
+      send_count: number;
+      last_followup_at: string | null;
+      followup_count: number;
+    }
   >();
   if (projectIds.length) {
     const { data: linkRows } = await admin
       .from('editing_project_share_links')
-      .select('id, project_id, last_review_email_sent_at')
+      .select(
+        'id, project_id, last_review_email_sent_at, last_followup_at, followup_count',
+      )
       .in('project_id', projectIds);
     const links = (linkRows ?? []) as Array<{
       id: string;
       project_id: string;
       last_review_email_sent_at: string | null;
+      last_followup_at: string | null;
+      followup_count: number | null;
     }>;
     const linkToProject = new Map(links.map((l) => [l.id, l.project_id]));
     const linkIds = links.map((l) => l.id);
@@ -124,6 +134,8 @@ export async function GET(req: Request) {
         first_sent_at: null,
         last_sent_at: null,
         send_count: 0,
+        last_followup_at: null,
+        followup_count: 0,
       };
       cur.send_count += 1;
       if (!cur.first_sent_at || r.sent_at < cur.first_sent_at) cur.first_sent_at = r.sent_at;
@@ -133,15 +145,27 @@ export async function GET(req: Request) {
     // Fallback: for any link whose archive insert was lost, fold its
     // bookmark into the project's stats so the column doesn't go blank.
     for (const link of links) {
-      if (!link.last_review_email_sent_at) continue;
       const cur = sendStats.get(link.project_id) ?? {
         first_sent_at: null,
         last_sent_at: null,
         send_count: 0,
+        last_followup_at: null,
+        followup_count: 0,
       };
-      const ts = link.last_review_email_sent_at;
-      if (!cur.first_sent_at || ts < cur.first_sent_at) cur.first_sent_at = ts;
-      if (!cur.last_sent_at || ts > cur.last_sent_at) cur.last_sent_at = ts;
+      if (link.last_review_email_sent_at) {
+        const ts = link.last_review_email_sent_at;
+        if (!cur.first_sent_at || ts < cur.first_sent_at) cur.first_sent_at = ts;
+        if (!cur.last_sent_at || ts > cur.last_sent_at) cur.last_sent_at = ts;
+      }
+      // Followup rollup: max(last_followup_at), sum(followup_count) across links.
+      // Initial deliverable sends never bump followup_count, so this only
+      // reflects manual re-review sends + cron cadence stages.
+      if (link.last_followup_at) {
+        if (!cur.last_followup_at || link.last_followup_at > cur.last_followup_at) {
+          cur.last_followup_at = link.last_followup_at;
+        }
+      }
+      cur.followup_count += link.followup_count ?? 0;
       sendStats.set(link.project_id, cur);
     }
   }
@@ -181,6 +205,8 @@ export async function GET(req: Request) {
     first_sent_at: sendStats.get(row.id)?.first_sent_at ?? null,
     last_sent_at: sendStats.get(row.id)?.last_sent_at ?? null,
     send_count: sendStats.get(row.id)?.send_count ?? 0,
+    last_followup_at: sendStats.get(row.id)?.last_followup_at ?? null,
+    followup_count: sendStats.get(row.id)?.followup_count ?? 0,
   }));
 
   return NextResponse.json({ projects });

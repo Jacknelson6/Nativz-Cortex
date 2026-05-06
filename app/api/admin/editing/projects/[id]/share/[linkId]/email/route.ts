@@ -47,6 +47,7 @@ interface ShareLinkRow {
   expires_at: string;
   archived_at: string | null;
   last_review_email_sent_at: string | null;
+  followup_count: number | null;
 }
 
 interface VideoRevisionRow {
@@ -87,7 +88,7 @@ async function loadEmailContext(projectId: string, linkId: string) {
 
   const { data: link } = await admin
     .from('editing_project_share_links')
-    .select('id, project_id, token, expires_at, archived_at, last_review_email_sent_at')
+    .select('id, project_id, token, expires_at, archived_at, last_review_email_sent_at, followup_count')
     .eq('id', linkId)
     .eq('project_id', projectId)
     .single<ShareLinkRow>();
@@ -364,10 +365,18 @@ export async function POST(
 
   // Stamp the bookmark so the next send computes pending revisions from this
   // moment forward and switches the dialog into "Send re-review" mode.
+  // Re-reviews also count as a followup nudge for the unified board.
   const sentAt = new Date().toISOString();
+  const linkUpdate: Record<string, string | number> = {
+    last_review_email_sent_at: sentAt,
+  };
+  if (kind === 'rereview') {
+    linkUpdate.last_followup_at = sentAt;
+    linkUpdate.followup_count = (link.followup_count ?? 0) + 1;
+  }
   await admin
     .from('editing_project_share_links')
-    .update({ last_review_email_sent_at: sentAt })
+    .update(linkUpdate)
     .eq('id', link.id);
 
   // Archive the rendered HTML so the editing modal's Past emails section can
