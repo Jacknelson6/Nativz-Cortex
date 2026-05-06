@@ -1022,6 +1022,7 @@ export function CalendarLinkDetail({
               videos={dropPosts?.videos ?? []}
               postStatusByPostId={dropPosts?.postStatusByPostId ?? {}}
               postCoverByPostId={dropPosts?.postCoverByPostId}
+              dropId={link.drop_id}
               getPostHref={(postId) =>
                 `/calendar/${link.drop_id}#post-${postId}`
               }
