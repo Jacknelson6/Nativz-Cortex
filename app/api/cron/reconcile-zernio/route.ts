@@ -120,8 +120,17 @@ async function handleGet(request: NextRequest) {
         for (const platform of zernio.platforms) {
           const dbStatus = sppByLateId.get(platform.profileId);
           if (!dbStatus) continue;
-          const zernioStatus = platform.status === 'published' ? 'published' : 'failed';
-          // Treat `pending` in DB vs. terminal in Zernio as drift.
+          // Map Zernio's three-state to our local equivalents. Future-dated
+          // legs come back as `scheduled` and must map to `pending` — never
+          // to `failed` (the old `=== 'published' ? : 'failed'` collapse is
+          // exactly what fired the May 6 false-positive alert).
+          let zernioStatus: 'published' | 'failed' | 'pending';
+          if (platform.status === 'published') zernioStatus = 'published';
+          else if (platform.status === 'failed') zernioStatus = 'failed';
+          else zernioStatus = 'pending';
+          // DB pending + Zernio still pending = no drift, post just hasn't
+          // run yet. Only treat pending → terminal as drift.
+          if (dbStatus === 'pending' && zernioStatus === 'pending') continue;
           if (dbStatus === 'pending') {
             hasDrift = true;
             break;

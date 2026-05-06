@@ -63,13 +63,23 @@ export async function syncPlatformRowsFromZernio(
     const spp = sppByLateId.get(platform.profileId);
     if (!spp) continue;
     if (spp.status === 'published' && platform.status !== 'published') continue;
+    // Map Zernio's three-state (`published` | `scheduled` | `failed`) onto our
+    // local spp status. Critically: a `scheduled` future leg must stay
+    // `pending`, NOT collapse to `failed`. The previous ternary
+    // (`platform.status === 'published' ? 'published' : 'failed'`) stamped
+    // every future-dated leg as failed the first time the daily reconciler
+    // ran, which is what fired the May 6 mass post-health alert.
+    let nextStatus: string;
+    if (platform.status === 'published') nextStatus = 'published';
+    else if (platform.status === 'failed') nextStatus = 'failed';
+    else nextStatus = 'pending';
     await adminClient
       .from('scheduled_post_platforms')
       .update({
-        status: platform.status === 'published' ? 'published' : 'failed',
+        status: nextStatus,
         external_post_id: platform.externalPostId ?? null,
         external_post_url: platform.externalPostUrl ?? null,
-        failure_reason: platform.error ?? null,
+        failure_reason: platform.status === 'failed' ? platform.error ?? null : null,
       })
       .eq('id', spp.id);
   }

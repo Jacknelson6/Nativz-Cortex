@@ -82,17 +82,40 @@ async function handleGet(request: NextRequest) {
     console.error('[post-health] failed-posts query error:', failedErr);
   }
 
-  const failedPosts: PostHealthFailedPost[] = (failedRows ?? []).map((r) => {
+  // Defensive gate: a row that's `failed` with retry_count=0, no failure
+  // reason, AND a future scheduled_at can only have been stamped by a bug
+  // upstream (the May 6 incident was the reconciler collapsing Zernio's
+  // `scheduled` state into `failed`). Skip those, don't email, but log so
+  // we can spot a recurrence.
+  const nowMs = Date.now();
+  const suspectIds: string[] = [];
+  const failedPosts: PostHealthFailedPost[] = [];
+  for (const r of failedRows ?? []) {
+    const scheduledMs = r.scheduled_at ? new Date(r.scheduled_at).getTime() : null;
+    const isUnattemptedFuture =
+      (r.retry_count ?? 0) === 0 &&
+      !r.failure_reason &&
+      scheduledMs !== null &&
+      scheduledMs > nowMs;
+    if (isUnattemptedFuture) {
+      suspectIds.push(r.id);
+      continue;
+    }
     const clientRow = Array.isArray(r.clients) ? r.clients[0] : r.clients;
-    return {
+    failedPosts.push({
       postId: r.id,
       clientName: clientRow?.name ?? '(unknown client)',
       caption: r.caption,
       scheduledFor: r.scheduled_at,
       failureReason: r.failure_reason,
       retryCount: r.retry_count ?? 0,
-    };
-  });
+    });
+  }
+  if (suspectIds.length > 0) {
+    console.warn(
+      `[post-health] skipped ${suspectIds.length} suspect future-dated 'failed' rows (likely upstream stamp bug); not emailing. ids: ${suspectIds.slice(0, 20).join(',')}${suspectIds.length > 20 ? '…' : ''}`,
+    );
+  }
 
   // ── 2. Find disconnected social profiles ──────────────────────────────────
 
