@@ -180,9 +180,7 @@ async function main() {
   }
 
   console.log('\n[seed] done.');
-  console.log('       Admin:   http://localhost:3001/admin/revenue');
   console.log('       Proposal: http://localhost:3001/proposals/fixture-sent-proposal');
-  console.log('       Portal:   http://localhost:3001/portal/billing (needs viewer auth)');
 }
 
 main().catch((err) => {

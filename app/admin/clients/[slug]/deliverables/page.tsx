@@ -1,7 +1,6 @@
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { LifecycleStatePill } from '@/components/admin/revenue/status-pill';
 import { ProductionHero } from '@/components/deliverables/production-hero';
 import { ScopePanel } from '@/components/deliverables/scope-panel';
 import { AdminShell } from '@/components/deliverables/admin-shell';
@@ -87,9 +86,6 @@ export default async function ClientDeliverablesPage({
     .maybeSingle();
   const payrollPeriodId = (payrollPeriodRow?.id as string | undefined) ?? null;
 
-  const lifecycleState =
-    (client as { lifecycle_state?: string | null }).lifecycle_state ?? 'lead';
-
   return (
     <div className="space-y-6">
       <header className="space-y-2">
@@ -99,7 +95,6 @@ export default async function ClientDeliverablesPage({
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="flex items-center gap-3">
             <h1 className="ui-page-title">{client.name}</h1>
-            <LifecycleStatePill state={lifecycleState} />
           </div>
         </div>
       </header>

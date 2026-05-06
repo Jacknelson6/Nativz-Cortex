@@ -51,12 +51,6 @@ const nextConfig: NextConfig = {
       // Invite acceptance moved /portal/join/[token] → /join/[token]. The
       // colon-asterisk capture passes the token segment through unchanged.
       { source: '/portal/join/:token*', destination: '/join/:token*', permanent: false },
-      // Viewer billing surface retired with /portal/* — admins still see
-      // billing inside /admin/account. Viewers don't have a billing UI yet,
-      // so the redirect lands them in the shell where the avatar popover
-      // covers account-level needs.
-      { source: '/portal/billing', destination: '/admin/account', permanent: false },
-      { source: '/portal/billing/:path*', destination: '/admin/account', permanent: false },
 
       // Phase 2 — every legacy /portal/* brand tool collapses into the
       // unified `(app)` shell at the root. Listed in match order: deeper

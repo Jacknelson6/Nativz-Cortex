@@ -2,6 +2,16 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/**
+ * Shared admin-role gate for API routes. Returns either the authenticated
+ * user id + a service-role Supabase client, or a `NextResponse` the caller
+ * can return directly (401 if no session, 403 if the user isn't an admin).
+ *
+ * Previously lived at `lib/revenue/auth.ts` next to the Revenue Hub. Moved
+ * here when the Revenue Hub was stripped so the remaining non-revenue
+ * callers (contract external uploads, email log) keep working.
+ */
+
 export type AdminAuth = {
   userId: string;
   admin: ReturnType<typeof createAdminClient>;

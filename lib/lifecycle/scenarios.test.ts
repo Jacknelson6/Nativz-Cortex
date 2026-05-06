@@ -1,8 +1,12 @@
 /**
- * Scenario tests for every production bug found in a /revenue-review pass.
+ * Scenario tests for production bugs in the lifecycle state machine.
  * Each test freezes the correct behaviour for one specific bug so a future
  * refactor can't silently reintroduce it. When a new bug is found, add a
  * scenario here as part of the fix commit.
+ *
+ * The Revenue Hub strip (2026-05-06) removed the net-revenue scenarios
+ * that lived in this file alongside the kickoff-email guard. They went
+ * out with `lib/revenue/aggregates.ts`.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -19,7 +23,6 @@ vi.mock('@/lib/supabase/admin', () => ({
 }));
 
 import { onInvoicePaid } from './state-machine';
-import { netLifetimeRevenueCents } from '@/lib/revenue/aggregates';
 
 type State = {
   clients: Map<string, {
@@ -31,17 +34,6 @@ type State = {
   }>;
   contacts: Map<string, { email: string; name: string }>;
   admins: Array<{ id: string }>;
-  invoices: Array<{
-    client_id: string | null;
-    amount_paid_cents: number;
-    paid_at: string | null;
-  }>;
-  refunds: Array<{
-    client_id: string | null;
-    amount_cents: number;
-    created_at: string;
-    status: string;
-  }>;
   lifecycleEvents: Array<Record<string, unknown>>;
   notifications: Array<Record<string, unknown>>;
   kickoffWrites: number;
@@ -63,8 +55,6 @@ function createState(): State {
     ]),
     contacts: new Map([['client-1', { email: 'dana@acme.test', name: 'Dana Smith' }]]),
     admins: [{ id: 'admin-1' }],
-    invoices: [],
-    refunds: [],
     lifecycleEvents: [],
     notifications: [],
     kickoffWrites: 0,
@@ -149,54 +139,9 @@ function makeAdmin(state: State): SupabaseClient {
         }),
       };
     }
-    if (table === 'stripe_invoices') {
-      return aggregateBuilder(() => state.invoices.filter((x) => x.paid_at !== null));
-    }
-    if (table === 'stripe_refunds') {
-      return aggregateBuilder(() => state.refunds.filter((x) => x.status === 'succeeded'));
-    }
     throw new Error(`Unexpected table in mock: ${table}`);
   };
   return { from } as unknown as SupabaseClient;
-}
-
-/**
- * Minimal chainable builder for the query shape aggregates.ts uses. Every
- * filter accumulates into a filter list and the final await resolves the
- * data set. Supports select, not, eq, gte, lte, order, limit — the subset
- * of PostgREST methods we call.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function aggregateBuilder<T extends Record<string, any>>(initial: () => T[]) {
-  const filters: Array<(row: T) => boolean> = [];
-  const run = (): Promise<{ data: T[]; error: null }> => {
-    const rows = initial().filter((r) => filters.every((f) => f(r)));
-    return Promise.resolve({ data: rows, error: null });
-  };
-
-  const chain = {
-    select: () => chain,
-    not: (col: string, _op: string, _val: unknown) => {
-      filters.push((r) => r[col] !== null && r[col] !== undefined);
-      return chain;
-    },
-    eq: (col: string, val: unknown) => {
-      filters.push((r) => r[col] === val);
-      return chain;
-    },
-    gte: (col: string, val: unknown) => {
-      filters.push((r) => String(r[col]) >= String(val));
-      return chain;
-    },
-    lte: (col: string, val: unknown) => {
-      filters.push((r) => String(r[col]) <= String(val));
-      return chain;
-    },
-    order: () => chain,
-    limit: () => chain,
-    then: <R,>(resolve: (v: { data: T[]; error: null }) => R) => run().then(resolve),
-  };
-  return chain;
 }
 
 describe('bug: kickoff email re-sent on every monthly payment', () => {
@@ -248,62 +193,3 @@ describe('bug: kickoff email re-sent on every monthly payment', () => {
   });
 });
 
-describe('bug: refund math not subtracted from lifetime revenue', () => {
-  it('netLifetimeRevenueCents = paid − refunded', async () => {
-    const state = createState();
-    state.invoices = [
-      {
-        client_id: 'client-1',
-        amount_paid_cents: 100000, // $1000
-        paid_at: '2026-04-01T00:00:00Z',
-      },
-    ];
-    state.refunds = [
-      {
-        client_id: 'client-1',
-        amount_cents: 50000, // $500 refund
-        created_at: '2026-04-10T00:00:00Z',
-        status: 'succeeded',
-      },
-    ];
-    const admin = makeAdmin(state);
-    const net = await netLifetimeRevenueCents(admin, { clientId: 'client-1' });
-    expect(net).toBe(50000);
-  });
-
-  it('clamps net at 0 when refunds exceed payments (over-refund case)', async () => {
-    const state = createState();
-    state.invoices = [
-      { client_id: 'client-1', amount_paid_cents: 50000, paid_at: '2026-04-01T00:00:00Z' },
-    ];
-    state.refunds = [
-      {
-        client_id: 'client-1',
-        amount_cents: 70000,
-        created_at: '2026-04-10T00:00:00Z',
-        status: 'succeeded',
-      },
-    ];
-    const admin = makeAdmin(state);
-    const net = await netLifetimeRevenueCents(admin, { clientId: 'client-1' });
-    expect(net).toBe(0);
-  });
-
-  it('ignores failed/canceled refunds', async () => {
-    const state = createState();
-    state.invoices = [
-      { client_id: 'client-1', amount_paid_cents: 100000, paid_at: '2026-04-01T00:00:00Z' },
-    ];
-    state.refunds = [
-      {
-        client_id: 'client-1',
-        amount_cents: 50000,
-        created_at: '2026-04-10T00:00:00Z',
-        status: 'failed',
-      },
-    ];
-    const admin = makeAdmin(state);
-    const net = await netLifetimeRevenueCents(admin, { clientId: 'client-1' });
-    expect(net).toBe(100000);
-  });
-});
