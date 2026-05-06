@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getBrandFromRequest } from '@/lib/agency/brand-from-request';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 /** POST /api/admin/users/reset-password — send password reset email (super_admin only) */
 export async function POST(req: NextRequest) {
@@ -15,8 +17,14 @@ export async function POST(req: NextRequest) {
   const { email } = await req.json();
   if (!email) return NextResponse.json({ error: 'email required' }, { status: 400 });
 
-  // Use the admin client to generate a password reset link
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io';
+  // Use the admin client to generate a password reset link. Brand the
+  // redirect to the agency the super_admin is operating from (request host)
+  // so an AC admin's reset link lands on cortex.andersoncollaborative.com.
+  const { brand } = getBrandFromRequest(req);
+  const appUrl =
+    process.env.NODE_ENV !== 'production'
+      ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
+      : getCortexAppUrl(brand);
   const { data, error } = await admin.auth.admin.generateLink({
     type: 'recovery',
     email,

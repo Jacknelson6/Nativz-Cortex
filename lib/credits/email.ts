@@ -27,6 +27,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { sendScopeApproachingEmail, sendScopeOverEmail } from '@/lib/email/resend';
 import { getBrandFromAgency } from '@/lib/agency/detect';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 import { deliverableCopy } from '@/lib/deliverables/copy';
 import { getDeliverableTypeSlug } from '@/lib/deliverables/types-cache';
 
@@ -265,7 +266,10 @@ export async function maybeSendBalanceWarning(
   const clientName = client?.name ?? 'Your brand';
   const agency = getBrandFromAgency(client?.agency ?? null);
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
+  const appUrl =
+    process.env.NODE_ENV !== 'production'
+      ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
+      : getCortexAppUrl(agency);
   const deliverablesUrl = `${appUrl}/deliverables`;
   const nextResetLabel = new Date(balance.next_reset_at).toLocaleDateString(
     'en-US',

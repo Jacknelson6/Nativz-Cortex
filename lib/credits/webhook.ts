@@ -29,6 +29,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AgencyBrand } from '@/lib/agency/detect';
 import { getStripe } from '@/lib/stripe/client';
 import { getBrandFromAgency } from '@/lib/agency/detect';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 import { grantCredit, expireCredit } from './grant';
 import { isGranted, type DeliverableTypeSlug, type GrantResult } from './types';
 import {
@@ -240,7 +241,10 @@ export async function onCreditsCheckoutCompleted(
     }
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
+  const appUrl =
+    process.env.NODE_ENV !== 'production'
+      ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
+      : getCortexAppUrl(resolvedAgency);
   const deliverablesUrl = `${appUrl}/deliverables`;
 
   const recipients = await resolveTopupRecipients(admin, clientId);

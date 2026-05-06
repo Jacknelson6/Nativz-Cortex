@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendWelcomeEmail } from '@/lib/email/resend';
 import { detectAgencyFromHostname } from '@/lib/agency/detect';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 export async function POST(request: NextRequest) {
   try {
@@ -177,8 +178,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to complete account setup' }, { status: 500 });
     }
 
-    // Send welcome email (non-blocking)
-    const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://cortex.nativz.io'}/login`;
+    // Send welcome email (non-blocking). Login URL must match the brand
+    // the email is themed for, otherwise an AC user gets a Nativz link.
+    const appUrl =
+      process.env.NODE_ENV !== 'production'
+        ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
+        : getCortexAppUrl(agency);
+    const loginUrl = `${appUrl}/login`;
     sendWelcomeEmail({ to: email, name: full_name, role: 'viewer', loginUrl, agency }).catch((err) =>
       console.error('Welcome email failed:', err),
     );

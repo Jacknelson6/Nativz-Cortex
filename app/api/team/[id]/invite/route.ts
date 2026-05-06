@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendTeamInviteEmail } from '@/lib/email/resend';
 import { detectAgencyFromHostname } from '@/lib/agency/detect';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 async function requireAdmin() {
   const supabase = await createServerSupabaseClient();
@@ -84,7 +85,14 @@ export async function POST(
       return NextResponse.json({ error: 'Failed to create invite' }, { status: 500 });
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+    // Brand the invite URL to match the email theming. Detect agency once
+    // and use it for both the URL host and the email template.
+    const agencyHeader = request.headers.get('x-agency') ?? request.nextUrl.hostname;
+    const agency = detectAgencyFromHostname(agencyHeader);
+    const baseUrl =
+      process.env.NODE_ENV !== 'production'
+        ? process.env.NEXT_PUBLIC_APP_URL ?? request.nextUrl.origin
+        : getCortexAppUrl(agency);
     const inviteUrl = `${baseUrl}/s/${invite.token}`;
 
     // Get inviter's name for the email
@@ -93,10 +101,6 @@ export async function POST(
       .select('full_name')
       .eq('id', admin.id)
       .single();
-
-    // Send invite email (non-blocking)
-    const agencyHeader = request.headers.get('x-agency') ?? request.nextUrl.hostname;
-    const agency = detectAgencyFromHostname(agencyHeader);
     sendTeamInviteEmail({
       to: member.email,
       memberName: member.full_name,

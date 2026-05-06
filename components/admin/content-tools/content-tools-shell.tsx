@@ -40,7 +40,14 @@ import { PostingHistoryTab } from './posting-history-tab';
 import { EditingNewProjectDialog } from './editing-new-project-dialog';
 import { EditingProjectDetail } from './editing-project-detail';
 import { CalendarLinkDetail } from './calendar-link-detail';
+import { MonthlyTargetPills } from './monthly-target-pills';
 import { subscribeToCompletion } from '@/lib/editing/upload-store';
+
+function firstOfMonthUTC(d: Date): string {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1))
+    .toISOString()
+    .slice(0, 10);
+}
 
 /**
  * `/admin/content-tools` shell. Reorganised around project type so
@@ -275,6 +282,16 @@ export function ContentToolsShell() {
   // column header to re-sort the whole table.
   const [sort, setSort] = useState<SortState>({ field: 'date_sent', dir: 'desc' });
 
+  // Month strip lives at the shell level so the pills + (future)
+  // by-month row filter share a single source of truth. Defaults to
+  // the current UTC month; nudged via the strip's chevrons.
+  const [selectedMonth, setSelectedMonth] = useState<string>(() =>
+    firstOfMonthUTC(new Date()),
+  );
+  // Tick-bumped after a delivery completes so the pills re-fetch
+  // without forcing a full table reload.
+  const [monthRefreshKey, setMonthRefreshKey] = useState(0);
+
   async function loadProjects(silent = false) {
     if (!silent) setLoading(true);
     else setRefreshing(true);
@@ -320,6 +337,9 @@ export function ContentToolsShell() {
   useEffect(() => {
     return subscribeToCompletion(() => {
       void loadProjects(true);
+      // A finished upload may flip a `monthly_deliverable_slots` row to
+      // `delivered` via auto-deliver; refresh the pills too.
+      setMonthRefreshKey((k) => k + 1);
       toast.success('Uploads finished');
     });
   }, []);
@@ -505,6 +525,11 @@ export function ContentToolsShell() {
 
         {activeProjectTab && (
           <>
+            <MonthlyTargetPills
+              selectedMonth={selectedMonth}
+              onMonthChange={setSelectedMonth}
+              refreshKey={monthRefreshKey}
+            />
             {loading ? (
               <ProjectsTableSkeleton />
             ) : allRows.length === 0 ? (

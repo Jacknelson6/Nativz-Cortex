@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getMux } from '@/lib/mux/client';
+import { autoDeliverEditingProject } from '@/lib/editing/auto-deliver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
@@ -166,6 +167,62 @@ export async function POST(req: Request) {
     if (!matched) {
       console.warn('[mux-webhook] asset.ready matched no row', { assetId, uploadId });
     }
+
+    // Auto-deliver gate. Only fires for editing-project rows, when every
+    // video on the project is ready, and only if the project has no
+    // active (non-archived) share link yet. Manual minting from the
+    // detail dialog beats us to it most of the time; this is the
+    // "uploads finished while admin was away" path.
+    if (matched === 'editing_project_videos' && assetId) {
+      try {
+        const { data: row } = await admin
+          .from('editing_project_videos')
+          .select('project_id')
+          .eq('mux_asset_id', assetId)
+          .maybeSingle<{ project_id: string }>();
+        const projectId = row?.project_id ?? null;
+        if (projectId) {
+          // All videos on the project must be ready before we deliver.
+          const { data: siblings } = await admin
+            .from('editing_project_videos')
+            .select('id, mux_status')
+            .eq('project_id', projectId);
+          const allReady =
+            (siblings ?? []).length > 0 &&
+            (siblings ?? []).every(
+              (v) => (v as { mux_status: string | null }).mux_status === 'ready',
+            );
+          if (allReady) {
+            // Skip if a share link already exists (manual mint or prior
+            // auto-deliver). archived links don't block — a fresh
+            // delivery cycle is fine after a hard archive.
+            const { data: existingLink } = await admin
+              .from('editing_project_share_links')
+              .select('id')
+              .eq('project_id', projectId)
+              .is('archived_at', null)
+              .limit(1)
+              .maybeSingle<{ id: string }>();
+            if (!existingLink) {
+              const result = await autoDeliverEditingProject(admin, projectId);
+              if ('skipped' in result) {
+                console.warn('[mux-webhook] auto-deliver skipped', {
+                  projectId,
+                  reason: result.skipped,
+                  detail: result.detail,
+                });
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[mux-webhook] auto-deliver gate failed', {
+          assetId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
     return NextResponse.json({ ok: true });
   }
 

@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendOnboardingEmail } from '@/lib/email/resend';
 import { formatCents } from '@/lib/format/money';
+import { getBrandFromAgency } from '@/lib/agency/detect';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 type AdminClient = SupabaseClient;
 
@@ -144,10 +146,11 @@ async function queueKickoffEmail(
   // billing cycle. See migration 160 for kickoff_email_sent_at column.
   const { data: client } = await admin
     .from('clients')
-    .select('name, kickoff_email_sent_at')
+    .select('name, agency, kickoff_email_sent_at')
     .eq('id', clientId)
-    .maybeSingle();
+    .maybeSingle<{ name: string | null; agency: string | null; kickoff_email_sent_at: string | null }>();
   if (client?.kickoff_email_sent_at) return;
+  const agency = getBrandFromAgency(client?.agency ?? null);
 
   const { data: contact } = await admin
     .from('contacts')
@@ -162,17 +165,21 @@ async function queueKickoffEmail(
   // here so the lifecycle webhook is self-contained and version-bumps
   // don't require an out-of-band DB seed.
   const firstName = (contact.name ?? '').split(' ')[0] || 'there';
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://cortex.nativz.io';
+  const appUrl =
+    process.env.NODE_ENV !== 'production'
+      ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
+      : getCortexAppUrl(agency);
   const kickoffUrl = `${appUrl}/admin/clients/${clientSlug}/onboarding`;
   const brandName = client?.name ?? 'your brand';
-  const subject = `Welcome to Nativz, ${brandName}`;
+  const agencyName = agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz';
+  const subject = `Welcome to ${agencyName}, ${brandName}`;
   const body = `<p>Hi ${firstName}, thanks for signing with ${brandName}. Schedule your kickoff call here: <a href="${kickoffUrl}">${kickoffUrl}</a></p>`;
 
   const result = await sendOnboardingEmail({
     to: contact.email,
     subject,
     html: body,
-    agency: 'nativz',
+    agency,
   });
 
   if (result.ok) {
