@@ -496,7 +496,7 @@ const STATUS_META: Record<
   missing: {
     label: 'Not connected',
     Icon: Circle,
-    chip: 'border-nativz-border bg-background text-text-tertiary',
+    chip: 'border-nativz-border bg-surface-elevated text-text-secondary',
   },
 };
 
@@ -566,7 +566,6 @@ function InviteBuilderModal({
 
   const [ctx, setCtx] = useState<InviteContext | null>(null);
   const [ctxLoading, setCtxLoading] = useState(false);
-  const [mode, setMode] = useState<'connect' | 'reconnect'>('connect');
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<PlatformKey>>(
     new Set(),
   );
@@ -574,11 +573,22 @@ function InviteBuilderModal({
     new Set(),
   );
   const [extraEmail, setExtraEmail] = useState('');
-  const [notifyChat, setNotifyChat] = useState(true);
-  const [notifyEmail, setNotifyEmail] = useState(true);
   const [sending, setSending] = useState(false);
   const [copying, setCopying] = useState(false);
   const [showExtras, setShowExtras] = useState(false);
+
+  // Mode is derived on-the-fly from the picked platforms, no UI toggle.
+  // If every selected platform has never been linked before, this is a
+  // first-time "Connect"; otherwise (anything previously connected,
+  // expired, or revoked) it's a "Reconnect". Empty selection defaults
+  // to "connect" for the title copy preview.
+  const mode: 'connect' | 'reconnect' = useMemo(() => {
+    if (!client || selectedPlatforms.size === 0) return 'connect';
+    const allFirstTime = Array.from(selectedPlatforms).every(
+      (k) => client.profiles[k].status === 'missing',
+    );
+    return allFirstTime ? 'connect' : 'reconnect';
+  }, [client, selectedPlatforms]);
 
   // Reset state every time we open for a new brand.
   useEffect(() => {
@@ -590,17 +600,7 @@ function InviteBuilderModal({
     setSelectedPlatforms(defaults);
     setSelectedContactIds(new Set());
     setExtraEmail('');
-    setNotifyChat(true);
-    setNotifyEmail(true);
     setShowExtras(false);
-    // Auto-pick mode based on what they're being asked for: if every
-    // selected platform has never connected before this is a first-time
-    // connect; otherwise treat it as a reconnect (anything previously
-    // connected, expired, or revoked falls into this bucket).
-    const allFirstTime = Array.from(defaults).every(
-      (k) => client.profiles[k].status === 'missing',
-    );
-    setMode(defaults.size === 0 || allFirstTime ? 'connect' : 'reconnect');
 
     void (async () => {
       setCtxLoading(true);
@@ -666,8 +666,8 @@ function InviteBuilderModal({
           clientId: client.id,
           platforms,
           recipientEmails,
-          notifyChat,
-          notifyEmail,
+          notifyChat: true,
+          notifyEmail: false,
           mode,
         }),
       });
@@ -706,8 +706,8 @@ function InviteBuilderModal({
           clientId: client.id,
           platforms,
           recipientEmails: [],
-          notifyChat,
-          notifyEmail,
+          notifyChat: true,
+          notifyEmail: false,
           skipEmail: true,
           mode,
         }),
@@ -743,8 +743,6 @@ function InviteBuilderModal({
     >
       {client && (
         <div className="space-y-5">
-          <ModeToggle mode={mode} onChange={setMode} />
-
           <p className="text-xs text-text-muted">
             {mode === 'connect'
               ? "Pick the platforms you want them to link for the first time, choose who the email goes to, and we'll send a one-tap connect page. They never see a password screen on our side."
@@ -841,36 +839,7 @@ function InviteBuilderModal({
             )}
           </Section>
 
-          <Section title="Notify on connect">
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-xs text-text-secondary">
-                <Checkbox
-                  checked={notifyChat}
-                  onCheckedChange={(v) => setNotifyChat(v === true)}
-                  disabled={!ctx?.hasChatWebhook}
-                  aria-label="Post to Google Chat on each connection"
-                />
-                <span>
-                  Post to Google Chat
-                  {ctx && !ctx.hasChatWebhook ? (
-                    <span className="ml-1.5 text-text-muted">
-                      (no webhook on file for this brand)
-                    </span>
-                  ) : null}
-                </span>
-              </label>
-              <label className="flex items-center gap-2 text-xs text-text-secondary">
-                <Checkbox
-                  checked={notifyEmail}
-                  onCheckedChange={(v) => setNotifyEmail(v === true)}
-                  aria-label="Email me on each connection"
-                />
-                <span>Email me on each connection</span>
-              </label>
-            </div>
-          </Section>
-
-          <div className="flex items-center justify-between gap-2 border-t border-nativz-border pt-4">
+          <div className="flex items-center justify-end gap-2 border-t border-nativz-border pt-4">
             <Button
               variant="outline"
               onClick={() => void handleCopyLink()}
@@ -884,70 +853,21 @@ function InviteBuilderModal({
               <Copy className="size-3.5" />
               {copying ? 'Copying...' : 'Copy link'}
             </Button>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button
-                onClick={() => void handleSend()}
-                disabled={sending || copying}
-              >
-                <Send className="size-3.5" />
-                {sending
-                  ? 'Sending...'
-                  : mode === 'connect'
-                    ? 'Send connect invite'
-                    : 'Send reconnect invite'}
-              </Button>
-            </div>
+            <Button
+              onClick={() => void handleSend()}
+              disabled={sending || copying}
+            >
+              <Send className="size-3.5" />
+              {sending
+                ? 'Sending...'
+                : mode === 'connect'
+                  ? 'Send connect invite'
+                  : 'Send reconnect invite'}
+            </Button>
           </div>
         </div>
       )}
     </Dialog>
-  );
-}
-
-/**
- * Segmented Connect / Reconnect toggle. The two flows look identical
- * mechanically (same OAuth, same matrix update), but the email subject,
- * hero copy, and CTA wording diverge so the recipient understands
- * whether we're asking for first-time access or recovering a dropped
- * token. Auto-picked on open from the brand's current matrix state,
- * the admin can override before sending.
- */
-function ModeToggle({
-  mode,
-  onChange,
-}: {
-  mode: 'connect' | 'reconnect';
-  onChange: (next: 'connect' | 'reconnect') => void;
-}) {
-  return (
-    <div
-      className="inline-flex items-center gap-0.5 rounded-lg border border-nativz-border bg-background p-0.5 text-xs"
-      role="tablist"
-      aria-label="Invite intent"
-    >
-      {(['connect', 'reconnect'] as const).map((value) => {
-        const active = mode === value;
-        return (
-          <button
-            key={value}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            onClick={() => onChange(value)}
-            className={`inline-flex h-7 items-center rounded-md px-3 font-medium transition-colors ${
-              active
-                ? 'bg-accent-text/10 text-accent-text'
-                : 'text-text-muted hover:text-text-primary'
-            }`}
-          >
-            {value === 'connect' ? 'Connect' : 'Reconnect'}
-          </button>
-        );
-      })}
-    </div>
   );
 }
 

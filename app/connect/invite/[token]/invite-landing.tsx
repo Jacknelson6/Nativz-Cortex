@@ -59,6 +59,7 @@ interface InviteResponse {
   brand: AgencyBrand;
   expired: boolean;
   completedAt: string | null;
+  mode: 'connect' | 'reconnect';
   platforms: PlatformStatus[];
 }
 
@@ -70,6 +71,15 @@ interface Props {
   platforms: string[];
   completedAt: string | null;
   expired: boolean;
+  /**
+   * Persisted on the invite row at mint time. Drives the H1 + helper
+   * paragraph so a "first-time connect" doesn't read as "reconnect" and
+   * vice versa. We do NOT re-derive on the client because by the time
+   * the recipient clicks the email, social_profiles state may have
+   * shifted (e.g. another invite landed first), and the copy should
+   * reflect what the admin chose at mint, not the current matrix state.
+   */
+  mode: 'connect' | 'reconnect';
 }
 
 type PendingConfirm =
@@ -91,11 +101,13 @@ type PendingConfirm =
  */
 export function InviteLanding({
   token,
+  brand,
   brandName,
   brandLogoUrl,
   platforms: askedFor,
   completedAt: initialCompletedAt,
   expired,
+  mode,
 }: Props) {
   const initialPlatforms: PlatformStatus[] = askedFor.map((key) => ({
     key,
@@ -198,7 +210,7 @@ export function InviteLanding({
 
   if (expired) {
     return (
-      <Shell brandName={brandName} brandLogoUrl={brandLogoUrl}>
+      <Shell brand={brand} brandName={brandName} brandLogoUrl={brandLogoUrl}>
         <div className="flex flex-col items-center text-center">
           <CircleAlert className="size-6 text-status-warning" />
           <h1 className="mt-3 text-lg font-semibold text-text-primary">
@@ -218,7 +230,7 @@ export function InviteLanding({
     : '';
 
   return (
-    <Shell brandName={brandName} brandLogoUrl={brandLogoUrl}>
+    <Shell brand={brand} brandName={brandName} brandLogoUrl={brandLogoUrl}>
       {allDone ? (
         <div className="flex flex-col items-center text-center">
           <div className="flex size-10 items-center justify-center rounded-full bg-status-success/15 text-status-success">
@@ -234,12 +246,13 @@ export function InviteLanding({
         </div>
       ) : (
         <>
-          <h1 className="text-lg font-semibold text-text-primary">
-            Reconnect {brandName}
+          <h1 className="text-center text-lg font-semibold text-text-primary">
+            {mode === 'connect' ? 'Connect' : 'Reconnect'} {brandName}
           </h1>
-          <p className="mt-1 text-sm text-text-muted">
-            Tap each platform below to log back in. Each one takes a few
-            seconds and we&apos;ll handle the rest.
+          <p className="mt-1 text-center text-sm text-text-muted">
+            {mode === 'connect'
+              ? "Tap each platform below to log in. Each one takes a few seconds and we'll handle the rest."
+              : "Tap each platform below to log back in. Each one takes a few seconds and we'll handle the rest."}
           </p>
         </>
       )}
@@ -368,23 +381,45 @@ function PlatformRow({
 }
 
 function Shell({
+  brand,
   brandName,
   brandLogoUrl,
   children,
 }: {
+  brand: AgencyBrand;
   brandName: string;
   brandLogoUrl: string | null;
   children: React.ReactNode;
 }) {
+  // Agency logo lives outside the card so the card itself stays focused
+  // on the brand the recipient is acting on (their own logo). Uses the
+  // dark-bg variants since the public page renders on `bg-background`.
+  const agencyLogoSrc =
+    brand === 'anderson' ? '/anderson-logo-dark.svg' : '/nativz-logo.png';
+  const agencyLogoAlt =
+    brand === 'anderson' ? 'Anderson Collaborative' : 'Nativz';
+  const footerLabel =
+    brand === 'anderson'
+      ? 'Powered by Anderson Collaborative'
+      : 'Powered by Nativz Cortex';
+
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center px-6 py-12">
+    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col items-center justify-center px-6 py-12">
+      <div className="mb-6 flex justify-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={agencyLogoSrc}
+          alt={agencyLogoAlt}
+          className="h-7 w-auto opacity-90"
+        />
+      </div>
       <div className="flex w-full flex-col rounded-2xl border border-nativz-border bg-surface p-8 shadow-lg">
         <div className="mb-5 flex justify-center">
           <ClientLogo name={brandName} src={brandLogoUrl} size="lg" />
         </div>
         {children}
         <p className="mt-6 text-center text-[11px] text-text-tertiary">
-          Powered by Nativz Cortex
+          {footerLabel}
         </p>
       </div>
     </main>

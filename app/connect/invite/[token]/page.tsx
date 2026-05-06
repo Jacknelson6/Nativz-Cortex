@@ -30,7 +30,7 @@ export default async function ConnectInvitePage({
   const { data: invite } = await admin
     .from('connection_invites')
     .select(
-      'id, client_id, platforms, completed_platforms, expires_at, completed_at',
+      'id, client_id, platforms, completed_platforms, expires_at, completed_at, mode',
     )
     .eq('token', token)
     .maybeSingle();
@@ -49,6 +49,9 @@ export default async function ConnectInvitePage({
 
   const brand = getBrandFromAgency((client.agency as string | null) ?? null);
 
+  const mode: 'connect' | 'reconnect' =
+    (invite.mode as string | null) === 'connect' ? 'connect' : 'reconnect';
+
   return (
     <InviteLanding
       token={token}
@@ -58,6 +61,7 @@ export default async function ConnectInvitePage({
       platforms={(invite.platforms as string[]) ?? []}
       completedAt={(invite.completed_at as string | null) ?? null}
       expired={expired}
+      mode={mode}
     />
   );
 }

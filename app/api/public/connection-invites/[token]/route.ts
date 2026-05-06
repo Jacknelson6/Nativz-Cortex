@@ -48,6 +48,16 @@ interface InviteResponse {
   brand: 'nativz' | 'anderson';
   expired: boolean;
   completedAt: string | null;
+  /**
+   * 'connect'   = first-time grant (no prior token on file).
+   * 'reconnect' = re-authorize after expiry/revoke.
+   * Drives the H1 + helper paragraph wording on the landing page so the
+   * recipient knows whether they're hooking us up for the first time or
+   * just refreshing access. Persisted on the invite row so the copy
+   * doesn't drift if the underlying social_profiles state changes
+   * between minting and opening.
+   */
+  mode: 'connect' | 'reconnect';
   platforms: Array<{
     key: PlatformKey;
     label: string;
@@ -69,7 +79,7 @@ export async function GET(
   const { data: invite } = await admin
     .from('connection_invites')
     .select(
-      'id, client_id, platforms, completed_platforms, expires_at, last_opened_at, completed_at',
+      'id, client_id, platforms, completed_platforms, expires_at, last_opened_at, completed_at, mode',
     )
     .eq('token', token)
     .maybeSingle();
@@ -156,6 +166,10 @@ export async function GET(
     brand,
     expired: false,
     completedAt: (invite.completed_at as string | null) ?? null,
+    mode:
+      ((invite.mode as string | null) === 'connect'
+        ? 'connect'
+        : 'reconnect') as 'connect' | 'reconnect',
     platforms,
   };
   return NextResponse.json(body);

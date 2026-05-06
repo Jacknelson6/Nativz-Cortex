@@ -334,6 +334,7 @@ export async function POST(request: NextRequest) {
         recipient_emails: recipientEmails,
         notify_chat: notifyChat,
         notify_email: notifyEmail,
+        mode,
         created_by: user.id,
       })
       .select('id, token')
