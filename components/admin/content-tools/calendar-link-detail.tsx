@@ -821,6 +821,7 @@ export function CalendarLinkDetail({
           <ShareHistoryPanel
             endpoint={`/api/calendar/drops/${link.drop_id}/activity`}
             emptyMessage="No activity yet. Mint a share link or send a notification to get started."
+            nounSingular="post"
           />
         }
         media={

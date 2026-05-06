@@ -94,9 +94,17 @@ export type ShareHistoryEvent =
 export function ShareHistoryPanel({
   endpoint,
   emptyMessage = 'No activity yet. Mint a share link or send a notification to get started.',
+  nounSingular = 'deliverable',
 }: {
   endpoint: string;
   emptyMessage?: string;
+  /**
+   * Singular noun for the deliverable type (e.g. "post", "ad", "video"). Drives
+   * the activity-feed verb so the row reads "Jane approved a post" instead of
+   * "Jane approved a video" when the project isn't a video cut. Defaults to
+   * "deliverable" so callers that don't care still get sensible copy.
+   */
+  nounSingular?: string;
 }) {
   const [events, setEvents] = useState<ShareHistoryEvent[] | null>(
     () => HISTORY_CACHE.get(endpoint) ?? null,
@@ -153,13 +161,23 @@ export function ShareHistoryPanel({
   return (
     <ol className="space-y-2">
       {events.map((e, i) => (
-        <HistoryRow key={`${e.kind}-${e.at}-${i}`} event={e} />
+        <HistoryRow
+          key={`${e.kind}-${e.at}-${i}`}
+          event={e}
+          nounSingular={nounSingular}
+        />
       ))}
     </ol>
   );
 }
 
-function HistoryRow({ event }: { event: ShareHistoryEvent }) {
+function HistoryRow({
+  event,
+  nounSingular,
+}: {
+  event: ShareHistoryEvent;
+  nounSingular: string;
+}) {
   const ts = formatTimestamp(event.at);
 
   if (event.kind === 'share_link') {
@@ -217,7 +235,7 @@ function HistoryRow({ event }: { event: ShareHistoryEvent }) {
   if (event.kind === 'review_comment') {
     const { author_name, status, content, attachment_count } = event.detail;
     const swatch = reviewSwatch(status);
-    const verb = reviewVerb(status, author_name);
+    const verb = reviewVerb(status, author_name, nounSingular);
     return (
       <li className="flex items-start gap-3 rounded-lg border border-nativz-border bg-surface p-3">
         <span
@@ -325,10 +343,13 @@ function reviewSwatch(status: 'approved' | 'changes_requested' | 'comment' | 'vi
 function reviewVerb(
   status: 'approved' | 'changes_requested' | 'comment' | 'video_revised',
   author: string,
+  nounSingular: string,
 ): string {
-  if (status === 'approved') return `${author} approved a video`;
+  const article = /^[aeiou]/i.test(nounSingular) ? 'an' : 'a';
+  if (status === 'approved') return `${author} approved ${article} ${nounSingular}`;
   if (status === 'changes_requested') return `${author} requested changes`;
-  if (status === 'video_revised') return `${author} uploaded a revised video`;
+  if (status === 'video_revised')
+    return `${author} uploaded a revised ${nounSingular}`;
   return `${author} left a comment`;
 }
 

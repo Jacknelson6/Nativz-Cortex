@@ -12,6 +12,7 @@ import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
 import { getClientNotificationRecipients } from '@/lib/email/notification-recipients';
 import { archiveEditingShareLinkEmail } from '@/lib/content-tools/archive-editing-share-email';
 import { notifyAdmins } from '@/lib/notifications';
+import { nounForProjectType } from '@/lib/editing/project-noun';
 
 export const maxDuration = 60;
 
@@ -63,6 +64,7 @@ async function handleGet(request: NextRequest) {
     editing_projects: {
       id: string;
       name: string | null;
+      project_type: string | null;
       client_id: string;
       clients: {
         id: string;
@@ -90,6 +92,7 @@ async function handleGet(request: NextRequest) {
       editing_projects!inner (
         id,
         name,
+        project_type,
         client_id,
         clients!inner ( id, name, agency )
       )
@@ -153,12 +156,13 @@ async function handleGet(request: NextRequest) {
     const shareUrl = `${appUrl}/s/${link.token}`;
     const projectName = project.name?.trim() || client.name;
     const pocFirstNames = recipients.map((c) => firstName(c.name));
+    const noun = nounForProjectType(project.project_type);
 
     // Auto-approve sweep at T+216h. Fires once per link.
     if (ageHours >= 216 && autoApproveSetting.enabled) {
       const autoApproved = await autoApprovePending(admin, {
         link,
-        project: { id: project.id, name: projectName },
+        project: { id: project.id, name: projectName, noun },
         client,
         shareUrl,
       });
@@ -234,7 +238,7 @@ async function handleGet(request: NextRequest) {
       postToGoogleChatSafe(
         opsWebhook,
         {
-          text: `📣 ${stageLabel} sent to *${client.name}* on *${projectName}*, ${pending}/${total} cuts still pending. ${shareUrl}`,
+          text: `📣 ${stageLabel} sent to *${client.name}* on *${projectName}*, ${pending}/${total} ${noun.plural} still pending. ${shareUrl}`,
         },
         `editing_cadence_ops:${link.id}:${stage}`,
       );
@@ -243,7 +247,7 @@ async function handleGet(request: NextRequest) {
         type: 'followup_sent',
         clientId: client.id,
         title: `${stageLabel} sent to ${client.name}`,
-        body: `${pending} of ${total} cuts on ${projectName} still need their eyes.`,
+        body: `${pending} of ${total} ${noun.plural} on ${projectName} still need their eyes.`,
         linkPath: `/admin/editing/projects/${project.id}`,
       });
 
@@ -336,12 +340,17 @@ async function autoApprovePending(
       project_id: string;
       all_approved_notified_at: string | null;
     };
-    project: { id: string; name: string };
+    project: {
+      id: string;
+      name: string;
+      noun: { singular: string; plural: string };
+    };
     client: { id: string; name: string };
     shareUrl: string;
   },
 ): Promise<boolean> {
   const { link, project, client } = args;
+  const { noun } = project;
 
   const { data: videos } = await admin
     .from('editing_project_videos')
@@ -405,7 +414,7 @@ async function autoApprovePending(
   postToGoogleChatSafe(
     opsWebhook,
     {
-      text: `✅ Auto-approved *${pendingVideoIds.length}* cuts on *${client.name} · ${project.name}*, no client activity for 9 days. ${args.shareUrl}`,
+      text: `✅ Auto-approved *${pendingVideoIds.length}* ${noun.plural} on *${client.name} · ${project.name}*, no client activity for 9 days. ${args.shareUrl}`,
     },
     `editing_cadence_ops_auto_approve:${link.id}`,
   );
@@ -413,7 +422,7 @@ async function autoApprovePending(
   await notifyAdmins({
     type: 'followup_sent',
     clientId: client.id,
-    title: `Auto-approved ${pendingVideoIds.length} cuts on ${project.name}`,
+    title: `Auto-approved ${pendingVideoIds.length} ${noun.plural} on ${project.name}`,
     body: `No client activity for 9 days. Project is ready to ship.`,
     linkPath: `/admin/editing/projects/${project.id}`,
   });

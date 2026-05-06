@@ -7,6 +7,10 @@ import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 import { getNotificationSetting } from '@/lib/notifications/get-setting';
+import {
+  articleSingular,
+  nounForProjectType,
+} from '@/lib/editing/project-noun';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,9 +103,9 @@ function looksLikeApproval(content: string): boolean {
 
 const TITLE_BY_STATUS: Record<
   'approved' | 'changes_requested' | 'comment',
-  (a: string, c: string) => string
+  (author: string, clientName: string, articledNoun: string) => string
 > = {
-  approved: (a, c) => `${a} approved an edit on ${c}`,
+  approved: (a, c, n) => `${a} approved ${n} on ${c}`,
   changes_requested: (a, c) => `${a} requested changes on ${c}`,
   comment: (a, c) => `${a} left a comment on ${c}`,
 };
@@ -140,6 +144,7 @@ async function loadShareLink(
 interface ProjectChatContext {
   clientName: string;
   projectName: string;
+  projectType: string | null;
   webhookUrl: string | null;
   shareUrl: string;
 }
@@ -151,11 +156,12 @@ async function loadProjectChatContext(
 ): Promise<ProjectChatContext> {
   const { data: project } = await admin
     .from('editing_projects')
-    .select('id, name, clients(name, agency, chat_webhook_url)')
+    .select('id, name, project_type, clients(name, agency, chat_webhook_url)')
     .eq('id', projectId)
     .maybeSingle<{
       id: string;
       name: string;
+      project_type: string | null;
       clients: {
         name: string | null;
         agency: string | null;
@@ -165,6 +171,7 @@ async function loadProjectChatContext(
 
   const clientName = project?.clients?.name ?? 'Client';
   const projectName = project?.name ?? 'Project';
+  const projectType = project?.project_type ?? null;
   const brand = getBrandFromAgency(project?.clients?.agency ?? null);
   const appUrl =
     process.env.NODE_ENV !== 'production'
@@ -181,6 +188,7 @@ async function loadProjectChatContext(
   return {
     clientName,
     projectName,
+    projectType,
     webhookUrl,
     shareUrl: `${appUrl}/s/${token}`,
   };
@@ -394,7 +402,7 @@ async function postEditingChatForComment(args: {
   }>;
   allApprovedClaim: 'won' | 'lost' | 'not-yet';
 }) {
-  const { webhookUrl, clientName, projectName, shareUrl } =
+  const { webhookUrl, clientName, projectName, projectType, shareUrl } =
     await loadProjectChatContext(args.admin, args.link.project_id, args.token);
   if (!webhookUrl) return;
 
@@ -435,7 +443,8 @@ async function postEditingChatForComment(args: {
   if (args.allApprovedClaim === 'won') {
     const setting = await getNotificationSetting('editing_all_approved_chat');
     if (!setting.enabled) return;
-    const text = `🎉 All cuts in ${clientName} · ${projectName} are approved.\n${shareUrl}`;
+    const noun = nounForProjectType(projectType);
+    const text = `🎉 All ${noun.plural} in ${clientName} · ${projectName} are approved.\n${shareUrl}`;
     postToGoogleChatSafe(
       webhookUrl,
       { text },
@@ -645,13 +654,14 @@ async function maybeFireEditingRevisionsCompleteNotification(
 
   if (args.link.revisions_complete_notified_at) return;
 
-  const { webhookUrl, clientName, projectName, shareUrl } =
+  const { webhookUrl, clientName, projectName, projectType, shareUrl } =
     await loadProjectChatContext(admin, args.link.project_id, args.token);
 
   if (webhookUrl) {
+    const noun = nounForProjectType(projectType);
     const text =
       `✅ All revisions are ready for *${clientName} · ${projectName}*.\n` +
-      `Take another look and approve the cuts that are good to go:\n${shareUrl}`;
+      `Take another look and approve the ${noun.plural} that are good to go:\n${shareUrl}`;
     postToGoogleChatSafe(
       webhookUrl,
       { text },
@@ -688,20 +698,23 @@ async function notifyAdminsOfComment(
   const { data: project } = await admin
     .from('editing_projects')
     .select(
-      'id, name, client:clients!editing_projects_client_id_fkey(name)',
+      'id, name, project_type, client:clients!editing_projects_client_id_fkey(name)',
     )
     .eq('id', projectId)
     .maybeSingle<{
       id: string;
       name: string;
+      project_type: string | null;
       client: { name: string | null } | null;
     }>();
   if (!project) return;
 
   const clientName = project.client?.name ?? project.name;
+  const noun = nounForProjectType(project.project_type);
   const title = TITLE_BY_STATUS[visibleStatus](
     comment.authorName,
     clientName,
+    articleSingular(noun),
   );
   const preview = comment.content.trim()
     ? comment.content.slice(0, 140) +

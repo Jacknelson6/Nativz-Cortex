@@ -53,6 +53,7 @@ import {
   UnifiedStatusPill,
 } from './detail-dialog/unified-status-pill';
 import { unifiedStatusForEditingProject } from '@/lib/content-tools/unified-status';
+import { nounForProjectType } from '@/lib/editing/project-noun';
 import {
   enqueueUploads,
   getProjectUploads,
@@ -695,6 +696,7 @@ export function EditingProjectDetail({
           projectId && (
             <ShareHistoryPanel
               endpoint={`/api/admin/editing/projects/${projectId}/activity`}
+              nounSingular={nounForProjectType(type).singular}
             />
           )
         }
