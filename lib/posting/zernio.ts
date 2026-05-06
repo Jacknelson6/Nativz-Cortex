@@ -162,6 +162,9 @@ const PLATFORM_MAP: Record<string, SocialPlatform> = {
   tiktok: 'tiktok',
   youtube: 'youtube',
   linkedin: 'linkedin',
+  googlebusiness: 'googlebusiness',
+  google_business: 'googlebusiness',
+  'google-business': 'googlebusiness',
 };
 
 function todayIsoDate(): string {
@@ -409,107 +412,300 @@ function parseZernioDuplicate(err: unknown): string | null {
   }
 }
 
-function buildPublishBody(input: PublishPostInput): Record<string, unknown> {
+// ============================================================================
+// Per-platform routers
+// ============================================================================
+//
+// Zernio uses a single endpoint (POST /v1/posts) for every platform. The
+// difference between, say, an Instagram Reel and a Facebook Story isn't the
+// endpoint — it's the per-leg `platformSpecificData` blob we send for that
+// platform. Each builder below owns one platform's translation from our
+// abstract `PublishPostInput` to that platform's contract:
+//
+//   * Auto-detects the right variant (feed vs reels vs story, single image
+//     vs carousel, video vs document) from `mediaItems`.
+//   * Maps cross-platform overrides (firstComment) onto whatever each
+//     platform calls them.
+//   * Surfaces platform-specific overrides (instagramContentType,
+//     linkedinOrganizationUrn, etc.) when the caller passes them.
+//
+// The dispatch table at the bottom of buildPublishBody is the only place
+// new platforms get wired up — adding Twitter/Pinterest/Threads later is a
+// matter of writing one builder and adding it to PLATFORM_BUILDERS.
+//
+// Sources: https://docs.zernio.com/platforms/{instagram,facebook,linkedin,
+// tiktok,youtube,google-business}
+
+interface PublishMediaContext {
+  /** Sanitized media items in the shape Zernio expects (`{ type, url, thumbnail? }`). */
+  items: Record<string, unknown>[];
+  /** True when EVERY media item is an image (covers single + carousel). */
+  isImageOnly: boolean;
+  /** True when EVERY media item is a video. */
+  isVideoOnly: boolean;
+  /** True when there's exactly one media item AND it's a video. */
+  isSingleVideo: boolean;
+  /** True when there's at least one media item. */
+  hasMedia: boolean;
+  /** True when the single media item is a document (PDF / PPT / DOCX). */
+  isSingleDocument: boolean;
+}
+
+function buildMediaContext(input: PublishPostInput): PublishMediaContext {
+  const items: Record<string, unknown>[] = [];
+
+  if (input.mediaItems && input.mediaItems.length > 0) {
+    for (const item of input.mediaItems) {
+      items.push({ type: item.type, url: item.url });
+    }
+  } else if (input.videoUrl) {
+    const v: Record<string, unknown> = { type: 'video', url: input.videoUrl };
+    if (input.coverImageUrl) v.thumbnail = input.coverImageUrl;
+    items.push(v);
+  } else {
+    throw new Error('publishPost requires either mediaItems or videoUrl');
+  }
+
+  const types = items.map((m) => String(m.type));
+  const isImageOnly = types.length > 0 && types.every((t) => t === 'image');
+  const isVideoOnly = types.length > 0 && types.every((t) => t === 'video');
+  const isSingleVideo = types.length === 1 && types[0] === 'video';
+  // PublishMediaItem doesn't expose 'document' yet; this future-proofs the
+  // LinkedIn router for when it does.
+  const isSingleDocument = types.length === 1 && types[0] === 'document';
+
+  return {
+    items,
+    isImageOnly,
+    isVideoOnly,
+    isSingleVideo,
+    hasMedia: items.length > 0,
+    isSingleDocument,
+  };
+}
+
+type PlatformEntryBuilder = (
+  input: PublishPostInput,
+  ctx: PublishMediaContext,
+  baseEntry: Record<string, unknown>,
+  caption: string,
+) => Record<string, unknown>;
+
+/**
+ * Instagram. Auto-routes by media:
+ *   * image-only (single or up to 10 carousel) → feed (no contentType)
+ *   * video → reels (Zernio's documented default)
+ *   * `instagramContentType` override forces story / reels / feed
+ *     (the only way to publish a 9:16 image as a Story today).
+ *
+ * Stories don't support collaborators or first-comment per the docs.
+ */
+const buildInstagramEntry: PlatformEntryBuilder = (input, ctx, baseEntry) => {
+  const contentType =
+    input.instagramContentType ?? (ctx.isImageOnly ? 'feed' : 'reels');
+
+  const psd: Record<string, unknown> = {};
+  if (contentType === 'reels') {
+    psd.contentType = 'reels';
+    psd.shareToFeed = input.instagramShareToFeed ?? true;
+  } else if (contentType === 'story') {
+    psd.contentType = 'story';
+  }
+  // 'feed' → omit contentType (Zernio routes carousel automatically when
+  // mediaItems.length > 1).
+
+  // Zernio docs (snapshotted in docs/zernio-platform-shapes.md, 2026-05-06)
+  // name this field `userTags` and expect objects with x,y coordinates:
+  // `Array<{username, x, y, mediaIndex?}>`. We don't have tap-coordinates at
+  // publish time, so a bare-string list isn't a valid payload — we used to
+  // send `usersToTag: string[]` and Zernio silently dropped it (no tags
+  // appeared on any IG post). Stopping the dead send entirely is cleaner
+  // than shipping data Zernio rejects. `tagged_people` stays on the row as
+  // forward-compat for when we add tap-to-tag UI; that work will need to
+  // emit `userTags` objects with coordinates.
+  // Stories don't accept collaborators per the IG docs.
+  if (input.collaboratorHandles?.length && contentType !== 'story') {
+    psd.collaborators = input.collaboratorHandles;
+  }
+  // Stories don't accept firstComment.
+  if (input.firstComment && contentType !== 'story') {
+    psd.firstComment = input.firstComment;
+  }
+
+  if (Object.keys(psd).length > 0) {
+    baseEntry.platformSpecificData = psd;
+  }
+  return baseEntry;
+};
+
+/**
+ * Facebook. Zernio routes feed-image vs feed-video automatically when the
+ * `contentType` discriminator is omitted. Override only when the caller
+ * needs Reel or Story specifically (vertical-video Reels especially —
+ * Facebook's algorithm rewards Reels heavily over feed videos).
+ */
+const buildFacebookEntry: PlatformEntryBuilder = (input, ctx, baseEntry) => {
+  const psd: Record<string, unknown> = {};
+
+  if (input.facebookContentType === 'reel' || input.facebookContentType === 'story') {
+    psd.contentType = input.facebookContentType;
+  }
+  if (input.facebookPageId) {
+    psd.pageId = input.facebookPageId;
+  }
+  // Stories don't accept firstComment per the FB docs.
+  if (input.firstComment && input.facebookContentType !== 'story') {
+    psd.firstComment = input.firstComment;
+  }
+
+  if (Object.keys(psd).length > 0) {
+    baseEntry.platformSpecificData = psd;
+  }
+  // Suppress unused-context warning while keeping the signature uniform.
+  void ctx;
+  return baseEntry;
+};
+
+/**
+ * LinkedIn. The variant is INFERRED by Zernio from `mediaItems` (no
+ * contentType discriminator):
+ *   * no media         → text post
+ *   * image / images   → single or multi-image (≤20)
+ *   * video            → video
+ *   * document         → PDF / PPT / DOCX (REQUIRES `documentTitle`)
+ *
+ * `firstComment` matters here — LinkedIn down-ranks link posts ~40-50%, so
+ * the documented best practice is to put external URLs in the first comment
+ * rather than the caption.
+ */
+const buildLinkedInEntry: PlatformEntryBuilder = (input, ctx, baseEntry) => {
+  const psd: Record<string, unknown> = {};
+
+  if (ctx.isSingleDocument && input.linkedinDocumentTitle) {
+    psd.documentTitle = input.linkedinDocumentTitle;
+  }
+  if (input.linkedinOrganizationUrn) {
+    psd.organizationUrn = input.linkedinOrganizationUrn;
+  }
+  if (input.firstComment) {
+    psd.firstComment = input.firstComment;
+  }
+  // Only meaningful for text posts that contain an inline link.
+  if (input.linkedinDisableLinkPreview && !ctx.hasMedia) {
+    psd.disableLinkPreview = true;
+  }
+
+  if (Object.keys(psd).length > 0) {
+    baseEntry.platformSpecificData = psd;
+  }
+  return baseEntry;
+};
+
+/**
+ * YouTube. Title is required by YouTube's API (rejected if empty); we always
+ * ship something using a 3-tier fallback (override → first caption line →
+ * literal "Video"). Tags pool falls back to shared hashtags when the caller
+ * doesn't pass an explicit youtubeTags override.
+ */
+const buildYouTubeEntry: PlatformEntryBuilder = (input, _ctx, baseEntry, caption) => {
+  const fallbackTitle = caption.split('\n')[0]?.slice(0, 100)?.trim() || 'Video';
+  const title = input.youtubeTitle?.trim().slice(0, 100) || fallbackTitle;
+  const description = input.youtubeDescription?.trim() || caption;
+  const tagPool = input.youtubeTags?.length ? input.youtubeTags : input.hashtags;
+  const tags = tagPool.map((t) => t.replace(/^#/, '').trim()).filter(Boolean);
+
+  const visibilityMap: Record<NonNullable<PublishPostInput['youtubePrivacy']>, string> = {
+    public: 'public',
+    unlisted: 'unlisted',
+    private: 'private',
+  };
+
+  const psd: Record<string, unknown> = {
+    title,
+    description,
+    visibility: visibilityMap[input.youtubePrivacy ?? 'public'],
+    madeForKids: input.youtubeMadeForKids ?? false,
+  };
+  if (tags.length) psd.tags = tags;
+  if (input.firstComment) psd.firstComment = input.firstComment;
+
+  baseEntry.platformSpecificData = psd;
+  return baseEntry;
+};
+
+/**
+ * TikTok leg. The TikTok contract lives at the BODY level (`tiktokSettings`)
+ * not on per-leg `platformSpecificData` — see the docs note: "TikTok settings
+ * go in `tiktokSettings` at the top level... This is a special case unique to
+ * TikTok." So this builder is a no-op at the leg level; body-level injection
+ * happens in buildPublishBody.
+ */
+const buildTikTokEntry: PlatformEntryBuilder = (_input, _ctx, baseEntry) => baseEntry;
+
+/**
+ * Google Business. Per the platform docs, Google Business posts only carry
+ * text + photos with no per-leg overrides — no platformSpecificData needed.
+ */
+const buildGoogleBusinessEntry: PlatformEntryBuilder = (_input, _ctx, baseEntry) =>
+  baseEntry;
+
+const PLATFORM_BUILDERS: Record<SocialPlatform, PlatformEntryBuilder> = {
+  instagram: buildInstagramEntry,
+  facebook: buildFacebookEntry,
+  linkedin: buildLinkedInEntry,
+  youtube: buildYouTubeEntry,
+  tiktok: buildTikTokEntry,
+  googlebusiness: buildGoogleBusinessEntry,
+};
+
+/**
+ * Exported for `scripts/dryrun-platform-routing.ts` and any future test that
+ * wants to assert what we ship to Zernio without making the network call.
+ * Not intended for production callers — go through `ZernioPostingService.publishPost`.
+ */
+export function buildPublishBody(input: PublishPostInput): Record<string, unknown> {
   const cappedHashtags = capHashtagsForCaption(input.caption, input.hashtags);
   const caption =
     cappedHashtags.length > 0
       ? `${input.caption}\n\n${cappedHashtags.map((h) => `#${h}`).join(' ')}`
       : input.caption;
 
+  const ctx = buildMediaContext(input);
+
   const hasTiktok = input.platformProfileIds.some(
     (id) => (input.platformHints?.[id] ?? 'instagram') === 'tiktok',
   );
 
-  // Resolve the media payload. When mediaItems is provided (image carousels),
-  // honor it directly. Otherwise fall back to the legacy single-video shape.
-  // Image-only payloads bypass Reels-specific metadata further down.
-  const mediaItems: Record<string, unknown>[] = [];
-  let isImageOnly = false;
-  if (input.mediaItems && input.mediaItems.length > 0) {
-    for (const item of input.mediaItems) {
-      mediaItems.push({ type: item.type, url: item.url });
-    }
-    isImageOnly = input.mediaItems.every((m) => m.type === 'image');
-  } else if (input.videoUrl) {
-    const v: Record<string, unknown> = { type: 'video', url: input.videoUrl };
-    if (input.coverImageUrl) v.thumbnail = input.coverImageUrl;
-    mediaItems.push(v);
-  } else {
-    throw new Error('publishPost requires either mediaItems or videoUrl');
-  }
-
   const platforms = input.platformProfileIds.map((accountId) => {
     const platform = input.platformHints?.[accountId] ?? 'instagram';
     const entry: Record<string, unknown> = { platform, accountId };
+
     const variant = input.captionByPlatform?.[platform]?.trim();
-    if (variant) {
-      entry.customContent = variant;
-    }
+    if (variant) entry.customContent = variant;
 
-    if (platform === 'instagram') {
-      // For image / carousel posts on Instagram, omit contentType so Zernio
-      // routes to feed/carousel instead of Reels (Reels is video-only).
-      entry.platformSpecificData = {
-        ...(isImageOnly ? {} : { contentType: 'reels' }),
-        // Default to true — most clients want the cross-post. Overrides
-        // only flip false when explicitly disabled (e.g. brands that
-        // gate the grid manually).
-        ...(isImageOnly ? {} : { shareToFeed: input.instagramShareToFeed ?? true }),
-        ...(input.taggedPeople?.length ? { usersToTag: input.taggedPeople } : {}),
-        ...(input.collaboratorHandles?.length ? { collaborators: input.collaboratorHandles } : {}),
-      };
-    } else if (platform === 'youtube') {
-      // Title precedence: explicit override → first line of caption →
-      // fallback string. YouTube rejects empty titles, so we always
-      // ship something. 100-char hard cap matches YouTube's API limit.
-      const fallbackTitle =
-        caption.split('\n')[0]?.slice(0, 100)?.trim() || 'Video';
-      const title = (input.youtubeTitle?.trim().slice(0, 100)) || fallbackTitle;
-
-      const description = input.youtubeDescription?.trim() || caption;
-      const tagPool = input.youtubeTags?.length ? input.youtubeTags : input.hashtags;
-      const tags = tagPool
-        .map((t) => t.replace(/^#/, '').trim())
-        .filter(Boolean);
-
-      const visibilityMap: Record<NonNullable<PublishPostInput['youtubePrivacy']>, string> = {
-        public: 'public',
-        unlisted: 'unlisted',
-        private: 'private',
-      };
-
-      entry.platformSpecificData = {
-        title,
-        description,
-        ...(tags.length ? { tags } : {}),
-        visibility: visibilityMap[input.youtubePrivacy ?? 'public'],
-        madeForKids: input.youtubeMadeForKids ?? false,
-      };
-    }
-
-    return entry;
+    const builder = PLATFORM_BUILDERS[platform];
+    return builder ? builder(input, ctx, entry, caption) : entry;
   });
 
   const body: Record<string, unknown> = {
     content: caption,
-    mediaItems,
+    mediaItems: ctx.items,
     platforms,
   };
 
   if (hasTiktok) {
     // privacy_level + content_preview_confirmed + express_consent_given
-    // are protocol requirements — Zernio rejects the call without them
-    // — so they stay hardcoded. The interaction toggles below ARE
-    // user-facing per migration 218; default to true to preserve
-    // existing behavior when the override is unset.
+    // are protocol requirements — Zernio rejects the call without them —
+    // so they stay hardcoded. The interaction toggles below ARE user-facing
+    // per migration 218; default to true to preserve existing behavior.
     //
-    // We deliberately do NOT pass a custom cover image URL here. TikTok
-    // via Zernio supports `video_cover_timestamp_ms` only — sending the
+    // We deliberately do NOT pass a custom cover image URL here. TikTok via
+    // Zernio supports `video_cover_timestamp_ms` only — sending the
     // undocumented `video_cover_image_url` we used previously crashed
     // Zernio's ffmpeg thumbnail-stitch step deterministically (Joseph
     // Pytcher's Weston Funding post 46a94566 was stuck for hours at
-    // PRE_FFMPEG_THUMBNAIL_STITCH on every retry). Letting TikTok pick
-    // the first frame is the documented default.
+    // PRE_FFMPEG_THUMBNAIL_STITCH on every retry). Letting TikTok pick the
+    // first frame is the documented default.
     body.tiktokSettings = {
       privacy_level: 'PUBLIC_TO_EVERYONE',
       allow_comment: input.tiktokAllowComment ?? true,

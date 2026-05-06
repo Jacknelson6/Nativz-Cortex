@@ -16,6 +16,25 @@ const CreatePostSchema = z.object({
   cover_image_url: z.string().nullable().default(null),
   tagged_people: z.array(z.string()).default([]),
   collaborator_handles: z.array(z.string()).default([]),
+  // Per-platform overrides (migrations 218 + 255). Optional everywhere —
+  // omitting them preserves the per-platform router defaults documented in
+  // docs/zernio-platform-shapes.md.
+  youtube_title: z.string().nullable().optional(),
+  youtube_description: z.string().nullable().optional(),
+  youtube_tags: z.array(z.string()).nullable().optional(),
+  youtube_privacy: z.enum(['public', 'unlisted', 'private']).nullable().optional(),
+  youtube_made_for_kids: z.boolean().nullable().optional(),
+  tiktok_allow_comment: z.boolean().nullable().optional(),
+  tiktok_allow_duet: z.boolean().nullable().optional(),
+  tiktok_allow_stitch: z.boolean().nullable().optional(),
+  instagram_share_to_feed: z.boolean().nullable().optional(),
+  instagram_content_type: z.enum(['feed', 'reels', 'story']).nullable().optional(),
+  facebook_content_type: z.enum(['feed', 'reel', 'story']).nullable().optional(),
+  facebook_page_id: z.string().nullable().optional(),
+  linkedin_document_title: z.string().nullable().optional(),
+  linkedin_organization_urn: z.string().nullable().optional(),
+  linkedin_disable_link_preview: z.boolean().nullable().optional(),
+  first_comment: z.string().nullable().optional(),
 });
 
 /**
@@ -68,6 +87,24 @@ export async function POST(request: NextRequest) {
         cover_image_url: data.cover_image_url,
         tagged_people: data.tagged_people,
         collaborator_handles: data.collaborator_handles,
+        // Per-platform overrides — only persist non-undefined values so
+        // omitted fields stay NULL and inherit the router defaults.
+        youtube_title: data.youtube_title ?? null,
+        youtube_description: data.youtube_description ?? null,
+        youtube_tags: data.youtube_tags ?? null,
+        youtube_privacy: data.youtube_privacy ?? null,
+        youtube_made_for_kids: data.youtube_made_for_kids ?? null,
+        tiktok_allow_comment: data.tiktok_allow_comment ?? null,
+        tiktok_allow_duet: data.tiktok_allow_duet ?? null,
+        tiktok_allow_stitch: data.tiktok_allow_stitch ?? null,
+        instagram_share_to_feed: data.instagram_share_to_feed ?? null,
+        instagram_content_type: data.instagram_content_type ?? null,
+        facebook_content_type: data.facebook_content_type ?? null,
+        facebook_page_id: data.facebook_page_id ?? null,
+        linkedin_document_title: data.linkedin_document_title ?? null,
+        linkedin_organization_urn: data.linkedin_organization_urn ?? null,
+        linkedin_disable_link_preview: data.linkedin_disable_link_preview ?? null,
+        first_comment: data.first_comment ?? null,
       })
       .select()
       .single();
@@ -146,6 +183,27 @@ export async function POST(request: NextRequest) {
           coverImageUrl: data.cover_image_url ?? undefined,
           taggedPeople: data.tagged_people,
           collaboratorHandles: data.collaborator_handles,
+          // Per-platform overrides (migrations 218 + 255). Previously this
+          // call site dropped every override silently — a post created with
+          // status='scheduled' (i.e. no draft step) would publish with the
+          // router defaults regardless of what the caller set on YouTube
+          // title, TikTok permissions, IG content type, etc.
+          youtubeTitle: data.youtube_title ?? undefined,
+          youtubeDescription: data.youtube_description ?? undefined,
+          youtubeTags: data.youtube_tags ?? undefined,
+          youtubePrivacy: data.youtube_privacy ?? undefined,
+          youtubeMadeForKids: data.youtube_made_for_kids ?? undefined,
+          tiktokAllowComment: data.tiktok_allow_comment ?? undefined,
+          tiktokAllowDuet: data.tiktok_allow_duet ?? undefined,
+          tiktokAllowStitch: data.tiktok_allow_stitch ?? undefined,
+          instagramShareToFeed: data.instagram_share_to_feed ?? undefined,
+          instagramContentType: data.instagram_content_type ?? undefined,
+          facebookContentType: data.facebook_content_type ?? undefined,
+          facebookPageId: data.facebook_page_id ?? undefined,
+          linkedinDocumentTitle: data.linkedin_document_title ?? undefined,
+          linkedinOrganizationUrn: data.linkedin_organization_urn ?? undefined,
+          linkedinDisableLinkPreview: data.linkedin_disable_link_preview ?? undefined,
+          firstComment: data.first_comment ?? undefined,
         });
 
         // Save Late post ID back to our record

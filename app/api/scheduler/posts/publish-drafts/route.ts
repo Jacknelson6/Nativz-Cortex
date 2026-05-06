@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     // TikTok interaction settings, etc. survive the bulk publish.
     const { data: allDrafts, error: fetchError } = await adminClient
       .from('scheduled_posts')
-      .select('id, caption, hashtags, scheduled_at, cover_image_url, tagged_people, collaborator_handles, youtube_title, youtube_description, youtube_tags, youtube_privacy, youtube_made_for_kids, tiktok_allow_comment, tiktok_allow_duet, tiktok_allow_stitch, instagram_share_to_feed')
+      .select('id, caption, hashtags, scheduled_at, cover_image_url, tagged_people, collaborator_handles, youtube_title, youtube_description, youtube_tags, youtube_privacy, youtube_made_for_kids, tiktok_allow_comment, tiktok_allow_duet, tiktok_allow_stitch, instagram_share_to_feed, instagram_content_type, facebook_content_type, facebook_page_id, linkedin_document_title, linkedin_organization_urn, linkedin_disable_link_preview, first_comment')
       .eq('client_id', parsed.data.client_id)
       .eq('status', 'draft')
       .not('scheduled_at', 'is', null);
@@ -164,6 +164,13 @@ export async function POST(request: NextRequest) {
           tiktok_allow_duet: boolean | null;
           tiktok_allow_stitch: boolean | null;
           instagram_share_to_feed: boolean | null;
+          instagram_content_type: 'feed' | 'reels' | 'story' | null;
+          facebook_content_type: 'feed' | 'reel' | 'story' | null;
+          facebook_page_id: string | null;
+          linkedin_document_title: string | null;
+          linkedin_organization_urn: string | null;
+          linkedin_disable_link_preview: boolean | null;
+          first_comment: string | null;
         };
         const lateResult = await service.publishPost({
           videoUrl: mediaUrl,
@@ -188,6 +195,14 @@ export async function POST(request: NextRequest) {
           tiktokAllowDuet: p.tiktok_allow_duet ?? undefined,
           tiktokAllowStitch: p.tiktok_allow_stitch ?? undefined,
           instagramShareToFeed: p.instagram_share_to_feed ?? undefined,
+          // Per-platform routing overrides (migration 255).
+          instagramContentType: p.instagram_content_type ?? undefined,
+          facebookContentType: p.facebook_content_type ?? undefined,
+          facebookPageId: p.facebook_page_id ?? undefined,
+          linkedinDocumentTitle: p.linkedin_document_title ?? undefined,
+          linkedinOrganizationUrn: p.linkedin_organization_urn ?? undefined,
+          linkedinDisableLinkPreview: p.linkedin_disable_link_preview ?? undefined,
+          firstComment: p.first_comment ?? undefined,
         });
 
         await adminClient

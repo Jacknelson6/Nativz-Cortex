@@ -618,6 +618,13 @@ async function handleGet(request: NextRequest) {
           tiktok_allow_duet: boolean | null;
           tiktok_allow_stitch: boolean | null;
           instagram_share_to_feed: boolean | null;
+          instagram_content_type: 'feed' | 'reels' | 'story' | null;
+          facebook_content_type: 'feed' | 'reel' | 'story' | null;
+          facebook_page_id: string | null;
+          linkedin_document_title: string | null;
+          linkedin_organization_urn: string | null;
+          linkedin_disable_link_preview: boolean | null;
+          first_comment: string | null;
         };
         const result = await postingService.publishPost({
           videoUrl,
@@ -638,6 +645,15 @@ async function handleGet(request: NextRequest) {
           tiktokAllowDuet: p.tiktok_allow_duet ?? undefined,
           tiktokAllowStitch: p.tiktok_allow_stitch ?? undefined,
           instagramShareToFeed: p.instagram_share_to_feed ?? undefined,
+          // Per-platform routing overrides (migration 255). NULL → undefined
+          // so each builder applies its documented default.
+          instagramContentType: p.instagram_content_type ?? undefined,
+          facebookContentType: p.facebook_content_type ?? undefined,
+          facebookPageId: p.facebook_page_id ?? undefined,
+          linkedinDocumentTitle: p.linkedin_document_title ?? undefined,
+          linkedinOrganizationUrn: p.linkedin_organization_urn ?? undefined,
+          linkedinDisableLinkPreview: p.linkedin_disable_link_preview ?? undefined,
+          firstComment: p.first_comment ?? undefined,
         });
 
         // Update per-platform results for the legs we just attempted.

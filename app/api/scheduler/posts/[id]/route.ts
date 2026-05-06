@@ -60,6 +60,24 @@ const UpdatePostSchema = z.object({
   cover_image_url: z.string().nullable().optional(),
   tagged_people: z.array(z.string()).optional(),
   collaborator_handles: z.array(z.string()).optional(),
+  // Per-platform overrides (migrations 218 + 255). All nullable so the UI
+  // can clear an override (NULL → fall back to router default).
+  youtube_title: z.string().nullable().optional(),
+  youtube_description: z.string().nullable().optional(),
+  youtube_tags: z.array(z.string()).nullable().optional(),
+  youtube_privacy: z.enum(['public', 'unlisted', 'private']).nullable().optional(),
+  youtube_made_for_kids: z.boolean().nullable().optional(),
+  tiktok_allow_comment: z.boolean().nullable().optional(),
+  tiktok_allow_duet: z.boolean().nullable().optional(),
+  tiktok_allow_stitch: z.boolean().nullable().optional(),
+  instagram_share_to_feed: z.boolean().nullable().optional(),
+  instagram_content_type: z.enum(['feed', 'reels', 'story']).nullable().optional(),
+  facebook_content_type: z.enum(['feed', 'reel', 'story']).nullable().optional(),
+  facebook_page_id: z.string().nullable().optional(),
+  linkedin_document_title: z.string().nullable().optional(),
+  linkedin_organization_urn: z.string().nullable().optional(),
+  linkedin_disable_link_preview: z.boolean().nullable().optional(),
+  first_comment: z.string().nullable().optional(),
 });
 
 /**
@@ -164,6 +182,24 @@ export async function PUT(
     if (data.cover_image_url !== undefined) updates.cover_image_url = data.cover_image_url;
     if (data.tagged_people !== undefined) updates.tagged_people = data.tagged_people;
     if (data.collaborator_handles !== undefined) updates.collaborator_handles = data.collaborator_handles;
+    // Per-platform overrides — `undefined` means "don't touch", explicit
+    // `null` clears the override back to the router default.
+    if (data.youtube_title !== undefined) updates.youtube_title = data.youtube_title;
+    if (data.youtube_description !== undefined) updates.youtube_description = data.youtube_description;
+    if (data.youtube_tags !== undefined) updates.youtube_tags = data.youtube_tags;
+    if (data.youtube_privacy !== undefined) updates.youtube_privacy = data.youtube_privacy;
+    if (data.youtube_made_for_kids !== undefined) updates.youtube_made_for_kids = data.youtube_made_for_kids;
+    if (data.tiktok_allow_comment !== undefined) updates.tiktok_allow_comment = data.tiktok_allow_comment;
+    if (data.tiktok_allow_duet !== undefined) updates.tiktok_allow_duet = data.tiktok_allow_duet;
+    if (data.tiktok_allow_stitch !== undefined) updates.tiktok_allow_stitch = data.tiktok_allow_stitch;
+    if (data.instagram_share_to_feed !== undefined) updates.instagram_share_to_feed = data.instagram_share_to_feed;
+    if (data.instagram_content_type !== undefined) updates.instagram_content_type = data.instagram_content_type;
+    if (data.facebook_content_type !== undefined) updates.facebook_content_type = data.facebook_content_type;
+    if (data.facebook_page_id !== undefined) updates.facebook_page_id = data.facebook_page_id;
+    if (data.linkedin_document_title !== undefined) updates.linkedin_document_title = data.linkedin_document_title;
+    if (data.linkedin_organization_urn !== undefined) updates.linkedin_organization_urn = data.linkedin_organization_urn;
+    if (data.linkedin_disable_link_preview !== undefined) updates.linkedin_disable_link_preview = data.linkedin_disable_link_preview;
+    if (data.first_comment !== undefined) updates.first_comment = data.first_comment;
 
     const { data: post, error: updateError } = await adminClient
       .from('scheduled_posts')

@@ -336,7 +336,9 @@ export async function publishScheduledPost(
       'id, client_id, caption, hashtags, scheduled_at, status, late_post_id, cover_image_url, post_type, ' +
       'tagged_people, collaborator_handles, ' +
       'youtube_title, youtube_description, youtube_tags, youtube_privacy, youtube_made_for_kids, ' +
-      'tiktok_allow_comment, tiktok_allow_duet, tiktok_allow_stitch, instagram_share_to_feed',
+      'tiktok_allow_comment, tiktok_allow_duet, tiktok_allow_stitch, instagram_share_to_feed, ' +
+      'instagram_content_type, facebook_content_type, facebook_page_id, ' +
+      'linkedin_document_title, linkedin_organization_urn, linkedin_disable_link_preview, first_comment',
     )
     .eq('id', postId)
     .single<{
@@ -360,6 +362,13 @@ export async function publishScheduledPost(
       tiktok_allow_duet: boolean | null;
       tiktok_allow_stitch: boolean | null;
       instagram_share_to_feed: boolean | null;
+      instagram_content_type: 'feed' | 'reels' | 'story' | null;
+      facebook_content_type: 'feed' | 'reel' | 'story' | null;
+      facebook_page_id: string | null;
+      linkedin_document_title: string | null;
+      linkedin_organization_urn: string | null;
+      linkedin_disable_link_preview: boolean | null;
+      first_comment: string | null;
     }>();
   if (postErr || !post) throw new Error(`Post ${postId} not found`);
 
@@ -543,6 +552,16 @@ export async function publishScheduledPost(
     tiktokAllowDuet: post.tiktok_allow_duet ?? undefined,
     tiktokAllowStitch: post.tiktok_allow_stitch ?? undefined,
     instagramShareToFeed: post.instagram_share_to_feed ?? undefined,
+    // Per-platform routing overrides (migration 255). Same NULL → undefined
+    // pattern so the per-platform routers in lib/posting/zernio.ts apply
+    // their documented defaults when the row hasn't customized anything.
+    instagramContentType: post.instagram_content_type ?? undefined,
+    facebookContentType: post.facebook_content_type ?? undefined,
+    facebookPageId: post.facebook_page_id ?? undefined,
+    linkedinDocumentTitle: post.linkedin_document_title ?? undefined,
+    linkedinOrganizationUrn: post.linkedin_organization_urn ?? undefined,
+    linkedinDisableLinkPreview: post.linkedin_disable_link_preview ?? undefined,
+    firstComment: post.first_comment ?? undefined,
   });
 
   await admin

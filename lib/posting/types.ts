@@ -71,6 +71,34 @@ export interface PublishPostInput {
 
   /** Cross-post Instagram Reel to feed. Defaults to true. */
   instagramShareToFeed?: boolean;
+
+  // ----- Per-platform routing overrides (added 2026-05-06) -----
+  // Each per-platform router auto-detects content variant from media items
+  // by default. These overrides force a specific variant (e.g. publish a
+  // 9:16 image as an IG Story instead of the default feed routing).
+
+  /** Instagram content variant. Default: image-only → feed/carousel; video → reels. */
+  instagramContentType?: 'feed' | 'reels' | 'story';
+
+  /** Facebook content variant. Default: no discriminator (Zernio routes feed-image / feed-video). */
+  facebookContentType?: 'feed' | 'reel' | 'story';
+  /** Facebook target page when the connected account manages multiple pages. */
+  facebookPageId?: string;
+
+  /** LinkedIn document title (REQUIRED by LinkedIn for PDF / PPT / DOCX posts). */
+  linkedinDocumentTitle?: string;
+  /** LinkedIn organization URN to post as a company page. Format: `urn:li:organization:123456`. */
+  linkedinOrganizationUrn?: string;
+  /** LinkedIn: suppress the auto URL preview card on text-only posts that contain a link. */
+  linkedinDisableLinkPreview?: boolean;
+
+  /**
+   * Auto-posted as the first comment after publish. Supported by Facebook,
+   * Instagram (feed/carousel only — IG suppresses on Stories), LinkedIn, and
+   * YouTube. Useful for parking external links out of the caption (LinkedIn
+   * down-ranks link posts ~40-50%).
+   */
+  firstComment?: string;
 }
 
 export interface PublishResult {
