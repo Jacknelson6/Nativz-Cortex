@@ -388,9 +388,13 @@ function SharedReviewView({
   }
 
   /**
-   * Sequentially download every cut. Browsers throttle (or popup-block)
-   * many simultaneous anchor clicks, so we serialize and surface
-   * progress through a single sticky toast.
+   * Bundle every cut into a single zip and hand the browser one save
+   * dialog. Triggering 16 anchor clicks in a row gets popup-blocked or
+   * silently dropped on most browsers, which is what was happening here
+   * before. Fetches run in parallel (browser caps per-host concurrency
+   * to ~6), assets are added with STORE (no DEFLATE) since h264 + png
+   * don't compress further, and `jszip` is dynamically imported so the
+   * library only ships when this button is actually clicked.
    */
   async function handleDownloadAll() {
     if (downloadingAll) return;
@@ -404,35 +408,77 @@ function SharedReviewView({
       return;
     }
     setDownloadingAll(true);
-    const toastId = toast.loading(`Downloading 0 of ${targets.length}…`);
-    let done = 0;
+    const toastId = toast.loading(`Fetching 0 of ${targets.length}…`);
+    let fetched = 0;
     let failed = 0;
     try {
-      for (const t of targets) {
-        try {
-          await downloadAsset(t.url, getDownloadFilename(t.video, t.idx));
-          done++;
-        } catch {
-          failed++;
-        }
-        toast.loading(
-          `Downloading ${done + failed} of ${targets.length}…`,
-          { id: toastId },
-        );
+      const { default: JSZip } = await import('jszip');
+      const zip = new JSZip();
+      const usedNames = new Set<string>();
+
+      await Promise.all(
+        targets.map(async (t) => {
+          try {
+            const res = await fetch(t.url);
+            if (!res.ok) throw new Error(`status ${res.status}`);
+            const buf = await res.arrayBuffer();
+            const name = uniqueZipName(
+              usedNames,
+              getDownloadFilename(t.video, t.idx),
+            );
+            zip.file(name, buf, { binary: true, compression: 'STORE' });
+            fetched++;
+          } catch {
+            failed++;
+          } finally {
+            toast.loading(
+              `Fetching ${fetched + failed} of ${targets.length}…`,
+              { id: toastId },
+            );
+          }
+        }),
+      );
+
+      if (fetched === 0) {
+        toast.error('Could not download any files. Try again.', {
+          id: toastId,
+        });
+        return;
       }
+
+      toast.loading('Building zip…', { id: toastId });
+      const zipBlob = await zip.generateAsync({
+        type: 'blob',
+        compression: 'STORE',
+      });
+
+      const zipName = buildZipFilename(clientName, projectName);
+      const objUrl = URL.createObjectURL(zipBlob);
+      try {
+        const a = document.createElement('a');
+        a.href = objUrl;
+        a.download = zipName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } finally {
+        setTimeout(() => URL.revokeObjectURL(objUrl), 1500);
+      }
+
       if (failed === 0) {
         toast.success(
-          `Downloaded ${done} file${done === 1 ? '' : 's'}`,
+          `Zipped ${fetched} file${fetched === 1 ? '' : 's'}`,
           { id: toastId },
         );
-      } else if (done === 0) {
-        toast.error('Could not download any files. Try again.', { id: toastId });
       } else {
         toast.error(
-          `Downloaded ${done}, ${failed} failed.`,
+          `Zipped ${fetched}, ${failed} failed.`,
           { id: toastId },
         );
       }
+    } catch (err) {
+      console.error('[handleDownloadAll] zip failed', err);
+      toast.error('Could not build zip. Try again.', { id: toastId });
     } finally {
       setDownloadingAll(false);
     }
@@ -487,7 +533,7 @@ function SharedReviewView({
                   onClick={handleDownloadAll}
                   disabled={downloadingAll}
                   className="inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3.5 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
-                  title={`Download all ${total} ${total === 1 ? 'file' : 'files'}`}
+                  title={`Download all ${total} ${total === 1 ? 'file' : 'files'} as a zip`}
                 >
                   {downloadingAll ? (
                     <Loader2 size={14} className="animate-spin" />
@@ -495,7 +541,9 @@ function SharedReviewView({
                     <Download size={14} />
                   )}
                   <span className="hidden sm:inline">
-                    {downloadingAll ? 'Downloading…' : `Download all (${total})`}
+                    {downloadingAll
+                      ? 'Preparing zip…'
+                      : `Download all (${total})`}
                   </span>
                   <span className="sm:hidden">
                     {downloadingAll ? '…' : `Download (${total})`}
@@ -1959,6 +2007,37 @@ function getDownloadFilename(v: SharedVideo, idx: number): string {
   const isImage = (v.mime_type ?? '').startsWith('image/');
   const ext = isImage ? 'png' : 'mp4';
   return `cut-${idx + 1}.${ext}`;
+}
+
+// Two cuts can legitimately share a `filename` (e.g. multiple revisions
+// of "final.mp4"). JSZip silently overwrites entries with the same key,
+// which would drop files from the bundle. Append " (n)" before the
+// extension on collisions.
+function uniqueZipName(used: Set<string>, name: string): string {
+  if (!used.has(name)) {
+    used.add(name);
+    return name;
+  }
+  const dot = name.lastIndexOf('.');
+  const stem = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : '';
+  let n = 2;
+  while (used.has(`${stem} (${n})${ext}`)) n++;
+  const final = `${stem} (${n})${ext}`;
+  used.add(final);
+  return final;
+}
+
+function buildZipFilename(client: string, project: string): string {
+  const slug = (s: string) =>
+    s
+      .normalize('NFKD')
+      .replace(/[^\w\s-]+/g, '')
+      .trim()
+      .replace(/[\s_]+/g, '-')
+      .toLowerCase();
+  const parts = [slug(client), slug(project)].filter(Boolean);
+  return `${parts.join('-') || 'cuts'}.zip`;
 }
 
 /**
