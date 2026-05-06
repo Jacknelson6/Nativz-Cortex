@@ -8,6 +8,7 @@ import {
   CalendarClock,
   CheckCircle2,
   Circle,
+  Copy,
   Plus,
   RefreshCcw,
   Search,
@@ -561,6 +562,7 @@ function InviteBuilderModal({
   const [notifyChat, setNotifyChat] = useState(true);
   const [notifyEmail, setNotifyEmail] = useState(true);
   const [sending, setSending] = useState(false);
+  const [copying, setCopying] = useState(false);
   const [showExtras, setShowExtras] = useState(false);
 
   // Reset state every time we open for a new brand.
@@ -651,6 +653,44 @@ function InviteBuilderModal({
       toast.error(err instanceof Error ? err.message : 'Send failed');
     } finally {
       setSending(false);
+    }
+  }
+
+  // Mints a fresh invite + copies the reconnect URL to the clipboard.
+  // Recipients aren't required, the email send is skipped, and the URL
+  // is the same `/s/{token}` that the email CTA points at.
+  async function handleCopyLink() {
+    if (!client) return;
+    const platforms = Array.from(selectedPlatforms);
+    if (platforms.length === 0) {
+      toast.error('Pick at least one platform');
+      return;
+    }
+    setCopying(true);
+    try {
+      const res = await fetch('/api/admin/connection-invites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: client.id,
+          platforms,
+          recipientEmails: [],
+          notifyChat,
+          notifyEmail,
+          skipEmail: true,
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        url?: string;
+      };
+      if (!res.ok || !body.url) throw new Error(body.error ?? 'Copy failed');
+      await navigator.clipboard.writeText(body.url);
+      toast.success('Reconnect link copied');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Copy failed');
+    } finally {
+      setCopying(false);
     }
   }
 
@@ -791,17 +831,28 @@ function InviteBuilderModal({
             </div>
           </Section>
 
-          <div className="flex items-center justify-end gap-2 border-t border-nativz-border pt-4">
-            <Button variant="ghost" onClick={onClose}>
-              Cancel
-            </Button>
+          <div className="flex items-center justify-between gap-2 border-t border-nativz-border pt-4">
             <Button
-              onClick={() => void handleSend()}
-              disabled={sending}
+              variant="outline"
+              onClick={() => void handleCopyLink()}
+              disabled={copying || sending}
+              title="Mint a reconnect link and copy it to your clipboard. No email sent."
             >
-              <Send className="size-3.5" />
-              {sending ? 'Sending...' : 'Send invite'}
+              <Copy className="size-3.5" />
+              {copying ? 'Copying...' : 'Copy link'}
             </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => void handleSend()}
+                disabled={sending || copying}
+              >
+                <Send className="size-3.5" />
+                {sending ? 'Sending...' : 'Send invite'}
+              </Button>
+            </div>
           </div>
         </div>
       )}

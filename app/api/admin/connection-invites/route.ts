@@ -23,12 +23,13 @@ export const dynamic = 'force-dynamic';
  *   {
  *     clientId: uuid,
  *     platforms: string[],            // e.g. ['tiktok','instagram']
- *     recipientEmails: string[],      // emails to email
+ *     recipientEmails: string[],      // emails to email; required unless skipEmail
  *     notifyChat: boolean,
  *     notifyEmail: boolean,
+ *     skipEmail?: boolean,            // mint token + return url, no email send
  *   }
  *
- * Response: { id, token, sent }
+ * Response: { id, token, url, sent }
  *
  * Auth: admin only.
  */
@@ -49,9 +50,13 @@ const SUPPORTED_PLATFORMS = [
 const Body = z.object({
   clientId: z.string().uuid(),
   platforms: z.array(z.enum(SUPPORTED_PLATFORMS)).min(1).max(20),
-  recipientEmails: z.array(z.string().email()).min(1).max(20),
+  recipientEmails: z.array(z.string().email()).max(20).default([]),
   notifyChat: z.boolean(),
   notifyEmail: z.boolean(),
+  // When true, mint the token + row but skip the email send. Used by the
+  // "Copy link" button in the invite modal so admins can hand-deliver the
+  // reconnect URL via Slack / iMessage / whatever.
+  skipEmail: z.boolean().optional().default(false),
 });
 
 const TOKEN_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -211,7 +216,16 @@ export async function POST(request: NextRequest) {
       recipientEmails,
       notifyChat,
       notifyEmail,
+      skipEmail,
     } = parsed.data;
+
+    // Recipients are only required when actually emailing.
+    if (!skipEmail && recipientEmails.length === 0) {
+      return NextResponse.json(
+        { error: 'recipientEmails required when skipEmail is false' },
+        { status: 400 },
+      );
+    }
 
     const admin = createAdminClient();
     const { data: client, error: clientErr } = await admin
@@ -229,34 +243,41 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'client not found' }, { status: 404 });
     }
 
+    const brand = getBrandFromAgency(client.agency as string | null);
+
     // Soft dedupe: same brand + same recipient set in last 60s ⇒ reuse.
-    const sortedRecipients = [...recipientEmails]
-      .map((e) => e.trim().toLowerCase())
-      .sort();
-    const recentCutoff = new Date(Date.now() - 60_000).toISOString();
-    const { data: recentInvites } = await admin
-      .from('connection_invites')
-      .select('id, token, recipient_emails, sent_at')
-      .eq('client_id', clientId)
-      .gte('sent_at', recentCutoff)
-      .order('sent_at', { ascending: false })
-      .limit(5);
-    const dupe = (recentInvites ?? []).find((row) => {
-      const existing = ((row.recipient_emails as string[]) ?? [])
+    // Skipped for link-only mints since there are no recipients to match
+    // against and admins clicking "Copy link" generally want a fresh URL.
+    if (!skipEmail) {
+      const sortedRecipients = [...recipientEmails]
         .map((e) => e.trim().toLowerCase())
         .sort();
-      return (
-        existing.length === sortedRecipients.length &&
-        existing.every((v, i) => v === sortedRecipients[i])
-      );
-    });
-    if (dupe) {
-      return NextResponse.json({
-        id: dupe.id,
-        token: dupe.token,
-        sent: 0,
-        deduped: true,
+      const recentCutoff = new Date(Date.now() - 60_000).toISOString();
+      const { data: recentInvites } = await admin
+        .from('connection_invites')
+        .select('id, token, recipient_emails, sent_at')
+        .eq('client_id', clientId)
+        .gte('sent_at', recentCutoff)
+        .order('sent_at', { ascending: false })
+        .limit(5);
+      const dupe = (recentInvites ?? []).find((row) => {
+        const existing = ((row.recipient_emails as string[]) ?? [])
+          .map((e) => e.trim().toLowerCase())
+          .sort();
+        return (
+          existing.length === sortedRecipients.length &&
+          existing.every((v, i) => v === sortedRecipients[i])
+        );
       });
+      if (dupe) {
+        return NextResponse.json({
+          id: dupe.id,
+          token: dupe.token,
+          url: inviteUrl(brand, dupe.token),
+          sent: 0,
+          deduped: true,
+        });
+      }
     }
 
     const token = mintToken(32);
@@ -280,8 +301,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const brand = getBrandFromAgency(client.agency as string | null);
     const url = inviteUrl(brand, inserted.token);
+
+    // Link-only mode: short-circuit before touching Resend.
+    if (skipEmail) {
+      return NextResponse.json({
+        id: inserted.id,
+        token: inserted.token,
+        url,
+        sent: 0,
+      });
+    }
 
     const apiKey = (await getSecret('RESEND_API_KEY')) ?? '';
     if (!apiKey) {
@@ -291,6 +321,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         id: inserted.id,
         token: inserted.token,
+        url,
         sent: 0,
       });
     }
@@ -328,6 +359,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       id: inserted.id,
       token: inserted.token,
+      url,
       sent,
     });
   } catch (err) {
