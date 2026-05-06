@@ -76,35 +76,9 @@ async function main() {
     );
   }
 
-  console.log('[seed] upserting ad spend rows…');
-  const now = new Date();
-  for (let monthsBack = 0; monthsBack < 3; monthsBack += 1) {
-    const d = new Date(now.getFullYear(), now.getMonth() - monthsBack, 1);
-    const month = d.toISOString().slice(0, 10);
-    for (const c of FIXTURE_CLIENTS) {
-      await supabase.from('client_ad_spend').upsert(
-        {
-          client_id: c.id,
-          platform: 'meta',
-          campaign_label: 'Fixture retainer',
-          period_month: month,
-          spend_cents: 25000 + monthsBack * 5000,
-          source: 'manual',
-        },
-        { onConflict: 'client_id,platform,campaign_label,period_month' },
-      );
-    }
-  }
-
-  console.log('[seed] upserting lifecycle events for the Activity tab…');
-  for (const c of FIXTURE_CLIENTS) {
-    await supabase.from('client_lifecycle_events').insert({
-      client_id: c.id,
-      type: 'contract.signed',
-      title: `Fixture ${c.slug}: seed event`,
-      description: 'Populated by scripts/seed-staging.ts',
-    });
-  }
+  // The Revenue Hub strip (migration 255) removed the client_ad_spend and
+  // client_lifecycle_events tables, and the self-hosted proposal flow was
+  // retired separately, so the seed no longer populates any of those.
 
   const stripeKey = process.env.STRIPE_SECRET_KEY ?? '';
   if (!stripeKey.startsWith('sk_test_')) {

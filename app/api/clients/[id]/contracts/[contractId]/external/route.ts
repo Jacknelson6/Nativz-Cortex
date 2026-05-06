@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAdmin } from '@/lib/auth/require-admin';
-import { logLifecycleEvent } from '@/lib/lifecycle/state-machine';
 import { dollarsToCents } from '@/lib/format/money';
 
 export const dynamic = 'force-dynamic';
@@ -24,7 +23,7 @@ export async function PATCH(
 ) {
   const auth = await requireAdmin();
   if (auth instanceof NextResponse) return auth;
-  const { admin, userId } = auth;
+  const { admin } = auth;
 
   const { id: clientId, contractId } = await ctx.params;
 
@@ -68,18 +67,10 @@ export async function PATCH(
       .update({ lifecycle_state: 'contracted' })
       .eq('id', clientId)
       .eq('lifecycle_state', 'lead');
-    await logLifecycleEvent(clientId, 'contract.signed', 'Contract marked as signed', {
-      metadata: { contract_id: contractId },
-      actorUserId: userId,
-      admin,
-    });
-  } else if (parsed.data.mark === 'sent') {
-    await logLifecycleEvent(clientId, 'contract.sent', 'Contract marked as sent', {
-      metadata: { contract_id: contractId },
-      actorUserId: userId,
-      admin,
-    });
   }
+  // Lifecycle event logging was retired with the Revenue Hub strip
+  // (migration 255). The contract status field on client_contracts is
+  // the canonical record now.
 
   return NextResponse.json({ ok: true });
 }

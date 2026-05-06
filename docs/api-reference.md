@@ -2,7 +2,7 @@
 
 > **For AI agents:** This document describes every API endpoint that exists on disk. Auto-generated from `app/api/**/route.ts` by `scripts/generate-api-docs.ts` — do not edit by hand. Re-run the script after adding/removing routes or tweaking a JSDoc block.
 
-**658 endpoints across 32 sections.**
+**655 endpoints across 31 sections.**
 
 ## Authentication
 
@@ -6168,14 +6168,6 @@ role - Role/title, max 100 chars (optional)
 
 ---
 
-## Cron Jobs
-
-_Internal scheduled jobs for sync, publishing, monitoring._
-
-### `GET /api/cron/meta-ads-sync`
-
----
-
 ## Other
 
 _Uncategorized routes._
@@ -6291,9 +6283,5 @@ GET /api/spying/watch/[id]/history — full snapshot history for a single client
 ### `POST /api/webhooks/openrouter/generation`
 
 ### `POST /api/webhooks/resend`
-
-### `POST /api/webhooks/stripe`
-
-### `POST /api/webhooks/stripe/:agency`
 
 ---

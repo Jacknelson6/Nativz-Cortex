@@ -1,16 +1,16 @@
 /**
  * ensureStripeCustomer, first-time customer onboarding for the credits flow.
  *
- * The credits feature is the first surface that mints a Stripe customer for a
- * client we haven't billed before. Earlier surfaces (Revenue Hub) only ever
- * mirror customers Stripe created on their own. So this helper exists.
+ * The credits feature is the only remaining surface that mints a Stripe
+ * customer for a client we haven't billed before. (The Revenue Hub mirror
+ * tables were retired in migration 255; the future webhook handler will
+ * read straight off Stripe.)
  *
  * Contract:
  *   1. If `clients.stripe_customer_id` is already set, return it.
  *   2. Otherwise call `stripe.customers.create({ email, metadata: { client_id,
  *      organization_id } })` against the agency-correct Stripe account.
- *   3. Persist the new id back to `clients.stripe_customer_id` AND mirror the
- *      row into `stripe_customers` so the Revenue Hub picks it up.
+ *   3. Persist the new id back to `clients.stripe_customer_id`.
  *
  * Race protection: `clients.stripe_customer_id` has a UNIQUE constraint
  * (migration 154). If two concurrent checkouts both call this helper, the
@@ -112,25 +112,6 @@ export async function ensureStripeCustomer(
     // a 500 rather than silently using our (now orphaned) customer id.
     throw new Error(`ensureStripeCustomer: client ${clientId} disappeared during update`);
   }
-
-  // Mirror into stripe_customers for Revenue Hub joins. Best-effort: the
-  // canonical link is `clients.stripe_customer_id`, mirror is denormalized.
-  await admin
-    .from('stripe_customers')
-    .upsert(
-      {
-        id: customer.id,
-        client_id: clientId,
-        email: customer.email ?? email,
-        name: customer.name ?? row.name ?? null,
-        metadata: customer.metadata ?? {},
-        livemode: customer.livemode,
-        created_at: new Date(customer.created * 1000).toISOString(),
-        synced_at: new Date().toISOString(),
-        deleted: false,
-      },
-      { onConflict: 'id' },
-    );
 
   return { stripeCustomerId: customer.id, created: true, agency };
 }

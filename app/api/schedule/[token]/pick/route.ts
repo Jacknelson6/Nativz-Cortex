@@ -4,7 +4,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchBusyForEmail } from '@/lib/scheduling/google-busy';
 import { createSchedulingCalendarEvent } from '@/lib/scheduling/google-event-create';
 import { isImpersonateAllowed } from '@/lib/google/service-account';
-import { logLifecycleEvent } from '@/lib/lifecycle/state-machine';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -29,7 +28,10 @@ export const dynamic = 'force-dynamic';
  *   4. If event.item_id is set, patch the linked schedule_meeting onboarding
  *      item: data.scheduled_for, data.scheduling_event_id, status='done'.
  *   5. Trigger flow completion check.
- *   6. Log a lifecycle event so it shows up in the client's activity feed.
+ *
+ *   The lifecycle-event log step that lived here was retired with the Revenue
+ *   Hub strip (migration 255); its backing table is gone and the activity
+ *   feed it fed has been removed.
  */
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -178,7 +180,6 @@ export async function POST(
       .filter(Boolean)
       .join('\n\n');
     let meetLink: string | null = null;
-    let calendarEventId: string | null = null;
     let calendarEventError: string | null = null;
     if (!organizer) {
       calendarEventError =
@@ -207,7 +208,6 @@ export async function POST(
       }));
       if (result.ok) {
         meetLink = result.meetLink ?? null;
-        calendarEventId = result.eventId ?? null;
         await admin
           .from('team_scheduling_event_picks')
           .update({
@@ -237,28 +237,7 @@ export async function POST(
     // The legacy onboarding-checklist + flow-completion linkage was retired
     // alongside the proposal/onboarding rebuild. The new onboarding system
     // owns its own scheduling step via a different table; team_scheduling
-    // remains a standalone surface, lifecycle event below covers feed needs.
-
-    if (event.client_id) {
-      const startLocal = new Date(startMs).toISOString();
-      await logLifecycleEvent(
-        event.client_id as string,
-        'kickoff.scheduled',
-        `${event.name} scheduled for ${startLocal}`,
-        {
-          metadata: {
-            scheduling_event_id: event.id,
-            pick_id: pickRow.id,
-            start_at: startLocal,
-            picked_by_email,
-            picked_by_name,
-            meet_link: meetLink,
-            calendar_event_id: calendarEventId,
-          },
-          admin,
-        },
-      ).catch((err) => console.error('[scheduling:pick] lifecycle log failed', err));
-    }
+    // remains a standalone surface.
 
     return NextResponse.json({
       ok: true,

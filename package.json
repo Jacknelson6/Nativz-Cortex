@@ -57,8 +57,6 @@
     "setup:college-hunks": "tsx scripts/college-hunks-setup.ts",
     "seed:college-hunks-searches": "tsx scripts/seed-college-hunks-topic-searches.ts",
     "pdf:avondale-video-ideas": "tsx scripts/generate-avondale-video-ideas-pdf.tsx",
-    "revenue:backfill": "dotenv -e .env.local -- tsx scripts/stripe-backfill.ts",
-    "revenue:backfill:dry": "dotenv -e .env.local -- tsx scripts/stripe-backfill.ts --dry-run",
     "vercel:env:mirror": "dotenv -e .env.local -- tsx scripts/vercel-env-mirror.ts",
     "vercel:env:mirror:dry": "dotenv -e .env.local -- tsx scripts/vercel-env-mirror.ts --dry-run",
     "seed:staging": "dotenv -e .env.local -- tsx scripts/seed-staging.ts"

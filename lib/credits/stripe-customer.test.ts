@@ -38,32 +38,21 @@ interface RefreshResult {
   error: { message: string } | null;
 }
 
-interface UpsertResult {
-  data: unknown;
-  error: { message: string } | null;
-}
-
 /**
- * The helper makes up to four supabase calls in a fixed order:
+ * The helper makes up to three supabase calls in a fixed order:
  *   1. clients lookup (select+eq+maybeSingle)
  *   2. clients claim update (update+eq+is+select+maybeSingle)
  *   3. (race-lost only) clients refresh (select+eq+maybeSingle)
- *   4. stripe_customers mirror (upsert)
  * This factory lets each test stage exactly the responses it needs.
  */
 function makeAdmin(opts: {
   lookup: ClientLookupResult;
   claim?: ClaimResult;
   refresh?: RefreshResult;
-  upsert?: UpsertResult;
-}): { admin: SupabaseClient; calls: { from: ReturnType<typeof vi.fn>; upsert?: ReturnType<typeof vi.fn> } } {
-  const upsertSpy = vi.fn(async () => opts.upsert ?? { data: null, error: null });
+}): { admin: SupabaseClient; calls: { from: ReturnType<typeof vi.fn> } } {
   let clientsCallCount = 0;
 
   const fromMock = vi.fn((table: string) => {
-    if (table === 'stripe_customers') {
-      return { upsert: upsertSpy };
-    }
     if (table !== 'clients') throw new Error(`unexpected table: ${table}`);
     clientsCallCount += 1;
 
@@ -94,7 +83,7 @@ function makeAdmin(opts: {
   });
 
   const admin = { from: fromMock } as unknown as SupabaseClient;
-  return { admin, calls: { from: fromMock, upsert: upsertSpy } };
+  return { admin, calls: { from: fromMock } };
 }
 
 beforeEach(() => {
@@ -233,74 +222,8 @@ describe('ensureStripeCustomer', () => {
     );
   });
 
-  it('mirrors the new customer into stripe_customers for Revenue Hub joins', async () => {
-    const { admin, calls } = makeAdmin({
-      lookup: {
-        data: {
-          id: 'client-1',
-          name: 'Acme',
-          agency: 'nativz',
-          stripe_customer_id: null,
-          organization_id: 'org-1',
-        },
-        error: null,
-      },
-    });
-    stripeCreateMock.mockResolvedValueOnce({
-      id: 'cus_mirror',
-      email: 'jane@acme.com',
-      name: 'Acme',
-      metadata: { foo: 'bar' },
-      livemode: true,
-      created: 1700000000,
-    });
-
-    await ensureStripeCustomer(admin, 'client-1', 'jane@acme.com');
-
-    expect(calls.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'cus_mirror',
-        client_id: 'client-1',
-        email: 'jane@acme.com',
-        livemode: true,
-        deleted: false,
-      }),
-      { onConflict: 'id' },
-    );
-  });
-
-  it('falls back to the customer email when the Stripe response is missing one', async () => {
-    const { admin, calls } = makeAdmin({
-      lookup: {
-        data: {
-          id: 'client-1',
-          name: 'Acme',
-          agency: 'nativz',
-          stripe_customer_id: null,
-          organization_id: 'org-1',
-        },
-        error: null,
-      },
-    });
-    stripeCreateMock.mockResolvedValueOnce({
-      id: 'cus_no_email',
-      email: null,
-      name: null,
-      metadata: {},
-      livemode: false,
-      created: 1700000000,
-    });
-
-    await ensureStripeCustomer(admin, 'client-1', 'fallback@acme.com');
-
-    expect(calls.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ email: 'fallback@acme.com' }),
-      expect.anything(),
-    );
-  });
-
   it('returns the winners customer id when the conditional update loses the race', async () => {
-    const { admin, calls } = makeAdmin({
+    const { admin } = makeAdmin({
       lookup: {
         data: {
           id: 'client-1',
@@ -330,8 +253,6 @@ describe('ensureStripeCustomer', () => {
       created: false,
       agency: 'nativz',
     });
-    // Mirror MUST NOT run when we lost the race (we don't own the row).
-    expect(calls.upsert).not.toHaveBeenCalled();
   });
 
   it('throws when the row vanishes mid-flight (race lost AND no winner persisted)', async () => {

@@ -2865,14 +2865,6 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   },
   {
     "method": "GET",
-    "path": "/api/cron/meta-ads-sync",
-    "description": "",
-    "auth": "",
-    "section": "Cron Jobs",
-    "sectionSlug": "cron"
-  },
-  {
-    "method": "GET",
     "path": "/api/activity",
     "description": "Fetch recent activity log entries. Admins see all activity; portal viewers see only activity related to clients in their organization.",
     "auth": "Required (any authenticated user)",
@@ -3926,22 +3918,6 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   {
     "method": "POST",
     "path": "/api/webhooks/resend",
-    "description": "",
-    "auth": "",
-    "section": "Other",
-    "sectionSlug": "other"
-  },
-  {
-    "method": "POST",
-    "path": "/api/webhooks/stripe",
-    "description": "",
-    "auth": "",
-    "section": "Other",
-    "sectionSlug": "other"
-  },
-  {
-    "method": "POST",
-    "path": "/api/webhooks/stripe/:agency",
     "description": "",
     "auth": "",
     "section": "Other",
