@@ -572,6 +572,16 @@ export function ContentToolsShell() {
               patchLink(next.id, patch);
             }
           }}
+          onApprovedAll={(patch) => {
+            // Counters + status flip immediately; the Posts section in
+            // the open dialog and the row in the parent table both
+            // reflect the new state without waiting on a refetch.
+            if (activeCalendarLink) {
+              const next = { ...activeCalendarLink, ...patch };
+              setActiveCalendarLink(next);
+              patchLink(next.id, patch);
+            }
+          }}
         />
       </div>
     </TooltipProvider>

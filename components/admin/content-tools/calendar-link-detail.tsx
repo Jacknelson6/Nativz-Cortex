@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { toast } from 'sonner';
 import {
+  CheckCheck,
   CheckCircle2,
   Copy,
   ExternalLink,
@@ -134,6 +135,7 @@ export function CalendarLinkDetail({
   onSent,
   onFollowupRecorded,
   onRefreshed,
+  onApprovedAll,
 }: {
   link: ReviewLinkRow | null;
   onClose: () => void;
@@ -165,6 +167,19 @@ export function CalendarLinkDetail({
     last_followup_at: string;
     followup_count: number;
   }) => void;
+  /**
+   * Called after a successful "Mark all approved" bulk action so the
+   * parent table can flip the counts + status pill without a refetch.
+   * Status comes back as the optimistic next state ("approved" when
+   * everything got through, "revising" when changes_requested rows
+   * remain, "ready_for_review" otherwise).
+   */
+  onApprovedAll?: (patch: {
+    approved_count: number;
+    changes_count: number;
+    pending_count: number;
+    status: ReviewLinkStatus;
+  }) => void;
 }) {
   const open = !!link;
   const [refreshing, setRefreshing] = useState(false);
@@ -176,6 +191,7 @@ export function CalendarLinkDetail({
   const [refreshedThisSession, setRefreshedThisSession] = useState(false);
   const [markingFollowup, setMarkingFollowup] = useState(false);
   const [markingSent, setMarkingSent] = useState(false);
+  const [markingAllApproved, setMarkingAllApproved] = useState(false);
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState<DetailTab>('details');
   // Recipients live on the detail panel itself (not just the send preview)
@@ -504,6 +520,49 @@ export function CalendarLinkDetail({
     }
   }
 
+  async function markAllApproved() {
+    if (markingAllApproved || !link) return;
+    const remaining = link.pending_count + link.changes_count;
+    if (remaining <= 0) return;
+    const confirmed = confirm(
+      `Approve every still-pending post (${remaining} of ${link.post_count})? ` +
+        `This will publish them to Zernio just as if the client clicked approve.`,
+    );
+    if (!confirmed) return;
+    setMarkingAllApproved(true);
+    try {
+      const res = await fetch(
+        `/api/calendar/share/${link.token}/approve-all`,
+        { method: 'POST' },
+      );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof json?.error === 'string' ? json.error : 'Failed to approve');
+      }
+      const approvedNow = Number(json.approved ?? 0);
+      const failed = Number(json.failed ?? 0);
+      if (failed > 0 && approvedNow === 0) {
+        toast.error('Could not approve any posts. Try again.');
+      } else if (failed > 0) {
+        toast.error(`Approved ${approvedNow}, ${failed} failed.`);
+      } else if (approvedNow === 0) {
+        toast.info('Everything was already approved.');
+      } else {
+        toast.success(`Approved ${approvedNow} post${approvedNow === 1 ? '' : 's'}`);
+      }
+      onApprovedAll?.({
+        approved_count: Number(json.approved_count ?? link.approved_count),
+        changes_count: Number(json.changes_count ?? link.changes_count),
+        pending_count: Number(json.pending_count ?? link.pending_count),
+        status: (json.status as ReviewLinkStatus) ?? link.status,
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to approve');
+    } finally {
+      setMarkingAllApproved(false);
+    }
+  }
+
   async function refreshLink() {
     if (refreshing || !link) return;
     setRefreshing(true);
@@ -660,6 +719,27 @@ export function CalendarLinkDetail({
           title="Record an out-of-band nudge (Slack, text, in-person) without sending an email"
         >
           {markingFollowup ? 'Recording...' : 'Mark followed up'}
+        </Button>
+      )}
+      {/* Bulk-approve every still-pending post. Skips posts that are
+          already approved server-side, so it's safe to click on a
+          partially-approved calendar (only the remaining posts move).
+          Hidden once everything's approved (the unified pill switches
+          and `canSend` becomes false anyway). */}
+      {canSend && link.pending_count + link.changes_count > 0 && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={markAllApproved}
+          disabled={markingAllApproved}
+          className="text-text-muted hover:text-text-primary"
+          title="Approve every still-pending post and publish them to Zernio"
+        >
+          <CheckCheck size={13} />
+          {markingAllApproved
+            ? 'Approving…'
+            : `Mark all approved (${link.pending_count + link.changes_count})`}
         </Button>
       )}
       {canSend && (
