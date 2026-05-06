@@ -133,12 +133,39 @@ export function ConnectionsTab() {
     else setLoading(true);
     try {
       if (silent) {
-        // Re-check pings Zernio for fresh token expiry before re-reading.
-        // Failures here don't block the matrix render — the cached
+        // Re-check pings Zernio for fresh token expiry, plus back-fills
+        // `late_account_id` for any social_profiles row whose handle
+        // matches a Zernio account that was connected outside our invite
+        // flow. Failures here don't block the matrix render, the cached
         // `token_expires_at` will still surface.
-        await fetch('/api/admin/content-tools/connections-matrix/sync', {
-          method: 'POST',
-        }).catch(() => undefined);
+        try {
+          const syncRes = await fetch(
+            '/api/admin/content-tools/connections-matrix/sync',
+            { method: 'POST' },
+          );
+          if (syncRes.ok) {
+            const syncBody = (await syncRes.json()) as {
+              linked?: number;
+              ambiguous?: { platform: string; username: string }[];
+            };
+            if (syncBody.linked && syncBody.linked > 0) {
+              toast.success(
+                `Linked ${syncBody.linked} Zernio account${
+                  syncBody.linked === 1 ? '' : 's'
+                } to existing brands`,
+              );
+            }
+            if (syncBody.ambiguous && syncBody.ambiguous.length > 0) {
+              toast.warning(
+                `${syncBody.ambiguous.length} handle${
+                  syncBody.ambiguous.length === 1 ? '' : 's'
+                } matched multiple brands, link manually`,
+              );
+            }
+          }
+        } catch {
+          // Swallow; matrix still renders from cached state.
+        }
       }
       const res = await fetch('/api/admin/content-tools/connections-matrix', {
         cache: 'no-store',
