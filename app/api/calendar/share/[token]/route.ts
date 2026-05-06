@@ -81,6 +81,15 @@ interface PostAssetRow {
   status: string;
 }
 
+interface SchedulerMediaJoinRow {
+  post_id: string;
+  sort_order: number | null;
+  scheduler_media:
+    | { feed_normalized_url: string | null }
+    | { feed_normalized_url: string | null }[]
+    | null;
+}
+
 interface CommentAttachment {
   url: string;
   filename: string;
@@ -228,16 +237,46 @@ async function handleShareGet(
   const imageVideoIds = videoRows
     .filter((v) => v.media_type === 'image')
     .map((v) => v.id);
-  const { data: assetRows } = imageVideoIds.length
-    ? await admin
-        .from('content_drop_post_assets')
-        .select('id, drop_video_id, asset_url, thumbnail_url, mime_type, width, height, position, status')
-        .in('drop_video_id', imageVideoIds)
-        .order('position', { ascending: true })
-    : { data: [] as PostAssetRow[] };
+  const imagePostIds = videoRows
+    .filter((v) => v.media_type === 'image' && v.scheduled_post_id)
+    .map((v) => v.scheduled_post_id as string);
+  // Pull assets + scheduler_media in parallel. scheduler_media holds the
+  // `feed_normalized_url` cache (4:5 center-cropped JPEG, ~200KB) we render
+  // when source images are out of Instagram's [0.8, 1.91] feed range. We
+  // prefer that URL on the share viewer so:
+  //   1. The customer sees exactly what will publish to IG (no drift between
+  //      approval surface and posted output).
+  //   2. Supabase's image-transform endpoint stops 400'ing on the original
+  //      28MB PNGs (the size limit only bites originals, not the cropped
+  //      JPEGs).
+  // Aligned by sort_order ↔ position — both 0-indexed against the same
+  // logical asset list.
+  const [{ data: assetRows }, { data: schedulerMediaRows }] = await Promise.all([
+    imageVideoIds.length
+      ? admin
+          .from('content_drop_post_assets')
+          .select('id, drop_video_id, asset_url, thumbnail_url, mime_type, width, height, position, status')
+          .in('drop_video_id', imageVideoIds)
+          .order('position', { ascending: true })
+      : Promise.resolve({ data: [] as PostAssetRow[] }),
+    imagePostIds.length
+      ? admin
+          .from('scheduled_post_media')
+          .select('post_id, sort_order, scheduler_media:media_id (feed_normalized_url)')
+          .in('post_id', imagePostIds)
+      : Promise.resolve({ data: [] as SchedulerMediaJoinRow[] }),
+  ]);
   const assetsByVideo: Record<string, PostAssetRow[]> = {};
   for (const a of (assetRows ?? []) as PostAssetRow[]) {
     (assetsByVideo[a.drop_video_id] ||= []).push(a);
+  }
+  // Map: postId -> position -> normalized URL. Substituted at payload-build
+  // time below.
+  const normalizedByPostPos: Record<string, Record<number, string>> = {};
+  for (const r of (schedulerMediaRows ?? []) as SchedulerMediaJoinRow[]) {
+    const sm = Array.isArray(r.scheduler_media) ? r.scheduler_media[0] : r.scheduler_media;
+    if (!sm?.feed_normalized_url || r.sort_order == null) continue;
+    (normalizedByPostPos[r.post_id] ||= {})[r.sort_order] = sm.feed_normalized_url;
   }
 
   const videoByPost: Record<string, string> = {};
@@ -377,16 +416,24 @@ async function handleShareGet(
       const rev = revisionByPost[p.id];
       const filename = filenameByPost[p.id] ?? null;
       const mediaType = mediaTypeByPost[p.id] ?? 'video';
-      const assets = (assetsByPost[p.id] ?? []).map((a) => ({
-        id: a.id,
-        url: a.asset_url,
-        thumbnail_url: a.thumbnail_url,
-        mime_type: a.mime_type,
-        width: a.width,
-        height: a.height,
-        position: a.position,
-        status: a.status,
-      }));
+      const normalizedForPost = normalizedByPostPos[p.id] ?? {};
+      const assets = (assetsByPost[p.id] ?? []).map((a) => {
+        const normalizedUrl = normalizedForPost[a.position];
+        return {
+          id: a.id,
+          // Prefer the cached 4:5 cropped render when present so the share
+          // viewer shows exactly what publishes to Instagram. Falls back to
+          // the original asset_url for in-range images that don't need
+          // normalization.
+          url: normalizedUrl ?? a.asset_url,
+          thumbnail_url: a.thumbnail_url,
+          mime_type: normalizedUrl ? 'image/jpeg' : a.mime_type,
+          width: normalizedUrl ? 1080 : a.width,
+          height: normalizedUrl ? 1350 : a.height,
+          position: a.position,
+          status: a.status,
+        };
+      });
       return {
         id: p.id,
         caption: p.caption,

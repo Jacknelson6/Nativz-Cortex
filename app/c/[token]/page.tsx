@@ -1838,6 +1838,7 @@ function PostCard({
   const isCtv = projectType === 'ctv_ads';
   const isSocialAd = projectType === 'social_ads';
   const isOther = projectType === 'other';
+  const isImagePost = post.media_type === 'image';
   const showCaptionFlow = isOrganic;
   const showHandles = isOrganic;
   const showSchedule = isOrganic;
@@ -2470,11 +2471,16 @@ function PostCard({
   // CSS aspect ratio used by the inner Mux player. Must mirror the Tailwind
   // aspect class on the wrapping div (see videoColAspect below) so the
   // player and its container agree on geometry.
+  // Image posts always use 4:5 (Instagram feed max-vertical). Their cropped
+  // render is 1080×1350 — putting that inside a 9:16 container creates
+  // top/bottom pillarbox bars, which is what the customer was seeing.
   const videoAspectRatioStyle = isCtv
     ? '16 / 9'
     : isSocialAd
       ? '1 / 1'
-      : '9 / 16';
+      : isImagePost
+        ? '4 / 5'
+        : '9 / 16';
   const videoPanel = (
     <div
       ref={videoSectionRef}
@@ -2488,7 +2494,9 @@ function PostCard({
             ? 'aspect-video'
             : isSocialAd
               ? 'aspect-square'
-              : 'aspect-[9/16]'
+              : isImagePost
+                ? 'aspect-[4/5]'
+                : 'aspect-[9/16]'
         }
         aspectRatioStyle={videoAspectRatioStyle}
         onPlayerReady={(handle) => {
@@ -2791,7 +2799,9 @@ function PostCard({
     ? 'aspect-video'
     : isSocialAd
       ? 'aspect-square'
-      : 'aspect-[9/16]';
+      : isImagePost
+        ? 'aspect-[4/5]'
+        : 'aspect-[9/16]';
   // For CTV (vertical stack) the video occupies full card width with its
   // natural 16:9 height; for the side-by-side layouts the video column is
   // height-constrained so it hugs the card height.
