@@ -50,7 +50,7 @@ export const calendarTools: ToolDefinition[] = [
             calendarConnectionCount: (connections ?? []).length,
           },
           cardType: 'calendar' as const,
-          link: { href: '/admin/availability', label: 'View scheduling' },
+          link: { href: '/admin/calendar', label: 'View calendar' },
         };
       } catch (err) {
         return {

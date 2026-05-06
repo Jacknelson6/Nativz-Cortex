@@ -24,12 +24,6 @@ const nextConfig: NextConfig = {
       // from the legacy directory.
       { source: '/admin/pipeline', destination: '/admin/edits', permanent: false },
       { source: '/admin/pipeline/:path*', destination: '/admin/edits/:path*', permanent: false },
-      // /admin/scheduler is the Zernio social-post scheduler (content
-      // calendar). /admin/availability is the cal.com-style team
-      // availability picker (added 2026-04-26, renamed from /admin/scheduling
-      // 2026-05-03). Aliases below keep old bookmarks working.
-      { source: '/admin/scheduling', destination: '/admin/availability', permanent: false },
-      { source: '/admin/scheduling/:path*', destination: '/admin/availability/:path*', permanent: false },
       // Notifications hub absorbed into Settings on 2026-05-03. Banners /
       // Contacts / Emails are sub-tabs of /admin/settings?tab=notifications;
       // legacy ?tab= values map onto the new ?sub= key.

@@ -1158,19 +1158,6 @@ async function handleGet(request: NextRequest) {
 
 export const GET = withCronTelemetry({ route: '/api/cron/publish-posts' }, handleGet);
 
-/**
- * Resolve the deep-link path for a publish-failure notification.
- *
- * Drop posts (the bulk of what we publish) live inside `/admin/calendar/{dropId}`
- * because that's where the team actually reviews / re-cuts / re-approves
- * calendar content. Falling back to `/admin/availability?post=...` (team
- * availability page) was the old behaviour and is wrong for drop posts —
- * it doesn't show the post in context, and there's nothing actionable on
- * that page when a single post fails.
- *
- * Non-drop posts (quick-schedule / ads) fall back to the team availability
- * page, which is the right surface for those.
- */
 async function resolveFailureLinkPath(
   adminClient: ReturnType<typeof createAdminClient>,
   postId: string,
@@ -1182,7 +1169,7 @@ async function resolveFailureLinkPath(
     .maybeSingle();
   const dropId = (dropVideo as { drop_id?: string } | null)?.drop_id ?? null;
   if (dropId) return `/admin/calendar/${dropId}`;
-  return `/admin/availability?post=${postId}`;
+  return `/admin/scheduler?post=${postId}`;
 }
 
 async function sendFailureNotification(

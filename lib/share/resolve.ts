@@ -13,7 +13,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 export type ShareKind =
   | 'calendar'
   | 'editing'
-  | 'schedule'
   | 'calendar_review'
   | 'post_review'
   | 'report'
@@ -40,7 +39,6 @@ interface Lookup {
 const LOOKUPS: Lookup[] = [
   { kind: 'calendar', table: 'content_drop_share_links', column: 'token', path: (t) => `/c/${t}` },
   { kind: 'editing', table: 'editing_project_share_links', column: 'token', path: (t) => `/c/edit/${t}` },
-  { kind: 'schedule', table: 'team_scheduling_events', column: 'share_token', path: (t) => `/schedule/${t}` },
   { kind: 'calendar_review', table: 'client_review_links', column: 'token', path: (t) => `/shared/calendar/${t}` },
   { kind: 'post_review', table: 'post_review_links', column: 'token', path: (t) => `/shared/post/${t}` },
   { kind: 'report', table: 'report_links', column: 'token', path: (t) => `/shared/report/${t}` },

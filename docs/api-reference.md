@@ -2,7 +2,7 @@
 
 > **For AI agents:** This document describes every API endpoint that exists on disk. Auto-generated from `app/api/**/route.ts` by `scripts/generate-api-docs.ts` — do not edit by hand. Re-run the script after adding/removing routes or tweaking a JSDoc block.
 
-**655 endpoints across 31 sections.**
+**645 endpoints across 31 sections.**
 
 ## Authentication
 
@@ -2310,10 +2310,6 @@ Admin-only. Accepts a re-cut video for a single scheduled post inside a content 
 
 ### `GET /api/calendar/drops/active-brands`
 
-### `GET /api/calendar/events`
-
-Returns Google Calendar events for each scheduling_people row in the given window. Events are fetched via service-account / domain-wide delegation; each person's multiple workspace emails are unioned and deduped before being returned. Response: { calendars: { [personId]: { name, color, connection_type: 'team', events[], errors? } } }
-
 ### `GET /api/calendar/gaps`
 
 ### `POST /api/calendar/invite`
@@ -2333,22 +2329,6 @@ contact_id - Contact UUID to generate the invite for (required)
 ```
 {{ token: string, url: string }} Invite token and full shareable URL
 ```
-
-### `GET /api/calendar/people`
-
-Returns the configurable list of stakeholders for team availability + the unified calendar overlay. Each row is one logical person; their multiple workspace emails (e.g. jake@nativz.io and jake@andersoncollaborative.com) are returned as a string[]. Admins only.
-
-### `POST /api/calendar/people`
-
-Create a new person + their email aliases. Admins only. Emails are lowercased and validated against the authorized workspace domains client- side too, but final domain check happens at calendar fetch time.
-
-### `DELETE /api/calendar/people/:id`
-
-Soft-delete: flips is_active=false instead of removing the row, so any historical scheduling links (event members, etc.) keep their FK target.
-
-### `PATCH /api/calendar/people/:id`
-
-Update one person's attributes and optionally replace their email aliases. Email replacement is atomic: we delete the existing rows then insert the new set inside a best-effort sequence — if the insert fails we re-insert the old list so we don't strand a person with no emails.
 
 ### `GET /api/calendar/review`
 
@@ -2421,18 +2401,6 @@ Admin-only "revoke link" — sets `expires_at` to now so the next visitor gets t
 ### `POST /api/calendar/share/:token/title`
 
 ### `POST /api/calendar/share/:token/upload`
-
-### `POST /api/calendar/sync`
-
-Sync the authenticated admin's Google Calendar with Cortex. Fetches upcoming events (60 days) via Google OAuth, identifies shoot events and creates/updates shoot_events records, and pulls changes to Cortex meetings (time shifts, title changes, cancellations).
-
-**Auth:** Required (admin)
-
-**Returns:**
-
-```
-{{ totalEvents, shoots: { found, created, updated, matched }, meetings: { synced, updated, cancelled } }}
-```
 
 ### `GET /api/shoots`
 
@@ -6259,14 +6227,6 @@ Public comment endpoints for the editing-project review page. Mirrors `/api/cale
 ### `GET /api/public/onboarding/:token`
 
 ### `PATCH /api/public/onboarding/:token`
-
-### `GET /api/schedule/:token`
-
-### `POST /api/schedule/:token/pick`
-
-### `GET /api/scheduling/events`
-
-### `POST /api/scheduling/events`
 
 ### `POST /api/spying/baseline`
 

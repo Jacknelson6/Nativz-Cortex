@@ -2,7 +2,7 @@
  * Google Service Account authentication with domain-wide delegation.
  *
  * Used for any workspace API call that needs to act as a domain user without
- * per-user OAuth (Fyxer Gmail importer, team-availability calendar reads, etc).
+ * per-user OAuth (Fyxer Gmail importer, calendar reads, etc).
  *
  * Provide credentials in one of two ways:
  * - `GOOGLE_SERVICE_ACCOUNT_KEY` — base64-encoded JSON or raw JSON string (Vercel-friendly)
@@ -35,8 +35,6 @@ interface TokenCache {
 }
 
 const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
-const CALENDAR_READONLY_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
-const CALENDAR_EVENTS_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 const DRIVE_READONLY_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
 
 const DEFAULT_GMAIL_IMPERSONATE =
@@ -137,23 +135,6 @@ export async function getServiceAccountToken({
 /** Gmail readonly token for the configured importer mailbox (Fyxer cron path). */
 export function getServiceAccountGmailToken(impersonate: string = DEFAULT_GMAIL_IMPERSONATE): Promise<string> {
   return getServiceAccountToken({ scope: GMAIL_READONLY_SCOPE, impersonate });
-}
-
-/** Calendar readonly token for a workspace user (team-availability path). */
-export function getServiceAccountCalendarToken(impersonate: string): Promise<string> {
-  return getServiceAccountToken({ scope: CALENDAR_READONLY_SCOPE, impersonate });
-}
-
-/**
- * Calendar read+write token for a workspace user — needed to insert events on
- * their calendar (e.g. the scheduling-pick → Google Meet flow). Workspace admin
- * must allowlist the SA Client ID with `calendar.events` scope (or full
- * `calendar`) for this to succeed; on failure the caller should fall back to
- * surfacing the pick row alone and let the team create the calendar entry
- * manually.
- */
-export function getServiceAccountCalendarEventsToken(impersonate: string): Promise<string> {
-  return getServiceAccountToken({ scope: CALENDAR_EVENTS_SCOPE, impersonate });
 }
 
 /** Drive readonly token for a workspace user — used by the content-calendar

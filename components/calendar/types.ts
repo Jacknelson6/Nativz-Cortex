@@ -30,20 +30,6 @@ export interface ExternalCalendarEvent {
   isAllDay?: boolean;
 }
 
-export interface CalendarPerson {
-  /** scheduling_people.id — the SA-driven person identity. */
-  connectionId: string;
-  name: string;
-  color: string;
-  connectionType: 'team' | 'client';
-  /** 1 = required, 2 = preferred, 3 = optional/can-overlap. Undefined = legacy/client. */
-  priorityTier?: 1 | 2 | 3;
-  /** Workspace email aliases unioned for this person's calendar fetch. */
-  emails?: string[];
-  events: ExternalCalendarEvent[];
-  enabled: boolean;
-}
-
 export interface CalendarLayer {
   type: EventType | 'external';
   label: string;

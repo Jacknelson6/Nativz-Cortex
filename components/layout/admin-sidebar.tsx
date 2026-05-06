@@ -164,7 +164,6 @@ const NAV_SECTIONS: NavSection[] = [
           // strip; the new flow lives at /admin/onboarding.
           { href: '/admin/onboarding', label: 'Onboarding', icon: Workflow },
           { href: '/admin/users', label: 'Users', icon: Users },
-          { href: '/admin/availability', label: 'Availability', icon: Calendar },
           { href: '/admin/accounting', label: 'Accounting', icon: Receipt, superAdminOnly: true },
           { href: '/admin/usage', label: 'Usage', icon: Gauge },
           { href: '/admin/settings', label: 'Settings', icon: SettingsIcon },
@@ -213,7 +212,6 @@ function isActivePath(pathname: string, href: string, searchParams?: URLSearchPa
 const ADMIN_ONLY_HREFS = new Set([
   '/admin/dashboard',
   '/admin/accounting',
-  '/admin/availability',
   '/admin/clients',
   '/admin/onboarding',
   '/admin/users',

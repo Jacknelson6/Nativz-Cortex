@@ -3844,38 +3844,6 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     "sectionSlug": "other"
   },
   {
-    "method": "GET",
-    "path": "/api/schedule/:token",
-    "description": "",
-    "auth": "",
-    "section": "Other",
-    "sectionSlug": "other"
-  },
-  {
-    "method": "POST",
-    "path": "/api/schedule/:token/pick",
-    "description": "",
-    "auth": "",
-    "section": "Other",
-    "sectionSlug": "other"
-  },
-  {
-    "method": "GET",
-    "path": "/api/scheduling/events",
-    "description": "",
-    "auth": "",
-    "section": "Other",
-    "sectionSlug": "other"
-  },
-  {
-    "method": "POST",
-    "path": "/api/scheduling/events",
-    "description": "",
-    "auth": "",
-    "section": "Other",
-    "sectionSlug": "other"
-  },
-  {
     "method": "POST",
     "path": "/api/spying/baseline",
     "description": "Pulls the brand's connected IG + TikTok handles from `social_profiles`, creates a fresh `client_benchmarks` row whose `competitors_snapshot` is the brand itself, and stamps `next_snapshot_due_at = now()` so the daily cron picks it up and writes the first scored snapshot on its next run. The brand's own scoring lives in the same table the leaderboard reads from — no parallel \"self vs. competitors\" split. The brand is just the first profile in the list; competitor profiles are appended as audits get attached. Returns 422 with `missing_handles: true` when the brand has neither IG nor TikTok wired up, so the UI can route to settings instead of failing silently.",
@@ -5121,14 +5089,6 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   },
   {
     "method": "GET",
-    "path": "/api/calendar/events",
-    "description": "Returns Google Calendar events for each scheduling_people row in the given window. Events are fetched via service-account / domain-wide delegation; each person's multiple workspace emails are unioned and deduped before being returned. Response: { calendars: { [personId]: { name, color, connection_type: 'team', events[], errors? } } }",
-    "auth": "",
-    "section": "Shoots & Calendar",
-    "sectionSlug": "shoots"
-  },
-  {
-    "method": "GET",
     "path": "/api/calendar/gaps",
     "description": "",
     "auth": "",
@@ -5144,38 +5104,6 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     "sectionSlug": "shoots",
     "body": "contact_id - Contact UUID to generate the invite for (required)",
     "response": "{{ token: string, url: string }} Invite token and full shareable URL"
-  },
-  {
-    "method": "GET",
-    "path": "/api/calendar/people",
-    "description": "Returns the configurable list of stakeholders for team availability + the unified calendar overlay. Each row is one logical person; their multiple workspace emails (e.g. jake@nativz.io and jake@andersoncollaborative.com) are returned as a string[]. Admins only.",
-    "auth": "",
-    "section": "Shoots & Calendar",
-    "sectionSlug": "shoots"
-  },
-  {
-    "method": "POST",
-    "path": "/api/calendar/people",
-    "description": "Create a new person + their email aliases. Admins only. Emails are lowercased and validated against the authorized workspace domains client- side too, but final domain check happens at calendar fetch time.",
-    "auth": "",
-    "section": "Shoots & Calendar",
-    "sectionSlug": "shoots"
-  },
-  {
-    "method": "DELETE",
-    "path": "/api/calendar/people/:id",
-    "description": "Soft-delete: flips is_active=false instead of removing the row, so any historical scheduling links (event members, etc.) keep their FK target.",
-    "auth": "",
-    "section": "Shoots & Calendar",
-    "sectionSlug": "shoots"
-  },
-  {
-    "method": "PATCH",
-    "path": "/api/calendar/people/:id",
-    "description": "Update one person's attributes and optionally replace their email aliases. Email replacement is atomic: we delete the existing rows then insert the new set inside a best-effort sequence — if the insert fails we re-insert the old list so we don't strand a person with no emails.",
-    "auth": "",
-    "section": "Shoots & Calendar",
-    "sectionSlug": "shoots"
   },
   {
     "method": "GET",
@@ -5408,15 +5336,6 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     "auth": "",
     "section": "Shoots & Calendar",
     "sectionSlug": "shoots"
-  },
-  {
-    "method": "POST",
-    "path": "/api/calendar/sync",
-    "description": "Sync the authenticated admin's Google Calendar with Cortex. Fetches upcoming events (60 days) via Google OAuth, identifies shoot events and creates/updates shoot_events records, and pulls changes to Cortex meetings (time shifts, title changes, cancellations).",
-    "auth": "Required (admin)",
-    "section": "Shoots & Calendar",
-    "sectionSlug": "shoots",
-    "response": "{{ totalEvents, shoots: { found, created, updated, matched }, meetings: { synced, updated, cancelled } }}"
   },
   {
     "method": "GET",
