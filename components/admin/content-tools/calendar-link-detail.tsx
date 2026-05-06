@@ -26,6 +26,7 @@ import { ComboSelect } from '@/components/ui/combo-select';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { ShareHistoryPanel } from './share-history-panel';
 import { EditedVideosBox, UploadRow } from './edited-videos-box';
+import { CalendarMiniGrid } from './calendar-mini-grid';
 import {
   ContentDetailDialog,
   type DetailTab,
@@ -113,6 +114,28 @@ interface BridgedProject {
   videos: EditingProjectVideo[];
 }
 const EDITING_BRIDGE_CACHE = new Map<string, BridgedProject>();
+
+/**
+ * Minimal slice of GET /api/calendar/drops/[id] that the Calendar tab
+ * needs: post rows for thumbnails + draft scheduled time, and live
+ * publish state keyed by scheduled_post_id. Cached per drop so flipping
+ * tabs doesn't re-spinner.
+ */
+interface DropPostsSlice {
+  videos: {
+    id: string;
+    scheduled_post_id: string | null;
+    thumbnail_url: string | null;
+    draft_scheduled_at: string | null;
+    draft_caption: string | null;
+  }[];
+  postStatusByPostId: Record<
+    string,
+    { status: string; scheduled_at: string | null; platforms: { status: string }[] }
+  >;
+  postCoverByPostId: Record<string, string | null>;
+}
+const DROP_POSTS_CACHE = new Map<string, DropPostsSlice>();
 
 /**
  * Pipeline-status dropdown options. Mirrors the editing modal's options
@@ -256,6 +279,11 @@ export function CalendarLinkDetail({
   const [creatingProject, setCreatingProject] = useState(false);
   const [dragActive, setDragActive] = useState(false);
 
+  // Drop posts (videos + live publish state) for the Calendar tab. Lazily
+  // loaded the first time the tab is rendered and cached per drop_id.
+  const [dropPosts, setDropPosts] = useState<DropPostsSlice | null>(null);
+  const [dropPostsLoading, setDropPostsLoading] = useState(false);
+
   // Send preview / dialog state. `null` = closed; setting to a variant
   // pops the modal and kicks off the GET preview fetch.
   const [previewVariant, setPreviewVariant] = useState<SendVariant | null>(null);
@@ -388,6 +416,53 @@ export function CalendarLinkDetail({
     if (!open) return;
     void loadBridge();
   }, [open, loadBridge]);
+
+  // Fetch drop posts (videos + publish state) for the Calendar tab.
+  // Triggered the first time that tab is opened. Cache hit shows
+  // instantly; we still revalidate in the background so a status
+  // transition (publish/fail) lands without a parent refresh.
+  const dropId = link?.drop_id ?? null;
+  useEffect(() => {
+    if (!open || !dropId || tab !== 'calendar') return;
+    const cached = DROP_POSTS_CACHE.get(dropId) ?? null;
+    setDropPosts(cached);
+    let cancelled = false;
+    void (async () => {
+      if (cached === null) setDropPostsLoading(true);
+      try {
+        const res = await fetch(`/api/calendar/drops/${dropId}`, {
+          cache: 'no-store',
+        });
+        if (!res.ok) throw new Error('failed');
+        const data = (await res.json()) as {
+          videos: DropPostsSlice['videos'];
+          postStatusByPostId: DropPostsSlice['postStatusByPostId'];
+          postAssetsByPostId?: Record<string, { count: number; cover: string | null }>;
+        };
+        if (cancelled) return;
+        const postCoverByPostId: Record<string, string | null> = {};
+        for (const [k, v] of Object.entries(data.postAssetsByPostId ?? {})) {
+          postCoverByPostId[k] = v?.cover ?? null;
+        }
+        const next: DropPostsSlice = {
+          videos: data.videos ?? [],
+          postStatusByPostId: data.postStatusByPostId ?? {},
+          postCoverByPostId,
+        };
+        DROP_POSTS_CACHE.set(dropId, next);
+        setDropPosts(next);
+      } catch {
+        if (!cancelled && cached === null) {
+          setDropPosts({ videos: [], postStatusByPostId: {}, postCoverByPostId: {} });
+        }
+      } finally {
+        if (!cancelled) setDropPostsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, dropId, tab]);
 
   // Lazy-load the archived emails for this share link. Refetches on every
   // open so a send/followup that just fired shows up without forcing a
@@ -936,6 +1011,23 @@ export function CalendarLinkDetail({
         tab={tab}
         onTabChange={setTab}
         tabsAriaLabel="Calendar link sections"
+        tabs={['details', 'calendar', 'media', 'history']}
+        calendar={
+          dropPostsLoading && !dropPosts ? (
+            <div className="flex h-full min-h-[280px] items-center justify-center text-sm text-text-muted">
+              Loading calendar…
+            </div>
+          ) : (
+            <CalendarMiniGrid
+              videos={dropPosts?.videos ?? []}
+              postStatusByPostId={dropPosts?.postStatusByPostId ?? {}}
+              postCoverByPostId={dropPosts?.postCoverByPostId}
+              getPostHref={(postId) =>
+                `/calendar/${link.drop_id}#post-${postId}`
+              }
+            />
+          )
+        }
         history={
           <ShareHistoryPanel
             endpoint={`/api/calendar/drops/${link.drop_id}/activity`}

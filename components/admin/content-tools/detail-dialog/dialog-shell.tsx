@@ -27,13 +27,26 @@ import { ClientLogo } from '@/components/clients/client-logo';
  * `pl-6 pr-14` to keep the title clear of the close button on the right.
  */
 
-export type DetailTab = 'details' | 'media' | 'history';
+export type DetailTab = 'details' | 'calendar' | 'media' | 'history';
 
-const TABS = [
+const DEFAULT_TABS = [
   { slug: 'details', label: 'Details' },
   { slug: 'media', label: 'Media' },
   { slug: 'history', label: 'History' },
 ] as const;
+
+const TAB_LABELS: Record<DetailTab, string> = {
+  details: 'Details',
+  calendar: 'Calendar',
+  media: 'Media',
+  history: 'History',
+};
+
+function buildTabs(
+  slugs: ReadonlyArray<DetailTab>,
+): ReadonlyArray<{ slug: DetailTab; label: string }> {
+  return slugs.map((slug) => ({ slug, label: TAB_LABELS[slug] }));
+}
 
 export function ContentDetailDialog({
   open,
@@ -46,8 +59,10 @@ export function ContentDetailDialog({
   tab,
   onTabChange,
   tabsAriaLabel,
+  tabs,
   history,
   media,
+  calendar,
   footer,
   children,
 }: {
@@ -68,13 +83,17 @@ export function ContentDetailDialog({
   tab: DetailTab;
   onTabChange: (tab: DetailTab) => void;
   tabsAriaLabel: string;
+  /** Override the default tab order. Defaults to details/media/history.
+   *  Calendar share-link rows pass details/calendar/media/history. */
+  tabs?: ReadonlyArray<DetailTab>;
   /** Body content for the History tab. */
   history: ReactNode;
-  /** Body content for the Media tab — raw footage link, uploaded edited
-   *  deliverables, and the drop zone for new uploads. Pass `null` if the
-   *  tab isn't applicable for this row (none of our current row types
-   *  skip it, but the slot is optional so future row types can opt out). */
+  /** Body content for the Media tab. Pass `null` if the tab isn't
+   *  applicable for this row. */
   media?: ReactNode;
+  /** Body content for the Calendar tab. Only shown when `tabs` includes
+   *  `'calendar'`. */
+  calendar?: ReactNode;
   /** Footer slot. The chassis adds the bordered/padded wrapper when this
    *  is truthy; pass `null` to omit the footer entirely. */
   footer?: ReactNode;
@@ -100,7 +119,7 @@ export function ContentDetailDialog({
         <div className="px-6 pt-3">
           <SubNav
             ariaLabel={tabsAriaLabel}
-            items={TABS}
+            items={tabs ? buildTabs(tabs) : DEFAULT_TABS}
             active={tab}
             onChange={onTabChange}
           />
@@ -111,6 +130,8 @@ export function ContentDetailDialog({
           <div className="flex-1 overflow-y-auto p-6">{history}</div>
         ) : tab === 'media' ? (
           <div className="flex-1 space-y-5 overflow-y-auto p-6">{media}</div>
+        ) : tab === 'calendar' ? (
+          <div className="flex-1 overflow-y-auto p-6">{calendar}</div>
         ) : (
           <div className="flex-1 space-y-5 overflow-y-auto p-6">{children}</div>
         )}

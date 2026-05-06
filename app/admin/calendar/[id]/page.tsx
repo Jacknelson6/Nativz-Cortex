@@ -198,6 +198,21 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
     return () => clearInterval(t);
   }, [data, refresh]);
 
+  // Deep-link support: when arriving with `#post-<id>` in the URL (e.g. from
+  // the unified review modal's mini calendar), scroll the matching card into
+  // view and flash an accent ring once data has rendered.
+  useEffect(() => {
+    if (!data) return;
+    const hash = window.location.hash;
+    if (!hash.startsWith('#post-')) return;
+    const el = document.getElementById(hash.slice(1));
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.classList.add('ring-2', 'ring-accent');
+    const t = window.setTimeout(() => el.classList.remove('ring-2', 'ring-accent'), 1600);
+    return () => window.clearTimeout(t);
+  }, [data]);
+
   async function handleSchedule() {
     setScheduling(true);
     try {
