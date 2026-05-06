@@ -9,7 +9,7 @@ const TIMEOUT_PATTERNS = [
   /gateway timeout/i,
 ];
 
-function looksLikeTimeout(reason: string | null | undefined): boolean {
+export function looksLikeTimeout(reason: string | null | undefined): boolean {
   if (!reason) return false;
   return TIMEOUT_PATTERNS.some((p) => p.test(reason));
 }
@@ -156,6 +156,8 @@ export async function verifyAndReconcilePost(
     };
     if (newPostStatus === 'published') {
       update.failure_reason = null;
+      // Clear the dedup stamp so a future failure on this row can re-page.
+      update.failure_notification_sent_at = null;
     }
     await adminClient.from('scheduled_posts').update(update).eq('id', postId);
   }

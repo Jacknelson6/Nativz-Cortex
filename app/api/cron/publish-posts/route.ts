@@ -7,6 +7,7 @@ import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 import { notifyAdmins } from '@/lib/notifications';
 import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
 import { verifyAndReconcilePost } from '@/lib/calendar/verify-post';
+import { notifyPartialFailureGuarded } from '@/lib/calendar/notify-partial-failure';
 import { resolveScheduledPostMedia } from '@/lib/calendar/resolve-media';
 import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
 import {
@@ -302,7 +303,12 @@ async function handleGet(request: NextRequest) {
               })
               .eq('id', post.id);
             try {
-              await sendPartialFailureNotification(adminClient, post, unconnectedFailures);
+              await notifyPartialFailureGuarded(
+                adminClient,
+                post,
+                unconnectedFailures,
+                sendPartialFailureNotification,
+              );
             } catch (notifyErr) {
               console.error('Failed to send unconnected-profile notification:', notifyErr);
             }
@@ -420,6 +426,9 @@ async function handleGet(request: NextRequest) {
               status: 'published',
               published_at: new Date().toISOString(),
               failure_reason: null,
+              // Clear the dedup stamp so a future failure on this row can
+              // re-page (e.g. caption edit + republish).
+              failure_notification_sent_at: null,
               updated_at: new Date().toISOString(),
             };
           } else if (anyFailed && !anyPending) {
@@ -479,7 +488,12 @@ async function handleGet(request: NextRequest) {
 
           if (probeNewStatus === 'partially_failed' && !retriesRemaining && failedDetails.length > 0) {
             try {
-              await sendPartialFailureNotification(adminClient, post, failedDetails);
+              await notifyPartialFailureGuarded(
+                adminClient,
+                post,
+                failedDetails,
+                sendPartialFailureNotification,
+              );
             } catch (notifyErr) {
               console.error('Failed to send partial-failure notification (Zernio probe):', notifyErr);
             }
@@ -556,7 +570,12 @@ async function handleGet(request: NextRequest) {
             })
             .eq('id', post.id);
           try {
-            await sendPartialFailureNotification(adminClient, post, preFlightFailures);
+            await notifyPartialFailureGuarded(
+              adminClient,
+              post,
+              preFlightFailures,
+              sendPartialFailureNotification,
+            );
           } catch (notifyErr) {
             console.error('Failed to send pre-flight failure notification:', notifyErr);
           }
@@ -732,6 +751,9 @@ async function handleGet(request: NextRequest) {
             late_post_id: result.externalPostId,
             published_at: new Date().toISOString(),
             failure_reason: null,
+            // Clear the dedup stamp so a future failure on this row can
+            // re-page.
+            failure_notification_sent_at: null,
             updated_at: new Date().toISOString(),
           };
         } else if (anyFailed && retriesRemaining) {
@@ -777,6 +799,9 @@ async function handleGet(request: NextRequest) {
             late_post_id: result.externalPostId,
             published_at: new Date().toISOString(),
             failure_reason: null,
+            // Clear the dedup stamp so a future failure on this row can
+            // re-page.
+            failure_notification_sent_at: null,
             updated_at: new Date().toISOString(),
           };
         }
@@ -796,7 +821,12 @@ async function handleGet(request: NextRequest) {
         // intervene.
         if (newStatus === 'partially_failed' && !retriesRemaining && failedPlatformDetails.length > 0) {
           try {
-            await sendPartialFailureNotification(adminClient, post, failedPlatformDetails);
+            await notifyPartialFailureGuarded(
+              adminClient,
+              post,
+              failedPlatformDetails,
+              sendPartialFailureNotification,
+            );
           } catch (notifyErr) {
             console.error('Failed to send partial-failure notification:', notifyErr);
           }
