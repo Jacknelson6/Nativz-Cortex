@@ -11,8 +11,9 @@ import {
 } from 'react';
 import {
   AlertCircle, AlertTriangle, AtSign, BellRing, CalendarDays, CheckCircle, Clock,
-  File as FileIcon, Film, List, Loader2, MapPin, MessageSquare, Paperclip, Pencil, Play,
-  Plus, RefreshCw, Send, Tag, Trash2, Type, Undo2, Upload, Users, VideoOff, X,
+  Download, File as FileIcon, Film, List, Loader2, MapPin, MessageSquare,
+  Paperclip, Pencil, Play, Plus, RefreshCw, Send, Tag, Trash2, Type, Undo2,
+  Upload, Users, VideoOff, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog } from '@/components/ui/dialog';
@@ -215,6 +216,7 @@ function SharedDropView({
   const [detailPostId, setDetailPostId] = useState<string | null>(null);
   const [approveAllOpen, setApproveAllOpen] = useState(false);
   const [approvingAll, setApprovingAll] = useState(false);
+  const [downloadingAll, setDownloadingAll] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -257,6 +259,17 @@ function SharedDropView({
     const d = new Date(data.expiresAt);
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   }, [data.expiresAt]);
+
+  // Flatten every post into the per-asset download targets the zip
+  // bundler needs. Video posts contribute one mp4 (Mux capped-1080p when
+  // available, falling back to the legacy revised_video_url / video_url);
+  // image posts contribute one entry per asset (carousels expand). Posts
+  // with no usable URL yet are silently dropped from the count.
+  const downloadTargets = useMemo(
+    () => sortedPosts.flatMap((p, idx) => buildPostDownloadTargets(p, idx)),
+    [sortedPosts],
+  );
+  const downloadableCount = downloadTargets.length;
 
   function appendComment(postId: string, comment: SharedComment) {
     setData((prev) =>
@@ -324,6 +337,77 @@ function SharedDropView({
       }
     } finally {
       setApprovingAll(false);
+    }
+  }
+
+  // Bundle every available post asset into a single zip and trigger one
+  // download. Mirrors the editing share page so calendar reviewers can pull
+  // every approved cut + carousel image in one go instead of fighting the
+  // browser's popup blocker on N anchor clicks. Lazy-imports jszip to keep
+  // the share-page bundle light for visitors who never click download.
+  async function handleDownloadAll() {
+    if (downloadingAll) return;
+    if (downloadTargets.length === 0) {
+      toast.error('Nothing to download yet.');
+      return;
+    }
+    setDownloadingAll(true);
+    const toastId = toast.loading(`Fetching 0 of ${downloadTargets.length}…`);
+    let fetched = 0;
+    let failed = 0;
+    try {
+      const { default: JSZip } = await import('jszip');
+      const zip = new JSZip();
+      const usedNames = new Set<string>();
+      await Promise.all(
+        downloadTargets.map(async (t) => {
+          try {
+            const res = await fetch(t.url);
+            if (!res.ok) throw new Error(`status ${res.status}`);
+            const buf = await res.arrayBuffer();
+            const name = uniqueZipName(usedNames, t.filename);
+            // h264 + jpeg/png are pre-compressed; STORE skips the DEFLATE pass
+            // so we don't burn CPU re-compressing incompressible bytes.
+            zip.file(name, buf, { binary: true, compression: 'STORE' });
+            fetched++;
+          } catch {
+            failed++;
+          } finally {
+            toast.loading(
+              `Fetching ${fetched + failed} of ${downloadTargets.length}…`,
+              { id: toastId },
+            );
+          }
+        }),
+      );
+      if (fetched === 0) {
+        toast.error('Could not download any files. Try again.', { id: toastId });
+        return;
+      }
+      toast.loading('Building zip…', { id: toastId });
+      const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+      const zipName = buildSmmZipFilename(data.clientName, data.drop.start_date, data.drop.end_date);
+      const objUrl = URL.createObjectURL(zipBlob);
+      try {
+        const a = document.createElement('a');
+        a.href = objUrl;
+        a.download = zipName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } finally {
+        setTimeout(() => URL.revokeObjectURL(objUrl), 1500);
+      }
+      if (failed === 0) {
+        toast.success(`Zipped ${fetched} file${fetched === 1 ? '' : 's'}`, { id: toastId });
+      } else {
+        toast.error(`Zipped ${fetched}, ${failed} failed.`, { id: toastId });
+      }
+    } catch (err) {
+      console.error('[handleDownloadAll] zip failed', err);
+      toast.error('Could not build zip. Try again.', { id: toastId });
+    } finally {
+      setDownloadingAll(false);
     }
   }
 
@@ -563,6 +647,27 @@ function SharedDropView({
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {downloadableCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void handleDownloadAll()}
+                  disabled={downloadingAll}
+                  className="inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3.5 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                  title={`Download ${downloadableCount} file${downloadableCount === 1 ? '' : 's'} as a single zip`}
+                >
+                  {downloadingAll ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Download size={14} />
+                  )}
+                  <span className="hidden sm:inline">
+                    {downloadingAll ? 'Preparing zip…' : `Download all (${downloadableCount})`}
+                  </span>
+                  <span className="sm:hidden">
+                    {downloadingAll ? '…' : `Download (${downloadableCount})`}
+                  </span>
+                </button>
+              )}
               {unapprovedPosts.length > 0 && (
                 <button
                   type="button"
@@ -3452,6 +3557,154 @@ function sortPostsForList(posts: SharedPost[]): SharedPost[] {
     if (!b.scheduled_at) return 1;
     return new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime();
   });
+}
+
+// One zip entry. We flatten posts up-front so the bundler doesn't have to
+// re-derive URLs per asset and so toast counters can use a flat denominator.
+interface PostDownloadTarget {
+  url: string;
+  filename: string;
+}
+
+// Picks the best available mp4 URL for a video post:
+//   1. Mux capped-1080p (post-process render that's safe for direct download)
+//   2. revised_video_url (legacy Supabase Storage URL after a re-cut)
+//   3. video_url (original upload, pre-revision)
+// Returns null when the post hasn't finished uploading yet (mid-processing
+// posts have a Mux upload but no playback id, and no fallback URL).
+function getPostVideoDownloadUrl(post: SharedPost): string | null {
+  if (post.mux_playback_id) {
+    return `https://stream.mux.com/${post.mux_playback_id}/capped-1080p.mp4`;
+  }
+  if (post.revised_video_url) return post.revised_video_url;
+  if (post.video_url) return post.video_url;
+  return null;
+}
+
+// Build the per-asset download list for a post. Video posts contribute one
+// mp4; image posts contribute one entry per asset (so a 4-image carousel
+// produces four files in the zip with a `-1`, `-2`… suffix). Skips posts
+// that aren't downloadable yet (Mux still processing, no usable asset).
+function buildPostDownloadTargets(post: SharedPost, idx: number): PostDownloadTarget[] {
+  const baseLabel = postLabel(post, idx);
+  if (post.media_type === 'image') {
+    const usable = post.assets.filter((a) => a.url);
+    const carousel = usable.length > 1;
+    return usable.map((a, i) => {
+      const ext = mimeToExt(a.mime_type) ?? extFromUrl(a.url ?? '') ?? 'jpg';
+      const stem = carousel ? `${baseLabel}-${i + 1}` : baseLabel;
+      return {
+        url: a.url as string,
+        filename: `${stem}.${ext}`,
+      };
+    });
+  }
+  const url = getPostVideoDownloadUrl(post);
+  if (!url) return [];
+  // Mux capped renders are always mp4. For legacy Supabase URLs we sniff
+  // the extension off the URL so .mov uploads keep their original ext.
+  const ext = post.mux_playback_id ? 'mp4' : (extFromUrl(url) ?? 'mp4');
+  return [{ url, filename: `${baseLabel}.${ext}` }];
+}
+
+// Human-friendly stem for a single post. Falls back through editor-set
+// title → original upload filename → caption snippet → numeric index so
+// every entry in the zip has a meaningful name even for un-captioned drafts.
+function postLabel(post: SharedPost, idx: number): string {
+  const fromTitle = post.title?.trim();
+  if (fromTitle) return slugify(fromTitle);
+  const fromFallback = post.filename_fallback?.trim();
+  if (fromFallback) return slugify(fromFallback);
+  const caption = post.caption?.trim();
+  if (caption) {
+    const snippet = caption.slice(0, 40);
+    const slugged = slugify(snippet);
+    if (slugged) return slugged;
+  }
+  return `post-${idx + 1}`;
+}
+
+function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+}
+
+function mimeToExt(mime: string | null): string | null {
+  if (!mime) return null;
+  const map: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/jpg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+    'image/heic': 'heic',
+    'image/heif': 'heif',
+    'video/mp4': 'mp4',
+    'video/quicktime': 'mov',
+    'video/webm': 'webm',
+  };
+  return map[mime.toLowerCase()] ?? null;
+}
+
+function extFromUrl(url: string): string | null {
+  try {
+    const path = new URL(url).pathname;
+    const m = path.match(/\.([a-z0-9]{2,5})$/i);
+    return m ? m[1].toLowerCase() : null;
+  } catch {
+    const m = url.match(/\.([a-z0-9]{2,5})(?:\?|$)/i);
+    return m ? m[1].toLowerCase() : null;
+  }
+}
+
+// Pad a zip with `-2`, `-3`… when the same human label collides (e.g. two
+// untitled drafts both slug to "post-1"). JSZip silently overwrites
+// duplicate keys, which would silently drop files from the zip.
+function uniqueZipName(used: Set<string>, base: string): string {
+  if (!used.has(base)) {
+    used.add(base);
+    return base;
+  }
+  const dot = base.lastIndexOf('.');
+  const stem = dot > 0 ? base.slice(0, dot) : base;
+  const ext = dot > 0 ? base.slice(dot) : '';
+  let i = 2;
+  for (;;) {
+    const candidate = `${stem}-${i}${ext}`;
+    if (!used.has(candidate)) {
+      used.add(candidate);
+      return candidate;
+    }
+    i++;
+  }
+}
+
+// `<client>-calendar-<startISO>.zip` so a reviewer who downloads multiple
+// drops can tell them apart in their Downloads folder. Falls back to a
+// generic name when client / dates are missing.
+function buildSmmZipFilename(
+  clientName: string | null | undefined,
+  startDate: string,
+  endDate: string,
+): string {
+  const parts: string[] = [];
+  const clientSlug = clientName ? slugify(clientName) : '';
+  if (clientSlug) parts.push(clientSlug);
+  parts.push('calendar');
+  const startSlug = startDate ? startDate.slice(0, 10) : '';
+  if (startSlug) {
+    parts.push(startSlug);
+  }
+  if (endDate && endDate.slice(0, 10) !== startSlug) {
+    parts.push(endDate.slice(0, 10));
+  }
+  const stem = parts.filter(Boolean).join('-') || 'calendar-share';
+  return `${stem}.zip`;
 }
 
 // Map raw fetch / parse errors to copy that makes sense to a non-engineer
