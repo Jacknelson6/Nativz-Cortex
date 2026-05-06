@@ -128,6 +128,30 @@ export interface ReviewLinkRow {
     | 'done'
     | 'archived'
     | null;
+  /**
+   * Live count of share-link views. Computed from
+   * `content_drop_share_link_views` for calendar rows and projected from
+   * the editing share-link aggregate for editing rows. Drives the small
+   * "N views" line in the share-link box on both modals so editors see
+   * client engagement at a glance.
+   */
+  view_count?: number;
+  /** Internal notes / hand-off context. Mirrors the editing modal's
+   *  Notes section so SMM can render the same surface. Calendar rows
+   *  read from `content_drops.notes`, editing rows from
+   *  `editing_projects.notes`. */
+  notes?: string | null;
+  /** Strategist + editor assignments. Calendar rows resolve from
+   *  `content_drops.{strategist_id,editor_id}` (FKs into team_members),
+   *  editing rows project from `editing_projects.{strategist_id,
+   *  editor_id}`. Names are denormalised so the modal's picker doesn't
+   *  refetch. Both nullable until the user assigns them. */
+  strategist_id?: string | null;
+  strategist_email?: string | null;
+  strategist_name?: string | null;
+  editor_id?: string | null;
+  editor_email?: string | null;
+  editor_name?: string | null;
 }
 
 interface ReviewBoardProps {

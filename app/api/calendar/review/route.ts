@@ -51,9 +51,14 @@ export async function GET(req: Request) {
   }
 
   // Step 1: scope drops to allowed clients (if any filter applies).
+  // Pull strategist/editor/notes alongside the date span so the unified
+  // review modal can render the Team + Notes sections without a second
+  // round trip. Strategist/editor are FKs into `team_members` (added in
+  // migration 240); `notes` ships in migration 252 to mirror the
+  // editing-project field.
   let dropsQuery = admin
     .from('content_drops')
-    .select('id, client_id, start_date, end_date');
+    .select('id, client_id, start_date, end_date, strategist_id, editor_id, notes');
   if (allowedClientIds) {
     dropsQuery = dropsQuery.in('client_id', allowedClientIds);
   }
@@ -89,6 +94,46 @@ export async function GET(req: Request) {
     .select('id, name, slug, logo_url, agency')
     .in('id', clientIds);
   const clientById = new Map((clients ?? []).map((c) => [c.id, c]));
+
+  // Step 3b: resolve strategist/editor display names off team_members so
+  // the modal's Team picker has labels without a second round trip. The
+  // picker itself fetches the full roster on open, but the unified
+  // table needs the email/name to render the chip while the dropdown is
+  // closed.
+  const teamMemberIds = new Set<string>();
+  for (const d of drops) {
+    if (d.strategist_id) teamMemberIds.add(d.strategist_id as string);
+    if (d.editor_id) teamMemberIds.add(d.editor_id as string);
+  }
+  const teamMemberById = new Map<string, { email: string | null; full_name: string | null }>();
+  if (teamMemberIds.size > 0) {
+    const { data: teamRows } = await admin
+      .from('team_members')
+      .select('id, email, full_name')
+      .in('id', Array.from(teamMemberIds));
+    for (const t of teamRows ?? []) {
+      teamMemberById.set(t.id, { email: t.email, full_name: t.full_name });
+    }
+  }
+
+  // Step 3c: live view counts per share link. The views table is small
+  // (one row per visit) so a single COUNT(*) GROUP BY share_link_id keeps
+  // us drift-free without a denormalised counter column. We aggregate in
+  // JS because supabase-js doesn't expose grouping cleanly.
+  const linkIdsForViews = (links ?? []).map((l) => l.id);
+  const viewCountByLink = new Map<string, number>();
+  if (linkIdsForViews.length > 0) {
+    const { data: viewRows } = await admin
+      .from('content_drop_share_link_views')
+      .select('share_link_id')
+      .in('share_link_id', linkIdsForViews);
+    for (const r of viewRows ?? []) {
+      viewCountByLink.set(
+        r.share_link_id,
+        (viewCountByLink.get(r.share_link_id) ?? 0) + 1,
+      );
+    }
+  }
 
   // Step 4: pull every comment that could affect status. Aggregating in JS
   // (rather than a Postgres view) keeps the implementation tight; we can
@@ -184,6 +229,20 @@ export async function GET(req: Request) {
     );
     const shareUrl = `${getCortexAppUrl(brand)}/s/${link.token}`;
 
+    const dropExtra = drop as
+      | {
+          strategist_id?: string | null;
+          editor_id?: string | null;
+          notes?: string | null;
+        }
+      | undefined;
+    const strategist = dropExtra?.strategist_id
+      ? teamMemberById.get(dropExtra.strategist_id) ?? null
+      : null;
+    const editor = dropExtra?.editor_id
+      ? teamMemberById.get(dropExtra.editor_id) ?? null
+      : null;
+
     return {
       id: link.id,
       token: link.token,
@@ -212,6 +271,14 @@ export async function GET(req: Request) {
       first_sent_at: linkExtra.first_sent_at ?? null,
       last_sent_at: linkExtra.last_sent_at ?? null,
       send_count: linkExtra.send_count ?? 0,
+      view_count: viewCountByLink.get(link.id) ?? 0,
+      notes: dropExtra?.notes ?? null,
+      strategist_id: dropExtra?.strategist_id ?? null,
+      strategist_email: strategist?.email ?? null,
+      strategist_name: strategist?.full_name ?? null,
+      editor_id: dropExtra?.editor_id ?? null,
+      editor_email: editor?.email ?? null,
+      editor_name: editor?.full_name ?? null,
     };
   });
 

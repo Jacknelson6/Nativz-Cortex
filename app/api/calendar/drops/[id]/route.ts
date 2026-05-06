@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { isAdmin } from '@/lib/auth/permissions';
 import type { CaptionVariantPlatform } from '@/lib/types/calendar';
 
 const VARIANT_PLATFORMS: ReadonlySet<CaptionVariantPlatform> = new Set([
@@ -198,4 +200,63 @@ export async function GET(
     postStatusByPostId,
     postAssetsByPostId,
   });
+}
+
+/**
+ * PATCH /api/calendar/drops/[id]
+ *
+ * Admin-only field-level edits on a content drop. Used by the unified
+ * review modal's Team picker (strategist/editor) and Notes textarea so
+ * both flows (SMM + editing) save through the same shape. Each field is
+ * optional - the caller sends only what changed.
+ *
+ * Schema:
+ *   { strategist_id?: uuid|null, editor_id?: uuid|null, notes?: string|null }
+ *
+ * `strategist_id` and `editor_id` come from migration 240 (FKs into
+ * team_members); `notes` ships in migration 252.
+ */
+const PatchBody = z
+  .object({
+    strategist_id: z.string().uuid().nullable().optional(),
+    editor_id: z.string().uuid().nullable().optional(),
+    notes: z.string().max(4000).nullable().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: 'no fields to update' });
+
+export async function PATCH(
+  req: Request,
+  ctx: { params: Promise<{ id: string }> },
+) {
+  const { id } = await ctx.params;
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (!(await isAdmin(user.id))) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+
+  const body = (await req.json().catch(() => null)) as unknown;
+  const parsed = PatchBody.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'bad_request', detail: parsed.error.message }, { status: 400 });
+  }
+
+  const admin = createAdminClient();
+  const update: Record<string, string | null> = {};
+  if ('strategist_id' in parsed.data) update.strategist_id = parsed.data.strategist_id ?? null;
+  if ('editor_id' in parsed.data) update.editor_id = parsed.data.editor_id ?? null;
+  if ('notes' in parsed.data) update.notes = parsed.data.notes ?? null;
+
+  const { data, error } = await admin
+    .from('content_drops')
+    .update(update)
+    .eq('id', id)
+    .select('id, strategist_id, editor_id, notes')
+    .single();
+
+  if (error || !data) {
+    return NextResponse.json({ error: 'update_failed', detail: error?.message }, { status: 500 });
+  }
+  return NextResponse.json({ drop: data });
 }

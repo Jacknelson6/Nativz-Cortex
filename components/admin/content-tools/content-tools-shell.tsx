@@ -205,6 +205,13 @@ function editingProjectToRow(p: EditingProject): ReviewLinkRow {
     kind: 'editing',
     editing_project_id: p.id,
     editing_status: p.status,
+    notes: p.notes,
+    strategist_id: p.strategist_id,
+    strategist_email: p.strategist_email,
+    strategist_name: p.strategist_name,
+    editor_id: p.editor_id,
+    editor_email: p.editor_email,
+    editor_name: p.editor_name,
   };
 }
 
@@ -343,6 +350,22 @@ export function ContentToolsShell() {
       toast.success('Uploads finished');
     });
   }, []);
+
+  // Keep the open calendar-link modal's data fresh when the unified
+  // links list refetches. The modal itself doesn't load its own data;
+  // it reads everything from the row passed in via the `link` prop. So
+  // when an inner control (Notes blur, AssigneePicker save) calls
+  // `onChanged` and we kick a `loadProjects(true)`, we have to re-pluck
+  // the row by id and feed the modal the fresh copy. Without this the
+  // strategist/editor chips and the notes textarea would lag a full
+  // dialog re-open behind the server.
+  useEffect(() => {
+    if (!activeCalendarLink) return;
+    const fresh = links.find((l) => l.id === activeCalendarLink.id);
+    if (fresh && fresh !== activeCalendarLink) {
+      setActiveCalendarLink(fresh);
+    }
+  }, [links, activeCalendarLink]);
 
   // Editing-project rows are projected into ReviewLinkRow shape so
   // the shared table renders both kinds side-by-side. Archived
@@ -607,6 +630,7 @@ export function ContentToolsShell() {
               patchLink(next.id, patch);
             }
           }}
+          onChanged={() => void loadProjects(true)}
         />
       </div>
     </TooltipProvider>

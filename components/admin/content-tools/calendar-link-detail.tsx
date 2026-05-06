@@ -28,7 +28,8 @@ import {
   ContentDetailDialog,
   type DetailTab,
 } from './detail-dialog/dialog-shell';
-import { Section } from './detail-dialog/section';
+import { Section, SideField } from './detail-dialog/section';
+import { AssigneePicker } from './assignee-picker';
 import { formatRelative, formatTimestamp } from './detail-dialog/format';
 import {
   ContentKindBadge,
@@ -136,6 +137,7 @@ export function CalendarLinkDetail({
   onFollowupRecorded,
   onRefreshed,
   onApprovedAll,
+  onChanged,
 }: {
   link: ReviewLinkRow | null;
   onClose: () => void;
@@ -180,6 +182,14 @@ export function CalendarLinkDetail({
     pending_count: number;
     status: ReviewLinkStatus;
   }) => void;
+  /**
+   * Called after a successful field-level edit on the underlying drop
+   * (strategist / editor / notes). Parent re-fetches the unified review
+   * table so the modal's `link` prop refreshes with the new values. The
+   * AssigneePicker chip resolves from its own cache once `currentUserId`
+   * updates, so no email/name plumbing is needed here.
+   */
+  onChanged?: () => void;
 }) {
   const open = !!link;
   const [refreshing, setRefreshing] = useState(false);
@@ -234,6 +244,12 @@ export function CalendarLinkDetail({
   const [archivedLoading, setArchivedLoading] = useState(false);
   const [viewingEmail, setViewingEmail] = useState<ArchivedEmail | null>(null);
 
+  // Local draft for the Notes textarea. Synced from `link.notes` on open
+  // so the textarea is editable without round-tripping every keystroke;
+  // saves on blur via PATCH /api/calendar/drops/[id].
+  const [notes, setNotes] = useState<string>('');
+  const [savingNotes, setSavingNotes] = useState(false);
+
   // Reset transient UI state when a new link is opened.
   useEffect(() => {
     if (open) {
@@ -246,6 +262,16 @@ export function CalendarLinkDetail({
       setRefreshedThisSession(false);
     }
   }, [open, link?.id]);
+
+  // Sync the Notes textarea draft from the underlying link row whenever
+  // a different drop is opened OR the parent re-fetches and pushes a
+  // fresh `link` prop in. Tracking `link?.notes` (not just id) means a
+  // background refresh from `onChanged` (e.g. after the AssigneePicker
+  // saves and we reload the list) also pulls in any concurrent notes
+  // update from another tab.
+  useEffect(() => {
+    setNotes(link?.notes ?? '');
+  }, [link?.id, link?.notes]);
 
   // Fetch the brand's POC contacts so the Recipients section shows who
   // will receive the email. Brand profile is the single source of truth.
@@ -458,6 +484,29 @@ export function CalendarLinkDetail({
       setTimeout(() => setCopied(false), 1500);
     } catch {
       toast.error('Could not copy link');
+    }
+  }
+
+  // Field-level PATCH for the underlying content_drops row. Used by the
+  // Notes textarea on blur. Strategist/editor PATCHes go through the
+  // shared AssigneePicker, which we point at the same endpoint via its
+  // `patchUrl` prop.
+  async function patchDrop(body: Record<string, unknown>) {
+    if (!link) return;
+    try {
+      const res = await fetch(`/api/calendar/drops/${link.drop_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => null)) as { detail?: string } | null;
+        throw new Error(err?.detail ?? 'Save failed');
+      }
+      toast.success('Saved');
+      onChanged?.();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Save failed');
     }
   }
 
@@ -918,6 +967,9 @@ export function CalendarLinkDetail({
             {hasBeenSent && link.last_sent_at
               ? ` · last sent ${formatRelative(link.last_sent_at)}${link.send_count > 1 ? ` (${link.send_count} sends)` : ''}`
               : ''}
+            {typeof link.view_count === 'number'
+              ? ` · ${link.view_count} ${link.view_count === 1 ? 'view' : 'views'}`
+              : ''}
           </p>
         </Section>
 
@@ -1020,6 +1072,56 @@ export function CalendarLinkDetail({
             <p className="text-[12px] text-text-muted">Loading…</p>
           </Section>
         )}
+
+        {/* Team + Notes mirror the editing-project modal one-for-one
+            so the unified review modal feels symmetrical regardless of
+            which side a row originated on. Both PATCH the same
+            /api/calendar/drops/[id] endpoint; the AssigneePicker is the
+            shared component used by the editing modal, just pointed at
+            content_drops via `patchUrl`. */}
+        <Section label="Team">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <SideField label="Strategist">
+              <AssigneePicker
+                projectId={link.drop_id}
+                role="strategist_id"
+                currentUserId={link.strategist_id ?? null}
+                currentEmail={link.strategist_email ?? null}
+                variant="field"
+                patchUrl={`/api/calendar/drops/${link.drop_id}`}
+                onSaved={() => onChanged?.()}
+              />
+            </SideField>
+            <SideField label="Editor">
+              <AssigneePicker
+                projectId={link.drop_id}
+                role="editor_id"
+                currentUserId={link.editor_id ?? null}
+                currentEmail={link.editor_email ?? null}
+                variant="field"
+                patchUrl={`/api/calendar/drops/${link.drop_id}`}
+                onSaved={() => onChanged?.()}
+              />
+            </SideField>
+          </div>
+        </Section>
+
+        <Section label="Notes">
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            onBlur={() => {
+              const next = notes.trim() || null;
+              if ((link.notes ?? null) === next) return;
+              setSavingNotes(true);
+              void patchDrop({ notes: next }).finally(() => setSavingNotes(false));
+            }}
+            disabled={savingNotes}
+            rows={4}
+            placeholder="Brief, references, hand-off context..."
+            className="block w-full resize-none rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-60"
+          />
+        </Section>
 
         {/* Counts: approved / revising / pending. Skipped when the
             project has zero posts so the modal doesn't read as broken

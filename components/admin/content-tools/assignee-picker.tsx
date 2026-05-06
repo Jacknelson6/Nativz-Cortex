@@ -97,6 +97,7 @@ export function AssigneePicker({
   currentEmail,
   variant = 'compact',
   onSaved,
+  patchUrl,
 }: {
   projectId: string;
   role: AssigneeRole;
@@ -105,6 +106,14 @@ export function AssigneePicker({
   variant?: 'compact' | 'field';
   /** Called after a successful PATCH so the parent can refresh data. */
   onSaved?: () => void;
+  /**
+   * Override the PATCH endpoint. Defaults to the editing-projects route.
+   * The SMM modal passes `/api/calendar/drops/<dropId>` so the same
+   * picker can save against `content_drops` (which shares the same
+   * `strategist_id` / `editor_id` column names). The body shape stays
+   * `{ [role]: nextId }`, so any endpoint accepting that contract works.
+   */
+  patchUrl?: string;
 }) {
   const tag = ROLE_TAG[role];
   const [open, setOpen] = useState(false);
@@ -161,7 +170,8 @@ export function AssigneePicker({
   async function patch(nextId: string | null) {
     setSaving(true);
     try {
-      const res = await fetch(`/api/admin/editing/projects/${projectId}`, {
+      const url = patchUrl ?? `/api/admin/editing/projects/${projectId}`;
+      const res = await fetch(url, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [role]: nextId }),
