@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { reconcileMuxRow, type ReconcileTarget } from '@/lib/mux/reconcile';
+import { ensureFeedCompatibleUrl } from '@/lib/calendar/normalize-image-for-feed';
 
 export interface ResolvedMedia {
   videoUrl?: string;
@@ -44,25 +45,48 @@ export async function resolveScheduledPostMedia(
     const { data: links } = await admin
       .from('scheduled_post_media')
       .select(
-        'sort_order, scheduler_media:media_id (late_media_url, storage_path, mime_type)',
+        'sort_order, scheduler_media:media_id (id, late_media_url, storage_path, mime_type, width, height, feed_normalized_url)',
       )
       .eq('post_id', postId)
       .order('sort_order');
 
+    type MediaRow = {
+      id: string;
+      late_media_url: string | null;
+      storage_path: string | null;
+      mime_type: string | null;
+      width: number | null;
+      height: number | null;
+      feed_normalized_url: string | null;
+    };
     type LinkRow = {
       sort_order: number | null;
-      scheduler_media:
-        | { late_media_url: string | null; storage_path: string | null; mime_type: string | null }
-        | { late_media_url: string | null; storage_path: string | null; mime_type: string | null }[]
-        | null;
+      scheduler_media: MediaRow | MediaRow[] | null;
     };
-    const ordered = ((links ?? []) as LinkRow[])
+    const rows = ((links ?? []) as LinkRow[])
       .map((l) => (Array.isArray(l.scheduler_media) ? l.scheduler_media[0] : l.scheduler_media))
-      .map((m) => (m?.late_media_url ?? m?.storage_path ?? null))
-      .filter((u): u is string => !!u)
-      .map((u) => resolveStoragePath(admin, u));
-    if (ordered.length === 0) throw new Error('No media attached to image post');
-    return { mediaItems: ordered.map((url) => ({ type: 'image' as const, url })) };
+      .filter((m): m is MediaRow => !!m && (!!m.late_media_url || !!m.storage_path));
+
+    if (rows.length === 0) throw new Error('No media attached to image post');
+
+    // Normalize each image to Instagram feed-compatible aspect ratio (4:5
+    // letterbox with blurred fill) when the source falls outside [0.8, 1.91].
+    // Otherwise Zernio silently routes to Stories.
+    const urls = await Promise.all(
+      rows.map(async (m) => {
+        const sourceUrl = resolveStoragePath(admin, (m.late_media_url ?? m.storage_path) as string);
+        return ensureFeedCompatibleUrl(admin, {
+          id: m.id,
+          late_media_url: sourceUrl,
+          storage_path: m.storage_path,
+          feed_normalized_url: m.feed_normalized_url,
+          width: m.width,
+          height: m.height,
+        });
+      }),
+    );
+
+    return { mediaItems: urls.map((url) => ({ type: 'image' as const, url })) };
   }
 
   const { data: revisionRow } = await admin
