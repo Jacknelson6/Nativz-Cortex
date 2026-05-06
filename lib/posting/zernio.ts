@@ -2023,10 +2023,17 @@ function mapZernioStatus(status: string): 'published' | 'scheduled' | 'failed' {
   switch (status) {
     case 'published':
       return 'published';
+    // Zernio uses these for non-terminal queued / in-flight states. They MUST
+    // map to our 'scheduled' (which the spp sync then writes as 'pending').
+    // Collapsing them to 'failed' caused the May 6 mass post-health alert:
+    // 64 future-dated bulk-batch legs were reported by Zernio as 'pending'
+    // (queued and waiting for their scheduledFor), the default-case fallback
+    // here stamped them as failed in our DB, and the reconciler couldn't
+    // distinguish them from real failures. `pending` was the missing case.
     case 'scheduled':
-      return 'scheduled';
     case 'draft':
-      return 'scheduled';
+    case 'pending':
+    case 'queued':
     case 'publishing':
       return 'scheduled';
     case 'failed':
@@ -2034,6 +2041,9 @@ function mapZernioStatus(status: string): 'published' | 'scheduled' | 'failed' {
     case 'partial':
       return 'failed';
     default:
-      return 'failed';
+      // Unknown statuses are treated as non-terminal scheduled rather than
+      // failed. A future Zernio status word we haven't seen yet shouldn't
+      // mass-fail our posts; let the next reconcile or webhook resolve it.
+      return 'scheduled';
   }
 }
