@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 import {
   AlertTriangle,
   Cable,
-  CalendarClock,
   CheckCircle2,
   Circle,
   Copy,
@@ -26,6 +25,7 @@ import {
   Youtube,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ClientLogo } from '@/components/clients/client-logo';
 import { Dialog } from '@/components/ui/dialog';
 import {
@@ -106,6 +106,10 @@ function hasActiveProduction(c: ClientRow): boolean {
   );
 }
 
+function hasSmm(c: ClientRow): boolean {
+  return c.services.includes('SMM');
+}
+
 interface MatrixResponse {
   clients: ClientRow[];
   totals: {
@@ -163,13 +167,22 @@ export function ConnectionsTab() {
   const filtered = useMemo(() => {
     if (!data) return [];
     const q = query.trim().toLowerCase();
-    return data.clients.filter((c) => {
+    const matches = data.clients.filter((c) => {
       if (activeOnly && !hasActiveProduction(c)) return false;
       if (!q) return true;
       return (
         c.name.toLowerCase().includes(q) ||
         (c.slug ?? '').toLowerCase().includes(q)
       );
+    });
+    // SMM brands are the audience that actually depends on these tokens
+    // staying alive, so they sort to the top. Within each tier we keep
+    // the alpha order the API returned.
+    return matches.toSorted((a, b) => {
+      const aSmm = hasSmm(a) ? 0 : 1;
+      const bSmm = hasSmm(b) ? 0 : 1;
+      if (aSmm !== bSmm) return aSmm - bSmm;
+      return a.name.localeCompare(b.name);
     });
   }, [data, query, activeOnly]);
 
@@ -380,7 +393,6 @@ function SlotCell({
   const meta = STATUS_META[slot.status];
   const Icon = meta.Icon;
   const tooltip = describeSlot(slot, platformKey);
-  const expiringSoon = needsReconnect(slot.tokenStatus);
 
   return (
     <Tooltip>
@@ -393,11 +405,6 @@ function SlotCell({
           >
             <Icon className="size-3.5" />
           </span>
-          {expiringSoon && slot.status === 'connected' ? (
-            <span className="absolute -right-1 -top-1 flex size-3.5 items-center justify-center rounded-full border border-status-warning/50 bg-status-warning/20 text-status-warning">
-              <CalendarClock className="size-2.5" />
-            </span>
-          ) : null}
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" className="w-56">
@@ -484,12 +491,6 @@ function Legend() {
           </div>
         );
       })}
-      <div className="inline-flex items-center gap-1.5">
-        <span className="inline-flex size-4 items-center justify-center rounded-full border border-status-warning/50 bg-status-warning/20 text-status-warning">
-          <CalendarClock className="size-2.5" />
-        </span>
-        <span>Token expiring soon</span>
-      </div>
     </div>
   );
 }
@@ -538,6 +539,7 @@ function InviteBuilderModal({
 
   const [ctx, setCtx] = useState<InviteContext | null>(null);
   const [ctxLoading, setCtxLoading] = useState(false);
+  const [mode, setMode] = useState<'connect' | 'reconnect'>('connect');
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<PlatformKey>>(
     new Set(),
   );
@@ -564,20 +566,34 @@ function InviteBuilderModal({
     setNotifyChat(true);
     setNotifyEmail(true);
     setShowExtras(false);
+    // Auto-pick mode based on what they're being asked for: if every
+    // selected platform has never connected before this is a first-time
+    // connect; otherwise treat it as a reconnect (anything previously
+    // connected, expired, or revoked falls into this bucket).
+    const allFirstTime = Array.from(defaults).every(
+      (k) => client.profiles[k].status === 'missing',
+    );
+    setMode(defaults.size === 0 || allFirstTime ? 'connect' : 'reconnect');
 
-    setCtxLoading(true);
-    void fetch(`/api/admin/connection-invites/context?clientId=${client.id}`, {
-      cache: 'no-store',
-    })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('ctx failed'))))
-      .then((body: InviteContext) => {
+    void (async () => {
+      setCtxLoading(true);
+      try {
+        const r = await fetch(
+          `/api/admin/connection-invites/context?clientId=${client.id}`,
+          { cache: 'no-store' },
+        );
+        if (!r.ok) throw new Error('ctx failed');
+        const body = (await r.json()) as InviteContext;
         setCtx(body);
         // Pre-check the primary contact.
         const primary = body.contacts.find((c) => c.isPrimary);
         if (primary) setSelectedContactIds(new Set([primary.id]));
-      })
-      .catch(() => setCtx({ contacts: [], hasChatWebhook: false }))
-      .finally(() => setCtxLoading(false));
+      } catch {
+        setCtx({ contacts: [], hasChatWebhook: false });
+      } finally {
+        setCtxLoading(false);
+      }
+    })();
   }, [client]);
 
   const togglePlatform = (key: PlatformKey) =>
@@ -625,6 +641,7 @@ function InviteBuilderModal({
           recipientEmails,
           notifyChat,
           notifyEmail,
+          mode,
         }),
       });
       const body = (await res.json().catch(() => ({}))) as {
@@ -632,7 +649,9 @@ function InviteBuilderModal({
         sent?: number;
       };
       if (!res.ok) throw new Error(body.error ?? 'Send failed');
-      toast.success(`Invite sent to ${body.sent ?? recipientEmails.length} recipient${(body.sent ?? recipientEmails.length) === 1 ? '' : 's'}`);
+      const noun = mode === 'connect' ? 'Connect invite' : 'Reconnect invite';
+      const count = body.sent ?? recipientEmails.length;
+      toast.success(`${noun} sent to ${count} recipient${count === 1 ? '' : 's'}`);
       onSent();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Send failed');
@@ -663,6 +682,7 @@ function InviteBuilderModal({
           notifyChat,
           notifyEmail,
           skipEmail: true,
+          mode,
         }),
       });
       const body = (await res.json().catch(() => ({}))) as {
@@ -671,7 +691,9 @@ function InviteBuilderModal({
       };
       if (!res.ok || !body.url) throw new Error(body.error ?? 'Copy failed');
       await navigator.clipboard.writeText(body.url);
-      toast.success('Reconnect link copied');
+      toast.success(
+        mode === 'connect' ? 'Connect link copied' : 'Reconnect link copied',
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Copy failed');
     } finally {
@@ -683,15 +705,23 @@ function InviteBuilderModal({
     <Dialog
       open={open}
       onClose={onClose}
-      title={client ? `Invite ${client.name} to reconnect` : 'Send connection invite'}
+      title={
+        client
+          ? mode === 'connect'
+            ? `Connect ${client.name}'s accounts`
+            : `Reconnect ${client.name}'s accounts`
+          : 'Send connection invite'
+      }
       maxWidth="lg"
     >
       {client && (
         <div className="space-y-5">
+          <ModeToggle mode={mode} onChange={setMode} />
+
           <p className="text-xs text-text-muted">
-            Pick the platforms you want them to reconnect, choose who the
-            email goes to, and we&apos;ll send a one-tap connect page.
-            They never see a password screen on our side.
+            {mode === 'connect'
+              ? "Pick the platforms you want them to link for the first time, choose who the email goes to, and we'll send a one-tap connect page. They never see a password screen on our side."
+              : "Pick the platforms whose access dropped, choose who the email goes to, and we'll send a one-tap reconnect page. They never see a password screen on our side."}
           </p>
 
           <Section title="Platforms">
@@ -744,11 +774,10 @@ function InviteBuilderModal({
                         key={c.id}
                         className="flex items-center gap-3 px-3 py-2.5"
                       >
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={selectedContactIds.has(c.id)}
-                          onChange={() => toggleContact(c.id)}
-                          className="size-4 rounded border-nativz-border bg-background text-accent-text focus:ring-accent-text/40"
+                          onCheckedChange={() => toggleContact(c.id)}
+                          aria-label={`Send invite to ${c.name ?? c.email}`}
                         />
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm text-text-primary">
@@ -788,12 +817,11 @@ function InviteBuilderModal({
           <Section title="Notify on connect">
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-xs text-text-secondary">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={notifyChat}
-                  onChange={(e) => setNotifyChat(e.target.checked)}
+                  onCheckedChange={(v) => setNotifyChat(v === true)}
                   disabled={!ctx?.hasChatWebhook}
-                  className="size-4 rounded border-nativz-border bg-background text-accent-text focus:ring-accent-text/40 disabled:opacity-40"
+                  aria-label="Post to Google Chat on each connection"
                 />
                 <span>
                   Post to Google Chat
@@ -805,11 +833,10 @@ function InviteBuilderModal({
                 </span>
               </label>
               <label className="flex items-center gap-2 text-xs text-text-secondary">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={notifyEmail}
-                  onChange={(e) => setNotifyEmail(e.target.checked)}
-                  className="size-4 rounded border-nativz-border bg-background text-accent-text focus:ring-accent-text/40"
+                  onCheckedChange={(v) => setNotifyEmail(v === true)}
+                  aria-label="Email me on each connection"
                 />
                 <span>Email me on each connection</span>
               </label>
@@ -821,7 +848,11 @@ function InviteBuilderModal({
               variant="outline"
               onClick={() => void handleCopyLink()}
               disabled={copying || sending}
-              title="Mint a reconnect link and copy it to your clipboard. No email sent."
+              title={
+                mode === 'connect'
+                  ? 'Mint a connect link and copy it to your clipboard. No email sent.'
+                  : 'Mint a reconnect link and copy it to your clipboard. No email sent.'
+              }
             >
               <Copy className="size-3.5" />
               {copying ? 'Copying...' : 'Copy link'}
@@ -835,13 +866,61 @@ function InviteBuilderModal({
                 disabled={sending || copying}
               >
                 <Send className="size-3.5" />
-                {sending ? 'Sending...' : 'Send invite'}
+                {sending
+                  ? 'Sending...'
+                  : mode === 'connect'
+                    ? 'Send connect invite'
+                    : 'Send reconnect invite'}
               </Button>
             </div>
           </div>
         </div>
       )}
     </Dialog>
+  );
+}
+
+/**
+ * Segmented Connect / Reconnect toggle. The two flows look identical
+ * mechanically (same OAuth, same matrix update), but the email subject,
+ * hero copy, and CTA wording diverge so the recipient understands
+ * whether we're asking for first-time access or recovering a dropped
+ * token. Auto-picked on open from the brand's current matrix state,
+ * the admin can override before sending.
+ */
+function ModeToggle({
+  mode,
+  onChange,
+}: {
+  mode: 'connect' | 'reconnect';
+  onChange: (next: 'connect' | 'reconnect') => void;
+}) {
+  return (
+    <div
+      className="inline-flex items-center gap-0.5 rounded-lg border border-nativz-border bg-background p-0.5 text-xs"
+      role="tablist"
+      aria-label="Invite intent"
+    >
+      {(['connect', 'reconnect'] as const).map((value) => {
+        const active = mode === value;
+        return (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(value)}
+            className={`inline-flex h-7 items-center rounded-md px-3 font-medium transition-colors ${
+              active
+                ? 'bg-accent-text/10 text-accent-text'
+                : 'text-text-muted hover:text-text-primary'
+            }`}
+          >
+            {value === 'connect' ? 'Connect' : 'Reconnect'}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -878,11 +957,10 @@ function PlatformPickerRow({
   const { label, Icon } = platform;
   return (
     <li className="flex items-center gap-3 px-3 py-2.5">
-      <input
-        type="checkbox"
+      <Checkbox
         checked={checked}
-        onChange={onToggle}
-        className="size-4 rounded border-nativz-border bg-background text-accent-text focus:ring-accent-text/40"
+        onCheckedChange={onToggle}
+        aria-label={`Include ${label}`}
       />
       <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-nativz-border bg-surface text-text-secondary">
         <Icon className="size-4" />

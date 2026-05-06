@@ -27,6 +27,7 @@ export const dynamic = 'force-dynamic';
  *     notifyChat: boolean,
  *     notifyEmail: boolean,
  *     skipEmail?: boolean,            // mint token + return url, no email send
+ *     mode?: 'connect' | 'reconnect', // default 'reconnect'; flips subject + body
  *   }
  *
  * Response: { id, token, url, sent }
@@ -57,7 +58,23 @@ const Body = z.object({
   // "Copy link" button in the invite modal so admins can hand-deliver the
   // reconnect URL via Slack / iMessage / whatever.
   skipEmail: z.boolean().optional().default(false),
+  // 'connect'    = first-time grant (no prior token on file)
+  // 'reconnect'  = re-authorize an account whose token expired or was
+  //                revoked. Drives subject line + hero copy. Defaults to
+  //                'reconnect' since that's the historical behavior.
+  mode: z.enum(['connect', 'reconnect']).optional().default('reconnect'),
 });
+
+/**
+ * Per-agency CC list for any client-facing invite. Today this is just
+ * the founder on each side; the spec calls for an extensible team-member
+ * list later, so keep it as an array here so callers don't need to
+ * change shape when more addresses get added.
+ */
+function getInviteCc(brand: 'nativz' | 'anderson'): string[] {
+  if (brand === 'anderson') return ['Jack@andersoncollaborative.com'];
+  return ['Jack@nativz.io'];
+}
 
 const TOKEN_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
@@ -99,23 +116,31 @@ function inviteHtml(opts: {
   url: string;
   platforms: string[];
   brand: 'nativz' | 'anderson';
+  mode: 'connect' | 'reconnect';
 }): string {
   // Mirrors Trevor's emailShell pattern (intro paragraph -> stats panel ->
   // structured detail rows -> left-aligned CTA -> small footer note). Body
   // is intentionally dense so the email reads like the docs-repo
   // notifications, not a one-paragraph blast.
+  const isReconnect = opts.mode === 'reconnect';
+  const verb = isReconnect ? 'Reconnect' : 'Connect';
+  const verbLower = verb.toLowerCase();
+  const platformStatusLabel = isReconnect
+    ? 'Authorization expired'
+    : 'Awaiting first connection';
+
   const platformRows = opts.platforms
     .map((p) => {
       const label = PLATFORM_LABEL[p as keyof typeof PLATFORM_LABEL] ?? p;
-      return `<tr><td class="k">${esc(label)}</td><td class="v">Authorization expired</td></tr>`;
+      return `<tr><td class="k">${esc(label)}</td><td class="v">${platformStatusLabel}</td></tr>`;
     })
     .join('');
 
   const single = opts.platforms.length === 1;
   const accountWord = single ? 'account' : 'accounts';
   const heroTitle = single
-    ? `Reconnect ${esc(opts.clientName)}'s social account`
-    : `Reconnect ${esc(opts.clientName)}'s social accounts`;
+    ? `${verb} ${esc(opts.clientName)}'s social account`
+    : `${verb} ${esc(opts.clientName)}'s social accounts`;
   const replyTo = getReplyTo(opts.brand);
   const accent = opts.brand === 'anderson' ? '#36D1C2' : '#00ADEF';
   const accentDark = opts.brand === 'anderson' ? '#2BB8AA' : '#0090CC';
@@ -123,21 +148,39 @@ function inviteHtml(opts: {
   const muted = '#7b8794';
   const border = '#e8ecf0';
 
+  const introParagraph = isReconnect
+    ? `A few of <strong>${esc(opts.clientName)}</strong>'s social authorizations have expired on our end, which means scheduled posts can't go out to those platforms until they're refreshed. Reconnecting takes about a minute and doesn't require a Cortex login.`
+    : `We're getting <strong>${esc(opts.clientName)}</strong>'s social accounts wired into our scheduler so the team can start lining up posts. Connecting takes about a minute and doesn't require a Cortex login on your end.`;
+
+  const sectionEyebrow = isReconnect
+    ? single
+      ? 'Account that needs attention'
+      : 'Accounts that need attention'
+    : single
+      ? 'Account to connect'
+      : 'Accounts to connect';
+
   const stepRows = [
     {
       n: '1',
       title: 'Open the secure link',
-      body: `Tap the button below. No login on your end &mdash; the link signs you in automatically and lands you on a single reconnect screen.`,
+      body: `Tap the button below. No login on your end &mdash; the link signs you in automatically and lands you on a single ${verbLower} screen.`,
     },
     {
       n: '2',
-      title: `Reauthorize each ${single ? 'account' : 'platform'}`,
-      body: `You'll see a row for each expired account. Hit "Reconnect," accept the prompt from ${single ? 'the platform' : 'each platform'}, and the row turns green.`,
+      title: isReconnect
+        ? `Reauthorize each ${single ? 'account' : 'platform'}`
+        : `Authorize each ${single ? 'account' : 'platform'}`,
+      body: isReconnect
+        ? `You'll see a row for each expired account. Hit "Reconnect," accept the prompt from ${single ? 'the platform' : 'each platform'}, and the row turns green.`
+        : `You'll see a row for each platform. Hit "Connect," log in to ${single ? 'the platform' : 'each platform'} as the brand account, accept the prompt, and the row turns green.`,
     },
     {
       n: '3',
       title: 'Done',
-      body: `As soon as the last row is green, scheduled posts start flowing again on our end. Nothing else for you to do.`,
+      body: isReconnect
+        ? `As soon as the last row is green, scheduled posts start flowing again on our end. Nothing else for you to do.`
+        : `As soon as the last row is green, our team can start scheduling posts. Nothing else for you to do.`,
     },
   ]
     .map(
@@ -156,17 +199,17 @@ function inviteHtml(opts: {
 
   const inner = `
     <p class="subtext" style="margin-top:0;">
-      A few of <strong>${esc(opts.clientName)}</strong>'s social authorizations have expired on our end, which means scheduled posts can't go out to those platforms until they're refreshed. Reconnecting takes about a minute and doesn't require a Cortex login.
+      ${introParagraph}
     </p>
 
-    <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${muted};margin:22px 0 8px;">${single ? 'Account that needs attention' : 'Accounts that need attention'}</div>
+    <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${muted};margin:22px 0 8px;">${sectionEyebrow}</div>
     <div class="stats" style="margin:0 0 6px;"><table>${platformRows}</table></div>
 
     <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${muted};margin:26px 0 4px;">What happens next</div>
     <table role="presentation" cellspacing="0" cellpadding="0" width="100%" style="border-collapse:collapse;border-top:1px solid ${border};">${stepRows}</table>
 
     <div class="button-wrap" style="text-align:center;margin:26px 0 4px;">
-      <a class="button" href="${esc(opts.url)}">Reconnect ${accountWord} &rarr;</a>
+      <a class="button" href="${esc(opts.url)}">${verb} ${accountWord} &rarr;</a>
     </div>
     <p style="font-size:12px;color:${muted};margin:8px 0 0;line-height:1.55;text-align:center;">
       Link valid for 30 days &middot; ${opts.platforms.length} ${single ? 'account' : 'accounts'} &middot; ${esc(opts.clientName)}
@@ -177,7 +220,7 @@ function inviteHtml(opts: {
     </p>`;
 
   return layout(inner, opts.brand, {
-    eyebrow: 'Action Required',
+    eyebrow: isReconnect ? 'Action Required' : 'Action Requested',
     heroTitle,
   });
 }
@@ -217,6 +260,7 @@ export async function POST(request: NextRequest) {
       notifyChat,
       notifyEmail,
       skipEmail,
+      mode,
     } = parsed.data;
 
     // Recipients are only required when actually emailing.
@@ -327,13 +371,18 @@ export async function POST(request: NextRequest) {
     }
 
     const resend = new Resend(apiKey);
-    const subject = `${client.name}: connect your accounts`;
+    const subject =
+      mode === 'reconnect'
+        ? `${client.name}: reconnect your social accounts`
+        : `${client.name}: connect your social accounts`;
     const html = inviteHtml({
       clientName: client.name as string,
       url,
       platforms,
       brand,
+      mode,
     });
+    const cc = getInviteCc(brand);
 
     let sent = 0;
     for (const to of recipientEmails) {
@@ -342,6 +391,10 @@ export async function POST(request: NextRequest) {
           from: getFromAddress(brand),
           replyTo: getReplyTo(brand),
           to,
+          // Per-agency oversight: every client-facing invite copies the
+          // founder on the agency that owns this brand. Future team
+          // members get appended to `getInviteCc()`.
+          cc,
           subject,
           html,
         });

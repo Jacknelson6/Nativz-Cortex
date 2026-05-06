@@ -96,6 +96,10 @@
       "schedule": "*/30 * * * *"
     },
     {
+      "path": "/api/cron/connection-token-watch",
+      "schedule": "0 */6 * * *"
+    },
+    {
       "path": "/api/cron/refresh-openrouter-models",
       "schedule": "0 4 1,15 * *"
     },
