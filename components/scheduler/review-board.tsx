@@ -14,6 +14,8 @@ import {
   RefreshCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { getBrandFromAgency } from '@/lib/agency/detect';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 /**
  * Review board — bento-grid view of share-link inventory. Used by:
@@ -56,6 +58,14 @@ export interface ReviewLinkRow {
   drop_end: string | null;
   client_id: string | null;
   client_name: string | null;
+  /**
+   * Client's `agency` value verbatim from `clients.agency`. Drives the
+   * brand fallback when `share_url` is empty so the modal/card never
+   * leaks `window.location.origin` to a brand on the wrong host. NULL
+   * for legacy rows and editing-only rows (those don't have a public
+   * share URL anyway).
+   */
+  client_agency: string | null;
   /** Brand logo / favicon URL. Rendered as a small icon next to the
    *  brand name in the unified review table. May be a Supabase
    *  storage URL (uploaded logo) or a Google s2 favicon URL.
@@ -310,13 +320,16 @@ function ReviewCard({
   const isExpired = link.status === 'expired';
   const dateRange = formatDateRange(link.drop_start, link.drop_end);
   const lastViewed = link.last_viewed_at ? formatRelative(link.last_viewed_at) : null;
-  // API resolves share_url to the client's branded host. Only fall back
-  // to current-origin stitching for legacy rows that pre-date the field.
-  const shareUrl =
-    link.share_url ||
-    (typeof window !== 'undefined'
-      ? `${window.location.origin}/s/${link.token}`
-      : `/s/${link.token}`);
+  // API resolves share_url to the client's branded host. For legacy
+  // rows that pre-date the field, derive the host from `client_agency`
+  // rather than `window.location.origin` — falling through to the
+  // current origin was leaking Nativz URLs onto Anderson cards whenever
+  // an admin viewed the board from cortex.nativz.io.
+  const shareUrl = link.share_url
+    ? link.share_url
+    : link.token
+      ? `${getCortexAppUrl(getBrandFromAgency(link.client_agency))}/s/${link.token}`
+      : '';
 
   async function copyLink() {
     try {

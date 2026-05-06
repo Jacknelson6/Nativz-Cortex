@@ -50,6 +50,8 @@ import type {
   ReviewLinkRow,
   ReviewLinkStatus,
 } from '@/components/scheduler/review-board';
+import { getBrandFromAgency } from '@/lib/agency/detect';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 type SendVariant = 'initial' | 'revised';
 
@@ -413,15 +415,16 @@ export function CalendarLinkDetail({
   );
 
   // Always use the API-resolved share_url so the link points at the
-  // client's branded host (Nativz vs Anderson Collaborative). Falling
-  // back to window.location.origin would silently mint an Anderson
-  // client a Nativz URL whenever Jack is logged into nativz.io.
+  // client's branded host (Nativz vs Anderson Collaborative). For the
+  // tiny set of legacy rows that pre-date the field, fall back to
+  // resolving via `client_agency` rather than `window.location.origin`
+  // — the origin fallback was the leak vector that minted Anderson
+  // clients a Nativz URL whenever Jack was logged into nativz.io.
   const shareUrl = useMemo(() => {
     if (!link) return '';
     if (link.share_url) return link.share_url;
     if (!link.token) return '';
-    if (typeof window === 'undefined') return `/s/${link.token}`;
-    return `${window.location.origin}/s/${link.token}`;
+    return `${getCortexAppUrl(getBrandFromAgency(link.client_agency))}/s/${link.token}`;
   }, [link]);
 
   if (!open || !link) return null;

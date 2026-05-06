@@ -167,11 +167,16 @@ function editingProjectToRow(p: EditingProject): ReviewLinkRow {
   return {
     id: `editing:${p.id}`,
     token: '',
+    // Editing rows don't have a public share URL — clicks open the
+    // detail dialog instead of routing to /s/<token>. Set to '' so the
+    // type stays satisfied; UI never reads this for `kind === 'editing'`.
+    share_url: '',
     drop_id: p.drop_id ?? '',
     drop_start: null,
     drop_end: null,
     client_id: p.client_id,
     client_name: p.client_name,
+    client_agency: null,
     client_logo_url: p.client_logo_url,
     post_count: p.video_count,
     approved_count: isApproved ? p.video_count : 0,
