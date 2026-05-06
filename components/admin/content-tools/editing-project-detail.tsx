@@ -742,12 +742,6 @@ export function EditingProjectDetail({
               />
             </Section>
 
-            {(data?.videos.length ?? 0) > 0 && (
-              <Section label="Review">
-                <ReviewCounters videos={data?.videos ?? []} />
-              </Section>
-            )}
-
             {uploads.length > 0 && (
               <Section label="Uploads">
                 <div className="rounded-lg border border-nativz-border bg-surface p-3">
@@ -981,6 +975,14 @@ export function EditingProjectDetail({
           </Section>
         )}
 
+        {(data?.videos.length ?? 0) > 0 && (
+          <Section
+            label={`${nounForProjectType(type).plural[0].toUpperCase()}${nounForProjectType(type).plural.slice(1)} (${data?.videos.length ?? 0})`}
+          >
+            <ReviewCounters videos={data?.videos ?? []} />
+          </Section>
+        )}
+
         <Section label="Project settings">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <SideField label="Status">
@@ -1007,11 +1009,6 @@ export function EditingProjectDetail({
                 searchable={false}
               />
             </SideField>
-          </div>
-        </Section>
-
-        <Section label="Team">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <SideField label="Strategist">
               <AssigneePicker
                 projectId={project.id}

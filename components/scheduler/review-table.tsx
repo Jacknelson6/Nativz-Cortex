@@ -1099,6 +1099,7 @@ function StatusPill({ link }: { link: ReviewLinkRow }) {
       : unifiedStatusForShareLink({
           status: link.status,
           first_sent_at: link.first_sent_at,
+          pipeline_status: link.pipeline_status ?? null,
         });
   const tone = UNIFIED_TONE[unified];
   const isTerminalCalendar =

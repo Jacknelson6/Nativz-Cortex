@@ -74,11 +74,20 @@ export function unifiedStatusForEditingProject(
  *
  * Jack's state machine spec (2026-05-05):
  *   not started -> editing -> ready to send -> need approval -> revising OR approved
+ *
+ * `pipeline_status` (added 2026-05-06) is the admin-set override on the
+ * underlying drop. When non-null it short-circuits the share-link compute
+ * so the SMM modal's Status dropdown can park a row anywhere in the
+ * pipeline, mirroring how the editing modal's Status dropdown works.
  */
 export function unifiedStatusForShareLink(input: {
   status: ReviewLinkStatus;
   first_sent_at: string | null;
+  pipeline_status?: EditingProjectStatus | null;
 }): UnifiedStatus {
+  if (input.pipeline_status) {
+    return unifiedStatusForEditingProject(input.pipeline_status);
+  }
   // Terminal states win over send-state. A 10/10 approved bundle is
   // "Approved" whether or not it was ever emailed (the previous logic
   // forced these rows to read "Ready to send" forever).

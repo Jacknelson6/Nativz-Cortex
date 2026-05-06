@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { ComboSelect } from '@/components/ui/combo-select';
 import { ShareHistoryPanel } from './share-history-panel';
 import { EditedVideosBox, UploadRow } from './edited-videos-box';
 import {
@@ -41,7 +42,11 @@ import {
   type ArchivedEmail,
 } from './detail-dialog/email-archive-dialog';
 import { unifiedStatusForShareLink } from '@/lib/content-tools/unified-status';
-import type { EditingProjectVideo } from '@/lib/editing/types';
+import {
+  EDITING_STATUS_LABEL,
+  type EditingProjectStatus,
+  type EditingProjectVideo,
+} from '@/lib/editing/types';
 import {
   enqueueUploads,
   getProjectUploads,
@@ -107,6 +112,20 @@ interface BridgedProject {
   videos: EditingProjectVideo[];
 }
 const EDITING_BRIDGE_CACHE = new Map<string, BridgedProject>();
+
+/**
+ * Pipeline-status dropdown options. Mirrors the editing modal's options
+ * exactly so admins see the same labels in both places. The empty
+ * sentinel (`''`) maps back to NULL, i.e. "compute from share-link
+ * state" — useful for clearing an override after the bundle settled.
+ */
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: 'Auto (from share link)' },
+  ...(Object.keys(EDITING_STATUS_LABEL) as EditingProjectStatus[]).map((value) => ({
+    value,
+    label: EDITING_STATUS_LABEL[value],
+  })),
+];
 
 /**
  * Detail dialog for a calendar share link (rows with `kind === 'calendar'`
@@ -250,6 +269,14 @@ export function CalendarLinkDetail({
   const [notes, setNotes] = useState<string>('');
   const [savingNotes, setSavingNotes] = useState(false);
 
+  // Local draft for the Status dropdown (content_drops.pipeline_status).
+  // NULL means "compute from share-link state" — that's the default for
+  // every existing row. Editing here PATCHes the underlying drop and the
+  // unified review pill switches to the override on the next data refresh.
+  const [pipelineStatus, setPipelineStatus] = useState<EditingProjectStatus | null>(
+    null,
+  );
+
   // Reset transient UI state when a new link is opened.
   useEffect(() => {
     if (open) {
@@ -272,6 +299,12 @@ export function CalendarLinkDetail({
   useEffect(() => {
     setNotes(link?.notes ?? '');
   }, [link?.id, link?.notes]);
+
+  // Same pattern for the Status dropdown — tracks `link.pipeline_status`
+  // so a save in another tab + parent refresh still flows through.
+  useEffect(() => {
+    setPipelineStatus((link?.pipeline_status as EditingProjectStatus | null) ?? null);
+  }, [link?.id, link?.pipeline_status]);
 
   // Fetch the brand's POC contacts so the Recipients section shows who
   // will receive the email. Brand profile is the single source of truth.
@@ -802,7 +835,7 @@ export function CalendarLinkDetail({
           title={sendDisabledReason ?? undefined}
         >
           {hasBeenSent ? <RefreshCcw size={13} /> : <Send size={13} />}
-          {hasBeenSent ? 'Resend (revised)' : 'Send share link'}
+          {hasBeenSent ? 'Send re-review' : 'Send delivery'}
         </Button>
       )}
     </>
@@ -1073,14 +1106,61 @@ export function CalendarLinkDetail({
           </Section>
         )}
 
-        {/* Team + Notes mirror the editing-project modal one-for-one
-            so the unified review modal feels symmetrical regardless of
-            which side a row originated on. Both PATCH the same
-            /api/calendar/drops/[id] endpoint; the AssigneePicker is the
-            shared component used by the editing modal, just pointed at
-            content_drops via `patchUrl`. */}
-        <Section label="Team">
+        {/* Counts: approved / revising / pending. Mirrors the editing
+            modal's same block; placement (right after Past emails) and
+            label format (`Posts (N)`) are intentional parity. Skipped
+            when the project has zero posts so the modal doesn't read as
+            broken for an empty calendar. */}
+        {link.post_count > 0 && (
+          <Section label={`Posts (${link.post_count})`}>
+            <div className="flex flex-wrap gap-2">
+              <Counter
+                icon={<CheckCircle2 size={12} />}
+                label="approved"
+                value={link.approved_count}
+                tone="success"
+              />
+              <Counter
+                icon={<MessagesSquare size={12} />}
+                label="revising"
+                value={link.changes_count}
+                tone="warning"
+              />
+              <Counter
+                icon={<Eye size={12} />}
+                label="pending"
+                value={link.pending_count}
+                tone="muted"
+              />
+            </div>
+          </Section>
+        )}
+
+        {/* Project settings + Notes mirror the editing-project modal
+            one-for-one so the unified review modal feels symmetrical
+            regardless of which side a row originated on. Status PATCHes
+            content_drops.pipeline_status (NULL = compute from share-link
+            state, otherwise overrides the unified pill). Strategist /
+            Editor and Notes also PATCH the same /api/calendar/drops/[id]
+            endpoint; the AssigneePicker is the shared component used by
+            the editing modal, pointed at content_drops via `patchUrl`.
+            Type is intentionally omitted: it's locked at project
+            creation and is not editable in this modal. */}
+        <Section label="Project settings">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <SideField label="Status">
+              <ComboSelect
+                value={pipelineStatus ?? ''}
+                onChange={(next) => {
+                  const value = (next || null) as EditingProjectStatus | null;
+                  setPipelineStatus(value);
+                  void patchDrop({ pipeline_status: value });
+                }}
+                options={STATUS_OPTIONS}
+                searchable={false}
+              />
+            </SideField>
+            <div />
             <SideField label="Strategist">
               <AssigneePicker
                 projectId={link.drop_id}
@@ -1122,34 +1202,6 @@ export function CalendarLinkDetail({
             className="block w-full resize-none rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-60"
           />
         </Section>
-
-        {/* Counts: approved / revising / pending. Skipped when the
-            project has zero posts so the modal doesn't read as broken
-            for an empty calendar. */}
-        {link.post_count > 0 && (
-          <Section label={`Posts (${link.post_count})`}>
-            <div className="flex flex-wrap gap-2">
-              <Counter
-                icon={<CheckCircle2 size={12} />}
-                label="approved"
-                value={link.approved_count}
-                tone="success"
-              />
-              <Counter
-                icon={<MessagesSquare size={12} />}
-                label="revising"
-                value={link.changes_count}
-                tone="warning"
-              />
-              <Counter
-                icon={<Eye size={12} />}
-                label="pending"
-                value={link.pending_count}
-                tone="muted"
-              />
-            </div>
-          </Section>
-        )}
       </ContentDetailDialog>
     </>
   );
@@ -1191,7 +1243,7 @@ function SendPreviewDialog({
   onSend: () => void;
 }) {
   const title =
-    variant === 'initial' ? 'Send share link' : 'Resend (revised)';
+    variant === 'initial' ? 'Send delivery' : 'Send re-review';
   const subtitle =
     variant === 'initial'
       ? 'Review the recipients and copy before the calendar goes out.'

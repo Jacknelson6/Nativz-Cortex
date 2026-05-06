@@ -58,7 +58,7 @@ export async function GET(req: Request) {
   // editing-project field.
   let dropsQuery = admin
     .from('content_drops')
-    .select('id, client_id, start_date, end_date, strategist_id, editor_id, notes');
+    .select('id, client_id, start_date, end_date, strategist_id, editor_id, notes, pipeline_status');
   if (allowedClientIds) {
     dropsQuery = dropsQuery.in('client_id', allowedClientIds);
   }
@@ -212,6 +212,9 @@ export async function GET(req: Request) {
       status = 'approved';
     else status = 'ready_for_review';
 
+    const dropPipelineStatus = (drop as { pipeline_status?: string | null } | undefined)
+      ?.pipeline_status ?? null;
+
     const linkExtra = link as {
       name?: string | null;
       project_type?: string | null;
@@ -279,6 +282,7 @@ export async function GET(req: Request) {
       editor_id: dropExtra?.editor_id ?? null,
       editor_email: editor?.email ?? null,
       editor_name: editor?.full_name ?? null,
+      pipeline_status: dropPipelineStatus,
     };
   });
 

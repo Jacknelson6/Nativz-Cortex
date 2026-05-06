@@ -152,6 +152,22 @@ export interface ReviewLinkRow {
   editor_id?: string | null;
   editor_email?: string | null;
   editor_name?: string | null;
+  /**
+   * Admin-set pipeline override for calendar rows. When non-null this
+   * short-circuits the share-link compute in `unifiedStatusForShareLink`,
+   * letting the SMM modal park a row anywhere in the editing pipeline
+   * (mirrors `editing_status` for editing rows). Calendar rows only;
+   * editing rows already use `editing_status`. NULL means "compute from
+   * share-link send + approval state."
+   */
+  pipeline_status?:
+    | 'editing'
+    | 'need_approval'
+    | 'revising'
+    | 'approved'
+    | 'done'
+    | 'archived'
+    | null;
 }
 
 interface ReviewBoardProps {

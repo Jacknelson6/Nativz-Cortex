@@ -221,6 +221,10 @@ const PatchBody = z
     strategist_id: z.string().uuid().nullable().optional(),
     editor_id: z.string().uuid().nullable().optional(),
     notes: z.string().max(4000).nullable().optional(),
+    pipeline_status: z
+      .enum(['editing', 'need_approval', 'revising', 'approved', 'done', 'archived'])
+      .nullable()
+      .optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'no fields to update' });
 
@@ -247,12 +251,13 @@ export async function PATCH(
   if ('strategist_id' in parsed.data) update.strategist_id = parsed.data.strategist_id ?? null;
   if ('editor_id' in parsed.data) update.editor_id = parsed.data.editor_id ?? null;
   if ('notes' in parsed.data) update.notes = parsed.data.notes ?? null;
+  if ('pipeline_status' in parsed.data) update.pipeline_status = parsed.data.pipeline_status ?? null;
 
   const { data, error } = await admin
     .from('content_drops')
     .update(update)
     .eq('id', id)
-    .select('id, strategist_id, editor_id, notes')
+    .select('id, strategist_id, editor_id, notes, pipeline_status')
     .single();
 
   if (error || !data) {
