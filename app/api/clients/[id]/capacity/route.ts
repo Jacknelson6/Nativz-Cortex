@@ -2,8 +2,7 @@
  * GET /api/clients/[id]/capacity
  *
  * Returns per-service monthly deliverable capacity for a client (editing /
- * smm / blogging) along with the source of each number ("proposal" if a
- * signed proposal tier defines it, "default" if we fell back to
+ * smm / blogging) along with the source of each number ("default" from
  * lib/clients/service-defaults.ts, "not-subscribed" if the client doesn't
  * carry the service at all). Used by ServiceCapacityPanel and
  * DeliverableProgress.

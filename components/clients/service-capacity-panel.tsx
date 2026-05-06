@@ -17,10 +17,8 @@ const SERVICE_META: Record<ServiceKind, { label: string; icon: typeof Film }> = 
   blogging: { label: 'Blogging', icon: FileText },
 };
 
-function sourceLabel(source: ServiceCapacity['source'], tierName: string | null): string {
+function sourceLabel(source: ServiceCapacity['source']): string {
   switch (source) {
-    case 'proposal':
-      return tierName ? `Proposal (${tierName})` : 'Proposal';
     case 'default':
       return 'Default';
     case 'not-subscribed':
@@ -30,8 +28,6 @@ function sourceLabel(source: ServiceCapacity['source'], tierName: string | null)
 
 function sourceTone(source: ServiceCapacity['source']): string {
   switch (source) {
-    case 'proposal':
-      return 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30';
     case 'default':
       return 'bg-amber-500/10 text-amber-300 border-amber-500/30';
     case 'not-subscribed':
@@ -75,7 +71,7 @@ export function ServiceCapacityPanel({ clientId }: Props) {
     <IconCard
       icon={<Gauge size={16} />}
       title="Service capacity"
-      helpText="Monthly deliverables this client is entitled to per service. Numbers come from the latest signed proposal tier when available, otherwise from a default fallback. Used by the editor upload page and the auto-populate engine."
+      helpText="Monthly deliverables this client is entitled to per service. Numbers come from a default fallback per service. Used by the editor upload page and the auto-populate engine."
     >
       {loading ? (
         <div className="flex items-center gap-2 text-xs text-text-muted">
@@ -121,7 +117,7 @@ export function ServiceCapacityPanel({ clientId }: Props) {
                   <span
                     className={`rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${sourceTone(cap.source)}`}
                   >
-                    {sourceLabel(cap.source, cap.tierName)}
+                    {sourceLabel(cap.source)}
                   </span>
                   <span className="font-mono text-base text-text-primary tabular-nums">
                     {cap.delivered} / {cap.monthly}

@@ -68,9 +68,6 @@ function editing(
     monthly: 0,
     delivered: 0,
     source: 'not-subscribed',
-    proposalId: null,
-    tierId: null,
-    tierName: null,
     ...overrides,
   };
 }
@@ -264,7 +261,7 @@ describe('getEditingOverScopeForPeriod', () => {
       capacityFor('c1', editing({
         monthly: 10,
         delivered: 14,
-        source: 'proposal',
+        source: 'default',
       })),
     );
     const result = await getEditingOverScopeForPeriod(admin, 'period-1');

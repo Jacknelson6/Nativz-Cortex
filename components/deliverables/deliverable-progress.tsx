@@ -5,8 +5,7 @@ import { OverageReviewPill } from './overage-review-pill';
 interface Props {
   used: number;
   capacity: number;
-  source: 'proposal' | 'default' | 'not-subscribed';
-  tierName?: string | null;
+  source: 'default' | 'not-subscribed';
   periodStart: string;
   periodEnd: string;
   /** Required when payrollPeriodId is provided (to key the over-scope pill). */
@@ -30,7 +29,6 @@ export function DeliverableProgress({
   used,
   capacity,
   source,
-  tierName,
   periodStart,
   periodEnd,
   clientId,
@@ -42,12 +40,7 @@ export function DeliverableProgress({
   const overOrAt = capacity > 0 && used >= capacity;
   const overCount = capacity > 0 && used > capacity ? used - capacity : 0;
   const ratio = capacity > 0 ? Math.min(1, used / capacity) : 0;
-  const sourceLabel =
-    source === 'proposal'
-      ? tierName
-        ? `Proposal (${tierName})`
-        : 'Proposal'
-      : 'Default';
+  const sourceLabel = 'Default';
 
   return (
     <div className="rounded-xl border border-nativz-border bg-surface p-4">

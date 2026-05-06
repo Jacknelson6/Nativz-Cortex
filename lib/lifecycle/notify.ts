@@ -11,7 +11,6 @@ export type NotificationType =
   | 'subscription_paused'
   | 'subscription_resumed'
   | 'subscription_updated'
-  | 'proposal_expiring'
   | 'revenue_anomaly';
 
 /**

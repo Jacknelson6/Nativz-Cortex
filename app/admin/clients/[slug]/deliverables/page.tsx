@@ -113,7 +113,6 @@ export default async function ClientDeliverablesPage({
         used={capacity.editing.delivered}
         capacity={capacity.editing.monthly}
         source={capacity.editing.source}
-        tierName={capacity.editing.tierName}
         periodStart={capacity.periodStart}
         periodEnd={capacity.periodEnd}
       />

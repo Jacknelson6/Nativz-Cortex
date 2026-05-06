@@ -4,8 +4,8 @@
  *
  *   npx dotenv -e .env.local -- tsx scripts/seed-staging.ts
  *
- * Creates three fixture clients, one contact each, and one proposal per
- * status state. Idempotent — re-running reseeds without duplication.
+ * Creates three fixture clients with one contact each. Idempotent,
+ * re-running reseeds without duplication.
  *
  * Does NOT touch live Stripe. If STRIPE_SECRET_KEY starts with `sk_test_`,
  * the script will also seed fake Stripe customers; otherwise it skips
@@ -76,59 +76,6 @@ async function main() {
     );
   }
 
-  console.log('[seed] upserting one proposal per status…');
-  const proposalStates: Array<{
-    id: string;
-    slug: string;
-    title: string;
-    status: string;
-    client_id: string;
-  }> = [
-    {
-      id: '00000000-0000-4000-c000-000000000001',
-      slug: 'fixture-draft-proposal',
-      title: 'Fixture: draft proposal',
-      status: 'draft',
-      client_id: FIXTURE_CLIENTS[0].id,
-    },
-    {
-      id: '00000000-0000-4000-c000-000000000002',
-      slug: 'fixture-sent-proposal',
-      title: 'Fixture: sent proposal',
-      status: 'sent',
-      client_id: FIXTURE_CLIENTS[1].id,
-    },
-    {
-      id: '00000000-0000-4000-c000-000000000003',
-      slug: 'fixture-signed-proposal',
-      title: 'Fixture: signed proposal',
-      status: 'signed',
-      client_id: FIXTURE_CLIENTS[0].id,
-    },
-  ];
-
-  for (const p of proposalStates) {
-    await supabase.from('proposals').upsert(
-      {
-        id: p.id,
-        slug: p.slug,
-        title: p.title,
-        status: p.status,
-        client_id: p.client_id,
-        signer_name: 'QA Signer',
-        signer_email: `${SEED_EMAIL}+${p.slug}@gmail.com`,
-        body_markdown: '## Summary\n\nFixture proposal for local QA.',
-        terms_markdown: '## Terms\n\nStandard month-to-month.',
-        total_cents: 150000,
-        deposit_cents: 50000,
-        currency: 'usd',
-        sent_at: p.status !== 'draft' ? new Date().toISOString() : null,
-        signed_at: p.status === 'signed' ? new Date().toISOString() : null,
-      },
-      { onConflict: 'id' },
-    );
-  }
-
   console.log('[seed] upserting ad spend rows…');
   const now = new Date();
   for (let monthsBack = 0; monthsBack < 3; monthsBack += 1) {
@@ -180,7 +127,6 @@ async function main() {
   }
 
   console.log('\n[seed] done.');
-  console.log('       Proposal: http://localhost:3001/proposals/fixture-sent-proposal');
 }
 
 main().catch((err) => {

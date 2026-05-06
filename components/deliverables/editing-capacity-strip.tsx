@@ -28,8 +28,7 @@ interface Props {
 interface CapacitySlice {
   monthly: number;
   delivered: number;
-  source: 'proposal' | 'default' | 'not-subscribed';
-  tierName: string | null;
+  source: 'default' | 'not-subscribed';
 }
 
 interface CapacityResponse {
@@ -109,7 +108,6 @@ export function EditingCapacityStrip({ clientId, service }: Props) {
       used={slice.delivered}
       capacity={slice.monthly}
       source={slice.source}
-      tierName={slice.tierName}
       periodStart={data.periodStart}
       periodEnd={data.periodEnd}
     />
