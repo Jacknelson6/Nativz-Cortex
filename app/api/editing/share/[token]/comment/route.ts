@@ -316,14 +316,28 @@ export async function POST(
       link.project_id,
     );
     if (everyoneApproved) {
+      const nowIso = new Date().toISOString();
       const { data: claimed } = await admin
         .from('editing_project_share_links')
-        .update({ all_approved_notified_at: new Date().toISOString() })
+        .update({ all_approved_notified_at: nowIso })
         .eq('id', link.id)
         .is('all_approved_notified_at', null)
         .select('id')
         .maybeSingle();
       allApprovedClaim = claimed ? 'won' : 'lost';
+      // Roll the project itself up to 'approved' so the review board pill,
+      // unified status helper, and any "queue" filter all see the project
+      // as done. Only the claim winner runs this so a double-click can't
+      // re-stamp approved_at. We also stay idempotent: if the project was
+      // already approved (legacy data, manual flip), the WHERE clause
+      // prevents re-stamping approved_at to a later time.
+      if (allApprovedClaim === 'won') {
+        await admin
+          .from('editing_projects')
+          .update({ status: 'approved', approved_at: nowIso })
+          .eq('id', link.project_id)
+          .neq('status', 'approved');
+      }
     }
   }
 
@@ -485,6 +499,16 @@ export async function DELETE(
       .from('editing_project_share_links')
       .update({ all_approved_notified_at: null })
       .eq('id', link.id);
+    // The project may have been rolled up to 'approved' when this
+    // comment landed. Revert it back to 'need_approval' so the review
+    // board pill stays accurate. Skip if the project was manually moved
+    // forward (revising/done/archived) — reverting those would unwind
+    // legitimate state.
+    await admin
+      .from('editing_projects')
+      .update({ status: 'need_approval', approved_at: null })
+      .eq('id', link.project_id)
+      .eq('status', 'approved');
   }
 
   return NextResponse.json({ ok: true, commentId: comment.id });
