@@ -621,6 +621,51 @@ export async function publishScheduledPost(
     }
   }
 
+  // Parent-row honesty. Per-leg `spp.failure_reason` is stamped above, but the
+  // parent row was set to 'scheduled' before the leg loop ran. Without a
+  // parent-level summary the calendar UI reads 'scheduled' with no failure
+  // text until the cron's next dupe-probe tick reconciles. Mirror the cron's
+  // joined-reason format so a partially-failed publish surfaces immediately.
+  // Re-query the spp set after timeout-reconcile so we don't stamp a reason
+  // for legs that just got rescued.
+  try {
+    const { data: postLegRows } = await admin
+      .from('scheduled_post_platforms')
+      .select('status, failure_reason, social_profiles:social_profile_id (platform)')
+      .eq('post_id', postId);
+    type LegRow = {
+      status: string;
+      failure_reason: string | null;
+      social_profiles:
+        | { platform: SocialPlatform }
+        | { platform: SocialPlatform }[]
+        | null;
+    };
+    const failedLegs = ((postLegRows ?? []) as LegRow[]).filter(
+      (r) => r.status === 'failed',
+    );
+    if (failedLegs.length > 0) {
+      const summary = failedLegs
+        .map((leg) => {
+          const sp = Array.isArray(leg.social_profiles)
+            ? leg.social_profiles[0]
+            : leg.social_profiles;
+          const platform = sp?.platform ?? 'unknown';
+          return `${platform}: ${leg.failure_reason ?? 'unknown error'}`;
+        })
+        .join(' | ');
+      await admin
+        .from('scheduled_posts')
+        .update({ failure_reason: summary })
+        .eq('id', postId);
+    }
+  } catch (summaryErr) {
+    console.error(
+      `[publishScheduledPost] parent failure_reason stamp failed for ${postId}:`,
+      summaryErr,
+    );
+  }
+
   return { alreadyPublished: false, externalPostId: publish.externalPostId };
   } catch (publishErr) {
     await admin
