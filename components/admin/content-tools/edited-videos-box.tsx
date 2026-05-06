@@ -277,6 +277,11 @@ function VideoCard({
               Needs changes
             </span>
           )}
+          {status === null && !muxBadge && (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-hover px-2 py-0.5 text-[10px] font-medium text-text-muted">
+              Pending review
+            </span>
+          )}
         </div>
         <p className="text-[11px] text-text-muted">
           {sizeLabel}
