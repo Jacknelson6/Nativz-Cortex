@@ -380,7 +380,7 @@ function SlotCell({
   const meta = STATUS_META[slot.status];
   const Icon = meta.Icon;
   const tooltip = describeSlot(slot, platformKey);
-  const expiringSoon = isExpiringSoon(slot.tokenExpiresAt);
+  const expiringSoon = needsReconnect(slot.tokenStatus);
 
   return (
     <Tooltip>
@@ -408,12 +408,8 @@ function SlotCell({
   );
 }
 
-function isExpiringSoon(iso: string | null): boolean {
-  if (!iso) return false;
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return false;
-  const days = (t - Date.now()) / (1000 * 60 * 60 * 24);
-  return days >= 0 && days <= 14;
+function needsReconnect(status: string | null): boolean {
+  return status === 'needs_refresh' || status === 'expired';
 }
 
 function describeSlot(slot: PlatformSlot, platform: PlatformKey): string {
@@ -424,15 +420,8 @@ function describeSlot(slot: PlatformSlot, platform: PlatformKey): string {
       const base = slot.username
         ? `Posting as @${slot.username} via Zernio.`
         : `${noun} is connected via Zernio.`;
-      if (slot.tokenExpiresAt && isExpiringSoon(slot.tokenExpiresAt)) {
-        const days = Math.max(
-          0,
-          Math.round(
-            (Date.parse(slot.tokenExpiresAt) - Date.now()) /
-              (1000 * 60 * 60 * 24),
-          ),
-        );
-        return `${base} Token expires in ${days} day${days === 1 ? '' : 's'} — send a reconnect invite.`;
+      if (needsReconnect(slot.tokenStatus)) {
+        return `${base} Zernio flagged this token as needs_refresh, send a reconnect invite.`;
       }
       return base;
     }
