@@ -9,9 +9,8 @@
  * on the story rail.
  *
  * This module sits in front of the publish path and rewrites out-of-range
- * source URLs to a 4:5 letterboxed render with a blurred fill behind the
- * original frame. Renders are cached on `scheduler_media.feed_normalized_url`
- * so retries don't repeat the work.
+ * source URLs to a 4:5 center-cropped render. Renders are cached on
+ * `scheduler_media.feed_normalized_url` so retries don't repeat the work.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -43,33 +42,20 @@ function inFeedRange(width: number, height: number): boolean {
 }
 
 /**
- * Letterbox the source image onto a 1080x1350 canvas with a blurred fill of
- * the same image behind it. Output is JPEG (smaller than PNG and Instagram
- * compresses anyway). Returns the JPEG buffer.
+ * Center-crop the source image to a 1080x1350 (4:5) canvas. Sharp's
+ * `cover` fit scales-to-cover then trims edges, so the subject stays
+ * pixel-perfect at native resolution and we just lose the top/bottom (or
+ * left/right) bands that don't fit. Output is JPEG (smaller than PNG, and
+ * Instagram re-compresses anyway).
  */
-async function renderFeedLetterbox(input: Buffer): Promise<Buffer> {
+async function renderFeedCenterCrop(input: Buffer): Promise<Buffer> {
   const meta = await sharp(input).metadata();
-  const srcW = meta.width ?? 0;
-  const srcH = meta.height ?? 0;
-  if (srcW <= 0 || srcH <= 0) {
+  if (!meta.width || !meta.height) {
     throw new Error('Could not read image dimensions');
   }
 
-  // Blurred fill: cover the whole canvas, blur heavily, slightly darken so
-  // the foreground reads cleanly.
-  const background = await sharp(input)
-    .resize(TARGET_W, TARGET_H, { fit: 'cover', position: 'center' })
-    .blur(40)
-    .modulate({ brightness: 0.7 })
-    .toBuffer();
-
-  // Foreground: scale source to fit inside the canvas (no crop).
-  const foreground = await sharp(input)
-    .resize(TARGET_W, TARGET_H, { fit: 'inside', withoutEnlargement: false })
-    .toBuffer();
-
-  return sharp(background)
-    .composite([{ input: foreground, gravity: 'center' }])
+  return sharp(input)
+    .resize(TARGET_W, TARGET_H, { fit: 'cover', position: 'attention' })
     .jpeg({ quality: 90, mozjpeg: true })
     .toBuffer();
 }
@@ -144,7 +130,7 @@ export async function ensureFeedCompatibleUrl(
 
   let rendered: Buffer;
   try {
-    rendered = await renderFeedLetterbox(bytes);
+    rendered = await renderFeedCenterCrop(bytes);
   } catch (err) {
     console.warn('[feed-normalize] render failed, using source URL', err);
     return sourceUrl;
