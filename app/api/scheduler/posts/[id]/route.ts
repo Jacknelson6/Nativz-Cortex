@@ -177,6 +177,33 @@ export async function PUT(
       return NextResponse.json({ error: 'Failed to update post' }, { status: 500 });
     }
 
+    // Sync rescheduled time to Zernio. Without this, dragging in our calendar
+    // would update our DB but Zernio would still publish at the original
+    // `scheduledFor`, producing a silent drift between our UI and the actual
+    // queue. Failures are logged + surfaced via `zernio_sync_warning` rather
+    // than rolling back — our row is authoritative, and the cron + status
+    // poller will reconcile on the next pass.
+    let zernioSyncWarning: string | null = null;
+    if (
+      data.scheduled_at !== undefined &&
+      data.scheduled_at !== null &&
+      (post as { late_post_id?: string | null }).late_post_id
+    ) {
+      try {
+        const service = getPostingService();
+        await service.reschedulePost(
+          (post as { late_post_id: string }).late_post_id,
+          data.scheduled_at,
+        );
+      } catch (zernioErr) {
+        console.error('Failed to reschedule on Zernio:', zernioErr);
+        zernioSyncWarning =
+          zernioErr instanceof Error
+            ? zernioErr.message
+            : 'Zernio reschedule failed';
+      }
+    }
+
     // Update platform links if provided
     if (data.platform_profile_ids !== undefined) {
       await adminClient.from('scheduled_post_platforms').delete().eq('post_id', id);
@@ -223,7 +250,9 @@ export async function PUT(
       }
     }
 
-    return NextResponse.json({ post });
+    return NextResponse.json(
+      zernioSyncWarning ? { post, zernio_sync_warning: zernioSyncWarning } : { post },
+    );
   } catch (error) {
     console.error('PUT /api/scheduler/posts/[id] error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

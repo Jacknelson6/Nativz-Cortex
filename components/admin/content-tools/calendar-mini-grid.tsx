@@ -242,6 +242,17 @@ export function CalendarMiniGrid({
         const body = await res.json().catch(() => null);
         throw new Error((body?.error as string) ?? 'Reschedule failed');
       }
+      // Soft warning: DB updated fine but Zernio rejected the reschedule
+      // (post already published, network blip, etc.). Surface it in the
+      // toast so the user knows the queue may publish at the old time —
+      // we don't roll back the optimistic move because our DB is the
+      // authoritative source of truth.
+      const okBody = await res.json().catch(() => null);
+      if (okBody?.zernio_sync_warning) {
+        setDragError(
+          `Calendar updated, but Zernio queue may still post at the old time (${okBody.zernio_sync_warning}).`,
+        );
+      }
     } catch (err) {
       // Rollback optimistic move and surface a non-blocking error toast.
       setOverrides((prev) => {

@@ -295,6 +295,15 @@ export interface PostingService {
   /** Delete a post from the provider (and platforms if already published) */
   deletePost(externalPostId: string): Promise<void>;
 
+  /**
+   * Reschedule an already-queued (not yet published) post to a new time.
+   * Throws if the provider rejects (e.g. post already published, invalid
+   * timestamp, network error). Callers should treat failures as a warning,
+   * not as a reason to roll back local DB state — our `scheduled_at` is the
+   * authoritative source of truth and the cron will pick it up regardless.
+   */
+  reschedulePost(externalPostId: string, scheduledFor: string): Promise<void>;
+
   /** Start OAuth flow to connect a social profile */
   connectProfile(input: ConnectProfileInput): Promise<ConnectProfileResult>;
 

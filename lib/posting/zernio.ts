@@ -675,6 +675,28 @@ export class ZernioPostingService implements PostingService {
     await zernioRequest(`/posts/${externalPostId}`, { method: 'DELETE' });
   }
 
+  /**
+   * Reschedule a queued post on Zernio. Used when the calendar UI drag-drops
+   * a scheduled (not-yet-published) post to a new day so our local
+   * `scheduled_posts.scheduled_at` and Zernio's `scheduledFor` stay in sync —
+   * otherwise Zernio would still publish at the original time even though
+   * our calendar shows the new slot.
+   *
+   * Implementation: PATCH /posts/{id} with { scheduledFor }. Mirrors the
+   * field name used by `publishPost` (see `buildPublishBody`) and matches
+   * the verb the API uses for partial updates.
+   *
+   * Throws ZernioApiError on non-2xx (e.g. post already published, invalid
+   * ISO string). Caller should treat as a warning, not an authoritative
+   * failure — our DB row is the source of truth.
+   */
+  async reschedulePost(externalPostId: string, scheduledFor: string): Promise<void> {
+    await zernioRequest(`/posts/${externalPostId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ scheduledFor }),
+    });
+  }
+
   async connectProfile(input: ConnectProfileInput): Promise<ConnectProfileResult> {
     const params = new URLSearchParams({
       profileId: input.profileId,
