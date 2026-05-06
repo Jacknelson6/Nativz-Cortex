@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createNotification } from '@/lib/notifications/create';
 import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 import { getNotificationSetting } from '@/lib/notifications/get-setting';
@@ -150,12 +151,16 @@ async function loadProjectChatContext(
 ): Promise<ProjectChatContext> {
   const { data: project } = await admin
     .from('editing_projects')
-    .select('id, name, clients(name, agency)')
+    .select('id, name, clients(name, agency, chat_webhook_url)')
     .eq('id', projectId)
     .maybeSingle<{
       id: string;
       name: string;
-      clients: { name: string | null; agency: string | null } | null;
+      clients: {
+        name: string | null;
+        agency: string | null;
+        chat_webhook_url: string | null;
+      } | null;
     }>();
 
   const clientName = project?.clients?.name ?? 'Client';
@@ -165,9 +170,14 @@ async function loadProjectChatContext(
     process.env.NODE_ENV !== 'production'
       ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
       : getCortexAppUrl(brand);
-  // No per-client chat webhook on editing yet, so the ops space is the
-  // only target. When it isn't configured, we just skip the chat ping.
-  const webhookUrl = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
+  // Per-client webhook first, agency catchall second, ops fallback last.
+  // Mirrors the calendar comment route so editing reviews land in the same
+  // space the rest of the client's notifications go to.
+  const teamWebhook = await resolveTeamChatWebhook(admin, {
+    primaryUrl: project?.clients?.chat_webhook_url ?? null,
+    agency: project?.clients?.agency ?? null,
+  });
+  const webhookUrl = teamWebhook ?? process.env.OPS_CHAT_WEBHOOK_URL ?? null;
   return {
     clientName,
     projectName,
