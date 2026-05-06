@@ -60,6 +60,8 @@ interface TokenRow {
   id: string;
   batch_id: string | null;
   client_id: string;
+  /** Admin-facing project title shown on the celebration ping. */
+  label: string | null;
   all_approved_notified_at: string | null;
 }
 
@@ -77,7 +79,7 @@ export async function notifyAdminsOfAdConceptComment(
       .maybeSingle<ConceptRow>(),
     admin
       .from('ad_concept_share_tokens')
-      .select('id, batch_id, client_id, all_approved_notified_at')
+      .select('id, batch_id, client_id, label, all_approved_notified_at')
       .eq('id', ev.shareTokenId)
       .maybeSingle<TokenRow>(),
   ]);
@@ -160,7 +162,15 @@ export async function notifyAdminsOfAdConceptComment(
       `ad-${ev.kind} ${ev.conceptId}`,
     );
   } else if (allApprovedClaim === 'won') {
-    const text = `🎉 All ad concepts in ${clientName}'s gallery are approved.\n${shareUrl}`;
+    // Surface the share-token's admin-facing label so the chat ping reads
+    // "from <Client>'s <Project Title> project" rather than the generic
+    // "<Client>'s gallery". Falls back to "gallery" wording when the admin
+    // didn't bother labeling the share.
+    const projectTitle = tokenRow.label?.trim() ?? '';
+    const subject = projectTitle
+      ? `${clientName}'s ${projectTitle} project`
+      : `${clientName}'s gallery`;
+    const text = `🎉 All ad concepts from ${subject} are approved!\n${shareUrl}`;
     postToGoogleChatSafe(
       targetWebhookUrl,
       { text },

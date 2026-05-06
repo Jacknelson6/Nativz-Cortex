@@ -510,10 +510,13 @@ async function notifyAdminsOfComment(
     attachments: Array<{ url: string; filename: string; mime_type: string; size_bytes: number }>;
   },
 ) {
-  // Fetch drop + the specific post in parallel — the post's `scheduled_at` is
-  // surfaced in the chat message body so reviewers can see *which* post the
-  // change request / comment / approval is about without opening the link.
-  const [dropRes, postRes] = await Promise.all([
+  // Fetch drop + the specific post + share-link name in parallel. The post's
+  // `scheduled_at` is surfaced in the chat message body so reviewers can see
+  // *which* post the change request / comment / approval is about without
+  // opening the link. The share-link's `name` is the admin-facing project
+  // title surfaced on the celebration ping ("All N posts from Acme's
+  // April Refresh project are approved!").
+  const [dropRes, postRes, linkRes] = await Promise.all([
     admin
       .from('content_drops')
       .select('id, start_date, clients(name, agency, chat_webhook_url)')
@@ -528,9 +531,15 @@ async function notifyAdminsOfComment(
       .select('scheduled_at')
       .eq('id', comment.postId)
       .maybeSingle<{ scheduled_at: string | null }>(),
+    admin
+      .from('content_drop_share_links')
+      .select('name')
+      .eq('id', shareLinkId)
+      .maybeSingle<{ name: string | null }>(),
   ]);
   const drop = dropRes.data;
   if (!drop) return;
+  const linkName = linkRes.data?.name?.trim() ?? '';
 
   const clientName = drop.clients?.name ?? 'Client';
   const chatWebhookUrl = await resolveTeamChatWebhook(admin, {
@@ -626,7 +635,14 @@ async function notifyAdminsOfComment(
       postToGoogleChatSafe(targetWebhookUrl, { text }, `comment ${dropId}`);
     } else if (allApprovedClaim === 'won') {
       const reviewLinkIds = Object.values(reviewLinkMap);
-      const text = `🎉 All ${reviewLinkIds.length} posts in ${clientName}'s calendar are approved.\n${shareUrl}`;
+      // Surface the share-link's admin-facing name so the chat ping reads
+      // "from <Client>'s <Project Title> project" rather than the generic
+      // "<Client>'s calendar". Falls back to "calendar" wording when the
+      // admin didn't bother labeling the share.
+      const subject = linkName
+        ? `${clientName}'s ${linkName} project`
+        : `${clientName}'s calendar`;
+      const text = `🎉 All ${reviewLinkIds.length} posts from ${subject} are approved!\n${shareUrl}`;
       postToGoogleChatSafe(targetWebhookUrl, { text }, `all-approved ${dropId}`);
     }
   }
