@@ -26,7 +26,7 @@ export const dynamic = 'force-dynamic';
  *      OAuth callback can re-mark it on a fresh attempt.
  */
 
-const ZernioPlatform = z.enum(['tiktok', 'instagram', 'facebook', 'youtube']);
+const ZernioPlatform = z.enum(['tiktok', 'instagram', 'facebook', 'youtube', 'linkedin']);
 
 export async function DELETE(
   _request: NextRequest,

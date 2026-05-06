@@ -8,7 +8,7 @@ import { signState } from '@/lib/scheduler/oauth-state';
 import { ensureZernioProfile } from '@/lib/zernio/ensure-profile';
 
 const ConnectSchema = z.object({
-  platform: z.enum(['facebook', 'instagram', 'tiktok', 'youtube']),
+  platform: z.enum(['facebook', 'instagram', 'tiktok', 'youtube', 'linkedin']),
   client_id: z.string().uuid(),
 });
 

@@ -23,7 +23,7 @@ export const dynamic = 'force-dynamic';
  * platform list to whatever the invite asked for.
  */
 
-const ZernioPlatform = z.enum(['tiktok', 'instagram', 'facebook', 'youtube']);
+const ZernioPlatform = z.enum(['tiktok', 'instagram', 'facebook', 'youtube', 'linkedin']);
 
 export async function POST(
   request: NextRequest,

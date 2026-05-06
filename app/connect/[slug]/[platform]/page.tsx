@@ -4,7 +4,7 @@ import { ConnectLanding } from './connect-landing';
 
 export const dynamic = 'force-dynamic';
 
-const SUPPORTED = ['tiktok', 'instagram', 'facebook', 'youtube'] as const;
+const SUPPORTED = ['tiktok', 'instagram', 'facebook', 'youtube', 'linkedin'] as const;
 type SupportedPlatform = (typeof SUPPORTED)[number];
 
 const PLATFORM_LABEL: Record<SupportedPlatform, string> = {
@@ -12,6 +12,7 @@ const PLATFORM_LABEL: Record<SupportedPlatform, string> = {
   instagram: 'Instagram',
   facebook: 'Facebook',
   youtube: 'YouTube',
+  linkedin: 'LinkedIn',
 };
 
 /**

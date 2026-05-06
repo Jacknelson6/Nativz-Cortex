@@ -1,17 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { Facebook, Instagram, Loader2, Music2, Youtube } from 'lucide-react';
+import { Facebook, Instagram, Linkedin, Loader2, Music2, Youtube } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ClientLogo } from '@/components/clients/client-logo';
 
-type SupportedPlatform = 'tiktok' | 'instagram' | 'facebook' | 'youtube';
+type SupportedPlatform = 'tiktok' | 'instagram' | 'facebook' | 'youtube' | 'linkedin';
 
 const PLATFORM_ICON: Record<SupportedPlatform, typeof Music2> = {
   tiktok: Music2,
   instagram: Instagram,
   facebook: Facebook,
   youtube: Youtube,
+  linkedin: Linkedin,
 };
 
 interface Props {

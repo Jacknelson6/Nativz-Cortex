@@ -437,9 +437,6 @@ function describeSlot(slot: PlatformSlot, platform: PlatformKey): string {
         : 'Zernio reported the token is revoked. Reconnect to resume posting.';
     }
     case 'missing':
-      if (platform === 'linkedin') {
-        return `${noun}: Zernio has no LinkedIn flow. Posts go through the client account by hand.`;
-      }
       return `No ${noun} token on file. Send a connection invite to reconnect.`;
   }
 }
@@ -559,7 +556,6 @@ function InviteBuilderModal({
     if (!client) return;
     const defaults = new Set<PlatformKey>();
     for (const p of CORE_PLATFORMS) {
-      if (p.key === 'linkedin') continue;
       if (client.profiles[p.key].status !== 'connected') defaults.add(p.key);
     }
     setSelectedPlatforms(defaults);

@@ -29,7 +29,7 @@ export const dynamic = 'force-dynamic';
  * + callback path so no changes are needed downstream.
  */
 
-const Platform = z.enum(['tiktok', 'instagram', 'facebook', 'youtube']);
+const Platform = z.enum(['tiktok', 'instagram', 'facebook', 'youtube', 'linkedin']);
 
 export async function POST(
   request: NextRequest,

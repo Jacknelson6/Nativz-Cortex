@@ -12,6 +12,7 @@ const PLATFORMS = [
   { id: 'tiktok' as const, label: 'TikTok' },
   { id: 'youtube' as const, label: 'YouTube' },
   { id: 'facebook' as const, label: 'Facebook' },
+  { id: 'linkedin' as const, label: 'LinkedIn' },
 ];
 
 interface ConnectAccountDialogProps {

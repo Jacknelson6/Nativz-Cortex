@@ -11,6 +11,7 @@ import { TikTokMark } from '@/components/integrations/tiktok-mark';
 import { InstagramMark } from '@/components/integrations/instagram-mark';
 import { FacebookMark } from '@/components/integrations/facebook-mark';
 import { YouTubeMark } from '@/components/integrations/youtube-mark';
+import { LinkedInMark } from '@/components/integrations/linkedin-mark';
 import type { SocialPlatform } from '@/lib/types/reporting';
 
 interface SocialProfile {
@@ -393,6 +394,7 @@ export function IntegrationsTable({
       socialRow('facebook', 'Facebook', <FacebookMark size={20} />),
       socialRow('tiktok', 'TikTok', <TikTokMark size={20} />),
       socialRow('youtube', 'YouTube', <YouTubeMark size={20} />),
+      socialRow('linkedin', 'LinkedIn', <LinkedInMark size={20} />),
       {
         key: 'uppromote',
         label: 'UpPromote',
