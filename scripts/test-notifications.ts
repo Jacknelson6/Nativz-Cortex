@@ -78,6 +78,7 @@ async function main() {
           clientName: SAMPLE_CLIENT,
           projectName: SAMPLE_PROJECT,
           shareUrl: SAMPLE_EDITING_URL,
+          noun: { singular: 'post', plural: 'posts' },
         }).then((r) => ({ ok: r.ok, error: r.error })),
     ],
     [
@@ -90,6 +91,7 @@ async function main() {
           clientName: SAMPLE_CLIENT,
           projectName: SAMPLE_PROJECT,
           shareUrl: SAMPLE_EDITING_URL,
+          noun: { singular: 'post', plural: 'posts' },
         }).then((r) => ({ ok: r.ok, error: r.error })),
     ],
     [
@@ -102,6 +104,7 @@ async function main() {
           clientName: SAMPLE_CLIENT,
           projectName: SAMPLE_PROJECT,
           shareUrl: SAMPLE_EDITING_URL,
+          noun: { singular: 'post', plural: 'posts' },
         }).then((r) => ({ ok: r.ok, error: r.error })),
     ],
     [
@@ -123,6 +126,7 @@ async function main() {
           clientName: SAMPLE_CLIENT,
           projectName: SAMPLE_PROJECT,
           shareUrl: SAMPLE_EDITING_URL,
+          noun: { singular: 'post', plural: 'posts' },
         }).then((r) => ({ ok: r.ok, error: r.error })),
     ],
     [

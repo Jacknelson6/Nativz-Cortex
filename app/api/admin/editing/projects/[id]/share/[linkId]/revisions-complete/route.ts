@@ -11,6 +11,7 @@ import {
 import { getNotificationSetting } from '@/lib/notifications/get-setting';
 import { getClientNotificationRecipients } from '@/lib/email/notification-recipients';
 import { archiveEditingShareLinkEmail } from '@/lib/content-tools/archive-editing-share-email';
+import { nounForProjectType } from '@/lib/editing/project-noun';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,6 +47,7 @@ interface ProjectRow {
   id: string;
   name: string | null;
   client_id: string;
+  project_type: string | null;
   clients: {
     id: string;
     name: string;
@@ -138,7 +140,7 @@ export async function POST(
 
   const { data: project } = await admin
     .from('editing_projects')
-    .select('id, name, client_id, clients(id, name, agency)')
+    .select('id, name, client_id, project_type, clients(id, name, agency)')
     .eq('id', id)
     .maybeSingle<ProjectRow>();
   if (!project) {
@@ -149,6 +151,7 @@ export async function POST(
   const clientName = project.clients?.name ?? 'your brand';
   const projectName = project.name?.trim() || clientName;
   const brand = getBrandFromAgency(project.clients?.agency ?? null);
+  const noun = nounForProjectType(project.project_type);
   const appUrl = resolveAppUrl(project.clients?.agency);
   const shareUrl = `${appUrl}/s/${link.token}`;
 
@@ -168,6 +171,7 @@ export async function POST(
     pocFirstNames,
     clientName,
     projectName,
+    noun,
   });
 
   const result = await sendEditingRevisionsCompleteEmail({
@@ -179,6 +183,7 @@ export async function POST(
     agency: brand,
     clientId,
     projectId: project.id,
+    noun,
   });
 
   if (!result.ok) {

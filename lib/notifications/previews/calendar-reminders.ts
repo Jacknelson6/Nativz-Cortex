@@ -124,16 +124,18 @@ export async function previewEditingCadenceFollowup(
   agency: AgencyBrand,
   stage: CadenceStage = 1,
 ): Promise<NotificationPreviewResult> {
+  const noun = { singular: 'post', plural: 'posts' };
   const draft = buildEditingCadenceFollowupDraft({
     stage,
     pocFirstNames: SAMPLE_POC_FIRST_NAMES,
     clientName: SAMPLE_CLIENT,
     projectName: SAMPLE_PROJECT,
+    noun,
   });
   const eyebrow = stage === 3 ? 'Final Call' : 'Editing Check-In';
   const html = layout(
     `${paragraphsFromMessage(draft.message)}
-     <div class="button-wrap"><a href="${SAMPLE_EDITING_URL}" class="button">Review the cuts &rarr;</a></div>`,
+     <div class="button-wrap"><a href="${SAMPLE_EDITING_URL}" class="button">Review the ${noun.plural} &rarr;</a></div>`,
     agency,
     { eyebrow, heroTitle: draft.heroTitle },
   );

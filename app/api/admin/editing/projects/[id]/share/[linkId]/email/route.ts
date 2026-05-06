@@ -13,6 +13,7 @@ import {
 } from '@/lib/email/resend';
 import { getClientNotificationRecipients } from '@/lib/email/notification-recipients';
 import { archiveEditingShareLinkEmail } from '@/lib/content-tools/archive-editing-share-email';
+import { nounForProjectType } from '@/lib/editing/project-noun';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,6 +59,7 @@ interface ProjectRow {
   id: string;
   name: string | null;
   client_id: string;
+  project_type: string | null;
   clients: {
     id: string;
     name: string;
@@ -107,7 +109,7 @@ async function loadEmailContext(projectId: string, linkId: string) {
 
   const { data: project } = await admin
     .from('editing_projects')
-    .select('id, name, client_id, clients(id, name, agency)')
+    .select('id, name, client_id, project_type, clients(id, name, agency)')
     .eq('id', projectId)
     .single<ProjectRow>();
   if (!project) {
@@ -120,6 +122,7 @@ async function loadEmailContext(projectId: string, linkId: string) {
   const clientName = project.clients?.name ?? 'your brand';
   const projectName = project.name?.trim() || clientName;
   const agency = getBrandFromAgency(project.clients?.agency ?? null);
+  const noun = nounForProjectType(project.project_type);
 
   const eligible = await getClientNotificationRecipients(admin, clientId);
 
@@ -179,6 +182,7 @@ async function loadEmailContext(projectId: string, linkId: string) {
     kind,
     pendingRevisionCount,
     contentKind,
+    noun,
   } as const;
 }
 
@@ -198,6 +202,7 @@ export async function GET(
     kind,
     pendingRevisionCount,
     contentKind,
+    noun,
   } = ctxResult;
   if (eligible.length === 0) {
     return NextResponse.json(
@@ -217,13 +222,13 @@ export async function GET(
           clientName,
           projectName,
           pendingCount: pendingRevisionCount,
-          contentKind,
+          noun,
         })
       : buildEditingDeliverableDraft({
           pocFirstNames,
           clientName,
           projectName,
-          contentKind,
+          noun,
         });
 
   return NextResponse.json({
@@ -238,6 +243,7 @@ export async function GET(
     share_url: shareUrl,
     kind,
     content_kind: contentKind,
+    noun: noun.singular,
     pending_count: pendingRevisionCount,
   });
 }
@@ -281,7 +287,7 @@ export async function POST(
     shareUrl,
     kind,
     pendingRevisionCount,
-    contentKind,
+    noun,
   } = ctxResult;
 
   if (eligible.length === 0) {
@@ -307,13 +313,13 @@ export async function POST(
           clientName,
           projectName,
           pendingCount: pendingRevisionCount,
-          contentKind,
+          noun,
         })
       : buildEditingDeliverableDraft({
           pocFirstNames,
           clientName,
           projectName,
-          contentKind,
+          noun,
         });
   const resolvedSubject = parsed.data.subject?.trim() || draft.subject;
 
@@ -329,7 +335,7 @@ export async function POST(
           agency,
           clientId,
           projectId,
-          contentKind,
+          noun,
           subjectOverride: parsed.data.subject,
           messageOverride: parsed.data.message,
           ctaLabelOverride: parsed.data.cta_label,
@@ -343,7 +349,7 @@ export async function POST(
           agency,
           clientId,
           projectId,
-          contentKind,
+          noun,
           subjectOverride: parsed.data.subject,
           messageOverride: parsed.data.message,
           ctaLabelOverride: parsed.data.cta_label,

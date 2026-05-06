@@ -197,6 +197,7 @@ async function handleGet(request: NextRequest) {
         agency: brand,
         clientId: client.id,
         projectId: project.id,
+        noun,
       });
       if (!result.ok) {
         console.error('editing-reminders: send failed:', result.error);

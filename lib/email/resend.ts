@@ -10,6 +10,7 @@ import { getSecret } from '@/lib/secrets/store';
 import type { WeeklySocialReport } from '@/lib/reporting/weekly-social-report';
 import type { AgencyBrand } from '@/lib/agency/detect';
 import { createAdminClient } from '@/lib/supabase/admin';
+import type { ProjectNoun } from '@/lib/editing/project-noun';
 
 // ── Authoring rules ────────────────────────────────────────────────────────
 //
@@ -1829,20 +1830,40 @@ function renderRevisionsCard(bullets: string[], agency: AgencyBrand): string {
 // shows delivery + open status alongside calendar emails.
 
 /**
- * `contentKind` swaps "cuts / watch each video / Watch the cuts" copy for
- * "work / review each piece / Review the work" when the project has no
- * video assets (static-ad shoots, carousel slides). `mixed` projects get
- * the generic "work" wording too. Defaults to 'video' for backwards
- * compatibility — pre-existing call sites that don't pass kind keep the
- * cuts-flavoured copy.
+ * Kept exported for callers that still pass it through (e.g. archive metadata).
+ * No longer drives copy: noun (derived from `editing_projects.project_type`)
+ * does that now. See `buildEditingDeliverableDraft` below.
  */
 export type EditingContentKind = 'video' | 'static' | 'mixed';
+
+/**
+ * Picks the eyebrow / hero plural form. We keep the punchy "Posts Delivered"
+ * / "Ads Delivered" pattern for known noun types, but fall back to the
+ * generic "Ready for Review" when the project_type is unset or `general`
+ * since "Deliverables Delivered" reads awkwardly.
+ */
+function deliverableEyebrowAndHero(noun: ProjectNoun, projectName: string): {
+  eyebrow: string;
+  heroTitle: string;
+} {
+  if (noun.singular === 'deliverable') {
+    return {
+      eyebrow: 'Ready for Review',
+      heroTitle: `${projectName} ready for review`,
+    };
+  }
+  const cap = noun.plural.charAt(0).toUpperCase() + noun.plural.slice(1);
+  return {
+    eyebrow: `${cap} Delivered`,
+    heroTitle: `${projectName} ${noun.plural} ready for review`,
+  };
+}
 
 export function buildEditingDeliverableDraft(opts: {
   pocFirstNames: string[];
   clientName: string;
   projectName: string;
-  contentKind?: EditingContentKind;
+  noun: ProjectNoun;
 }): {
   subject: string;
   message: string;
@@ -1851,28 +1872,17 @@ export function buildEditingDeliverableDraft(opts: {
   heroTitle: string;
 } {
   const greeting = greetingFor(opts.pocFirstNames, opts.clientName);
-  const kind = opts.contentKind ?? 'video';
-  if (kind === 'video') {
-    return {
-      subject: `Your ${opts.projectName} cuts are ready for review`,
-      message:
-        `${greeting}, the latest cuts for ${opts.projectName} are ready for your review. ` +
-        `Tap the button below to watch each video and either approve it or drop comments where you'd like changes.\n\n` +
-        `Once you've signed off we'll get everything packaged for delivery.`,
-      ctaLabel: 'Watch the cuts',
-      eyebrow: 'Cuts Delivered',
-      heroTitle: `${opts.projectName} cuts ready for review`,
-    };
-  }
+  const { noun } = opts;
+  const { eyebrow, heroTitle } = deliverableEyebrowAndHero(noun, opts.projectName);
   return {
-    subject: `Your ${opts.projectName} is ready for review`,
+    subject: `Your ${opts.projectName} ${noun.plural} are ready for review`,
     message:
-      `${greeting}, the latest work for ${opts.projectName} is ready for your review. ` +
-      `Tap the button below to review each piece and either approve it or drop comments where you'd like changes.\n\n` +
+      `${greeting}, the latest ${noun.plural} for ${opts.projectName} are ready for your review. ` +
+      `Tap the button below to review each ${noun.singular} and either approve it or drop comments where you'd like changes.\n\n` +
       `Once you've signed off we'll get everything packaged for delivery.`,
-    ctaLabel: 'Review the work',
-    eyebrow: 'Work Delivered',
-    heroTitle: `${opts.projectName} ready for review`,
+    ctaLabel: `Review the ${noun.plural}`,
+    eyebrow,
+    heroTitle,
   };
 }
 
@@ -1882,6 +1892,7 @@ export async function sendEditingDeliverableEmail(opts: {
   clientName: string;
   projectName: string;
   shareUrl: string;
+  noun: ProjectNoun;
   agency?: AgencyBrand;
   clientId?: string;
   projectId?: string;
@@ -1898,7 +1909,7 @@ export async function sendEditingDeliverableEmail(opts: {
     pocFirstNames: opts.pocFirstNames,
     clientName: opts.clientName,
     projectName: opts.projectName,
-    contentKind: opts.contentKind,
+    noun: opts.noun,
   });
   const subject = opts.subjectOverride?.trim() || draft.subject;
   const messageText = opts.messageOverride?.trim() || draft.message;
@@ -1925,6 +1936,7 @@ export async function sendEditingDeliverableEmail(opts: {
       projectName: opts.projectName,
       projectId: opts.projectId,
       pocFirstNames: opts.pocFirstNames,
+      noun: opts.noun.singular,
       contentKind: opts.contentKind ?? 'video',
       edited: !!(opts.subjectOverride || opts.messageOverride || opts.ctaLabelOverride),
     },
@@ -1947,7 +1959,7 @@ export function buildEditingRereviewDraft(opts: {
   clientName: string;
   projectName: string;
   pendingCount: number;
-  contentKind?: EditingContentKind;
+  noun: ProjectNoun;
 }): {
   subject: string;
   message: string;
@@ -1956,40 +1968,21 @@ export function buildEditingRereviewDraft(opts: {
   heroTitle: string;
 } {
   const greeting = greetingFor(opts.pocFirstNames, opts.clientName);
-  const kind = opts.contentKind ?? 'video';
-  if (kind === 'video') {
-    const cutWord = opts.pendingCount === 1 ? 'cut' : 'cuts';
-    return {
-      subject:
-        opts.pendingCount > 0
-          ? `Revised ${opts.projectName} ${cutWord} ready for re-review`
-          : `Re-review ready for ${opts.projectName}`,
-      message:
-        opts.pendingCount > 0
-          ? `${greeting}, we worked through the notes and re-uploaded ${opts.pendingCount} revised ${cutWord} for ${opts.projectName}. ` +
-            `Tap the button below to watch the new versions and either approve them or drop more comments.\n\n` +
-            `Thanks for the quick turn on the last round.`
-          : `${greeting}, the revised ${opts.projectName} cuts are ready for another look. ` +
-            `Tap the button below to watch the new versions and either approve them or drop more comments.`,
-      ctaLabel: 'Watch the revised cuts',
-      eyebrow: 'Revised Cuts Ready',
-      heroTitle: `${opts.projectName} revisions ready`,
-    };
-  }
-  const pieceWord = opts.pendingCount === 1 ? 'piece' : 'pieces';
+  const { noun } = opts;
+  const word = opts.pendingCount === 1 ? noun.singular : noun.plural;
   return {
     subject:
       opts.pendingCount > 0
-        ? `Revised ${opts.projectName} ${pieceWord} ready for re-review`
+        ? `Revised ${opts.projectName} ${word} ready for re-review`
         : `Re-review ready for ${opts.projectName}`,
     message:
       opts.pendingCount > 0
-        ? `${greeting}, we worked through the notes and re-uploaded ${opts.pendingCount} revised ${pieceWord} for ${opts.projectName}. ` +
+        ? `${greeting}, we worked through the notes and re-uploaded ${opts.pendingCount} revised ${word} for ${opts.projectName}. ` +
           `Tap the button below to review the new versions and either approve them or drop more comments.\n\n` +
           `Thanks for the quick turn on the last round.`
-        : `${greeting}, the revised ${opts.projectName} work is ready for another look. ` +
+        : `${greeting}, the revised ${opts.projectName} ${noun.plural} are ready for another look. ` +
           `Tap the button below to review the new versions and either approve them or drop more comments.`,
-    ctaLabel: 'Review the revised work',
+    ctaLabel: `Review the revised ${noun.plural}`,
     eyebrow: 'Revisions Ready',
     heroTitle: `${opts.projectName} revisions ready`,
   };
@@ -2002,6 +1995,7 @@ export async function sendEditingRereviewEmail(opts: {
   projectName: string;
   shareUrl: string;
   pendingCount: number;
+  noun: ProjectNoun;
   /** Past-tense action bullets describing what the editor actually changed
    *  this round (already AI-rephrased upstream). When [] or undefined the
    *  "Here's what we did" card is hidden entirely - matches the calendar
@@ -2024,7 +2018,7 @@ export async function sendEditingRereviewEmail(opts: {
     clientName: opts.clientName,
     projectName: opts.projectName,
     pendingCount: opts.pendingCount,
-    contentKind: opts.contentKind,
+    noun: opts.noun,
   });
   const subject = opts.subjectOverride?.trim() || draft.subject;
   const messageText = opts.messageOverride?.trim() || draft.message;
@@ -2056,6 +2050,7 @@ export async function sendEditingRereviewEmail(opts: {
       pocFirstNames: opts.pocFirstNames,
       pendingCount: opts.pendingCount,
       summaryBulletsCount: summaryBullets.length,
+      noun: opts.noun.singular,
       contentKind: opts.contentKind ?? 'video',
       edited: !!(opts.subjectOverride || opts.messageOverride || opts.ctaLabelOverride),
     },
@@ -2073,12 +2068,13 @@ export function buildEditingRevisionsCompleteDraft(opts: {
   pocFirstNames: string[];
   clientName: string;
   projectName: string;
+  noun: ProjectNoun;
 }): { subject: string; message: string } {
   const greeting = greetingFor(opts.pocFirstNames, opts.clientName);
   const subject = `Your ${opts.projectName} revisions are ready to review`;
   const message =
     `${greeting}, we've worked through every change you flagged on ${opts.projectName}. ` +
-    `Hop back in to take a final look and approve the cuts you're happy with.`;
+    `Hop back in to take a final look and approve the ${opts.noun.plural} you're happy with.`;
   return { subject, message };
 }
 
@@ -2088,6 +2084,7 @@ export async function sendEditingRevisionsCompleteEmail(opts: {
   clientName: string;
   projectName: string;
   shareUrl: string;
+  noun: ProjectNoun;
   agency?: AgencyBrand;
   clientId?: string;
   projectId?: string;
@@ -2099,6 +2096,7 @@ export async function sendEditingRevisionsCompleteEmail(opts: {
     pocFirstNames: opts.pocFirstNames,
     clientName: opts.clientName,
     projectName: opts.projectName,
+    noun: opts.noun,
   });
   const subject = opts.subjectOverride?.trim() || draft.subject;
   const messageText = opts.messageOverride?.trim() || draft.message;
@@ -2113,7 +2111,7 @@ export async function sendEditingRevisionsCompleteEmail(opts: {
     html: layout(`
       ${bodyHtml}
       <div class="button-wrap">
-        <a href="${opts.shareUrl}" class="btn">Review the updated cuts</a>
+        <a href="${opts.shareUrl}" class="btn">Review the updated ${opts.noun.plural}</a>
       </div>
     `, agency, {
       eyebrow: 'Revisions Complete',
@@ -2124,6 +2122,7 @@ export async function sendEditingRevisionsCompleteEmail(opts: {
       projectName: opts.projectName,
       projectId: opts.projectId,
       pocFirstNames: opts.pocFirstNames,
+      noun: opts.noun.singular,
       edited: !!(opts.subjectOverride || opts.messageOverride),
     },
   });
@@ -2473,14 +2472,19 @@ function calendarStageCopy(stage: CadenceStage, greeting: string, clientName: st
   };
 }
 
-function editingStageCopy(stage: CadenceStage, greeting: string, projectName: string) {
+function editingStageCopy(
+  stage: CadenceStage,
+  greeting: string,
+  projectName: string,
+  noun: ProjectNoun,
+) {
   if (stage === 1) {
     return {
       subject: `Following up on ${projectName}`,
       heroTitle: 'Just wanted to follow up.',
       message:
         `${greeting}, just wanted to follow up on ${projectName}. ` +
-        `Wanted to make sure you saw the cuts we sent over. Whenever you have a few minutes, take a look and either approve the videos or drop comments where anything needs to change.`,
+        `Wanted to make sure you saw the ${noun.plural} we sent over. Whenever you have a few minutes, take a look and either approve the ${noun.plural} or drop comments where anything needs to change.`,
     };
   }
   if (stage === 2) {
@@ -2488,8 +2492,8 @@ function editingStageCopy(stage: CadenceStage, greeting: string, projectName: st
       subject: `Quick check-in on ${projectName}`,
       heroTitle: 'Just in case you missed this.',
       message:
-        `${greeting}, just in case you didn't see the last note. We want to make sure the cuts on ${projectName} got in front of you. ` +
-        `Whenever you have a few minutes, take a look and either approve the videos or drop comments where anything needs to change.`,
+        `${greeting}, just in case you didn't see the last note. We want to make sure the ${noun.plural} on ${projectName} got in front of you. ` +
+        `Whenever you have a few minutes, take a look and either approve the ${noun.plural} or drop comments where anything needs to change.`,
     };
   }
   return {
@@ -2497,7 +2501,7 @@ function editingStageCopy(stage: CadenceStage, greeting: string, projectName: st
     heroTitle: 'Last check before we mark this approved.',
     message:
       `${greeting}, just wanted to check in one last time before we mark ${projectName} as approved. ` +
-      `If we don't hear back, we'll consider the cuts good as-is. ` +
+      `If we don't hear back, we'll consider the ${noun.plural} good as-is. ` +
       `If anything still needs your eyes, hit reply or drop a comment now.`,
   };
 }
@@ -2516,9 +2520,10 @@ export function buildEditingCadenceFollowupDraft(opts: {
   pocFirstNames: string[];
   clientName: string;
   projectName: string;
+  noun: ProjectNoun;
 }): { subject: string; message: string; heroTitle: string } {
   const greeting = greetingFor(opts.pocFirstNames, opts.clientName);
-  return editingStageCopy(opts.stage, greeting, opts.projectName);
+  return editingStageCopy(opts.stage, greeting, opts.projectName, opts.noun);
 }
 
 export async function sendCalendarCadenceFollowupEmail(opts: {
@@ -2568,6 +2573,7 @@ export async function sendEditingCadenceFollowupEmail(opts: {
   clientName: string;
   projectName: string;
   shareUrl: string;
+  noun: ProjectNoun;
   agency?: AgencyBrand;
   clientId?: string;
   projectId?: string;
@@ -2578,9 +2584,10 @@ export async function sendEditingCadenceFollowupEmail(opts: {
     pocFirstNames: opts.pocFirstNames,
     clientName: opts.clientName,
     projectName: opts.projectName,
+    noun: opts.noun,
   });
   const eyebrow = opts.stage === 3 ? 'Final Call' : 'Editing Check-In';
-  const ctaLabel = opts.stage === 3 ? 'Review the cuts' : 'Review the cuts';
+  const ctaLabel = `Review the ${opts.noun.plural}`;
   return sendAndLog({
     category: 'transactional',
     typeKey: `editing_cadence_followup_${opts.stage}`,
@@ -2600,6 +2607,7 @@ export async function sendEditingCadenceFollowupEmail(opts: {
       projectId: opts.projectId,
       pocFirstNames: opts.pocFirstNames,
       stage: opts.stage,
+      noun: opts.noun.singular,
     },
   });
 }

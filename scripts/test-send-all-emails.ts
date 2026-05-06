@@ -657,6 +657,7 @@ pushBoth('editing_deliverable', 'Editing deliverable', (agency) => async () => {
     projectName: 'Spring Wave 1',
     shareUrl: `https://cortex.nativz.io/c/edit/${REFS.editingShareToken}`,
     agency,
+    noun: { singular: 'post', plural: 'posts' },
   });
   return { ok: r.ok, id: r.messageId, error: r.error };
 });
@@ -670,6 +671,7 @@ pushBoth('editing_rereview', 'Editing re-review', (agency) => async () => {
     shareUrl: `https://cortex.nativz.io/c/edit/${REFS.editingShareToken}`,
     pendingCount: 3,
     agency,
+    noun: { singular: 'post', plural: 'posts' },
   });
   return { ok: r.ok, id: r.messageId, error: r.error };
 });
