@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { evaluateShareToken } from '@/lib/ad-creatives/share-token';
+import { notifyAdminsOfAdConceptComment } from '@/lib/ad-creatives/notify-comment';
 
 const bodySchema = z.object({
   conceptId: z.string().uuid(),
@@ -77,6 +78,25 @@ export async function POST(
       { status: 500 },
     );
   }
+
+  // Run notifications AFTER the response. `after()` keeps the function alive
+  // past the response so the chat ping + bell pings don't race against
+  // serverless shutdown — this is the same pattern the SMM calendar comment
+  // route uses for parity.
+  after(async () => {
+    try {
+      await notifyAdminsOfAdConceptComment(admin, {
+        conceptId,
+        shareTokenId: status.token.id,
+        shareTokenString: token,
+        authorName: authorName.trim(),
+        body: body.trim(),
+        kind,
+      });
+    } catch (err) {
+      console.error('Ad concept comment notification failed:', err);
+    }
+  });
 
   return NextResponse.json({ comment: inserted }, { status: 201 });
 }
