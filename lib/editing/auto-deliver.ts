@@ -4,6 +4,7 @@ import { sendEditingDeliverableEmail } from '@/lib/email/resend';
 import { getClientNotificationRecipients } from '@/lib/email/notification-recipients';
 import { archiveEditingShareLinkEmail } from '@/lib/content-tools/archive-editing-share-email';
 import { createEditingShareLink } from '@/lib/editing/share-link';
+import { nounForProjectType } from '@/lib/editing/project-noun';
 
 /**
  * Mux-webhook-driven auto-deliver: when every video on an editing project
@@ -37,11 +38,12 @@ export async function autoDeliverEditingProject(
     name: string | null;
     client_id: string;
     month_slot_id: string | null;
+    project_type: string | null;
     clients: { id: string; name: string; agency: string | null } | null;
   };
   const { data: project } = await admin
     .from('editing_projects')
-    .select('id, name, client_id, month_slot_id, clients(id, name, agency)')
+    .select('id, name, client_id, month_slot_id, project_type, clients(id, name, agency)')
     .eq('id', projectId)
     .single<ProjectRow>();
   if (!project) return { skipped: 'project_not_found' };
@@ -81,12 +83,14 @@ export async function autoDeliverEditingProject(
   const recipients = eligible.map((c) => c.email);
   const pocFirstNames = eligible.map((c) => firstName(c.name));
 
+  const noun = nounForProjectType(project.project_type);
   const result = await sendEditingDeliverableEmail({
     to: recipients,
     pocFirstNames,
     clientName,
     projectName,
     shareUrl: link.url,
+    noun,
     agency,
     clientId,
     projectId,
