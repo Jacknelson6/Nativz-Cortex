@@ -380,6 +380,28 @@ function ActionMenu({
               );
             })
           )}
+
+          {/*
+            Pause/Resume lives in the Move sheet too, not just the action
+            menu, because Jack thinks of "Paused" as another section a
+            client can be moved into (sits between Active and Inactive in
+            the grid). Surfacing it here means whichever path you take —
+            quick action menu OR Move — you find it.
+          */}
+          <div className="my-2 h-px bg-nativz-border/60" />
+          <button
+            type="button"
+            onClick={() => { setMoveOpen(false); onTogglePause(!isPaused); }}
+            className="w-full flex items-center gap-3 rounded-lg border border-nativz-border bg-background px-3 py-2.5 text-sm text-text-primary hover:bg-surface-hover hover:border-accent-border/60 transition-colors text-left"
+          >
+            {isPaused ? (
+              <Play size={13} className="text-text-muted" />
+            ) : (
+              <Pause size={13} className="text-text-muted" />
+            )}
+            <span className="flex-1">{isPaused ? 'Resume (move out of Paused)' : 'Pause (move to Paused)'}</span>
+            {isPaused && <Check size={14} className="text-accent-text" />}
+          </button>
         </div>
       </Dialog>
 
@@ -459,8 +481,19 @@ function ClientCard({
   // 2026-04-28: Move pill became an ellipsis menu (Move / Copy invite link /
   // Delete) — keeps the card resting state quiet and gives delete + invite
   // mint a home that doesn't require opening the detail page.
+  // Belt-and-suspenders: stop ALL clicks/keys originating in ActionMenu's
+  // subtree (trigger button, dropdown items, the Move dialog body, X close,
+  // ConfirmDialog buttons, etc) before they bubble to ClientCard's
+  // onClick={onNavigate} / onKeyDown. Native <dialog> keeps children in the
+  // React virtual tree at declaration site, so synthetic events bubble
+  // through every ancestor including this card. One wrapper here covers
+  // every interactive surface ActionMenu owns.
   const actionMenu = client.dbId && (
-    <div className="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+    <div
+      className="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+    >
       <ActionMenu
         mode={moveMode}
         groups={groups}
