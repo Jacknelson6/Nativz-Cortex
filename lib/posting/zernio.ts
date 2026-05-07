@@ -878,9 +878,11 @@ export class ZernioPostingService implements PostingService {
    * otherwise Zernio would still publish at the original time even though
    * our calendar shows the new slot.
    *
-   * Implementation: PATCH /posts/{id} with { scheduledFor }. Mirrors the
-   * field name used by `publishPost` (see `buildPublishBody`) and matches
-   * the verb the API uses for partial updates.
+   * Implementation: PUT /posts/{id} with { scheduledFor }. Verified against
+   * the Zernio OpenAPI spec — `updatePost` is a PUT (not PATCH) and uses
+   * `scheduledFor` as the field name (matches `buildPublishBody`). Zernio
+   * rejects updates to posts in `published`, `publishing`, or `cancelled`
+   * status; only `draft`, `scheduled`, `failed`, and `partial` can be edited.
    *
    * Throws ZernioApiError on non-2xx (e.g. post already published, invalid
    * ISO string). Caller should treat as a warning, not an authoritative
@@ -888,7 +890,7 @@ export class ZernioPostingService implements PostingService {
    */
   async reschedulePost(externalPostId: string, scheduledFor: string): Promise<void> {
     await zernioRequest(`/posts/${externalPostId}`, {
-      method: 'PATCH',
+      method: 'PUT',
       body: JSON.stringify({ scheduledFor }),
     });
   }
