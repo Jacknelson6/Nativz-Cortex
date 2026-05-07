@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createNotification } from '@/lib/notifications/create';
 import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
+import { reschedulePastDueDrafts } from '@/lib/calendar/reschedule-past-due';
 import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { getBrandFromAgency } from '@/lib/agency/detect';
@@ -191,12 +192,32 @@ export async function POST(
     }
 
     if (finalStatus === 'approved') {
+      // Past-due fixup: shift this draft to a gap in the current month if its
+      // original scheduled_at has already passed. Mirrors the bulk-approve
+      // path so single-comment approvals get the same protection.
+      let pastDueResult: Awaited<ReturnType<typeof reschedulePastDueDrafts>> | null = null;
+      try {
+        pastDueResult = await reschedulePastDueDrafts(admin, [parsed.data.postId]);
+      } catch (err) {
+        console.error(`Past-due fixup failed for post ${parsed.data.postId}:`, err);
+      }
+
       // publishScheduledPost is idempotent (returns alreadyPublished=true if
       // already scheduled), so re-approval / multiple approvers won't double-post.
       try {
         await publishScheduledPost(admin, parsed.data.postId);
       } catch (err) {
         console.error(`Approval → Zernio publish failed for post ${parsed.data.postId}:`, err);
+      }
+
+      // Jack-only ping if we shifted the post. Posted to the client's chat
+      // webhook (or agency catchall / OPS fallback). Never goes to the client.
+      if (pastDueResult && (pastDueResult.moves.length > 0 || pastDueResult.overflow.length > 0)) {
+        try {
+          await notifyPastDueFixup(admin, link.drop_id, pastDueResult);
+        } catch (err) {
+          console.error('Past-due fixup notification failed:', err);
+        }
       }
 
       // Approval-as-consumption: 1 credit per approved video. State-based
@@ -696,5 +717,62 @@ async function checkAllApproved(
     .eq('status', 'approved');
   const approvedSet = new Set((approvals ?? []).map((a) => a.review_link_id));
   return reviewLinkIds.every((id) => approvedSet.has(id));
+}
+
+/**
+ * Posts a Jack-only summary to the client's Google Chat webhook describing
+ * any past-due posts that were shifted into the current month, plus overflow
+ * posts that didn't fit. Never goes to the client. Falls back to
+ * OPS_CHAT_WEBHOOK_URL if no client/agency webhook is configured.
+ */
+async function notifyPastDueFixup(
+  admin: ReturnType<typeof createAdminClient>,
+  dropId: string,
+  result: {
+    moves: Array<{ postId: string; oldScheduledAt: string; newScheduledAt: string; doubledUp: boolean }>;
+    overflow: string[];
+  },
+): Promise<void> {
+  const { data: drop } = await admin
+    .from('content_drops')
+    .select('id, clients(name, agency, chat_webhook_url)')
+    .eq('id', dropId)
+    .single<{
+      id: string;
+      clients: { name: string; agency: string | null; chat_webhook_url: string | null } | null;
+    }>();
+  if (!drop) return;
+
+  const clientName = drop.clients?.name ?? 'Client';
+  const chatWebhookUrl = await resolveTeamChatWebhook(admin, {
+    primaryUrl: drop.clients?.chat_webhook_url ?? null,
+    agency: drop.clients?.agency ?? null,
+  });
+  const opsWebhookUrl = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
+  const targetWebhookUrl = chatWebhookUrl ?? opsWebhookUrl;
+  if (!targetWebhookUrl) return;
+
+  const fmt = (iso: string) =>
+    new Date(iso).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: 'America/Chicago',
+    });
+
+  const lines: string[] = [];
+  lines.push(`⏰ ${clientName}: late approval rescheduled ${result.moves.length} past-due post(s).`);
+  for (const m of result.moves) {
+    const tag = m.doubledUp ? ' (doubled up, month is full)' : '';
+    lines.push(`  • was ${fmt(m.oldScheduledAt)} → now ${fmt(m.newScheduledAt)}${tag}`);
+  }
+  if (result.overflow.length > 0) {
+    lines.push(
+      `⚠️ ${result.overflow.length} post(s) couldn't fit in this month, left at original time. Manual reschedule needed.`,
+    );
+  }
+
+  postToGoogleChatSafe(targetWebhookUrl, { text: lines.join('\n') }, `past-due-fixup ${dropId}`);
 }
 
