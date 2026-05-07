@@ -96,6 +96,13 @@ export async function POST(request: NextRequest) {
 
     await mirrorPostsAsDropVideos(admin, { dropId, postIds });
 
+    // Step 2b: refresh the synthetic drop's start_date/end_date to span
+    // the selected posts. The /c/{token} viewer renders these in the
+    // header ("scheduled May 1 to May 31") and the SMM zip filename
+    // builder slices them — both crash on null. Drive drops always have
+    // these populated; calendar-share drops need us to derive them.
+    await syncCalendarShareDropDateRange(admin, { dropId, postIds });
+
     // Step 3: mint a fresh post_review_links row per post so the new
     // share cycle gets its own comment thread (matches drop-share
     // pattern). Map post_id → review_link.id for mintOrRefreshShareLink.
@@ -190,6 +197,37 @@ async function getOrCreateCalendarShareDrop(
     throw new Error(error?.message ?? 'Failed to create calendar share drop');
   }
   return created.id;
+}
+
+/**
+ * Compute min/max scheduled_at across the selected posts and write them
+ * back as the synthetic drop's start_date/end_date (YYYY-MM-DD). Falls
+ * back to today when the posts haven't been scheduled yet — the viewer
+ * just needs SOMETHING non-null for its header copy and zip filename.
+ */
+async function syncCalendarShareDropDateRange(
+  admin: SupabaseClient,
+  opts: { dropId: string; postIds: string[] },
+): Promise<void> {
+  const { data: rows } = await admin
+    .from('scheduled_posts')
+    .select('scheduled_at')
+    .in('id', opts.postIds);
+
+  const scheduledDates = (rows ?? [])
+    .map((r) => (r as { scheduled_at: string | null }).scheduled_at)
+    .filter((s): s is string => Boolean(s))
+    .map((s) => s.slice(0, 10))
+    .sort();
+
+  const today = new Date().toISOString().slice(0, 10);
+  const startDate = scheduledDates[0] ?? today;
+  const endDate = scheduledDates[scheduledDates.length - 1] ?? startDate;
+
+  await admin
+    .from('content_drops')
+    .update({ start_date: startDate, end_date: endDate })
+    .eq('id', opts.dropId);
 }
 
 /**
