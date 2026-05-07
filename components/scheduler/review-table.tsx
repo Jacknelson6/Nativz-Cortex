@@ -1406,7 +1406,7 @@ export function sortLinksBy(
  * Title Case here matches the agency's project-naming convention in
  * client-facing copy, even though the rest of the UI is sentence case.
  */
-function derivedName(start: string | null, end: string | null): string {
+export function derivedName(start: string | null, end: string | null): string {
   const ref = end ?? start;
   if (!ref) return 'Content Calendar';
   const d = new Date(ref);

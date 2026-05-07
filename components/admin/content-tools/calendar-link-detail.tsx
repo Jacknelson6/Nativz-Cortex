@@ -1127,6 +1127,7 @@ export function CalendarLinkDetail({
               status={unifiedStatusForShareLink({
                 status: link.status,
                 first_sent_at: link.first_sent_at,
+                pipeline_status: link.pipeline_status ?? null,
               })}
             />
             {(isExpired || isAbandoned) && (
@@ -1160,6 +1161,30 @@ export function CalendarLinkDetail({
             endpoint={`/api/calendar/drops/${link.drop_id}/activity`}
             emptyMessage="No activity yet. Mint a share link or send a notification to get started."
             nounSingular="post"
+            onClickEmail={(emailId) => {
+              // History rows carry the share_link_emails.id. The archive
+              // panel below already loads emails for the CURRENT share
+              // link, so look there first. Re-minted drops can have
+              // history events from sibling share links; for those, we
+              // fall back to a per-id lookup so the replay still opens.
+              const match = archivedEmails?.find((e) => e.id === emailId);
+              if (match) {
+                setViewingEmail(match);
+                return;
+              }
+              void (async () => {
+                try {
+                  const res = await fetch(
+                    `/api/admin/share-link-emails/${emailId}`,
+                  );
+                  if (!res.ok) return;
+                  const body = (await res.json()) as { email: ArchivedEmail };
+                  setViewingEmail(body.email);
+                } catch (err) {
+                  console.warn('[calendar-link-detail] email lookup failed', err);
+                }
+              })();
+            }}
           />
         }
         media={

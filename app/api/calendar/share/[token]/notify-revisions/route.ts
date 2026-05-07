@@ -57,7 +57,9 @@ export async function POST(
   const admin = createAdminClient();
   const { data: link } = await admin
     .from('content_drop_share_links')
-    .select('id, drop_id, post_review_link_map, expires_at, included_post_ids')
+    .select(
+      'id, drop_id, post_review_link_map, expires_at, included_post_ids, first_sent_at, last_sent_at, send_count',
+    )
     .eq('token', token)
     .single<{
       id: string;
@@ -65,6 +67,9 @@ export async function POST(
       post_review_link_map: Record<string, string>;
       expires_at: string;
       included_post_ids: string[];
+      first_sent_at: string | null;
+      last_sent_at: string | null;
+      send_count: number | null;
     }>();
   if (!link) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
@@ -280,6 +285,24 @@ export async function POST(
           })),
           sentBy: user.id,
         });
+        // Bump send metadata so the unified pill flips out of
+        // "Ready to send" once the revisions email actually goes out.
+        // Without this, a re-review can ship and the row still reads
+        // as if we'd never contacted the client.
+        const nowIso = new Date().toISOString();
+        const update: {
+          last_sent_at: string;
+          send_count: number;
+          first_sent_at?: string;
+        } = {
+          last_sent_at: nowIso,
+          send_count: (link.send_count ?? 0) + 1,
+        };
+        if (!link.first_sent_at) update.first_sent_at = nowIso;
+        await admin
+          .from('content_drop_share_links')
+          .update(update)
+          .eq('id', link.id);
       }
     } catch (err) {
       console.error('[notify-revisions] revised-videos email threw:', err);

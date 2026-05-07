@@ -63,9 +63,20 @@ export type ShareHistoryEvent =
         status: string | null;
         failure_reason: string | null;
         /**
-         * Lets us distinguish a delivery (`editing_deliverable`), re-review
-         * (`editing_rereview`), or calendar followup (`content_drop_followup`)
-         * row when it lands in the same feed.
+         * Set on calendar feeds, where successful sends come from the
+         * `share_link_emails` archive. When non-null the row is clickable
+         * and opens the email replay dialog.
+         */
+        email_id?: string | null;
+        /**
+         * Kind from `share_link_emails.kind` — drives the row copy
+         * ("Revised videos sent", "Content calendar sent", etc.).
+         */
+        email_kind?: string | null;
+        /**
+         * Legacy editing-projects feed still emits `email_messages.type_key`
+         * (`editing_deliverable`, `editing_rereview`, `content_drop_followup`).
+         * Used as a fallback for the row copy when `email_kind` is absent.
          */
         type_key?: string | null;
       };
@@ -95,6 +106,7 @@ export function ShareHistoryPanel({
   endpoint,
   emptyMessage = 'No activity yet. Mint a share link or send a notification to get started.',
   nounSingular = 'deliverable',
+  onClickEmail,
 }: {
   endpoint: string;
   emptyMessage?: string;
@@ -105,6 +117,14 @@ export function ShareHistoryPanel({
    * "deliverable" so callers that don't care still get sensible copy.
    */
   nounSingular?: string;
+  /**
+   * When provided, email-sent rows that carry an `email_id` become
+   * clickable buttons that hand the id back to the parent so it can
+   * open the email replay dialog. Failed sends and editing-projects'
+   * legacy rows (which carry `type_key` but no archive id) stay as
+   * static rows.
+   */
+  onClickEmail?: (emailId: string) => void;
 }) {
   const [events, setEvents] = useState<ShareHistoryEvent[] | null>(
     () => HISTORY_CACHE.get(endpoint) ?? null,
@@ -165,6 +185,7 @@ export function ShareHistoryPanel({
           key={`${e.kind}-${e.at}-${i}`}
           event={e}
           nounSingular={nounSingular}
+          onClickEmail={onClickEmail}
         />
       ))}
     </ol>
@@ -174,9 +195,11 @@ export function ShareHistoryPanel({
 function HistoryRow({
   event,
   nounSingular,
+  onClickEmail,
 }: {
   event: ShareHistoryEvent;
   nounSingular: string;
+  onClickEmail?: (emailId: string) => void;
 }) {
   const ts = formatTimestamp(event.at);
 
@@ -268,9 +291,16 @@ function HistoryRow({
 
   // email_sent
   const failed = event.detail.status === 'failed';
-  const verb = emailVerb(event.detail.type_key, failed);
-  return (
-    <li className="flex items-start gap-3 rounded-lg border border-nativz-border bg-surface p-3">
+  const verb = emailVerb({
+    kind: event.detail.email_kind ?? null,
+    typeKey: event.detail.type_key ?? null,
+    failed,
+  });
+  const emailId = event.detail.email_id ?? null;
+  const clickable = !!emailId && !!onClickEmail && !failed;
+
+  const inner = (
+    <>
       <span
         className={
           'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md ' +
@@ -283,7 +313,8 @@ function HistoryRow({
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm text-text-primary">
-          {verb} to {event.detail.to}
+          {verb}
+          {event.detail.to ? ` to ${event.detail.to}` : ''}
         </p>
         {event.detail.subject && (
           <p className="truncate text-xs text-text-muted">{event.detail.subject}</p>
@@ -295,11 +326,68 @@ function HistoryRow({
         )}
       </div>
       <span className="shrink-0 text-[11px] text-text-muted">{ts}</span>
+    </>
+  );
+
+  if (clickable) {
+    return (
+      <li>
+        <button
+          type="button"
+          onClick={() => onClickEmail!(emailId!)}
+          className="flex w-full items-start gap-3 rounded-lg border border-nativz-border bg-surface p-3 text-left transition hover:border-accent-text/40 hover:bg-surface-hover"
+        >
+          {inner}
+        </button>
+      </li>
+    );
+  }
+  return (
+    <li className="flex items-start gap-3 rounded-lg border border-nativz-border bg-surface p-3">
+      {inner}
     </li>
   );
 }
 
-function emailVerb(typeKey: string | null | undefined, failed: boolean): string {
+function emailVerb({
+  kind,
+  typeKey,
+  failed,
+}: {
+  kind: string | null;
+  typeKey: string | null;
+  failed: boolean;
+}): string {
+  // share_link_emails.kind is the source of truth on the calendar feed.
+  // Map each kind to a human verb that reads like an audit-log entry.
+  const kindLabel = (() => {
+    switch (kind) {
+      case 'initial':
+        return 'Content calendar sent';
+      case 'resend':
+        return 'Content calendar resent';
+      case 'manual_followup':
+        return 'Manual follow-up sent';
+      case 'auto_followup_open':
+        return 'Auto follow-up sent (no opens yet)';
+      case 'auto_followup_action':
+        return 'Auto follow-up sent (no action yet)';
+      case 'auto_followup_final':
+        return 'Final follow-up sent';
+      case 'all_approved':
+        return 'All-approved confirmation sent';
+      case 'revisions_complete':
+        return 'Revised videos sent';
+      default:
+        return null;
+    }
+  })();
+
+  if (kindLabel) {
+    return failed ? kindLabel.replace('sent', 'failed') : kindLabel;
+  }
+
+  // Fallback: legacy editing-projects feed still ships type_key.
   if (failed) {
     if (typeKey === 'editing_rereview') return 'Re-review email failed';
     if (typeKey === 'editing_deliverable') return 'Delivery email failed';
