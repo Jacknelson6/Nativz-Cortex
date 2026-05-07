@@ -305,9 +305,17 @@ async function mirrorPostsAsDropVideos(
   // input order — the viewer re-sorts by scheduled_at anyway).
   const dropVideoRows = opts.postIds.map((postId, idx) => {
     const postType = postTypeById.get(postId);
-    const isImage = postType === 'image' || postType === 'carousel';
     const items = mediaByPost.get(postId) ?? [];
     const first = items[0]?.media;
+    // Classify by the actual media's mime_type when available — a "reel"
+    // post can carry a static PNG (Instagram and TikTok both accept
+    // image-as-reel), and rendering that through the video surface 500s
+    // because there's no Mux asset. Fall back to post_type only when the
+    // post has no media attached yet.
+    const firstMime = first?.mime_type ?? null;
+    const isImage = firstMime
+      ? firstMime.startsWith('image/')
+      : postType === 'image' || postType === 'carousel';
 
     return {
       drop_id: opts.dropId,
