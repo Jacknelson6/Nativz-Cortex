@@ -264,6 +264,7 @@ export async function PATCH(
           'name',
           'feature_flags',
           'is_active',
+          'is_paused',
           'description',
           'category',
           'logo_url',

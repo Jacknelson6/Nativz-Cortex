@@ -17,6 +17,7 @@ type AdminClientsDbRow = {
   slug: string;
   industry: string | null;
   is_active: boolean | null;
+  is_paused: boolean | null;
   logo_url: string | null;
   services: unknown;
   agency: string | null;
@@ -52,7 +53,7 @@ export default async function AdminClientsPage() {
       { data: activeTrackers },
     ] = await Promise.all([
       selectClientsWithRosterVisibility<AdminClientsDbRow>(adminClient, {
-        select: 'id, name, slug, industry, is_active, logo_url, services, agency, health_score, organization_id, group_id, chat_webhook_url, is_misc_catchall',
+        select: 'id, name, slug, industry, is_active, is_paused, logo_url, services, agency, health_score, organization_id, group_id, chat_webhook_url, is_misc_catchall',
         orderBy: { column: 'name' },
       }),
       adminClient
@@ -106,6 +107,7 @@ export default async function AdminClientsPage() {
         slug: c.slug,
         industry: c.industry && c.industry !== 'General' ? c.industry : '',
         isActive: c.is_active ?? true,
+        isPaused: c.is_paused ?? false,
         logoUrl: c.logo_url ?? null,
         services: (c.services as string[]) ?? [],
         agency: c.agency ?? undefined,
