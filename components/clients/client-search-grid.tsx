@@ -13,6 +13,8 @@ import {
   Trash2,
   ArrowRight,
   AlertTriangle,
+  Pause,
+  Play,
 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 // (SpotlightCard — the cursor-following cyan radial hover glow — was removed
@@ -33,6 +35,9 @@ interface ClientItem {
   services: string[];
   agency?: string;
   isActive?: boolean;
+  /** Soft-pause state (distinct from isActive=false). Surfaced as its own
+   *  Paused section in the grid. */
+  isPaused?: boolean;
   logoUrl?: string | null;
   healthScore?: string | null;
   lastActivityAt?: string | null;
@@ -156,8 +161,10 @@ function ActionMenu({
   clientName,
   currentGroupId,
   currentBucket,
+  isPaused,
   onMoveGroup,
   onMoveAgency,
+  onTogglePause,
   onDeleted,
 }: {
   mode: MoveMode;
@@ -166,8 +173,10 @@ function ActionMenu({
   clientName: string;
   currentGroupId: string | null | undefined;
   currentBucket: AgencyBucket;
+  isPaused: boolean;
   onMoveGroup: (groupId: string | null) => void;
   onMoveAgency: (bucket: AgencyBucket) => void;
+  onTogglePause: (next: boolean) => void;
   onDeleted: (dbId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -277,6 +286,20 @@ function ActionMenu({
               <span className="flex-1">{copying ? 'Copying…' : 'Copy invite link'}</span>
             </button>
 
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => { setOpen(false); onTogglePause(!isPaused); }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-primary hover:bg-surface-hover transition-colors text-left"
+            >
+              {isPaused ? (
+                <Play size={13} className="text-text-muted" />
+              ) : (
+                <Pause size={13} className="text-text-muted" />
+              )}
+              <span className="flex-1">{isPaused ? 'Resume' : 'Pause'}</span>
+            </button>
+
             <div className="my-1 h-px bg-nativz-border/60" />
 
             <button
@@ -298,9 +321,17 @@ function ActionMenu({
         title={`Move ${clientName}`}
         maxWidth="sm"
       >
-        <div className="space-y-1">
+        {/*
+          stopPropagation here because the native <dialog> element keeps
+          its children in the React virtual tree at the location they're
+          declared (inside ClientCard's onClick={onNavigate}). Without
+          this, clicking a destination button bubbles up and triggers a
+          router.push to the client detail page right after the move
+          fires. Wrapping once here covers every interactive child below.
+        */}
+        <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
           <p className="text-xs text-text-muted mb-3">
-            Pick a destination — this client will move there immediately.
+            Pick a destination, this client will move there immediately.
           </p>
           {mode === 'groups' ? (
             <>
@@ -398,6 +429,7 @@ function ClientCard({
   onNavigate,
   onMoveGroup,
   onMoveAgency,
+  onTogglePause,
   onDeleted,
   animate = true,
 }: {
@@ -406,12 +438,13 @@ function ClientCard({
   dimmed?: boolean;
   listView?: boolean;
   groups: ClientGroup[];
-  /** Which destinations the Move menu should list — matches the current
+  /** Which destinations the Move menu should list, matches the current
    *  sectioning mode so users can only move between rows they can see. */
   moveMode: MoveMode;
   onNavigate: () => void;
   onMoveGroup: (groupId: string | null) => void;
   onMoveAgency: (bucket: AgencyBucket) => void;
+  onTogglePause: (next: boolean) => void;
   onDeleted: (dbId: string) => void;
   /**
    * When false, skip the entrance stagger animation. We turn this off after
@@ -435,8 +468,10 @@ function ClientCard({
         clientName={client.name}
         currentGroupId={client.groupId}
         currentBucket={currentBucket}
+        isPaused={client.isPaused === true}
         onMoveGroup={onMoveGroup}
         onMoveAgency={onMoveAgency}
+        onTogglePause={onTogglePause}
         onDeleted={onDeleted}
       />
     </div>
@@ -831,6 +866,27 @@ export function ClientSearchGrid({
     [],
   );
 
+  const handleTogglePause = useCallback(async (dbId: string, next: boolean) => {
+    const prev = allClients;
+    setAllClients((xs) => xs.map((c) => (c.dbId === dbId ? { ...c, isPaused: next } : c)));
+    try {
+      const res = await fetch(`/api/clients/${dbId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_paused: next }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
+      const name = prev.find((c) => c.dbId === dbId)?.name ?? 'Client';
+      toast.success(next ? `${name} paused` : `${name} resumed`);
+    } catch (err) {
+      toast.error(`Failed to ${next ? 'pause' : 'resume'}: ${(err as Error).message}`);
+      setAllClients(prev);
+    }
+  }, [allClients]);
+
   const handleDeleteGroup = useCallback(async (id: string) => {
     const prev = groups;
     const prevClients = allClients;
@@ -861,8 +917,12 @@ export function ClientSearchGrid({
     return [...list].sort((a, b) => a.name.localeCompare(b.name));
   }, [query, allClients]);
 
-  const active = filtered.filter((c) => c.isActive !== false);
+  // Lifecycle bucketing: inactive (hard off) wins over paused (soft pause)
+  // wins over active. A client with isActive === false renders only in
+  // Inactive even if isPaused was true at the time they were turned off.
   const inactive = filtered.filter((c) => c.isActive === false);
+  const paused = filtered.filter((c) => c.isActive !== false && c.isPaused === true);
+  const active = filtered.filter((c) => c.isActive !== false && c.isPaused !== true);
 
   // When groups exist, sections are user-defined. Otherwise fall back to
   // hardcoded agency buckets — preserves the earlier UX for admins who
@@ -918,6 +978,7 @@ export function ClientSearchGrid({
       onNavigate: () => router.push(`/admin/clients/${client.slug}`),
       onMoveGroup: (gid: string | null) => client.dbId && handleMoveGroup(client.dbId, gid),
       onMoveAgency: (bucket: AgencyBucket) => handleMoveAgency(client, bucket),
+      onTogglePause: (next: boolean) => client.dbId && handleTogglePause(client.dbId, next),
       onDeleted: handleDeleted,
     });
     if (listView) {
@@ -1066,6 +1127,17 @@ export function ClientSearchGrid({
           ) : active.length > 0 ? (
             renderBucket(active, false)
           ) : null}
+
+          {paused.length > 0 && (
+            <section className="space-y-2">
+              <SectionHeader
+                label="Paused"
+                count={paused.length}
+                icon={<Pause size={12} className="text-text-muted" />}
+              />
+              {renderBucket(paused, true)}
+            </section>
+          )}
 
           {inactive.length > 0 && (
             <section className="space-y-2">
