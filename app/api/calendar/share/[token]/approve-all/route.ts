@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/auth/permissions';
 import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
+import { reschedulePastDueDrafts } from '@/lib/calendar/reschedule-past-due';
 import { consumeForApproval } from '@/lib/credits/comment-hooks';
 import {
   findContentCalendarItem,
@@ -160,6 +161,16 @@ export async function POST(
     }
   }
 
+  // Past-due fixup: if the client is approving days/weeks after a post's
+  // original scheduled time, shift those past-due drafts to gaps in the
+  // current calendar month BEFORE we hand them to publishScheduledPost.
+  // Otherwise Zernio either spam-publishes them all back-to-back or rejects
+  // with "scheduledFor must be in the future". See lib/calendar/reschedule-past-due.
+  const pastDue = await reschedulePastDueDrafts(
+    admin,
+    targets.map((t) => t.postId),
+  );
+
   let approved = 0;
   let failed = 0;
   for (const { postId, reviewLinkId } of targets) {
@@ -249,6 +260,16 @@ export async function POST(
       console.error('Monday sync after bulk approve failed:', err);
     }
 
+    // Past-due fixup notification (Jack-only, per the client's chat webhook).
+    // We never tell the client we moved their posts — Jack handles that out-of-band.
+    if (pastDue.moves.length > 0 || pastDue.overflow.length > 0) {
+      try {
+        await notifyPastDueFixup(admin, link.drop_id, pastDue);
+      } catch (err) {
+        console.error('Past-due fixup notification failed:', err);
+      }
+    }
+
     if (approvedCount === reviewLinkEntries.length) {
       // Atomic claim, same dedup pattern as the per-comment route. Two
       // concurrent triggers (bulk + manual race) won't double-fire.
@@ -285,6 +306,65 @@ export async function POST(
     status: nextStatus,
     post_count: reviewLinkEntries.length,
   });
+}
+
+/**
+ * Posts a Jack-only summary to the client's Google Chat webhook explaining
+ * which past-due posts were shifted to gaps in the current month, plus any
+ * overflow posts that didn't fit. Never goes to the client.
+ *
+ * Falls back to OPS_CHAT_WEBHOOK_URL if the client has no webhook and no
+ * agency catchall is configured.
+ */
+async function notifyPastDueFixup(
+  admin: ReturnType<typeof createAdminClient>,
+  dropId: string,
+  result: {
+    moves: Array<{ postId: string; oldScheduledAt: string; newScheduledAt: string; doubledUp: boolean }>;
+    overflow: string[];
+  },
+): Promise<void> {
+  const { data: drop } = await admin
+    .from('content_drops')
+    .select('id, clients(name, agency, chat_webhook_url)')
+    .eq('id', dropId)
+    .single<{
+      id: string;
+      clients: { name: string; agency: string | null; chat_webhook_url: string | null } | null;
+    }>();
+  if (!drop) return;
+
+  const clientName = drop.clients?.name ?? 'Client';
+  const chatWebhookUrl = await resolveTeamChatWebhook(admin, {
+    primaryUrl: drop.clients?.chat_webhook_url ?? null,
+    agency: drop.clients?.agency ?? null,
+  });
+  const opsWebhookUrl = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
+  const targetWebhookUrl = chatWebhookUrl ?? opsWebhookUrl;
+  if (!targetWebhookUrl) return;
+
+  const fmt = (iso: string) =>
+    new Date(iso).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: 'America/Chicago',
+    });
+
+  const lines: string[] = [];
+  lines.push(`⏰ ${clientName}: late approval rescheduled ${result.moves.length} past-due post(s).`);
+  for (const m of result.moves) {
+    const tag = m.doubledUp ? ' (doubled up, month is full)' : '';
+    lines.push(`  • was ${fmt(m.oldScheduledAt)} → now ${fmt(m.newScheduledAt)}${tag}`);
+  }
+  if (result.overflow.length > 0) {
+    lines.push(
+      `⚠️ ${result.overflow.length} post(s) couldn't fit in this month, left at original time. Manual reschedule needed.`,
+    );
+  }
+
+  postToGoogleChatSafe(targetWebhookUrl, { text: lines.join('\n') }, `past-due-fixup ${dropId}`);
 }
 
 async function fireAllApprovedNotifications(
