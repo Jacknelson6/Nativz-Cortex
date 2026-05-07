@@ -1323,6 +1323,24 @@ export async function sendCombinedCalendarDeliveryEmail(opts: {
 // Admins can still override subject + message from the preview dialog. The
 // override only swaps the body paragraphs, the polished shell holds.
 
+export interface CalendarShareSendDraft {
+  subject: string;
+  message: string;
+  /** Small uppercase label above the hero (e.g. "May Calendar"). */
+  eyebrow: string;
+  /** Big white headline inside the dark hero card. */
+  heroTitle: string;
+  /** CTA button label (the text only — the trailing arrow is added at render). */
+  ctaLabel: string;
+  /**
+   * Centered "small" line under the CTA. The token `{replyTo}` is swapped at
+   * render time for the agency reply-to address so admins can leave it
+   * untouched without leaking the wrong inbox per brand. Empty string
+   * suppresses the line entirely (used by the revised variant by default).
+   */
+  footerNote: string;
+}
+
 export function buildCalendarShareSendDraft(opts: {
   variant: 'initial' | 'revised';
   pocFirstNames: string[];
@@ -1331,7 +1349,7 @@ export function buildCalendarShareSendDraft(opts: {
   startDate: string;
   endDate: string;
   agency: AgencyBrand;
-}): { subject: string; message: string } {
+}): CalendarShareSendDraft {
   const isAC = opts.agency === 'anderson';
   const brand = isAC ? 'Anderson Collaborative' : 'Nativz';
   const team = isAC ? 'the AC team' : 'the Nativz team';
@@ -1352,6 +1370,10 @@ export function buildCalendarShareSendDraft(opts: {
       message:
         `${greeting}, we've worked through every change you flagged. ` +
         `Hop back in to take a final look and approve the posts you're happy with.`,
+      eyebrow: 'Revisions Complete',
+      heroTitle: 'Revisions complete',
+      ctaLabel: 'Review the updated posts',
+      footerNote: '',
     };
   }
 
@@ -1363,6 +1385,11 @@ export function buildCalendarShareSendDraft(opts: {
       `${greeting}, ${team} just shipped ${opts.postCount} ${postsWord} for you to review, ` +
       `scheduled across ${dateRange}. Tap the button below to watch the videos, read the ` +
       `captions, and approve or request changes one post at a time.`,
+    eyebrow: `${monthLabel} Calendar`,
+    heroTitle: `Your ${monthLabel} content calendar is ready`,
+    ctaLabel: 'Open content calendar',
+    footerNote:
+      "Questions or want to chat about a post? Just reply to this email and it'll come straight to {replyTo}.",
   };
 }
 
@@ -1372,57 +1399,91 @@ export function buildCalendarShareSendHtml(opts: {
   message: string;
   shareUrl: string;
   agency: AgencyBrand;
-  /** Used to derive `${monthLabel} Calendar` eyebrow + hero on initial sends. */
+  /** Used to derive `${monthLabel} Calendar` eyebrow + hero defaults. */
   startDate: string;
   /** Used to bold "${postCount} posts" highlight in the default initial body. */
   postCount: number;
+  /** Admin-edited eyebrow ("MAY CALENDAR" by default). Empty hides the eyebrow. */
+  eyebrowOverride?: string;
+  /** Admin-edited hero headline. Empty hides the hero title row. */
+  heroTitleOverride?: string;
+  /** Admin-edited CTA button label. Trailing arrow is appended at render. */
+  ctaLabelOverride?: string;
+  /**
+   * Admin-edited centered footer line under the CTA. `{replyTo}` is swapped
+   * for the agency reply-to address. Empty string suppresses the line.
+   */
+  footerNoteOverride?: string;
 }): string {
   const isAC = opts.agency === 'anderson';
   const replyTo = isAC ? 'jack@andersoncollaborative.com' : 'jack@nativz.io';
-  const monthLabel = new Date(`${opts.startDate}T00:00:00Z`).toLocaleString('en-US', {
-    month: 'long',
-    timeZone: 'UTC',
+
+  // Compute the same defaults the draft builder uses so a partial override
+  // (just the CTA, say) still renders the rest correctly.
+  const defaults = buildCalendarShareSendDraft({
+    variant: opts.variant,
+    pocFirstNames: [],
+    clientName: '',
+    postCount: opts.postCount,
+    startDate: opts.startDate,
+    endDate: opts.startDate,
+    agency: opts.agency,
   });
+  const eyebrow = (opts.eyebrowOverride ?? defaults.eyebrow).trim();
+  const heroTitle = (opts.heroTitleOverride ?? defaults.heroTitle).trim();
+  const ctaLabel = (opts.ctaLabelOverride ?? defaults.ctaLabel).trim() || defaults.ctaLabel;
+  const footerNoteRaw =
+    opts.footerNoteOverride !== undefined ? opts.footerNoteOverride : defaults.footerNote;
+  const footerNote = footerNoteRaw.trim();
+  // Initial CTA carries an arrow + uses the .button (large blue) style; the
+  // revised variant uses .btn (smaller pill). Preserve that distinction so
+  // the rendered preview keeps mirroring the auto-sender's look.
+  const ctaClass = opts.variant === 'revised' ? 'btn' : 'button';
+  const ctaSuffix = opts.variant === 'revised' ? '' : ' &rarr;';
 
   if (opts.variant === 'revised') {
-    // Mirror sendCalendarRevisionsCompleteEmail: single-paragraph subtext +
-    // "Review the updated posts" CTA. No reply-footer line because the
-    // polished sibling doesn't have one.
     const bodyHtml = messageToHtmlParagraphs(opts.message);
+    const footerHtml = footerNote
+      ? `<p class="small" style="text-align:center; margin-top:24px;">${escapeHtml(
+          footerNote.replace(/\{replyTo\}/g, replyTo),
+        )}</p>`
+      : '';
     return layout(`
       ${bodyHtml}
       <div class="button-wrap">
-        <a href="${opts.shareUrl}" class="btn">Review the updated posts</a>
+        <a href="${opts.shareUrl}" class="${ctaClass}">${escapeHtml(ctaLabel)}${ctaSuffix}</a>
       </div>
+      ${footerHtml}
     `, opts.agency, {
-      eyebrow: 'Revisions Complete',
-      heroTitle: 'Revisions complete',
+      eyebrow: eyebrow || undefined,
+      heroTitle: heroTitle || undefined,
     });
   }
 
-  // Initial: mirror sendCalendarDeliveryEmail. Bold the "{postCount} posts"
-  // span when the body still contains the literal substring (it always does
-  // in the default; admin edits may strip it, in which case the highlight
-  // silently noops which is fine). Apply the wrap AFTER paragraphizing so
-  // `escapeHtml` inside `messageToHtmlParagraphs` doesn't escape our `<span>`
-  // tags into literal `&lt;span...&gt;` text in the rendered email.
+  // Initial: bold the "{postCount} posts" span when the body still contains
+  // the literal substring (admin edits may strip it; the highlight silently
+  // noops in that case). Apply AFTER paragraphizing so `escapeHtml` inside
+  // `messageToHtmlParagraphs` doesn't escape our `<span>` into text.
   const postsWord = opts.postCount === 1 ? 'post' : 'posts';
   const literal = `${opts.postCount} ${postsWord}`;
   const highlighted = `<span class="highlight">${literal}</span>`;
   const paragraphHtml = messageToHtmlParagraphs(opts.message);
   const bodyHtml = paragraphHtml.replace(literal, highlighted);
+  const footerHtml = footerNote
+    ? `<p class="small" style="text-align:center; margin-top:24px;">${escapeHtml(
+        footerNote.replace(/\{replyTo\}/g, replyTo),
+      )}</p>`
+    : '';
 
   return layout(`
     ${bodyHtml}
     <div class="button-wrap">
-      <a href="${opts.shareUrl}" class="button">Open content calendar &rarr;</a>
+      <a href="${opts.shareUrl}" class="${ctaClass}">${escapeHtml(ctaLabel)}${ctaSuffix}</a>
     </div>
-    <p class="small" style="text-align:center; margin-top:24px;">
-      Questions or want to chat about a post? Just reply to this email and it'll come straight to ${replyTo}.
-    </p>
+    ${footerHtml}
   `, opts.agency, {
-    eyebrow: `${monthLabel} Calendar`,
-    heroTitle: `Your ${monthLabel} content calendar is ready`,
+    eyebrow: eyebrow || undefined,
+    heroTitle: heroTitle || undefined,
   });
 }
 
@@ -1443,6 +1504,14 @@ export async function sendCalendarShareSendEmail(opts: {
   subjectOverride?: string;
   /** Admin-edited body (plain text, blank-line separated paragraphs). */
   messageOverride?: string;
+  /** Admin-edited eyebrow (above the hero). */
+  eyebrowOverride?: string;
+  /** Admin-edited hero headline. */
+  heroTitleOverride?: string;
+  /** Admin-edited CTA button label. */
+  ctaLabelOverride?: string;
+  /** Admin-edited footer line under the CTA. `{replyTo}` token is supported. */
+  footerNoteOverride?: string;
 }) {
   const agency = opts.agency ?? 'nativz';
   const isAC = agency === 'anderson';
@@ -1466,6 +1535,10 @@ export async function sendCalendarShareSendEmail(opts: {
     agency,
     startDate: opts.startDate,
     postCount: opts.postCount,
+    eyebrowOverride: opts.eyebrowOverride,
+    heroTitleOverride: opts.heroTitleOverride,
+    ctaLabelOverride: opts.ctaLabelOverride,
+    footerNoteOverride: opts.footerNoteOverride,
   });
   return sendAndLog({
     category: 'transactional',
@@ -1486,7 +1559,14 @@ export async function sendCalendarShareSendEmail(opts: {
       startDate: opts.startDate,
       endDate: opts.endDate,
       manualSend: true,
-      edited: !!(opts.subjectOverride || opts.messageOverride),
+      edited: !!(
+        opts.subjectOverride ||
+        opts.messageOverride ||
+        opts.eyebrowOverride !== undefined ||
+        opts.heroTitleOverride !== undefined ||
+        opts.ctaLabelOverride !== undefined ||
+        opts.footerNoteOverride !== undefined
+      ),
     },
   });
 }

@@ -14,6 +14,7 @@ import {
   Copy,
   ExternalLink,
   Eye,
+  Loader2,
   Mail,
   MessagesSquare,
   Send,
@@ -69,6 +70,14 @@ interface SendPreview {
   default_variant: SendVariant;
   subject: string;
   message: string;
+  /** Default eyebrow above the hero (e.g. "May Calendar"). */
+  eyebrow: string;
+  /** Default hero headline. */
+  headline: string;
+  /** Default CTA button label (no trailing arrow). */
+  cta_label: string;
+  /** Default footer note under the CTA. `{replyTo}` swapped at render. */
+  footer_note: string;
   html: string;
   share_url: string;
   recipients: { email: string; name: string | null }[];
@@ -292,8 +301,23 @@ export function CalendarLinkDetail({
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [subjectDraft, setSubjectDraft] = useState('');
   const [messageDraft, setMessageDraft] = useState('');
+  // Surrounding-shell drafts. The editor exposes every fragment of the
+  // email so admins can fully tailor a send: eyebrow ("MAY CALENDAR"),
+  // headline ("Your May content calendar is ready"), CTA button label,
+  // and the centered footer line under the CTA. Empty footer suppresses
+  // the line entirely.
+  const [eyebrowDraft, setEyebrowDraft] = useState('');
+  const [headlineDraft, setHeadlineDraft] = useState('');
+  const [ctaLabelDraft, setCtaLabelDraft] = useState('');
+  const [footerNoteDraft, setFooterNoteDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [ccSelf, setCcSelf] = useState(false);
+  // Live-rendered HTML reflecting the current drafts. Refetched (debounced)
+  // from the GET endpoint whenever the admin tweaks any draft so the
+  // preview iframe mirrors what the recipient will actually see — not just
+  // what the dialog opened with. Initialized from `preview.html`.
+  const [livePreviewHtml, setLivePreviewHtml] = useState<string | null>(null);
+  const [livePreviewLoading, setLivePreviewLoading] = useState(false);
   // Render toggle: edit the source copy, or eyeball the rendered HTML
   // exactly the way the recipient will see it. Defaults to edit so the
   // dialog opens "ready to tweak the subject", not "ready to send".
@@ -595,6 +619,74 @@ export function CalendarLinkDetail({
     return `${getCortexAppUrl(getBrandFromAgency(link.client_agency))}/s/${link.token}`;
   }, [link]);
 
+  // Live preview refetch. When the admin is on the "Rendered preview" tab
+  // and has tweaked any of the editable surfaces, we hit the GET endpoint
+  // with those drafts as query params so the iframe re-renders with the
+  // exact same HTML pipeline the recipient will see. Debounced so typing
+  // doesn't pelt the endpoint, and skipped when nothing has changed from
+  // the server defaults (the initial response is already the right HTML).
+  // Must live above the `!open` early return below — hook order rule.
+  useEffect(() => {
+    if (!link?.token || !preview || !previewVariant) return;
+    if (renderMode !== 'preview') return;
+    const subjectChanged = subjectDraft.trim() !== preview.subject.trim();
+    const messageChanged = messageDraft.trim() !== preview.message.trim();
+    const eyebrowChanged = eyebrowDraft !== preview.eyebrow;
+    const headlineChanged = headlineDraft !== preview.headline;
+    const ctaChanged = ctaLabelDraft !== preview.cta_label;
+    const footerChanged = footerNoteDraft !== preview.footer_note;
+    if (
+      !subjectChanged &&
+      !messageChanged &&
+      !eyebrowChanged &&
+      !headlineChanged &&
+      !ctaChanged &&
+      !footerChanged
+    ) {
+      setLivePreviewHtml(preview.html);
+      return;
+    }
+    const ctrl = new AbortController();
+    const t = window.setTimeout(async () => {
+      setLivePreviewLoading(true);
+      try {
+        const params = new URLSearchParams({ variant: previewVariant });
+        if (subjectChanged) params.set('subject', subjectDraft);
+        if (messageChanged) params.set('message', messageDraft);
+        if (eyebrowChanged) params.set('eyebrow', eyebrowDraft);
+        if (headlineChanged) params.set('headline', headlineDraft);
+        if (ctaChanged) params.set('cta_label', ctaLabelDraft);
+        if (footerChanged) params.set('footer_note', footerNoteDraft);
+        const res = await fetch(
+          `/api/calendar/share/${link!.token}/send?${params.toString()}`,
+          { cache: 'no-store', signal: ctrl.signal },
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as { html?: string };
+        if (data.html) setLivePreviewHtml(data.html);
+      } catch (err) {
+        if ((err as Error)?.name === 'AbortError') return;
+      } finally {
+        setLivePreviewLoading(false);
+      }
+    }, 350);
+    return () => {
+      ctrl.abort();
+      window.clearTimeout(t);
+    };
+  }, [
+    link,
+    preview,
+    previewVariant,
+    renderMode,
+    subjectDraft,
+    messageDraft,
+    eyebrowDraft,
+    headlineDraft,
+    ctaLabelDraft,
+    footerNoteDraft,
+  ]);
+
   if (!open || !link) return null;
 
   const isExpired = link.status === 'expired';
@@ -802,6 +894,11 @@ export function CalendarLinkDetail({
       setPreview(data);
       setSubjectDraft(data.subject);
       setMessageDraft(data.message);
+      setEyebrowDraft(data.eyebrow ?? '');
+      setHeadlineDraft(data.headline ?? '');
+      setCtaLabelDraft(data.cta_label ?? '');
+      setFooterNoteDraft(data.footer_note ?? '');
+      setLivePreviewHtml(data.html);
     } catch (err) {
       setPreviewError(err instanceof Error ? err.message : 'Failed to load preview');
     } finally {
@@ -814,6 +911,7 @@ export function CalendarLinkDetail({
     setPreviewVariant(null);
     setPreview(null);
     setPreviewError(null);
+    setLivePreviewHtml(null);
   }
 
   async function confirmSend() {
@@ -833,6 +931,18 @@ export function CalendarLinkDetail({
             : {}),
           ...(messageDraft.trim() !== preview.message.trim()
             ? { message: messageDraft.trim() }
+            : {}),
+          ...(eyebrowDraft !== preview.eyebrow
+            ? { eyebrow: eyebrowDraft.trim() }
+            : {}),
+          ...(headlineDraft !== preview.headline
+            ? { headline: headlineDraft.trim() }
+            : {}),
+          ...(ctaLabelDraft !== preview.cta_label && ctaLabelDraft.trim()
+            ? { cta_label: ctaLabelDraft.trim() }
+            : {}),
+          ...(footerNoteDraft !== preview.footer_note
+            ? { footer_note: footerNoteDraft }
             : {}),
           ...(ccSelf ? { cc_self: true } : {}),
         }),
@@ -963,11 +1073,21 @@ export function CalendarLinkDetail({
         preview={preview}
         subject={subjectDraft}
         message={messageDraft}
+        eyebrow={eyebrowDraft}
+        headline={headlineDraft}
+        ctaLabel={ctaLabelDraft}
+        footerNote={footerNoteDraft}
+        livePreviewHtml={livePreviewHtml}
+        livePreviewLoading={livePreviewLoading}
         renderMode={renderMode}
         sending={sending}
         ccSelf={ccSelf}
         onChangeSubject={setSubjectDraft}
         onChangeMessage={setMessageDraft}
+        onChangeEyebrow={setEyebrowDraft}
+        onChangeHeadline={setHeadlineDraft}
+        onChangeCtaLabel={setCtaLabelDraft}
+        onChangeFooterNote={setFooterNoteDraft}
         onChangeRenderMode={setRenderMode}
         onChangeCcSelf={setCcSelf}
         onClose={closeSendPreview}
@@ -1345,11 +1465,21 @@ function SendPreviewDialog({
   preview,
   subject,
   message,
+  eyebrow,
+  headline,
+  ctaLabel,
+  footerNote,
+  livePreviewHtml,
+  livePreviewLoading,
   renderMode,
   sending,
   ccSelf,
   onChangeSubject,
   onChangeMessage,
+  onChangeEyebrow,
+  onChangeHeadline,
+  onChangeCtaLabel,
+  onChangeFooterNote,
   onChangeRenderMode,
   onChangeCcSelf,
   onClose,
@@ -1362,11 +1492,21 @@ function SendPreviewDialog({
   preview: SendPreview | null;
   subject: string;
   message: string;
+  eyebrow: string;
+  headline: string;
+  ctaLabel: string;
+  footerNote: string;
+  livePreviewHtml: string | null;
+  livePreviewLoading: boolean;
   renderMode: 'edit' | 'preview';
   sending: boolean;
   ccSelf: boolean;
   onChangeSubject: (v: string) => void;
   onChangeMessage: (v: string) => void;
+  onChangeEyebrow: (v: string) => void;
+  onChangeHeadline: (v: string) => void;
+  onChangeCtaLabel: (v: string) => void;
+  onChangeFooterNote: (v: string) => void;
   onChangeRenderMode: (m: 'edit' | 'preview') => void;
   onChangeCcSelf: (v: boolean) => void;
   onClose: () => void;
@@ -1465,27 +1605,91 @@ function SendPreviewDialog({
                       className="block w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                     />
                   </Section>
+                  <Section label="Eyebrow">
+                    <input
+                      value={eyebrow}
+                      onChange={(e) => onChangeEyebrow(e.target.value)}
+                      maxLength={120}
+                      placeholder="May Calendar"
+                      className="block w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm uppercase tracking-wide text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                    />
+                    <p className="mt-1 text-[11px] text-text-muted">
+                      Small label above the hero card. Leave empty to hide.
+                    </p>
+                  </Section>
+                  <Section label="Headline">
+                    <input
+                      value={headline}
+                      onChange={(e) => onChangeHeadline(e.target.value)}
+                      maxLength={200}
+                      placeholder="Your May content calendar is ready"
+                      className="block w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                    />
+                  </Section>
                   <Section label="Message">
                     <textarea
                       value={message}
                       onChange={(e) => onChangeMessage(e.target.value)}
-                      rows={10}
+                      rows={6}
                       className="block w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm leading-relaxed text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                     />
                   </Section>
+                  <Section label="Button">
+                    <input
+                      value={ctaLabel}
+                      onChange={(e) => onChangeCtaLabel(e.target.value)}
+                      maxLength={80}
+                      placeholder={
+                        variant === 'revised'
+                          ? 'Review the updated posts'
+                          : 'Open content calendar'
+                      }
+                      className="block w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                    />
+                    {variant !== 'revised' && (
+                      <p className="mt-1 text-[11px] text-text-muted">
+                        A &quot;&rarr;&quot; arrow is appended automatically at render time.
+                      </p>
+                    )}
+                  </Section>
+                  <Section label="Footer note">
+                    <textarea
+                      value={footerNote}
+                      onChange={(e) => onChangeFooterNote(e.target.value)}
+                      rows={3}
+                      maxLength={500}
+                      placeholder="Questions or want to chat about a post? Just reply…"
+                      className="block w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm leading-relaxed text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                    />
+                    <p className="mt-1 text-[11px] text-text-muted">
+                      Centered line under the button. Use{' '}
+                      <code className="rounded bg-surface px-1 py-0.5 text-[10px] text-text-secondary">
+                        {'{replyTo}'}
+                      </code>{' '}
+                      to insert the agency reply-to address. Leave empty to hide.
+                    </p>
+                  </Section>
                   <p className="text-[11px] text-text-muted">
-                    Edits stay scoped to this send. The default copy refreshes every time you reopen the dialog.
+                    Edits stay scoped to this send. Defaults refresh every time you reopen the dialog.
                   </p>
                 </>
               ) : (
                 <Section label="Rendered email">
-                  <iframe
-                    title="Email preview"
-                    srcDoc={preview.html}
-                    className="h-[420px] w-full rounded-md border border-nativz-border bg-white"
-                  />
+                  <div className="relative">
+                    <iframe
+                      title="Email preview"
+                      srcDoc={livePreviewHtml ?? preview.html}
+                      className="h-[420px] w-full rounded-md border border-nativz-border bg-white"
+                    />
+                    {livePreviewLoading && (
+                      <div className="pointer-events-none absolute right-2 top-2 inline-flex items-center gap-1 rounded-md bg-surface/90 px-2 py-1 text-[11px] text-text-secondary shadow">
+                        <Loader2 size={11} className="animate-spin" />
+                        Updating…
+                      </div>
+                    )}
+                  </div>
                   <p className="mt-2 text-[11px] text-text-muted">
-                    Layout reference using the default copy. Subject + body edits in the other tab apply at send time.
+                    Live preview reflecting your current edits. Switch back to &quot;Edit copy&quot; to keep tweaking.
                   </p>
                 </Section>
               )}

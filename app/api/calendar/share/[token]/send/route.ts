@@ -161,6 +161,17 @@ export async function GET(
   const variantParse = VariantSchema.safeParse(variantParam);
   const variant = variantParse.success ? variantParse.data : defaultVariant;
 
+  // Optional override params for the live rendered preview. The dialog
+  // sends these as the admin types in the "Edit copy" tab so the iframe
+  // mirrors what the recipient will see, including the eyebrow / hero /
+  // CTA / footer surfaces that used to be hardcoded.
+  const subjectParam = url.searchParams.get('subject');
+  const messageParam = url.searchParams.get('message');
+  const eyebrowParam = url.searchParams.get('eyebrow');
+  const heroTitleParam = url.searchParams.get('headline');
+  const ctaLabelParam = url.searchParams.get('cta_label');
+  const footerNoteParam = url.searchParams.get('footer_note');
+
   const pocFirstNames = eligible.map((c) => firstName(c.name));
   const draft = buildCalendarShareSendDraft({
     variant,
@@ -172,15 +183,22 @@ export async function GET(
     agency,
   });
 
+  const subjectForPreview = subjectParam?.trim() || draft.subject;
+  const messageForPreview = messageParam?.trim() || draft.message;
+
   const shareUrl = resolveShareUrl(agency, token);
   const html = buildCalendarShareSendHtml({
     variant,
-    subject: draft.subject,
-    message: draft.message,
+    subject: subjectForPreview,
+    message: messageForPreview,
     shareUrl,
     agency,
     startDate,
     postCount,
+    eyebrowOverride: eyebrowParam ?? undefined,
+    heroTitleOverride: heroTitleParam ?? undefined,
+    ctaLabelOverride: ctaLabelParam ?? undefined,
+    footerNoteOverride: footerNoteParam ?? undefined,
   });
 
   return NextResponse.json({
@@ -188,6 +206,10 @@ export async function GET(
     default_variant: defaultVariant,
     subject: draft.subject,
     message: draft.message,
+    eyebrow: draft.eyebrow,
+    headline: draft.heroTitle,
+    cta_label: draft.ctaLabel,
+    footer_note: draft.footerNote,
     html,
     share_url: shareUrl,
     recipients: eligible.map((c) => ({ email: c.email, name: c.name })),
@@ -206,6 +228,14 @@ const PostBodySchema = z
     variant: VariantSchema,
     subject: z.string().trim().min(1).max(200).optional(),
     message: z.string().trim().min(1).max(5000).optional(),
+    // Surrounding shell overrides. Empty strings are accepted (and cleared
+    // to the default at render time for eyebrow/heroTitle/ctaLabel; the
+    // footer line accepts an explicit empty string to suppress the
+    // "Questions or want to chat..." footer entirely).
+    eyebrow: z.string().trim().max(120).optional(),
+    headline: z.string().trim().max(200).optional(),
+    cta_label: z.string().trim().min(1).max(80).optional(),
+    footer_note: z.string().max(500).optional(),
     cc: z.array(z.string().email()).max(10).optional(),
     // Server-resolved CC: when true, the admin who clicked Send is added
     // to the cc[] list. Avoids exposing the admin's email to the client
@@ -285,6 +315,10 @@ export async function POST(
     dropId: link.drop_id,
     subjectOverride: parsed.data.subject,
     messageOverride: parsed.data.message,
+    eyebrowOverride: parsed.data.eyebrow,
+    heroTitleOverride: parsed.data.headline,
+    ctaLabelOverride: parsed.data.cta_label,
+    footerNoteOverride: parsed.data.footer_note,
   });
 
   if (!result.ok) {
