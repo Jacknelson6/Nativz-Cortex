@@ -385,6 +385,27 @@ export async function GET(request: NextRequest) {
         platforms,
         review_status,
         media: mediaItems,
+        // Per-platform override fields. Surfaced so the post editor can
+        // hydrate its Platform settings panel without a second fetch.
+        // Migrations 218 + 258.
+        tagged_people: post.tagged_people ?? [],
+        collaborator_handles: post.collaborator_handles ?? [],
+        first_comment: post.first_comment ?? null,
+        instagram_share_to_feed: post.instagram_share_to_feed ?? null,
+        instagram_content_type: post.instagram_content_type ?? null,
+        facebook_content_type: post.facebook_content_type ?? null,
+        facebook_page_id: post.facebook_page_id ?? null,
+        linkedin_document_title: post.linkedin_document_title ?? null,
+        linkedin_organization_urn: post.linkedin_organization_urn ?? null,
+        linkedin_disable_link_preview: post.linkedin_disable_link_preview ?? null,
+        youtube_title: post.youtube_title ?? null,
+        youtube_description: post.youtube_description ?? null,
+        youtube_tags: post.youtube_tags ?? null,
+        youtube_privacy: post.youtube_privacy ?? null,
+        youtube_made_for_kids: post.youtube_made_for_kids ?? null,
+        tiktok_allow_comment: post.tiktok_allow_comment ?? null,
+        tiktok_allow_duet: post.tiktok_allow_duet ?? null,
+        tiktok_allow_stitch: post.tiktok_allow_stitch ?? null,
       };
     });
 

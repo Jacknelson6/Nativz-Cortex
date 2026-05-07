@@ -22,6 +22,28 @@ export interface CalendarPost {
   }[];
   review_status: 'none' | 'pending' | 'approved' | 'changes_requested';
   media: { id: string; filename: string; storage_path: string; thumbnail_url: string | null; late_media_url: string | null; mime_type: string | null }[];
+  // Per-platform overrides (migrations 218 + 258). Hydrated from
+  // /api/scheduler/posts so the post editor's Platform settings panel can
+  // round-trip values without a second fetch. All optional/nullable so
+  // the publisher's defaults still apply when the user hasn't set anything.
+  tagged_people?: string[];
+  collaborator_handles?: string[];
+  first_comment?: string | null;
+  instagram_share_to_feed?: boolean | null;
+  instagram_content_type?: 'feed' | 'reels' | 'story' | null;
+  facebook_content_type?: 'feed' | 'reel' | 'story' | null;
+  facebook_page_id?: string | null;
+  linkedin_document_title?: string | null;
+  linkedin_organization_urn?: string | null;
+  linkedin_disable_link_preview?: boolean | null;
+  youtube_title?: string | null;
+  youtube_description?: string | null;
+  youtube_tags?: string[] | null;
+  youtube_privacy?: 'public' | 'unlisted' | 'private' | null;
+  youtube_made_for_kids?: boolean | null;
+  tiktok_allow_comment?: boolean | null;
+  tiktok_allow_duet?: boolean | null;
+  tiktok_allow_stitch?: boolean | null;
 }
 
 export interface MediaItem {

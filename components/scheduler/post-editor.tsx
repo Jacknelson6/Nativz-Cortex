@@ -51,6 +51,26 @@ export interface PostEditorData {
   cover_image_url: string | null;
   tagged_people: string[];
   collaborator_handles: string[];
+  // Per-platform overrides (migrations 218 + 258). Snake_case to match the
+  // API schema directly — `handleSavePost` spreads this body straight into
+  // the POST/PUT payload without re-mapping. Nulls mean "use the
+  // publisher's default"; explicit nulls clear the field on PUT.
+  first_comment?: string | null;
+  instagram_share_to_feed?: boolean | null;
+  instagram_content_type?: 'feed' | 'reels' | 'story' | null;
+  facebook_content_type?: 'feed' | 'reel' | 'story' | null;
+  facebook_page_id?: string | null;
+  linkedin_document_title?: string | null;
+  linkedin_organization_urn?: string | null;
+  linkedin_disable_link_preview?: boolean | null;
+  youtube_title?: string | null;
+  youtube_description?: string | null;
+  youtube_tags?: string[] | null;
+  youtube_privacy?: 'public' | 'unlisted' | 'private' | null;
+  youtube_made_for_kids?: boolean | null;
+  tiktok_allow_comment?: boolean | null;
+  tiktok_allow_duet?: boolean | null;
+  tiktok_allow_stitch?: boolean | null;
 }
 
 export function PostEditor({
@@ -79,6 +99,33 @@ export function PostEditor({
   const [collaborators, setCollaborators] = useState<string[]>([]);
   const [collabInput, setCollabInput] = useState('');
   const [showMoreOptions, setShowMoreOptions] = useState(false);
+  const [showPlatformSettings, setShowPlatformSettings] = useState(false);
+
+  // Per-platform override state (migrations 218 + 258). Each field mirrors
+  // the snake_case API schema; null = "publisher default". `firstComment`
+  // is shared across IG/FB/LI/YT (TikTok doesn't accept it).
+  const [firstComment, setFirstComment] = useState<string>('');
+  // Instagram
+  const [igContentType, setIgContentType] = useState<'feed' | 'reels' | 'story' | ''>('');
+  const [igShareToFeed, setIgShareToFeed] = useState<boolean | null>(null);
+  // Facebook
+  const [fbContentType, setFbContentType] = useState<'feed' | 'reel' | 'story' | ''>('');
+  const [fbPageId, setFbPageId] = useState<string>('');
+  // LinkedIn
+  const [liDocTitle, setLiDocTitle] = useState<string>('');
+  const [liOrgUrn, setLiOrgUrn] = useState<string>('');
+  const [liDisableLinkPreview, setLiDisableLinkPreview] = useState<boolean>(false);
+  // YouTube
+  const [ytTitle, setYtTitle] = useState<string>('');
+  const [ytDescription, setYtDescription] = useState<string>('');
+  const [ytTagsInput, setYtTagsInput] = useState<string>('');
+  const [ytPrivacy, setYtPrivacy] = useState<'public' | 'unlisted' | 'private' | ''>('');
+  const [ytMadeForKids, setYtMadeForKids] = useState<boolean>(false);
+  // TikTok
+  const [ttAllowComment, setTtAllowComment] = useState<boolean | null>(null);
+  const [ttAllowDuet, setTtAllowDuet] = useState<boolean | null>(null);
+  const [ttAllowStitch, setTtAllowStitch] = useState<boolean | null>(null);
+
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [forcing, setForcing] = useState(false);
@@ -127,6 +174,26 @@ export function PostEditor({
       setSelectedProfiles(post.platforms.map(p => p.profile_id));
       setPublishMode(post.status === 'draft' ? 'draft' : 'schedule');
       setCoverImageUrl(post.cover_image_url ?? null);
+      setTaggedPeople(post.tagged_people ?? []);
+      setCollaborators(post.collaborator_handles ?? []);
+      // Per-platform overrides — hydrate from the row, fall back to '' / null
+      // so the user sees "publisher default" until they explicitly set one.
+      setFirstComment(post.first_comment ?? '');
+      setIgContentType(post.instagram_content_type ?? '');
+      setIgShareToFeed(post.instagram_share_to_feed ?? null);
+      setFbContentType(post.facebook_content_type ?? '');
+      setFbPageId(post.facebook_page_id ?? '');
+      setLiDocTitle(post.linkedin_document_title ?? '');
+      setLiOrgUrn(post.linkedin_organization_urn ?? '');
+      setLiDisableLinkPreview(post.linkedin_disable_link_preview ?? false);
+      setYtTitle(post.youtube_title ?? '');
+      setYtDescription(post.youtube_description ?? '');
+      setYtTagsInput((post.youtube_tags ?? []).join(', '));
+      setYtPrivacy(post.youtube_privacy ?? '');
+      setYtMadeForKids(post.youtube_made_for_kids ?? false);
+      setTtAllowComment(post.tiktok_allow_comment ?? null);
+      setTtAllowDuet(post.tiktok_allow_duet ?? null);
+      setTtAllowStitch(post.tiktok_allow_stitch ?? null);
       if (post.scheduled_at) {
         const d = new Date(post.scheduled_at);
         setScheduledDate(d.toISOString().split('T')[0]);
@@ -142,6 +209,23 @@ export function PostEditor({
       setCoverImageUrl(null);
       setSelectingCover(false);
       setIsPlaying(false);
+      // Reset all overrides to "publisher default"
+      setFirstComment('');
+      setIgContentType('');
+      setIgShareToFeed(null);
+      setFbContentType('');
+      setFbPageId('');
+      setLiDocTitle('');
+      setLiOrgUrn('');
+      setLiDisableLinkPreview(false);
+      setYtTitle('');
+      setYtDescription('');
+      setYtTagsInput('');
+      setYtPrivacy('');
+      setYtMadeForKids(false);
+      setTtAllowComment(null);
+      setTtAllowDuet(null);
+      setTtAllowStitch(null);
 
       if (defaultDate) {
         setScheduledDate(defaultDate.toISOString().split('T')[0]);
@@ -184,6 +268,54 @@ export function PostEditor({
         scheduled_at = new Date(`${scheduledDate}T${scheduledTime}`).toISOString();
       }
 
+      // Per-platform overrides — only include a platform's fields when at
+      // least one profile of that platform is currently selected. Sending
+      // null for a field on PUT clears it; sending undefined leaves it
+      // untouched. We send null when the user touched the field then
+      // emptied it (e.g. cleared a YouTube title), and undefined when no
+      // profile of that platform is selected at all.
+      const selected = profiles.filter(p => selectedProfiles.includes(p.id));
+      const has = (platform: SocialPlatform) =>
+        selected.some(p => p.platform === platform);
+
+      const trimOrNull = (s: string): string | null => (s.trim() ? s.trim() : null);
+      const ytTagsArray = ytTagsInput
+        .split(',')
+        .map(t => t.trim().replace(/^#/, ''))
+        .filter(Boolean);
+
+      const overrides: Partial<PostEditorData> = {
+        // Shared — applies to whichever platform supports it (IG/FB/LI/YT,
+        // not TikTok). Stored once; the publisher fans it out per-platform.
+        first_comment: trimOrNull(firstComment),
+      };
+
+      if (has('instagram')) {
+        overrides.instagram_content_type = igContentType || null;
+        overrides.instagram_share_to_feed = igShareToFeed;
+      }
+      if (has('facebook')) {
+        overrides.facebook_content_type = fbContentType || null;
+        overrides.facebook_page_id = trimOrNull(fbPageId);
+      }
+      if (has('linkedin')) {
+        overrides.linkedin_document_title = trimOrNull(liDocTitle);
+        overrides.linkedin_organization_urn = trimOrNull(liOrgUrn);
+        overrides.linkedin_disable_link_preview = liDisableLinkPreview;
+      }
+      if (has('youtube')) {
+        overrides.youtube_title = trimOrNull(ytTitle);
+        overrides.youtube_description = trimOrNull(ytDescription);
+        overrides.youtube_tags = ytTagsArray.length ? ytTagsArray : null;
+        overrides.youtube_privacy = ytPrivacy || null;
+        overrides.youtube_made_for_kids = ytMadeForKids;
+      }
+      if (has('tiktok')) {
+        overrides.tiktok_allow_comment = ttAllowComment;
+        overrides.tiktok_allow_duet = ttAllowDuet;
+        overrides.tiktok_allow_stitch = ttAllowStitch;
+      }
+
       await onSave({
         id: post?.id,
         caption,
@@ -195,6 +327,7 @@ export function PostEditor({
         cover_image_url: coverImageUrl,
         tagged_people: taggedPeople,
         collaborator_handles: collaborators,
+        ...overrides,
       });
       onClose();
     } catch (err) {
@@ -705,6 +838,263 @@ export function PostEditor({
                     </div>
                   </div>
                 )}
+
+                {/* Platform settings (per-platform routing + first comment) */}
+                {(() => {
+                  const selectedPlatforms = profiles
+                    .filter(p => selectedProfiles.includes(p.id))
+                    .map(p => p.platform);
+                  const has = (platform: SocialPlatform) => selectedPlatforms.includes(platform);
+                  const supportsFirstComment = has('instagram') || has('facebook') || has('linkedin') || has('youtube');
+                  // Drop overrides for any platform that's no longer selected so
+                  // the panel header count + saved payload stay in sync.
+                  const hasOverrides =
+                    (supportsFirstComment && firstComment.trim() !== '') ||
+                    (has('instagram') && (igContentType !== '' || igShareToFeed !== null)) ||
+                    (has('facebook') && (fbContentType !== '' || fbPageId.trim() !== '')) ||
+                    (has('linkedin') && (liDocTitle.trim() !== '' || liOrgUrn.trim() !== '' || liDisableLinkPreview)) ||
+                    (has('youtube') && (ytTitle.trim() !== '' || ytDescription.trim() !== '' || ytTagsInput.trim() !== '' || ytPrivacy !== '' || ytMadeForKids)) ||
+                    (has('tiktok') && (ttAllowComment !== null || ttAllowDuet !== null || ttAllowStitch !== null));
+                  return (
+                    <div className="mt-3">
+                      <button
+                        onClick={() => setShowPlatformSettings(!showPlatformSettings)}
+                        className="flex items-center gap-1 text-xs text-text-muted hover:text-text-secondary cursor-pointer"
+                      >
+                        <ChevronDown size={12} className={`transition-transform ${showPlatformSettings ? 'rotate-180' : ''}`} />
+                        Platform settings
+                        {hasOverrides && (
+                          <span className="ml-1 inline-flex items-center rounded-full bg-accent-surface px-1.5 py-0.5 text-[10px] text-accent-text">
+                            Customised
+                          </span>
+                        )}
+                      </button>
+
+                      {showPlatformSettings && (
+                        <div className="mt-3 space-y-4">
+                          {selectedProfiles.length === 0 && (
+                            <p className="text-xs text-text-muted">Select an account above to customise platform settings.</p>
+                          )}
+
+                          {supportsFirstComment && (
+                            <div>
+                              <label className="text-xs font-medium text-text-muted mb-1 block">First comment</label>
+                              <textarea
+                                value={firstComment}
+                                onChange={(e) => setFirstComment(e.target.value)}
+                                placeholder="Posted as the first comment after publish (IG, FB, LI, YT)."
+                                rows={2}
+                                className="w-full rounded-lg border border-nativz-border bg-transparent px-2 py-1 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text resize-none"
+                              />
+                              <p className="mt-1 text-[10px] text-text-muted">Stories drop the first comment automatically.</p>
+                            </div>
+                          )}
+
+                          {has('instagram') && (
+                            <div className="rounded-lg border border-nativz-border p-3 space-y-2">
+                              <p className="text-xs font-medium text-text-secondary">Instagram</p>
+                              <div>
+                                <label className="text-[10px] uppercase tracking-wide text-text-muted block mb-1">Content type</label>
+                                <div className="flex gap-1">
+                                  {(['', 'feed', 'reels', 'story'] as const).map(opt => (
+                                    <button
+                                      key={opt || 'auto'}
+                                      onClick={() => setIgContentType(opt)}
+                                      className={`px-2 py-1 text-xs rounded-md border transition-colors cursor-pointer ${
+                                        igContentType === opt
+                                          ? 'border-accent-text bg-accent-surface text-accent-text'
+                                          : 'border-nativz-border text-text-muted hover:text-text-secondary'
+                                      }`}
+                                    >
+                                      {opt === '' ? 'Auto' : opt === 'reels' ? 'Reels' : opt === 'story' ? 'Story' : 'Feed'}
+                                    </button>
+                                  ))}
+                                </div>
+                                <p className="mt-1 text-[10px] text-text-muted">Auto picks reels for video, feed for image, carousel for multi-image.</p>
+                              </div>
+                              {igContentType === 'reels' && (
+                                <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={igShareToFeed ?? true}
+                                    onChange={(e) => setIgShareToFeed(e.target.checked)}
+                                    className="accent-accent-text"
+                                  />
+                                  Share reel to feed
+                                </label>
+                              )}
+                            </div>
+                          )}
+
+                          {has('facebook') && (
+                            <div className="rounded-lg border border-nativz-border p-3 space-y-2">
+                              <p className="text-xs font-medium text-text-secondary">Facebook</p>
+                              <div>
+                                <label className="text-[10px] uppercase tracking-wide text-text-muted block mb-1">Content type</label>
+                                <div className="flex gap-1">
+                                  {(['', 'feed', 'reel', 'story'] as const).map(opt => (
+                                    <button
+                                      key={opt || 'auto'}
+                                      onClick={() => setFbContentType(opt)}
+                                      className={`px-2 py-1 text-xs rounded-md border transition-colors cursor-pointer ${
+                                        fbContentType === opt
+                                          ? 'border-accent-text bg-accent-surface text-accent-text'
+                                          : 'border-nativz-border text-text-muted hover:text-text-secondary'
+                                      }`}
+                                    >
+                                      {opt === '' ? 'Auto' : opt === 'reel' ? 'Reel' : opt === 'story' ? 'Story' : 'Feed'}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div>
+                                <label className="text-[10px] uppercase tracking-wide text-text-muted block mb-1">Page ID (optional)</label>
+                                <input
+                                  value={fbPageId}
+                                  onChange={(e) => setFbPageId(e.target.value)}
+                                  placeholder="Override the default Facebook page"
+                                  className="w-full rounded-lg border border-nativz-border bg-transparent px-2 py-1 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {has('linkedin') && (
+                            <div className="rounded-lg border border-nativz-border p-3 space-y-2">
+                              <p className="text-xs font-medium text-text-secondary">LinkedIn</p>
+                              <div>
+                                <label className="text-[10px] uppercase tracking-wide text-text-muted block mb-1">Organization URN (optional)</label>
+                                <input
+                                  value={liOrgUrn}
+                                  onChange={(e) => setLiOrgUrn(e.target.value)}
+                                  placeholder="urn:li:organization:123456"
+                                  className="w-full rounded-lg border border-nativz-border bg-transparent px-2 py-1 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text font-mono"
+                                />
+                                <p className="mt-1 text-[10px] text-text-muted">Posts to a company page instead of the personal profile.</p>
+                              </div>
+                              <div>
+                                <label className="text-[10px] uppercase tracking-wide text-text-muted block mb-1">Document title (PDF posts)</label>
+                                <input
+                                  value={liDocTitle}
+                                  onChange={(e) => setLiDocTitle(e.target.value)}
+                                  placeholder="Title shown above the document"
+                                  className="w-full rounded-lg border border-nativz-border bg-transparent px-2 py-1 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text"
+                                />
+                              </div>
+                              <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={liDisableLinkPreview}
+                                  onChange={(e) => setLiDisableLinkPreview(e.target.checked)}
+                                  className="accent-accent-text"
+                                />
+                                Disable link preview
+                              </label>
+                            </div>
+                          )}
+
+                          {has('youtube') && (
+                            <div className="rounded-lg border border-nativz-border p-3 space-y-2">
+                              <p className="text-xs font-medium text-text-secondary">YouTube</p>
+                              <div>
+                                <label className="text-[10px] uppercase tracking-wide text-text-muted block mb-1">Title (optional)</label>
+                                <input
+                                  value={ytTitle}
+                                  onChange={(e) => setYtTitle(e.target.value)}
+                                  placeholder="Defaults to first line of caption"
+                                  maxLength={100}
+                                  className="w-full rounded-lg border border-nativz-border bg-transparent px-2 py-1 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text"
+                                />
+                                <p className="mt-1 text-[10px] text-text-muted">{ytTitle.length}/100</p>
+                              </div>
+                              <div>
+                                <label className="text-[10px] uppercase tracking-wide text-text-muted block mb-1">Description (optional)</label>
+                                <textarea
+                                  value={ytDescription}
+                                  onChange={(e) => setYtDescription(e.target.value)}
+                                  placeholder="Defaults to caption"
+                                  rows={3}
+                                  className="w-full rounded-lg border border-nativz-border bg-transparent px-2 py-1 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text resize-none"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] uppercase tracking-wide text-text-muted block mb-1">Tags (optional)</label>
+                                <input
+                                  value={ytTagsInput}
+                                  onChange={(e) => setYtTagsInput(e.target.value)}
+                                  placeholder="comma, separated, tags"
+                                  className="w-full rounded-lg border border-nativz-border bg-transparent px-2 py-1 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text"
+                                />
+                                <p className="mt-1 text-[10px] text-text-muted">Defaults to caption hashtags.</p>
+                              </div>
+                              <div>
+                                <label className="text-[10px] uppercase tracking-wide text-text-muted block mb-1">Privacy</label>
+                                <div className="flex gap-1">
+                                  {(['', 'public', 'unlisted', 'private'] as const).map(opt => (
+                                    <button
+                                      key={opt || 'auto'}
+                                      onClick={() => setYtPrivacy(opt)}
+                                      className={`px-2 py-1 text-xs rounded-md border transition-colors cursor-pointer ${
+                                        ytPrivacy === opt
+                                          ? 'border-accent-text bg-accent-surface text-accent-text'
+                                          : 'border-nativz-border text-text-muted hover:text-text-secondary'
+                                      }`}
+                                    >
+                                      {opt === '' ? 'Auto' : opt.charAt(0).toUpperCase() + opt.slice(1)}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={ytMadeForKids}
+                                  onChange={(e) => setYtMadeForKids(e.target.checked)}
+                                  className="accent-accent-text"
+                                />
+                                Made for kids
+                              </label>
+                            </div>
+                          )}
+
+                          {has('tiktok') && (
+                            <div className="rounded-lg border border-nativz-border p-3 space-y-2">
+                              <p className="text-xs font-medium text-text-secondary">TikTok</p>
+                              {([
+                                { label: 'Allow comments', value: ttAllowComment, set: setTtAllowComment },
+                                { label: 'Allow duet', value: ttAllowDuet, set: setTtAllowDuet },
+                                { label: 'Allow stitch', value: ttAllowStitch, set: setTtAllowStitch },
+                              ] as const).map(({ label, value, set }) => (
+                                <div key={label} className="flex items-center justify-between gap-2">
+                                  <span className="text-xs text-text-secondary">{label}</span>
+                                  <div className="flex gap-1">
+                                    {([
+                                      { v: null, l: 'Auto' },
+                                      { v: true, l: 'On' },
+                                      { v: false, l: 'Off' },
+                                    ] as const).map(opt => (
+                                      <button
+                                        key={String(opt.v)}
+                                        onClick={() => set(opt.v)}
+                                        className={`px-2 py-1 text-[10px] rounded-md border transition-colors cursor-pointer ${
+                                          value === opt.v
+                                            ? 'border-accent-text bg-accent-surface text-accent-text'
+                                            : 'border-nativz-border text-text-muted hover:text-text-secondary'
+                                        }`}
+                                      >
+                                        {opt.l}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
