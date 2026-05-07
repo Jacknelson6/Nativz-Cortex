@@ -405,9 +405,17 @@ async function handleShareGet(
   return NextResponse.json({
     clientId: drop.client_id,
     clientName: client?.name ?? 'Brand',
+    /**
+     * Share-link UUID. Editor-only inline-rename in the viewer header
+     * PATCHes /api/calendar/review/{shareLinkId} (the same endpoint the
+     * portal "Your reviews" table uses), so both surfaces stay in lockstep
+     * without duplicating endpoints. The id itself is no more sensitive
+     * than the token already in the URL — the PATCH route enforces admin.
+     */
+    shareLinkId: link.id,
     // Editable share-link name (the same field the portal "Your reviews"
     // table renders in the project-name column). Null for legacy links
-    // that haven't been named yet — viewer falls back to the generic
+    // that haven't been named yet, viewer falls back to the generic
     // brand-scoped header copy.
     projectName: (link.name ?? '').trim() || null,
     isEditor,

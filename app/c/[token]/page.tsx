@@ -116,6 +116,13 @@ interface SharedDrop {
   clientId: string;
   clientName: string;
   /**
+   * Share-link UUID. Editor-only inline-rename in the viewer header
+   * PATCHes the same /api/calendar/review/{id} endpoint the portal
+   * "Your reviews" table uses, so the title stays in sync across both
+   * surfaces without duplicating endpoints.
+   */
+  shareLinkId: string;
+  /**
    * Editable per-share name (the same value the portal "Your reviews"
    * table renders as the project-name column). When set, the viewer
    * header uses this verbatim instead of the generic
@@ -708,17 +715,24 @@ function SharedDropView({
           </div>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <h1 className="font-display text-xl font-semibold tracking-tight text-text-primary sm:text-3xl">
-                {/*
-                  Mirror the portal "Your reviews" project-name column.
-                  When the admin renames the share link in that table the
-                  same string lands here, so the viewer sees the title
-                  the team gave the project (e.g. "Mother's Day Post")
-                  instead of a generic brand label. Falls back to the
-                  brand-scoped header copy for legacy unnamed links.
-                */}
-                {data.projectName ?? `${data.clientName}, content calendar`}
-              </h1>
+              {/*
+                Mirrors the portal "Your reviews" project-name column.
+                When the admin renames the share link there the same
+                string lands here, and editors can rename it inline from
+                this header. Both surfaces PATCH the same review row
+                (/api/calendar/review/{shareLinkId}) so they stay in
+                lockstep without duplicating endpoints. Non-editors see
+                a static title only.
+              */}
+              <ProjectNameHeader
+                projectName={data.projectName}
+                fallback={`${data.clientName}, content calendar`}
+                isEditor={data.isEditor}
+                shareLinkId={data.shareLinkId}
+                onRenamed={(next) =>
+                  setData((prev) => (prev ? { ...prev, projectName: next } : prev))
+                }
+              />
               <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
                 <p className="text-sm text-text-secondary sm:text-base">
                   {total} post{total !== 1 ? 's' : ''} to review · scheduled {formatDropDateRange(data.drop.start_date, data.drop.end_date)}
@@ -974,6 +988,122 @@ function SharedDropView({
       />
 
     </div>
+  );
+}
+
+/**
+ * Editable share-link H1. Mirrors the inline-rename UX from the portal
+ * "Your reviews" table (components/scheduler/review-table.tsx → NameCell)
+ * but renders as a large header instead of a table cell. Both surfaces
+ * PATCH the same row (/api/calendar/review/{shareLinkId}) with `{ name }`
+ * so renames stay in lockstep. Empty input clears back to fallback.
+ */
+function ProjectNameHeader({
+  projectName,
+  fallback,
+  isEditor,
+  shareLinkId,
+  onRenamed,
+}: {
+  projectName: string | null;
+  fallback: string;
+  isEditor: boolean;
+  shareLinkId: string;
+  onRenamed: (next: string | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(projectName ?? '');
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // Keep draft in sync when the canonical value changes from elsewhere
+  // (e.g. another tab/portal rename, polling refetch).
+  useEffect(() => {
+    if (!editing) setDraft(projectName ?? '');
+  }, [projectName, editing]);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  const headingClass =
+    'font-display text-xl font-semibold tracking-tight text-text-primary sm:text-3xl';
+
+  if (!isEditor) {
+    return <h1 className={headingClass}>{projectName ?? fallback}</h1>;
+  }
+
+  async function save() {
+    const trimmed = draft.trim();
+    const next = trimmed.length > 0 ? trimmed : null;
+    setEditing(false);
+    if (next === (projectName ?? null)) return;
+    const prev = projectName ?? null;
+    onRenamed(next); // optimistic
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/calendar/review/${shareLinkId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: next }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? 'Rename failed');
+      }
+      toast.success('Project name updated');
+    } catch (err) {
+      onRenamed(prev); // rollback
+      toast.error(err instanceof Error ? err.message : 'Rename failed');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => void save()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            (e.target as HTMLInputElement).blur();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            setDraft(projectName ?? '');
+            setEditing(false);
+          }
+        }}
+        placeholder={fallback}
+        disabled={saving}
+        maxLength={120}
+        className={`${headingClass} w-full max-w-full rounded-md border border-nativz-border bg-transparent px-2 py-1 outline-none focus:border-accent`}
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setDraft(projectName ?? '');
+        setEditing(true);
+      }}
+      className="group inline-flex max-w-full items-center gap-2 rounded-md text-left transition-colors hover:text-text-primary"
+      title="Rename"
+    >
+      <span className={`${headingClass} truncate`}>{projectName ?? fallback}</span>
+      <Pencil
+        size={16}
+        className="shrink-0 text-text-tertiary opacity-0 transition-opacity group-hover:opacity-100"
+      />
+    </button>
   );
 }
 
