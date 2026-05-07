@@ -80,6 +80,7 @@ type PlatformKey = (typeof ALL_PLATFORMS)[number]['key'];
 type PlatformDef = (typeof ALL_PLATFORMS)[number];
 
 type SlotStatus = 'connected' | 'disconnected' | 'missing';
+type AccountOwner = 'agency' | 'client' | 'unknown';
 
 interface PlatformSlot {
   status: SlotStatus;
@@ -87,6 +88,7 @@ interface PlatformSlot {
   disconnectedAt: string | null;
   tokenExpiresAt: string | null;
   tokenStatus: string | null;
+  accountOwner: AccountOwner;
 }
 
 interface ClientRow {
@@ -301,6 +303,46 @@ export function ConnectionsTab() {
           rows={filtered}
           platforms={visiblePlatforms}
           onPickClient={setInviteFor}
+          onCycleOwner={async (clientId, platformKey, nextOwner) => {
+            setData((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                clients: prev.clients.map((c) =>
+                  c.id === clientId
+                    ? {
+                        ...c,
+                        profiles: {
+                          ...c.profiles,
+                          [platformKey]: {
+                            ...c.profiles[platformKey],
+                            accountOwner: nextOwner,
+                          },
+                        },
+                      }
+                    : c,
+                ),
+              };
+            });
+            try {
+              const res = await fetch(
+                '/api/admin/content-tools/connections-matrix/owner',
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    clientId,
+                    platform: platformKey,
+                    accountOwner: nextOwner,
+                  }),
+                },
+              );
+              if (!res.ok) throw new Error('save failed');
+            } catch {
+              toast.error('Could not save ownership, reloading');
+              void load(true);
+            }
+          }}
         />
       )}
 
@@ -346,10 +388,16 @@ function MatrixTable({
   rows,
   platforms,
   onPickClient,
+  onCycleOwner,
 }: {
   rows: ClientRow[];
   platforms: readonly PlatformDef[];
   onPickClient: (c: ClientRow) => void;
+  onCycleOwner: (
+    clientId: string,
+    platformKey: PlatformKey,
+    nextOwner: AccountOwner,
+  ) => void | Promise<void>;
 }) {
   return (
     <div className="overflow-x-auto">
@@ -399,7 +447,11 @@ function MatrixTable({
               </td>
               {platforms.map(({ key }) => (
                 <td key={key} className="px-3 py-3 text-center">
-                  <SlotCell slot={row.profiles[key]} platformKey={key} />
+                  <SlotCell
+                    slot={row.profiles[key]}
+                    platformKey={key}
+                    onCycleOwner={(next) => onCycleOwner(row.id, key, next)}
+                  />
                 </td>
               ))}
             </tr>
@@ -413,12 +465,15 @@ function MatrixTable({
 function SlotCell({
   slot,
   platformKey,
+  onCycleOwner,
 }: {
   slot: PlatformSlot;
   platformKey: PlatformKey;
+  onCycleOwner: (next: AccountOwner) => void | Promise<void>;
 }) {
   const meta = STATUS_META[slot.status];
   const Icon = meta.Icon;
+  const ownerMeta = OWNER_META[slot.accountOwner];
   const tooltip = describeSlot(slot, platformKey);
 
   return (
@@ -432,14 +487,58 @@ function SlotCell({
           >
             <Icon className="size-3.5" />
           </span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              void onCycleOwner(nextOwner(slot.accountOwner));
+            }}
+            className={`absolute -bottom-1 -right-1 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full border px-[3px] text-[8px] font-semibold leading-none transition-colors ${ownerMeta.chip}`}
+            aria-label={`Owner: ${ownerMeta.label}, click to change`}
+            title={`Owner: ${ownerMeta.label} (click to cycle)`}
+          >
+            {ownerMeta.letter}
+          </button>
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" className="w-56">
         <div className="font-medium text-text-primary">{meta.label}</div>
         <div className="mt-0.5 text-text-muted">{tooltip}</div>
+        <div className="mt-1.5 border-t border-nativz-border/60 pt-1.5 text-text-muted">
+          Owner: <span className="text-text-primary">{ownerMeta.label}</span>.
+          Click the corner badge to cycle.
+        </div>
       </TooltipContent>
     </Tooltip>
   );
+}
+
+const OWNER_META: Record<
+  AccountOwner,
+  { letter: string; label: string; chip: string }
+> = {
+  agency: {
+    letter: 'A',
+    label: 'Agency-owned (we made it)',
+    chip: 'border-accent-text/40 bg-accent-text/15 text-accent-text',
+  },
+  client: {
+    letter: 'C',
+    label: 'Client-owned',
+    chip: 'border-status-success/40 bg-status-success/15 text-status-success',
+  },
+  unknown: {
+    letter: '?',
+    label: 'Ownership unknown (triage)',
+    chip: 'border-nativz-border bg-surface-elevated text-text-muted',
+  },
+};
+
+function nextOwner(current: AccountOwner): AccountOwner {
+  if (current === 'unknown') return 'agency';
+  if (current === 'agency') return 'client';
+  return 'unknown';
 }
 
 function needsReconnect(status: string | null): boolean {

@@ -38,6 +38,7 @@ const PLATFORMS = [...CORE_PLATFORMS, ...EXTRA_PLATFORMS] as const;
 type Platform = (typeof PLATFORMS)[number];
 
 type Status = 'connected' | 'disconnected' | 'missing';
+type AccountOwner = 'agency' | 'client' | 'unknown';
 
 interface PlatformSlot {
   status: Status;
@@ -48,6 +49,10 @@ interface PlatformSlot {
   /** Zernio-reported token expiry if synced; null if we haven't checked. */
   tokenExpiresAt: string | null;
   tokenStatus: string | null;
+  /** Who actually created the underlying account: agency (we made it),
+   *  client (they made it), unknown (legacy / not yet triaged). Drives
+   *  reconnect-notification routing in the cron. */
+  accountOwner: AccountOwner;
 }
 
 interface ClientRow {
@@ -75,6 +80,7 @@ function emptySlot(): PlatformSlot {
     disconnectedAt: null,
     tokenExpiresAt: null,
     tokenStatus: null,
+    accountOwner: 'unknown',
   };
 }
 
@@ -98,7 +104,7 @@ export async function GET() {
     admin
       .from('social_profiles')
       .select(
-        'client_id, platform, username, is_active, late_account_id, disconnect_alerted_at, token_expires_at, token_status',
+        'client_id, platform, username, is_active, late_account_id, disconnect_alerted_at, token_expires_at, token_status, account_owner',
       ),
   ]);
 
@@ -163,9 +169,12 @@ function resolveSlot(p: {
   disconnect_alerted_at: string | null;
   token_expires_at: string | null;
   token_status: string | null;
+  account_owner: string | null;
 }): PlatformSlot {
+  const accountOwner = (p.account_owner as AccountOwner | null) ?? 'unknown';
+
   // Disconnected: Zernio either flagged a revoke, or we marked the row
-  // inactive. Either way the agency needs the client to re-auth.
+  // inactive. Either way the agency needs the account re-authed.
   if (p.disconnect_alerted_at || p.is_active === false) {
     return {
       status: 'disconnected',
@@ -173,6 +182,7 @@ function resolveSlot(p: {
       disconnectedAt: p.disconnect_alerted_at,
       tokenExpiresAt: p.token_expires_at,
       tokenStatus: p.token_status,
+      accountOwner,
     };
   }
   // Connected: active row + Zernio account id on file.
@@ -183,9 +193,10 @@ function resolveSlot(p: {
       disconnectedAt: null,
       tokenExpiresAt: p.token_expires_at,
       tokenStatus: p.token_status,
+      accountOwner,
     };
   }
-  // Profile URL on file but no Zernio token — operator can't post.
+  // Profile URL on file but no Zernio token, operator can't post.
   // Treated as missing so the matrix nudges them to send an invite.
   return {
     status: 'missing',
@@ -193,6 +204,7 @@ function resolveSlot(p: {
     disconnectedAt: null,
     tokenExpiresAt: null,
     tokenStatus: null,
+    accountOwner,
   };
 }
 
