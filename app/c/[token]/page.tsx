@@ -2805,9 +2805,14 @@ function PostCard({
   // For CTV (vertical stack) the video occupies full card width with its
   // natural 16:9 height; for the side-by-side layouts the video column is
   // height-constrained so it hugs the card height.
+  // Image posts are 4:5 — letting card height drive width makes the column
+  // ~62vh wide and squashes the comments column. Width-cap to ~44vh so it
+  // matches the 9:16 video footprint and the right column keeps room.
   const videoColSizing = stackVertical
     ? 'w-full bg-black'
-    : 'w-full bg-black md:w-auto md:flex-shrink-0 md:h-full';
+    : isImagePost
+      ? 'w-full bg-black md:w-[44vh] md:max-w-[480px] md:flex-shrink-0 md:self-center'
+      : 'w-full bg-black md:w-auto md:flex-shrink-0 md:h-full';
   return (
     <article className={articleChrome}>
       {revisionInput}
