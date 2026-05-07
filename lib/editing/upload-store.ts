@@ -38,6 +38,11 @@ export interface UploadJob {
   detail?: string;
 }
 
+export interface ProjectUploadGroup {
+  projectId: string;
+  jobs: UploadJob[];
+}
+
 type Listener = () => void;
 type CompletionListener = (projectId: string) => void;
 
@@ -55,7 +60,21 @@ const completionListeners = new Set<CompletionListener>();
 // still mid-flight).
 const activeBatches = new Map<string, number>();
 
+// Cached flat snapshot for getAllUploads(). useSyncExternalStore requires
+// getSnapshot to return the SAME reference when nothing has changed, or
+// React tears. We rebuild this only when emit() fires.
+let allUploadsSnapshot: ProjectUploadGroup[] = [];
+
+function rebuildAllSnapshot() {
+  const out: ProjectUploadGroup[] = [];
+  for (const [projectId, jobs] of state.entries()) {
+    if (jobs.length > 0) out.push({ projectId, jobs });
+  }
+  allUploadsSnapshot = out;
+}
+
 function emit() {
+  rebuildAllSnapshot();
   for (const l of listeners) l();
 }
 
@@ -259,4 +278,29 @@ export function hasActiveUploads(projectId: string): boolean {
       j.state === 'uploading' ||
       j.state === 'finalizing',
   );
+}
+
+/**
+ * Flat snapshot across all projects for the global UploadDock. Returns the
+ * cached array; reference is stable until emit() rebuilds it.
+ */
+export function getAllUploads(): ProjectUploadGroup[] {
+  return allUploadsSnapshot;
+}
+
+export function clearAllCompleted(): void {
+  let mutated = false;
+  for (const [projectId, jobs] of Array.from(state.entries())) {
+    const next = jobs.filter(
+      (j) => j.state !== 'done' && j.state !== 'error',
+    );
+    if (next.length === jobs.length) continue;
+    if (next.length === 0) {
+      state.delete(projectId);
+    } else {
+      state.set(projectId, next);
+    }
+    mutated = true;
+  }
+  if (mutated) emit();
 }
