@@ -187,6 +187,12 @@ async function handleShareGet(
     admin
       .from('content_drop_videos')
       .select('id, scheduled_post_id, drive_file_name, media_type, video_url, revised_video_url, revised_mp4_url, revised_video_uploaded_at, revised_video_notify_pending, mux_upload_id, mux_asset_id, mux_playback_id, mux_status')
+      // Scope to THIS share's drop. A scheduled post can have drop_videos
+      // from a Drive ingest *and* from a synthetic calendar-share drop
+      // (migration 259); without this filter they would collide in the
+      // viewer maps. The share link only ever shows one drop's worth of
+      // video state, so filter by drop_id alongside the post-id IN list.
+      .eq('drop_id', link.drop_id)
       .in('scheduled_post_id', link.included_post_ids),
   ]);
   if (!drop) return NextResponse.json({ error: 'content calendar missing' }, { status: 404 });
