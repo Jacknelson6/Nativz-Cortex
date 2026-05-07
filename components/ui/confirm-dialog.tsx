@@ -75,7 +75,18 @@ export function ConfirmDialog({
       onMouseDown={handleBackdropMouseDown}
       className="m-auto w-full max-w-sm rounded-xl border border-nativz-border bg-surface p-0 shadow-xl backdrop:bg-[color:var(--nz-ink)]/70 backdrop:backdrop-blur-sm"
     >
-      <div className="p-6 animate-[popIn_200ms_ease-out]">
+      {/*
+        stopPropagation on the body: native <dialog> elements keep their
+        children in the React virtual tree at the location they're declared.
+        When this confirm sits inside a clickable parent (e.g. a client card
+        that navigates on click), bubbling button clicks would re-trigger
+        the parent's handler. A confirm dialog only ever holds confirm /
+        cancel actions, so swallowing bubbling here is always safe.
+      */}
+      <div
+        className="p-6 animate-[popIn_200ms_ease-out]"
+        onClick={(e) => e.stopPropagation()}
+      >
         {variant === 'danger' && (
           <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--status-danger)]/15">
             <AlertTriangle size={22} className="text-[color:var(--status-danger)]" />
