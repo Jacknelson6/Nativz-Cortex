@@ -30,12 +30,16 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 });
 
 async function main() {
+  // Sweep any row mid-pipeline that has either id we can hand to Mux —
+  // upload_id (direct-upload path) OR asset_id (URL-pull path). Earlier
+  // versions filtered on upload_id only, which silently locked URL-pulled
+  // rows in 'processing' forever when the asset.ready webhook didn't land.
   const { data: rows, error } = await supabase
     .from('content_drop_videos')
     .select('id, mux_upload_id, mux_asset_id, mux_status, revised_mp4_url, revised_video_uploaded_at')
     .in('mux_status', ['processing', 'uploading'])
-    .not('mux_upload_id', 'is', null)
-    .order('revised_video_uploaded_at', { ascending: false });
+    .or('mux_upload_id.not.is.null,mux_asset_id.not.is.null')
+    .order('revised_video_uploaded_at', { ascending: false, nullsFirst: false });
 
   if (error) {
     console.error('Query failed:', error.message);

@@ -206,10 +206,16 @@ async function handleShareGet(
   // reconciler patches the row object in place so the response reflects
   // the up-to-date status without a second DB round-trip.
   const videoRows = (videos ?? []) as DropVideoRow[];
+  // Reconcile any row mid-pipeline. Two ingest paths land here:
+  //   - URL-pull (lib/calendar/schedule-drop.ts) — stamps mux_asset_id at
+  //     create time, no upload id.
+  //   - Direct-upload (mux-finalize) — stamps mux_upload_id, asset id arrives
+  //     via webhook.
+  // The reconciler accepts either id, so we sweep on (upload_id OR asset_id).
   const inFlight = videoRows.filter(
     (v) =>
       (v.mux_status === 'processing' || v.mux_status === 'uploading') &&
-      v.mux_upload_id != null,
+      (v.mux_upload_id != null || v.mux_asset_id != null),
   );
   if (inFlight.length > 0) {
     try {
