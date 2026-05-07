@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 import {
-  sendPostHealthAlertEmail,
   type PostHealthFailedPost,
   type PostHealthDisconnect,
 } from '@/lib/email/resend';
@@ -196,16 +195,10 @@ async function handleGet(request: NextRequest) {
     }
     const summary = summaryParts.join(' · ');
 
-    // Email
-    try {
-      await sendPostHealthAlertEmail({
-        to: ALERT_EMAIL,
-        failedPosts,
-        disconnects,
-      });
-    } catch (err) {
-      console.error('[post-health] email send failed:', err);
-    }
+    // Email send disabled 2026-05-06 (Jack) — post-health alerts stay
+    // internal-only via Google Chat + in-app notification. The email
+    // template still exists in resend.ts for ad-hoc preview, but the
+    // cron no longer fans it out.
 
     // Google Chat (ops space)
     const chatLines: string[] = [`*Cortex post-health alert* — ${summary}`];

@@ -204,14 +204,13 @@ export async function POST(req: Request) {
               .limit(1)
               .maybeSingle<{ id: string }>();
             if (!existingLink) {
-              const result = await autoDeliverEditingProject(admin, projectId);
-              if ('skipped' in result) {
-                console.warn('[mux-webhook] auto-deliver skipped', {
-                  projectId,
-                  reason: result.skipped,
-                  detail: result.detail,
-                });
-              }
+              // Auto-deliver disabled 2026-05-06 (Jack). The Mux
+              // webhook no longer mints a share link + emails the
+              // brand the moment all renditions finish — admins now
+              // press Send manually from the modal once they've
+              // double-checked the cuts. The function is still wired
+              // up below so we can re-enable later.
+              void autoDeliverEditingProject;
             }
           }
         }

@@ -21,9 +21,19 @@ function isAuthorisedCron(req: NextRequest): boolean {
  *
  * Designed to run every minute (see vercel.json crons entry).
  */
+// Hard-coded off since 2026-05-06 (Jack). Email Hub fan-out (campaigns
+// + sequence steps) no longer runs. Cron schedule stays in vercel.json
+// so re-enabling is a one-line flip. Rows in `email_campaigns` and
+// `email_sequence_enrollments` simply pile up while disabled.
+const DRAIN_ENABLED = false;
+
 async function handleGet(request: NextRequest) {
   if (!isAuthorisedCron(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!DRAIN_ENABLED) {
+    return NextResponse.json({ ok: true, disabled: true });
   }
 
   const admin = createAdminClient();

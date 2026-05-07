@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 /**
- * GET /api/cron/connection-token-watch
+ * GET /api/cron/connection-expired-watch
  *
  * Watches every active `social_profiles` row Zernio has a token for.
  * On each tick:
@@ -421,7 +421,7 @@ async function handleGet(request: NextRequest) {
         platforms: platformList,
         recipient_emails: [primary.email],
         notify_chat: true,
-        notify_email: true,
+        notify_email: false,
         // created_by stays null — that's how we mark a row as
         // cron-generated vs admin-sent.
         created_by: null,
@@ -474,7 +474,7 @@ async function handleGet(request: NextRequest) {
   }
 
   if (failures.length) {
-    console.error('[connection-token-watch] failures:', failures);
+    console.error('[connection-expired-watch] failures:', failures);
   }
 
   return NextResponse.json({
@@ -489,7 +489,7 @@ async function handleGet(request: NextRequest) {
 
 export const GET = withCronTelemetry(
   {
-    route: '/api/cron/connection-token-watch',
+    route: '/api/cron/connection-expired-watch',
     extractRowsProcessed: (body) => {
       if (typeof body !== 'object' || body === null) return undefined;
       const sent = (body as { sent?: number }).sent;

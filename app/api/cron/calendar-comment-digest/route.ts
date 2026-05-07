@@ -62,11 +62,21 @@ type EditingCommentRow = {
  *
  * @auth Bearer CRON_SECRET (Vercel cron)
  */
+// Hard-coded off since 2026-05-06 (Jack). Admins watch the inboxes
+// directly — flip back to true to revive the daily digest. Kept as a
+// constant so the rest of the body stays type-checked and easy to
+// resume later.
+const DIGEST_ENABLED = false;
+
 async function handleGet(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!DIGEST_ENABLED) {
+    return NextResponse.json({ message: 'disabled', sent: 0 });
   }
 
   const setting = await getNotificationSetting('calendar_comment_digest');

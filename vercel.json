@@ -96,7 +96,7 @@
       "schedule": "*/30 * * * *"
     },
     {
-      "path": "/api/cron/connection-token-watch",
+      "path": "/api/cron/connection-expired-watch",
       "schedule": "0 */6 * * *"
     },
     {

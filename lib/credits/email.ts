@@ -167,10 +167,18 @@ interface MaybeNotifyArgs {
  * Hooks call this in a `try/catch` because failures here must never block
  * the comment write; same semantics as `consumeForApproval` itself.
  */
+// Hard-coded off since 2026-05-06 (Jack). Scope-approaching + over-scope
+// warnings used to fan out to client POCs whenever a consume crossed
+// the threshold. They were noisy on busy approval weeks; flip back to
+// true to revive. Period dedup + transition detection still run below
+// so re-enabling doesn't double-fire.
+const SCOPE_WARNINGS_ENABLED = false;
+
 export async function maybeSendBalanceWarning(
   admin: SupabaseClient,
   args: MaybeNotifyArgs,
 ): Promise<void> {
+  if (!SCOPE_WARNINGS_ENABLED) return;
   const { clientId, previousBalance, newBalance, deliverableTypeId } = args;
 
   // Detect transitions first; cheaper than any DB call.

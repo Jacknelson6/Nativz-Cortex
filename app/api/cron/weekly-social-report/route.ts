@@ -48,11 +48,20 @@ function isVercelProduction(): boolean {
  *
  * @auth Bearer CRON_SECRET or admin session
  */
+// Hard-coded off since 2026-05-06 (Jack). The weekly social digest is
+// no longer fanned out. Cron schedule stays in vercel.json so flipping
+// this back to true revives the report.
+const REPORT_ENABLED = false;
+
 async function handler(request: NextRequest) {
   try {
     const cronSecret = process.env.CRON_SECRET;
     const hasCronAuth =
       cronSecret && request.headers.get('authorization') === `Bearer ${cronSecret}`;
+
+    if (!REPORT_ENABLED) {
+      return NextResponse.json({ ok: true, disabled: true, sent: 0 });
+    }
 
     if (!hasCronAuth) {
       const supabase = await createServerSupabaseClient();
