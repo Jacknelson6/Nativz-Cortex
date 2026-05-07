@@ -23,6 +23,8 @@ type AdminClientsDbRow = {
   health_score: number | null;
   organization_id: string | null;
   group_id: string | null;
+  chat_webhook_url: string | null;
+  is_misc_catchall: boolean | null;
 };
 
 type ClientGroupRow = {
@@ -50,7 +52,7 @@ export default async function AdminClientsPage() {
       { data: activeTrackers },
     ] = await Promise.all([
       selectClientsWithRosterVisibility<AdminClientsDbRow>(adminClient, {
-        select: 'id, name, slug, industry, is_active, logo_url, services, agency, health_score, organization_id, group_id',
+        select: 'id, name, slug, industry, is_active, logo_url, services, agency, health_score, organization_id, group_id, chat_webhook_url, is_misc_catchall',
         orderBy: { column: 'name' },
       }),
       adminClient
@@ -84,20 +86,39 @@ export default async function AdminClientsPage() {
       (activeTrackers ?? []).map((t) => t.client_id).filter((id): id is string => Boolean(id)),
     );
 
-    const clients = (dbClients ?? []).map((c) => ({
-      dbId: c.id,
-      name: c.name,
-      slug: c.slug,
-      industry: c.industry && c.industry !== 'General' ? c.industry : '',
-      isActive: c.is_active ?? true,
-      logoUrl: c.logo_url ?? null,
-      services: (c.services as string[]) ?? [],
-      agency: c.agency ?? undefined,
-      healthScore: c.health_score != null ? String(c.health_score) : null,
-      organizationId: c.organization_id ?? null,
-      groupId: c.group_id ?? null,
-      inOnboarding: onboardingClientIds.has(c.id),
-    }));
+    // Set of agency keys (lowercased) that have at least one client marked as
+    // the misc-catchall. Those agencies have webhook coverage even for clients
+    // that haven't set their own chat_webhook_url.
+    const agenciesWithCatchall = new Set(
+      (dbClients ?? [])
+        .filter((c) => c.is_misc_catchall && c.chat_webhook_url && c.chat_webhook_url.trim().length > 0)
+        .map((c) => (c.agency ?? '').trim().toLowerCase())
+        .filter((a) => a.length > 0),
+    );
+
+    const clients = (dbClients ?? []).map((c) => {
+      const ownWebhook = (c.chat_webhook_url ?? '').trim().length > 0;
+      const agencyKey = (c.agency ?? '').trim().toLowerCase();
+      const coveredByCatchall = agencyKey.length > 0 && agenciesWithCatchall.has(agencyKey);
+      return {
+        dbId: c.id,
+        name: c.name,
+        slug: c.slug,
+        industry: c.industry && c.industry !== 'General' ? c.industry : '',
+        isActive: c.is_active ?? true,
+        logoUrl: c.logo_url ?? null,
+        services: (c.services as string[]) ?? [],
+        agency: c.agency ?? undefined,
+        healthScore: c.health_score != null ? String(c.health_score) : null,
+        organizationId: c.organization_id ?? null,
+        groupId: c.group_id ?? null,
+        inOnboarding: onboardingClientIds.has(c.id),
+        // True when the client has no webhook AND no agency-catchall covers
+        // them. These clients silently fall through to OPS_CHAT_WEBHOOK_URL
+        // (or no notification at all). Surfaced as an amber badge in the grid.
+        missingWebhook: !ownWebhook && !coveredByCatchall,
+      };
+    });
 
     return (
       <div className="cortex-page-gutter max-w-6xl mx-auto space-y-6">
