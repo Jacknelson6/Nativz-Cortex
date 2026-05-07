@@ -597,12 +597,13 @@ function SharedDropView({
   }
 
   // Auto-poll the share endpoint while any post is mid-Mux-pipeline
-  // (uploading or processing). The Mux webhook updates the row when the
-  // asset goes ready; without this, the page would sit on the
-  // "Processing the new cut…" placeholder until the user manually
-  // refreshed. Polls every 5s, gives up after 4 minutes (Mux short-form
-  // typically packages in well under a minute, so 4 minutes covers the
-  // ~p99 case before we stop nagging the network).
+  // (uploading or processing). The share GET endpoint runs reconcileMuxRow
+  // against the Mux API on every hit, so polling is also our self-heal
+  // path when the asset.ready webhook fails to land in production. The
+  // poll interval grows over time so we don't hammer the API for the
+  // long tail (large files, busy Mux), and resumes when the tab regains
+  // focus so a re-check fires immediately after the user comes back to
+  // the page rather than sitting on a stale placeholder.
   const hasInFlightMux = useMemo(
     () =>
       data.posts.some(
@@ -613,15 +614,43 @@ function SharedDropView({
   useEffect(() => {
     if (!hasInFlightMux) return;
     const startedAt = Date.now();
-    const MAX_MS = 4 * 60 * 1000;
-    const id = window.setInterval(() => {
-      if (Date.now() - startedAt > MAX_MS) {
-        window.clearInterval(id);
+    // 30 minutes covers slow MP4 rendition packaging on larger files.
+    // Mux short-form typically finishes in <1 min, but the publish cron
+    // needs revised_mp4_url which can lag the HLS playback id.
+    const MAX_MS = 30 * 60 * 1000;
+    let timer: number | null = null;
+
+    function intervalFor(elapsed: number): number {
+      if (elapsed < 60_000) return 5_000;
+      if (elapsed < 5 * 60_000) return 10_000;
+      return 30_000;
+    }
+
+    function tick() {
+      const elapsed = Date.now() - startedAt;
+      if (elapsed > MAX_MS) {
+        if (timer != null) window.clearTimeout(timer);
         return;
       }
       void refetch();
-    }, 5000);
-    return () => window.clearInterval(id);
+      timer = window.setTimeout(tick, intervalFor(elapsed));
+    }
+
+    timer = window.setTimeout(tick, intervalFor(0));
+
+    // Re-check immediately on tab focus, in case the webhook landed
+    // while the page was backgrounded and our last poll missed it.
+    function onFocus() {
+      if (document.visibilityState === 'visible') {
+        void refetch();
+      }
+    }
+    document.addEventListener('visibilitychange', onFocus);
+
+    return () => {
+      if (timer != null) window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
     // refetch is a stable closure over token/storageKey/setData, all of
     // which are stable inside this component. Re-running the effect on
     // every render would reset the timer, defeating the point of polling.
