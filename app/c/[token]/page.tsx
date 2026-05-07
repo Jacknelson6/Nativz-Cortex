@@ -2590,7 +2590,12 @@ function PostCard({
             {post.comments.length}
           </span>
         </div>
-        <div className="space-y-2">
+        {/* Cap the comment list height + scroll inside. Without this the
+            card grows unbounded as history accrues, especially for image
+            posts where the card sizes to content. With it: the History
+            header stays pinned, the composer stays in reach, and a long
+            review thread scrolls inside its own region. */}
+        <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
           {post.comments.map((c) => (
             <CommentRow
               key={c.id}
