@@ -94,17 +94,33 @@ async function dispatchUpdate(
 export async function POST(req: Request) {
   const rawBody = await req.text();
   const mux = getMux();
-  const secret = process.env.MUX_WEBHOOK_SECRET;
+  // Cortex is multi-brand (cortex.nativz.io + cortex.andersoncollaborative.com),
+  // each with its own Mux webhook + signing secret. Accept any secret that
+  // verifies. MUX_WEBHOOK_SECRETS is the canonical comma-separated form;
+  // MUX_WEBHOOK_SECRET stays as a single-value fallback for back-compat.
+  const secrets = (process.env.MUX_WEBHOOK_SECRETS ?? process.env.MUX_WEBHOOK_SECRET ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 
-  if (secret) {
-    try {
-      await mux.webhooks.verifySignature(rawBody, req.headers, secret);
-    } catch (err) {
-      console.error('[mux-webhook] signature verification failed', err);
+  if (secrets.length > 0) {
+    let verified = false;
+    let lastErr: unknown = null;
+    for (const secret of secrets) {
+      try {
+        await mux.webhooks.verifySignature(rawBody, req.headers, secret);
+        verified = true;
+        break;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    if (!verified) {
+      console.error('[mux-webhook] signature verification failed across all secrets', lastErr);
       return NextResponse.json({ error: 'invalid signature' }, { status: 401 });
     }
   } else if (process.env.NODE_ENV === 'production') {
-    console.error('[mux-webhook] MUX_WEBHOOK_SECRET not set in production');
+    console.error('[mux-webhook] MUX_WEBHOOK_SECRETS / MUX_WEBHOOK_SECRET not set in production');
     return NextResponse.json({ error: 'webhook secret not configured' }, { status: 500 });
   }
 
