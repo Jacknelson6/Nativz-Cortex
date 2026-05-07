@@ -405,6 +405,11 @@ async function handleShareGet(
   return NextResponse.json({
     clientId: drop.client_id,
     clientName: client?.name ?? 'Brand',
+    // Editable share-link name (the same field the portal "Your reviews"
+    // table renders in the project-name column). Null for legacy links
+    // that haven't been named yet — viewer falls back to the generic
+    // brand-scoped header copy.
+    projectName: (link.name ?? '').trim() || null,
     isEditor,
     projectType,
     projectTypeOther: link.project_type_other,

@@ -115,6 +115,14 @@ interface SharedDrop {
   /** Client UUID, used by the soft-block modal as the Stripe checkout subject. */
   clientId: string;
   clientName: string;
+  /**
+   * Editable per-share name (the same value the portal "Your reviews"
+   * table renders as the project-name column). When set, the viewer
+   * header uses this verbatim instead of the generic
+   * "<Brand>, Content calendar" fallback so the title the viewer sees
+   * matches what the admin / portal user typed.
+   */
+  projectName: string | null;
   isEditor: boolean;
   projectType: ShareProjectType;
   projectTypeOther: string | null;
@@ -701,7 +709,15 @@ function SharedDropView({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <h1 className="font-display text-xl font-semibold tracking-tight text-text-primary sm:text-3xl">
-                {data.clientName} — Content calendar
+                {/*
+                  Mirror the portal "Your reviews" project-name column.
+                  When the admin renames the share link in that table the
+                  same string lands here, so the viewer sees the title
+                  the team gave the project (e.g. "Mother's Day Post")
+                  instead of a generic brand label. Falls back to the
+                  brand-scoped header copy for legacy unnamed links.
+                */}
+                {data.projectName ?? `${data.clientName}, content calendar`}
               </h1>
               <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
                 <p className="text-sm text-text-secondary sm:text-base">
