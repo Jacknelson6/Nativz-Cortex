@@ -1055,7 +1055,7 @@ async function handleGet(request: NextRequest) {
       const nowIso = new Date().toISOString();
       const { data: staleCandidates } = await adminClient
         .from('scheduled_posts')
-        .select('id, client_id, caption, scheduled_at, failure_reason')
+        .select('id, client_id, caption, title, scheduled_at, failure_reason')
         .eq('status', 'draft')
         .lt('scheduled_at', nowIso)
         .limit(50);
@@ -1069,13 +1069,14 @@ async function handleGet(request: NextRequest) {
         const candidateIds = candidates.map((p) => (p as { id: string }).id);
         const { data: dropRows } = await adminClient
           .from('content_drop_videos')
-          .select('scheduled_post_id')
+          .select('scheduled_post_id, drop_id')
           .in('scheduled_post_id', candidateIds);
-        const dropPostIds = new Set(
-          (dropRows ?? []).map(
-            (r) => (r as { scheduled_post_id: string }).scheduled_post_id,
-          ),
-        );
+        const postIdToDropId = new Map<string, string>();
+        for (const r of dropRows ?? []) {
+          const row = r as { scheduled_post_id: string; drop_id: string };
+          postIdToDropId.set(row.scheduled_post_id, row.drop_id);
+        }
+        const dropPostIds = new Set(postIdToDropId.keys());
 
         const staleDropPostsAll = candidates.filter((p) =>
           dropPostIds.has((p as { id: string }).id),
@@ -1120,20 +1121,144 @@ async function handleGet(request: NextRequest) {
           );
         }
 
+        // Batch-enrich the alert body. We resolve client name, target
+        // platforms, and assigned strategist up front so notifyAdmins gets
+        // a single rich description per post instead of "scheduled for X,
+        // caption Y" with no ownership context.
+        const stalePostIds = staleDropPosts.map((p) => (p as { id: string }).id);
+        const clientIds = Array.from(
+          new Set(
+            staleDropPosts
+              .map((p) => (p as { client_id: string | null }).client_id)
+              .filter((id): id is string => Boolean(id)),
+          ),
+        );
+        const dropIds = Array.from(
+          new Set(
+            stalePostIds
+              .map((id) => postIdToDropId.get(id))
+              .filter((id): id is string => Boolean(id)),
+          ),
+        );
+
+        const [clientRowsRes, dropRowsRes, platformRowsRes] = await Promise.all([
+          clientIds.length > 0
+            ? adminClient.from('clients').select('id, name').in('id', clientIds)
+            : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+          dropIds.length > 0
+            ? adminClient
+                .from('content_drops')
+                .select('id, strategist_id')
+                .in('id', dropIds)
+            : Promise.resolve({
+                data: [] as Array<{ id: string; strategist_id: string | null }>,
+              }),
+          stalePostIds.length > 0
+            ? adminClient
+                .from('scheduled_post_platforms')
+                .select('post_id, social_profiles!inner(platform)')
+                .in('post_id', stalePostIds)
+            : Promise.resolve({ data: [] as Array<unknown> }),
+        ]);
+
+        const clientNameById = new Map<string, string>();
+        for (const c of (clientRowsRes.data ?? []) as Array<{ id: string; name: string }>) {
+          clientNameById.set(c.id, c.name);
+        }
+
+        const dropToStrategist = new Map<string, string | null>();
+        for (const d of (dropRowsRes.data ?? []) as Array<{
+          id: string;
+          strategist_id: string | null;
+        }>) {
+          dropToStrategist.set(d.id, d.strategist_id);
+        }
+
+        const strategistIds = Array.from(
+          new Set(
+            Array.from(dropToStrategist.values()).filter(
+              (id): id is string => Boolean(id),
+            ),
+          ),
+        );
+        const strategistNameById = new Map<string, string>();
+        if (strategistIds.length > 0) {
+          const { data: tmRows } = await adminClient
+            .from('team_members')
+            .select('id, full_name, email')
+            .in('id', strategistIds);
+          for (const tm of (tmRows ?? []) as Array<{
+            id: string;
+            full_name: string | null;
+            email: string | null;
+          }>) {
+            strategistNameById.set(
+              tm.id,
+              tm.full_name?.trim() || tm.email?.trim() || 'Unknown',
+            );
+          }
+        }
+
+        const platformsByPost = new Map<string, Set<string>>();
+        for (const r of (platformRowsRes.data ?? []) as Array<{
+          post_id: string;
+          social_profiles: { platform: string } | { platform: string }[] | null;
+        }>) {
+          const sp = r.social_profiles;
+          // Supabase returns the joined row as either an object or array
+          // depending on cardinality declarations; normalize.
+          const platform = Array.isArray(sp) ? sp[0]?.platform : sp?.platform;
+          if (!platform) continue;
+          const set = platformsByPost.get(r.post_id) ?? new Set<string>();
+          set.add(platform);
+          platformsByPost.set(r.post_id, set);
+        }
+
+        const formatPlatform = (p: string) =>
+          p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
+
         for (const post of staleDropPosts) {
           const row = post as {
             id: string;
             client_id: string;
             caption: string | null;
+            title: string | null;
             scheduled_at: string;
           };
-          const caption = (row.caption ?? '').substring(0, 80);
+          const clientName = clientNameById.get(row.client_id) ?? 'Unknown client';
+          const dropId = postIdToDropId.get(row.id) ?? null;
+          const strategistId = dropId ? dropToStrategist.get(dropId) ?? null : null;
+          const strategistName = strategistId
+            ? strategistNameById.get(strategistId) ?? null
+            : null;
+          const platformSet = platformsByPost.get(row.id);
+          const platformList = platformSet
+            ? Array.from(platformSet).map(formatPlatform).sort().join(', ')
+            : '';
+          const headline = (row.title ?? row.caption ?? '').trim();
+          const headlineSnippet = headline.length > 90
+            ? `${headline.substring(0, 90)}...`
+            : headline;
+          const scheduledFormatted = new Date(row.scheduled_at).toLocaleString(
+            'en-US',
+            { dateStyle: 'medium', timeStyle: 'short' },
+          );
+
+          const bodyLines: string[] = [];
+          if (headlineSnippet) bodyLines.push(`"${headlineSnippet}"`);
+          const meta: string[] = [`Scheduled ${scheduledFormatted}`];
+          if (platformList) meta.push(platformList);
+          if (strategistName) meta.push(`Strategist: ${strategistName}`);
+          bodyLines.push(meta.join(' · '));
+          bodyLines.push('Still in draft, no approval comment received.');
+          const body = bodyLines.join('\n');
+
           try {
             const linkPath = await resolveFailureLinkPath(adminClient, row.id);
             await notifyAdmins({
               type: 'post_needs_approval',
-              title: 'Drop post past due without approval',
-              body: `Post scheduled for ${new Date(row.scheduled_at).toLocaleString()} is still in draft (no approval comment). Caption: "${caption}${(row.caption ?? '').length > 80 ? '...' : ''}"`,
+              title: `Past due without approval: ${clientName}`,
+              body,
               linkPath,
               clientId: row.client_id,
             });
