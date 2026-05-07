@@ -568,6 +568,40 @@ function SharedDropView({
     );
   }
 
+  // Image-replace: swap the asset row's url + mime in-memory after the
+  // server endpoint repoints content_drop_post_assets and busts the
+  // scheduler_media feed-normalized cache. Single-asset posts only — that's
+  // the only case the Replace UI exposes today (carousels need a per-frame
+  // selector). Width/height clear so any consumer that branches on them
+  // doesn't render the OLD aspect ratio against the NEW image.
+  function updatePostImageAsset(
+    postId: string,
+    next: { url: string; mime_type: string | null },
+  ) {
+    setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            posts: prev.posts.map((p) => {
+              if (p.id !== postId) return p;
+              if (p.media_type !== 'image' || p.assets.length === 0) return p;
+              const target = p.assets[0];
+              const updated: SharedAsset = {
+                ...target,
+                url: next.url,
+                thumbnail_url: next.url,
+                mime_type: next.mime_type,
+                width: null,
+                height: null,
+                status: 'pending_review',
+              };
+              return { ...p, assets: [updated, ...p.assets.slice(1)] };
+            }),
+          }
+        : prev,
+    );
+  }
+
   function clearRevisionPending() {
     setData((prev) =>
       prev
@@ -799,6 +833,7 @@ function SharedDropView({
                 onHandlesUpdated={(field, next, c) => updatePostHandles(post.id, field, next, c)}
                 onScheduleUpdated={(at, c) => updatePostScheduledAt(post.id, at, c)}
                 onRevisionUploaded={(rev) => updatePostRevision(post.id, rev)}
+                onAssetReplaced={(next) => updatePostImageAsset(post.id, next)}
                 onRemoveFromCalendar={() => removePostFromCalendar(post.id)}
                 onTitleUpdated={(title) => updatePostTitle(post.id, title)}
                 requireName={() => {
@@ -897,6 +932,7 @@ function SharedDropView({
         onHandlesUpdated={updatePostHandles}
         onScheduleUpdated={updatePostScheduledAt}
         onRevisionUploaded={updatePostRevision}
+        onAssetReplaced={updatePostImageAsset}
         onRemoveFromCalendar={removePostFromCalendar}
         onTitleUpdated={updatePostTitle}
         onClose={() => setDetailPostId(null)}
@@ -1383,6 +1419,7 @@ function PostDetailModal({
   onHandlesUpdated,
   onScheduleUpdated,
   onRevisionUploaded,
+  onAssetReplaced,
   onRemoveFromCalendar,
   onTitleUpdated,
   onClose,
@@ -1416,6 +1453,7 @@ function PostDetailModal({
       mux_status?: string | null;
     },
   ) => void;
+  onAssetReplaced: (postId: string, next: { url: string; mime_type: string | null }) => void;
   onRemoveFromCalendar: (postId: string) => void;
   onTitleUpdated: (postId: string, title: string | null) => void;
   onClose: () => void;
@@ -1439,6 +1477,7 @@ function PostDetailModal({
         onHandlesUpdated={(field, next, c) => onHandlesUpdated(post.id, field, next, c)}
         onScheduleUpdated={(at, c) => onScheduleUpdated(post.id, at, c)}
         onRevisionUploaded={(rev) => onRevisionUploaded(post.id, rev)}
+        onAssetReplaced={(next) => onAssetReplaced(post.id, next)}
         onRemoveFromCalendar={() => {
           onRemoveFromCalendar(post.id);
           onClose();
@@ -1821,6 +1860,7 @@ function PostCard({
   onHandlesUpdated,
   onScheduleUpdated,
   onRevisionUploaded,
+  onAssetReplaced,
   onRemoveFromCalendar,
   onTitleUpdated,
   requireName,
@@ -1850,6 +1890,13 @@ function PostCard({
     mux_playback_id?: string | null;
     mux_status?: string | null;
   }) => void;
+  /**
+   * Image-replace callback. Fires after the server endpoint repoints the
+   * `content_drop_post_assets` row at the new bytes — gives the parent the
+   * new url/mime so the asset re-renders without a full refetch. Single-asset
+   * image posts only (carousels reject server-side).
+   */
+  onAssetReplaced: (next: { url: string; mime_type: string | null }) => void;
   onRemoveFromCalendar: () => void;
   onTitleUpdated: (title: string | null) => void;
   requireName: () => void;
@@ -1892,6 +1939,12 @@ function PostCard({
   // bypass Vercel and the request can run for many minutes on a big file.
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const revisionInputRef = useRef<HTMLInputElement>(null);
+  // Per-post Download state. The bulk "Download all" lives at the page
+  // header for grabbing every asset in one zip; this overlay button is for
+  // pulling a single post (e.g. when the reviewer just wants this one
+  // image to repost or this one cut to QA). Carousels zip in-browser so
+  // the four images come down as one tidy bundle.
+  const [downloadingPost, setDownloadingPost] = useState(false);
   // Player + timestamped-comment plumbing. The ref is set when VideoSurface
   // mounts a player (only in the inline `withVideoHeader` mode); when it's
   // null, we hide the anchor button and timestamp pills are non-interactive.
@@ -2308,6 +2361,117 @@ function PostCard({
     }
   }
 
+  // Image-replace twin of uploadRevisionFile. Posts the new bytes to the
+  // image-only endpoint, which uploads to scheduler-media, repoints
+  // content_drop_post_assets, and busts the feed-normalized cache. On
+  // success we hand the new url back to the parent so the next render
+  // shows the swapped image without a full refetch. Carousels are
+  // rejected server-side; the UI hides Replace for them already.
+  async function uploadReplacementImage(file: File) {
+    if (!isEditor) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Choose an image file');
+      return;
+    }
+    setUploadingRevision(true);
+    setUploadProgress(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(
+        `/api/calendar/share/${token}/replace-image/${post.id}`,
+        { method: 'POST', body: fd },
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(
+          typeof json?.error === 'string' ? json.error : `Upload failed (${res.status})`,
+        );
+      }
+      const url = typeof json?.url === 'string' ? json.url : null;
+      if (!url) throw new Error('Server did not return the new image URL');
+      onAssetReplaced({
+        url,
+        mime_type: typeof json?.mime_type === 'string' ? json.mime_type : file.type || null,
+      });
+      toast.success('Image replaced');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploadingRevision(false);
+      setUploadProgress(null);
+      if (revisionInputRef.current) revisionInputRef.current.value = '';
+    }
+  }
+
+  // Per-post download. Reuses the same target builder the bulk zip uses so
+  // the filenames stay consistent: a video post yields one mp4 named after
+  // the post; a single-image post yields one image; a carousel yields a
+  // small zip with one entry per asset (numbered -1, -2…).
+  async function handlePostDownload() {
+    if (downloadingPost) return;
+    const targets = buildPostDownloadTargets(post, 0);
+    if (targets.length === 0) {
+      toast.error('Nothing to download yet.');
+      return;
+    }
+    setDownloadingPost(true);
+    try {
+      if (targets.length === 1) {
+        const t = targets[0];
+        const res = await fetch(t.url);
+        if (!res.ok) throw new Error(`fetch ${res.status}`);
+        const blob = await res.blob();
+        const obj = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = obj;
+        a.download = t.filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(obj), 1000);
+      } else {
+        // Carousel: zip in-browser so the user gets one file instead of N
+        // anchor-click downloads (which the popup blocker chokes on).
+        const { default: JSZip } = await import('jszip');
+        const zip = new JSZip();
+        const used = new Set<string>();
+        let added = 0;
+        await Promise.all(
+          targets.map(async (t) => {
+            try {
+              const res = await fetch(t.url);
+              if (!res.ok) return;
+              const name = uniqueZipName(used, t.filename);
+              zip.file(name, await res.blob());
+              added += 1;
+            } catch {
+              // skip individual asset failures
+            }
+          }),
+        );
+        if (added === 0) {
+          toast.error('Could not download any files. Try again.');
+          return;
+        }
+        const blob = await zip.generateAsync({ type: 'blob' });
+        const obj = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = obj;
+        a.download = `${postLabel(post, 0)}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(obj), 1000);
+      }
+    } catch (err) {
+      console.error('[handlePostDownload] failed', err);
+      toast.error('Download failed.');
+    } finally {
+      setDownloadingPost(false);
+    }
+  }
+
   async function removeApproval() {
     if (!latestApprovedId) return;
     setRemovingApproval(true);
@@ -2533,40 +2697,73 @@ function PostCard({
           setPlayerReady(!!handle);
         }}
       />
-      {/* Editor-only Replace media — overlays the top-right of the video
-          itself. The action acts on the video, so it lives on the video.
-          Same affordance pattern as the "Edit" pencil that overlays the
-          caption: small, contextual, doesn't compete with primary content.
-          Backdrop blur keeps it readable over any frame; while uploading
-          the button widens to show progress in-place. */}
-      {isEditor && post.media_type !== 'image' && (
+      {/* Top-right overlay cluster — Download (everyone) sits left, Replace
+          (editor-only, video posts) sits right. Same affordance pattern as
+          the "Edit" pencil that overlays the caption: small, contextual,
+          doesn't compete with primary content. Backdrop blur keeps both
+          readable over any frame; while uploading, Replace widens to show
+          progress in-place. Carousels download as a single zip so the
+          reviewer doesn't fight the popup blocker on N anchor clicks. */}
+      <div className="absolute right-2 top-2 flex items-center gap-1.5">
         <button
           type="button"
-          onClick={() => revisionInputRef.current?.click()}
-          disabled={uploadingRevision || submitting || uploading}
-          className="absolute right-2 top-2 inline-flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1.5 text-[11px] font-medium text-white backdrop-blur-md ring-1 ring-white/15 transition-all hover:bg-black/75 hover:ring-white/30 disabled:opacity-60"
-          title="Replace the current cut with a new upload"
+          onClick={() => void handlePostDownload()}
+          disabled={downloadingPost || buildPostDownloadTargets(post, 0).length === 0}
+          className="inline-flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1.5 text-[11px] font-medium text-white backdrop-blur-md ring-1 ring-white/15 transition-all hover:bg-black/75 hover:ring-white/30 disabled:opacity-60"
+          title={
+            post.media_type === 'image'
+              ? post.assets.length > 1
+                ? 'Download this carousel as a zip'
+                : 'Download this image'
+              : 'Download this video'
+          }
         >
-          {uploadingRevision ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-          {uploadingRevision
-            ? uploadProgress !== null
-              ? `${uploadProgress}%`
-              : 'Uploading…'
-            : 'Replace'}
+          {downloadingPost ? (
+            <Loader2 size={12} className="animate-spin" />
+          ) : (
+            <Download size={12} />
+          )}
+          {downloadingPost ? 'Downloading…' : 'Download'}
         </button>
-      )}
+        {isEditor && (post.media_type !== 'image' || post.assets.length === 1) && (
+          <button
+            type="button"
+            onClick={() => revisionInputRef.current?.click()}
+            disabled={uploadingRevision || submitting || uploading}
+            className="inline-flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1.5 text-[11px] font-medium text-white backdrop-blur-md ring-1 ring-white/15 transition-all hover:bg-black/75 hover:ring-white/30 disabled:opacity-60"
+            title={
+              isImagePost
+                ? 'Replace this image with a new upload'
+                : 'Replace the current cut with a new upload'
+            }
+          >
+            {uploadingRevision ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+            {uploadingRevision
+              ? uploadProgress !== null
+                ? `${uploadProgress}%`
+                : 'Uploading…'
+              : 'Replace'}
+          </button>
+        )}
+      </div>
     </div>
   );
 
+  // Image vs video Replace share the same hidden input + ref. The accept
+  // attribute and the per-file dispatch swap based on the post's media_type
+  // so an image post posts to the image endpoint and never tries to mint a
+  // Mux upload (and vice versa).
   const revisionInput = isEditor ? (
     <input
       ref={revisionInputRef}
       type="file"
-      accept="video/*"
+      accept={isImagePost ? 'image/*' : 'video/*'}
       className="hidden"
       onChange={(e) => {
         const f = e.target.files?.[0];
-        if (f) uploadRevisionFile(f);
+        if (!f) return;
+        if (isImagePost) uploadReplacementImage(f);
+        else uploadRevisionFile(f);
       }}
     />
   ) : null;
@@ -2820,14 +3017,17 @@ function PostCard({
   //     Switch to a stacked layout: video on top filling card width at
   //     16:9, comments fill the rest of the height below. Frame.io uses
   //     the same flip for landscape ads.
-  // Image posts size-to-content. The fixed 78vh card height was scoped
-  // to the video review case (frame.io-style chrome where the comments
-  // column scrolls inside a bounded right panel). For a still image with
-  // a short caption, that lock leaves a big empty gap under the picture
-  // and makes the card feel oversized. Letting it grow with content
-  // hugs the composer to the image, no wasted space.
+  // Image posts get a smaller fixed height than video. The 78vh card was
+  // scoped to the video review case (frame.io-style chrome where the
+  // comments column scrolls inside a bounded right panel) — for a still
+  // image at 4:5 the picture only fills ~55vh, so the rest reads as a big
+  // empty gap. 60vh hugs the image's natural footprint while still giving
+  // the right column a definite height — which is what pins the composer
+  // (Approve / Request change) to the bottom of the card. With no fixed
+  // height the inner flex-1 has nothing to grow into and the composer
+  // floats up next to the caption.
   const heightPx = isImagePost
-    ? ''
+    ? 'md:h-[60vh]'
     : layoutMode === 'modal'
       ? 'md:h-[88vh]'
       : 'md:h-[78vh]';
