@@ -20,9 +20,10 @@ const CreateShareLinkSchema = z.object({
  * POST /api/scheduler/share
  *
  * Mint (or refresh) a rich `/c/{token}` share link for the calendar's
- * Share button. Replaces the OLD `client_review_links` flow so admins
- * always hand clients the modern viewer with caption editing, comments,
- * video revisions, named reviewers, etc.
+ * Share button. Replaced the OLD `client_review_links` flow (table +
+ * page + feedback API retired in migration 263) so admins always hand
+ * clients the modern viewer with caption editing, comments, video
+ * revisions, named reviewers, etc.
  *
  * Wire-up: the new viewer at /c/{token} reads from `content_drops` +
  * `content_drop_videos`. To support free-form post selection from the
