@@ -659,8 +659,8 @@ function SharedDropView({
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-nativz-border bg-surface px-4 py-5 sm:px-6 sm:py-7">
-        <div className="mx-auto max-w-5xl">
+      <header className="border-b border-nativz-border bg-surface px-3 py-5 sm:px-6 sm:py-7">
+        <div className="mx-auto max-w-6xl">
           <div className="mb-4 flex items-center sm:mb-5">
             <ShareHeaderLogo />
           </div>
@@ -2815,7 +2815,17 @@ function PostCard({
   //     Switch to a stacked layout: video on top filling card width at
   //     16:9, comments fill the rest of the height below. Frame.io uses
   //     the same flip for landscape ads.
-  const heightPx = layoutMode === 'modal' ? 'md:h-[88vh]' : 'md:h-[78vh]';
+  // Image posts size-to-content. The fixed 78vh card height was scoped
+  // to the video review case (frame.io-style chrome where the comments
+  // column scrolls inside a bounded right panel). For a still image with
+  // a short caption, that lock leaves a big empty gap under the picture
+  // and makes the card feel oversized. Letting it grow with content
+  // hugs the composer to the image, no wasted space.
+  const heightPx = isImagePost
+    ? ''
+    : layoutMode === 'modal'
+      ? 'md:h-[88vh]'
+      : 'md:h-[78vh]';
   const stackVertical = isCtv;
   const layoutDirection = stackVertical ? '' : 'md:flex-row';
   const articleChrome =
