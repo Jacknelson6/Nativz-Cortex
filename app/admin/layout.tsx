@@ -14,6 +14,7 @@ import { AdminTopBar } from '@/components/layout/admin-top-bar';
 import { SidebarProvider, SidebarInset } from '@/components/layout/sidebar';
 import { EasterEgg } from '@/components/easter-egg';
 import { CommandPalette } from '@/components/shared/command-palette';
+import { UploadDock } from '@/components/shared/upload-dock';
 import { PageTransition } from '@/components/shared/page-transition';
 import { BackgroundSearchProvider } from '@/components/search/background-search-tracker';
 import { SWRProvider } from '@/components/providers/swr-provider';
@@ -102,6 +103,7 @@ export default async function AdminLayout({
             <ImpersonationBanner />
             <EasterEgg />
             <CommandPalette />
+            <UploadDock />
             <AdminSidebar userName={userName} avatarUrl={avatarUrl} hiddenSidebarItems={hiddenSidebarItems} isSuperAdmin={isSuperAdmin} />
             <SidebarInset>
               <BannerStrip />
