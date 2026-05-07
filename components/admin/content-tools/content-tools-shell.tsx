@@ -170,7 +170,20 @@ function statusForReview(
  * `/c/<token>`.
  */
 function editingProjectToRow(p: EditingProject): ReviewLinkRow {
-  const isApproved = p.status === 'approved' || p.status === 'done';
+  // Source of truth for "are the creatives approved?" is the per-video
+  // latest review state (`approved_count`/`changes_count`/`pending_count`),
+  // not the project's `status` column - the column is a manual lifecycle
+  // flag that lags real review state. Mirror calendar's status derivation
+  // so the row's pill matches its counter.
+  const totalForReview = p.approved_count + p.changes_count + p.pending_count;
+  const reviewDerivedStatus: ReviewLinkRow['status'] | null =
+    totalForReview > 0
+      ? p.changes_count > 0
+        ? 'revising'
+        : p.approved_count === totalForReview
+          ? 'approved'
+          : null
+      : null;
   return {
     id: `editing:${p.id}`,
     token: '',
@@ -186,10 +199,10 @@ function editingProjectToRow(p: EditingProject): ReviewLinkRow {
     client_agency: null,
     client_logo_url: p.client_logo_url,
     post_count: p.video_count,
-    approved_count: isApproved ? p.video_count : 0,
-    changes_count: 0,
-    pending_count: isApproved ? 0 : p.video_count,
-    status: statusForReview(p.status),
+    approved_count: p.approved_count,
+    changes_count: p.changes_count,
+    pending_count: p.pending_count,
+    status: reviewDerivedStatus ?? statusForReview(p.status),
     expires_at: p.created_at,
     created_at: p.created_at,
     last_viewed_at: null,
@@ -204,7 +217,17 @@ function editingProjectToRow(p: EditingProject): ReviewLinkRow {
     send_count: p.send_count,
     kind: 'editing',
     editing_project_id: p.id,
-    editing_status: p.status,
+    // Override the project's lifecycle status when per-video review state
+    // is terminal (all approved or any changes). The pill reads from this
+    // field via `unifiedStatusForEditingProject`, so this keeps the pill
+    // in sync with the counter without depending on the lifecycle column
+    // having been advanced manually.
+    editing_status:
+      totalForReview > 0 && p.changes_count > 0
+        ? 'revising'
+        : totalForReview > 0 && p.approved_count === totalForReview
+          ? 'approved'
+          : p.status,
     notes: p.notes,
     strategist_id: p.strategist_id,
     strategist_email: p.strategist_email,

@@ -170,6 +170,78 @@ export async function GET(req: Request) {
     }
   }
 
+  // Per-video review-state rollup. The project's `status` column only
+  // advances on explicit admin action, so a fully-approved deliverable
+  // can still read `editing` here. The unified review table needs the
+  // real "creatives approved" count — mirror calendar's latestReview()
+  // walk over editing_project_review_comments.
+  const reviewCounts = new Map<
+    string,
+    { approved: number; changes: number; pending: number; total: number }
+  >();
+  if (projectIds.length) {
+    const [{ data: videoRows }, { data: commentRows }] = await Promise.all([
+      admin
+        .from('editing_project_videos')
+        .select('id, project_id')
+        .in('project_id', projectIds),
+      admin
+        .from('editing_project_review_comments')
+        .select('video_id, status, metadata, created_at')
+        .in('project_id', projectIds)
+        .in('status', ['approved', 'changes_requested'])
+        .order('created_at', { ascending: true }),
+    ]);
+    const videoToProject = new Map<string, string>();
+    const projectToVideos = new Map<string, string[]>();
+    for (const v of (videoRows ?? []) as Array<{ id: string; project_id: string }>) {
+      videoToProject.set(v.id, v.project_id);
+      const arr = projectToVideos.get(v.project_id) ?? [];
+      arr.push(v.id);
+      projectToVideos.set(v.project_id, arr);
+    }
+    const byVideo = new Map<
+      string,
+      Array<{ status: string; metadata: Record<string, unknown> | null; created_at: string }>
+    >();
+    for (const c of (commentRows ?? []) as Array<{
+      video_id: string;
+      status: string;
+      metadata: Record<string, unknown> | null;
+      created_at: string;
+    }>) {
+      const arr = byVideo.get(c.video_id) ?? [];
+      arr.push({ status: c.status, metadata: c.metadata, created_at: c.created_at });
+      byVideo.set(c.video_id, arr);
+    }
+    function latestReview(
+      rows: Array<{ status: string; metadata: Record<string, unknown> | null }>,
+    ): 'approved' | 'changes_requested' | null {
+      for (let i = rows.length - 1; i >= 0; i--) {
+        const r = rows[i];
+        if (r.status === 'approved') return 'approved';
+        if (r.status === 'changes_requested') {
+          const resolved = !!(r.metadata && (r.metadata as Record<string, unknown>).resolved);
+          if (!resolved) return 'changes_requested';
+        }
+      }
+      return null;
+    }
+    for (const pid of projectIds) {
+      const vids = projectToVideos.get(pid) ?? [];
+      let approved = 0;
+      let changes = 0;
+      let pending = 0;
+      for (const vid of vids) {
+        const s = latestReview(byVideo.get(vid) ?? []);
+        if (s === 'approved') approved += 1;
+        else if (s === 'changes_requested') changes += 1;
+        else pending += 1;
+      }
+      reviewCounts.set(pid, { approved, changes, pending, total: vids.length });
+    }
+  }
+
   const projects: EditingProject[] = (data ?? []).map((row: any) => ({
     id: row.id,
     client_id: row.client_id,
@@ -207,6 +279,11 @@ export async function GET(req: Request) {
     send_count: sendStats.get(row.id)?.send_count ?? 0,
     last_followup_at: sendStats.get(row.id)?.last_followup_at ?? null,
     followup_count: sendStats.get(row.id)?.followup_count ?? 0,
+    approved_count: reviewCounts.get(row.id)?.approved ?? 0,
+    changes_count: reviewCounts.get(row.id)?.changes ?? 0,
+    pending_count:
+      reviewCounts.get(row.id)?.pending
+        ?? (Array.isArray(row.videos) ? row.videos[0]?.count ?? 0 : 0),
   }));
 
   return NextResponse.json({ projects });

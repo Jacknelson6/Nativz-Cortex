@@ -139,6 +139,21 @@ export interface EditingProject {
    */
   last_followup_at: string | null;
   followup_count: number;
+  /**
+   * Per-video review-state rollup. Walks `editing_project_review_comments`
+   * newest-to-oldest per video (mirrors calendar's `latestReview()`):
+   * - `approved_count`: latest non-comment status is `approved`
+   * - `changes_count`: latest non-comment status is `changes_requested`
+   *   AND `metadata.resolved` is not truthy
+   * - `pending_count`: video has no terminal review row
+   *
+   * Source of truth for "are the creatives approved?" — the project's
+   * `status` column is a manual lifecycle flag that only advances on
+   * explicit admin action, so it can lag the actual review state.
+   */
+  approved_count: number;
+  changes_count: number;
+  pending_count: number;
 }
 
 export const EDITING_STATUS_LABEL: Record<EditingProjectStatus, string> = {
