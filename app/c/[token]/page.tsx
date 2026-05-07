@@ -646,7 +646,7 @@ function SharedDropView({
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 md:ml-auto md:flex-nowrap">
               {downloadableCount > 0 && (
                 <button
                   type="button"
