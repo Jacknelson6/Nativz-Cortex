@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from 'react';
@@ -17,6 +18,7 @@ import {
   Loader2,
   Mail,
   MessagesSquare,
+  Pencil,
   Send,
   RefreshCcw,
   Users,
@@ -693,6 +695,7 @@ export function CalendarLinkDetail({
   const isAbandoned = link.status === 'abandoned';
   const isApproved = link.status === 'approved';
   const dateRange = formatDateRange(link.drop_start, link.drop_end);
+  const projectNameFallback = formatProjectName(link.drop_start) ?? dateRange;
 
   async function copyShareUrl() {
     try {
@@ -1110,9 +1113,12 @@ export function CalendarLinkDetail({
         brandName={link.client_name ?? 'Client'}
         brandLabel={link.client_name ?? 'Unassigned brand'}
         title={
-          <p className="text-lg font-semibold text-text-primary">
-            {link.name && link.name.trim().length > 0 ? link.name : dateRange}
-          </p>
+          <CalendarProjectNameInline
+            shareLinkId={link.id}
+            initialName={link.name ?? null}
+            fallback={projectNameFallback}
+            onChanged={onChanged}
+          />
         }
         headerExtras={
           <>
@@ -1780,6 +1786,129 @@ function StatusPill({ status }: { status: ReviewLinkStatus }) {
     >
       {c.label}
     </span>
+  );
+}
+
+function formatProjectName(start: string | null): string | null {
+  if (!start) return null;
+  const d = new Date(start);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.toLocaleString('default', { month: 'long' })} ${d.getFullYear()}`;
+}
+
+/**
+ * Inline-editable project name in the modal header. PATCHes the same
+ * /api/calendar/review/{id} endpoint as the public share page and the
+ * review table NameCell so a rename here propagates everywhere on the
+ * next refetch (parent fires onChanged after save).
+ */
+function CalendarProjectNameInline({
+  shareLinkId,
+  initialName,
+  fallback,
+  onChanged,
+}: {
+  shareLinkId: string;
+  initialName: string | null;
+  fallback: string;
+  onChanged?: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [override, setOverride] = useState<string | null | undefined>(undefined);
+  const [draft, setDraft] = useState(initialName ?? '');
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // Drop the optimistic override when canonical prop changes (parent
+  // refetched after onChanged).
+  useEffect(() => {
+    setOverride(undefined);
+  }, [initialName]);
+
+  const display = override !== undefined ? override : initialName;
+
+  useEffect(() => {
+    if (!editing) setDraft(display ?? '');
+  }, [display, editing]);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  const cls = 'text-lg font-semibold text-text-primary';
+
+  async function save() {
+    const trimmed = draft.trim();
+    const next = trimmed.length > 0 ? trimmed : null;
+    setEditing(false);
+    if (next === (display ?? null)) return;
+    const prev = display ?? null;
+    setOverride(next);
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/calendar/review/${shareLinkId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: next }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? 'Rename failed');
+      }
+      toast.success('Project name updated');
+      onChanged?.();
+    } catch (err) {
+      setOverride(prev);
+      toast.error(err instanceof Error ? err.message : 'Rename failed');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => void save()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            (e.target as HTMLInputElement).blur();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            setDraft(display ?? '');
+            setEditing(false);
+          }
+        }}
+        placeholder={fallback}
+        disabled={saving}
+        maxLength={120}
+        className={`${cls} w-full max-w-full rounded-md border border-nativz-border bg-transparent px-2 py-1 outline-none focus:border-accent`}
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setDraft(display ?? '');
+        setEditing(true);
+      }}
+      className="group inline-flex max-w-full items-center gap-2 rounded-md text-left transition-colors hover:text-text-primary"
+      title="Rename"
+    >
+      <span className={`${cls} truncate`}>{display ?? fallback}</span>
+      <Pencil
+        size={14}
+        className="shrink-0 text-text-tertiary opacity-0 transition-opacity group-hover:opacity-100"
+      />
+    </button>
   );
 }
 
