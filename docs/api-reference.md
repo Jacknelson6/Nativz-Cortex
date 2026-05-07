@@ -2,7 +2,7 @@
 
 > **For AI agents:** This document describes every API endpoint that exists on disk. Auto-generated from `app/api/**/route.ts` by `scripts/generate-api-docs.ts` — do not edit by hand. Re-run the script after adding/removing routes or tweaking a JSDoc block.
 
-**645 endpoints across 31 sections.**
+**644 endpoints across 31 sections.**
 
 ## Authentication
 
@@ -4173,7 +4173,7 @@ id - Scheduled post UUID
 
 ### `PUT /api/scheduler/posts/:id`
 
-Resolve the client_id a scheduled post belongs to and assert that the given user is allowed to mutate it. Admins skip the access check; viewers must have a row in `user_client_access` for the owning brand. Returns `{ ok: true }` when the user is allowed, or a NextResponse with the appropriate 403/404 to bail out with. / async function assertPostAccess( postId: string, userId: string, ): Promise<{ ok: true } | { ok: false; response: NextResponse }> { const admin = createAdminClient(); const { data: post } = await admin .from('scheduled_posts') .select('client_id') .eq('id', postId) .maybeSingle(); if (!post) { return { ok: false, response: NextResponse.json({ error: 'Not found' }, { status: 404 }), }; } if (await isAdmin(userId)) return { ok: true }; const { data: access } = await admin .from('user_client_access') .select('client_id') .eq('user_id', userId) .eq('client_id', post.client_id) .maybeSingle(); if (!access) { return { ok: false, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }), }; } return { ok: true }; } const UpdatePostSchema = z.object({ caption: z.string().optional(), hashtags: z.array(z.string()).optional(), scheduled_at: z.string().nullable().optional(), status: z.enum(['draft', 'scheduled']).optional(), platform_profile_ids: z.array(z.string()).optional(), media_ids: z.array(z.string()).optional(), cover_image_url: z.string().nullable().optional(), tagged_people: z.array(z.string()).optional(), collaborator_handles: z.array(z.string()).optional(), }); /** PUT /api/scheduler/posts/[id] Update a scheduled post's fields, platform links, and/or media attachments. When media is replaced, old media items are unmarked as used. Platform links are replaced atomically (delete then insert) if platform_profile_ids is provided.
+Resolve the client_id a scheduled post belongs to and assert that the given user is allowed to mutate it. Admins skip the access check; viewers must have a row in `user_client_access` for the owning brand. Returns `{ ok: true }` when the user is allowed, or a NextResponse with the appropriate 403/404 to bail out with. / async function assertPostAccess( postId: string, userId: string, ): Promise<{ ok: true } | { ok: false; response: NextResponse }> { const admin = createAdminClient(); const { data: post } = await admin .from('scheduled_posts') .select('client_id') .eq('id', postId) .maybeSingle(); if (!post) { return { ok: false, response: NextResponse.json({ error: 'Not found' }, { status: 404 }), }; } if (await isAdmin(userId)) return { ok: true }; const { data: access } = await admin .from('user_client_access') .select('client_id') .eq('user_id', userId) .eq('client_id', post.client_id) .maybeSingle(); if (!access) { return { ok: false, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }), }; } return { ok: true }; } const UpdatePostSchema = z.object({ caption: z.string().optional(), hashtags: z.array(z.string()).optional(), scheduled_at: z.string().nullable().optional(), status: z.enum(['draft', 'scheduled']).optional(), platform_profile_ids: z.array(z.string()).optional(), media_ids: z.array(z.string()).optional(), cover_image_url: z.string().nullable().optional(), tagged_people: z.array(z.string()).optional(), collaborator_handles: z.array(z.string()).optional(), // Per-platform overrides (migrations 218 + 255). All nullable so the UI // can clear an override (NULL → fall back to router default). youtube_title: z.string().nullable().optional(), youtube_description: z.string().nullable().optional(), youtube_tags: z.array(z.string()).nullable().optional(), youtube_privacy: z.enum(['public', 'unlisted', 'private']).nullable().optional(), youtube_made_for_kids: z.boolean().nullable().optional(), tiktok_allow_comment: z.boolean().nullable().optional(), tiktok_allow_duet: z.boolean().nullable().optional(), tiktok_allow_stitch: z.boolean().nullable().optional(), instagram_share_to_feed: z.boolean().nullable().optional(), instagram_content_type: z.enum(['feed', 'reels', 'story']).nullable().optional(), facebook_content_type: z.enum(['feed', 'reel', 'story']).nullable().optional(), facebook_page_id: z.string().nullable().optional(), linkedin_document_title: z.string().nullable().optional(), linkedin_organization_urn: z.string().nullable().optional(), linkedin_disable_link_preview: z.boolean().nullable().optional(), first_comment: z.string().nullable().optional(), }); /** PUT /api/scheduler/posts/[id] Update a scheduled post's fields, platform links, and/or media attachments. When media is replaced, old media items are unmarked as used. Platform links are replaced atomically (delete then insert) if platform_profile_ids is provided.
 
 **Auth:** Required (any authenticated user)
 
@@ -4389,27 +4389,9 @@ hashtags - Array of hashtags without # prefix (optional)
 {{ caption: SavedCaption }}
 ```
 
-### `GET /api/scheduler/share`
-
-Fetch posts for a shared calendar review link. Public endpoint used by the client review page. Returns posts enriched with platform info, media thumbnails, and per-post review status from any existing comments.
-
-**Auth:** None (public — token provides authorization)
-
-**Query params:**
-
-```
-token - Calendar review link token (required)
-```
-
-**Returns:**
-
-```
-{{ client_name, label, posts: EnrichedPost[] }}
-```
-
 ### `POST /api/scheduler/share`
 
-Create a shareable calendar review link for a selected set of posts. Clients use the generated URL to view and provide feedback on scheduled content without logging in.
+Mint (or refresh) a rich `/c/{token}` share link for the calendar's Share button. Replaced the OLD `client_review_links` flow (table + page + feedback API retired in migration 263) so admins always hand clients the modern viewer with caption editing, comments, video revisions, named reviewers, etc. Wire-up: the new viewer at /c/{token} reads from `content_drops` + `content_drop_videos`. To support free-form post selection from the calendar (posts that may not be tied to a Drive ingest), this route mints a *synthetic* `content_drops` row per client (one forever, found on subsequent calls) marked `source='calendar_share'` (migration 259), then mirrors each selected scheduled post as a `content_drop_videos` child row with the publish-ready media URL copied over from `scheduler_media`. Image/carousel posts also get matching `content_drop_post_assets` rows. Refresh semantics match the Drive-drop share endpoint: - One active share link per client (partial unique index from migration 208). Re-sharing the same client refreshes the same row; the token stays stable so old URLs keep working. - Orphan posts dropped during a refresh are withdrawn from Zernio when previously approved + queued (see SafeStop incident). - A fresh `post_review_links` row is minted per post per share call to give the new cycle its own comment thread.
 
 **Auth:** Required (any authenticated user)
 
@@ -4418,35 +4400,12 @@ Create a shareable calendar review link for a selected set of posts. Clients use
 ```
 client_id - Client UUID (required)
 post_ids - Scheduled post UUIDs to share (min 1 required)
-label - Label for the review link (default 'Review link')
 ```
 
 **Returns:**
 
 ```
-{{ link: ClientReviewLink, url: string }}
-```
-
-### `POST /api/scheduler/share/feedback`
-
-Submit review feedback on a post via a shared calendar link. When a client approves a draft post, it is automatically promoted to 'scheduled' and synced to Late API. Public endpoint — no auth required, authorization is via share token.
-
-**Auth:** None (public — share_token provides authorization)
-
-**Body:**
-
-```
-share_token - Calendar review link token (required)
-post_id - Scheduled post UUID to comment on (required)
-author_name - Commenter name (required)
-content - Feedback text (required)
-status - 'approved' | 'changes_requested' | 'comment' (default 'comment')
-```
-
-**Returns:**
-
-```
-{{ comment: PostReviewComment }}
+{{ url: string, refreshed: boolean, cancelled_orphans: string[], unpublishable_orphans: string[] }}
 ```
 
 ### `POST /api/scheduler/webhooks`
@@ -5403,6 +5362,8 @@ Sidekick endpoint for the InviteBuilderModal. Returns the brand's `contacts` row
 ### `GET /api/admin/content-tools/connections`
 
 ### `GET /api/admin/content-tools/connections-matrix`
+
+### `POST /api/admin/content-tools/connections-matrix/owner`
 
 ### `POST /api/admin/content-tools/connections-matrix/sync`
 
