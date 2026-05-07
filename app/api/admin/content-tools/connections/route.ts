@@ -7,6 +7,7 @@ import {
   probeMonday,
   probeOpenRouter,
   probeResend,
+  probeResendWebhook,
   probeSupabase,
   probeZernioPresence,
   type ProbeResult,
@@ -62,6 +63,13 @@ const PROBES: ProbeSpec[] = [
     label: 'Resend',
     description: 'Outbound transactional email (calendar shares, followups).',
     run: probeResend,
+  },
+  {
+    id: 'resend-webhook',
+    label: 'Resend webhook',
+    description:
+      'Inbound delivery, open + click tracking. Status flips to connected once Resend posts a signature-valid event.',
+    run: probeResendWebhook,
   },
   {
     id: 'monday',

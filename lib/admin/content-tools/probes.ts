@@ -239,6 +239,86 @@ export async function probeDrive(): Promise<ProbeResult> {
   }
 }
 
+/** Resend webhook reachability. Two-part check:
+ *   1. At least one Svix signing secret is configured (shared, nativz, or
+ *      anderson). Without it the route accepts unsigned events in dev but
+ *      rejects them in production.
+ *   2. The `email_webhook_events` archive has had a signature-valid entry
+ *      in the last 30 days. This is what tells Jack "events are actually
+ *      arriving" vs "secret is set but Resend isn't pointed here yet."
+ *
+ *  Returns `missing` when no secrets, `connected` when secrets + recent
+ *  successful events, `unknown` when secrets are present but only invalid
+ *  attempts (or zero events) have arrived. The detail line includes the
+ *  most recent success timestamp + count of rejected attempts so admins
+ *  can spot a stale secret without leaving the tab. */
+export async function probeResendWebhook(): Promise<ProbeResult> {
+  const [shared, nativz, anderson] = await Promise.all([
+    getSecret('RESEND_WEBHOOK_SECRET').catch(() => undefined),
+    getSecret('RESEND_WEBHOOK_SECRET_NATIVZ').catch(() => undefined),
+    getSecret('RESEND_WEBHOOK_SECRET_ANDERSON').catch(() => undefined),
+  ]);
+  const configured = [shared, nativz, anderson].filter(
+    (s): s is string => typeof s === 'string' && s.length > 0,
+  );
+  const labels = [
+    shared ? 'shared' : null,
+    nativz ? 'nativz' : null,
+    anderson ? 'anderson' : null,
+  ].filter(Boolean) as string[];
+
+  if (configured.length === 0) {
+    return missing(
+      'No webhook signing secrets configured (RESEND_WEBHOOK_SECRET[_NATIVZ|_ANDERSON])',
+    );
+  }
+
+  try {
+    const admin = createAdminClient();
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const [{ data: lastValid }, { count: rejectedCount }] = await Promise.all([
+      admin
+        .from('email_webhook_events')
+        .select('received_at, event_type')
+        .eq('signature_valid', true)
+        .gte('received_at', since)
+        .order('received_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      admin
+        .from('email_webhook_events')
+        .select('id', { count: 'exact', head: true })
+        .eq('signature_valid', false)
+        .gte('received_at', since),
+    ]);
+
+    const rejected = rejectedCount ?? 0;
+    const secretsLabel = `${configured.length} secret${configured.length === 1 ? '' : 's'} (${labels.join(', ')})`;
+
+    if (lastValid) {
+      const ageMs = Date.now() - new Date(lastValid.received_at).getTime();
+      const ageHours = Math.round(ageMs / (60 * 60 * 1000));
+      const ageLabel =
+        ageHours < 1 ? '<1h ago' : ageHours < 48 ? `${ageHours}h ago` : `${Math.round(ageHours / 24)}d ago`;
+      const rejectedSuffix = rejected > 0 ? ` · ${rejected} rejected` : '';
+      return {
+        status: 'connected',
+        detail: `${secretsLabel} · last event ${ageLabel}${rejectedSuffix}`,
+        latencyMs: null,
+      };
+    }
+
+    if (rejected > 0) {
+      return unknown(
+        `${secretsLabel} but ${rejected} signature-rejected attempt${rejected === 1 ? '' : 's'} in last 30d (stale secret?)`,
+      );
+    }
+    return unknown(`${secretsLabel} but no events received in last 30d`);
+  } catch (err) {
+    return unknown(err instanceof Error ? err.message : 'webhook archive query failed');
+  }
+}
+
 /** Zernio uses a shared webhook secret + outbound notify recipients;
  *  there's no public health endpoint we can hit without spamming the
  *  channel. Presence-only check, with a heads-up in the detail line. */
