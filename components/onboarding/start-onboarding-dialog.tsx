@@ -1,0 +1,165 @@
+'use client';
+
+/**
+ * Single-client variant of the New Onboarding dialog. Used from the
+ * Clients grid action menu, so the client is already selected — we only
+ * need kind, platforms (smm), optional POC email, and the welcome
+ * toggle. POST + redirect mirrors `onboarding-new-button.tsx`.
+ */
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+
+const PLATFORMS = ['tiktok', 'instagram', 'youtube_shorts', 'linkedin', 'x'];
+
+interface Props {
+  open: boolean;
+  onClose: () => void;
+  clientId: string;
+  clientName: string;
+}
+
+export function StartOnboardingDialog({ open, onClose, clientId, clientName }: Props) {
+  const router = useRouter();
+  const [kind, setKind] = useState<'smm' | 'editing'>('smm');
+  const [platforms, setPlatforms] = useState<string[]>(['tiktok', 'instagram']);
+  const [pocEmail, setPocEmail] = useState('');
+  const [sendWelcome, setSendWelcome] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function togglePlatform(slug: string) {
+    setPlatforms((prev) =>
+      prev.includes(slug) ? prev.filter((p) => p !== slug) : [...prev, slug],
+    );
+  }
+
+  async function submit() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/onboardings', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          client_id: clientId,
+          kind,
+          platforms: kind === 'smm' ? platforms : undefined,
+          poc_email: pocEmail.trim() || undefined,
+          send_welcome: sendWelcome,
+        }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.error ?? 'failed to create onboarding');
+      }
+      const { row } = (await res.json()) as { row: { id: string } };
+      onClose();
+      router.push(`/admin/onboarding/${row.id}`);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'unknown error');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={`Start onboarding for ${clientName}`}
+      maxWidth="lg"
+    >
+      <div className="space-y-4">
+        <div className="space-y-1.5">
+          <label className="text-[11px] uppercase tracking-wide text-text-secondary">Kind</label>
+          <div className="flex gap-2">
+            {(['smm', 'editing'] as const).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setKind(k)}
+                disabled={submitting}
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm capitalize transition-colors ${
+                  kind === k
+                    ? 'border-accent text-accent-text bg-background'
+                    : 'border-border text-text-secondary hover:bg-background hover:text-foreground'
+                }`}
+              >
+                {k === 'smm' ? 'Social media' : 'Editing'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {kind === 'smm' && (
+          <div className="space-y-1.5">
+            <label className="text-[11px] uppercase tracking-wide text-text-secondary">
+              Platforms
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {PLATFORMS.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => togglePlatform(p)}
+                  disabled={submitting}
+                  className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                    platforms.includes(p)
+                      ? 'border-accent text-accent-text bg-background'
+                      : 'border-border text-text-secondary hover:bg-background hover:text-foreground'
+                  }`}
+                >
+                  {p.replace('_', ' ')}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          <label className="text-[11px] uppercase tracking-wide text-text-secondary">
+            POC email (optional)
+          </label>
+          <Input
+            type="email"
+            placeholder="Falls back to brand profile primary contact"
+            value={pocEmail}
+            onChange={(e) => setPocEmail(e.target.value)}
+            disabled={submitting}
+          />
+        </div>
+
+        <label className="flex items-center gap-2 text-sm text-text-secondary">
+          <input
+            type="checkbox"
+            checked={sendWelcome}
+            onChange={(e) => setSendWelcome(e.target.checked)}
+            disabled={submitting}
+            className="rounded border-border"
+          />
+          Send welcome email now
+        </label>
+
+        {error ? (
+          <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+            {error}
+          </div>
+        ) : null}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={submit} disabled={submitting}>
+            {submitting ? 'Creating...' : 'Create onboarding'}
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  );
+}

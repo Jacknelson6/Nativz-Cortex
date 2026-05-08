@@ -15,8 +15,10 @@ import {
   AlertTriangle,
   Pause,
   Play,
+  Rocket,
 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
+import { StartOnboardingDialog } from '@/components/onboarding/start-onboarding-dialog';
 // (SpotlightCard — the cursor-following cyan radial hover glow — was removed
 // 2026-04-24: looked stuck-blue on AC paper and wasn't needed to signal
 // hoverability. The border + bg transitions on the card itself carry that load.)
@@ -181,6 +183,7 @@ function ActionMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
+  const [startOnboardingOpen, setStartOnboardingOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [copying, setCopying] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -274,6 +277,18 @@ function ActionMenu({
               <ArrowRight size={13} className="text-text-muted" />
               <span className="flex-1">Move</span>
             </button>
+
+            {currentBucket === 'prospect' && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => { setOpen(false); setStartOnboardingOpen(true); }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-primary hover:bg-surface-hover transition-colors text-left"
+              >
+                <Rocket size={13} className="text-text-muted" />
+                <span className="flex-1">Start onboarding</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -404,6 +419,13 @@ function ActionMenu({
           </button>
         </div>
       </Dialog>
+
+      <StartOnboardingDialog
+        open={startOnboardingOpen}
+        onClose={() => setStartOnboardingOpen(false)}
+        clientId={clientId}
+        clientName={clientName}
+      />
 
       <ConfirmDialog
         open={confirmDelete}
