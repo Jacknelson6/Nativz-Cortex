@@ -1,6 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { reconcileMuxRow, type ReconcileTarget } from '@/lib/mux/reconcile';
 import { ensureFeedCompatibleUrl } from '@/lib/calendar/normalize-image-for-feed';
+import {
+  ensureMuxForSchedulerMedia,
+  isZernioTempUrl,
+  type SchedulerMediaMuxRow,
+} from '@/lib/mux/scheduler-media';
 
 export interface ResolvedMedia {
   videoUrl?: string;
@@ -161,22 +166,41 @@ export async function resolveScheduledPostMedia(
   const { data: links } = await admin
     .from('scheduled_post_media')
     .select(
-      'sort_order, scheduler_media:media_id (late_media_url, storage_path, mime_type)',
+      'sort_order, scheduler_media:media_id (id, late_media_url, storage_path, mime_type, mux_upload_id, mux_asset_id, mux_playback_id, mux_status)',
     )
     .eq('post_id', postId)
     .order('sort_order')
     .limit(1);
 
+  type SchedulerMediaPick = SchedulerMediaMuxRow & { storage_path: string | null };
   type LinkRow = {
-    scheduler_media:
-      | { late_media_url: string | null; storage_path: string | null }
-      | { late_media_url: string | null; storage_path: string | null }[]
-      | null;
+    scheduler_media: SchedulerMediaPick | SchedulerMediaPick[] | null;
   };
   const first = (links ?? [])[0] as LinkRow | undefined;
   const m = first ? (Array.isArray(first.scheduler_media) ? first.scheduler_media[0] : first.scheduler_media) : null;
   const fallback = m?.late_media_url ?? m?.storage_path ?? null;
-  if (!fallback) throw new Error('No media attached to post');
+  if (!m || !fallback) throw new Error('No media attached to post');
+
+  // Self-heal: UI-uploaded videos land on Zernio's temp CDN, which TTLs out
+  // mid IG container creation for big files. Mirror onto Mux on first publish
+  // attempt; subsequent attempts reuse the stamped Mux asset. The cron retry
+  // path naturally absorbs the 1-5 min wait while Mux packages the rendition.
+  if (isZernioTempUrl(fallback) && m.mime_type?.startsWith('video/')) {
+    const result = await ensureMuxForSchedulerMedia(admin, {
+      id: m.id,
+      late_media_url: m.late_media_url,
+      mime_type: m.mime_type,
+      mux_upload_id: m.mux_upload_id,
+      mux_asset_id: m.mux_asset_id,
+      mux_playback_id: m.mux_playback_id,
+      mux_status: m.mux_status,
+    });
+    if (!result.ready) {
+      throw new Error('Mux MP4 rendition not ready yet for original. Cron will retry.');
+    }
+    return { videoUrl: result.mp4Url! };
+  }
+
   return { videoUrl: resolveStoragePath(admin, fallback) };
 }
 
