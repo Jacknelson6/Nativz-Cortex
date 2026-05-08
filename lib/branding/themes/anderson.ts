@@ -12,7 +12,7 @@ export const andersonTheme: AgencyTheme = {
   shortName: 'AC',
   domain: 'https://andersoncollaborative.com',
   supportEmail: 'hello@andersoncollaborative.com',
-  opsEmail: 'team@andersoncollaborative.com',
+  opsEmail: 'jack@andersoncollaborative.com',
   metaBusinessId: '',
 
   colors: {
