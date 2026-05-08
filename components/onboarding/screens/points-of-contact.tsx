@@ -4,13 +4,13 @@
  * Points of contact screen.
  *
  * Mirrors the brand's `contacts` table via the public share-token CRUD.
- * The client adds anyone we should loop in, marks one primary, and can
- * forward the onboarding link to a teammate so they can fill in the
- * pieces only they have visibility on.
+ * Optional step: clients may already have contacts captured elsewhere,
+ * so an empty list is allowed. They can forward the onboarding link to
+ * a teammate so anyone can complete the rest of the flow.
  */
 
 import { useEffect, useState } from 'react';
-import { Loader2, Star, Trash2, Send, Plus } from 'lucide-react';
+import { Loader2, Trash2, Send, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { PointOfContactEntry, PointsOfContactState } from '@/lib/onboarding/types';
@@ -30,7 +30,7 @@ export function PointsOfContactScreen({ value, token, clientName, submitting, on
   const [busy, setBusy] = useState<string | null>(null);
 
   // New row draft.
-  const [draft, setDraft] = useState({ name: '', email: '', role: '', is_primary: false });
+  const [draft, setDraft] = useState({ name: '', email: '' });
   const [draftError, setDraftError] = useState<string | null>(null);
 
   // Invite teammate UI.
@@ -69,8 +69,6 @@ export function PointsOfContactScreen({ value, token, clientName, submitting, on
         body: JSON.stringify({
           name: draft.name.trim(),
           email: draft.email.trim(),
-          role: draft.role.trim() || null,
-          is_primary: draft.is_primary,
         }),
       });
       if (!res.ok) {
@@ -79,29 +77,8 @@ export function PointsOfContactScreen({ value, token, clientName, submitting, on
         return;
       }
       const { contact } = (await res.json()) as { contact: PointOfContactEntry };
-      const next = draft.is_primary
-        ? [contact, ...contacts.map((c) => ({ ...c, is_primary: false }))]
-        : [...contacts, contact];
-      setContacts(next);
-      setDraft({ name: '', email: '', role: '', is_primary: false });
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function setPrimary(contact_id: string) {
-    setBusy(contact_id);
-    try {
-      const res = await fetch(`/api/public/onboarding/${token}/contacts`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id: contact_id, is_primary: true }),
-      });
-      if (res.ok) {
-        setContacts((prev) =>
-          prev.map((c) => ({ ...c, is_primary: c.contact_id === contact_id })),
-        );
-      }
+      setContacts((prev) => [...prev, contact]);
+      setDraft({ name: '', email: '' });
     } finally {
       setBusy(null);
     }
@@ -156,7 +133,7 @@ export function PointsOfContactScreen({ value, token, clientName, submitting, on
     }
   }
 
-  const canContinue = contacts.length > 0 && !submitting;
+  const canContinue = !submitting;
 
   return (
     <form
@@ -172,7 +149,7 @@ export function PointsOfContactScreen({ value, token, clientName, submitting, on
           Who should we loop in?
         </h1>
         <p className="text-base text-text-secondary">
-          Add anyone the strategist or editor should email about {clientName}. Mark one as primary.
+          Add anyone the strategist or editor should email about {clientName}. This step is optional, skip it if your contacts are already on file.
         </p>
       </div>
 
@@ -189,45 +166,21 @@ export function PointsOfContactScreen({ value, token, clientName, submitting, on
               className="flex flex-col gap-2 rounded-lg border border-nativz-border bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 text-sm font-medium text-text-primary">
-                  {c.name}
-                  {c.is_primary && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent-text">
-                      <Star size={10} />
-                      Primary
-                    </span>
-                  )}
-                </div>
-                <div className="text-xs text-text-muted">
-                  {c.email}
-                  {c.role && <span className="text-text-secondary"> · {c.role}</span>}
-                </div>
+                <div className="text-sm font-medium text-text-primary">{c.name}</div>
+                <div className="text-xs text-text-muted">{c.email}</div>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {!c.is_primary && c.contact_id && (
-                  <Button
-                    type="button"
-                    size="xs"
-                    variant="outline"
-                    onClick={() => setPrimary(c.contact_id!)}
-                    disabled={busy === c.contact_id || submitting}
-                  >
-                    Make primary
-                  </Button>
-                )}
-                {c.contact_id && (
-                  <Button
-                    type="button"
-                    size="xs"
-                    variant="ghost"
-                    onClick={() => removeContact(c.contact_id!)}
-                    disabled={busy === c.contact_id || submitting}
-                  >
-                    <Trash2 size={12} />
-                    Remove
-                  </Button>
-                )}
-              </div>
+              {c.contact_id && (
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => removeContact(c.contact_id!)}
+                  disabled={busy === c.contact_id || submitting}
+                >
+                  <Trash2 size={12} />
+                  Remove
+                </Button>
+              )}
             </div>
           ))}
 
@@ -251,23 +204,6 @@ export function PointsOfContactScreen({ value, token, clientName, submitting, on
                 onChange={(e) => setDraft((d) => ({ ...d, email: e.target.value }))}
                 disabled={submitting}
               />
-              <Input
-                id="poc-role"
-                label="Role (optional)"
-                placeholder="Marketing lead"
-                value={draft.role}
-                onChange={(e) => setDraft((d) => ({ ...d, role: e.target.value }))}
-                disabled={submitting}
-              />
-              <label className="flex items-end gap-2 pb-2 text-sm text-text-secondary">
-                <input
-                  type="checkbox"
-                  checked={draft.is_primary}
-                  onChange={(e) => setDraft((d) => ({ ...d, is_primary: e.target.checked }))}
-                  disabled={submitting}
-                />
-                Make them primary
-              </label>
             </div>
             {draftError && <div className="text-xs text-status-error">{draftError}</div>}
             <Button

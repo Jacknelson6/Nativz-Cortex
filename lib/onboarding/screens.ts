@@ -34,9 +34,9 @@ export interface OnboardingScreen {
 /**
  * SMM = social media management. 5 screens.
  *   0 welcome           -> agency-aware intro
- *   1 brand_basics      -> tagline, what/who/voice/offers, prefilled from `clients`
- *   2 social_connect    -> per-platform Zernio OAuth + Meta Business Suite tile
- *   3 points_of_contact -> who's on the client side (mirrors `contacts` table)
+ *   1 points_of_contact -> who's on the client side (mirrors `contacts` table)
+ *   2 brand_basics      -> tagline, what/who/voice/offers, prefilled from `clients`
+ *   3 social_connect    -> per-platform Zernio OAuth + Meta Business Suite tile
  *   4 done              -> handoff
  */
 const SMM_SCREENS: readonly OnboardingScreen[] = [
@@ -45,6 +45,12 @@ const SMM_SCREENS: readonly OnboardingScreen[] = [
     label: 'Welcome',
     step_state_key: null,
     description: 'Agency-aware intro to the SMM onboarding flow.',
+  },
+  {
+    key: 'points_of_contact',
+    label: 'Points of contact',
+    step_state_key: 'points_of_contact',
+    description: 'Who on your team should we loop in.',
   },
   {
     key: 'brand_basics',
@@ -57,12 +63,6 @@ const SMM_SCREENS: readonly OnboardingScreen[] = [
     label: 'Connect socials',
     step_state_key: 'social_handles',
     description: 'Zernio OAuth per platform + Meta Business Suite access.',
-  },
-  {
-    key: 'points_of_contact',
-    label: 'Points of contact',
-    step_state_key: 'points_of_contact',
-    description: 'Who on your team should we loop in.',
   },
   {
     key: 'done',

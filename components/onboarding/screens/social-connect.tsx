@@ -3,18 +3,21 @@
 /**
  * Social connect screen.
  *
- * For each platform on the engagement, the client picks one of three
- * paths: connect now (Zernio OAuth in a popup), set-up-for-me (we ping
- * ops and they walk them through it), or skip. The Meta Business Suite
- * tile is a separate access-grant ask: either the client adds our
- * Partner ID to Business Manager, or they email a teammate the share
- * link, then ticks the self-attest checkbox.
+ * For each platform, the client either connects now (Zernio OAuth in a
+ * popup) or clicks "Don't have one", which opens a modal asking whether
+ * we should set it up for them or skip the platform entirely.
+ *
+ * The Meta Business Suite tile is a separate access-grant ask: the
+ * client adds the agency's Partner ID to Business Manager (with a
+ * linked guide), or emails ops the request, then ticks the self-attest
+ * checkbox.
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Check, ExternalLink, Mail, Copy } from 'lucide-react';
+import { Loader2, Check, ExternalLink, Mail, Copy, ShieldCheck, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/input';
+import { Dialog } from '@/components/ui/dialog';
 import type { AgencyTheme } from '@/lib/branding';
 import type {
   SocialHandlesState,
@@ -33,6 +36,9 @@ const PLATFORM_LABEL: Record<string, string> = {
   threads: 'Threads',
   bluesky: 'Bluesky',
 };
+
+const META_PARTNER_GUIDE_URL =
+  'https://www.facebook.com/business/help/2169003770027706';
 
 interface Props {
   value: Record<string, unknown> | null;
@@ -67,8 +73,10 @@ export function SocialConnectScreen({
     initial.meta_business_suite_acknowledged ?? false,
   );
   const [busyPlatform, setBusyPlatform] = useState<string | null>(null);
-  const [setupPlatform, setSetupPlatform] = useState<string | null>(null);
+  const [dontHavePlatform, setDontHavePlatform] = useState<string | null>(null);
   const [setupNote, setSetupNote] = useState('');
+  const [setupMode, setSetupMode] = useState<'menu' | 'note'>('menu');
+  const [setupBusy, setSetupBusy] = useState(false);
   const popupRef = useRef<Window | null>(null);
 
   // Poll the live row while a Zernio popup is open so the row flips to
@@ -124,31 +132,56 @@ export function SocialConnectScreen({
     }
   }
 
-  async function handleSetUpForMe(platform: string) {
+  function openDontHave(platform: string) {
+    setDontHavePlatform(platform);
+    setSetupMode('menu');
+    setSetupNote('');
+  }
+
+  function closeDontHave() {
+    setDontHavePlatform(null);
+    setSetupMode('menu');
+    setSetupNote('');
+    setSetupBusy(false);
+  }
+
+  async function submitSetUpForMe() {
+    if (!dontHavePlatform) return;
+    setSetupBusy(true);
     try {
       const res = await fetch(`/api/public/onboarding/${token}/set-up-for-me`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ platform, note: setupNote || null }),
+        body: JSON.stringify({
+          platform: dontHavePlatform,
+          note: setupNote.trim() || null,
+        }),
       });
       if (res.ok) {
-        setStatus(platform, 'set_up_for_me');
-        setSetupPlatform(null);
-        setSetupNote('');
+        setStatus(dontHavePlatform, 'set_up_for_me');
+        closeDontHave();
       }
     } catch {
       // ignore
+    } finally {
+      setSetupBusy(false);
     }
   }
 
-  function handleSkip(platform: string) {
-    setStatus(platform, 'skipped');
+  function confirmSkip() {
+    if (!dontHavePlatform) return;
+    setStatus(dontHavePlatform, 'skipped');
+    closeDontHave();
   }
 
-  const allDecided = platforms.every((p) => connections[p]?.status && connections[p].status !== 'pending');
+  const allDecided = platforms.every(
+    (p) => connections[p]?.status && connections[p].status !== 'pending',
+  );
   const canContinue = (platforms.length === 0 || allDecided) && !submitting;
 
-  function statusBadge(status: Status | undefined): { label: string; tone: 'good' | 'muted' | 'warn' } | null {
+  function statusBadge(
+    status: Status | undefined,
+  ): { label: string; tone: 'good' | 'muted' | 'warn' } | null {
     if (!status || status === 'pending') return null;
     if (status === 'connected') return { label: 'Connected', tone: 'good' };
     if (status === 'set_up_for_me') return { label: 'We’ll set it up', tone: 'warn' };
@@ -159,6 +192,7 @@ export function SocialConnectScreen({
 
   const supportEmail = agency.opsEmail ?? agency.supportEmail;
   const metaPartnerId = agency.metaBusinessId?.trim() ?? '';
+  const dontHaveLabel = dontHavePlatform ? PLATFORM_LABEL[dontHavePlatform] ?? dontHavePlatform : '';
 
   return (
     <form
@@ -177,8 +211,8 @@ export function SocialConnectScreen({
           Connect your accounts
         </h1>
         <p className="text-base text-text-secondary">
-          For each platform, choose how you want to hand it off. Connect now, ask us to set it up,
-          or skip and come back later.
+          For each platform, connect now or tap “Don’t have one” to either hand setup to us or skip
+          the platform.
         </p>
       </div>
 
@@ -193,7 +227,7 @@ export function SocialConnectScreen({
             const conn = connections[p];
             const badge = statusBadge(conn?.status);
             const isBusy = busyPlatform === p;
-            const isSetup = setupPlatform === p;
+            const decided = conn?.status && conn.status !== 'pending';
 
             return (
               <div
@@ -223,7 +257,7 @@ export function SocialConnectScreen({
                   )}
                 </div>
 
-                {!isSetup && conn?.status !== 'connected' && (
+                {!decided && (
                   <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"
@@ -247,74 +281,10 @@ export function SocialConnectScreen({
                       type="button"
                       size="sm"
                       variant="outline"
-                      onClick={() => setSetupPlatform(p)}
+                      onClick={() => openDontHave(p)}
                       disabled={submitting}
                     >
-                      Set up for me
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleSkip(p)}
-                      disabled={submitting}
-                    >
-                      Skip
-                    </Button>
-                  </div>
-                )}
-
-                {isSetup && (
-                  <div className="space-y-3 rounded-md border border-nativz-border bg-background p-3">
-                    <p className="text-xs text-text-secondary">
-                      We’ll reach out to walk you through giving us access. Add a note if there’s
-                      anything we should know first.
-                    </p>
-                    <Textarea
-                      id={`${p}-setup-note`}
-                      label="Note (optional)"
-                      placeholder="e.g. Manager Sara handles the account, loop her in."
-                      value={setupNote}
-                      onChange={(e) => setSetupNote(e.target.value)}
-                      rows={2}
-                      maxLength={2000}
-                      disabled={submitting}
-                    />
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => handleSetUpForMe(p)}
-                        disabled={submitting}
-                      >
-                        Send request
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setSetupPlatform(null);
-                          setSetupNote('');
-                        }}
-                        disabled={submitting}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {conn?.status === 'skipped' && (
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setStatus(p, 'pending')}
-                      disabled={submitting}
-                    >
-                      Undo skip
+                      Don’t have one
                     </Button>
                   </div>
                 )}
@@ -354,6 +324,81 @@ export function SocialConnectScreen({
           )}
         </Button>
       </div>
+
+      <Dialog
+        open={dontHavePlatform !== null}
+        onClose={closeDontHave}
+        title={dontHaveLabel ? `${dontHaveLabel}: pick a path` : 'Pick a path'}
+        maxWidth="md"
+      >
+        {setupMode === 'menu' && (
+          <div className="space-y-3">
+            <p className="text-sm text-text-secondary">
+              No problem. Choose how you’d like to handle {dontHaveLabel}.
+            </p>
+            <button
+              type="button"
+              onClick={() => setSetupMode('note')}
+              className="w-full rounded-lg border border-nativz-border bg-surface px-4 py-3 text-left transition hover:border-accent hover:bg-surface-hover"
+            >
+              <div className="text-sm font-medium text-text-primary">Set it up for me</div>
+              <p className="mt-1 text-xs text-text-secondary">
+                {agency.shortName} will reach out and walk you through creating the account and
+                getting access.
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={confirmSkip}
+              className="w-full rounded-lg border border-nativz-border bg-surface px-4 py-3 text-left transition hover:border-accent hover:bg-surface-hover"
+            >
+              <div className="text-sm font-medium text-text-primary">Skip this platform</div>
+              <p className="mt-1 text-xs text-text-secondary">
+                We’ll leave {dontHaveLabel} out of the rotation. You can revisit this from the same
+                link later.
+              </p>
+            </button>
+          </div>
+        )}
+        {setupMode === 'note' && (
+          <div className="space-y-3">
+            <p className="text-sm text-text-secondary">
+              Anything we should know first? (optional)
+            </p>
+            <Textarea
+              id="setup-note"
+              label="Note"
+              placeholder="e.g. Manager Sara handles the account, loop her in."
+              value={setupNote}
+              onChange={(e) => setSetupNote(e.target.value)}
+              rows={3}
+              maxLength={2000}
+              disabled={setupBusy}
+            />
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setSetupMode('menu')}
+                disabled={setupBusy}
+              >
+                Back
+              </Button>
+              <Button type="button" size="sm" onClick={submitSetUpForMe} disabled={setupBusy}>
+                {setupBusy ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  'Send request'
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
     </form>
   );
 }
@@ -379,82 +424,126 @@ function MetaBusinessSuiteTile(props: {
   }
 
   return (
-    <div className="space-y-3 rounded-lg border border-nativz-border bg-surface px-4 py-4">
-      <div className="space-y-1">
-        <div className="text-sm font-medium text-text-primary">Meta Business Suite access</div>
-        <p className="text-xs text-text-secondary">
-          So we can run ads and pull insights for Facebook + Instagram, add{' '}
-          {props.agencyShortName} as a partner inside Business Manager.
-        </p>
+    <div className="overflow-hidden rounded-xl border border-nativz-border bg-surface">
+      <div className="flex items-start gap-3 border-b border-nativz-border bg-background/40 px-5 py-4">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent-text">
+          <ShieldCheck size={18} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium text-text-primary">Meta Business Suite access</div>
+          <p className="mt-0.5 text-xs text-text-secondary">
+            So we can run ads and pull insights for Facebook + Instagram, add{' '}
+            {props.agencyShortName} as a partner inside Business Manager.
+          </p>
+        </div>
       </div>
 
-      {props.partnerId ? (
-        <div className="space-y-2 rounded-md border border-nativz-border bg-background p-3">
-          <div className="text-[11px] font-medium uppercase tracking-wide text-text-muted">
-            Partner ID
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <code className="rounded bg-surface-hover px-2 py-1 text-sm text-text-primary">
-              {props.partnerId}
-            </code>
-            <Button
-              type="button"
-              size="xs"
-              variant="outline"
-              onClick={copyPartnerId}
-              disabled={props.disabled}
-            >
-              {copied ? (
-                <>
-                  <Check size={12} />
-                  Copied
-                </>
-              ) : (
-                <>
-                  <Copy size={12} />
-                  Copy
-                </>
-              )}
-            </Button>
-          </div>
-          <p className="text-xs text-text-muted">
-            In Business Manager: Settings &rarr; Partners &rarr; Add Partner &rarr; paste this ID.
-            Grant access to your Pages and Ad Accounts.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-2 rounded-md border border-nativz-border bg-background p-3">
-          <p className="text-xs text-text-secondary">
-            Email <a href={`mailto:${props.opsEmail}`} className="text-accent-text underline">
-              {props.opsEmail}
-            </a>{' '}
-            and we’ll send Business Manager invite details for your team to action.
-          </p>
-          <Button
-            type="button"
-            size="xs"
-            variant="outline"
-            onClick={() => {
-              window.location.href = `mailto:${props.opsEmail}?subject=Meta%20Business%20Suite%20access`;
-            }}
-            disabled={props.disabled}
-          >
-            <Mail size={12} />
-            Email {props.agencyShortName}
-          </Button>
-        </div>
-      )}
+      <div className="space-y-4 px-5 py-4">
+        {props.partnerId ? (
+          <>
+            <div className="space-y-2">
+              <div className="text-[11px] font-medium uppercase tracking-wide text-text-muted">
+                Partner ID
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <code className="rounded-md bg-surface-hover px-2.5 py-1.5 font-mono text-sm text-text-primary">
+                  {props.partnerId}
+                </code>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="outline"
+                  onClick={copyPartnerId}
+                  disabled={props.disabled}
+                >
+                  {copied ? (
+                    <>
+                      <Check size={12} />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={12} />
+                      Copy ID
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
 
-      <label className="flex items-start gap-2 text-sm text-text-secondary">
-        <input
-          type="checkbox"
-          checked={props.acknowledged}
-          onChange={(e) => props.onChange(e.target.checked)}
-          disabled={props.disabled}
-          className="mt-0.5"
-        />
-        <span>I’ve granted access (or sent a teammate to handle it).</span>
-      </label>
+            <ol className="space-y-2 text-xs text-text-secondary">
+              <li className="flex gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-hover text-[11px] font-medium text-text-primary">
+                  1
+                </span>
+                <span>
+                  Open Meta Business Suite &rarr; Settings &rarr; Business assets &rarr; Partners.
+                </span>
+              </li>
+              <li className="flex gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-hover text-[11px] font-medium text-text-primary">
+                  2
+                </span>
+                <span>Click “Add partner” and paste the Partner ID above.</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-hover text-[11px] font-medium text-text-primary">
+                  3
+                </span>
+                <span>Grant access to your Pages, Instagram accounts, and Ad accounts.</span>
+              </li>
+            </ol>
+
+            <div className="flex flex-wrap gap-2">
+              <a
+                href={META_PARTNER_GUIDE_URL}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="inline-flex items-center gap-1.5 rounded-md border border-nativz-border bg-background px-3 py-1.5 text-xs font-medium text-text-primary transition hover:border-accent hover:text-accent-text"
+              >
+                <BookOpen size={12} />
+                Read Meta’s guide
+                <ExternalLink size={11} className="opacity-60" />
+              </a>
+              <a
+                href={`mailto:${props.opsEmail}?subject=Meta%20Business%20Suite%20access`}
+                className="inline-flex items-center gap-1.5 rounded-md border border-nativz-border bg-background px-3 py-1.5 text-xs font-medium text-text-primary transition hover:border-accent hover:text-accent-text"
+              >
+                <Mail size={12} />
+                Email {props.agencyShortName} for help
+              </a>
+            </div>
+          </>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-xs text-text-secondary">
+              Email{' '}
+              <a href={`mailto:${props.opsEmail}`} className="text-accent-text underline">
+                {props.opsEmail}
+              </a>{' '}
+              and we’ll send Business Manager invite details for your team to action.
+            </p>
+            <a
+              href={`mailto:${props.opsEmail}?subject=Meta%20Business%20Suite%20access`}
+              className="inline-flex items-center gap-1.5 rounded-md border border-nativz-border bg-background px-3 py-1.5 text-xs font-medium text-text-primary transition hover:border-accent hover:text-accent-text"
+            >
+              <Mail size={12} />
+              Email {props.agencyShortName}
+            </a>
+          </div>
+        )}
+
+        <label className="flex items-start gap-2 border-t border-nativz-border pt-3 text-sm text-text-secondary">
+          <input
+            type="checkbox"
+            checked={props.acknowledged}
+            onChange={(e) => props.onChange(e.target.checked)}
+            disabled={props.disabled}
+            className="mt-0.5"
+          />
+          <span>I’ve granted access (or sent a teammate to handle it).</span>
+        </label>
+      </div>
     </div>
   );
 }
