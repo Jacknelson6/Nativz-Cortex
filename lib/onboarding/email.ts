@@ -107,15 +107,34 @@ async function loadClient(clientId: string): Promise<ClientCtx> {
 
 /**
  * Resolve every brand-profile POC we should email for this onboarding.
- * Falls back to the explicit `override` (single recipient) when the caller
- * passed one, since admin-triggered nudges accept a "send to" override field.
+ * Falls back to the explicit `override` (single email or list of emails)
+ * when the caller passed one, since admin-triggered nudges accept a
+ * "send to" override and the start-onboarding modal lets admins pick
+ * which subset of brand contacts gets the welcome email.
  */
 async function resolveRecipients(
   clientId: string,
-  override: string | undefined,
+  override: string | string[] | undefined,
 ): Promise<RecipientCtx[]> {
-  if (override) {
-    return [{ email: override, first_name: null }];
+  const overrideList = Array.isArray(override)
+    ? override.filter((e) => e.trim().length > 0)
+    : override
+      ? [override]
+      : [];
+  if (overrideList.length > 0) {
+    const admin = createAdminClient();
+    // Pull names for nicer first-name greetings when the override email
+    // matches a brand-profile contact. Unknown overrides fall back to no
+    // first name (the email body still works).
+    const pocs = await getClientNotificationRecipients(admin, clientId).catch(() => []);
+    const byEmail = new Map(pocs.map((p) => [p.email.toLowerCase(), p]));
+    return overrideList.map((email) => {
+      const match = byEmail.get(email.toLowerCase());
+      return {
+        email,
+        first_name: match ? firstName(match.name) : null,
+      };
+    });
   }
   const admin = createAdminClient();
   const pocs = await getClientNotificationRecipients(admin, clientId);
@@ -157,7 +176,7 @@ function shellResult(
 
 export async function sendOnboardingWelcomeEmail(opts: {
   onboarding: OnboardingRow;
-  recipient_email?: string;
+  recipient_email?: string | string[];
   triggered_by?: string;
 }): Promise<OnboardingEmailResult[]> {
   const client = await loadClient(opts.onboarding.client_id);

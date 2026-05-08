@@ -3,13 +3,17 @@
 /**
  * Single-client variant of the New Onboarding dialog. Used from the
  * Clients grid action menu, so the client is already selected — we only
- * need kind, platforms (smm), POC selection (from contacts), and the
- * welcome toggle. POST + redirect mirrors `onboarding-new-button.tsx`.
+ * need kind, platforms (smm), POC selection (multi-check from the
+ * brand profile contacts list), and the welcome toggle.
+ *
+ * POSTs to /api/admin/onboardings with `poc_emails: string[]`. Backend
+ * uses that as the welcome-email recipient list; empty falls back to
+ * "all brand profile contacts".
  */
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Plus } from 'lucide-react';
+import { Loader2, Plus, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -26,6 +30,7 @@ interface Contact {
   name: string;
   email: string;
   is_primary?: boolean;
+  role?: string | null;
 }
 
 interface Props {
@@ -34,9 +39,6 @@ interface Props {
   clientId: string;
   clientName: string;
 }
-
-const CUSTOM = '__custom__';
-const DEFAULT_POC = '';
 
 export function StartOnboardingDialog({ open, onClose, clientId, clientName }: Props) {
   const router = useRouter();
@@ -49,8 +51,7 @@ export function StartOnboardingDialog({ open, onClose, clientId, clientName }: P
   // POC state
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
-  const [pocChoice, setPocChoice] = useState<string>(DEFAULT_POC);
-  const [customEmail, setCustomEmail] = useState('');
+  const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set());
   const [addingContact, setAddingContact] = useState(false);
   const [newContact, setNewContact] = useState({ name: '', email: '' });
   const [savingContact, setSavingContact] = useState(false);
@@ -67,10 +68,9 @@ export function StartOnboardingDialog({ open, onClose, clientId, clientName }: P
         if (!alive) return;
         if (Array.isArray(j)) {
           setContacts(j);
-          // Default to primary contact if one exists; otherwise leave on
-          // "(use brand profile primary)" which falls back server-side.
-          const primary = j.find((c) => c.is_primary);
-          if (primary) setPocChoice(primary.id);
+          // Default: every contact checked. Admin unchecks the ones that
+          // shouldn't get the welcome email.
+          setSelectedEmails(new Set(j.map((c) => c.email)));
         }
       } finally {
         if (alive) setContactsLoading(false);
@@ -88,10 +88,13 @@ export function StartOnboardingDialog({ open, onClose, clientId, clientName }: P
     );
   }
 
-  function resolvePocEmail(): string | undefined {
-    if (pocChoice === CUSTOM) return customEmail.trim() || undefined;
-    if (!pocChoice) return undefined;
-    return contacts.find((c) => c.id === pocChoice)?.email;
+  function toggleContact(email: string) {
+    setSelectedEmails((prev) => {
+      const next = new Set(prev);
+      if (next.has(email)) next.delete(email);
+      else next.add(email);
+      return next;
+    });
   }
 
   async function saveNewContact() {
@@ -117,7 +120,7 @@ export function StartOnboardingDialog({ open, onClose, clientId, clientName }: P
       }
       const c = data as Contact;
       setContacts((prev) => [...prev, c]);
-      setPocChoice(c.id);
+      setSelectedEmails((prev) => new Set(prev).add(c.email));
       setNewContact({ name: '', email: '' });
       setAddingContact(false);
     } finally {
@@ -136,7 +139,7 @@ export function StartOnboardingDialog({ open, onClose, clientId, clientName }: P
           client_id: clientId,
           kind,
           platforms: kind === 'smm' ? platforms : undefined,
-          poc_email: resolvePocEmail(),
+          poc_emails: sendWelcome ? Array.from(selectedEmails) : undefined,
           send_welcome: sendWelcome,
         }),
       });
@@ -154,6 +157,8 @@ export function StartOnboardingDialog({ open, onClose, clientId, clientName }: P
       setSubmitting(false);
     }
   }
+
+  const hasContacts = contacts.length > 0;
 
   return (
     <Dialog
@@ -204,41 +209,70 @@ export function StartOnboardingDialog({ open, onClose, clientId, clientName }: P
         )}
 
         <div className="space-y-2">
-          <label className="text-[11px] uppercase tracking-wide text-text-secondary">
-            Point of contact
-          </label>
-          {contactsLoading ? (
-            <div className="flex items-center gap-2 text-xs text-text-muted">
-              <Loader2 size={12} className="animate-spin" />
-              Loading contacts...
-            </div>
-          ) : (
-            <select
-              value={pocChoice}
-              onChange={(e) => setPocChoice(e.target.value)}
-              disabled={submitting}
-              className="block w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
-            >
-              <option value={DEFAULT_POC}>Use brand profile primary contact</option>
-              {contacts.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.email})
-                  {c.is_primary ? ' — primary' : ''}
-                </option>
-              ))}
-              <option value={CUSTOM}>Custom email...</option>
-            </select>
-          )}
+          <div className="flex items-center justify-between">
+            <label className="text-[11px] uppercase tracking-wide text-text-secondary">
+              Welcome email recipients
+            </label>
+            {hasContacts && (
+              <span className="text-[11px] text-text-muted">
+                {selectedEmails.size} of {contacts.length} selected
+              </span>
+            )}
+          </div>
 
-          {pocChoice === CUSTOM && (
-            <Input
-              type="email"
-              placeholder="someone@brand.com"
-              value={customEmail}
-              onChange={(e) => setCustomEmail(e.target.value)}
-              disabled={submitting}
-            />
-          )}
+          <div className="rounded-lg border border-nativz-border bg-surface">
+            {contactsLoading ? (
+              <div className="flex items-center gap-2 px-3 py-3 text-xs text-text-muted">
+                <Loader2 size={12} className="animate-spin" />
+                Loading contacts...
+              </div>
+            ) : !hasContacts ? (
+              <div className="px-3 py-3 text-xs text-text-muted">
+                No contacts on the brand profile yet. Add one below.
+              </div>
+            ) : (
+              <ul className="divide-y divide-nativz-border/60">
+                {contacts.map((c) => {
+                  const checked = selectedEmails.has(c.email);
+                  return (
+                    <li key={c.id}>
+                      <label
+                        className={`flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors hover:bg-surface-hover ${
+                          submitting || !sendWelcome ? 'opacity-60' : ''
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleContact(c.email)}
+                          disabled={submitting || !sendWelcome}
+                          className="rounded border-border"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate text-sm text-text-primary">
+                              {c.name?.trim() ? c.name : c.email}
+                            </span>
+                            {c.is_primary && (
+                              <span className="shrink-0 rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent-text">
+                                Primary
+                              </span>
+                            )}
+                          </div>
+                          {c.name?.trim() && (
+                            <div className="truncate text-xs text-text-muted">{c.email}</div>
+                          )}
+                        </div>
+                        {c.role?.trim() && (
+                          <span className="shrink-0 text-[11px] text-text-muted">{c.role}</span>
+                        )}
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
 
           {!addingContact ? (
             <button
@@ -267,15 +301,9 @@ export function StartOnboardingDialog({ open, onClose, clientId, clientName }: P
                   disabled={savingContact || submitting}
                 />
               </div>
-              {contactError && (
-                <div className="text-xs text-status-error">{contactError}</div>
-              )}
+              {contactError && <div className="text-xs text-status-error">{contactError}</div>}
               <div className="flex gap-2">
-                <Button
-                  size="xs"
-                  onClick={saveNewContact}
-                  disabled={savingContact || submitting}
-                >
+                <Button size="xs" onClick={saveNewContact} disabled={savingContact || submitting}>
                   {savingContact ? (
                     <>
                       <Loader2 size={12} className="animate-spin" />
@@ -309,6 +337,7 @@ export function StartOnboardingDialog({ open, onClose, clientId, clientName }: P
             disabled={submitting}
             className="rounded border-border"
           />
+          <Mail size={14} className="text-text-muted" />
           Send welcome email now
         </label>
 
