@@ -10,10 +10,10 @@
  */
 
 import { useRef, useState } from 'react';
-import Image from 'next/image';
-import { Loader2, Upload, X, Globe } from 'lucide-react';
+import { Loader2, Upload, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input, Textarea } from '@/components/ui/input';
+import { ClientLogo } from '@/components/clients/client-logo';
 
 interface BrandBasicsValue {
   tagline?: string;
@@ -162,90 +162,58 @@ export function BrandBasicsScreen({
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-text-secondary mb-1.5">
+        <div className="flex flex-col items-center gap-3 py-2">
+          <label className="block text-sm font-medium text-text-secondary">
             Logo
           </label>
-          <div className="rounded-xl border border-dashed border-nativz-border bg-surface-hover/40 px-4 py-4">
-            {logoUrl ? (
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-nativz-border bg-background">
-                    <Image
-                      src={logoUrl}
-                      alt={`${clientName} logo`}
-                      width={56}
-                      height={56}
-                      unoptimized
-                      className="h-full w-full object-contain"
-                    />
-                  </div>
-                  <div className="min-w-0 text-sm text-text-secondary truncate">Logo uploaded</div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploading || submitting}
-                  >
-                    {uploading ? (
-                      <>
-                        <Loader2 size={14} className="animate-spin" />
-                        Uploading...
-                      </>
-                    ) : (
-                      <>
-                        <Upload size={14} />
-                        Replace
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setLogoUrl('')}
-                    disabled={uploading || submitting}
-                  >
-                    <X size={14} />
-                    Remove
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading || submitting}
-                className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition hover:bg-surface-hover/60 disabled:opacity-60"
-              >
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10 text-accent-text">
-                  {uploading ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    <Upload size={16} />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-text-primary">
-                    {uploading ? 'Uploading...' : 'Upload your logo'}
-                  </div>
-                  <div className="text-xs text-text-muted">PNG, JPG, or WebP up to 2 MB.</div>
-                </div>
-              </button>
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              hidden
-              onChange={handleFileChange}
-            />
-          </div>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading || submitting}
+            className="group relative shrink-0 rounded-full transition hover:ring-2 hover:ring-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
+            aria-label={logoUrl ? 'Replace logo' : 'Upload logo'}
+          >
+            <ClientLogo src={logoUrl || null} name={clientName} size="xl" />
+            <div
+              className={
+                'absolute inset-0 flex items-center justify-center rounded-full bg-black/45 transition-opacity ' +
+                (logoUrl ? 'opacity-0 group-hover:opacity-100' : 'opacity-100')
+              }
+            >
+              {uploading ? (
+                <Loader2 size={20} className="animate-spin text-white" />
+              ) : (
+                <Upload size={20} className="text-white" />
+              )}
+            </div>
+          </button>
+          <p className="text-xs text-text-muted text-center">
+            {uploading
+              ? 'Uploading...'
+              : logoUrl
+                ? 'Click to replace.'
+                : 'Click to upload. PNG, JPG, or WebP up to 2 MB.'}
+          </p>
+          {logoUrl && !uploading ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={() => setLogoUrl('')}
+              disabled={submitting}
+            >
+              Remove
+            </Button>
+          ) : null}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            hidden
+            onChange={handleFileChange}
+          />
           {uploadError && (
-            <p className="mt-1.5 text-xs text-status-error">{uploadError}</p>
+            <p className="text-xs text-status-error text-center">{uploadError}</p>
           )}
         </div>
 
