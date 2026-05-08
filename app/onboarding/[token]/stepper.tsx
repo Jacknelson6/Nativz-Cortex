@@ -135,34 +135,42 @@ export function OnboardingStepper(props: Props) {
     ? (stepState[screen.step_state_key] as Record<string, unknown> | undefined) ?? null
     : null;
 
+  const isWelcome = !isDone && screen.key === 'welcome';
+
   return (
-    <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-6 py-8 sm:py-12">
-      <header className="flex items-center justify-between">
+    <div className="mx-auto flex min-h-screen max-w-3xl flex-col px-6 py-8 sm:py-12">
+      <header className="flex items-center justify-between gap-4">
         <BrandLogo agency={agency} clientName={clientName} clientLogoUrl={clientLogoUrl} />
         <div className="flex items-center gap-2">
           {savedFlash ? (
             <span
               role="status"
-              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-medium text-emerald-300 transition-opacity"
+              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-300 transition-opacity"
             >
               <Check size={12} aria-hidden />
               Saved
             </span>
           ) : null}
-          <div className="text-[11px] uppercase tracking-wide text-text-secondary">
+          <div className="text-xs uppercase tracking-[0.12em] text-text-secondary">
             {isDone ? 'Done' : `Step ${progress.current} of ${progress.total}`}
           </div>
         </div>
       </header>
 
-      <div className="mt-4 h-1 overflow-hidden rounded-full bg-surface">
+      <div className="mt-5 h-1 overflow-hidden rounded-full bg-surface">
         <div
           className="h-full bg-accent transition-[width] duration-300 ease-out"
           style={{ width: `${isDone ? 100 : progress.pct}%` }}
         />
       </div>
 
-      <main className="mt-10 flex-1">
+      <main
+        className={
+          isWelcome
+            ? 'mt-10 flex flex-1 items-center justify-center'
+            : 'mt-10 flex-1'
+        }
+      >
         {error ? (
           <div
             ref={errorRef}
@@ -248,22 +256,22 @@ function BrandLogo({
 }) {
   if (clientLogoUrl) {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         <Image
           src={clientLogoUrl}
           alt={clientName}
-          width={28}
-          height={28}
+          width={36}
+          height={36}
           className="rounded-md object-contain"
         />
-        <span className="text-sm font-medium text-text-primary">{clientName}</span>
+        <span className="text-base font-medium text-text-primary">{clientName}</span>
       </div>
     );
   }
   const src = agency === 'anderson' ? '/anderson-logo-dark.svg' : '/nativz-logo.png';
   const alt = agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz';
   return (
-    <Image src={src} alt={alt} width={96} height={28} className="h-7 w-auto object-contain" />
+    <Image src={src} alt={alt} width={140} height={40} className="h-9 w-auto object-contain" />
   );
 }
 
@@ -280,34 +288,40 @@ function WelcomeScreen({
   submitting: boolean;
   onStart: () => void;
 }) {
-  const title = `Welcome to ${theme.name}, ${clientName}.`;
+  const eyebrow =
+    kind === 'smm' ? '5 quick steps · about 5 minutes' : '4 quick steps · about 3 minutes';
   const intro =
     kind === 'smm'
-      ? 'Brand basics, then a couple of platform connections, then who we should email. About 5 minutes. Your answers shape how we plan, film, and post for you.'
-      : `Quick partnership setup so we can hit the ground running. Brand basics and a place to drop your footage and references. About 3 minutes, then ${theme.shortName} books your kickoff.`;
+      ? 'Brand basics, then a couple of platform connections, then who we should email. Your answers shape how we plan, film, and post for you.'
+      : `Quick partnership setup so we can hit the ground running. Brand basics, then a place to drop your footage and references. After that, ${theme.shortName} books your kickoff.`;
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <h1 className="text-[28px] leading-tight font-semibold text-text-primary sm:text-3xl">
-          {title}
-        </h1>
-        <p className="text-base text-text-secondary">{intro}</p>
+    <div className="w-full rounded-[20px] border border-nativz-border bg-surface p-8 sm:p-12">
+      <div className="space-y-7">
+        <div className="space-y-3">
+          <p className="text-sm font-medium italic text-accent-text">{eyebrow}</p>
+          <h1 className="text-3xl font-semibold leading-tight text-text-primary sm:text-4xl">
+            Welcome to {theme.name},
+            <br />
+            {clientName}.
+          </h1>
+          <p className="text-base leading-relaxed text-text-secondary sm:text-lg">{intro}</p>
+        </div>
+        <Button
+          onClick={onStart}
+          disabled={submitting}
+          size="lg"
+          className="w-full rounded-full sm:w-auto"
+        >
+          {submitting ? (
+            <>
+              <Loader2 size={16} className="animate-spin" />
+              Loading...
+            </>
+          ) : (
+            'Get started'
+          )}
+        </Button>
       </div>
-      <Button
-        onClick={onStart}
-        disabled={submitting}
-        size="lg"
-        className="w-full sm:w-auto"
-      >
-        {submitting ? (
-          <>
-            <Loader2 size={16} className="animate-spin" />
-            Loading...
-          </>
-        ) : (
-          'Get started'
-        )}
-      </Button>
     </div>
   );
 }
