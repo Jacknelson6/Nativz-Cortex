@@ -138,7 +138,8 @@ export function OnboardingStepper(props: Props) {
   const isWelcome = !isDone && screen.key === 'welcome';
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col px-6 py-8 sm:py-12">
+    <div className="flex min-h-screen items-center justify-center px-6 py-8 sm:py-12">
+      <div className="mx-auto w-full max-w-3xl rounded-[20px] border border-nativz-border bg-surface p-8 sm:p-12">
       <header className="flex items-center justify-between gap-4">
         <BrandLogo agency={agency} clientName={clientName} clientLogoUrl={clientLogoUrl} />
         <div className="flex items-center gap-2">
@@ -157,7 +158,7 @@ export function OnboardingStepper(props: Props) {
         </div>
       </header>
 
-      <div className="mt-5 h-1 overflow-hidden rounded-full bg-surface">
+      <div className="mt-5 h-1 overflow-hidden rounded-full bg-background/60">
         <div
           className="h-full bg-accent transition-[width] duration-300 ease-out"
           style={{ width: `${isDone ? 100 : progress.pct}%` }}
@@ -167,8 +168,8 @@ export function OnboardingStepper(props: Props) {
       <main
         className={
           isWelcome
-            ? 'mt-12 sm:mt-16'
-            : 'mt-10 flex-1'
+            ? 'mt-10 sm:mt-12'
+            : 'mt-8'
         }
       >
         {error ? (
@@ -203,7 +204,6 @@ export function OnboardingStepper(props: Props) {
           <WelcomeScreen
             clientName={clientName}
             kind={initial.kind}
-            theme={theme}
             submitting={submitting}
             onStart={() => submitAndAdvance(null)}
           />
@@ -241,6 +241,7 @@ export function OnboardingStepper(props: Props) {
           />
         ) : null}
       </main>
+      </div>
     </div>
   );
 }
@@ -278,13 +279,11 @@ function BrandLogo({
 function WelcomeScreen({
   clientName,
   kind,
-  theme,
   submitting,
   onStart,
 }: {
   clientName: string;
   kind: OnboardingRow['kind'];
-  theme: AgencyTheme;
   submitting: boolean;
   onStart: () => void;
 }) {
@@ -295,33 +294,31 @@ function WelcomeScreen({
       ? 'Brand basics, then a couple of platform connections, then who we should email. Your answers shape how we plan, film, and post for you.'
       : `Quick partnership setup so we can hit the ground running. Brand basics, then a place to drop your footage and references. After that, our team books your kickoff.`;
   return (
-    <div className="w-full rounded-[20px] border border-nativz-border bg-surface p-8 sm:p-12">
-      <div className="space-y-7">
-        <div className="space-y-3">
-          <p className="text-sm font-medium italic text-accent-text">{eyebrow}</p>
-          <h1 className="text-3xl font-semibold leading-tight text-text-primary sm:text-4xl">
-            Welcome to our team,
-            <br />
-            {clientName}.
-          </h1>
-          <p className="text-base leading-relaxed text-text-secondary sm:text-lg">{intro}</p>
-        </div>
-        <Button
-          onClick={onStart}
-          disabled={submitting}
-          size="lg"
-          className="w-full rounded-full sm:w-auto"
-        >
-          {submitting ? (
-            <>
-              <Loader2 size={16} className="animate-spin" />
-              Loading...
-            </>
-          ) : (
-            'Get started'
-          )}
-        </Button>
+    <div className="space-y-7">
+      <div className="space-y-3">
+        <p className="text-sm font-medium italic text-accent-text">{eyebrow}</p>
+        <h1 className="text-3xl font-semibold leading-tight text-text-primary sm:text-4xl">
+          Welcome to our team,
+          <br />
+          {clientName}.
+        </h1>
+        <p className="text-base leading-relaxed text-text-secondary sm:text-lg">{intro}</p>
       </div>
+      <Button
+        onClick={onStart}
+        disabled={submitting}
+        size="lg"
+        className="w-full rounded-full sm:w-auto"
+      >
+        {submitting ? (
+          <>
+            <Loader2 size={16} className="animate-spin" />
+            Loading...
+          </>
+        ) : (
+          'Get started'
+        )}
+      </Button>
     </div>
   );
 }
