@@ -138,7 +138,7 @@ export function OnboardingStepper(props: Props) {
   const isWelcome = !isDone && screen.key === 'welcome';
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-3xl flex-col px-6 py-8 sm:py-12">
+    <div className="mx-auto flex max-w-3xl flex-col px-6 py-8 sm:py-12">
       <header className="flex items-center justify-between gap-4">
         <BrandLogo agency={agency} clientName={clientName} clientLogoUrl={clientLogoUrl} />
         <div className="flex items-center gap-2">
@@ -167,7 +167,7 @@ export function OnboardingStepper(props: Props) {
       <main
         className={
           isWelcome
-            ? 'mt-10 flex flex-1 items-center justify-center'
+            ? 'mt-12 sm:mt-16'
             : 'mt-10 flex-1'
         }
       >
@@ -293,14 +293,14 @@ function WelcomeScreen({
   const intro =
     kind === 'smm'
       ? 'Brand basics, then a couple of platform connections, then who we should email. Your answers shape how we plan, film, and post for you.'
-      : `Quick partnership setup so we can hit the ground running. Brand basics, then a place to drop your footage and references. After that, ${theme.shortName} books your kickoff.`;
+      : `Quick partnership setup so we can hit the ground running. Brand basics, then a place to drop your footage and references. After that, our team books your kickoff.`;
   return (
     <div className="w-full rounded-[20px] border border-nativz-border bg-surface p-8 sm:p-12">
       <div className="space-y-7">
         <div className="space-y-3">
           <p className="text-sm font-medium italic text-accent-text">{eyebrow}</p>
           <h1 className="text-3xl font-semibold leading-tight text-text-primary sm:text-4xl">
-            Welcome to {theme.name},
+            Welcome to our team,
             <br />
             {clientName}.
           </h1>
@@ -355,7 +355,7 @@ function DoneScreen({
   const message =
     kind === 'smm'
       ? `That's everything we need to get started, ${clientName}. Your account manager will reach out within a business day to confirm your kickoff time.`
-      : `Got it, ${clientName}. ${theme.shortName} will email you from ${opsEmail} within a business day to book your kickoff call. Here's what the partnership looks like from here:`;
+      : `Got it, ${clientName}. Our team will email you from ${opsEmail} within a business day to book your kickoff call. Here's what the partnership looks like from here:`;
 
   const sections = screens
     .filter((s) => s.step_state_key)

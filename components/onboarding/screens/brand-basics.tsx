@@ -46,9 +46,10 @@ interface Props {
   onSubmit: (value: Record<string, unknown>) => void;
 }
 
-function pick(stepValue: string | undefined, prefillValue: string | null | undefined): string {
-  if (stepValue && stepValue.trim().length > 0) return stepValue;
-  return prefillValue ?? '';
+function pick(stepValue: unknown, prefillValue: unknown): string {
+  if (typeof stepValue === 'string' && stepValue.trim().length > 0) return stepValue;
+  if (typeof prefillValue === 'string') return prefillValue;
+  return '';
 }
 
 export function BrandBasicsScreen({ value, clientName, prefill, submitting, onSubmit }: Props) {
