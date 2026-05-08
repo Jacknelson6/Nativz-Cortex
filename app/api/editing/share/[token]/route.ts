@@ -72,9 +72,15 @@ export async function GET(
 
   const { data: link } = await admin
     .from('editing_project_share_links')
-    .select('id, project_id, expires_at, archived_at')
+    .select('id, project_id, name, expires_at, archived_at')
     .eq('token', token)
-    .maybeSingle();
+    .maybeSingle<{
+      id: string;
+      project_id: string;
+      name: string | null;
+      expires_at: string;
+      archived_at: string | null;
+    }>();
 
   if (!link) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
@@ -246,6 +252,10 @@ export async function GET(
 
   return NextResponse.json({
     isEditor,
+    share_link: {
+      id: link.id,
+      name: link.name,
+    },
     project: {
       id: project.id,
       name: project.name,

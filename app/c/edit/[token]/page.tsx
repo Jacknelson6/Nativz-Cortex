@@ -131,8 +131,19 @@ interface SharedClient {
   agency: string | null;
 }
 
+interface SharedShareLink {
+  id: string;
+  /**
+   * Admin-set override for the public page header. NULL falls back to
+   * the derived "<client> - <project>" label. Editable inline by a
+   * signed-in admin; PATCH /api/editing/review/[id] persists it.
+   */
+  name: string | null;
+}
+
 interface SharedPayload {
   isEditor: boolean;
+  share_link: SharedShareLink;
   project: SharedProject;
   client: SharedClient;
   videos: SharedVideo[];
@@ -526,6 +537,7 @@ function SharedReviewView({
 
   const clientName = data.client.name ?? 'Review';
   const projectName = data.project.name;
+  const headerFallback = `${clientName} ${DASH} ${projectName}`;
 
   return (
     <div className="min-h-screen bg-background">
@@ -536,9 +548,23 @@ function SharedReviewView({
           </div>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <h1 className="font-display text-xl font-semibold tracking-tight text-text-primary sm:text-3xl">
-                {clientName} {DASH} {projectName}
-              </h1>
+              {/*
+                Mirrors the SMM share page header. Admin can rename the
+                public review page inline; PATCH lands on the share link
+                row so it doesn't disturb the underlying project name.
+                Non-admin viewers see a static title.
+              */}
+              <ProjectNameHeader
+                name={data.share_link.name}
+                fallback={headerFallback}
+                isEditor={data.isEditor}
+                shareLinkId={data.share_link.id}
+                onRenamed={(next) =>
+                  setData((prev) =>
+                    prev ? { ...prev, share_link: { ...prev.share_link, name: next } } : prev,
+                  )
+                }
+              />
               <p className="mt-2 text-sm text-text-secondary sm:text-base">
                 {total} {total === 1 ? 'video' : 'videos'} to review
                 {data.project.shoot_date
@@ -2242,3 +2268,117 @@ function friendlyError(code: string): string {
 // readable and let an audit grep for them.
 const DASH = '-';
 const APOS = "'";
+
+/**
+ * Editable share-link H1. Mirrors ProjectNameHeader on the SMM share
+ * page (app/c/[token]/page.tsx): admins see a hover-pencil that flips
+ * the title into an inline input; PATCH lands on the share link row
+ * (/api/editing/review/{shareLinkId}) so the underlying project name
+ * is untouched. Non-admins see a static title.
+ */
+function ProjectNameHeader({
+  name,
+  fallback,
+  isEditor,
+  shareLinkId,
+  onRenamed,
+}: {
+  name: string | null;
+  fallback: string;
+  isEditor: boolean;
+  shareLinkId: string;
+  onRenamed: (next: string | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(name ?? '');
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!editing) setDraft(name ?? '');
+  }, [name, editing]);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  const headingClass =
+    'font-display text-xl font-semibold tracking-tight text-text-primary sm:text-3xl';
+
+  if (!isEditor) {
+    return <h1 className={headingClass}>{name ?? fallback}</h1>;
+  }
+
+  async function save() {
+    const trimmed = draft.trim();
+    const next = trimmed.length > 0 ? trimmed : null;
+    setEditing(false);
+    if (next === (name ?? null)) return;
+    const prev = name ?? null;
+    onRenamed(next);
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/editing/review/${shareLinkId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: next }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? 'Rename failed');
+      }
+      toast.success('Project name updated');
+    } catch (err) {
+      onRenamed(prev);
+      toast.error(err instanceof Error ? err.message : 'Rename failed');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => void save()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            (e.target as HTMLInputElement).blur();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            setDraft(name ?? '');
+            setEditing(false);
+          }
+        }}
+        placeholder={fallback}
+        disabled={saving}
+        maxLength={120}
+        className={`${headingClass} w-full max-w-full rounded-md border border-nativz-border bg-transparent px-2 py-1 outline-none focus:border-accent`}
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setDraft(name ?? '');
+        setEditing(true);
+      }}
+      className="group inline-flex max-w-full items-center gap-2 rounded-md text-left transition-colors hover:text-text-primary"
+      title="Rename"
+    >
+      <span className={`${headingClass} truncate`}>{name ?? fallback}</span>
+      <Pencil
+        size={16}
+        className="shrink-0 text-text-tertiary opacity-0 transition-opacity group-hover:opacity-100"
+      />
+    </button>
+  );
+}
