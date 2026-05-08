@@ -128,6 +128,35 @@ export function OnboardingStepper(props: Props) {
     submitAndAdvance(lastAttemptRef.current);
   }
 
+  async function goBack() {
+    if (submitting) return;
+    if (currentStep <= 0) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const target = currentStep - 1;
+      const res = await fetch(`/api/public/onboarding/${token}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ advance_to: target }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.error ?? 'Could not go back.');
+      }
+      const data = await res.json();
+      setStepState(data.onboarding.step_state ?? {});
+      setCurrentStep(data.onboarding.current_step ?? target);
+      setStatus(data.onboarding.status);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'unknown error');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const onBack = currentStep > 1 ? goBack : undefined;
+
   const screenValue = screen.step_state_key
     ? (stepState[screen.step_state_key] as Record<string, unknown> | undefined) ?? null
     : null;
@@ -211,6 +240,7 @@ export function OnboardingStepper(props: Props) {
             token={token}
             submitting={submitting}
             onSubmit={(v) => submitAndAdvance(v)}
+            onBack={onBack}
           />
         ) : screen.key === 'social_connect' ? (
           <SocialConnectScreen
@@ -220,6 +250,7 @@ export function OnboardingStepper(props: Props) {
             token={token}
             submitting={submitting}
             onSubmit={(v) => submitAndAdvance(v)}
+            onBack={onBack}
           />
         ) : screen.key === 'points_of_contact' ? (
           <PointsOfContactScreen
@@ -228,6 +259,7 @@ export function OnboardingStepper(props: Props) {
             clientName={clientName}
             submitting={submitting}
             onSubmit={(v) => submitAndAdvance(v)}
+            onBack={onBack}
           />
         ) : screen.key === 'footage_and_references' ? (
           <FootageAndReferencesScreen
@@ -235,6 +267,7 @@ export function OnboardingStepper(props: Props) {
             clientName={clientName}
             submitting={submitting}
             onSubmit={(v) => submitAndAdvance(v)}
+            onBack={onBack}
           />
         ) : null}
       </main>
@@ -295,7 +328,7 @@ function WelcomeScreen({
       <div className="space-y-3">
         <p className="text-sm font-medium italic text-accent-text">{eyebrow}</p>
         <h1 className="text-3xl font-semibold leading-tight text-text-primary sm:text-4xl">
-          Welcome to our team,
+          Welcome,
           <br />
           {clientName}.
         </h1>
@@ -421,39 +454,50 @@ function buildSections(
   return out;
 }
 
+interface ConfettiParticle {
+  x: number;
+  y: number;
+  rot: number;
+}
+
 function Confetti() {
-  const count = 16;
-  const items = Array.from({ length: count });
+  const [particles, setParticles] = useState<ConfettiParticle[]>([]);
+  useEffect(() => {
+    const count = 16;
+    setParticles(
+      Array.from({ length: count }, (_, i) => {
+        const angle = (i / count) * Math.PI * 2;
+        const radius = 120 + Math.random() * 90;
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius * 0.8 - 30;
+        const rot = Math.round(Math.random() * 540 - 270);
+        return { x, y, rot };
+      }),
+    );
+  }, []);
+  const colors = ['var(--accent)', 'var(--accent-text)', '#10B981', '#F59E0B'];
   return (
     <div
       aria-hidden
       className="pointer-events-none absolute inset-x-0 top-0 z-10 h-0 overflow-visible"
     >
-      {items.map((_, i) => {
-        const colors = ['var(--accent)', 'var(--accent-text)', '#10B981', '#F59E0B'];
-        const bg = colors[i % colors.length];
-        return (
-          <span
-            key={i}
-            className="absolute left-1/2 top-0 h-2 w-2 rounded-sm"
-            style={{
-              backgroundColor: bg,
-              animation: `nz-confetti-${i} 1500ms ease-out forwards`,
-              animationDelay: `${i * 30}ms`,
-              opacity: 0,
-            }}
-          />
-        );
-      })}
-      <style>{items
-        .map((_, i) => {
-          const angle = (i / count) * Math.PI * 2;
-          const radius = 120 + Math.random() * 90;
-          const x = Math.cos(angle) * radius;
-          const y = Math.sin(angle) * radius * 0.8 - 30;
-          const rot = Math.round(Math.random() * 540 - 270);
-          return `@keyframes nz-confetti-${i} { 0% { opacity: 1; transform: translate(-50%, 0) rotate(0); } 100% { opacity: 0; transform: translate(calc(-50% + ${x.toFixed(0)}px), ${y.toFixed(0)}px) rotate(${rot}deg); } }`;
-        })
+      {particles.map((_, i) => (
+        <span
+          key={i}
+          className="absolute left-1/2 top-0 h-2 w-2 rounded-sm"
+          style={{
+            backgroundColor: colors[i % colors.length],
+            animation: `nz-confetti-${i} 1500ms ease-out forwards`,
+            animationDelay: `${i * 30}ms`,
+            opacity: 0,
+          }}
+        />
+      ))}
+      <style>{particles
+        .map(
+          (p, i) =>
+            `@keyframes nz-confetti-${i} { 0% { opacity: 1; transform: translate(-50%, 0) rotate(0); } 100% { opacity: 0; transform: translate(calc(-50% + ${p.x.toFixed(0)}px), ${p.y.toFixed(0)}px) rotate(${p.rot}deg); } }`,
+        )
         .join('\n')}</style>
     </div>
   );

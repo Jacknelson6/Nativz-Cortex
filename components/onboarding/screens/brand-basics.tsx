@@ -47,6 +47,7 @@ interface Props {
   token: string;
   submitting: boolean;
   onSubmit: (value: Record<string, unknown>) => void;
+  onBack?: () => void;
 }
 
 function pick(stepValue: unknown, prefillValue: unknown): string {
@@ -62,6 +63,7 @@ export function BrandBasicsScreen({
   token,
   submitting,
   onSubmit,
+  onBack,
 }: Props) {
   const initial = (value as BrandBasicsValue | null) ?? {};
   const [websiteUrl, setWebsiteUrl] = useState(pick(initial.website_url, prefill?.website_url));
@@ -270,7 +272,21 @@ export function BrandBasicsScreen({
         />
       </div>
 
-      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+        {onBack ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onBack}
+            disabled={submitting || uploading}
+            className="self-start sm:self-auto"
+          >
+            Back
+          </Button>
+        ) : (
+          <div />
+        )}
         <Button
           type="submit"
           size="lg"

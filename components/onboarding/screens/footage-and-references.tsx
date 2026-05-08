@@ -20,6 +20,7 @@ interface Props {
   clientName: string;
   submitting: boolean;
   onSubmit: (value: Record<string, unknown>) => void;
+  onBack?: () => void;
 }
 
 function urlsToText(urls: string[] | undefined): string {
@@ -84,7 +85,7 @@ function LinkBox({
   );
 }
 
-export function FootageAndReferencesScreen({ value, clientName, submitting, onSubmit }: Props) {
+export function FootageAndReferencesScreen({ value, clientName, submitting, onSubmit, onBack }: Props) {
   const initial = (value as FootageAndReferencesState | null) ?? {};
   const [rawFootage, setRawFootage] = useState(urlsToText(initial.raw_footage_urls));
   const [referenceEdits, setReferenceEdits] = useState(urlsToText(initial.reference_edit_urls));
@@ -170,7 +171,21 @@ export function FootageAndReferencesScreen({ value, clientName, submitting, onSu
         </div>
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+        {onBack ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onBack}
+            disabled={submitting}
+            className="self-start sm:self-auto"
+          >
+            Back
+          </Button>
+        ) : (
+          <div />
+        )}
         <Button type="submit" size="lg" disabled={submitting} className="w-full sm:w-auto">
           {submitting ? (
             <>

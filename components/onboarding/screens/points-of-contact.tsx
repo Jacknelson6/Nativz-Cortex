@@ -21,9 +21,10 @@ interface Props {
   clientName: string;
   submitting: boolean;
   onSubmit: (value: Record<string, unknown>) => void;
+  onBack?: () => void;
 }
 
-export function PointsOfContactScreen({ value, token, clientName, submitting, onSubmit }: Props) {
+export function PointsOfContactScreen({ value, token, clientName, submitting, onSubmit, onBack }: Props) {
   const initial = (value as PointsOfContactState | null) ?? { contacts: [] };
   const [contacts, setContacts] = useState<PointOfContactEntry[]>(initial.contacts ?? []);
   const [loading, setLoading] = useState(true);
@@ -231,9 +232,9 @@ export function PointsOfContactScreen({ value, token, clientName, submitting, on
       <div className="rounded-lg border border-nativz-border bg-surface px-4 py-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <div className="text-sm font-medium text-text-primary">Need a teammate to fill this in?</div>
+            <div className="text-sm font-medium text-text-primary">Want to loop a teammate in?</div>
             <p className="text-xs text-text-secondary">
-              Forward this onboarding link to whoever owns the pieces you don’t.
+              Send them this link and they can fill out the rest of the onboarding for you.
             </p>
           </div>
           {!inviteOpen && (
@@ -314,7 +315,21 @@ export function PointsOfContactScreen({ value, token, clientName, submitting, on
         )}
       </div>
 
-      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+        {onBack ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onBack}
+            disabled={submitting}
+            className="self-start sm:self-auto"
+          >
+            Back
+          </Button>
+        ) : (
+          <div />
+        )}
         <Button type="submit" size="lg" disabled={!canContinue} className="w-full sm:w-auto">
           {submitting ? (
             <>

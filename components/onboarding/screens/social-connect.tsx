@@ -16,7 +16,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Check, ExternalLink, Mail, Copy, ShieldCheck, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/input';
 import { Dialog } from '@/components/ui/dialog';
 import type { AgencyTheme } from '@/lib/branding';
 import type {
@@ -47,6 +46,7 @@ interface Props {
   token: string;
   submitting: boolean;
   onSubmit: (value: Record<string, unknown>) => void;
+  onBack?: () => void;
 }
 
 type Status = SocialPlatformConnection['status'];
@@ -58,6 +58,7 @@ export function SocialConnectScreen({
   token,
   submitting,
   onSubmit,
+  onBack,
 }: Props) {
   const initial = (value as SocialHandlesState | null) ?? {};
   const initialConnections = initial.connections ?? {};
@@ -74,8 +75,6 @@ export function SocialConnectScreen({
   );
   const [busyPlatform, setBusyPlatform] = useState<string | null>(null);
   const [dontHavePlatform, setDontHavePlatform] = useState<string | null>(null);
-  const [setupNote, setSetupNote] = useState('');
-  const [setupMode, setSetupMode] = useState<'menu' | 'note'>('menu');
   const [setupBusy, setSetupBusy] = useState(false);
   const popupRef = useRef<Window | null>(null);
 
@@ -134,14 +133,10 @@ export function SocialConnectScreen({
 
   function openDontHave(platform: string) {
     setDontHavePlatform(platform);
-    setSetupMode('menu');
-    setSetupNote('');
   }
 
   function closeDontHave() {
     setDontHavePlatform(null);
-    setSetupMode('menu');
-    setSetupNote('');
     setSetupBusy(false);
   }
 
@@ -154,7 +149,7 @@ export function SocialConnectScreen({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           platform: dontHavePlatform,
-          note: setupNote.trim() || null,
+          note: null,
         }),
       });
       if (res.ok) {
@@ -310,9 +305,22 @@ export function SocialConnectScreen({
       />
 
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs text-text-muted">
-          You can change any of these later from the same link.
-        </p>
+        <div className="flex items-center gap-3">
+          {onBack ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onBack}
+              disabled={submitting}
+            >
+              Back
+            </Button>
+          ) : null}
+          <p className="text-xs text-text-muted">
+            You can change any of these later from the same link.
+          </p>
+        </div>
         <Button type="submit" size="lg" disabled={!canContinue} className="w-full sm:w-auto">
           {submitting ? (
             <>
@@ -331,73 +339,38 @@ export function SocialConnectScreen({
         title={dontHaveLabel ? `${dontHaveLabel}: pick a path` : 'Pick a path'}
         maxWidth="md"
       >
-        {setupMode === 'menu' && (
-          <div className="space-y-3">
-            <p className="text-sm text-text-secondary">
-              No problem. Choose how you’d like to handle {dontHaveLabel}.
-            </p>
-            <button
-              type="button"
-              onClick={() => setSetupMode('note')}
-              className="w-full rounded-lg border border-nativz-border bg-surface px-4 py-3 text-left transition hover:border-accent hover:bg-surface-hover"
-            >
+        <div className="space-y-3">
+          <p className="text-sm text-text-secondary">
+            No problem. Choose how you’d like to handle {dontHaveLabel}.
+          </p>
+          <button
+            type="button"
+            onClick={submitSetUpForMe}
+            disabled={setupBusy}
+            className="w-full rounded-lg border border-nativz-border bg-surface px-4 py-3 text-left transition hover:border-accent hover:bg-surface-hover disabled:opacity-60"
+          >
+            <div className="flex items-center justify-between gap-3">
               <div className="text-sm font-medium text-text-primary">Set it up for me</div>
-              <p className="mt-1 text-xs text-text-secondary">
-                {agency.shortName} will reach out and walk you through creating the account and
-                getting access.
-              </p>
-            </button>
-            <button
-              type="button"
-              onClick={confirmSkip}
-              className="w-full rounded-lg border border-nativz-border bg-surface px-4 py-3 text-left transition hover:border-accent hover:bg-surface-hover"
-            >
-              <div className="text-sm font-medium text-text-primary">Skip this platform</div>
-              <p className="mt-1 text-xs text-text-secondary">
-                We’ll leave {dontHaveLabel} out of the rotation. You can revisit this from the same
-                link later.
-              </p>
-            </button>
-          </div>
-        )}
-        {setupMode === 'note' && (
-          <div className="space-y-3">
-            <p className="text-sm text-text-secondary">
-              Anything we should know first? (optional)
-            </p>
-            <Textarea
-              id="setup-note"
-              label="Note"
-              placeholder="e.g. Manager Sara handles the account, loop her in."
-              value={setupNote}
-              onChange={(e) => setSetupNote(e.target.value)}
-              rows={3}
-              maxLength={2000}
-              disabled={setupBusy}
-            />
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => setSetupMode('menu')}
-                disabled={setupBusy}
-              >
-                Back
-              </Button>
-              <Button type="button" size="sm" onClick={submitSetUpForMe} disabled={setupBusy}>
-                {setupBusy ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  'Send request'
-                )}
-              </Button>
+              {setupBusy && <Loader2 size={14} className="animate-spin text-text-muted" />}
             </div>
-          </div>
-        )}
+            <p className="mt-1 text-xs text-text-secondary">
+              {agency.shortName} will reach out and walk you through creating the account and
+              getting access.
+            </p>
+          </button>
+          <button
+            type="button"
+            onClick={confirmSkip}
+            disabled={setupBusy}
+            className="w-full rounded-lg border border-nativz-border bg-surface px-4 py-3 text-left transition hover:border-accent hover:bg-surface-hover disabled:opacity-60"
+          >
+            <div className="text-sm font-medium text-text-primary">Skip this platform</div>
+            <p className="mt-1 text-xs text-text-secondary">
+              We’ll leave {dontHaveLabel} out of the rotation. You can revisit this from the same
+              link later.
+            </p>
+          </button>
+        </div>
       </Dialog>
     </form>
   );
