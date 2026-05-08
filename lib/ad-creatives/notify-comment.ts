@@ -93,12 +93,12 @@ export async function notifyAdminsOfAdConceptComment(
     concept.headline?.trim() || concept.template_name?.trim() || 'concept';
   const agency = concept.clients?.agency ?? null;
 
-  const chatWebhookUrl = await resolveTeamChatWebhook(admin, {
+  // Per-client webhook first, agency misc-catchall second. No OPS fallback —
+  // that space is reserved for system-level alerts.
+  const targetWebhookUrl = await resolveTeamChatWebhook(admin, {
     primaryUrl: concept.clients?.chat_webhook_url ?? null,
     agency,
   });
-  const opsWebhookUrl = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
-  const targetWebhookUrl = chatWebhookUrl ?? opsWebhookUrl;
 
   const shareUrl = `${getCortexAppUrl(getBrandFromAgency(agency))}/s/${ev.shareTokenString}`;
   // Admin-side deep link: ad generator scoped to this client (and batch when

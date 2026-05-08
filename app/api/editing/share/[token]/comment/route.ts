@@ -177,14 +177,14 @@ async function loadProjectChatContext(
     process.env.NODE_ENV !== 'production'
       ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
       : getCortexAppUrl(brand);
-  // Per-client webhook first, agency catchall second, ops fallback last.
-  // Mirrors the calendar comment route so editing reviews land in the same
-  // space the rest of the client's notifications go to.
-  const teamWebhook = await resolveTeamChatWebhook(admin, {
+  // Per-client webhook first, agency misc-catchall second. Client-comment
+  // notifications never fall back to OPS — that space is reserved for
+  // system-level alerts. Brands without their own webhook AND no agency
+  // catchall silently no-op.
+  const webhookUrl = await resolveTeamChatWebhook(admin, {
     primaryUrl: project?.clients?.chat_webhook_url ?? null,
     agency: project?.clients?.agency ?? null,
   });
-  const webhookUrl = teamWebhook ?? process.env.OPS_CHAT_WEBHOOK_URL ?? null;
   return {
     clientName,
     projectName,

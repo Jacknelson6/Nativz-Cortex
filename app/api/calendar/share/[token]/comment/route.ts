@@ -648,15 +648,14 @@ async function notifyAdminsOfComment(
     }
   }
 
-  // Google Chat: prefer the per-client collab space when set, otherwise fall
-  // back to the ops chat space so editors still see the ping. Without the
-  // fallback, a client that hasn't been wired into a Chat space yet
-  // produces silent revision requests — the editor only finds out when they
-  // happen to reload the share link UI.
+  // Google Chat: per-client space when set, otherwise the agency's
+  // miscellaneous-catchall client (resolved inside `resolveTeamChatWebhook`).
+  // Client-comment notifications never fall back to OPS — that space is
+  // reserved for system-level alerts (cron failures, post-health). Brands
+  // without a per-client webhook AND no agency catchall silently no-op.
   // - comment / changes_requested → post immediately with full content + attachments
   // - approved → post 🎉 once every post in this share link is approved
-  const opsWebhookUrl = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
-  const targetWebhookUrl = chatWebhookUrl ?? opsWebhookUrl;
+  const targetWebhookUrl = chatWebhookUrl;
   if (targetWebhookUrl) {
     if (comment.status === 'comment' || comment.status === 'changes_requested') {
       const verb = comment.status === 'changes_requested' ? 'requested changes' : 'commented';
@@ -745,8 +744,8 @@ async function checkAllApproved(
 /**
  * Posts a Jack-only summary to the client's Google Chat webhook describing
  * any past-due posts that were shifted into the current month, plus overflow
- * posts that didn't fit. Never goes to the client. Falls back to
- * OPS_CHAT_WEBHOOK_URL if no client/agency webhook is configured.
+ * posts that didn't fit. Never goes to the client. Silently no-ops if neither
+ * a per-client webhook nor an agency misc-catchall is configured.
  */
 async function notifyPastDueFixup(
   admin: ReturnType<typeof createAdminClient>,
@@ -767,12 +766,10 @@ async function notifyPastDueFixup(
   if (!drop) return;
 
   const clientName = drop.clients?.name ?? 'Client';
-  const chatWebhookUrl = await resolveTeamChatWebhook(admin, {
+  const targetWebhookUrl = await resolveTeamChatWebhook(admin, {
     primaryUrl: drop.clients?.chat_webhook_url ?? null,
     agency: drop.clients?.agency ?? null,
   });
-  const opsWebhookUrl = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
-  const targetWebhookUrl = chatWebhookUrl ?? opsWebhookUrl;
   if (!targetWebhookUrl) return;
 
   const fmt = (iso: string) =>
