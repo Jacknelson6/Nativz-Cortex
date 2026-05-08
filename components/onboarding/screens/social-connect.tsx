@@ -37,7 +37,7 @@ const PLATFORM_LABEL: Record<string, string> = {
 };
 
 const META_PARTNER_GUIDE_URL =
-  'https://www.facebook.com/business/help/2169003770027706';
+  'https://www.facebook.com/business/help/1717412048538897?id=2190812977867143';
 
 interface Props {
   value: Record<string, unknown> | null;
@@ -305,22 +305,20 @@ export function SocialConnectScreen({
       />
 
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          {onBack ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onBack}
-              disabled={submitting}
-            >
-              Back
-            </Button>
-          ) : null}
-          <p className="text-xs text-text-muted">
-            You can change any of these later from the same link.
-          </p>
-        </div>
+        {onBack ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onBack}
+            disabled={submitting}
+            className="self-start sm:self-auto"
+          >
+            Back
+          </Button>
+        ) : (
+          <div />
+        )}
         <Button type="submit" size="lg" disabled={!canContinue} className="w-full sm:w-auto">
           {submitting ? (
             <>
@@ -477,13 +475,6 @@ function MetaBusinessSuiteTile(props: {
                 <BookOpen size={12} />
                 Read Meta’s guide
                 <ExternalLink size={11} className="opacity-60" />
-              </a>
-              <a
-                href={`mailto:${props.opsEmail}?subject=Meta%20Business%20Suite%20access`}
-                className="inline-flex items-center gap-1.5 rounded-md border border-nativz-border bg-background px-3 py-1.5 text-xs font-medium text-text-primary transition hover:border-accent hover:text-accent-text"
-              >
-                <Mail size={12} />
-                Email {props.agencyShortName} for help
               </a>
             </div>
           </>
