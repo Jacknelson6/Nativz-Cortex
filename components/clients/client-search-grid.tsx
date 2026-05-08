@@ -564,7 +564,9 @@ function ClientCard({
               {formatRelativeTime(client.lastActivityAt)}
             </span>
           )}
-          {client.missingWebhook && <WebhookWarning clientName={client.name} />}
+          {client.missingWebhook && currentBucket !== 'prospect' && (
+            <WebhookWarning clientName={client.name} />
+          )}
           <HealthBadge healthScore={client.healthScore} />
           {actionButtons}
         </div>
@@ -592,7 +594,7 @@ function ClientCard({
                 <p className="text-sm font-semibold text-text-primary truncate leading-tight" title={client.name}>{client.name}</p>
                 <p className="text-xs text-text-muted truncate mt-0.5">{client.industry || 'General'}</p>
               </div>
-              {client.missingWebhook && (
+              {client.missingWebhook && currentBucket !== 'prospect' && (
                 <div className="mt-0.5">
                   <WebhookWarning clientName={client.name} />
                 </div>
