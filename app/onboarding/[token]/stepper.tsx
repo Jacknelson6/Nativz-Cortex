@@ -18,18 +18,18 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { AlertTriangle, Check, Loader2 } from 'lucide-react';
 import type { AgencyBrand } from '@/lib/agency/detect';
+import type { AgencyTheme } from '@/lib/branding';
 import type { OnboardingScreen } from '@/lib/onboarding/screens';
 import type { OnboardingRow } from '@/lib/onboarding/types';
 import { Button } from '@/components/ui/button';
 import { StepStateView } from '@/components/onboarding/step-state-view';
-import { BrandBasicsScreen } from '@/components/onboarding/screens/brand-basics';
+import {
+  BrandBasicsScreen,
+  type BrandBasicsPrefill,
+} from '@/components/onboarding/screens/brand-basics';
 import { SocialConnectScreen } from '@/components/onboarding/screens/social-connect';
-import { ContentPrefsScreen } from '@/components/onboarding/screens/content-prefs';
-import { AudienceToneScreen } from '@/components/onboarding/screens/audience-tone';
-import { KickoffPickScreen } from '@/components/onboarding/screens/kickoff-pick';
-import { ProjectBriefScreen } from '@/components/onboarding/screens/project-brief';
-import { AssetLinkScreen } from '@/components/onboarding/screens/asset-link';
-import { TurnaroundAckScreen } from '@/components/onboarding/screens/turnaround-ack';
+import { PointsOfContactScreen } from '@/components/onboarding/screens/points-of-contact';
+import { FootageAndReferencesScreen } from '@/components/onboarding/screens/footage-and-references';
 
 export interface InitialOnboardingState {
   kind: OnboardingRow['kind'];
@@ -43,14 +43,16 @@ export interface InitialOnboardingState {
 interface Props {
   token: string;
   agency: AgencyBrand;
+  theme: AgencyTheme;
   clientName: string;
   clientLogoUrl: string | null;
+  brandPrefill: BrandBasicsPrefill;
   initial: InitialOnboardingState;
   screens: readonly OnboardingScreen[];
 }
 
 export function OnboardingStepper(props: Props) {
-  const { token, agency, clientName, clientLogoUrl, initial, screens } = props;
+  const { token, agency, theme, clientName, clientLogoUrl, brandPrefill, initial, screens } = props;
 
   const [stepState, setStepState] = useState<Record<string, unknown>>(initial.step_state);
   const [currentStep, setCurrentStep] = useState(initial.current_step);
@@ -59,8 +61,6 @@ export function OnboardingStepper(props: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
-  // Last attempted payload, kept for the Retry button after a network or
-  // server failure. Cleared on successful save.
   const lastAttemptRef = useRef<Record<string, unknown> | null>(null);
   const errorRef = useRef<HTMLDivElement | null>(null);
 
@@ -68,16 +68,12 @@ export function OnboardingStepper(props: Props) {
   const lastIndex = screens.length - 1;
   const isDone = currentStep >= lastIndex || status === 'completed';
 
-  // When a fresh error lands, scroll the banner into view so users on long
-  // screens (project_brief, content_prefs) actually see it.
   useEffect(() => {
     if (error && errorRef.current) {
       errorRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [error]);
 
-  // Auto-dismiss the "Saved" pill after a beat. Short enough to feel like a
-  // confirmation, long enough to be readable on slow connections.
   useEffect(() => {
     if (!savedFlash) return;
     const id = window.setTimeout(() => setSavedFlash(false), 1800);
@@ -91,12 +87,6 @@ export function OnboardingStepper(props: Props) {
     total: screens.length,
   }), [currentStep, lastIndex, screen.label, screens.length]);
 
-  /**
-   * Submits step state for the current screen and advances to the next.
-   * `value` is whatever the screen has stored locally; if the screen has
-   * a step_state_key we merge it under that key. Otherwise we just bump
-   * current_step (welcome screen, etc).
-   */
   async function submitAndAdvance(value: Record<string, unknown> | null) {
     setSubmitting(true);
     setError(null);
@@ -107,7 +97,6 @@ export function OnboardingStepper(props: Props) {
       if (screen.step_state_key && value) {
         body.step_state = { [screen.step_state_key]: value };
       }
-      // If we're moving past the last step, mark complete; otherwise just advance.
       if (next === lastIndex && currentStep === lastIndex - 1) {
         body.complete = true;
       } else {
@@ -129,8 +118,6 @@ export function OnboardingStepper(props: Props) {
       setStatus(data.onboarding.status);
       setCompletedAt(data.onboarding.completed_at ?? null);
       lastAttemptRef.current = null;
-      // Skip the saved chip on the welcome screen — it's just an "I'm ready"
-      // ack with no answer to confirm. Showing "Saved" there feels off.
       if (screen.step_state_key) setSavedFlash(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'unknown error');
@@ -150,7 +137,6 @@ export function OnboardingStepper(props: Props) {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-6 py-8 sm:py-12">
-      {/* Header */}
       <header className="flex items-center justify-between">
         <BrandLogo agency={agency} clientName={clientName} clientLogoUrl={clientLogoUrl} />
         <div className="flex items-center gap-2">
@@ -169,7 +155,6 @@ export function OnboardingStepper(props: Props) {
         </div>
       </header>
 
-      {/* Progress bar */}
       <div className="mt-4 h-1 overflow-hidden rounded-full bg-surface">
         <div
           className="h-full bg-accent transition-[width] duration-300 ease-out"
@@ -177,7 +162,6 @@ export function OnboardingStepper(props: Props) {
         />
       </div>
 
-      {/* Screen body */}
       <main className="mt-10 flex-1">
         {error ? (
           <div
@@ -202,6 +186,7 @@ export function OnboardingStepper(props: Props) {
           <DoneScreen
             clientName={clientName}
             kind={initial.kind}
+            theme={theme}
             completedAt={completedAt}
             stepState={stepState}
             screens={screens}
@@ -210,6 +195,7 @@ export function OnboardingStepper(props: Props) {
           <WelcomeScreen
             clientName={clientName}
             kind={initial.kind}
+            theme={theme}
             submitting={submitting}
             onStart={() => submitAndAdvance(null)}
           />
@@ -217,6 +203,7 @@ export function OnboardingStepper(props: Props) {
           <BrandBasicsScreen
             value={screenValue}
             clientName={clientName}
+            prefill={brandPrefill}
             submitting={submitting}
             onSubmit={(v) => submitAndAdvance(v)}
           />
@@ -224,42 +211,23 @@ export function OnboardingStepper(props: Props) {
           <SocialConnectScreen
             value={screenValue}
             platforms={initial.platforms}
+            agency={theme}
+            token={token}
             submitting={submitting}
             onSubmit={(v) => submitAndAdvance(v)}
           />
-        ) : screen.key === 'content_prefs' ? (
-          <ContentPrefsScreen
+        ) : screen.key === 'points_of_contact' ? (
+          <PointsOfContactScreen
             value={screenValue}
+            token={token}
+            clientName={clientName}
             submitting={submitting}
             onSubmit={(v) => submitAndAdvance(v)}
           />
-        ) : screen.key === 'audience_tone' ? (
-          <AudienceToneScreen
+        ) : screen.key === 'footage_and_references' ? (
+          <FootageAndReferencesScreen
             value={screenValue}
-            submitting={submitting}
-            onSubmit={(v) => submitAndAdvance(v)}
-          />
-        ) : screen.key === 'kickoff_pick' ? (
-          <KickoffPickScreen
-            value={screenValue}
-            submitting={submitting}
-            onSubmit={(v) => submitAndAdvance(v)}
-          />
-        ) : screen.key === 'project_brief' ? (
-          <ProjectBriefScreen
-            value={screenValue}
-            submitting={submitting}
-            onSubmit={(v) => submitAndAdvance(v)}
-          />
-        ) : screen.key === 'asset_link' ? (
-          <AssetLinkScreen
-            value={screenValue}
-            submitting={submitting}
-            onSubmit={(v) => submitAndAdvance(v)}
-          />
-        ) : screen.key === 'turnaround_ack' ? (
-          <TurnaroundAckScreen
-            value={screenValue}
+            clientName={clientName}
             submitting={submitting}
             onSubmit={(v) => submitAndAdvance(v)}
           />
@@ -292,7 +260,6 @@ function BrandLogo({
       </div>
     );
   }
-  // Fall back to agency logo as a quiet trust mark.
   const src = agency === 'anderson' ? '/anderson-logo-dark.svg' : '/nativz-logo.png';
   const alt = agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz';
   return (
@@ -303,23 +270,26 @@ function BrandLogo({
 function WelcomeScreen({
   clientName,
   kind,
+  theme,
   submitting,
   onStart,
 }: {
   clientName: string;
   kind: OnboardingRow['kind'];
+  theme: AgencyTheme;
   submitting: boolean;
   onStart: () => void;
 }) {
+  const title = `Welcome to ${theme.name}, ${clientName}.`;
   const intro =
     kind === 'smm'
-      ? 'A few quick questions and a kickoff pick. About 5 minutes. Your answers shape how we plan, film, and post for you.'
-      : 'A short brief on what you want edited and a place to drop your raw footage. About 3 minutes.';
+      ? 'Brand basics, then a couple of platform connections, then who we should email. About 5 minutes. Your answers shape how we plan, film, and post for you.'
+      : `Quick partnership setup so we can hit the ground running. Brand basics and a place to drop your footage and references. About 3 minutes, then ${theme.shortName} books your kickoff.`;
   return (
     <div className="space-y-6">
       <div className="space-y-2">
         <h1 className="text-[28px] leading-tight font-semibold text-text-primary sm:text-3xl">
-          Welcome, {clientName}.
+          {title}
         </h1>
         <p className="text-base text-text-secondary">{intro}</p>
       </div>
@@ -342,28 +312,37 @@ function WelcomeScreen({
   );
 }
 
+const EDITING_CADENCE: { label: string; detail: string }[] = [
+  { label: 'Kickoff call', detail: 'We confirm scope, references, and the deliverable list.' },
+  { label: 'Footage handoff', detail: 'You drop links here or share access. We pull what we need.' },
+  { label: 'First cut', detail: 'Back to you within 5 to 7 business days.' },
+  { label: 'Round 1 revisions', detail: 'You leave timestamped notes. We turn them around in 2 to 3 days.' },
+  { label: 'Round 2 revisions', detail: 'Final polish pass. Usually 1 to 2 days.' },
+  { label: 'Final delivery', detail: 'Master files plus platform-ready exports.' },
+  { label: 'Next batch', detail: 'Same flow for the next deliverable in your package.' },
+];
+
 function DoneScreen({
   clientName,
   kind,
+  theme,
   completedAt,
   stepState,
   screens,
 }: {
   clientName: string;
   kind: OnboardingRow['kind'];
+  theme: AgencyTheme;
   completedAt: string | null;
   stepState: Record<string, unknown>;
   screens: readonly OnboardingScreen[];
 }) {
+  const opsEmail = theme.opsEmail ?? theme.supportEmail;
   const message =
     kind === 'smm'
       ? `That's everything we need to get started, ${clientName}. Your account manager will reach out within a business day to confirm your kickoff time.`
-      : `Got it, ${clientName}. We'll grab your assets and have your first cut back within 5 to 7 business days. We'll email when it's ready for review.`;
+      : `Got it, ${clientName}. ${theme.shortName} will email you from ${opsEmail} within a business day to book your kickoff call. Here's what the partnership looks like from here:`;
 
-  // Render a labeled summary of saved answers so the client can see what we
-  // captured. Walks the screens in order and surfaces only the ones with a
-  // step_state_key + non-empty payload, so welcome/turnaround_ack don't add
-  // noise. Mirrors the admin detail's StepStateView treatment.
   const sections = screens
     .filter((s) => s.step_state_key)
     .map((s) => {
@@ -394,6 +373,25 @@ function DoneScreen({
           </p>
         ) : null}
       </div>
+
+      {kind === 'editing' ? (
+        <ol className="space-y-3">
+          {EDITING_CADENCE.map((item, idx) => (
+            <li
+              key={item.label}
+              className="flex gap-3 rounded-lg border border-nativz-border bg-surface px-4 py-3"
+            >
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/15 text-[11px] font-semibold text-accent-text">
+                {idx + 1}
+              </span>
+              <div className="min-w-0 space-y-0.5">
+                <div className="text-sm font-medium text-text-primary">{item.label}</div>
+                <div className="text-xs text-text-secondary">{item.detail}</div>
+              </div>
+            </li>
+          ))}
+        </ol>
+      ) : null}
 
       {sections.length > 0 ? (
         <div className="space-y-4">

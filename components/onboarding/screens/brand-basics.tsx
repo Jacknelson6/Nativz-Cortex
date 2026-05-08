@@ -3,11 +3,14 @@
 /**
  * Brand basics screen.
  *
- * Captures the bare-minimum info we need to start producing content for
- * the client: tagline, what they sell, audience snapshot, voice. We
- * intentionally don't ask for logo or colors here, those live in the
- * brand profile and are admin-managed; this is just so the strategist
- * has a starting point on day one.
+ * Captures the brand fundamentals we need to start producing content:
+ * tagline, what they sell, audience, voice, current offers. Fields are
+ * pre-filled from the live `clients` row when the strategist already
+ * captured anything during setup, so the client never sees an empty
+ * form when we already know the answers.
+ *
+ * On submit the API mirrors all five fields back onto the `clients`
+ * row, so admin views and step_state stay in lockstep.
  */
 
 import { useState } from 'react';
@@ -20,21 +23,43 @@ interface BrandBasicsValue {
   what_we_sell?: string;
   audience?: string;
   voice?: string;
+  current_offers?: string;
+}
+
+export interface BrandBasicsPrefill {
+  tagline: string | null;
+  what_we_sell: string | null;
+  audience: string | null;
+  voice: string | null;
+  current_offers: string | null;
 }
 
 interface Props {
   value: Record<string, unknown> | null;
   clientName: string;
+  /**
+   * Latest fields from the `clients` row. Used as the initial form value
+   * when step_state has nothing yet, so the client only fills in gaps.
+   */
+  prefill: BrandBasicsPrefill | null;
   submitting: boolean;
   onSubmit: (value: Record<string, unknown>) => void;
 }
 
-export function BrandBasicsScreen({ value, clientName, submitting, onSubmit }: Props) {
+function pick(stepValue: string | undefined, prefillValue: string | null | undefined): string {
+  if (stepValue && stepValue.trim().length > 0) return stepValue;
+  return prefillValue ?? '';
+}
+
+export function BrandBasicsScreen({ value, clientName, prefill, submitting, onSubmit }: Props) {
   const initial = (value as BrandBasicsValue | null) ?? {};
-  const [tagline, setTagline] = useState(initial.tagline ?? '');
-  const [whatWeSell, setWhatWeSell] = useState(initial.what_we_sell ?? '');
-  const [audience, setAudience] = useState(initial.audience ?? '');
-  const [voice, setVoice] = useState(initial.voice ?? '');
+  const [tagline, setTagline] = useState(pick(initial.tagline, prefill?.tagline));
+  const [whatWeSell, setWhatWeSell] = useState(pick(initial.what_we_sell, prefill?.what_we_sell));
+  const [audience, setAudience] = useState(pick(initial.audience, prefill?.audience));
+  const [voice, setVoice] = useState(pick(initial.voice, prefill?.voice));
+  const [currentOffers, setCurrentOffers] = useState(
+    pick(initial.current_offers, prefill?.current_offers),
+  );
 
   const canSubmit = whatWeSell.trim().length > 0 && audience.trim().length > 0 && !submitting;
 
@@ -48,6 +73,7 @@ export function BrandBasicsScreen({ value, clientName, submitting, onSubmit }: P
           what_we_sell: whatWeSell.trim(),
           audience: audience.trim(),
           voice: voice.trim(),
+          current_offers: currentOffers.trim(),
         });
       }}
       className="space-y-6"
@@ -57,7 +83,7 @@ export function BrandBasicsScreen({ value, clientName, submitting, onSubmit }: P
           Brand basics
         </h1>
         <p className="text-base text-text-secondary">
-          The fast facts about {clientName}. Two minutes, four boxes.
+          A few sentences on {clientName} so the team can hit the ground running.
         </p>
       </div>
 
@@ -102,6 +128,17 @@ export function BrandBasicsScreen({ value, clientName, submitting, onSubmit }: P
           onChange={(e) => setVoice(e.target.value)}
           rows={2}
           maxLength={300}
+          disabled={submitting}
+        />
+
+        <Textarea
+          id="current_offers"
+          label="Current offers or promotions (optional)"
+          placeholder="Anything we should be highlighting right now? Sales, launches, new products, lead magnets."
+          value={currentOffers}
+          onChange={(e) => setCurrentOffers(e.target.value)}
+          rows={3}
+          maxLength={500}
           disabled={submitting}
         />
       </div>

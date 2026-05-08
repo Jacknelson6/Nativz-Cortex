@@ -180,6 +180,54 @@ export async function setStatus(id: string, status: OnboardingStatus): Promise<O
   return dbOk(data as OnboardingRow | null, error, 'setStatus');
 }
 
+/* ---------- brand_basics writeback to clients -------------------------- */
+
+/**
+ * Bidirectional sync: when the brand_basics screen submits, mirror the
+ * fields onto the `clients` row so the strategist sees the latest values
+ * in the admin dashboard. step_state still owns the audit trail; this
+ * helper just keeps the live `clients` columns in step.
+ *
+ * Field map (step_state → clients):
+ *   tagline         -> tagline
+ *   what_we_sell    -> products
+ *   audience        -> target_audience
+ *   voice           -> brand_voice
+ *   current_offers  -> current_offers
+ *
+ * Only writes fields that are non-empty strings. We never null out an
+ * existing clients-row value just because the client cleared a field
+ * mid-flow.
+ */
+export async function syncBrandBasicsToClient(opts: {
+  client_id: string;
+  basics: {
+    tagline?: string;
+    what_we_sell?: string;
+    audience?: string;
+    voice?: string;
+    current_offers?: string;
+  };
+}): Promise<void> {
+  const update: Record<string, string> = {};
+  if (opts.basics.tagline?.trim()) update.tagline = opts.basics.tagline.trim();
+  if (opts.basics.what_we_sell?.trim()) update.products = opts.basics.what_we_sell.trim();
+  if (opts.basics.audience?.trim()) update.target_audience = opts.basics.audience.trim();
+  if (opts.basics.voice?.trim()) update.brand_voice = opts.basics.voice.trim();
+  if (opts.basics.current_offers?.trim()) update.current_offers = opts.basics.current_offers.trim();
+
+  if (Object.keys(update).length === 0) return;
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from('clients')
+    .update(update)
+    .eq('id', opts.client_id);
+  if (error) {
+    console.warn('[onboarding/syncBrandBasics] writeback failed:', error.message);
+  }
+}
+
 /* ---------- social connection sync ------------------------------------- */
 
 /**

@@ -7,11 +7,6 @@
  * is, what JSONB key they own in step_state, and what the admin tracker
  * shows as the human-readable label.
  *
- * The stepper UI walks `SCREENS[kind][current_step]` and looks up the
- * screen component by `key`. The admin tracker uses `label` for the
- * progress copy ("Brand basics, step 2 of 7"). The `step_state_key`
- * tells the per-screen component which slot in step_state it owns.
- *
  * Reordering or adding a screen here is a real schema change for the
  * stepper, but does NOT require a DB migration: the JSONB shape is
  * append-only, and `current_step` is just an int index. Removing a
@@ -37,51 +32,37 @@ export interface OnboardingScreen {
 }
 
 /**
- * SMM = social media management. 7 screens.
- *   0 welcome      -> intro + what to expect
- *   1 brand_basics -> name, tagline, voice, audience snapshot
- *   2 social_connect -> Zernio OAuth per platform in `platforms`
- *   3 content_prefs -> cadence, content pillars, do/don't list
- *   4 audience_tone -> persona + tone descriptors
- *   5 kickoff_pick  -> preferred kickoff slot + notes
- *   6 done         -> handoff message, what happens next
+ * SMM = social media management. 5 screens.
+ *   0 welcome           -> agency-aware intro
+ *   1 brand_basics      -> tagline, what/who/voice/offers, prefilled from `clients`
+ *   2 social_connect    -> per-platform Zernio OAuth + Meta Business Suite tile
+ *   3 points_of_contact -> who's on the client side (mirrors `contacts` table)
+ *   4 done              -> handoff
  */
 const SMM_SCREENS: readonly OnboardingScreen[] = [
   {
     key: 'welcome',
     label: 'Welcome',
     step_state_key: null,
-    description: 'Intro to the onboarding flow.',
+    description: 'Agency-aware intro to the SMM onboarding flow.',
   },
   {
     key: 'brand_basics',
     label: 'Brand basics',
     step_state_key: 'brand_basics',
-    description: 'Brand name, tagline, audience snapshot.',
+    description: 'Tagline, what you sell, audience, voice, current offers.',
   },
   {
     key: 'social_connect',
     label: 'Connect socials',
     step_state_key: 'social_handles',
-    description: 'Connect each platform via Zernio OAuth.',
+    description: 'Zernio OAuth per platform + Meta Business Suite access.',
   },
   {
-    key: 'content_prefs',
-    label: 'Content preferences',
-    step_state_key: 'content_prefs',
-    description: 'Cadence, content pillars, do and do-not list.',
-  },
-  {
-    key: 'audience_tone',
-    label: 'Audience and tone',
-    step_state_key: 'audience_tone',
-    description: 'Target persona and tone descriptors.',
-  },
-  {
-    key: 'kickoff_pick',
-    label: 'Schedule kickoff',
-    step_state_key: 'kickoff_pick',
-    description: 'Pick a kickoff time when the assigned team is free.',
+    key: 'points_of_contact',
+    label: 'Points of contact',
+    step_state_key: 'points_of_contact',
+    description: 'Who on your team should we loop in.',
   },
   {
     key: 'done',
@@ -92,37 +73,30 @@ const SMM_SCREENS: readonly OnboardingScreen[] = [
 ] as const;
 
 /**
- * Editing = post-production deliverables. 5 screens.
- *   0 welcome           -> intro
- *   1 project_brief     -> what we are editing, deliverables, references
- *   2 asset_link        -> cloud-storage drop link (Drive/Dropbox)
- *   3 turnaround_ack    -> 5-7 day expectation copy + ack
- *   4 done              -> handoff
+ * Editing = post-production deliverables. 4 screens.
+ *   0 welcome                  -> partnership framing
+ *   1 brand_basics             -> same component as SMM
+ *   2 footage_and_references   -> raw footage, reference edits, prior edits, offers, notes
+ *   3 done                     -> 7-step cadence + ops email books kickoff
  */
 const EDITING_SCREENS: readonly OnboardingScreen[] = [
   {
     key: 'welcome',
     label: 'Welcome',
     step_state_key: null,
-    description: 'Intro to the editing onboarding flow.',
+    description: 'Partnership framing for the editing relationship.',
   },
   {
-    key: 'project_brief',
-    label: 'Project brief',
-    step_state_key: 'project_brief',
-    description: 'Project description, deliverables, references.',
+    key: 'brand_basics',
+    label: 'Brand basics',
+    step_state_key: 'brand_basics',
+    description: 'Tagline, what you sell, audience, voice, current offers.',
   },
   {
-    key: 'asset_link',
-    label: 'Drop your assets',
-    step_state_key: 'asset_link',
-    description: 'Cloud-storage link to raw footage.',
-  },
-  {
-    key: 'turnaround_ack',
-    label: 'Turnaround',
-    step_state_key: 'turnaround_ack',
-    description: '5-7 day turnaround expectations.',
+    key: 'footage_and_references',
+    label: 'Footage and references',
+    step_state_key: 'footage_and_references',
+    description: 'Raw footage, reference edits, prior edits, free-form notes.',
   },
   {
     key: 'done',

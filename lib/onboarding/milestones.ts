@@ -16,11 +16,11 @@
  * meaningful transition; we do NOT spam admins after every screen save):
  *
  *   SMM:
- *     - step crosses social_connect (idx 2 -> 3): "X connected their socials"
- *     - step crosses kickoff_pick   (idx 5 -> 6): "X picked a kickoff time"
+ *     - step crosses social_connect    (idx 2 -> 3): "X connected their socials"
+ *     - step crosses points_of_contact (idx 3 -> 4): "X added points of contact"
  *
  *   Editing:
- *     - step crosses asset_link     (idx 2 -> 3): "X dropped their assets"
+ *     - step crosses footage_and_references (idx 2 -> 3): "X shared footage links"
  *
  *   Either kind:
  *     - status flips to 'completed': "X finished onboarding" + client email
@@ -34,7 +34,7 @@
 import type { OnboardingRow } from './types';
 import { SCREENS } from './screens';
 import { notifyAdmins } from '@/lib/notifications';
-import { sendOnboardingCompleteEmail } from './email';
+import { sendOnboardingCompleteEmail, sendOnboardingOpsHandoffEmail } from './email';
 import { logEmail } from './api';
 
 interface Milestone {
@@ -80,8 +80,8 @@ export function detectMilestones(
       title: `${label} finished onboarding`,
       body:
         next.kind === 'smm'
-          ? 'Brand basics, socials, content prefs, and kickoff time all in. Ready for handoff.'
-          : 'Project brief, assets, and turnaround acknowledged. Ready to start editing.',
+          ? 'Brand basics, socials, and points of contact all in. Ready for handoff.'
+          : 'Brand basics and footage references are in. Ready to book the kickoff.',
     });
     // Don't fan out the per-step milestones below when we already
     // announced the completion - keeps the inbox clean.
@@ -104,17 +104,17 @@ export function detectMilestones(
             title: `${label} connected their social accounts`,
             body: 'Socials are linked in Zernio. Ready to schedule content.',
           });
-        } else if (justDone === 'kickoff_pick') {
+        } else if (justDone === 'points_of_contact') {
           out.push({
-            title: `${label} picked a kickoff time`,
-            body: 'Confirm the calendar invite and prep the kickoff agenda.',
+            title: `${label} added points of contact`,
+            body: 'Loop the new contacts into the next strategist touchpoint.',
           });
         }
       } else if (next.kind === 'editing') {
-        if (justDone === 'asset_link') {
+        if (justDone === 'footage_and_references') {
           out.push({
-            title: `${label} dropped their editing assets`,
-            body: 'Raw footage link is in. Editor can begin pulling selects.',
+            title: `${label} shared footage and references`,
+            body: 'Raw footage and reference links are in. Editor can begin pulling selects.',
           });
         }
       }
@@ -186,6 +186,25 @@ export async function notifyMilestones(opts: {
       } else {
         console.warn('[onboarding/milestones] completion email failed:', err);
       }
+    }
+
+    // Silent ops-side handoff to the agency inbox. Independent of the
+    // client-facing email, so a missing POC list shouldn't suppress this.
+    try {
+      const sent = await sendOnboardingOpsHandoffEmail({ onboarding: opts.next });
+      await logEmail({
+        onboarding_id: opts.next.id,
+        kind: 'ops_handoff',
+        to_email: sent.to,
+        subject: sent.subject,
+        body_preview: sent.body_preview,
+        resend_id: sent.resend_id,
+        ok: sent.ok,
+        error: sent.error,
+        triggered_by: null,
+      });
+    } catch (err) {
+      console.warn('[onboarding/milestones] ops handoff email failed:', err);
     }
   }
 }

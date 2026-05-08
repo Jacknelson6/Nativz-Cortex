@@ -1,22 +1,15 @@
 /**
- * Onboarding v2 (Phase 1-5) E2E.
+ * Onboarding v2 E2E (post-flow-revamp).
  *
  * Walks an editing-kind onboarding from create through completion using
  * the share-token-gated public endpoint, then loads the stepper page in
  * a real browser to confirm the "done" screen renders.
  *
- * What this exercises:
- *   - createOnboarding via direct insert (admin path is covered by a
- *     separate manual smoke through the add-modal)
- *   - GET /api/public/onboarding/[token] returns onboarding + client +
- *     screens + progress
- *   - PATCH advances current_step, merges step_state, flips status to
- *     completed when current_step lands on doneIndex
- *   - notifyMilestones logs a `complete` row to onboarding_emails_log
- *   - Public stepper page renders the "Done" screen for status=completed
- *
- * Self-contained: seeds its own org + client + onboarding, cleans up
- * after itself. Does not depend on tests/global-setup.ts.
+ * The post-revamp editing flow has 4 screens:
+ *   0 welcome
+ *   1 brand_basics
+ *   2 footage_and_references
+ *   3 done
  */
 
 import { test, expect, type APIRequestContext } from '@playwright/test';
@@ -135,80 +128,69 @@ test.describe('Onboarding v2: editing kind end-to-end', () => {
       expect(getBody.onboarding.status).toBe('in_progress');
       expect(getBody.client.name).toContain('E2E Editing Brand');
       expect(Array.isArray(getBody.screens)).toBe(true);
-      expect(getBody.screens).toHaveLength(5);
+      expect(getBody.screens).toHaveLength(4);
 
-      // 2. Welcome -> project_brief (just advance, no state)
+      // 2. Welcome -> brand_basics
       let body = await patch(request, fx.shareToken, { advance_to: 1 });
       expect(body.onboarding.current_step).toBe(1);
       expect(body.onboarding.status).toBe('in_progress');
 
-      // 3. project_brief screen submits state + advances to asset_link
+      // 3. brand_basics submits + advances to footage_and_references
       body = await patch(request, fx.shareToken, {
         step_state: {
-          project_brief: {
-            description: 'Cut a 30s spot from raw runway footage',
-            deliverables: ['30s vertical', '15s vertical'],
-            references: ['https://example.com/ref1'],
+          brand_basics: {
+            tagline: 'Performance gear for runners',
+            what_we_sell: 'Trail running apparel and accessories',
+            audience: 'Trail runners 25-45 in the western US',
+            voice: 'Energetic but technical',
+            current_offers: 'Free shipping over $75',
           },
         },
         advance_to: 2,
       });
       expect(body.onboarding.current_step).toBe(2);
-      expect(body.onboarding.step_state.project_brief).toBeTruthy();
+      expect(body.onboarding.step_state.brand_basics).toBeTruthy();
 
-      // 4. asset_link submits + advances to turnaround_ack
+      // 4. footage_and_references submits + completes
       body = await patch(request, fx.shareToken, {
         step_state: {
-          asset_link: { url: 'https://drive.google.com/drive/folders/abc123' },
-        },
-        advance_to: 3,
-      });
-      expect(body.onboarding.current_step).toBe(3);
-      expect(body.onboarding.step_state.asset_link).toMatchObject({
-        url: 'https://drive.google.com/drive/folders/abc123',
-      });
-
-      // 5. turnaround_ack acknowledges + completes
-      body = await patch(request, fx.shareToken, {
-        step_state: {
-          turnaround_ack: { acknowledged_at: new Date().toISOString() },
+          footage_and_references: {
+            raw_footage_urls: ['https://drive.google.com/drive/folders/abc123'],
+            reference_edit_urls: ['https://www.youtube.com/watch?v=ref'],
+            previous_edit_urls: [],
+            notes: 'Match the pacing of the reference. No music with vocals.',
+          },
         },
         complete: true,
       });
-      expect(body.onboarding.current_step).toBe(4);
+      expect(body.onboarding.current_step).toBe(3);
       expect(body.onboarding.status).toBe('completed');
       expect(body.onboarding.completed_at).not.toBeNull();
 
-      // 6. DB confirms completion
+      // 5. DB confirms completion
       const { data: dbRow } = await admin
         .from('onboardings')
         .select('status, current_step, step_state, completed_at')
         .eq('id', fx.onboardingId)
         .single();
       expect(dbRow?.status).toBe('completed');
-      expect(dbRow?.current_step).toBe(4);
+      expect(dbRow?.current_step).toBe(3);
       expect(dbRow?.completed_at).toBeTruthy();
-      expect((dbRow?.step_state as Record<string, unknown>).project_brief).toBeTruthy();
-      expect((dbRow?.step_state as Record<string, unknown>).asset_link).toBeTruthy();
-      expect((dbRow?.step_state as Record<string, unknown>).turnaround_ack).toBeTruthy();
+      expect((dbRow?.step_state as Record<string, unknown>).brand_basics).toBeTruthy();
+      expect((dbRow?.step_state as Record<string, unknown>).footage_and_references).toBeTruthy();
 
-      // 7. Completion email row should exist (best-effort send, but the row
-      //    is logged regardless of resend success/failure). With no contacts
-      //    on a fresh client, the recipient list may be empty, so we check
-      //    the log only when at least one row landed; it's not required.
+      // 6. Completion email row may or may not land (depends on POC seeded);
+      //    soft-assert by logging the count.
       const { data: completionLogs } = await admin
         .from('onboarding_emails_log')
         .select('kind, ok')
         .eq('onboarding_id', fx.onboardingId)
         .eq('kind', 'complete');
-      // Soft assertion: empty contacts can yield zero rows; this is fine.
       console.log(`[onboarding-v2] complete email log rows: ${completionLogs?.length ?? 0}`);
 
-      // 8. Public stepper renders the "Done" screen for completed onboarding
+      // 7. Public stepper renders the "Done" screen for completed onboarding
       const stepperResp = await page.goto(`/onboarding/${fx.shareToken}`);
       expect(stepperResp?.ok()).toBe(true);
-      // The DoneScreen helper in app/onboarding/[token]/stepper.tsx renders
-      // copy that's stable enough to assert on without coupling to layout.
       await expect(page.locator('body')).toContainText(/done|complete|handoff|all set|thanks/i, {
         timeout: 15_000,
       });
@@ -226,7 +208,6 @@ test.describe('Onboarding v2: editing kind end-to-end', () => {
   }) => {
     const fx = await seed();
     try {
-      // step_state must be an object record. Sending a string fails zod.
       const res = await request.patch(`/api/public/onboarding/${fx.shareToken}`, {
         data: { step_state: 'not-an-object' },
         headers: { 'content-type': 'application/json' },
