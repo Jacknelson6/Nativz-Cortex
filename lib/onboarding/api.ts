@@ -194,6 +194,8 @@ export async function setStatus(id: string, status: OnboardingStatus): Promise<O
  *   audience        -> target_audience
  *   voice           -> brand_voice
  *   current_offers  -> current_offers
+ *   website_url     -> website_url
+ *   logo_url        -> logo_url
  *
  * Only writes fields that are non-empty strings. We never null out an
  * existing clients-row value just because the client cleared a field
@@ -207,6 +209,8 @@ export async function syncBrandBasicsToClient(opts: {
     audience?: string;
     voice?: string;
     current_offers?: string;
+    website_url?: string;
+    logo_url?: string;
   };
 }): Promise<void> {
   const update: Record<string, string> = {};
@@ -215,6 +219,8 @@ export async function syncBrandBasicsToClient(opts: {
   if (opts.basics.audience?.trim()) update.target_audience = opts.basics.audience.trim();
   if (opts.basics.voice?.trim()) update.brand_voice = opts.basics.voice.trim();
   if (opts.basics.current_offers?.trim()) update.current_offers = opts.basics.current_offers.trim();
+  if (opts.basics.website_url?.trim()) update.website_url = opts.basics.website_url.trim();
+  if (opts.basics.logo_url?.trim()) update.logo_url = opts.basics.logo_url.trim();
 
   if (Object.keys(update).length === 0) return;
 

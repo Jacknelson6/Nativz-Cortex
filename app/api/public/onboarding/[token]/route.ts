@@ -53,6 +53,8 @@ interface PublicClientView {
     audience: string | null;
     voice: string | null;
     current_offers: string | null;
+    website_url: string | null;
+    logo_url: string | null;
   };
 }
 
@@ -87,7 +89,7 @@ async function loadClient(client_id: string): Promise<PublicClientView | null> {
   const { data } = await admin
     .from('clients')
     .select(
-      'id, name, agency, tagline, products, target_audience, brand_voice, current_offers',
+      'id, name, agency, tagline, products, target_audience, brand_voice, current_offers, website_url, logo_url',
     )
     .eq('id', client_id)
     .single<{
@@ -99,6 +101,8 @@ async function loadClient(client_id: string): Promise<PublicClientView | null> {
       target_audience: string | null;
       brand_voice: string | null;
       current_offers: string | null;
+      website_url: string | null;
+      logo_url: string | null;
     }>();
   if (!data) return null;
   return {
@@ -111,6 +115,8 @@ async function loadClient(client_id: string): Promise<PublicClientView | null> {
       audience: data.target_audience,
       voice: data.brand_voice,
       current_offers: data.current_offers,
+      website_url: data.website_url,
+      logo_url: data.logo_url,
     },
   };
 }

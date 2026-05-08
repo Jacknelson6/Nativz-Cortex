@@ -5,6 +5,9 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   error?: string;
 }
 
+const FIELD_BASE =
+  'block w-full rounded-lg border border-nativz-border bg-surface px-3.5 py-2.5 text-sm text-text-primary placeholder-text-muted/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] transition-[border-color,box-shadow,background-color] hover:border-nativz-border-strong focus:border-accent focus:outline-none focus:shadow-[0_0_0_3px_var(--focus-ring)] disabled:bg-surface-hover disabled:text-text-muted disabled:cursor-not-allowed';
+
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ label, error, className = '', id, ...props }, ref) => {
     return (
@@ -19,7 +22,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           id={id}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${id}-error` : undefined}
-          className={`block w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_var(--focus-ring)] disabled:bg-surface-hover disabled:text-text-muted ${error ? 'border-red-500' : ''} ${className}`}
+          className={`${FIELD_BASE} ${error ? 'border-red-500' : ''} ${className}`}
           {...props}
         />
         {error && <p id={`${id}-error`} className="text-sm text-red-400">{error}</p>}
@@ -49,7 +52,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           id={id}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${id}-error` : undefined}
-          className={`block w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-muted transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_var(--focus-ring)] disabled:bg-surface-hover ${error ? 'border-red-500' : ''} ${className}`}
+          className={`${FIELD_BASE} resize-y leading-relaxed ${error ? 'border-red-500' : ''} ${className}`}
           {...props}
         />
         {error && <p id={`${id}-error`} className="text-sm text-red-400">{error}</p>}

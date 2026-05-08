@@ -28,6 +28,7 @@ interface ClientRow {
   name: string | null;
   agency: string | null;
   logo_url: string | null;
+  website_url: string | null;
   tagline: string | null;
   products: string | null;
   target_audience: string | null;
@@ -64,7 +65,7 @@ export default async function OnboardingClientPage({
   const { data: clientRow } = await admin
     .from('clients')
     .select(
-      'id, name, agency, logo_url, tagline, products, target_audience, brand_voice, current_offers',
+      'id, name, agency, logo_url, website_url, tagline, products, target_audience, brand_voice, current_offers',
     )
     .eq('id', row.client_id)
     .single<ClientRow>();
@@ -81,6 +82,8 @@ export default async function OnboardingClientPage({
     audience: clientRow.target_audience,
     voice: clientRow.brand_voice,
     current_offers: clientRow.current_offers,
+    website_url: clientRow.website_url,
+    logo_url: clientRow.logo_url,
   };
 
   return (

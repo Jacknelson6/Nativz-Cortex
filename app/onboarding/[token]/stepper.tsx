@@ -22,7 +22,6 @@ import type { AgencyTheme } from '@/lib/branding';
 import type { OnboardingScreen } from '@/lib/onboarding/screens';
 import type { OnboardingRow } from '@/lib/onboarding/types';
 import { Button } from '@/components/ui/button';
-import { StepStateView } from '@/components/onboarding/step-state-view';
 import {
   BrandBasicsScreen,
   type BrandBasicsPrefill,
@@ -57,7 +56,6 @@ export function OnboardingStepper(props: Props) {
   const [stepState, setStepState] = useState<Record<string, unknown>>(initial.step_state);
   const [currentStep, setCurrentStep] = useState(initial.current_step);
   const [status, setStatus] = useState<OnboardingRow['status']>(initial.status);
-  const [completedAt, setCompletedAt] = useState<string | null>(initial.completed_at);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -116,7 +114,6 @@ export function OnboardingStepper(props: Props) {
       setStepState(data.onboarding.step_state ?? {});
       setCurrentStep(data.onboarding.current_step ?? next);
       setStatus(data.onboarding.status);
-      setCompletedAt(data.onboarding.completed_at ?? null);
       lastAttemptRef.current = null;
       if (screen.step_state_key) setSavedFlash(true);
     } catch (err) {
@@ -196,7 +193,6 @@ export function OnboardingStepper(props: Props) {
             clientName={clientName}
             kind={initial.kind}
             theme={theme}
-            completedAt={completedAt}
             stepState={stepState}
             screens={screens}
           />
@@ -212,6 +208,7 @@ export function OnboardingStepper(props: Props) {
             value={screenValue}
             clientName={clientName}
             prefill={brandPrefill}
+            token={token}
             submitting={submitting}
             onSubmit={(v) => submitAndAdvance(v)}
           />
@@ -333,97 +330,304 @@ const EDITING_CADENCE: { label: string; detail: string }[] = [
   { label: 'Next batch', detail: 'Same flow for the next deliverable in your package.' },
 ];
 
+interface SummarySection {
+  key: string;
+  label: string;
+  rows: SummaryRow[];
+}
+
+type SummaryRow =
+  | { kind: 'text'; label: string; value: string }
+  | { kind: 'list'; label: string; items: string[] }
+  | { kind: 'contacts'; label: string; items: { name: string; email: string }[] }
+  | { kind: 'image'; label: string; url: string };
+
+const BRAND_BASICS_FIELDS: { key: string; label: string }[] = [
+  { key: 'website_url', label: 'Website' },
+  { key: 'voice', label: 'Voice' },
+  { key: 'current_offers', label: 'Current offers' },
+  { key: 'tagline', label: 'Tagline' },
+  { key: 'what_we_sell', label: 'What we sell' },
+  { key: 'audience', label: 'Audience' },
+];
+
+function buildSections(
+  stepState: Record<string, unknown>,
+  screens: readonly OnboardingScreen[],
+): SummarySection[] {
+  const out: SummarySection[] = [];
+  for (const screen of screens) {
+    if (!screen.step_state_key) continue;
+    const raw = stepState[screen.step_state_key];
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const record = raw as Record<string, unknown>;
+    const rows: SummaryRow[] = [];
+
+    if (screen.key === 'brand_basics') {
+      const logoUrl = typeof record.logo_url === 'string' ? record.logo_url.trim() : '';
+      if (logoUrl) rows.push({ kind: 'image', label: 'Logo', url: logoUrl });
+      for (const f of BRAND_BASICS_FIELDS) {
+        const v = record[f.key];
+        if (typeof v === 'string' && v.trim().length > 0) {
+          rows.push({ kind: 'text', label: f.label, value: v.trim() });
+        }
+      }
+    } else if (screen.key === 'points_of_contact') {
+      const contacts = Array.isArray(record.contacts)
+        ? (record.contacts as Array<Record<string, unknown>>)
+        : [];
+      const items = contacts
+        .map((c) => ({
+          name: typeof c.name === 'string' ? c.name : '',
+          email: typeof c.email === 'string' ? c.email : '',
+        }))
+        .filter((c) => c.name || c.email);
+      if (items.length > 0) {
+        rows.push({ kind: 'contacts', label: 'Contacts', items });
+      }
+    } else if (screen.key === 'footage_and_references') {
+      const buckets: { key: keyof typeof record; label: string }[] = [
+        { key: 'raw_footage_urls', label: 'Raw footage' },
+        { key: 'reference_edit_urls', label: 'Reference edits' },
+      ];
+      for (const b of buckets) {
+        const arr = record[b.key];
+        if (Array.isArray(arr)) {
+          const links = arr.filter((v): v is string => typeof v === 'string' && v.trim().length > 0);
+          if (links.length > 0) rows.push({ kind: 'list', label: b.label, items: links });
+        }
+      }
+      if (typeof record.notes === 'string' && record.notes.trim().length > 0) {
+        rows.push({ kind: 'text', label: 'Notes', value: record.notes.trim() });
+      }
+    } else if (screen.key === 'social_connect') {
+      const handles = (record.handles as Record<string, unknown> | undefined) ?? {};
+      const lines: string[] = [];
+      for (const [platform, info] of Object.entries(handles)) {
+        if (info && typeof info === 'object') {
+          const handle = (info as Record<string, unknown>).handle;
+          if (typeof handle === 'string' && handle.trim().length > 0) {
+            lines.push(`${platform}: ${handle.trim()}`);
+          }
+        }
+      }
+      if (lines.length > 0) rows.push({ kind: 'list', label: 'Handles', items: lines });
+    }
+
+    if (rows.length > 0) {
+      out.push({ key: screen.key, label: screen.label, rows });
+    }
+  }
+  return out;
+}
+
+function Confetti() {
+  const count = 16;
+  const items = Array.from({ length: count });
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-x-0 top-0 z-10 h-0 overflow-visible"
+    >
+      {items.map((_, i) => {
+        const colors = ['var(--accent)', 'var(--accent-text)', '#10B981', '#F59E0B'];
+        const bg = colors[i % colors.length];
+        return (
+          <span
+            key={i}
+            className="absolute left-1/2 top-0 h-2 w-2 rounded-sm"
+            style={{
+              backgroundColor: bg,
+              animation: `nz-confetti-${i} 1500ms ease-out forwards`,
+              animationDelay: `${i * 30}ms`,
+              opacity: 0,
+            }}
+          />
+        );
+      })}
+      <style>{items
+        .map((_, i) => {
+          const angle = (i / count) * Math.PI * 2;
+          const radius = 120 + Math.random() * 90;
+          const x = Math.cos(angle) * radius;
+          const y = Math.sin(angle) * radius * 0.8 - 30;
+          const rot = Math.round(Math.random() * 540 - 270);
+          return `@keyframes nz-confetti-${i} { 0% { opacity: 1; transform: translate(-50%, 0) rotate(0); } 100% { opacity: 0; transform: translate(calc(-50% + ${x.toFixed(0)}px), ${y.toFixed(0)}px) rotate(${rot}deg); } }`;
+        })
+        .join('\n')}</style>
+    </div>
+  );
+}
+
 function DoneScreen({
   clientName,
   kind,
   theme,
-  completedAt,
   stepState,
   screens,
 }: {
   clientName: string;
   kind: OnboardingRow['kind'];
   theme: AgencyTheme;
-  completedAt: string | null;
   stepState: Record<string, unknown>;
   screens: readonly OnboardingScreen[];
 }) {
   const opsEmail = theme.opsEmail ?? theme.supportEmail;
   const message =
     kind === 'smm'
-      ? `That's everything we need to get started, ${clientName}. Your account manager will reach out within a business day to confirm your kickoff time.`
+      ? `That's everything we need to get started, ${clientName}. Sit back, we'll take it from here.`
       : `Got it, ${clientName}. Our team will email you from ${opsEmail} within a business day to book your kickoff call. Here's what the partnership looks like from here:`;
 
-  const sections = screens
-    .filter((s) => s.step_state_key)
-    .map((s) => {
-      const key = s.step_state_key as string;
-      const value = stepState[key];
-      if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-      const record = value as Record<string, unknown>;
-      if (Object.keys(record).length === 0) return null;
-      return { key, label: s.label, value: record };
-    })
-    .filter((x): x is { key: string; label: string; value: Record<string, unknown> } => x !== null);
+  const sections = buildSections(stepState, screens);
 
   return (
-    <div className="space-y-8">
-      <div className="space-y-6">
-        <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-accent/15 text-accent-text">
-          <Check size={20} />
+    <div className="relative space-y-10">
+      <Confetti />
+
+      <div className="space-y-4 text-center sm:text-left">
+        <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-accent/15 text-accent-text">
+          <Check size={22} />
         </div>
         <div className="space-y-2">
-          <h1 className="text-[28px] leading-tight font-semibold text-text-primary sm:text-3xl">
+          <h1 className="text-[30px] leading-tight font-semibold text-text-primary sm:text-[34px]">
             All set.
           </h1>
-          <p className="text-base text-text-secondary">{message}</p>
+          <p className="text-base text-text-secondary leading-relaxed">{message}</p>
         </div>
-        {completedAt ? (
-          <p className="text-xs text-text-secondary">
-            Completed {new Date(completedAt).toLocaleString()}.
-          </p>
-        ) : null}
       </div>
 
       {kind === 'editing' ? (
-        <ol className="space-y-3">
-          {EDITING_CADENCE.map((item, idx) => (
-            <li
-              key={item.label}
-              className="flex gap-3 rounded-lg border border-nativz-border bg-surface px-4 py-3"
-            >
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/15 text-[11px] font-semibold text-accent-text">
-                {idx + 1}
-              </span>
-              <div className="min-w-0 space-y-0.5">
-                <div className="text-sm font-medium text-text-primary">{item.label}</div>
-                <div className="text-xs text-text-secondary">{item.detail}</div>
-              </div>
-            </li>
-          ))}
-        </ol>
+        <div>
+          <h2 className="mb-3 text-[11px] uppercase tracking-wide text-text-secondary">
+            What happens next
+          </h2>
+          <ol className="divide-y divide-nativz-border overflow-hidden rounded-xl border border-nativz-border bg-surface-hover/40">
+            {EDITING_CADENCE.map((item, idx) => (
+              <li key={item.label} className="flex gap-3 px-4 py-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/15 text-[11px] font-semibold text-accent-text">
+                  {idx + 1}
+                </span>
+                <div className="min-w-0 space-y-0.5">
+                  <div className="text-sm font-medium text-text-primary">{item.label}</div>
+                  <div className="text-xs text-text-secondary">{item.detail}</div>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
       ) : null}
 
       {sections.length > 0 ? (
-        <div className="space-y-4">
-          <h2 className="text-[11px] uppercase tracking-wide text-text-secondary">
+        <div>
+          <h2 className="mb-3 text-[11px] uppercase tracking-wide text-text-secondary">
             Your answers
           </h2>
-          <div className="space-y-3">
+          <div className="divide-y divide-nativz-border overflow-hidden rounded-xl border border-nativz-border bg-surface-hover/40">
             {sections.map((section) => (
-              <div
-                key={section.key}
-                className="rounded-lg border border-border bg-surface p-4"
-              >
-                <h3 className="text-sm font-semibold text-text-primary">
-                  {section.label}
-                </h3>
-                <StepStateView screenKey={section.key} value={section.value} />
+              <div key={section.key} className="px-5 py-4">
+                <h3 className="text-sm font-semibold text-text-primary">{section.label}</h3>
+                <dl className="mt-3 space-y-3">
+                  {section.rows.map((row, i) => (
+                    <SummaryRowView key={`${section.key}-${i}`} row={row} />
+                  ))}
+                </dl>
               </div>
             ))}
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function SummaryRowView({ row }: { row: SummaryRow }) {
+  if (row.kind === 'image') {
+    return (
+      <div className="flex items-center gap-3">
+        <dt className="w-28 shrink-0 text-xs uppercase tracking-wide text-text-muted">
+          {row.label}
+        </dt>
+        <dd className="min-w-0 flex-1">
+          <Image
+            src={row.url}
+            alt={row.label}
+            width={72}
+            height={72}
+            unoptimized
+            className="h-14 w-14 rounded-md border border-nativz-border bg-background object-contain"
+          />
+        </dd>
+      </div>
+    );
+  }
+  if (row.kind === 'contacts') {
+    return (
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+        <dt className="w-28 shrink-0 text-xs uppercase tracking-wide text-text-muted pt-0.5">
+          {row.label}
+        </dt>
+        <dd className="min-w-0 flex-1 space-y-1.5">
+          {row.items.map((c, i) => (
+            <div key={`${c.email}-${i}`} className="text-sm text-text-primary">
+              <span className="font-medium">{c.name || c.email}</span>
+              {c.name && c.email ? (
+                <span className="text-text-muted"> &middot; {c.email}</span>
+              ) : null}
+            </div>
+          ))}
+        </dd>
+      </div>
+    );
+  }
+  if (row.kind === 'list') {
+    return (
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+        <dt className="w-28 shrink-0 text-xs uppercase tracking-wide text-text-muted pt-0.5">
+          {row.label}
+        </dt>
+        <dd className="min-w-0 flex-1 space-y-1">
+          {row.items.map((item, i) => {
+            const isUrl = /^https?:\/\//i.test(item);
+            return (
+              <div key={`${item}-${i}`} className="break-all text-sm text-text-primary">
+                {isUrl ? (
+                  <a
+                    href={item}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-accent-text underline-offset-2 hover:underline"
+                  >
+                    {item}
+                  </a>
+                ) : (
+                  item
+                )}
+              </div>
+            );
+          })}
+        </dd>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1 sm:flex-row sm:items-start">
+      <dt className="w-28 shrink-0 text-xs uppercase tracking-wide text-text-muted pt-0.5">
+        {row.label}
+      </dt>
+      <dd className="min-w-0 flex-1 whitespace-pre-wrap text-sm text-text-primary">
+        {/^https?:\/\//i.test(row.value) ? (
+          <a
+            href={row.value}
+            target="_blank"
+            rel="noreferrer"
+            className="break-all text-accent-text underline-offset-2 hover:underline"
+          >
+            {row.value}
+          </a>
+        ) : (
+          row.value
+        )}
+      </dd>
     </div>
   );
 }
