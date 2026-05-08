@@ -322,7 +322,7 @@ function WelcomeScreen({
   const intro =
     kind === 'smm'
       ? 'Brand basics, then a couple of platform connections, then who we should email. Your answers shape how we plan, film, and post for you.'
-      : `Quick partnership setup so we can hit the ground running. Brand basics, then a place to drop your footage and references. After that, our team books your kickoff.`;
+      : 'Quick setup so we can hit the ground running.';
   return (
     <div className="space-y-7">
       <div className="space-y-3">
