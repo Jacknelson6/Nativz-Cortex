@@ -537,7 +537,8 @@ async function notifyAdminsOfComment(
   // opening the link. The share-link's `name` is the admin-facing project
   // title surfaced on the celebration ping ("All N posts from Acme's
   // April Refresh project are approved!").
-  const [dropRes, postRes, linkRes] = await Promise.all([
+  const reviewLinkPostIds = Object.keys(reviewLinkMap);
+  const [dropRes, postRes, linkRes, allPostsRes] = await Promise.all([
     admin
       .from('content_drops')
       .select('id, start_date, clients(name, agency, chat_webhook_url)')
@@ -557,6 +558,12 @@ async function notifyAdminsOfComment(
       .select('name')
       .eq('id', shareLinkId)
       .maybeSingle<{ name: string | null }>(),
+    reviewLinkPostIds.length > 0
+      ? admin
+          .from('scheduled_posts')
+          .select('id, scheduled_at')
+          .in('id', reviewLinkPostIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; scheduled_at: string | null }> }),
   ]);
   const drop = dropRes.data;
   if (!drop) return;
@@ -580,7 +587,23 @@ async function notifyAdminsOfComment(
   // In-app links go to the admin view; chat links go to the public share view
   // so phones (mobile-blocked from /admin/*) can open them.
   const linkPath = `/admin/calendar/${drop.id}`;
-  const shareUrl = `${getCortexAppUrl(getBrandFromAgency(drop.clients?.agency ?? null))}/s/${shareToken}`;
+  // Compute the index of the commented-on post within the share link's
+  // sorted list so the chat link can deep-link to it via `#post-N`.
+  // Mirrors `sortPostsForList` on the public page: scheduled_at ASC,
+  // nulls first, fall back to id for stability.
+  const allPosts = (allPostsRes.data ?? []) as Array<{ id: string; scheduled_at: string | null }>;
+  const sortedPostIds = [...allPosts]
+    .sort((a, b) => {
+      const aTime = a.scheduled_at ? new Date(a.scheduled_at).getTime() : -Infinity;
+      const bTime = b.scheduled_at ? new Date(b.scheduled_at).getTime() : -Infinity;
+      if (aTime !== bTime) return aTime - bTime;
+      return a.id.localeCompare(b.id);
+    })
+    .map((p) => p.id);
+  const postIndex = sortedPostIds.indexOf(comment.postId);
+  const postAnchor = postIndex >= 0 ? `#post-${postIndex + 1}` : '';
+  const baseShareUrl = `${getCortexAppUrl(getBrandFromAgency(drop.clients?.agency ?? null))}/s/${shareToken}`;
+  const shareUrl = `${baseShareUrl}${postAnchor}`;
 
   // In-app: every admin user gets the bell ping. Was previously hard-coded
   // to jack@nativz.io, which meant no other editor on the team saw revision
@@ -652,7 +675,7 @@ async function notifyAdminsOfComment(
       // Show *which* post — by scheduled date/time — so the team can scan
       // the chat without opening the share link.
       const postLine = postTimeLine ? `\n_Post scheduled for ${postTimeLine}_` : '';
-      const text = `*${comment.authorName}* ${verb} on ${clientName}:${postLine}${quotedBlock}${attachmentBlock}\n\n${shareUrl}`;
+      const text = `*${comment.authorName} ${verb} on ${clientName}*${postLine}${quotedBlock}${attachmentBlock}\n\n${shareUrl}`;
       postToGoogleChatSafe(targetWebhookUrl, { text }, `comment ${dropId}`);
     } else if (allApprovedClaim === 'won') {
       const reviewLinkIds = Object.values(reviewLinkMap);

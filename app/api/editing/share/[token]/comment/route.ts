@@ -376,6 +376,7 @@ export async function POST(
           authorName: parsed.data.authorName.trim(),
           content: trimmedContent,
           attachments: parsed.data.attachments ?? [],
+          videoId: parsed.data.videoId ?? null,
           allApprovedClaim,
         });
       } catch (err) {
@@ -400,11 +401,40 @@ async function postEditingChatForComment(args: {
     mime_type: string;
     size_bytes: number;
   }>;
+  videoId: string | null;
   allApprovedClaim: 'won' | 'lost' | 'not-yet';
 }) {
   const { webhookUrl, clientName, projectName, projectType, shareUrl } =
     await loadProjectChatContext(args.admin, args.link.project_id, args.token);
   if (!webhookUrl) return;
+
+  // Resolve `#video-N` anchor for per-video comments so the chat link
+  // jumps to the exact tile being discussed. Mirrors the public page's
+  // dedup-by-position ordering: lowest position first, latest version
+  // wins per slot. Project-level (no videoId) comments stay unanchored.
+  let videoAnchor = '';
+  if (args.videoId) {
+    const { data: rows } = await args.admin
+      .from('editing_project_videos')
+      .select('id, position, version, created_at')
+      .eq('project_id', args.link.project_id)
+      .order('position', { ascending: true })
+      .order('version', { ascending: false });
+    const seen = new Set<number>();
+    const orderedIds: string[] = [];
+    for (const row of (rows ?? []) as Array<{
+      id: string;
+      position: number | null;
+    }>) {
+      const pos = row.position ?? 0;
+      if (seen.has(pos)) continue;
+      seen.add(pos);
+      orderedIds.push(row.id);
+    }
+    const idx = orderedIds.indexOf(args.videoId);
+    if (idx >= 0) videoAnchor = `#video-${idx + 1}`;
+  }
+  const linkedShareUrl = `${shareUrl}${videoAnchor}`;
 
   if (
     args.finalStatus === 'comment' ||
@@ -432,7 +462,7 @@ async function postEditingChatForComment(args: {
         ? '\n\n' +
           args.attachments.map((a) => `📎 ${a.filename}\n${a.url}`).join('\n\n')
         : '';
-    const text = `*${args.authorName}* ${verb} on ${clientName} · ${projectName}:${quotedBlock}${attachmentBlock}\n\n${shareUrl}`;
+    const text = `*${args.authorName} ${verb} on ${clientName} · ${projectName}*${quotedBlock}${attachmentBlock}\n\n${linkedShareUrl}`;
     postToGoogleChatSafe(
       webhookUrl,
       { text },

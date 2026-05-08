@@ -260,6 +260,22 @@ function SharedDropView({
   // ascending. Mirrors how editors think about the timeline.
   const sortedPosts = useMemo(() => sortPostsForList(data.posts), [data.posts]);
 
+  // Deep-link support: webhook chat pings include `#post-N` so the link
+  // jumps straight to the post under discussion. Browsers only auto-scroll
+  // on initial nav if the element is already in the DOM, so we re-run after
+  // the post list materializes.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const hash = window.location.hash;
+    if (!hash || !hash.startsWith('#post-')) return;
+    if (sortedPosts.length === 0) return;
+    const el = document.getElementById(hash.slice(1));
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [sortedPosts.length]);
+
   const total = data.posts.length;
   const approvedCount = data.posts.filter((p) => latestReview(p.comments) === 'approved').length;
   const changesCount = data.posts.filter((p) => latestReview(p.comments) === 'changes_requested').length;
@@ -3219,7 +3235,10 @@ function PostCard({
       ? 'w-full bg-black md:w-[44vh] md:max-w-[480px] md:flex-shrink-0 md:self-center'
       : 'w-full bg-black md:w-auto md:flex-shrink-0 md:h-full';
   return (
-    <article className={articleChrome}>
+    <article
+      id={layoutMode === 'inline' ? `post-${index}` : undefined}
+      className={articleChrome}
+    >
       {revisionInput}
       <div className={`${videoColAspect} ${videoColSizing}`}>
         {videoPanel}

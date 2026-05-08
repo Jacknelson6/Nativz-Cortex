@@ -278,6 +278,21 @@ function SharedReviewView({
     }
   }, [storageKey]);
 
+  // Deep-link support: webhook chat pings include `#video-N` so the link
+  // jumps straight to the cut under discussion.
+  const videoCount = data.videos.length;
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const hash = window.location.hash;
+    if (!hash || !hash.startsWith('#video-')) return;
+    if (videoCount === 0) return;
+    const el = document.getElementById(hash.slice(1));
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [videoCount]);
+
   function saveName(value: string) {
     const trimmed = value.trim();
     if (!trimmed) {
@@ -1607,6 +1622,7 @@ function VideoCard({
   const heightPx = 'md:h-[78vh]';
   return (
     <article
+      id={`video-${index}`}
       className={`flex flex-col overflow-hidden rounded-xl border border-nativz-border bg-surface md:flex-row ${heightPx}`}
     >
       {revisionInput}

@@ -1,12 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createNotification } from '@/lib/notifications/create';
-import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
-import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
-import { formatPostTimeForChat } from '@/lib/chat/format-post-time';
-import { getBrandFromAgency } from '@/lib/agency/detect';
-import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
 const BodySchema = z.object({
   postId: z.string().uuid(),
@@ -88,77 +82,8 @@ export async function POST(
     return NextResponse.json({ error: insErr?.message ?? 'failed to record edit' }, { status: 500 });
   }
 
-  notifyOfCaptionEdit(admin, link.drop_id, token, {
-    authorName: parsed.data.authorName.trim(),
-    previousCaption,
-    newCaption,
-    scheduledAt: post.scheduled_at,
-  }).catch((err) => console.error('Caption-edit notification failed:', err));
-
   return NextResponse.json({
     caption: newCaption,
     comment: commentRow,
   });
-}
-
-async function notifyOfCaptionEdit(
-  admin: ReturnType<typeof createAdminClient>,
-  dropId: string,
-  token: string,
-  edit: {
-    authorName: string;
-    previousCaption: string;
-    newCaption: string;
-    scheduledAt: string | null;
-  },
-) {
-  const { data: drop } = await admin
-    .from('content_drops')
-    .select('id, created_by, client_id, clients(name, agency, chat_webhook_url)')
-    .eq('id', dropId)
-    .single<{
-      id: string;
-      created_by: string;
-      client_id: string | null;
-      clients: { name: string; agency: string | null; chat_webhook_url: string | null } | null;
-    }>();
-  if (!drop) return;
-
-  const clientName = drop.clients?.name ?? 'Client';
-  const chatWebhookUrl = await resolveTeamChatWebhook(admin, {
-    primaryUrl: drop.clients?.chat_webhook_url ?? null,
-    agency: drop.clients?.agency ?? null,
-  });
-  const shareUrl = `${getCortexAppUrl(getBrandFromAgency(drop.clients?.agency ?? null))}/s/${token}`;
-
-  const truncate = (s: string, max = 280) =>
-    s.length > max ? `${s.slice(0, max)}…` : s;
-  const before = truncate(edit.previousCaption || '(empty)');
-  const after = truncate(edit.newCaption || '(empty)');
-
-  if (chatWebhookUrl) {
-    const postTimeLine = formatPostTimeForChat(edit.scheduledAt);
-    const postLine = postTimeLine ? `\n_Post scheduled for ${postTimeLine}_` : '';
-    const text =
-      `*${edit.authorName}* edited a caption for *${clientName}*.${postLine}\n` +
-      `_Before:_ ${before}\n` +
-      `_After:_ ${after}\n` +
-      `Share link: ${shareUrl}`;
-    postToGoogleChatSafe(chatWebhookUrl, { text }, `caption-edit ${dropId}`);
-  }
-
-  // Keep the in-app bell notification so admins see it inside Cortex too.
-  const title = `${edit.authorName} edited a caption in ${clientName}`;
-  const preview = `"${edit.newCaption.slice(0, 140)}${edit.newCaption.length > 140 ? '…' : ''}"`;
-  const linkPath = `/admin/calendar/${drop.id}`;
-  const { data: admins } = await admin.from('users').select('id').eq('role', 'admin');
-  for (const a of admins ?? []) {
-    createNotification({
-      recipientUserId: a.id,
-      type: 'general',
-      title,
-      body: preview,
-      linkPath,
-    }).catch(() => {});
-  }
 }
