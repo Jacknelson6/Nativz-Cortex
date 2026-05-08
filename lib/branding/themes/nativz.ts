@@ -14,10 +14,7 @@ export const nativzTheme: AgencyTheme = {
   domain: 'https://nativz.io',
   supportEmail: 'hello@nativz.io',
   opsEmail: 'jack@nativz.io',
-  // Placeholder until Jack pulls the Partner ID from Meta Business Suite.
-  // The onboarding social-connect screen falls back to email-share path
-  // when this is empty, so the UX still works without it.
-  metaBusinessId: '',
+  metaBusinessId: '787365371400640',
 
   colors: {
     primary: '#046BD2',
