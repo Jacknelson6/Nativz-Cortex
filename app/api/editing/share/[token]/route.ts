@@ -112,7 +112,7 @@ export async function GET(
       admin
         .from('editing_project_videos')
         .select(
-          'id, filename, public_url, drive_file_id, mime_type, duration_s, thumbnail_url, version, position, created_at, mux_upload_id, mux_asset_id, mux_playback_id, mux_status',
+          'id, filename, title, public_url, drive_file_id, mime_type, duration_s, thumbnail_url, version, position, created_at, mux_upload_id, mux_asset_id, mux_playback_id, mux_status',
         )
         .eq('project_id', link.project_id)
         .order('position', { ascending: true })
@@ -139,6 +139,7 @@ export async function GET(
   type EditingVideoRow = {
     id: string;
     filename: string | null;
+    title: string | null;
     public_url: string | null;
     drive_file_id: string | null;
     mime_type: string | null;
@@ -192,6 +193,7 @@ export async function GET(
       {
         id: v.id,
         filename: v.filename,
+        title: v.title,
         public_url: v.public_url,
         drive_file_id: v.drive_file_id,
         mime_type: v.mime_type,

@@ -17,8 +17,10 @@ import {
   MapPin,
   MessageSquare,
   Paperclip,
+  Pencil,
   Send,
   Trash2,
+  Type,
   Undo2,
   Upload,
   X,
@@ -85,6 +87,11 @@ interface SharedComment {
 interface SharedVideo {
   id: string;
   filename: string | null;
+  /**
+   * Optional viewer-facing display name. NULL falls back to the filename
+   * (sans extension). Editable inline from the public share link.
+   */
+  title: string | null;
   public_url: string | null;
   drive_file_id: string | null;
   mime_type: string | null;
@@ -317,6 +324,19 @@ function SharedReviewView({
                     ),
                   }
                 : v,
+            ),
+          }
+        : prev,
+    );
+  }
+
+  function updateVideoTitleLocal(videoId: string, title: string | null) {
+    setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            videos: prev.videos.map((v) =>
+              v.id === videoId ? { ...v, title } : v,
             ),
           }
         : prev,
@@ -652,6 +672,7 @@ function SharedReviewView({
                 onCommentUpdated={(c) => updateComment(v.id, c)}
                 onVideoReplaced={refetch}
                 onVideoDeleted={() => removeVideoLocal(v.id)}
+                onTitleUpdated={(title) => updateVideoTitleLocal(v.id, title)}
                 requireName={() => {
                   setPendingName(authorName);
                   setNameModalOpen(true);
@@ -795,6 +816,7 @@ function VideoCard({
   onCommentUpdated,
   onVideoReplaced,
   onVideoDeleted,
+  onTitleUpdated,
   requireName,
 }: {
   index: number;
@@ -808,10 +830,14 @@ function VideoCard({
   onCommentUpdated: (c: SharedComment) => void;
   onVideoReplaced: () => Promise<void>;
   onVideoDeleted: () => void;
+  onTitleUpdated: (title: string | null) => void;
   requireName: () => void;
 }) {
+  const filenameFallback = stripExt(video.filename);
   const displayLabel =
-    stripExt(video.filename) ?? `Video ${index}`;
+    (video.title && video.title.trim()) ||
+    filenameFallback ||
+    `Video ${index}`;
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [removingApproval, setRemovingApproval] = useState(false);
@@ -1167,9 +1193,16 @@ function VideoCard({
         <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-muted">
           {isImage ? 'Image' : 'Video'} {index}
         </p>
-        <h3 className="break-words text-[15px] font-medium leading-snug text-text-primary">
-          {displayLabel}
-        </h3>
+        <ClipTitleEditor
+          token={token}
+          videoId={video.id}
+          title={video.title}
+          fallback={filenameFallback}
+          displayTitle={displayLabel}
+          onSaved={onTitleUpdated}
+          requireName={requireName}
+          hasName={!!authorName.trim()}
+        />
       </div>
     </div>
   );
@@ -1948,6 +1981,134 @@ function CommentAttachmentTile({ attachment }: { attachment: CommentAttachment }
       <FileIcon size={12} />
       <span className="max-w-[180px] truncate">{attachment.filename}</span>
     </a>
+  );
+}
+
+/**
+ * Inline-editable display name for a clip on the editing-project share
+ * link. Click to enter edit mode, Enter / Save commits, Esc reverts.
+ * Empty input clears the override and the viewer falls back to the
+ * uploaded filename. Mirrors the social-ad TitleEditor in /c/[token].
+ */
+function ClipTitleEditor({
+  token,
+  videoId,
+  title,
+  fallback,
+  displayTitle,
+  onSaved,
+  requireName,
+  hasName,
+}: {
+  token: string;
+  videoId: string;
+  title: string | null;
+  fallback: string | null;
+  displayTitle: string;
+  onSaved: (title: string | null) => void;
+  requireName: () => void;
+  hasName: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(title ?? fallback ?? '');
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (saving) return;
+    const next = draft.trim();
+    if (next === (title ?? fallback ?? '')) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/editing/share/${token}/title`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoId, title: next }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof json.error === 'string' ? json.error : 'Failed to save title');
+      }
+      onSaved((json.title as string | null) ?? null);
+      toast.success('Title saved');
+      setEditing(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save title');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-2">
+        <Type size={14} className="text-text-muted" />
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void save();
+            } else if (e.key === 'Escape') {
+              setDraft(title ?? fallback ?? '');
+              setEditing(false);
+            }
+          }}
+          autoFocus
+          disabled={saving}
+          maxLength={160}
+          placeholder={fallback ?? 'Clip title'}
+          className="flex-1 rounded-md border border-accent/40 bg-background/60 px-2 py-1 text-[15px] text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent"
+        />
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={saving}
+          className="inline-flex items-center gap-1 rounded-md bg-accent px-2 py-1 text-[11px] font-medium text-accent-contrast transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          {saving ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle size={11} />}
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setDraft(title ?? fallback ?? '');
+            setEditing(false);
+          }}
+          disabled={saving}
+          className="inline-flex items-center rounded-md border border-nativz-border bg-transparent px-2 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="group flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => {
+          if (!hasName) {
+            requireName();
+            return;
+          }
+          setDraft(title ?? fallback ?? '');
+          setEditing(true);
+        }}
+        title="Click to rename"
+        className="flex-1 truncate rounded-md border border-transparent bg-transparent px-1 py-0.5 text-left text-[15px] font-medium leading-snug text-text-primary transition-colors hover:border-nativz-border hover:bg-surface-hover"
+      >
+        {displayTitle}
+      </button>
+      <Pencil
+        size={11}
+        className="text-text-muted opacity-0 transition-opacity group-hover:opacity-100"
+      />
+    </div>
   );
 }
 
