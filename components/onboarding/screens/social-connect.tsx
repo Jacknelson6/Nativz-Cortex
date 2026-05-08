@@ -286,7 +286,7 @@ export function SocialConnectScreen({
 
                 {conn?.status === 'set_up_for_me' && (
                   <p className="text-xs text-text-muted">
-                    Heads-up sent. {agency.shortName} will reach out to wire it up.
+                    {agency.shortName} team will complete this for you.
                   </p>
                 )}
               </div>
