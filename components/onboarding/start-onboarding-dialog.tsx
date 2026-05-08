@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, Plus, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 
@@ -241,12 +242,11 @@ export function StartOnboardingDialog({ open, onClose, clientId, clientName }: P
                           submitting || !sendWelcome ? 'opacity-60' : ''
                         }`}
                       >
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={checked}
-                          onChange={() => toggleContact(c.email)}
+                          onCheckedChange={() => toggleContact(c.email)}
                           disabled={submitting || !sendWelcome}
-                          className="rounded border-border"
+                          aria-label={`Send welcome email to ${c.name?.trim() || c.email}`}
                         />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
@@ -329,16 +329,15 @@ export function StartOnboardingDialog({ open, onClose, clientId, clientName }: P
           )}
         </div>
 
-        <label className="flex items-center gap-2 text-sm text-text-secondary">
-          <input
-            type="checkbox"
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-text-secondary">
+          <Checkbox
             checked={sendWelcome}
-            onChange={(e) => setSendWelcome(e.target.checked)}
+            onCheckedChange={(v) => setSendWelcome(v === true)}
             disabled={submitting}
-            className="rounded border-border"
+            aria-label="Send a welcome email"
           />
           <Mail size={14} className="text-text-muted" />
-          Send welcome email now
+          Send a welcome email
         </label>
 
         {error ? (
