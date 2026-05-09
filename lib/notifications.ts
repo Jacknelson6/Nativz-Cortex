@@ -20,6 +20,7 @@ export type NotificationType =
   | 'post_needs_approval'
   | 'post_trending'
   | 'account_disconnected'
+  | 'account_connected'
   | 'search_completed'
   | 'topic_search_failed'
   | 'topic_search_stuck'

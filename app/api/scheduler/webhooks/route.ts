@@ -6,6 +6,21 @@ import {
   syncPlatformRowsFromZernio,
   reconcileParentStatusFromSpp,
 } from '@/lib/posting/zernio-reconcile';
+import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
+import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+
+const PLATFORM_LABEL: Record<string, string> = {
+  tiktok: 'TikTok',
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+  youtube: 'YouTube',
+  linkedin: 'LinkedIn',
+  googlebusiness: 'Google Business',
+  pinterest: 'Pinterest',
+  x: 'X (Twitter)',
+  threads: 'Threads',
+  bluesky: 'Bluesky',
+};
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
@@ -265,7 +280,7 @@ export async function POST(request: NextRequest) {
           // client retapping the screen. No-op if there's no live onboarding.
           const { data: prof } = await adminClient
             .from('social_profiles')
-            .select('platform, username, client_id')
+            .select('platform, username, client_id, clients(name, agency, chat_webhook_url)')
             .eq('late_account_id', accountId)
             .maybeSingle();
           if (prof?.client_id && prof?.platform) {
@@ -280,8 +295,70 @@ export async function POST(request: NextRequest) {
             } catch (err) {
               console.error('[zernio-webhook] markPlatformConnection (connected) failed:', err);
             }
+
+            // Ping the SMM team in the client's Google Chat space so they
+            // know the account is live and can fan existing posts onto it
+            // (calendar header → Add platform). Falls back to the agency
+            // miscellaneous-catchall webhook, then OPS_GOOGLE_CHAT_WEBHOOK.
+            //
+            // Note: an invite-link OAuth path also pings via
+            // `handleInviteCompletion`, so a client connecting via invite
+            // gets two messages (one "client tapped invite", one "Zernio
+            // confirmed account active"). Acceptable for now — they read
+            // as different events.
+            try {
+              const client = prof.clients as { name?: string; agency?: string | null; chat_webhook_url?: string | null } | null;
+              const webhookUrl =
+                (await resolveTeamChatWebhook(adminClient, {
+                  primaryUrl: client?.chat_webhook_url ?? null,
+                  agency: client?.agency ?? null,
+                })) ?? process.env.OPS_GOOGLE_CHAT_WEBHOOK ?? null;
+
+              const platform = prof.platform as string;
+              const platformLabel = PLATFORM_LABEL[platform] ?? platform;
+              const username = (prof.username as string | null) ?? '';
+              const handle = username ? `@${username}` : 'their account';
+              const brand = client?.name ?? 'Unknown client';
+
+              postToGoogleChatSafe(
+                webhookUrl,
+                {
+                  text: `🔌 *${brand}* connected ${platformLabel} as ${handle}. Open the scheduler → Add platform to fan existing posts onto it.`,
+                },
+                `zernio-webhook:account.connected:${accountId}`,
+              );
+            } catch (err) {
+              console.error('[zernio-webhook] account.connected chat ping failed:', err);
+            }
           }
         }
+
+        // In-app notification (separate from Chat) — uses the same fanout
+        // recipients as post.failed / account.disconnected so admins who
+        // don't live in Google Chat still see it.
+        const { data: profForNotif } = accountId
+          ? await adminClient
+              .from('social_profiles')
+              .select('platform, username, clients(name)')
+              .eq('late_account_id', accountId)
+              .maybeSingle()
+          : { data: null };
+        const clientNameForNotif =
+          (profForNotif?.clients as { name?: string } | null)?.name ?? 'Unknown client';
+        const platformForNotif =
+          (profForNotif?.platform as string) ||
+          pickStr(accountPayload, 'platform') ||
+          'social';
+        const usernameForNotif =
+          (profForNotif?.username as string) ||
+          pickStr(accountPayload, 'username', 'handle') ||
+          '';
+        await notifyZernioWebhookRecipients({
+          type: 'account_connected',
+          title: `Social account connected, ${clientNameForNotif}`,
+          body: `${platformForNotif}${usernameForNotif ? ` (@${usernameForNotif})` : ''} is live in Zernio. Open the scheduler → Add platform to fan existing posts onto it.`,
+          linkPath: '/admin/scheduler',
+        });
         break;
       }
       case 'account.disconnected': {
