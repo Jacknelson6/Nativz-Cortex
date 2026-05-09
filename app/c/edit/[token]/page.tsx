@@ -705,6 +705,7 @@ function SharedReviewView({
                 index={idx + 1}
                 video={v}
                 projectId={data.project.id}
+                projectType={data.project.project_type}
                 isEditor={data.isEditor}
                 token={token}
                 authorName={authorName}
@@ -849,6 +850,7 @@ function VideoCard({
   index,
   video,
   projectId,
+  projectType,
   isEditor,
   token,
   authorName,
@@ -863,6 +865,7 @@ function VideoCard({
   index: number;
   video: SharedVideo;
   projectId: string;
+  projectType: string;
   isEditor: boolean;
   token: string;
   authorName: string;
@@ -992,6 +995,45 @@ function VideoCard({
       return;
     }
 
+    // Optimistic flow mirrors the calendar share page: paint a temp
+    // comment so the approve / changes_requested chip flips state without
+    // waiting on the round trip. Swap for the real row on success; yank
+    // it on failure and surface the error so the user can retry.
+    const tempId = `temp-${
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2)
+    }`;
+    const trimmedAuthor = authorName.trim();
+    const resolvedContent =
+      commentText.trim() || (status === 'approved' ? 'Approved' : '');
+    const anchorSeconds = readCurrentAnchorSeconds();
+    const snapshotAttachments = pendingAttachments;
+    const tempComment: SharedComment = {
+      id: tempId,
+      video_id: video.id,
+      share_link_id: null,
+      author_name: trimmedAuthor,
+      author_user_id: null,
+      content: resolvedContent,
+      // Local intent; server may auto-upgrade changes_requested → approved
+      // and we reconcile when the real row lands.
+      status,
+      attachments: snapshotAttachments,
+      metadata: {},
+      timestamp_seconds: anchorSeconds,
+      created_at: new Date().toISOString(),
+    };
+
+    onCommentAdded(tempComment);
+    setCommentText('');
+    setPendingAttachments([]);
+    setPinEnabled(true);
+    setComposerExpanded(false);
+    const optimisticToastId = toast.success(
+      status === 'approved' ? 'Video approved' : 'Revision added',
+    );
+
     setSubmitting(true);
     try {
       const res = await fetch(`/api/editing/share/${token}/comment`, {
@@ -999,14 +1041,13 @@ function VideoCard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           videoId: video.id,
-          authorName: authorName.trim(),
-          content:
-            commentText.trim() || (status === 'approved' ? 'Approved' : ''),
+          authorName: trimmedAuthor,
+          content: resolvedContent,
           status,
-          attachments: pendingAttachments,
+          attachments: snapshotAttachments,
           // Server only honors this for `comment` / `changes_requested`;
           // approval rows strip it.
-          timestampSeconds: readCurrentAnchorSeconds(),
+          timestampSeconds: anchorSeconds,
         }),
       });
       const json = await res.json();
@@ -1014,22 +1055,22 @@ function VideoCard({
         throw new Error(typeof json.error === 'string' ? json.error : 'Failed to submit');
       }
       const savedComment = json.comment as SharedComment;
+      onCommentRemoved(tempId);
       onCommentAdded(savedComment);
-      setCommentText('');
-      setPendingAttachments([]);
-      setPinEnabled(true);
-      setComposerExpanded(false);
       const wasAutoApproved =
         status !== 'approved' && savedComment.status === 'approved';
-      toast.success(
-        wasAutoApproved
-          ? 'Looked like an approval — marked approved'
-          : status === 'approved'
-            ? 'Video approved'
-            : 'Revision added',
-      );
+      if (wasAutoApproved) {
+        toast.success('Looked like an approval, marked approved', {
+          id: optimisticToastId,
+        });
+      }
     } catch (err) {
+      onCommentRemoved(tempId);
+      toast.dismiss(optimisticToastId);
       toast.error(err instanceof Error ? err.message : 'Failed to submit');
+      setCommentText(resolvedContent === 'Approved' ? '' : resolvedContent);
+      setPendingAttachments(snapshotAttachments);
+      if (status === 'changes_requested') setComposerExpanded(true);
     } finally {
       setSubmitting(false);
     }
@@ -1621,15 +1662,35 @@ function VideoCard({
     </div>
   );
 
-  const heightPx = 'md:h-[78vh]';
+  // Aspect + layout switch by project type, mirroring the Calendar share
+  // page so editing reviews of CTV / Social Ads / image deliverables don't
+  // get squashed into a 9:16 frame. CTV (16:9) stacks vertically; image
+  // posts get a width-capped 4:5 column so the comments rail keeps room.
+  const isCtv = projectType === 'ctv_ads';
+  const isSocialAd = projectType === 'social_ads';
+  const stackVertical = isCtv;
+  const heightPx = isImage ? 'md:h-[60vh]' : 'md:h-[78vh]';
+  const layoutDirection = stackVertical ? '' : 'md:flex-row';
+  const videoColAspect = isCtv
+    ? 'aspect-video'
+    : isSocialAd
+      ? 'aspect-square'
+      : isImage
+        ? 'aspect-[4/5]'
+        : 'aspect-[9/16]';
+  const videoColSizing = stackVertical
+    ? 'w-full'
+    : isImage
+      ? 'w-full md:w-[44vh] md:max-w-[480px] md:flex-shrink-0 md:self-center'
+      : 'w-full md:h-full md:w-auto md:flex-shrink-0';
   return (
     <article
       id={`video-${index}`}
-      className={`flex flex-col overflow-hidden rounded-xl border border-nativz-border bg-surface md:flex-row ${heightPx}`}
+      className={`flex flex-col overflow-hidden rounded-xl border border-nativz-border bg-surface ${layoutDirection} ${heightPx}`}
     >
       {revisionInput}
       <div
-        className={`aspect-[9/16] w-full md:h-full md:w-auto md:flex-shrink-0 ${
+        className={`${videoColAspect} ${videoColSizing} ${
           isImage ? 'bg-surface' : 'bg-black'
         }`}
       >
