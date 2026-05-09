@@ -556,8 +556,8 @@ function SharedReviewView({
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-nativz-border bg-surface px-4 py-5 sm:px-6 sm:py-7">
-        <div className="mx-auto max-w-5xl">
+      <header className="border-b border-nativz-border bg-surface px-3 py-5 sm:px-6 sm:py-7">
+        <div className="mx-auto max-w-6xl">
           <div className="mb-4 flex items-center sm:mb-5">
             <ShareHeaderLogo />
           </div>
@@ -1406,7 +1406,9 @@ function VideoCard({
             {video.comments.length}
           </span>
         </div>
-        <div className="space-y-2">
+        {/* Capped to keep the Approve / Request change buttons in view on long
+            threads. Mirrors the Calendar share page. */}
+        <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
           {video.comments.map((c) => (
             <CommentRow
               key={c.id}

@@ -2685,6 +2685,11 @@ function PostCard({
             <AlertTriangle size={13} /> Changes requested
           </span>
         )}
+        {review === null && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-hover px-3 py-1.5 text-sm font-medium text-text-muted">
+            <MessageSquare size={13} /> Awaiting review
+          </span>
+        )}
       </div>
 
       {!showCaptionFlow && (
@@ -3143,21 +3148,6 @@ function PostCard({
           </button>
         )}
       </div>
-
-      {isEditor && (
-        <div className="mt-4 flex justify-center border-t border-nativz-border pt-4">
-          <button
-            type="button"
-            onClick={() => {
-              // TODO: open the new-video upload flow (Mux upload → auto-caption → schedule)
-              toast.message('Add new video flow coming soon');
-            }}
-            className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-nativz-border bg-transparent px-3 py-1.5 text-xs font-medium text-text-muted transition-all hover:border-accent/50 hover:bg-accent-surface hover:text-accent-text"
-          >
-            <Plus size={13} /> Add new video
-          </button>
-        </div>
-      )}
 
       {/* Project-standard ConfirmDialog — same shell used by Delete client
           and other destructive flows so the styling reads as native. The
