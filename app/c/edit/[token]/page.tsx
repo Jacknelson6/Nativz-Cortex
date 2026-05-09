@@ -562,8 +562,16 @@ function SharedReviewView({
           <div className="mb-4 flex items-center sm:mb-5">
             <ShareHeaderLogo />
           </div>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
+          {/*
+            Header row uses flex-wrap only below `sm` so a long project
+            name on phones can break to a new line without colliding
+            with the action cluster, but on tablet/desktop the title
+            truncates instead of pushing the actions to a second row.
+            `min-w-0 flex-1` on the title column is the bit that lets
+            the inner truncate actually shrink under flex.
+          */}
+          <div className="flex flex-wrap items-center justify-between gap-3 sm:flex-nowrap">
+            <div className="min-w-0 flex-1">
               {/*
                 Mirrors the SMM share page header. Admin can rename the
                 public review page inline; PATCH lands on the share link
@@ -581,14 +589,14 @@ function SharedReviewView({
                   )
                 }
               />
-              <p className="mt-2 text-sm text-text-secondary sm:text-base">
+              <p className="mt-2 truncate text-sm text-text-secondary sm:text-base">
                 {total} {total === 1 ? 'video' : 'videos'} to review
                 {data.project.shoot_date
                   ? ` · shot ${formatShoot(data.project.shoot_date)}`
                   : ''}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               {total > 0 && (
                 <button
                   type="button"
@@ -2398,7 +2406,15 @@ function ProjectNameHeader({
     'font-display text-xl font-semibold tracking-tight text-text-primary sm:text-3xl';
 
   if (!isEditor) {
-    return <h1 className={headingClass}>{name ?? fallback}</h1>;
+    // `block truncate` keeps the heading on a single line and ellipsises
+    // when the title is longer than the column. Without this, a long
+    // share-link name would force the row to grow and shove the action
+    // cluster onto a new line.
+    return (
+      <h1 className={`${headingClass} block w-full max-w-full truncate`}>
+        {name ?? fallback}
+      </h1>
+    );
   }
 
   async function save() {
@@ -2460,10 +2476,12 @@ function ProjectNameHeader({
         setDraft(name ?? '');
         setEditing(true);
       }}
-      className="group inline-flex max-w-full items-center gap-2 rounded-md text-left transition-colors hover:text-text-primary"
+      className="group flex w-full min-w-0 max-w-full items-center gap-2 rounded-md text-left transition-colors hover:text-text-primary"
       title="Rename"
     >
-      <span className={`${headingClass} truncate`}>{name ?? fallback}</span>
+      <span className={`${headingClass} block min-w-0 flex-1 truncate`}>
+        {name ?? fallback}
+      </span>
       <Pencil
         size={16}
         className="shrink-0 text-text-tertiary opacity-0 transition-opacity group-hover:opacity-100"

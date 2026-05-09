@@ -443,14 +443,19 @@ function SharedDropView({
     }
   }
 
-  function updatePostCaption(postId: string, caption: string, comment: SharedComment) {
+  function updatePostCaption(
+    postId: string,
+    caption: string,
+    hashtags: string[],
+    comment: SharedComment,
+  ) {
     setData((prev) =>
       prev
         ? {
             ...prev,
             posts: prev.posts.map((p) =>
               p.id === postId
-                ? { ...p, caption, comments: [...p.comments, comment] }
+                ? { ...p, caption, hashtags, comments: [...p.comments, comment] }
                 : p,
             ),
           }
@@ -730,8 +735,16 @@ function SharedDropView({
           <div className="mb-4 flex items-center sm:mb-5">
             <ShareHeaderLogo />
           </div>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
+          {/*
+            Header row uses flex-wrap only below `sm` so a long project
+            name on phones can break to a new line without colliding
+            with the action cluster, but on tablet/desktop the title
+            truncates instead of pushing the actions to a second row.
+            `min-w-0 flex-1` on the title column is the bit that lets
+            the inner truncate actually shrink under flex.
+          */}
+          <div className="flex flex-wrap items-center justify-between gap-3 sm:flex-nowrap">
+            <div className="min-w-0 flex-1">
               {/*
                 Mirrors the portal "Your reviews" project-name column.
                 When the admin renames the share link there the same
@@ -751,12 +764,12 @@ function SharedDropView({
                 }
               />
               <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
-                <p className="text-sm text-text-secondary sm:text-base">
+                <p className="truncate text-sm text-text-secondary sm:text-base">
                   {total} post{total !== 1 ? 's' : ''} to review · scheduled {formatDropDateRange(data.drop.start_date, data.drop.end_date)}
                 </p>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 md:ml-auto md:flex-nowrap">
+            <div className="flex shrink-0 flex-wrap items-center gap-2 md:ml-auto md:flex-nowrap">
               {downloadableCount > 0 && (
                 <button
                   type="button"
@@ -877,7 +890,9 @@ function SharedDropView({
                 onCommentAdded={(c) => appendComment(post.id, c)}
                 onCommentRemoved={(commentId) => removeComment(post.id, commentId)}
                 onCommentUpdated={(c) => updateComment(post.id, c)}
-                onCaptionUpdated={(caption, c) => updatePostCaption(post.id, caption, c)}
+                onCaptionUpdated={(caption, hashtags, c) =>
+                  updatePostCaption(post.id, caption, hashtags, c)
+                }
                 onHandlesUpdated={(field, next, c) => updatePostHandles(post.id, field, next, c)}
                 onScheduleUpdated={(at, c) => updatePostScheduledAt(post.id, at, c)}
                 onRevisionUploaded={(rev) => updatePostRevision(post.id, rev)}
@@ -1056,7 +1071,15 @@ function ProjectNameHeader({
     'font-display text-xl font-semibold tracking-tight text-text-primary sm:text-3xl';
 
   if (!isEditor) {
-    return <h1 className={headingClass}>{projectName ?? fallback}</h1>;
+    // `block truncate` keeps the heading on a single line and ellipsises
+    // when the title is longer than the column. Without this, a long
+    // share-link name would force the row to grow and shove the action
+    // cluster onto a new line.
+    return (
+      <h1 className={`${headingClass} block w-full max-w-full truncate`}>
+        {projectName ?? fallback}
+      </h1>
+    );
   }
 
   async function save() {
@@ -1118,10 +1141,12 @@ function ProjectNameHeader({
         setDraft(projectName ?? '');
         setEditing(true);
       }}
-      className="group inline-flex max-w-full items-center gap-2 rounded-md text-left transition-colors hover:text-text-primary"
+      className="group flex w-full min-w-0 max-w-full items-center gap-2 rounded-md text-left transition-colors hover:text-text-primary"
       title="Rename"
     >
-      <span className={`${headingClass} truncate`}>{projectName ?? fallback}</span>
+      <span className={`${headingClass} block min-w-0 flex-1 truncate`}>
+        {projectName ?? fallback}
+      </span>
       <Pencil
         size={16}
         className="shrink-0 text-text-tertiary opacity-0 transition-opacity group-hover:opacity-100"
@@ -1604,7 +1629,7 @@ function PostDetailModal({
   onCommentAdded: (postId: string, c: SharedComment) => void;
   onCommentRemoved: (postId: string, commentId: string) => void;
   onCommentUpdated: (postId: string, c: SharedComment) => void;
-  onCaptionUpdated: (postId: string, caption: string, c: SharedComment) => void;
+  onCaptionUpdated: (postId: string, caption: string, hashtags: string[], c: SharedComment) => void;
   onHandlesUpdated: (
     postId: string,
     field: 'tagged_people' | 'collaborator_handles',
@@ -1642,7 +1667,9 @@ function PostDetailModal({
         onCommentAdded={(c) => onCommentAdded(post.id, c)}
         onCommentRemoved={(commentId) => onCommentRemoved(post.id, commentId)}
         onCommentUpdated={(c) => onCommentUpdated(post.id, c)}
-        onCaptionUpdated={(caption, c) => onCaptionUpdated(post.id, caption, c)}
+        onCaptionUpdated={(caption, hashtags, c) =>
+          onCaptionUpdated(post.id, caption, hashtags, c)
+        }
         onHandlesUpdated={(field, next, c) => onHandlesUpdated(post.id, field, next, c)}
         onScheduleUpdated={(at, c) => onScheduleUpdated(post.id, at, c)}
         onRevisionUploaded={(rev) => onRevisionUploaded(post.id, rev)}
@@ -2045,7 +2072,7 @@ function PostCard({
   onCommentAdded: (c: SharedComment) => void;
   onCommentRemoved: (commentId: string) => void;
   onCommentUpdated: (c: SharedComment) => void;
-  onCaptionUpdated: (caption: string, c: SharedComment) => void;
+  onCaptionUpdated: (caption: string, hashtags: string[], c: SharedComment) => void;
   onHandlesUpdated: (
     field: 'tagged_people' | 'collaborator_handles',
     next: string[],
@@ -2097,8 +2124,16 @@ function PostCard({
   const [pendingAttachments, setPendingAttachments] = useState<CommentAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Hashtags live in their own DB column for the publisher pipeline, but
+  // reviewers think of them as part of the caption (because that's how they
+  // read on TikTok / IG). So we present a single merged blob in the UI and
+  // let the API split it back out on save.
+  const mergedCaption =
+    post.caption + (post.hashtags.length > 0
+      ? (post.caption.trim().length > 0 ? '\n\n' : '') + post.hashtags.map((h) => `#${h}`).join(' ')
+      : '');
   const [editingCaption, setEditingCaption] = useState(false);
-  const [draftCaption, setDraftCaption] = useState(post.caption);
+  const [draftCaption, setDraftCaption] = useState(mergedCaption);
   const [savingCaption, setSavingCaption] = useState(false);
   const [schedulePopoverOpen, setSchedulePopoverOpen] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
@@ -2252,7 +2287,7 @@ function PostCard({
       return;
     }
     const next = draftCaption.trim();
-    if (next === post.caption.trim()) {
+    if (next === mergedCaption.trim()) {
       setEditingCaption(false);
       return;
     }
@@ -2269,7 +2304,11 @@ function PostCard({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Failed to save caption');
-      onCaptionUpdated(json.caption as string, json.comment as SharedComment);
+      onCaptionUpdated(
+        json.caption as string,
+        (json.hashtags as string[] | undefined) ?? [],
+        json.comment as SharedComment,
+      );
       setEditingCaption(false);
       toast.success('Caption updated');
     } catch (err) {
@@ -2714,7 +2753,24 @@ function PostCard({
         />
       )}
 
-      {showCaptionFlow && (editingCaption ? (
+      {showCaptionFlow && (isPublished ? (
+        // Once a post is in Zernio's hands the caption is locked. Render a
+        // read-only, dimmed copy of the caption + a "Published" confirmation
+        // card so the reviewer sees what shipped without thinking they can
+        // still tweak it.
+        <div className="space-y-2">
+          <div className="rounded-lg border border-nativz-border/60 bg-surface-hover/40 px-3 py-2.5">
+            <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-text-muted">
+              {mergedCaption.trim().length > 0 ? mergedCaption : (
+                <span className="italic">No caption</span>
+              )}
+            </p>
+          </div>
+          <div className="inline-flex items-center gap-1.5 rounded-md border border-status-success/30 bg-status-success/10 px-2.5 py-1 text-xs font-medium text-status-success">
+            <CheckCircle size={13} /> Published
+          </div>
+        </div>
+      ) : editingCaption ? (
         <div className="space-y-2">
           <textarea
             value={draftCaption}
@@ -2736,7 +2792,7 @@ function PostCard({
             <button
               type="button"
               onClick={() => {
-                setDraftCaption(post.caption);
+                setDraftCaption(mergedCaption);
                 setEditingCaption(false);
               }}
               disabled={savingCaption}
@@ -2758,7 +2814,7 @@ function PostCard({
       ) : (
         <div className="group relative">
           <p className="whitespace-pre-wrap pr-10 text-[15px] leading-relaxed text-text-primary">
-            {post.caption || (
+            {mergedCaption.trim().length > 0 ? mergedCaption : (
               <span className="italic text-text-muted">No caption yet</span>
             )}
           </p>
@@ -2769,7 +2825,7 @@ function PostCard({
                 requireName();
                 return;
               }
-              setDraftCaption(post.caption);
+              setDraftCaption(mergedCaption);
               setEditingCaption(true);
             }}
             data-tour="cal-caption"
@@ -2780,22 +2836,6 @@ function PostCard({
           </button>
         </div>
       ))}
-
-      {showCaptionFlow && !editingCaption && post.hashtags.length > 0 && (
-        // Hashtags are reference data, not links — the cyan accent wall
-        // visually competed with the Edit / Approve CTAs. Quieter chips on
-        // a low-contrast surface keep them scannable without shouting.
-        <div className="flex flex-wrap gap-1">
-          {post.hashtags.map((h) => (
-            <span
-              key={h}
-              className="rounded-md bg-surface-hover/60 px-2 py-0.5 text-xs text-text-muted"
-            >
-              #{h}
-            </span>
-          ))}
-        </div>
-      )}
 
       {showHandles && (
         <div data-tour="cal-collab" className="space-y-2">
