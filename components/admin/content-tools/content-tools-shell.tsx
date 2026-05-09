@@ -50,6 +50,60 @@ function firstOfMonthUTC(d: Date): string {
 }
 
 /**
+ * Group rows into month buckets keyed by `YYYY-MM`, using whichever
+ * date the user chose ("created" or "approved"). Rows missing the
+ * chosen date land in the `null` bucket so they still render under a
+ * fallback "No date" header instead of vanishing.
+ */
+type GroupByMonth = 'none' | 'created' | 'approved';
+
+function monthKey(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+function monthLabel(key: string): string {
+  const [y, m] = key.split('-').map((n) => Number(n));
+  const d = new Date(Date.UTC(y, m - 1, 1));
+  return d.toLocaleDateString(undefined, {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+function groupRowsByMonth(
+  rows: ReviewLinkRow[],
+  field: Exclude<GroupByMonth, 'none'>,
+): { key: string | null; label: string; rows: ReviewLinkRow[] }[] {
+  const buckets = new Map<string | null, ReviewLinkRow[]>();
+  for (const row of rows) {
+    const iso = field === 'created' ? row.created_at : row.approved_at ?? null;
+    const key = monthKey(iso);
+    const existing = buckets.get(key);
+    if (existing) {
+      existing.push(row);
+    } else {
+      buckets.set(key, [row]);
+    }
+  }
+  // Sort buckets newest first, with the null/no-date bucket last so it
+  // doesn't visually anchor the page above real months.
+  const keys = Array.from(buckets.keys()).sort((a, b) => {
+    if (a === null) return 1;
+    if (b === null) return -1;
+    return b.localeCompare(a);
+  });
+  return keys.map((key) => ({
+    key,
+    label: key ? monthLabel(key) : 'No date',
+    rows: buckets.get(key) ?? [],
+  }));
+}
+
+/**
  * `/admin/content-tools` shell. Reorganised around project type so
  * Jack can pivot between the cross-brand "everything in flight" view
  * and a single-type breakdown without reaching for filters.
@@ -205,6 +259,7 @@ function editingProjectToRow(p: EditingProject): ReviewLinkRow {
     status: reviewDerivedStatus ?? statusForReview(p.status),
     expires_at: p.created_at,
     created_at: p.created_at,
+    approved_at: p.approved_at,
     last_viewed_at: null,
     name: p.name,
     project_type: projectTypeForReview(p.project_type),
@@ -311,6 +366,12 @@ export function ContentToolsShell() {
   // previous SortMenu's default - but the user can now click any
   // column header to re-sort the whole table.
   const [sort, setSort] = useState<SortState>({ field: 'date_sent', dir: 'desc' });
+
+  // Group-by-month view mode. When non-`none`, rows are bucketed into
+  // <Month> sections (newest first) so the table reads like a list-view
+  // calendar. The active value also forces the in-bucket sort onto the
+  // chosen date so rows inside a month stay in temporal order.
+  const [groupBy, setGroupBy] = useState<GroupByMonth>('none');
 
   // Month strip lives at the shell level so the pills + (future)
   // by-month row filter share a single source of truth. Defaults to
@@ -446,6 +507,26 @@ export function ContentToolsShell() {
     });
   }, [sortedLinks, activeProjectTab]);
 
+  // Month-grouped view: take the same `visibleProjects` slice and split
+  // into bucketed sections. Inside each bucket, rows are sorted by the
+  // grouping field descending so the most recent project in a month
+  // sits at the top of its section regardless of the column the user
+  // clicked. This deliberately overrides `sort` while group mode is
+  // active because the column-sort intent ("show me by date sent") is
+  // incompatible with "show me each month's batch in order."
+  const monthGroups = useMemo(() => {
+    if (groupBy === 'none') return [];
+    const groups = groupRowsByMonth(visibleProjects, groupBy);
+    return groups.map((g) => ({
+      ...g,
+      rows: [...g.rows].sort((a, b) => {
+        const aIso = groupBy === 'created' ? a.created_at : a.approved_at ?? '';
+        const bIso = groupBy === 'created' ? b.created_at : b.approved_at ?? '';
+        return bIso.localeCompare(aIso);
+      }),
+    }));
+  }, [visibleProjects, groupBy]);
+
   /**
    * Optimistic patch. The discriminator on the row id (`editing:<uuid>`)
    * tells us which slice owns the row so a rename or project-type
@@ -576,11 +657,26 @@ export function ContentToolsShell() {
               onMonthChange={setSelectedMonth}
               refreshKey={monthRefreshKey}
             />
+            <div className="flex items-center justify-end gap-2 text-xs text-text-muted">
+              <label htmlFor="group-by-month" className="font-medium uppercase tracking-wide">
+                Group by
+              </label>
+              <select
+                id="group-by-month"
+                value={groupBy}
+                onChange={(e) => setGroupBy(e.target.value as GroupByMonth)}
+                className="rounded-md border border-nativz-border bg-surface px-2 py-1 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+              >
+                <option value="none">None</option>
+                <option value="created">Created month</option>
+                <option value="approved">Approved month</option>
+              </select>
+            </div>
             {loading ? (
               <ProjectsTableSkeleton />
             ) : allRows.length === 0 ? (
               <ProjectsEmptyState />
-            ) : (
+            ) : groupBy === 'none' ? (
               <ReviewTableCard
                 rows={visibleProjects}
                 showBrand
@@ -593,6 +689,38 @@ export function ContentToolsShell() {
                 onOpenEditingProject={(id) => setActiveEditingId(id)}
                 onOpenCalendarLink={(link) => setActiveCalendarLink(link)}
               />
+            ) : (
+              // Month-grouped mode: one ReviewTableCard per bucket so
+              // each section gets its own header + counter without
+              // needing the table to know about grouping. The card's
+              // own `sort` is suppressed (rows pre-sorted by month
+              // field) but the header still passes `sort` so column
+              // labels render the same.
+              <div className="space-y-6">
+                {monthGroups.map((group) => (
+                  <section key={group.key ?? 'no-date'} className="space-y-2">
+                    <div className="flex items-center justify-between gap-3 px-1">
+                      <h2 className="text-base font-semibold text-text-primary">
+                        {group.label}
+                      </h2>
+                      <span className="text-xs text-text-muted">
+                        {group.rows.length} {group.rows.length === 1 ? 'project' : 'projects'}
+                      </span>
+                    </div>
+                    <ReviewTableCard
+                      rows={group.rows}
+                      showBrand
+                      onPatchLink={patchLink}
+                      onArchiveLink={archiveLink}
+                      sort={sort}
+                      onSortChange={setSort}
+                      hideColumns={PROJECT_TAB_HIDE[activeProjectTab]}
+                      onOpenEditingProject={(id) => setActiveEditingId(id)}
+                      onOpenCalendarLink={(link) => setActiveCalendarLink(link)}
+                    />
+                  </section>
+                ))}
+              </div>
             )}
           </>
         )}

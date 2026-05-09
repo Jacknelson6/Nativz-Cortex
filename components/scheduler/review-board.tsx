@@ -102,6 +102,14 @@ export interface ReviewLinkRow {
   /** Count of calendar sends (initial + revised). */
   send_count: number;
   /**
+   * Editing-project approval timestamp. NULL on calendar rows (calendar
+   * share links don't carry a project-level approved-at; their approval
+   * lives per-post). Drives the "group by approved month" mode on the
+   * content-tools shell so an editing project shows up under the month
+   * the deliverable was actually green-lit, not when it was created.
+   */
+  approved_at?: string | null;
+  /**
    * Discriminator so a single table can render both calendar share-link
    * rows and editing-project rows side-by-side. `'calendar'` (or
    * undefined for legacy callers) means the row is keyed on a
