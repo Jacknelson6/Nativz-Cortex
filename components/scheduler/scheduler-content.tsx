@@ -9,7 +9,7 @@ import type { PostEditorData } from '@/components/scheduler/post-editor';
 import { useSchedulerData } from '@/components/scheduler/hooks/use-scheduler-data';
 import type { CalendarPost, CalendarViewMode, MediaItem, ClientOption } from '@/components/scheduler/types';
 import { Button } from '@/components/ui/button';
-import { Plus, Link2, Share2, Wand2, Send, FolderInput } from 'lucide-react';
+import { Plus, Link2, Share2, Wand2, Send, FolderInput, CopyPlus } from 'lucide-react';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 
 const PostEditor = dynamic(() => import('@/components/scheduler/post-editor').then(m => ({ default: m.PostEditor })));
@@ -17,6 +17,7 @@ const ConnectAccountDialog = dynamic(() => import('@/components/scheduler/connec
 const SharePostsDialog = dynamic(() => import('@/components/scheduler/share-posts-dialog').then(m => ({ default: m.SharePostsDialog })));
 const AutoScheduleDialog = dynamic(() => import('@/components/scheduler/auto-schedule-dialog').then(m => ({ default: m.AutoScheduleDialog })));
 const NewDropDialog = dynamic(() => import('@/components/scheduler/new-drop-dialog').then(m => ({ default: m.NewDropDialog })));
+const AddPlatformDialog = dynamic(() => import('@/components/scheduler/add-platform-dialog').then(m => ({ default: m.AddPlatformDialog })));
 import { toast } from 'sonner';
 
 /**
@@ -100,6 +101,7 @@ function SchedulerInner({
   const [showShare, setShowShare] = useState(false);
   const [showAutoSchedule, setShowAutoSchedule] = useState(false);
   const [showNewDrop, setShowNewDrop] = useState(false);
+  const [showAddPlatform, setShowAddPlatform] = useState(false);
   const [showUnusedOnly, setShowUnusedOnly] = useState(false);
 
   // Post editor state
@@ -422,6 +424,16 @@ function SchedulerInner({
               <Button
                 variant="ghost"
                 size="sm"
+                onClick={() => setShowAddPlatform(true)}
+                disabled={!selectedClientId || posts.length === 0 || profiles.length === 0}
+                title="Fan existing posts out to a newly-connected social profile"
+              >
+                <CopyPlus size={14} />
+                Add platform
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setShowNewDrop(true)}
                 disabled={!selectedClientId}
               >
@@ -542,6 +554,19 @@ function SchedulerInner({
             setShowNewDrop(false);
             toast.success('Content calendar created — analysing content…');
             router.push(`/calendar/${id}`);
+          }}
+        />
+      )}
+
+      {isAdmin && showAddPlatform && selectedClientId && (
+        <AddPlatformDialog
+          open={showAddPlatform}
+          onClose={() => setShowAddPlatform(false)}
+          posts={posts}
+          profiles={profiles}
+          onComplete={() => {
+            const { start, end } = getMonthGridRange(currentDate);
+            fetchPosts(selectedClientId, start, end);
           }}
         />
       )}
