@@ -8,6 +8,7 @@ import {
 } from '@/lib/posting/zernio-reconcile';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import { autoBackfillNewPlatform } from '@/lib/scheduler/auto-backfill-platform';
 
 const PLATFORM_LABEL: Record<string, string> = {
   tiktok: 'TikTok',
@@ -280,7 +281,7 @@ export async function POST(request: NextRequest) {
           // client retapping the screen. No-op if there's no live onboarding.
           const { data: prof } = await adminClient
             .from('social_profiles')
-            .select('platform, username, client_id, invite_chat_pinged_at, clients(name, agency, chat_webhook_url)')
+            .select('id, platform, username, client_id, invite_chat_pinged_at, clients(name, agency, chat_webhook_url)')
             .eq('late_account_id', accountId)
             .maybeSingle();
           if (prof?.client_id && prof?.platform) {
@@ -294,6 +295,24 @@ export async function POST(request: NextRequest) {
               });
             } catch (err) {
               console.error('[zernio-webhook] markPlatformConnection (connected) failed:', err);
+            }
+
+            // Auto-backfill the new platform onto every not-yet-shipped
+            // scheduled/draft post so the client's calendar fans out
+            // automatically without anyone touching the UI. Posts that
+            // are already in Zernio's hands (`late_post_id` set) are
+            // skipped — those need cloning, which is destructive enough
+            // to leave to the manual Add platform dialog.
+            let autoBackfillCount = 0;
+            try {
+              const result = await autoBackfillNewPlatform({
+                admin: adminClient,
+                clientId: prof.client_id as string,
+                socialProfileId: prof.id as string,
+              });
+              autoBackfillCount = result.inserted;
+            } catch (err) {
+              console.error('[zernio-webhook] auto-backfill failed:', err);
             }
 
             // Ping the SMM team in the client's Google Chat space so they
@@ -325,10 +344,14 @@ export async function POST(request: NextRequest) {
                 const handle = username ? `@${username}` : 'their account';
                 const brand = client?.name ?? 'Unknown client';
 
+                const backfillSuffix =
+                  autoBackfillCount > 0
+                    ? ` Auto-added to ${autoBackfillCount} upcoming post${autoBackfillCount === 1 ? '' : 's'}.`
+                    : '';
                 postToGoogleChatSafe(
                   webhookUrl,
                   {
-                    text: `🔌 *${brand}* connected ${platformLabel} as ${handle}. Open the scheduler → Add platform to fan existing posts onto it.`,
+                    text: `🔌 *${brand}* connected ${platformLabel} as ${handle}.${backfillSuffix} Open the scheduler → Add platform to fan past posts onto it.`,
                   },
                   `zernio-webhook:account.connected:${accountId}`,
                 );

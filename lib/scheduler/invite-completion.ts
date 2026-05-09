@@ -15,6 +15,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
+import { autoBackfillNewPlatform } from '@/lib/scheduler/auto-backfill-platform';
 
 const PLATFORM_LABEL: Record<string, string> = {
   tiktok: 'TikTok',
@@ -82,10 +83,38 @@ export async function handleInviteCompletion(opts: {
     .maybeSingle();
   if (!client) return;
 
+  // Look up the social profile id so we can run the auto-backfill (also
+  // run from the Zernio webhook; idempotent via the unique index).
+  // Doing it here too means the chat message can include the count.
+  const { data: profileRow } = await admin
+    .from('social_profiles')
+    .select('id')
+    .eq('client_id', clientId)
+    .eq('platform', platform)
+    .maybeSingle();
+
+  let backfillCount = 0;
+  if (profileRow?.id) {
+    try {
+      const result = await autoBackfillNewPlatform({
+        admin,
+        clientId,
+        socialProfileId: profileRow.id as string,
+      });
+      backfillCount = result.inserted;
+    } catch (err) {
+      console.error('[invite-completion] auto-backfill failed:', err);
+    }
+  }
+
   const brandName = client.name as string;
   const platformLabel = PLATFORM_LABEL[platform] ?? platform;
   const handle = username ? `@${username}` : 'their account';
-  const summary = `${brandName} just reconnected ${platformLabel} as ${handle}.`;
+  const backfillSuffix =
+    backfillCount > 0
+      ? ` Auto-added to ${backfillCount} upcoming post${backfillCount === 1 ? '' : 's'}.`
+      : '';
+  const summary = `${brandName} just reconnected ${platformLabel} as ${handle}.${backfillSuffix}`;
 
   // Resolver: client's own webhook → agency miscellaneous catchall → ops env.
   const resolved = await resolveTeamChatWebhook(admin, {
