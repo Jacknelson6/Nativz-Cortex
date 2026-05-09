@@ -280,7 +280,7 @@ export async function POST(request: NextRequest) {
           // client retapping the screen. No-op if there's no live onboarding.
           const { data: prof } = await adminClient
             .from('social_profiles')
-            .select('platform, username, client_id, clients(name, agency, chat_webhook_url)')
+            .select('platform, username, client_id, invite_chat_pinged_at, clients(name, agency, chat_webhook_url)')
             .eq('late_account_id', accountId)
             .maybeSingle();
           if (prof?.client_id && prof?.platform) {
@@ -301,34 +301,40 @@ export async function POST(request: NextRequest) {
             // (calendar header → Add platform). Falls back to the agency
             // miscellaneous-catchall webhook, then OPS_GOOGLE_CHAT_WEBHOOK.
             //
-            // Note: an invite-link OAuth path also pings via
-            // `handleInviteCompletion`, so a client connecting via invite
-            // gets two messages (one "client tapped invite", one "Zernio
-            // confirmed account active"). Acceptable for now — they read
-            // as different events.
-            try {
-              const client = prof.clients as { name?: string; agency?: string | null; chat_webhook_url?: string | null } | null;
-              const webhookUrl =
-                (await resolveTeamChatWebhook(adminClient, {
-                  primaryUrl: client?.chat_webhook_url ?? null,
-                  agency: client?.agency ?? null,
-                })) ?? process.env.OPS_GOOGLE_CHAT_WEBHOOK ?? null;
+            // Dedup: invite-link OAuth path already fires its own chat
+            // ping via `handleInviteCompletion`, which stamps
+            // `invite_chat_pinged_at` on the profile. Skip if that stamp
+            // is within the last 5 min — the invite ping is the
+            // authoritative one for self-serve flows. In-app notification
+            // (below) still fires regardless so admins not in Chat see it.
+            const recentInvitePing =
+              prof.invite_chat_pinged_at &&
+              Date.now() - new Date(prof.invite_chat_pinged_at as string).getTime() < 5 * 60_000;
+            if (!recentInvitePing) {
+              try {
+                const client = prof.clients as { name?: string; agency?: string | null; chat_webhook_url?: string | null } | null;
+                const webhookUrl =
+                  (await resolveTeamChatWebhook(adminClient, {
+                    primaryUrl: client?.chat_webhook_url ?? null,
+                    agency: client?.agency ?? null,
+                  })) ?? process.env.OPS_GOOGLE_CHAT_WEBHOOK ?? null;
 
-              const platform = prof.platform as string;
-              const platformLabel = PLATFORM_LABEL[platform] ?? platform;
-              const username = (prof.username as string | null) ?? '';
-              const handle = username ? `@${username}` : 'their account';
-              const brand = client?.name ?? 'Unknown client';
+                const platform = prof.platform as string;
+                const platformLabel = PLATFORM_LABEL[platform] ?? platform;
+                const username = (prof.username as string | null) ?? '';
+                const handle = username ? `@${username}` : 'their account';
+                const brand = client?.name ?? 'Unknown client';
 
-              postToGoogleChatSafe(
-                webhookUrl,
-                {
-                  text: `🔌 *${brand}* connected ${platformLabel} as ${handle}. Open the scheduler → Add platform to fan existing posts onto it.`,
-                },
-                `zernio-webhook:account.connected:${accountId}`,
-              );
-            } catch (err) {
-              console.error('[zernio-webhook] account.connected chat ping failed:', err);
+                postToGoogleChatSafe(
+                  webhookUrl,
+                  {
+                    text: `🔌 *${brand}* connected ${platformLabel} as ${handle}. Open the scheduler → Add platform to fan existing posts onto it.`,
+                  },
+                  `zernio-webhook:account.connected:${accountId}`,
+                );
+              } catch (err) {
+                console.error('[zernio-webhook] account.connected chat ping failed:', err);
+              }
             }
           }
         }

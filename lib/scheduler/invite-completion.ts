@@ -98,4 +98,14 @@ export async function handleInviteCompletion(opts: {
     { text: `🔌 ${summary}` },
     `connection-invite:${platform}:${clientId}`,
   );
+
+  // Stamp the social profile so the Zernio account.connected webhook can
+  // see we already pinged and skip its own chat message. The webhook
+  // typically lands a few seconds after this — the stamp is read with a
+  // 5-minute window over there.
+  await admin
+    .from('social_profiles')
+    .update({ invite_chat_pinged_at: new Date().toISOString() })
+    .eq('client_id', clientId)
+    .eq('platform', platform);
 }
