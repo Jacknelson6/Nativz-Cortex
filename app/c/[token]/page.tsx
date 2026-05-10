@@ -2798,7 +2798,7 @@ function PostCard({
       )}
 
       {showHandles && (
-        <div data-tour="cal-collab" className="contents">
+        <div data-tour="cal-collab" className="space-y-2">
           <HandleEditor
             label="Tagged"
             icon={Tag}
