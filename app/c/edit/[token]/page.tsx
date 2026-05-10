@@ -30,6 +30,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import { thumbUrl } from '@/lib/calendar/thumb-url';
+import { ShareTour } from '@/components/share/share-tour';
 
 // Load MuxPlayer client-only; the custom element registration explodes
 // during SSR.
@@ -623,6 +624,7 @@ function SharedReviewView({
                     setApproveAllOpen(true);
                   }}
                   disabled={approvingAll}
+                  data-tour="approve-all"
                   className="inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-status-success px-3.5 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {approvingAll ? (
@@ -724,6 +726,8 @@ function SharedReviewView({
           )}
         </div>
       </main>
+
+      <ShareTour enabled={!nameModalOpen && data.videos.length > 0} />
 
       <Dialog
         open={nameModalOpen}
@@ -1606,6 +1610,7 @@ function VideoCard({
             type="button"
             onClick={() => submit('approved')}
             disabled={submitting || uploading}
+            data-tour="approve"
             className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-status-success px-4 py-2.5 text-sm font-medium text-white shadow-[var(--shadow-card)] transition-all hover:opacity-90 hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 sm:flex-none sm:py-2"
           >
             <CheckCircle size={14} /> Approve
@@ -1616,6 +1621,7 @@ function VideoCard({
           onClick={() => setComposerExpanded((v) => !v)}
           disabled={submitting || uploading}
           aria-expanded={composerExpanded}
+          data-tour="request-change"
           className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-50 sm:flex-none sm:py-2 ${
             composerExpanded
               ? 'border-accent/50 bg-accent-surface text-accent-text'
