@@ -1013,15 +1013,22 @@ async function handleGet(request: NextRequest) {
     // back to 'published'. Only acts on rows whose failure_reason matches a
     // timeout pattern; real failures are left alone. Only flips failed →
     // published, never the reverse.
+    //
+    // Window is 7 days: the previous 24h cap meant any leg the cron didn't
+    // get to within a day fell out of view forever (the
+    // `scripts/reconcile-stale-timeouts.ts` backfill exists exactly for that
+    // reason). 7 days is wide enough that Zernio's authoritative state has
+    // settled on every platform, and the limit caps cost on the hot path.
     try {
-      const cutoffIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const cutoffIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const { data: reconcileCandidates } = await adminClient
         .from('scheduled_posts')
         .select('id')
         .in('status', ['partially_failed', 'failed'])
         .gte('updated_at', cutoffIso)
         .not('late_post_id', 'is', null)
-        .limit(10);
+        .order('updated_at', { ascending: false })
+        .limit(25);
 
       for (const c of reconcileCandidates ?? []) {
         const candidateId = (c as { id: string }).id;
