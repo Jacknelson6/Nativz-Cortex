@@ -17,6 +17,10 @@ import { toast } from 'sonner';
 import type { CalendarPost, ConnectedProfile, MediaItem } from './types';
 import { STATUS_CONFIG, PLATFORM_ICONS, DEFAULT_POSTING_TIME } from './types';
 import type { PostStatus, SocialPlatform } from '@/lib/types/scheduler';
+import {
+  mergeCaptionAndHashtags,
+  splitMergedCaption,
+} from '@/lib/scheduler/caption-hashtags';
 
 interface PostEditorProps {
   open: boolean;
@@ -89,7 +93,6 @@ export function PostEditor({
 }: PostEditorProps) {
   const isAdmin = mode === 'admin';
   const [caption, setCaption] = useState('');
-  const [hashtags, setHashtags] = useState<string[]>([]);
   const [selectedProfiles, setSelectedProfiles] = useState<string[]>([]);
   const [publishMode, setPublishMode] = useState<'draft' | 'schedule'>('draft');
   const [scheduledDate, setScheduledDate] = useState('');
@@ -169,8 +172,12 @@ export function PostEditor({
   // Initialize from existing post or defaults
   useEffect(() => {
     if (post) {
-      setCaption(post.caption ?? '');
-      setHashtags(post.hashtags ?? []);
+      // Hashtags are stored in their own DB column for Zernio, but the
+      // textarea presents them inline so admins read the same blob the
+      // client will see on the share link. We re-split on save.
+      setCaption(
+        mergeCaptionAndHashtags({ caption: post.caption, hashtags: post.hashtags }),
+      );
       setSelectedProfiles(post.platforms.map(p => p.profile_id));
       setPublishMode(post.status === 'draft' ? 'draft' : 'schedule');
       setCoverImageUrl(post.cover_image_url ?? null);
@@ -201,7 +208,6 @@ export function PostEditor({
       }
     } else {
       setCaption('');
-      setHashtags([]);
       setSelectedProfiles(profiles.map(p => p.id));
       setPublishMode('schedule');
       setTaggedPeople([]);
@@ -259,6 +265,14 @@ export function PostEditor({
   const isEditing = !!post;
   const postStatus = post?.status ?? 'draft';
   const statusConfig = STATUS_CONFIG[postStatus];
+  // Once a post has gone out (or is mid-flight), the caption is frozen on
+  // the platforms — editing it here would silently drift from the live
+  // copy. Mirror the published-lock UX from the share-link surfaces so the
+  // admin modal tells the same story.
+  const isPublished =
+    postStatus === 'published' ||
+    postStatus === 'publishing' ||
+    postStatus === 'partially_failed';
 
   async function handleSave(asDraft: boolean) {
     setSaving(true);
@@ -316,10 +330,14 @@ export function PostEditor({
         overrides.tiktok_allow_stitch = ttAllowStitch;
       }
 
+      // Pull hashtags back out of the merged textarea so the publisher
+      // gets the split fields it expects.
+      const { captionText, hashtags: parsedHashtags } = splitMergedCaption(caption);
+
       await onSave({
         id: post?.id,
-        caption,
-        hashtags,
+        caption: captionText,
+        hashtags: parsedHashtags,
         scheduled_at,
         status: asDraft ? 'draft' : 'scheduled',
         platform_profile_ids: selectedProfiles,
@@ -755,21 +773,32 @@ export function PostEditor({
                   onChange={(e) => setCaption(e.target.value)}
                   placeholder="Write your caption..."
                   rows={5}
-                  className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text resize-none"
+                  readOnly={isPublished}
+                  disabled={isPublished}
+                  className={`w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent-text resize-none ${
+                    isPublished ? 'opacity-60 cursor-not-allowed' : ''
+                  }`}
                 />
-                <div className="flex items-center justify-between mt-1.5">
-                  <button
-                    onClick={handleImproveCaption}
-                    disabled={aiLoading}
-                    className="flex items-center gap-1 text-xs text-accent-text hover:text-accent-text/80 transition-colors cursor-pointer disabled:opacity-50"
-                  >
-                    <Sparkles size={12} />
-                    {aiLoading ? 'Improving...' : caption ? 'Improve this caption' : 'Generate caption'}
-                  </button>
-                  <span className={`text-[10px] ${caption.length > activeLimit ? 'text-red-400' : 'text-text-muted'}`}>
-                    {caption.length}/{activeLimit}
-                  </span>
-                </div>
+                {isPublished ? (
+                  <div className="mt-1.5 flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-400">
+                    <CheckCircle2 size={14} className="shrink-0" />
+                    <span>Published. Caption is locked once a post goes live.</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between mt-1.5">
+                    <button
+                      onClick={handleImproveCaption}
+                      disabled={aiLoading}
+                      className="flex items-center gap-1 text-xs text-accent-text hover:text-accent-text/80 transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      <Sparkles size={12} />
+                      {aiLoading ? 'Improving...' : caption ? 'Improve this caption' : 'Generate caption'}
+                    </button>
+                    <span className={`text-[10px] ${caption.length > activeLimit ? 'text-red-400' : 'text-text-muted'}`}>
+                      {caption.length}/{activeLimit}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Saved captions + more options */}
@@ -1139,7 +1168,7 @@ export function PostEditor({
             )}
             <GlassButton
               onClick={() => handleSave(publishMode === 'draft')}
-              disabled={saving || selectedProfiles.length === 0}
+              disabled={saving || selectedProfiles.length === 0 || isPublished}
             >
               {saving ? 'Saving...' : publishMode === 'draft' ? 'Save as draft' : 'Schedule post'}
             </GlassButton>

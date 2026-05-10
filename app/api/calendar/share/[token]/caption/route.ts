@@ -1,65 +1,16 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
+import {
+  mergeCaptionAndHashtags,
+  splitMergedCaption,
+} from '@/lib/scheduler/caption-hashtags';
 
 const BodySchema = z.object({
   postId: z.string().uuid(),
   authorName: z.string().min(1).max(80),
   caption: z.string().max(5000),
 });
-
-/**
- * Split a user-edited caption blob into the body text + the hashtag column.
- *
- * The publisher cron (`/api/cron/publish-posts`) and Zernio expect hashtags
- * as a separate array, but the share-link UI presents them merged so
- * reviewers can edit one field. We pull only the *trailing* block of
- * pure-hashtag lines (i.e. lines whose tokens all start with `#`) and
- * leave any mid-sentence `#word` inline. That way "Going #live tomorrow"
- * stays in the caption text, but a bottom block like
- *
- *   This week we shipped X.
- *
- *   #marketing #shorts #fyp
- *
- * splits cleanly with `["marketing", "shorts", "fyp"]` in the array and
- * the body text on top.
- */
-function splitMergedCaption(merged: string): { captionText: string; hashtags: string[] } {
-  const lines = merged.split('\n');
-  let cut = lines.length;
-  let i = lines.length - 1;
-  // Skip pure-blank trailing lines.
-  while (i >= 0 && lines[i].trim() === '') i--;
-  while (i >= 0) {
-    const trimmed = lines[i].trim();
-    if (trimmed === '') {
-      i--;
-      continue;
-    }
-    const tokens = trimmed.split(/\s+/);
-    if (tokens.every((t) => /^#\w+$/.test(t))) {
-      cut = i;
-      i--;
-    } else {
-      break;
-    }
-  }
-  const trailing = lines.slice(cut).join(' ');
-  const seen = new Set<string>();
-  const hashtags: string[] = [];
-  for (const m of trailing.matchAll(/#(\w+)/g)) {
-    const key = m[1].toLowerCase();
-    if (!seen.has(key)) {
-      seen.add(key);
-      hashtags.push(m[1]);
-    }
-  }
-  return {
-    captionText: lines.slice(0, cut).join('\n').trimEnd(),
-    hashtags,
-  };
-}
 
 export async function POST(
   req: Request,
@@ -109,13 +60,10 @@ export async function POST(
   // Build the previous merged form so the no-op check matches what the user
   // saw before they hit Save (otherwise re-submitting an unchanged blob with
   // hashtags would always look "changed" because we compare body-only).
-  const prevCaption = post.caption ?? '';
-  const prevHashtags = post.hashtags ?? [];
-  const previousMerged =
-    prevCaption +
-    (prevHashtags.length > 0
-      ? (prevCaption.trim().length > 0 ? '\n\n' : '') + prevHashtags.map((h) => `#${h}`).join(' ')
-      : '');
+  const previousMerged = mergeCaptionAndHashtags({
+    caption: post.caption,
+    hashtags: post.hashtags,
+  });
   if (previousMerged.trim() === newMerged) {
     return NextResponse.json({ error: 'caption unchanged' }, { status: 400 });
   }

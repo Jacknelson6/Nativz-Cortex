@@ -23,6 +23,7 @@ import type { DeliverableBalance } from '@/lib/deliverables/get-balances';
 import type { AddonSku } from '@/lib/deliverables/addon-skus';
 import { thumbUrl } from '@/lib/calendar/thumb-url';
 import { ShareTour, CALENDAR_SHARE_BEATS } from '@/components/share/share-tour';
+import { mergeCaptionAndHashtags } from '@/lib/scheduler/caption-hashtags';
 
 // Mux Player is a heavy web-component-backed React component. Dynamic-import
 // with ssr:false keeps it out of the initial server bundle and avoids
@@ -2126,12 +2127,12 @@ function PostCard({
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Hashtags live in their own DB column for the publisher pipeline, but
   // reviewers think of them as part of the caption (because that's how they
-  // read on TikTok / IG). So we present a single merged blob in the UI and
-  // let the API split it back out on save.
-  const mergedCaption =
-    post.caption + (post.hashtags.length > 0
-      ? (post.caption.trim().length > 0 ? '\n\n' : '') + post.hashtags.map((h) => `#${h}`).join(' ')
-      : '');
+  // read on TikTok / IG). Present a single merged blob in the UI and let
+  // the API split it back out on save (see lib/scheduler/caption-hashtags).
+  const mergedCaption = mergeCaptionAndHashtags({
+    caption: post.caption,
+    hashtags: post.hashtags,
+  });
   const [editingCaption, setEditingCaption] = useState(false);
   const [draftCaption, setDraftCaption] = useState(mergedCaption);
   const [savingCaption, setSavingCaption] = useState(false);
