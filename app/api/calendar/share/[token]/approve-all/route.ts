@@ -10,11 +10,10 @@ import {
   groupTitleForCalendarStart,
   syncMondayApprovalForDrop,
 } from '@/lib/monday/calendar-approval';
-import { isClientPaidMedia } from '@/lib/monday/paid-media';
 import { isMondayConfigured } from '@/lib/monday/client';
 import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
-import { getCalendarTeamWebhook } from '@/lib/chat/calendar-team-webhooks';
+import { resolvePaidMediaWebhook } from '@/lib/chat/resolve-paid-media-webhook';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
@@ -371,10 +370,11 @@ async function fireAllApprovedNotifications(
 ): Promise<void> {
   const { data: drop } = await admin
     .from('content_drops')
-    .select('id, start_date, clients(name, agency, chat_webhook_url)')
+    .select('id, client_id, start_date, clients(name, agency, chat_webhook_url)')
     .eq('id', dropId)
     .single<{
       id: string;
+      client_id: string | null;
       start_date: string;
       clients: { name: string; agency: string | null; chat_webhook_url: string | null } | null;
     }>();
@@ -392,18 +392,28 @@ async function fireAllApprovedNotifications(
     postToGoogleChatSafe(targetWebhookUrl, { text }, `all-approved ${dropId}`);
   }
 
-  if (!isMondayConfigured()) return;
-  const isPaidMedia = await isClientPaidMedia(clientName);
-  if (!isPaidMedia) return;
-  const teamWebhook = getCalendarTeamWebhook(clientName);
-  if (!teamWebhook) {
-    console.warn(`No team chat webhook mapped for ${clientName}`);
+  // Paid-media (ads team) ping. NAT-66: prefer the per-client webhook
+  // column over the legacy hard-coded map. The Monday folder enrichment
+  // only runs when we resolved via the legacy map, since that's the
+  // path that depends on Monday for the items board anyway.
+  const paidMedia = await resolvePaidMediaWebhook(admin, {
+    clientId: drop.client_id,
+    clientName,
+  });
+  if (!paidMedia) return;
+
+  if (paidMedia.source === 'legacy_map' && isMondayConfigured()) {
+    const groupTitle = groupTitleForCalendarStart(drop.start_date);
+    const item = await findContentCalendarItem(clientName, groupTitle);
+    const folder = item?.editedVideosFolderUrl;
+    const folderLine = folder ? folder : '(edited videos folder link not set in Monday)';
+    const text = `Hey all, content from ${clientName} is now approved: ${folderLine}`;
+    postToGoogleChatSafe(paidMedia.url, { text }, `paid-media-approved ${clientName}`);
     return;
   }
-  const groupTitle = groupTitleForCalendarStart(drop.start_date);
-  const item = await findContentCalendarItem(clientName, groupTitle);
-  const folder = item?.editedVideosFolderUrl;
-  const folderLine = folder ? folder : '(edited videos folder link not set in Monday)';
-  const text = `Hey all, content from ${clientName} is now approved: ${folderLine}`;
-  postToGoogleChatSafe(teamWebhook.url, { text }, `paid-media-approved ${clientName}`);
+
+  // DB-driven path: include the share link directly so the ads team can
+  // jump into Cortex without bouncing through Monday.
+  const text = `🎬 ${clientName} creatives are approved and ready to run.\n${shareUrl}`;
+  postToGoogleChatSafe(paidMedia.url, { text }, `paid-media-approved ${clientName}`);
 }

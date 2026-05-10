@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createNotification } from '@/lib/notifications/create';
 import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
+import { resolvePaidMediaWebhook } from '@/lib/chat/resolve-paid-media-webhook';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 import { getNotificationSetting } from '@/lib/notifications/get-setting';
@@ -480,6 +481,31 @@ async function postEditingChatForComment(args: {
       { text },
       `editing-all-approved ${args.link.id}`,
     );
+
+    // NAT-66: paid-media (ads team) ping. Fires only on the all-approved
+    // claim winner, mirrors the calendar flow. Independent of the strategy
+    // chat above so a brand can have one without the other.
+    try {
+      const { data: project } = await args.admin
+        .from('editing_projects')
+        .select('client_id')
+        .eq('id', args.link.project_id)
+        .maybeSingle<{ client_id: string | null }>();
+      const paidMedia = await resolvePaidMediaWebhook(args.admin, {
+        clientId: project?.client_id ?? null,
+        clientName,
+      });
+      if (paidMedia) {
+        const adsText = `🎬 ${clientName} creatives are approved and ready to run.\n${shareUrl}`;
+        postToGoogleChatSafe(
+          paidMedia.url,
+          { text: adsText },
+          `paid-media-approved-editing ${args.link.id}`,
+        );
+      }
+    } catch (err) {
+      console.error('Editing paid-media ping failed:', err);
+    }
   }
 }
 

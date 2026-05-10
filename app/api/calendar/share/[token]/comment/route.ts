@@ -15,8 +15,7 @@ import {
   groupTitleForCalendarStart,
   syncMondayApprovalForDrop,
 } from '@/lib/monday/calendar-approval';
-import { isClientPaidMedia } from '@/lib/monday/paid-media';
-import { getCalendarTeamWebhook } from '@/lib/chat/calendar-team-webhooks';
+import { resolvePaidMediaWebhook } from '@/lib/chat/resolve-paid-media-webhook';
 import {
   consumeForApproval,
   hasPriorApproval,
@@ -541,10 +540,11 @@ async function notifyAdminsOfComment(
   const [dropRes, postRes, linkRes, allPostsRes] = await Promise.all([
     admin
       .from('content_drops')
-      .select('id, start_date, clients(name, agency, chat_webhook_url)')
+      .select('id, client_id, start_date, clients(name, agency, chat_webhook_url)')
       .eq('id', dropId)
       .single<{
         id: string;
+        client_id: string | null;
         start_date: string;
         clients: { name: string; agency: string | null; chat_webhook_url: string | null } | null;
       }>(),
@@ -694,7 +694,12 @@ async function notifyAdminsOfComment(
   // doesn't double-fire either.
   if (allApprovedClaim === 'won') {
     try {
-      await pingPaidMediaTeam(clientName, drop.start_date);
+      await pingPaidMediaTeam(admin, {
+        clientId: drop.client_id,
+        clientName,
+        startDate: drop.start_date,
+        shareUrl: baseShareUrl,
+      });
     } catch (err) {
       console.error('Paid-media team ping failed:', err);
     }
@@ -703,27 +708,40 @@ async function notifyAdminsOfComment(
 
 /**
  * Ping the paid-media team's Google Chat space when a calendar gets the
- * all-clear. Sheet-driven webhook map; per-client gate from the Monday
- * Clients board "Paid Media" flag. Reuses the Monday item lookup to grab
- * the edited-videos folder URL for the message body.
+ * all-clear. NAT-66: prefer per-client `clients.paid_media_webhook_url`
+ * over the legacy hard-coded map. The Monday folder enrichment only runs
+ * when we resolved via the legacy map, since that path needs Monday for
+ * the items board anyway.
  */
-async function pingPaidMediaTeam(clientName: string, startDate: string): Promise<void> {
-  if (!isMondayConfigured()) return;
-  const isPaidMedia = await isClientPaidMedia(clientName);
-  if (!isPaidMedia) return;
+async function pingPaidMediaTeam(
+  admin: ReturnType<typeof createAdminClient>,
+  args: {
+    clientId: string | null;
+    clientName: string;
+    startDate: string;
+    shareUrl: string;
+  },
+): Promise<void> {
+  const paidMedia = await resolvePaidMediaWebhook(admin, {
+    clientId: args.clientId,
+    clientName: args.clientName,
+  });
+  if (!paidMedia) return;
 
-  const webhook = getCalendarTeamWebhook(clientName);
-  if (!webhook) {
-    console.warn(`No team chat webhook mapped for ${clientName}`);
+  if (paidMedia.source === 'legacy_map' && isMondayConfigured()) {
+    const groupTitle = groupTitleForCalendarStart(args.startDate);
+    const item = await findContentCalendarItem(args.clientName, groupTitle);
+    const folder = item?.editedVideosFolderUrl;
+    const folderLine = folder ? folder : '(edited videos folder link not set in Monday)';
+    const text = `Hey all, content from ${args.clientName} is now approved: ${folderLine}`;
+    postToGoogleChatSafe(paidMedia.url, { text }, `paid-media-approved ${args.clientName}`);
     return;
   }
 
-  const groupTitle = groupTitleForCalendarStart(startDate);
-  const item = await findContentCalendarItem(clientName, groupTitle);
-  const folder = item?.editedVideosFolderUrl;
-  const folderLine = folder ? folder : '(edited videos folder link not set in Monday)';
-  const text = `Hey all, content from ${clientName} is now approved: ${folderLine}`;
-  postToGoogleChatSafe(webhook.url, { text }, `paid-media-approved ${clientName}`);
+  // DB-driven path: include the Cortex share link so the ads team can
+  // pull thumbnails and final captions in one click.
+  const text = `🎬 ${args.clientName} creatives are approved and ready to run.\n${args.shareUrl}`;
+  postToGoogleChatSafe(paidMedia.url, { text }, `paid-media-approved ${args.clientName}`);
 }
 
 async function checkAllApproved(
