@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
+import Link from 'next/link';
 import { Sparkles, Loader2, Check, Globe, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -31,6 +32,13 @@ interface BrandProfile {
   target_audience: string | null;
   services: string[];
   topic_keywords: string[];
+  // NAT-67: free-text guidance that flows into caption-generation prompts.
+  // Distinct from the structured boilerplate (caption_cta + caption_hashtags)
+  // that's appended verbatim to every generated caption — those live on the
+  // /admin/calendar/library page and stay there.
+  caption_notes: string | null;
+  hashtag_notes: string | null;
+  cta_notes: string | null;
 }
 
 const DEFAULT_PROFILE: BrandProfile = {
@@ -50,6 +58,9 @@ const DEFAULT_PROFILE: BrandProfile = {
   target_audience: null,
   services: [],
   topic_keywords: [],
+  caption_notes: null,
+  hashtag_notes: null,
+  cta_notes: null,
 };
 
 // Common content-generation languages. Admin can still free-type via
@@ -173,6 +184,7 @@ export function BrandEssenceSection({
       <ProductsCard profile={profile} patch={patch} />
       <AliasesCard profile={profile} patch={patch} />
       <ContentGenerationCard profile={profile} patch={patch} />
+      <CaptionGuidanceCard profile={profile} patch={patch} />
       <DefaultLocationCard profile={profile} patch={patch} />
     </div>
   );
@@ -331,6 +343,58 @@ function ContentGenerationCard({
         values={profile.banned_phrases}
         onCommit={(next) => patch({ banned_phrases: next })}
         placeholder="e.g. game-changer"
+      />
+    </section>
+  );
+}
+
+function CaptionGuidanceCard({
+  profile, patch,
+}: {
+  profile: BrandProfile;
+  patch: (fields: Partial<BrandProfile>) => Promise<void>;
+}) {
+  // NAT-67: free-text notes the strategist fills in once per brand. These
+  // flow into the AI prompt for caption generation (calendar uploads,
+  // one-off ad-hoc captioning, anywhere a model writes copy for the
+  // brand). Different from the verbatim boilerplate on
+  // /admin/calendar/library — those columns are appended literally;
+  // these shape what the model writes before the boilerplate gets
+  // tacked on.
+  return (
+    <section className="rounded-xl border border-nativz-border bg-surface p-5 space-y-4">
+      <div>
+        <h3 className="text-sm font-semibold text-text-primary">Caption guidance</h3>
+        <p className="text-xs text-text-muted mt-1">
+          Free-text notes that flow into the AI prompt every time Cortex
+          writes a caption for this brand. The exact CTA and hashtags
+          appended verbatim live on the{' '}
+          <Link href="/admin/calendar/library" className="text-accent-text hover:underline">
+            caption library
+          </Link>
+          .
+        </p>
+      </div>
+      <TextareaFieldOnBlur
+        label="Caption notes"
+        placeholder="Voice, structure, hook style, banned phrases. e.g. Open with a question. Never use 'game-changer.' Keep under 150 chars before the CTA."
+        rows={4}
+        value={profile.caption_notes}
+        onCommit={(v) => patch({ caption_notes: v })}
+      />
+      <TextareaFieldOnBlur
+        label="Hashtag notes"
+        placeholder="Branded tags, banned tags, regional/niche set, count preferences. e.g. Always use #BrandName + 2-3 city tags. Never #ad. Aim for 8-12 total."
+        rows={4}
+        value={profile.hashtag_notes}
+        onCommit={(v) => patch({ hashtag_notes: v })}
+      />
+      <TextareaFieldOnBlur
+        label="CTA notes"
+        placeholder="Default CTA copy, link destinations, A/B variants. e.g. Rotate between 'Shop the link' and 'Save your seat'. Always end with the booking URL."
+        rows={4}
+        value={profile.cta_notes}
+        onCommit={(v) => patch({ cta_notes: v })}
       />
     </section>
   );

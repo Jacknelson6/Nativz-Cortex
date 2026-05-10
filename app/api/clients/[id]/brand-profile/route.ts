@@ -50,6 +50,13 @@ const patchSchema = z.object({
   // Caption boilerplate appended to every generated content-calendar caption.
   caption_cta: z.string().trim().max(500).nullable().optional(),
   caption_hashtags: z.array(z.string().trim().min(1).max(60)).max(50).optional(),
+
+  // NAT-67 caption guidance — free-text prompt context, NOT appended
+  // literally to output. Use caption_cta / caption_hashtags above for
+  // the verbatim trailing boilerplate.
+  caption_notes: z.string().trim().max(4000).nullable().optional(),
+  hashtag_notes: z.string().trim().max(4000).nullable().optional(),
+  cta_notes: z.string().trim().max(4000).nullable().optional(),
 });
 
 async function requireAdmin() {
@@ -131,6 +138,10 @@ export async function GET(
           // Caption boilerplate.
           'caption_cta',
           'caption_hashtags',
+          // NAT-67 caption guidance (free-text prompt context).
+          'caption_notes',
+          'hashtag_notes',
+          'cta_notes',
           // Metadata.
           'id',
           'created_at',

@@ -27,6 +27,11 @@ interface ClientContext {
   caption_hashtags: string[] | null;
   caption_cta_es: string | null;
   caption_hashtags_es: string[] | null;
+  // NAT-67: free-text strategist guidance, mirrored from generate-caption.ts
+  // so static / carousel posts get the same prompt context as video drops.
+  caption_notes: string | null;
+  hashtag_notes: string | null;
+  cta_notes: string | null;
 }
 
 interface SavedCaption {
@@ -53,7 +58,7 @@ export async function generateImageDropCaptions(
       .order('order_index'),
     admin
       .from('clients')
-      .select('name, industry, brand_voice, target_audience, topic_keywords, description, services, caption_cta, caption_hashtags, caption_cta_es, caption_hashtags_es')
+      .select('name, industry, brand_voice, target_audience, topic_keywords, description, services, caption_cta, caption_hashtags, caption_cta_es, caption_hashtags_es, caption_notes, hashtag_notes, cta_notes')
       .eq('id', opts.clientId)
       .single(),
     admin
@@ -223,7 +228,23 @@ function renderBrandBlock(client: ClientContext | null): string {
   if (client.topic_keywords?.length) lines.push(`Keywords: ${client.topic_keywords.join(', ')}`);
   if (client.description) lines.push(`About: ${client.description}`);
   if (client.services?.length) lines.push(`Services: ${client.services.join(', ')}`);
-  return `\n\nClient context:\n${lines.join('\n')}`;
+
+  // NAT-67: per-brand strategist guidance — same shape as the video flow
+  // in generate-caption.ts. Empty notes stay silent so the prompt doesn't
+  // bloat with placeholder headings for brands that haven't filled them in.
+  const guidance: string[] = [];
+  if (client.caption_notes?.trim()) {
+    guidance.push(`Caption guidance:\n${client.caption_notes.trim()}`);
+  }
+  if (client.hashtag_notes?.trim()) {
+    guidance.push(`Hashtag guidance:\n${client.hashtag_notes.trim()}`);
+  }
+  if (client.cta_notes?.trim()) {
+    guidance.push(`CTA guidance:\n${client.cta_notes.trim()}`);
+  }
+  const guidanceBlock = guidance.length ? `\n\n${guidance.join('\n\n')}` : '';
+
+  return `\n\nClient context:\n${lines.join('\n')}${guidanceBlock}`;
 }
 
 function renderSavedBlock(saved: SavedCaption[]): string {
