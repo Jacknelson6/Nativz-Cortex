@@ -1,8 +1,9 @@
-import { CalendarDays } from 'lucide-react';
+import { CalendarDays, CheckCircle2 } from 'lucide-react';
 import type { SectionTabDef } from '@/components/admin/section-tabs';
 
 export const ACCOUNTING_TABS = [
   { slug: 'periods', label: 'Periods', icon: <CalendarDays size={13} /> },
+  { slug: 'approved', label: 'Approved creatives', icon: <CheckCircle2 size={13} /> },
 ] as const satisfies readonly SectionTabDef[];
 
 export type AccountingTabSlug = (typeof ACCOUNTING_TABS)[number]['slug'];
