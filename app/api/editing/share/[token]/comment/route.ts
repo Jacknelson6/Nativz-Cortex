@@ -457,38 +457,45 @@ async function postEditingChatForComment(args: {
   }
   const linkedShareUrl = `${shareUrl}${videoAnchor}`;
 
+  // Per-event chat ping. Independent of the all-approved ping below —
+  // disabling `editing_comment_chat` must NOT kill the celebration post.
+  // (Used to early-return here, which silenced the all-approved block
+  // whenever the per-comment toggle was off.)
   if (
     args.finalStatus === 'comment' ||
     args.finalStatus === 'changes_requested' ||
     args.finalStatus === 'approved'
   ) {
-    const setting = await getNotificationSetting('editing_comment_chat');
-    if (!setting.enabled) return;
-    const verb =
-      args.finalStatus === 'changes_requested'
-        ? 'requested changes'
-        : args.finalStatus === 'approved'
-          ? 'approved'
-          : 'commented';
-    const trimmed = args.content.trim();
-    const quotedBlock = trimmed
-      ? '\n' +
-        trimmed
-          .split('\n')
-          .map((line) => `> ${line}`)
-          .join('\n')
-      : '';
-    const attachmentBlock =
-      args.attachments.length > 0
-        ? '\n\n' +
-          args.attachments.map((a) => `📎 ${a.filename}\n${a.url}`).join('\n\n')
+    const commentSetting = await getNotificationSetting('editing_comment_chat');
+    if (commentSetting.enabled) {
+      const verb =
+        args.finalStatus === 'changes_requested'
+          ? 'requested changes'
+          : args.finalStatus === 'approved'
+            ? 'approved'
+            : 'commented';
+      const trimmed = args.content.trim();
+      const quotedBlock = trimmed
+        ? '\n' +
+          trimmed
+            .split('\n')
+            .map((line) => `> ${line}`)
+            .join('\n')
         : '';
-    const text = `*${args.authorName} ${verb} on ${clientName} · ${projectName}*${quotedBlock}${attachmentBlock}\n\n${linkedShareUrl}`;
-    postToGoogleChatSafe(
-      webhookUrl,
-      { text },
-      `editing-comment ${args.link.id}`,
-    );
+      const attachmentBlock =
+        args.attachments.length > 0
+          ? '\n\n' +
+            args.attachments
+              .map((a) => `📎 ${a.filename}\n${a.url}`)
+              .join('\n\n')
+          : '';
+      const text = `*${args.authorName} ${verb} on ${clientName} · ${projectName}*${quotedBlock}${attachmentBlock}\n\n${linkedShareUrl}`;
+      postToGoogleChatSafe(
+        webhookUrl,
+        { text },
+        `editing-comment ${args.link.id}`,
+      );
+    }
   }
 
   if (args.allApprovedClaim === 'won') {
