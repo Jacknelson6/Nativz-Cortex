@@ -314,6 +314,20 @@ const BenchmarkCard = memo(function BenchmarkCard({
                       dot={false}
                     />
                   ))}
+                  {/* "Your account" overlay — rendered last so it sits on top
+                      of the competitor lines, with a distinct accent stroke
+                      and slightly thicker weight so the read at a glance is
+                      "us vs. them". Skipped when the client has no follower
+                      data so the chart doesn't show a flat zero line. */}
+                  {clientSeries.length > 0 && (
+                    <Line
+                      type="monotone"
+                      dataKey={CLIENT_SERIES_KEY}
+                      stroke="var(--accent-text)"
+                      strokeWidth={3}
+                      dot={false}
+                    />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
             </div>
