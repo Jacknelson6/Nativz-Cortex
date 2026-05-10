@@ -707,34 +707,50 @@ export function PostEditor({
 
             {/* Right: Form fields */}
             <div className="flex-1 min-w-0">
-              {/* Profile selector */}
+              {/* Profile selector — each chip toggles whether this post
+                  publishes to that connected account. Once the post has
+                  shipped (any status past 'scheduled'), legs are frozen
+                  and the chips become read-only so we don't accidentally
+                  drop a leg's published state on save. */}
               <div className="px-5 py-3 border-b border-nativz-border">
                 <label className="text-xs font-medium text-text-muted mb-1.5 block">Post to</label>
                 <div className="flex flex-wrap gap-2">
                   {profiles.length === 0 ? (
                     <p className="text-xs text-text-muted">No accounts connected.</p>
                   ) : (
-                    profiles.map(profile => (
-                      <button
-                        key={profile.id}
-                        onClick={() => toggleProfile(profile.id)}
-                        className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs border transition-colors cursor-pointer ${
-                          selectedProfiles.includes(profile.id)
-                            ? 'border-accent-text bg-accent-surface text-accent-text'
-                            : 'border-nativz-border text-text-muted hover:border-text-secondary'
-                        }`}
-                      >
-                        {profile.avatar_url ? (
-                          <img src={profile.avatar_url} alt="" className="w-4 h-4 rounded-full" />
-                        ) : (
-                          <div className="w-4 h-4 rounded-full bg-surface-hover" />
-                        )}
-                        <span>{profile.username}</span>
-                        <span className="text-[10px] opacity-60">{PLATFORM_ICONS[profile.platform]}</span>
-                      </button>
-                    ))
+                    profiles.map(profile => {
+                      const selected = selectedProfiles.includes(profile.id);
+                      return (
+                        <button
+                          key={profile.id}
+                          onClick={() => !isPublished && toggleProfile(profile.id)}
+                          disabled={isPublished}
+                          aria-pressed={selected}
+                          className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs border transition-colors ${
+                            isPublished ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'
+                          } ${
+                            selected
+                              ? 'border-accent-text bg-accent-surface text-accent-text'
+                              : 'border-nativz-border text-text-muted hover:border-text-secondary'
+                          }`}
+                        >
+                          {profile.avatar_url ? (
+                            <img src={profile.avatar_url} alt="" className="w-4 h-4 rounded-full" />
+                          ) : (
+                            <div className="w-4 h-4 rounded-full bg-surface-hover" />
+                          )}
+                          <span>{profile.username}</span>
+                          <span className="text-[10px] opacity-60">{PLATFORM_ICONS[profile.platform]}</span>
+                        </button>
+                      );
+                    })
                   )}
                 </div>
+                {!isPublished && profiles.length > 0 && (
+                  <p className="mt-1.5 text-[10px] text-text-muted">
+                    Toggle a chip to add or remove this account from the post. Legs that already published stay locked.
+                  </p>
+                )}
               </div>
 
               {/* Publish mode + date/time */}
