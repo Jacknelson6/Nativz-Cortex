@@ -383,6 +383,26 @@ export async function POST(
       } catch (err) {
         console.error('Editing comment chat ping failed:', err);
       }
+
+      // NAT-66: paid-media ping fires INDEPENDENTLY of the strategy chat
+      // path above. A brand can have a paid-media webhook set without
+      // having a strategy webhook (or vice-versa), and the ads team alert
+      // must NOT be silenced when `editing_all_approved_chat` is off —
+      // that setting governs strategy-chat noise, not the ads handoff.
+      // Gated solely by the all-approved claim winner so we don't double-
+      // post on concurrent approvals.
+      if (allApprovedClaim === 'won') {
+        try {
+          await pingPaidMediaForEditingApproval({
+            admin,
+            projectId: link.project_id,
+            linkId: link.id,
+            token,
+          });
+        } catch (err) {
+          console.error('Editing paid-media ping failed:', err);
+        }
+      }
     });
   }
 
@@ -481,32 +501,52 @@ async function postEditingChatForComment(args: {
       { text },
       `editing-all-approved ${args.link.id}`,
     );
-
-    // NAT-66: paid-media (ads team) ping. Fires only on the all-approved
-    // claim winner, mirrors the calendar flow. Independent of the strategy
-    // chat above so a brand can have one without the other.
-    try {
-      const { data: project } = await args.admin
-        .from('editing_projects')
-        .select('client_id')
-        .eq('id', args.link.project_id)
-        .maybeSingle<{ client_id: string | null }>();
-      const paidMedia = await resolvePaidMediaWebhook(args.admin, {
-        clientId: project?.client_id ?? null,
-        clientName,
-      });
-      if (paidMedia) {
-        const adsText = `🎬 ${clientName} creatives are approved and ready to run.\n${shareUrl}`;
-        postToGoogleChatSafe(
-          paidMedia.url,
-          { text: adsText },
-          `paid-media-approved-editing ${args.link.id}`,
-        );
-      }
-    } catch (err) {
-      console.error('Editing paid-media ping failed:', err);
-    }
   }
+}
+
+/**
+ * NAT-66: paid-media (ads team) ping for the all-approved claim winner.
+ *
+ * Standalone from `postEditingChatForComment` on purpose — the strategy
+ * chat path can be silenced (no webhook, or `editing_all_approved_chat`
+ * disabled) without killing the ads handoff. Brands can configure
+ * paid-media + strategy chat independently.
+ */
+async function pingPaidMediaForEditingApproval(args: {
+  admin: ReturnType<typeof createAdminClient>;
+  projectId: string;
+  linkId: string;
+  token: string;
+}) {
+  const { data: project } = await args.admin
+    .from('editing_projects')
+    .select('client_id, clients(name, agency)')
+    .eq('id', args.projectId)
+    .maybeSingle<{
+      client_id: string | null;
+      clients: { name: string | null; agency: string | null } | null;
+    }>();
+
+  const clientName = project?.clients?.name ?? 'Client';
+  const paidMedia = await resolvePaidMediaWebhook(args.admin, {
+    clientId: project?.client_id ?? null,
+    clientName,
+  });
+  if (!paidMedia) return;
+
+  const brand = getBrandFromAgency(project?.clients?.agency ?? null);
+  const appUrl =
+    process.env.NODE_ENV !== 'production'
+      ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
+      : getCortexAppUrl(brand);
+  const shareUrl = `${appUrl}/s/${args.token}`;
+
+  const adsText = `🎬 ${clientName} creatives are approved and ready to run.\n${shareUrl}`;
+  postToGoogleChatSafe(
+    paidMedia.url,
+    { text: adsText },
+    `paid-media-approved-editing ${args.linkId}`,
+  );
 }
 
 export async function DELETE(
