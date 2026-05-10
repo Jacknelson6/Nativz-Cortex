@@ -6,6 +6,8 @@ import {
   BadgeDollarSign,
   Bell,
   Cable,
+  ChevronLeft,
+  ChevronRight,
   FileText,
   History,
   Megaphone,
@@ -373,6 +375,13 @@ export function ContentToolsShell() {
   // chosen date so rows inside a month stay in temporal order.
   const [groupBy, setGroupBy] = useState<GroupByMonth>('none');
 
+  // When grouped, the user focuses on one month at a time and pages
+  // between months with the chevrons. Stored as the bucket key
+  // (`YYYY-MM` or `null` for the no-date bucket). Auto-snaps to the
+  // most recent bucket whenever the underlying group set changes so a
+  // freshly enabled group view doesn't land on an empty month.
+  const [focusedMonthKey, setFocusedMonthKey] = useState<string | null>(null);
+
   // Month strip lives at the shell level so the pills + (future)
   // by-month row filter share a single source of truth. Defaults to
   // the current UTC month; nudged via the strip's chevrons.
@@ -526,6 +535,18 @@ export function ContentToolsShell() {
       }),
     }));
   }, [visibleProjects, groupBy]);
+
+  // Resolve the active month bucket from `focusedMonthKey`, falling
+  // back to the newest group when the stored key isn't in the current
+  // set (group field switched, tab changed, or first paint after
+  // enabling group mode). The fallback is computed during render so
+  // chevrons always operate against the freshest group list.
+  const focusedGroupIndex = useMemo(() => {
+    if (monthGroups.length === 0) return -1;
+    const idx = monthGroups.findIndex((g) => g.key === focusedMonthKey);
+    return idx >= 0 ? idx : 0;
+  }, [monthGroups, focusedMonthKey]);
+  const focusedGroup = focusedGroupIndex >= 0 ? monthGroups[focusedGroupIndex] : null;
 
   /**
    * Optimistic patch. The discriminator on the row id (`editing:<uuid>`)
@@ -689,38 +710,68 @@ export function ContentToolsShell() {
                 onOpenEditingProject={(id) => setActiveEditingId(id)}
                 onOpenCalendarLink={(link) => setActiveCalendarLink(link)}
               />
-            ) : (
-              // Month-grouped mode: one ReviewTableCard per bucket so
-              // each section gets its own header + counter without
-              // needing the table to know about grouping. The card's
-              // own `sort` is suppressed (rows pre-sorted by month
-              // field) but the header still passes `sort` so column
-              // labels render the same.
-              <div className="space-y-6">
-                {monthGroups.map((group) => (
-                  <section key={group.key ?? 'no-date'} className="space-y-2">
-                    <div className="flex items-center justify-between gap-3 px-1">
-                      <h2 className="text-base font-semibold text-text-primary">
-                        {group.label}
-                      </h2>
-                      <span className="text-xs text-text-muted">
-                        {group.rows.length} {group.rows.length === 1 ? 'project' : 'projects'}
+            ) : focusedGroup ? (
+              // Month-grouped mode: focus a single month and page between
+              // them with the chevrons so the page reads like a
+              // list-view calendar (one batch at a time, not a giant
+              // scroll). The card's own `sort` is suppressed (rows
+              // pre-sorted by month field) but the header still passes
+              // `sort` so column labels render the same.
+              <section className="space-y-2">
+                <div className="flex items-center justify-between gap-3 px-1">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = monthGroups[focusedGroupIndex + 1];
+                        if (next) setFocusedMonthKey(next.key);
+                      }}
+                      disabled={focusedGroupIndex >= monthGroups.length - 1}
+                      aria-label="Older month"
+                      className="rounded-md p-1 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-text-muted"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    <h2 className="text-base font-semibold text-text-primary tabular-nums">
+                      {focusedGroup.label}
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const prev = monthGroups[focusedGroupIndex - 1];
+                        if (prev) setFocusedMonthKey(prev.key);
+                      }}
+                      disabled={focusedGroupIndex <= 0}
+                      aria-label="Newer month"
+                      className="rounded-md p-1 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-text-muted"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                  <span className="text-xs text-text-muted">
+                    {focusedGroup.rows.length}{' '}
+                    {focusedGroup.rows.length === 1 ? 'project' : 'projects'}
+                    {monthGroups.length > 1 && (
+                      <span className="ml-2 opacity-60">
+                        {focusedGroupIndex + 1} of {monthGroups.length}
                       </span>
-                    </div>
-                    <ReviewTableCard
-                      rows={group.rows}
-                      showBrand
-                      onPatchLink={patchLink}
-                      onArchiveLink={archiveLink}
-                      sort={sort}
-                      onSortChange={setSort}
-                      hideColumns={PROJECT_TAB_HIDE[activeProjectTab]}
-                      onOpenEditingProject={(id) => setActiveEditingId(id)}
-                      onOpenCalendarLink={(link) => setActiveCalendarLink(link)}
-                    />
-                  </section>
-                ))}
-              </div>
+                    )}
+                  </span>
+                </div>
+                <ReviewTableCard
+                  rows={focusedGroup.rows}
+                  showBrand
+                  onPatchLink={patchLink}
+                  onArchiveLink={archiveLink}
+                  sort={sort}
+                  onSortChange={setSort}
+                  hideColumns={PROJECT_TAB_HIDE[activeProjectTab]}
+                  onOpenEditingProject={(id) => setActiveEditingId(id)}
+                  onOpenCalendarLink={(link) => setActiveCalendarLink(link)}
+                />
+              </section>
+            ) : (
+              <ProjectsEmptyState />
             )}
           </>
         )}
