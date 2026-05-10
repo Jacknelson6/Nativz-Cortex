@@ -91,9 +91,27 @@ function colorStyles(key: string | undefined) {
   return GROUP_COLORS.find((c) => c.key === resolved) ?? GROUP_COLORS[GROUP_COLORS.length - 1];
 }
 
-function normalizeServices(raw: string[]): string[] {
+function normalizeServices(raw: string[] | null | undefined): string[] {
+  // Defensive: Postgres can hand back NULL for `services`, and an older
+  // ingestion path occasionally seeded the column as a JSON string. Both
+  // shapes used to crash the page with "n.filter is not a function" once
+  // the production bundle minified the iteration. Coerce to an array first
+  // so every downstream `.filter` / `.some` / `for..of` is safe.
+  const list: string[] = Array.isArray(raw)
+    ? raw
+    : typeof raw === 'string'
+      ? (() => {
+          try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return [];
+          }
+        })()
+      : [];
   const result = new Set<string>();
-  for (const s of raw) {
+  for (const s of list) {
+    if (typeof s !== 'string') continue;
     const lower = s.toLowerCase();
     if (STANDARD_SERVICES.includes(s as typeof STANDARD_SERVICES[number])) {
       result.add(s);
