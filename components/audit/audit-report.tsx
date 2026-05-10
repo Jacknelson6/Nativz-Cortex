@@ -605,13 +605,50 @@ export function AuditReport({ audit: initialAudit }: { audit: AuditRecord }) {
     const picked = Array.from(selectedCompetitorWebsites).map(normalize).filter(Boolean);
     const legacy = competitorUrls.map(normalize).filter(Boolean);
     const cleanedCompetitors = picked.length > 0 ? picked : legacy;
-    if (Object.keys(filled).length > 0 || cleanedCompetitors.length > 0) {
+
+    // Bundle every confirmed-social pick into the resume payload so the
+    // process route doesn't re-discover and silently swap the user's pick.
+    // Walk both LLM candidates and manually-pasted websites; only entries
+    // with at least one confirmed (non-null) platform get sent.
+    const competitorSocialsPayload: {
+      website: string;
+      brandName: string;
+      socials: Partial<Record<AuditPlatformKey, { url: string; username: string }>>;
+    }[] = [];
+    const selectedCompetitorEntries: { name: string; website: string }[] = [
+      ...suggestedCandidates
+        .filter((c) => selectedCompetitorWebsites.has(c.website))
+        .map((c) => ({ name: c.name, website: normalize(c.website) })),
+      ...manualCompetitorWebsites
+        .map((w) => ({ name: w, website: `https://${w}` }))
+        .filter((entry) => selectedCompetitorWebsites.has(entry.website)),
+    ];
+    for (const entry of selectedCompetitorEntries) {
+      const socials: Partial<Record<AuditPlatformKey, { url: string; username: string }>> = {};
+      for (const platform of ['tiktok', 'instagram', 'youtube'] as AuditPlatformKey[]) {
+        const key = `${entry.name.toLowerCase()}:${platform}`;
+        if (!confirmedSocials.has(key)) continue;
+        const candidate = confirmedSocials.get(key);
+        if (!candidate) continue; // null = explicitly cleared, skip
+        socials[platform] = { url: candidate.url, username: candidate.username };
+      }
+      if (Object.keys(socials).length > 0) {
+        competitorSocialsPayload.push({ website: entry.website, brandName: entry.name, socials });
+      }
+    }
+
+    if (
+      Object.keys(filled).length > 0 ||
+      cleanedCompetitors.length > 0 ||
+      competitorSocialsPayload.length > 0
+    ) {
       await fetch(`/api/analyze-social/${audit.id}/resume`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           social_urls: filled,
           competitor_urls: cleanedCompetitors,
+          competitor_socials: competitorSocialsPayload,
           social_goals: socialGoals,
         }),
       });

@@ -577,22 +577,90 @@ async function scrapeOneCandidate(
 }
 
 /**
+ * A single competitor's user-confirmed social picks from the
+ * confirm-platforms screen. Keyed off the website URL (normalized form)
+ * so the override list can pair up with the user's competitor URL list.
+ *
+ * `socials` only includes platforms the user explicitly confirmed — null
+ * picks (user cleared the auto-suggestion) are dropped, so an empty entry
+ * just means "no overrides for this brand, fall back to discovery."
+ */
+export interface ConfirmedCompetitorSocials {
+  website: string;
+  brandName: string;
+  socials: Partial<Record<AuditPlatform, { url: string; username: string }>>;
+}
+
+/**
  * Scrape user-provided competitor URLs directly, bypassing LLM discovery.
  * Each URL is treated as both the candidate name and website — we scrape it
  * to find social links, then pull real platform metrics as usual.
+ *
+ * If `confirmedSocials` is supplied, any URL with a matching entry skips
+ * website + Apify-search discovery entirely and scrapes the user's chosen
+ * social profiles directly. That keeps the user's pick from being silently
+ * replaced by a re-discovered handle that ranks higher in
+ * `searchCompetitorSocials`.
  */
 export async function scrapeProvidedCompetitors(
   urls: string[],
   targetPlatforms: AuditPlatform[],
+  confirmedSocials?: ConfirmedCompetitorSocials[],
 ): Promise<CompetitorDiscoveryResult> {
   const failures: CompetitorDiscoveryFailure[] = [];
   const competitors: CompetitorProfile[] = [];
 
-  console.log(`[audit] scrapeProvidedCompetitors: ${urls.length} user-provided URL(s): ${urls.join(', ')}`);
+  // Index confirmed picks by normalized website so we can match the user's
+  // override regardless of trailing-slash / scheme drift between the picker
+  // payload and the override list. Falls back to brand name as a secondary
+  // key for entries that came from manual paste (where website == brand).
+  const confirmedByKey = new Map<string, ConfirmedCompetitorSocials>();
+  for (const entry of confirmedSocials ?? []) {
+    const websiteKey = normaliseWebsite(entry.website).toLowerCase();
+    if (websiteKey) confirmedByKey.set(websiteKey, entry);
+    const brandKey = entry.brandName.trim().toLowerCase();
+    if (brandKey) confirmedByKey.set(brandKey, entry);
+  }
+
+  console.log(`[audit] scrapeProvidedCompetitors: ${urls.length} user-provided URL(s): ${urls.join(', ')}${confirmedByKey.size > 0 ? ` · ${confirmedSocials?.length ?? 0} confirmed-social override(s)` : ''}`);
 
   const discoveryStartMs = Date.now();
   for (const url of urls) {
     if (competitors.length >= DEFAULT_TARGET_COMPETITORS) break;
+
+    // 0. User-confirmed socials win over everything. If the user picked
+    // explicit profiles on the confirm screen, scrape those directly and
+    // skip every discovery hop — that's the whole point of the confirm UI.
+    const websiteKey = normaliseWebsite(url).toLowerCase();
+    const brandKey = brandNameFromUrl(url).toLowerCase();
+    const confirmed = confirmedByKey.get(websiteKey) ?? confirmedByKey.get(brandKey);
+    if (confirmed) {
+      const overlap = targetPlatforms.filter((p) => confirmed.socials[p]);
+      if (overlap.length > 0) {
+        const matchingSocial: SocialLink = {
+          platform: overlap[0],
+          url: confirmed.socials[overlap[0]]!.url,
+          username: confirmed.socials[overlap[0]]!.username,
+        };
+        try {
+          const { profile, videos } = await scrapeSocialForCompetitor(matchingSocial);
+          console.log(
+            `[audit] competitor (confirmed) ${confirmed.brandName} via ${matchingSocial.platform}: ${profile.followers} followers, ${videos.length} videos`,
+          );
+          competitors.push(buildCompetitorProfile(profile, videos));
+          continue;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.log(`[audit] competitor (confirmed) ${confirmed.brandName} ${matchingSocial.platform} scrape failed: ${msg} — falling back to discovery`);
+          // Fall through to the regular discovery path below so the user
+          // still gets a competitor row even if their pick 404'd.
+        }
+      } else if (Object.keys(confirmed.socials).length > 0) {
+        console.log(
+          `[audit] competitor (confirmed) ${confirmed.brandName}: confirmed socials don't overlap with target platforms (${targetPlatforms.join(', ')}) — falling back to discovery`,
+        );
+      }
+    }
 
     // Users paste social URLs (instagram.com/handle, tiktok.com/@handle, etc.)
     // more often than company websites. If the URL is a direct social profile,

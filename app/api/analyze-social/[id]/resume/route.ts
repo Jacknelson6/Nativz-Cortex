@@ -17,9 +17,25 @@ const domainOrUrl = z
     message: 'Must be a URL or domain',
   });
 
+// User picks from the confirm-platforms screen for each competitor. Persisted
+// so the process route can scrape these handles directly instead of
+// re-discovering and silently replacing the user's choice with whatever
+// `searchCompetitorSocials` ranks highest.
+const ConfirmedCompetitorSocialSchema = z.object({
+  website: z.string().min(1),
+  brandName: z.string().min(1),
+  socials: z
+    .record(
+      z.enum(['tiktok', 'instagram', 'facebook', 'youtube']),
+      z.object({ url: z.string().min(1), username: z.string().min(1) }),
+    )
+    .optional(),
+});
+
 const ResumeSchema = z.object({
   social_urls: z.record(z.string(), z.string()),
   competitor_urls: z.array(domainOrUrl).max(3).optional(),
+  competitor_socials: z.array(ConfirmedCompetitorSocialSchema).max(6).optional(),
   social_goals: z.array(z.string()).max(10).optional(),
   // Optional pre-attach — stamps the audit with a client so the post-
   // completion step auto-creates a client_benchmarks row. Admin-only;
@@ -69,6 +85,13 @@ export async function POST(
 
     const existingAnalysisData = (existing?.analysis_data as Record<string, unknown> | null) ?? {};
     const competitorUrlsOverride = parsed.data.competitor_urls?.filter(Boolean) ?? [];
+    // Normalize so the persisted shape matches the lib's
+     // `ConfirmedCompetitorSocials` interface (socials is required there).
+    const competitorSocialsOverride = (parsed.data.competitor_socials ?? []).map((entry) => ({
+      website: entry.website,
+      brandName: entry.brandName,
+      socials: entry.socials ?? {},
+    }));
     const socialGoals = parsed.data.social_goals?.filter(Boolean) ?? [];
 
     // Always set the override field — if the user submitted competitors it
@@ -80,6 +103,7 @@ export async function POST(
     const analysisData: Record<string, unknown> = {
       ...existingAnalysisData,
       competitor_urls_override: competitorUrlsOverride,
+      competitor_socials_override: competitorSocialsOverride,
       ...(socialGoals.length > 0 ? { social_goals: socialGoals } : {}),
     };
 
