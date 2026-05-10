@@ -30,7 +30,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import { thumbUrl } from '@/lib/calendar/thumb-url';
-import { ShareTour } from '@/components/share/share-tour';
+import { ShareTour, EDIT_SHARE_BEATS } from '@/components/share/share-tour';
 
 // Load MuxPlayer client-only; the custom element registration explodes
 // during SSR.
@@ -727,7 +727,11 @@ function SharedReviewView({
         </div>
       </main>
 
-      <ShareTour enabled={!nameModalOpen && data.videos.length > 0} />
+      <ShareTour
+        enabled={!nameModalOpen && data.videos.length > 0}
+        beats={EDIT_SHARE_BEATS}
+        storageKey="cortex.share.editTourSeen"
+      />
 
       <Dialog
         open={nameModalOpen}

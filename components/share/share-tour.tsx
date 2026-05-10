@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * ShareTour — first-visit coach-mark tour for the share-link review page.
+ * ShareTour — first-visit coach-mark tour for the share-link review pages.
  *
  * Inspired by the create-onboarding-video skill philosophy:
  * - punchy, one-thing-per-beat
@@ -10,19 +10,17 @@
  * - pulsing accent ring around the focal element
  *
  * Beats are configured by data-tour selector. Steps whose target element is
- * not present in the DOM (e.g. Approve all hides when nothing is unapproved)
- * are silently skipped.
+ * not present in the DOM (e.g. Approve all hides when nothing is unapproved,
+ * Change date hides when a post is already published) are silently skipped.
  *
- * Dismissal stores `cortex.share.tourSeen = '1'` in localStorage so it never
- * shows again across share links on the same browser.
+ * Each consumer surface passes its own `beats` and `storageKey` so the
+ * editing-share tour and the calendar-share tour gate independently.
  */
 
 import { ArrowRight, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-const STORAGE_KEY = 'cortex.share.tourSeen';
-
-type Beat = {
+export type Beat = {
   /** Selector queried via document.querySelector. First match wins. */
   target: string;
   /** Big top-of-frame headline. */
@@ -31,7 +29,8 @@ type Beat = {
   detail: string;
 };
 
-const BEATS: Beat[] = [
+/** Beats for the editing-project share link at /c/edit/[token]. */
+export const EDIT_SHARE_BEATS: Beat[] = [
   {
     target: '[data-tour="approve"]',
     caption: 'Approve when it’s ready.',
@@ -52,6 +51,46 @@ const BEATS: Beat[] = [
   },
 ];
 
+/** Beats for the calendar share link at /c/[token]. */
+export const CALENDAR_SHARE_BEATS: Beat[] = [
+  {
+    target: '[data-tour="cal-approve"]',
+    caption: 'Approve when it’s ready.',
+    detail:
+      'One tap signs off on a post. The team gets pinged the moment you do.',
+  },
+  {
+    target: '[data-tour="cal-request-change"]',
+    caption: 'Request a change.',
+    detail:
+      'Need a tweak? Drop a note, timestamps, or references and the editor sees it instantly.',
+  },
+  {
+    target: '[data-tour="cal-caption"]',
+    caption: 'Edit the caption.',
+    detail:
+      'Tweak copy, hashtags, or hooks inline. We log the before/after so the editor can see exactly what you changed.',
+  },
+  {
+    target: '[data-tour="cal-schedule"]',
+    caption: 'Change the post date.',
+    detail:
+      'Need it later or sooner? Pick a new date and time. The schedule updates everywhere automatically.',
+  },
+  {
+    target: '[data-tour="cal-collab"]',
+    caption: 'Add tags and collaborators.',
+    detail:
+      'Tag people in the post or pull in a collab handle so it shows up on their profile too.',
+  },
+  {
+    target: '[data-tour="cal-approve-all"]',
+    caption: 'Ship the whole month.',
+    detail:
+      'When everything looks good, approve all of them in one click and we publish on schedule.',
+  },
+];
+
 interface Rect {
   top: number;
   left: number;
@@ -59,25 +98,33 @@ interface Rect {
   height: number;
 }
 
-function readSeen(): boolean {
+function readSeen(key: string): boolean {
   if (typeof window === 'undefined') return true;
   try {
-    return window.localStorage.getItem(STORAGE_KEY) === '1';
+    return window.localStorage.getItem(key) === '1';
   } catch {
     return true;
   }
 }
 
-function markSeen() {
+function markSeen(key: string) {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, '1');
+    window.localStorage.setItem(key, '1');
   } catch {
     // ignore
   }
 }
 
-export function ShareTour({ enabled }: { enabled: boolean }) {
+interface ShareTourProps {
+  enabled: boolean;
+  /** Beat list to play. Steps with missing targets are auto-skipped. */
+  beats: Beat[];
+  /** localStorage key for the seen flag. Use a distinct key per surface. */
+  storageKey: string;
+}
+
+export function ShareTour({ enabled, beats, storageKey }: ShareTourProps) {
   const [active, setActive] = useState(false);
   const [stepIdx, setStepIdx] = useState(0);
   const [rect, setRect] = useState<Rect | null>(null);
@@ -87,63 +134,66 @@ export function ShareTour({ enabled }: { enabled: boolean }) {
   // Decide whether to start. Only on the first eligible mount.
   useEffect(() => {
     if (!enabled) return;
-    if (readSeen()) return;
+    if (readSeen(storageKey)) return;
     // Wait a tick so anchor elements are rendered.
     const t = window.setTimeout(() => setActive(true), 350);
     return () => window.clearTimeout(t);
-  }, [enabled]);
+  }, [enabled, storageKey]);
 
   // Resolve the visible beat index, advancing past missing targets.
-  const resolveStep = useCallback((from: number): number => {
-    for (let i = from; i < BEATS.length; i += 1) {
-      const el = document.querySelector<HTMLElement>(BEATS[i].target);
-      if (el) return i;
-    }
-    return -1;
-  }, []);
+  const resolveStep = useCallback(
+    (from: number): number => {
+      for (let i = from; i < beats.length; i += 1) {
+        const el = document.querySelector<HTMLElement>(beats[i].target);
+        if (el) return i;
+      }
+      return -1;
+    },
+    [beats],
+  );
 
   const close = useCallback(() => {
-    markSeen();
+    markSeen(storageKey);
     setActive(false);
     targetElRef.current = null;
-  }, []);
+  }, [storageKey]);
 
   const advance = useCallback(() => {
     setStepIdx((prev) => {
       const next = resolveStep(prev + 1);
       if (next === -1) {
-        markSeen();
+        markSeen(storageKey);
         setActive(false);
         return prev;
       }
       return next;
     });
-  }, [resolveStep]);
+  }, [resolveStep, storageKey]);
 
   // When the tour activates, snap to the first available beat.
   useEffect(() => {
     if (!active) return;
     const first = resolveStep(0);
     if (first === -1) {
-      markSeen();
+      markSeen(storageKey);
       setActive(false);
       return;
     }
     setStepIdx(first);
-  }, [active, resolveStep]);
+  }, [active, resolveStep, storageKey]);
 
   // Track the current target's bounding rect. Recomputes on resize, scroll,
   // and via a ResizeObserver on the target itself.
   useLayoutEffect(() => {
     if (!active) return;
-    const beat = BEATS[stepIdx];
+    const beat = beats[stepIdx];
     if (!beat) return;
     const el = document.querySelector<HTMLElement>(beat.target);
     if (!el) {
       // Target disappeared between steps; advance.
       const next = resolveStep(stepIdx + 1);
       if (next === -1) {
-        markSeen();
+        markSeen(storageKey);
         setActive(false);
       } else if (next !== stepIdx) {
         setStepIdx(next);
@@ -178,7 +228,7 @@ export function ShareTour({ enabled }: { enabled: boolean }) {
       window.clearTimeout(enterT);
       window.clearTimeout(restT);
     };
-  }, [active, stepIdx, resolveStep]);
+  }, [active, stepIdx, resolveStep, beats, storageKey]);
 
   // Esc to dismiss.
   useEffect(() => {
@@ -195,24 +245,24 @@ export function ShareTour({ enabled }: { enabled: boolean }) {
   }, [active, advance, close]);
 
   const stepsTotal = useMemo(
-    () => BEATS.filter((b) => document.querySelector(b.target)).length,
+    () => beats.filter((b) => document.querySelector(b.target)).length,
     // re-run when active changes so we count after mount
     // and when the step changes in case targets toggle in/out
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [active, stepIdx],
+    [active, stepIdx, beats],
   );
   const stepsBefore = useMemo(
     () =>
-      BEATS.slice(0, stepIdx).filter((b) => document.querySelector(b.target))
+      beats.slice(0, stepIdx).filter((b) => document.querySelector(b.target))
         .length,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [active, stepIdx],
+    [active, stepIdx, beats],
   );
   const isLast = stepIdx >= 0 && resolveStep(stepIdx + 1) === -1;
 
   if (!active || !rect) return null;
 
-  const beat = BEATS[stepIdx];
+  const beat = beats[stepIdx];
   if (!beat) return null;
 
   const ringPad = 10;

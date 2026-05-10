@@ -22,6 +22,7 @@ import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import type { DeliverableBalance } from '@/lib/deliverables/get-balances';
 import type { AddonSku } from '@/lib/deliverables/addon-skus';
 import { thumbUrl } from '@/lib/calendar/thumb-url';
+import { ShareTour, CALENDAR_SHARE_BEATS } from '@/components/share/share-tour';
 
 // Mux Player is a heavy web-component-backed React component. Dynamic-import
 // with ssr:false keeps it out of the initial server bundle and avoids
@@ -780,6 +781,7 @@ function SharedDropView({
               {unapprovedPosts.length > 0 && (
                 <button
                   type="button"
+                  data-tour="cal-approve-all"
                   onClick={() => {
                     if (!authorName.trim()) {
                       setPendingName(authorName);
@@ -1003,6 +1005,11 @@ function SharedDropView({
         }}
       />
 
+      <ShareTour
+        enabled={!nameModalOpen && data.posts.length > 0}
+        beats={CALENDAR_SHARE_BEATS}
+        storageKey="cortex.share.calendarTourSeen"
+      />
     </div>
   );
 }
@@ -2765,6 +2772,7 @@ function PostCard({
               setDraftCaption(post.caption);
               setEditingCaption(true);
             }}
+            data-tour="cal-caption"
             className="absolute right-0 top-0 inline-flex items-center gap-1 rounded-md border border-nativz-border bg-surface px-2 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-hover"
             title="Edit caption"
           >
@@ -2790,7 +2798,7 @@ function PostCard({
       )}
 
       {showHandles && (
-        <>
+        <div data-tour="cal-collab" className="contents">
           <HandleEditor
             label="Tagged"
             icon={Tag}
@@ -2817,7 +2825,7 @@ function PostCard({
             }}
             hasName={!!authorName.trim()}
           />
-        </>
+        </div>
       )}
     </div>
   );
@@ -3109,6 +3117,7 @@ function PostCard({
             type="button"
             onClick={() => submit('approved')}
             disabled={submitting || uploading}
+            data-tour="cal-approve"
             className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-status-success px-4 py-2.5 text-sm font-medium text-white shadow-[var(--shadow-card)] transition-all hover:opacity-90 hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 sm:flex-none sm:py-2"
           >
             <CheckCircle size={14} /> Approve
@@ -3122,6 +3131,7 @@ function PostCard({
           onClick={() => setComposerExpanded((v) => !v)}
           disabled={submitting || uploading}
           aria-expanded={composerExpanded}
+          data-tour="cal-request-change"
           className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-50 sm:flex-none sm:py-2 ${
             composerExpanded
               ? 'border-accent/50 bg-accent-surface text-accent-text'
@@ -3634,6 +3644,7 @@ function SchedulePill({
         type="button"
         onClick={() => onOpenChange(!open)}
         disabled={isPublished}
+        data-tour={isPublished ? undefined : 'cal-schedule'}
         className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-all ${
           isPublished
             ? 'bg-surface-hover text-text-muted'
