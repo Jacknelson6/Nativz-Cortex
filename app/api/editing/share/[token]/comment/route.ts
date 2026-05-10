@@ -7,7 +7,7 @@ import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { resolvePaidMediaWebhook } from '@/lib/chat/resolve-paid-media-webhook';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
-import { getNotificationSetting } from '@/lib/notifications/get-setting';
+import { getClientNotificationSetting } from '@/lib/notifications/get-client-setting';
 import {
   articleSingular,
   nounForProjectType,
@@ -143,6 +143,7 @@ async function loadShareLink(
 }
 
 interface ProjectChatContext {
+  clientId: string | null;
   clientName: string;
   projectName: string;
   projectType: string | null;
@@ -157,12 +158,13 @@ async function loadProjectChatContext(
 ): Promise<ProjectChatContext> {
   const { data: project } = await admin
     .from('editing_projects')
-    .select('id, name, project_type, clients(name, agency, chat_webhook_url)')
+    .select('id, name, project_type, client_id, clients(name, agency, chat_webhook_url)')
     .eq('id', projectId)
     .maybeSingle<{
       id: string;
       name: string;
       project_type: string | null;
+      client_id: string | null;
       clients: {
         name: string | null;
         agency: string | null;
@@ -170,6 +172,7 @@ async function loadProjectChatContext(
       } | null;
     }>();
 
+  const clientId = project?.client_id ?? null;
   const clientName = project?.clients?.name ?? 'Client';
   const projectName = project?.name ?? 'Project';
   const projectType = project?.project_type ?? null;
@@ -187,6 +190,7 @@ async function loadProjectChatContext(
     agency: project?.clients?.agency ?? null,
   });
   return {
+    clientId,
     clientName,
     projectName,
     projectType,
@@ -425,7 +429,7 @@ async function postEditingChatForComment(args: {
   videoId: string | null;
   allApprovedClaim: 'won' | 'lost' | 'not-yet';
 }) {
-  const { webhookUrl, clientName, projectName, projectType, shareUrl } =
+  const { clientId, webhookUrl, clientName, projectName, projectType, shareUrl } =
     await loadProjectChatContext(args.admin, args.link.project_id, args.token);
   if (!webhookUrl) return;
 
@@ -466,7 +470,11 @@ async function postEditingChatForComment(args: {
     args.finalStatus === 'changes_requested' ||
     args.finalStatus === 'approved'
   ) {
-    const commentSetting = await getNotificationSetting('editing_comment_chat');
+    const commentSetting = await getClientNotificationSetting(
+      'editing_comment_chat',
+      'chat',
+      clientId,
+    );
     if (commentSetting.enabled) {
       const verb =
         args.finalStatus === 'changes_requested'
@@ -499,7 +507,11 @@ async function postEditingChatForComment(args: {
   }
 
   if (args.allApprovedClaim === 'won') {
-    const setting = await getNotificationSetting('editing_all_approved_chat');
+    const setting = await getClientNotificationSetting(
+      'editing_all_approved_chat',
+      'chat',
+      clientId,
+    );
     if (!setting.enabled) return;
     const noun = nounForProjectType(projectType);
     const text = `🎉 All ${noun.plural} in ${clientName} · ${projectName} are approved.\n${shareUrl}`;
@@ -535,6 +547,12 @@ async function pingPaidMediaForEditingApproval(args: {
     }>();
 
   const clientName = project?.clients?.name ?? 'Client';
+  const paidMediaSetting = await getClientNotificationSetting(
+    'editing_paid_media_chat',
+    'chat',
+    project?.client_id ?? null,
+  );
+  if (!paidMediaSetting.enabled) return;
   const paidMedia = await resolvePaidMediaWebhook(args.admin, {
     clientId: project?.client_id ?? null,
     clientName,

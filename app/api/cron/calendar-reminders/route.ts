@@ -5,7 +5,7 @@ import {
   type CadenceStage,
 } from '@/lib/email/resend';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
-import { getNotificationSetting } from '@/lib/notifications/get-setting';
+import { getClientNotificationSetting } from '@/lib/notifications/get-client-setting';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
@@ -41,11 +41,6 @@ async function handleGet(request: NextRequest) {
   if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-
-  const [cadenceSetting, autoApproveSetting] = await Promise.all([
-    getNotificationSetting('calendar_followup_cadence'),
-    getNotificationSetting('calendar_auto_approve'),
-  ]);
 
   const admin = createAdminClient();
 
@@ -161,6 +156,11 @@ async function handleGet(request: NextRequest) {
 
     // Auto-approve sweep at T+216h. Fires once per link and stamps
     // auto_approved_at so we never re-enter for this link.
+    const autoApproveSetting = await getClientNotificationSetting(
+      'calendar_auto_approve',
+      'email',
+      client.id,
+    );
     if (ageHours >= 216 && autoApproveSetting.enabled) {
       const autoApproved = await autoApprovePending(admin, {
         link,
@@ -184,6 +184,11 @@ async function handleGet(request: NextRequest) {
       continue;
     }
 
+    const cadenceSetting = await getClientNotificationSetting(
+      'calendar_followup_cadence',
+      'email',
+      client.id,
+    );
     if (!cadenceSetting.enabled) {
       counts.skipped += 1;
       continue;

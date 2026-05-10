@@ -16,6 +16,7 @@ import {
   syncMondayApprovalForDrop,
 } from '@/lib/monday/calendar-approval';
 import { resolvePaidMediaWebhook } from '@/lib/chat/resolve-paid-media-webhook';
+import { getClientNotificationSetting } from '@/lib/notifications/get-client-setting';
 import {
   consumeForApproval,
   hasPriorApproval,
@@ -658,35 +659,49 @@ async function notifyAdminsOfComment(
   const targetWebhookUrl = chatWebhookUrl;
   if (targetWebhookUrl) {
     if (comment.status === 'comment' || comment.status === 'changes_requested') {
-      const verb = comment.status === 'changes_requested' ? 'requested changes' : 'commented';
-      const trimmed = comment.content.trim();
-      // When the reviewer attaches files without typing anything, skip the
-      // empty `> ` quote block so the message doesn't lead with a stray
-      // dangling quote line.
-      const quotedBlock = trimmed
-        ? '\n' + trimmed.split('\n').map((line) => `> ${line}`).join('\n')
-        : '';
-      const attachmentBlock =
-        comment.attachments.length > 0
-          ? '\n\n' +
-            comment.attachments.map((a) => `📎 ${a.filename}\n${a.url}`).join('\n\n')
+      const commentSetting = await getClientNotificationSetting(
+        'calendar_comment_chat',
+        'chat',
+        drop.client_id,
+      );
+      if (commentSetting.enabled) {
+        const verb = comment.status === 'changes_requested' ? 'requested changes' : 'commented';
+        const trimmed = comment.content.trim();
+        // When the reviewer attaches files without typing anything, skip the
+        // empty `> ` quote block so the message doesn't lead with a stray
+        // dangling quote line.
+        const quotedBlock = trimmed
+          ? '\n' + trimmed.split('\n').map((line) => `> ${line}`).join('\n')
           : '';
-      // Show *which* post — by scheduled date/time — so the team can scan
-      // the chat without opening the share link.
-      const postLine = postTimeLine ? `\n_Post scheduled for ${postTimeLine}_` : '';
-      const text = `*${comment.authorName} ${verb} on ${clientName}*${postLine}${quotedBlock}${attachmentBlock}\n\n${shareUrl}`;
-      postToGoogleChatSafe(targetWebhookUrl, { text }, `comment ${dropId}`);
+        const attachmentBlock =
+          comment.attachments.length > 0
+            ? '\n\n' +
+              comment.attachments.map((a) => `📎 ${a.filename}\n${a.url}`).join('\n\n')
+            : '';
+        // Show *which* post — by scheduled date/time — so the team can scan
+        // the chat without opening the share link.
+        const postLine = postTimeLine ? `\n_Post scheduled for ${postTimeLine}_` : '';
+        const text = `*${comment.authorName} ${verb} on ${clientName}*${postLine}${quotedBlock}${attachmentBlock}\n\n${shareUrl}`;
+        postToGoogleChatSafe(targetWebhookUrl, { text }, `comment ${dropId}`);
+      }
     } else if (allApprovedClaim === 'won') {
-      const reviewLinkIds = Object.values(reviewLinkMap);
-      // Surface the share-link's admin-facing name so the chat ping reads
-      // "from <Client>'s <Project Title> project" rather than the generic
-      // "<Client>'s calendar". Falls back to "calendar" wording when the
-      // admin didn't bother labeling the share.
-      const subject = linkName
-        ? `${clientName}'s ${linkName} project`
-        : `${clientName}'s calendar`;
-      const text = `🎉 All ${reviewLinkIds.length} posts from ${subject} are approved!\n${shareUrl}`;
-      postToGoogleChatSafe(targetWebhookUrl, { text }, `all-approved ${dropId}`);
+      const approvedSetting = await getClientNotificationSetting(
+        'calendar_all_approved_chat',
+        'chat',
+        drop.client_id,
+      );
+      if (approvedSetting.enabled) {
+        const reviewLinkIds = Object.values(reviewLinkMap);
+        // Surface the share-link's admin-facing name so the chat ping reads
+        // "from <Client>'s <Project Title> project" rather than the generic
+        // "<Client>'s calendar". Falls back to "calendar" wording when the
+        // admin didn't bother labeling the share.
+        const subject = linkName
+          ? `${clientName}'s ${linkName} project`
+          : `${clientName}'s calendar`;
+        const text = `🎉 All ${reviewLinkIds.length} posts from ${subject} are approved!\n${shareUrl}`;
+        postToGoogleChatSafe(targetWebhookUrl, { text }, `all-approved ${dropId}`);
+      }
     }
   }
 
@@ -722,6 +737,12 @@ async function pingPaidMediaTeam(
     shareUrl: string;
   },
 ): Promise<void> {
+  const paidMediaSetting = await getClientNotificationSetting(
+    'calendar_paid_media_chat',
+    'chat',
+    args.clientId,
+  );
+  if (!paidMediaSetting.enabled) return;
   const paidMedia = await resolvePaidMediaWebhook(admin, {
     clientId: args.clientId,
     clientName: args.clientName,
