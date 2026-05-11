@@ -911,7 +911,6 @@ function VideoCard({
   );
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [composerExpanded, setComposerExpanded] = useState(false);
 
   const videoElRef = useRef<HTMLVideoElement | null>(null);
   const videoSectionRef = useRef<HTMLDivElement | null>(null);
@@ -1050,7 +1049,6 @@ function VideoCard({
     setCommentText('');
     setPendingAttachments([]);
     setPinEnabled(true);
-    setComposerExpanded(false);
     const optimisticToastId = toast.success(
       status === 'approved' ? 'Video approved' : 'Revision added',
     );
@@ -1091,7 +1089,6 @@ function VideoCard({
       toast.error(err instanceof Error ? err.message : 'Failed to submit');
       setCommentText(resolvedContent === 'Approved' ? '' : resolvedContent);
       setPendingAttachments(snapshotAttachments);
-      if (status === 'changes_requested') setComposerExpanded(true);
     } finally {
       setSubmitting(false);
     }
@@ -1486,124 +1483,81 @@ function VideoCard({
 
   const composerBlock = (
     <div className="border-t border-nativz-border bg-surface px-3 py-3 sm:px-4">
-      {composerExpanded && (
-        <div className="mb-3 rounded-lg border border-nativz-border bg-background/60 focus-within:border-accent/60 focus-within:ring-1 focus-within:ring-accent/40">
-          <textarea
-            ref={(el) => {
-              if (
-                el &&
-                composerExpanded &&
-                document.activeElement !== el &&
-                !commentText
-              ) {
-                el.focus();
-              }
-            }}
-            value={commentText}
-            onChange={(e) => setCommentText(e.target.value)}
-            placeholder="Notes on the video (cuts, music, hook, etc.)"
-            rows={3}
-            className="w-full resize-none rounded-t-lg bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
-            disabled={submitting}
-          />
+      <div className="mb-3 rounded-lg border border-nativz-border bg-background/60 focus-within:border-accent/60 focus-within:ring-1 focus-within:ring-accent/40">
+        <textarea
+          value={commentText}
+          onChange={(e) => setCommentText(e.target.value)}
+          placeholder="Notes on the video (cuts, music, hook, etc.)"
+          rows={3}
+          className="w-full resize-none rounded-t-lg bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+          disabled={submitting}
+        />
 
-          {pendingAttachments.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-3 pb-2">
-              {pendingAttachments.map((a) => (
-                <AttachmentChip
-                  key={a.url}
-                  attachment={a}
-                  onRemove={() => removeAttachment(a.url)}
-                />
-              ))}
-            </div>
-          )}
+        {pendingAttachments.length > 0 && (
+          <div className="flex flex-wrap gap-2 px-3 pb-2">
+            {pendingAttachments.map((a) => (
+              <AttachmentChip
+                key={a.url}
+                attachment={a}
+                onRemove={() => removeAttachment(a.url)}
+              />
+            ))}
+          </div>
+        )}
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept="image/*,video/*,application/pdf"
-            className="hidden"
-            onChange={(e) => uploadFiles(e.target.files)}
-          />
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*,video/*,application/pdf"
+          className="hidden"
+          onChange={(e) => uploadFiles(e.target.files)}
+        />
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-nativz-border/60 px-2 py-2">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={
-                submitting || uploading || pendingAttachments.length >= 10
-              }
-              className="inline-flex items-center gap-1.5 rounded-md bg-transparent px-2 py-1 text-xs font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
-            >
-              {uploading ? (
-                <Loader2 size={13} className="animate-spin" />
-              ) : (
-                <Paperclip size={13} />
-              )}
-              {uploading ? 'Uploading…' : 'Attach files'}
-            </button>
-            {playerReady &&
-              (pinEnabled ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-surface px-2.5 py-1 text-xs font-medium text-accent-text ring-1 ring-accent/40">
-                  <MapPin size={12} />
-                  At {formatSeconds(livePlayheadSeconds)}
-                  <button
-                    type="button"
-                    onClick={() => setPinEnabled(false)}
-                    className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-accent/20"
-                    aria-label="Don't reference a timestamp"
-                    title="Don't reference a timestamp"
-                  >
-                    <X size={11} />
-                  </button>
-                </span>
-              ) : (
+        <div className="flex flex-wrap items-center gap-2 border-t border-nativz-border/60 px-2 py-2">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={
+              submitting || uploading || pendingAttachments.length >= 10
+            }
+            className="inline-flex items-center gap-1.5 rounded-md bg-transparent px-2 py-1 text-xs font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+          >
+            {uploading ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <Paperclip size={13} />
+            )}
+            {uploading ? 'Uploading…' : 'Attach files'}
+          </button>
+          {playerReady &&
+            (pinEnabled ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-surface px-2.5 py-1 text-xs font-medium text-accent-text ring-1 ring-accent/40">
+                <MapPin size={12} />
+                At {formatSeconds(livePlayheadSeconds)}
                 <button
                   type="button"
-                  onClick={() => setPinEnabled(true)}
-                  disabled={submitting}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-transparent px-2 py-1 text-xs font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
-                  title="Reference current timestamp"
+                  onClick={() => setPinEnabled(false)}
+                  className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-accent/20"
+                  aria-label="Don't reference a timestamp"
+                  title="Don't reference a timestamp"
                 >
-                  <MapPin size={13} /> Reference timestamp
+                  <X size={11} />
                 </button>
-              ))}
-            <div className="ml-auto flex items-center gap-1">
+              </span>
+            ) : (
               <button
                 type="button"
-                onClick={() => {
-                  setComposerExpanded(false);
-                  setCommentText('');
-                  setPendingAttachments([]);
-                }}
-                disabled={submitting || uploading}
-                className="inline-flex items-center gap-1.5 rounded-md bg-transparent px-2 py-1 text-xs font-medium text-text-muted transition-all hover:bg-surface-hover hover:text-text-secondary disabled:opacity-50"
+                onClick={() => setPinEnabled(true)}
+                disabled={submitting}
+                className="inline-flex items-center gap-1.5 rounded-md bg-transparent px-2 py-1 text-xs font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+                title="Reference current timestamp"
               >
-                Cancel
+                <MapPin size={13} /> Reference timestamp
               </button>
-              <button
-                type="button"
-                onClick={() => submit('changes_requested')}
-                disabled={
-                  submitting ||
-                  uploading ||
-                  (!commentText.trim() && pendingAttachments.length === 0)
-                }
-                className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 disabled:hover:bg-accent"
-              >
-                {submitting ? (
-                  <Loader2 size={12} className="animate-spin" />
-                ) : (
-                  <Send size={12} />
-                )}
-                Send
-              </button>
-            </div>
-          </div>
+            ))}
         </div>
-      )}
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         {review === 'approved' && latestApprovedId ? (
@@ -1633,17 +1587,21 @@ function VideoCard({
         )}
         <button
           type="button"
-          onClick={() => setComposerExpanded((v) => !v)}
-          disabled={submitting || uploading}
-          aria-expanded={composerExpanded}
+          onClick={() => submit('changes_requested')}
+          disabled={
+            submitting ||
+            uploading ||
+            (!commentText.trim() && pendingAttachments.length === 0)
+          }
           data-tour="request-change"
-          className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-50 sm:flex-none sm:py-2 ${
-            composerExpanded
-              ? 'border-accent/50 bg-accent-surface text-accent-text'
-              : 'border-nativz-border bg-transparent text-text-secondary hover:bg-surface-hover hover:text-text-primary'
-          }`}
+          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-4 py-2.5 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50 sm:flex-none sm:py-2"
         >
-          <MessageSquare size={14} /> Request change
+          {submitting ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <MessageSquare size={14} />
+          )}{' '}
+          Request change
         </button>
         {isEditor && (
           <button
@@ -1724,6 +1682,7 @@ function VideoCard({
       <div className="flex flex-1 flex-col md:min-w-0">
         <div className="p-3 sm:p-4">{headerBlock}</div>
         {historyBlock}
+        <div className="flex-1" />
         {composerBlock}
       </div>
     </article>
