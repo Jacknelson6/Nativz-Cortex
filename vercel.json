@@ -48,6 +48,10 @@
       "schedule": "0 6 * * *"
     },
     {
+      "path": "/api/cron/zernio-pulse",
+      "schedule": "30 7 * * *"
+    },
+    {
       "path": "/api/cron/publish-posts",
       "schedule": "*/2 * * * *"
     },
