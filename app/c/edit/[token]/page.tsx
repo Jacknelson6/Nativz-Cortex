@@ -1468,9 +1468,7 @@ function VideoCard({
             {video.comments.length}
           </span>
         </div>
-        {/* Capped to keep the Approve / Request change buttons in view on long
-            threads. Mirrors the Calendar share page. */}
-        <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+        <div className="space-y-2 pr-1">
           {video.comments.map((c) => (
             <CommentRow
               key={c.id}
@@ -1685,15 +1683,14 @@ function VideoCard({
     </div>
   );
 
-  // Aspect + layout switch by project type, mirroring the Calendar share
-  // page so editing reviews of CTV / Social Ads / image deliverables don't
-  // get squashed into a 9:16 frame. CTV (16:9) stacks vertically; image
-  // posts get a width-capped 4:5 column so the comments rail keeps room.
+  // Aspect + layout switch by project type. The media column drives its own
+  // height via `aspect-[…]`; the card hugs whichever side is taller so the
+  // video frame stays flush with the card edges (no letterboxing) and the
+  // comment thread renders inline instead of inside a scroll well.
   const isCtv = projectType === 'ctv_ads';
   const isSocialAd = projectType === 'social_ads';
   const stackVertical = isCtv;
-  const heightPx = isImage ? 'md:h-[60vh]' : 'md:h-[78vh]';
-  const layoutDirection = stackVertical ? '' : 'md:flex-row';
+  const layoutDirection = stackVertical ? '' : 'md:flex-row md:items-stretch';
   const videoColAspect = isCtv
     ? 'aspect-video'
     : isSocialAd
@@ -1701,27 +1698,20 @@ function VideoCard({
       : isImage
         ? 'aspect-[4/5]'
         : 'aspect-[9/16]';
-  // For side-by-side layouts we pin the media column to a width derived
-  // from the article height (78vh × aspect-ratio) instead of letting flex
-  // infer width via `md:w-auto` + `aspect-[…]`. The auto-width path
-  // resolved to the <mux-player> intrinsic content size in some Chromium
-  // builds and starved the comments rail down to ~12px — see issue from
-  // 2026-05-10. Hard-pinning is deterministic and matches the math that
-  // aspect-ratio was supposed to do.
-  //   9:16 video → 78vh × 9/16 ≈ 44vh
-  //   1:1 social → 78vh × 1   = 78vh (cap at 560px for ultrawide)
-  //   4:5 image  → 60vh × 4/5 = 48vh (already width-pinned below)
+  // Width caps mirror the prior visual scale (≈78vh tall × aspect-ratio).
+  // We drop the explicit `md:h-full` so the column's intrinsic height comes
+  // from `aspect-[…]` and width — that's what kills the black bars.
   const videoColSizing = stackVertical
     ? 'w-full'
     : isImage
-      ? 'w-full md:w-[44vh] md:max-w-[480px] md:flex-shrink-0 md:self-center'
+      ? 'w-full md:w-[44vh] md:max-w-[480px] md:flex-shrink-0 md:self-start'
       : isSocialAd
-        ? 'w-full md:h-full md:w-[78vh] md:max-w-[560px] md:flex-shrink-0 md:self-center'
-        : 'w-full md:h-full md:w-[44vh] md:max-w-[440px] md:flex-shrink-0';
+        ? 'w-full md:w-[78vh] md:max-w-[560px] md:flex-shrink-0 md:self-start'
+        : 'w-full md:w-[44vh] md:max-w-[440px] md:flex-shrink-0 md:self-start';
   return (
     <article
       id={`video-${index}`}
-      className={`flex flex-col overflow-hidden rounded-xl border border-nativz-border bg-surface ${layoutDirection} ${heightPx}`}
+      className={`flex flex-col overflow-hidden rounded-xl border border-nativz-border bg-surface ${layoutDirection}`}
     >
       {revisionInput}
       <div
@@ -1731,11 +1721,9 @@ function VideoCard({
       >
         {videoPanel}
       </div>
-      <div className="flex flex-1 flex-col md:h-full md:min-w-0">
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-3 sm:p-4">{headerBlock}</div>
-          {historyBlock}
-        </div>
+      <div className="flex flex-1 flex-col md:min-w-0">
+        <div className="p-3 sm:p-4">{headerBlock}</div>
+        {historyBlock}
         {composerBlock}
       </div>
     </article>
