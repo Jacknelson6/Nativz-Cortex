@@ -174,15 +174,28 @@ export async function POST(
   const name = formatDropName(drop.start_date, drop.end_date);
 
   // Match the create flow used by POST /api/admin/editing/projects:
-  // resolve the current admin to a team_members row so the project has
-  // a sensible default editor instead of falling to NULL.
-  const { data: teamRow } = await admin
-    .from('team_members')
-    .select('id')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  // brand-level default strategist/editor (migration 240) wins over the
+  // creator fallback. Run both lookups in parallel.
+  const [clientDefaultsRes, creatorRes] = await Promise.all([
+    admin
+      .from('clients')
+      .select('default_strategist_id, default_editor_id')
+      .eq('id', drop.client_id)
+      .maybeSingle(),
+    admin
+      .from('team_members')
+      .select('id')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  const clientDefaults = clientDefaultsRes.data as
+    | { default_strategist_id: string | null; default_editor_id: string | null }
+    | null;
+  const creatorTeamId = (creatorRes.data?.id as string | undefined) ?? null;
+  const editorId = clientDefaults?.default_editor_id ?? creatorTeamId;
+  const strategistId = clientDefaults?.default_strategist_id ?? null;
 
   const { data: created, error } = await admin
     .from('editing_projects')
@@ -192,7 +205,8 @@ export async function POST(
       name,
       project_type: 'calendar',
       created_by: user.id,
-      editor_id: (teamRow?.id as string | undefined) ?? null,
+      editor_id: editorId,
+      strategist_id: strategistId,
     })
     .select('id')
     .single();

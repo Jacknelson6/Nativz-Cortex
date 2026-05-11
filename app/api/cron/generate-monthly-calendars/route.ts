@@ -32,6 +32,8 @@ type ClientRow = {
   id: string;
   name: string;
   monthly_calendar_post_count: number;
+  default_strategist_id: string | null;
+  default_editor_id: string | null;
 };
 
 type CalendarProjectRow = {
@@ -128,7 +130,9 @@ async function handleGet(req: NextRequest) {
 
   let clientQuery = admin
     .from('clients')
-    .select('id, name, monthly_calendar_post_count, services, is_active, is_paused')
+    .select(
+      'id, name, monthly_calendar_post_count, services, is_active, is_paused, default_strategist_id, default_editor_id',
+    )
     .eq('is_active', true)
     .gt('monthly_calendar_post_count', 0)
     .contains('services', ['SMM']);
@@ -145,6 +149,8 @@ async function handleGet(req: NextRequest) {
       services: string[] | null;
       is_active: boolean;
       is_paused: boolean | null;
+      default_strategist_id: string | null;
+      default_editor_id: string | null;
     }>
   >();
   if (clientErr) {
@@ -160,6 +166,8 @@ async function handleGet(req: NextRequest) {
       id: c.id,
       name: c.name,
       monthly_calendar_post_count: c.monthly_calendar_post_count,
+      default_strategist_id: c.default_strategist_id,
+      default_editor_id: c.default_editor_id,
     }));
 
   if (candidates.length === 0) {
@@ -231,8 +239,12 @@ async function handleGet(req: NextRequest) {
         client_id: c.id,
         name: targetLabel,
         project_type: 'calendar',
-        // status defaults to 'editing'; leave editor_id/etc null so the
-        // team assigns when they pick the project up.
+        // Auto-fill strategist/editor from the brand's account-level
+        // defaults (migration 240). Either may be null — the cron has
+        // no creator to fall back to, so unassigned stays unassigned
+        // until the team sets a default or picks manually.
+        strategist_id: c.default_strategist_id,
+        editor_id: c.default_editor_id,
       })
       .select('id')
       .single();

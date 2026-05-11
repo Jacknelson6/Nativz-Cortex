@@ -304,19 +304,30 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
 
-  // editor_id now FKs into team_members (migration 212, renamed from
-  // assignee_id in migration 240), so translate the current admin's
-  // auth user id to their team_members row if there is one. If the
-  // admin doesn't have a roster entry (e.g. a super-admin with no
-  // team_members row) we leave it null and let the user pick later.
-  const { data: teamRow } = await admin
-    .from('team_members')
-    .select('id')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  const defaultEditorId = (teamRow?.id as string | undefined) ?? null;
+  // Account-level assignment overrides creator-as-editor. Read the
+  // client's per-account defaults (migration 240) in parallel with the
+  // creator's team_members lookup so we can fall back when the brand
+  // hasn't set one. Defaults always win when present.
+  const [clientDefaultsRes, creatorRes] = await Promise.all([
+    admin
+      .from('clients')
+      .select('default_strategist_id, default_editor_id')
+      .eq('id', parsed.data.client_id)
+      .maybeSingle(),
+    admin
+      .from('team_members')
+      .select('id')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  const clientDefaults = clientDefaultsRes.data as
+    | { default_strategist_id: string | null; default_editor_id: string | null }
+    | null;
+  const creatorTeamId = (creatorRes.data?.id as string | undefined) ?? null;
+  const editorId = clientDefaults?.default_editor_id ?? creatorTeamId;
+  const strategistId = clientDefaults?.default_strategist_id ?? null;
 
   const { data, error } = await admin
     .from('editing_projects')
@@ -327,7 +338,8 @@ export async function POST(req: Request) {
       drive_folder_url: parsed.data.drive_folder_url ?? null,
       notes: parsed.data.notes ?? null,
       created_by: user.id,
-      editor_id: defaultEditorId,
+      editor_id: editorId,
+      strategist_id: strategistId,
     })
     .select('id')
     .single();

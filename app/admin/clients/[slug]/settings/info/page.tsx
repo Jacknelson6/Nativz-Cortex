@@ -9,6 +9,7 @@ import { InfoCard } from '@/components/clients/settings/info-card';
 import { InfoIdentityCard } from '@/components/clients/settings/info-identity-card';
 import { InfoBrandVoiceCard } from '@/components/clients/settings/info-brand-voice-card';
 import { InfoBrandCaptionsCard } from '@/components/clients/settings/info-brand-captions-card';
+import { InfoAssignedTeamCard } from '@/components/clients/settings/info-assigned-team-card';
 import {
   InfoBrandDnaSlim,
   type BrandDnaColor,
@@ -45,6 +46,7 @@ export default async function ClientSettingsInfoPage({
         'brand_dna_status', 'uppromote_api_key',
         'brand_voice', 'target_audience', 'topic_keywords', 'description',
         'caption_notes', 'caption_cta', 'caption_hashtags',
+        'default_strategist_id', 'default_editor_id',
       ].join(','),
     )
     .eq('slug', slug)
@@ -65,8 +67,33 @@ export default async function ClientSettingsInfoPage({
       caption_notes: string | null;
       caption_cta: string | null;
       caption_hashtags: string[] | null;
+      default_strategist_id: string | null;
+      default_editor_id: string | null;
     }>();
   if (!client) notFound();
+
+  // Resolve the saved strategist/editor ids to display names so the
+  // read state shows "Jaime Rodriguez" instead of a bare uuid. One query
+  // hits both rows by `in` — cheaper than two single lookups.
+  type TeamMember = { id: string; full_name: string | null; email: string };
+  const assigneeIds = [client.default_strategist_id, client.default_editor_id]
+    .filter((id): id is string => !!id);
+  const assigneeMap = new Map<string, TeamMember>();
+  if (assigneeIds.length > 0) {
+    const { data: members } = await admin
+      .from('team_members')
+      .select('id, full_name, email')
+      .in('id', assigneeIds);
+    for (const m of (members ?? []) as TeamMember[]) {
+      assigneeMap.set(m.id, m);
+    }
+  }
+  const initialStrategist = client.default_strategist_id
+    ? assigneeMap.get(client.default_strategist_id) ?? null
+    : null;
+  const initialEditor = client.default_editor_id
+    ? assigneeMap.get(client.default_editor_id) ?? null
+    : null;
 
   type DnaMetadata = {
     colors?: BrandDnaColor[];
@@ -203,6 +230,16 @@ export default async function ClientSettingsInfoPage({
           caption_cta: client.caption_cta,
           caption_hashtags: client.caption_hashtags ?? [],
         }}
+      />
+
+      <InfoAssignedTeamCard
+        clientId={client.id}
+        initial={{
+          default_strategist_id: client.default_strategist_id,
+          default_editor_id: client.default_editor_id,
+        }}
+        initialStrategist={initialStrategist}
+        initialEditor={initialEditor}
       />
 
       <InfoBrandDnaSlim

@@ -61,6 +61,12 @@ const patchSchema = z.object({
   // Monthly calendar cron — number of post slots to pre-create on the
   // 1st of each month for SMM clients. 0 = do not auto-generate.
   monthly_calendar_post_count: z.number().int().min(0).max(1000).optional(),
+
+  // Account-level default assignees. Auto-fill new editing projects +
+  // content drops for this client so the team doesn't have to pick on
+  // every creation. Both FK into team_members; null = no default.
+  default_strategist_id: z.string().uuid().nullable().optional(),
+  default_editor_id: z.string().uuid().nullable().optional(),
 });
 
 async function requireAdmin() {
@@ -148,6 +154,9 @@ export async function GET(
           'cta_notes',
           // Monthly calendar cron.
           'monthly_calendar_post_count',
+          // Account-level default assignees.
+          'default_strategist_id',
+          'default_editor_id',
           // Metadata.
           'id',
           'created_at',
