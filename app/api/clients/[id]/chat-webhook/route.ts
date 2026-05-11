@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { isGoogleChatWebhook, postToGoogleChat } from '@/lib/chat/post-to-google-chat';
+import {
+  buildChatCardMessage,
+  isGoogleChatWebhook,
+  postToGoogleChat,
+} from '@/lib/chat/post-to-google-chat';
 
 const bodySchema = z.object({
   webhook_url: z
@@ -51,9 +55,17 @@ export async function POST(
       .single<{ name: string }>();
 
     try {
-      await postToGoogleChat(parsed.data.webhook_url, {
-        text: `✅ Cortex connected: ${client?.name ?? 'this client'}'s notifications will post here.`,
-      });
+      const brand = client?.name ?? 'this client';
+      await postToGoogleChat(
+        parsed.data.webhook_url,
+        buildChatCardMessage({
+          cardId: `chat-webhook-connected-${clientId}`,
+          title: `✅ Cortex connected for ${brand}`,
+          subtitle: 'Webhook saved',
+          paragraphs: [`${brand}'s notifications will post in this space.`],
+          fallback: `✅ Cortex connected: ${brand}'s notifications will post here.`,
+        }),
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Webhook test failed';
       return NextResponse.json({ error: message }, { status: 422 });

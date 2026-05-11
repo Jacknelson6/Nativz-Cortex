@@ -20,7 +20,11 @@
 import type { createAdminClient } from '@/lib/supabase/admin';
 import { createNotification } from '@/lib/notifications/create';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
-import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import {
+  buildChatCardMessage,
+  escapeCardHtml,
+  postToGoogleChatSafe,
+} from '@/lib/chat/post-to-google-chat';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
@@ -152,13 +156,24 @@ export async function notifyAdminsOfAdConceptComment(
 
   if (ev.kind === 'comment' || ev.kind === 'rejection') {
     const verb = ev.kind === 'rejection' ? 'rejected' : 'commented on';
+    const emoji = ev.kind === 'rejection' ? '🚫' : '💬';
     const quotedBlock = trimmed
       ? '\n' + trimmed.split('\n').map((line) => `> ${line}`).join('\n')
       : '';
-    const text = `*${ev.authorName}* ${verb} *${conceptLabel}* for ${clientName}:${quotedBlock}\n\n${shareUrl}`;
+    const fallback = `*${ev.authorName}* ${verb} *${conceptLabel}* for ${clientName}:${quotedBlock}\n\n${shareUrl}`;
+    const quotedHtml = trimmed
+      ? { html: `<i>${escapeCardHtml(trimmed).replace(/\n/g, '<br>')}</i>` }
+      : null;
     postToGoogleChatSafe(
       targetWebhookUrl,
-      { text },
+      buildChatCardMessage({
+        cardId: `ad-${ev.kind}-${ev.conceptId}`,
+        title: `${emoji} ${ev.authorName} ${verb} ${conceptLabel}`,
+        subtitle: clientName,
+        paragraphs: [quotedHtml],
+        buttons: [{ text: 'Open gallery', url: shareUrl }],
+        fallback,
+      }),
       `ad-${ev.kind} ${ev.conceptId}`,
     );
   } else if (allApprovedClaim === 'won') {
@@ -170,10 +185,17 @@ export async function notifyAdminsOfAdConceptComment(
     const subject = projectTitle
       ? `${clientName}'s ${projectTitle} project`
       : `${clientName}'s gallery`;
-    const text = `🎉 All ad concepts from ${subject} are approved!\n${shareUrl}`;
+    const fallback = `🎉 All ad concepts from ${subject} are approved!\n${shareUrl}`;
     postToGoogleChatSafe(
       targetWebhookUrl,
-      { text },
+      buildChatCardMessage({
+        cardId: `ad-all-approved-${tokenRow.id}`,
+        title: '🎉 All ad concepts approved',
+        subtitle: subject,
+        paragraphs: ['Every concept in the share has been approved.'],
+        buttons: [{ text: 'Open gallery', url: shareUrl }],
+        fallback,
+      }),
       `ad-all-approved ${tokenRow.id}`,
     );
   }

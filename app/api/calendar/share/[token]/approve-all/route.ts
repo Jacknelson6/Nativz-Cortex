@@ -12,7 +12,10 @@ import {
 } from '@/lib/monday/calendar-approval';
 import { isClientPaidMedia } from '@/lib/monday/paid-media';
 import { isMondayConfigured } from '@/lib/monday/client';
-import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import {
+  buildChatCardMessage,
+  postToGoogleChatSafe,
+} from '@/lib/chat/post-to-google-chat';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { getCalendarTeamWebhook } from '@/lib/chat/calendar-team-webhooks';
 import { getBrandFromAgency } from '@/lib/agency/detect';
@@ -354,17 +357,33 @@ async function notifyPastDueFixup(
 
   const lines: string[] = [];
   lines.push(`⏰ ${clientName}: late approval rescheduled ${result.moves.length} past-due post(s).`);
+  const movesParagraph = result.moves
+    .map((m) => {
+      const tag = m.doubledUp ? ' (doubled up, month is full)' : '';
+      return `• was ${fmt(m.oldScheduledAt)} -> now ${fmt(m.newScheduledAt)}${tag}`;
+    })
+    .join('\n');
   for (const m of result.moves) {
     const tag = m.doubledUp ? ' (doubled up, month is full)' : '';
-    lines.push(`  • was ${fmt(m.oldScheduledAt)} → now ${fmt(m.newScheduledAt)}${tag}`);
+    lines.push(`  • was ${fmt(m.oldScheduledAt)} -> now ${fmt(m.newScheduledAt)}${tag}`);
   }
-  if (result.overflow.length > 0) {
-    lines.push(
-      `⚠️ ${result.overflow.length} post(s) couldn't fit in this month, left at original time. Manual reschedule needed.`,
-    );
-  }
+  const overflowLine =
+    result.overflow.length > 0
+      ? `⚠️ ${result.overflow.length} post(s) couldn't fit in this month, left at original time. Manual reschedule needed.`
+      : null;
+  if (overflowLine) lines.push(overflowLine);
 
-  postToGoogleChatSafe(targetWebhookUrl, { text: lines.join('\n') }, `past-due-fixup ${dropId}`);
+  postToGoogleChatSafe(
+    targetWebhookUrl,
+    buildChatCardMessage({
+      cardId: `past-due-fixup-${dropId}`,
+      title: `⏰ ${result.moves.length} past-due post(s) rescheduled`,
+      subtitle: `${clientName} · late approval recovery`,
+      paragraphs: [movesParagraph, overflowLine],
+      fallback: lines.join('\n'),
+    }),
+    `past-due-fixup ${dropId}`,
+  );
 }
 
 async function fireAllApprovedNotifications(
@@ -394,8 +413,19 @@ async function fireAllApprovedNotifications(
   const shareUrl = `${getCortexAppUrl(getBrandFromAgency(drop.clients?.agency ?? null))}/s/${shareToken}`;
 
   if (targetWebhookUrl) {
-    const text = `🎉 All ${postCount} posts in ${clientName}'s calendar are approved.\n${shareUrl}`;
-    postToGoogleChatSafe(targetWebhookUrl, { text }, `all-approved ${dropId}`);
+    const fallback = `🎉 All ${postCount} posts in ${clientName}'s calendar are approved.\n${shareUrl}`;
+    postToGoogleChatSafe(
+      targetWebhookUrl,
+      buildChatCardMessage({
+        cardId: `all-approved-${dropId}`,
+        title: `🎉 All ${postCount} posts approved`,
+        subtitle: `${clientName}'s calendar`,
+        paragraphs: ['Every post in this share link has been approved by the client.'],
+        buttons: [{ text: 'Open calendar', url: shareUrl }],
+        fallback,
+      }),
+      `all-approved ${dropId}`,
+    );
   }
 
   if (!isMondayConfigured()) return;
@@ -410,6 +440,19 @@ async function fireAllApprovedNotifications(
   const item = await findContentCalendarItem(clientName, groupTitle);
   const folder = item?.editedVideosFolderUrl;
   const folderLine = folder ? folder : '(edited videos folder link not set in Monday)';
-  const text = `Hey all, content from ${clientName} is now approved: ${folderLine}`;
-  postToGoogleChatSafe(teamWebhook.url, { text }, `paid-media-approved ${clientName}`);
+  const fallback = `Hey all, content from ${clientName} is now approved: ${folderLine}`;
+  postToGoogleChatSafe(
+    teamWebhook.url,
+    buildChatCardMessage({
+      cardId: `paid-media-approved-${clientName}`,
+      title: `🎬 ${clientName} content approved`,
+      subtitle: 'Ready for paid-media handoff',
+      paragraphs: [folder ? null : '(edited videos folder link not set in Monday)'],
+      buttons: folder
+        ? [{ text: 'Open edited videos folder', url: folder }]
+        : undefined,
+      fallback,
+    }),
+    `paid-media-approved ${clientName}`,
+  );
 }

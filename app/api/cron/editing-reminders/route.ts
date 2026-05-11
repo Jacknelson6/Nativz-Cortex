@@ -8,7 +8,10 @@ import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 import { getNotificationSetting } from '@/lib/notifications/get-setting';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
-import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import {
+  buildChatCardMessage,
+  postToGoogleChatSafe,
+} from '@/lib/chat/post-to-google-chat';
 import { getClientNotificationRecipients } from '@/lib/email/notification-recipients';
 import { archiveEditingShareLinkEmail } from '@/lib/content-tools/archive-editing-share-email';
 import { notifyAdmins } from '@/lib/notifications';
@@ -247,9 +250,14 @@ async function handleGet(request: NextRequest) {
       const stageLabel = stage === 3 ? 'Final call' : `Follow-up ${stage}`;
       postToGoogleChatSafe(
         opsWebhook,
-        {
-          text: `📣 ${stageLabel} sent to *${client.name}* on *${projectName}*, ${pending}/${total} ${noun.plural} still pending. ${shareUrl}`,
-        },
+        buildChatCardMessage({
+          cardId: `editing-cadence-ops-${link.id}-${stage}`,
+          title: `📣 ${stageLabel} sent`,
+          subtitle: `${client.name} · ${projectName}`,
+          paragraphs: [`${pending} of ${total} ${noun.plural} still pending review.`],
+          buttons: [{ text: 'Open review', url: shareUrl }],
+          fallback: `📣 ${stageLabel} sent to *${client.name}* on *${projectName}*, ${pending}/${total} ${noun.plural} still pending. ${shareUrl}`,
+        }),
         `editing_cadence_ops:${link.id}:${stage}`,
       );
 
@@ -423,9 +431,14 @@ async function autoApprovePending(
   const opsWebhook = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
   postToGoogleChatSafe(
     opsWebhook,
-    {
-      text: `✅ Auto-approved *${pendingVideoIds.length}* ${noun.plural} on *${client.name} · ${project.name}*, no client activity for 9 days. ${args.shareUrl}`,
-    },
+    buildChatCardMessage({
+      cardId: `editing-auto-approve-${link.id}`,
+      title: `✅ Auto-approved ${pendingVideoIds.length} ${noun.plural}`,
+      subtitle: `${client.name} · ${project.name}`,
+      paragraphs: ['No client activity for 9 days. Project is ready to ship.'],
+      buttons: [{ text: 'Open review', url: args.shareUrl }],
+      fallback: `✅ Auto-approved *${pendingVideoIds.length}* ${noun.plural} on *${client.name} · ${project.name}*, no client activity for 9 days. ${args.shareUrl}`,
+    }),
     `editing_cadence_ops_auto_approve:${link.id}`,
   );
 

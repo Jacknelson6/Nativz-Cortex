@@ -2,7 +2,11 @@ import { NextResponse, after } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createNotification } from '@/lib/notifications/create';
-import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import {
+  buildChatCardMessage,
+  escapeCardHtml,
+  postToGoogleChatSafe,
+} from '@/lib/chat/post-to-google-chat';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
@@ -419,6 +423,12 @@ async function postEditingChatForComment(args: {
         : args.finalStatus === 'approved'
           ? 'approved'
           : 'commented';
+    const emoji =
+      args.finalStatus === 'changes_requested'
+        ? '✏️'
+        : args.finalStatus === 'approved'
+          ? '✅'
+          : '💬';
     const trimmed = args.content.trim();
     const quotedBlock = trimmed
       ? '\n' +
@@ -432,10 +442,31 @@ async function postEditingChatForComment(args: {
         ? '\n\n' +
           args.attachments.map((a) => `📎 ${a.filename}\n${a.url}`).join('\n\n')
         : '';
-    const text = `*${args.authorName}* ${verb} on ${clientName} · ${projectName}:${quotedBlock}${attachmentBlock}\n\n${shareUrl}`;
+    const fallback = `*${args.authorName}* ${verb} on ${clientName} · ${projectName}:${quotedBlock}${attachmentBlock}\n\n${shareUrl}`;
+    const quotedHtml = trimmed
+      ? { html: `<i>${escapeCardHtml(trimmed).replace(/\n/g, '<br>')}</i>` }
+      : null;
+    const attachmentsHtml =
+      args.attachments.length > 0
+        ? {
+            html: args.attachments
+              .map(
+                (a) =>
+                  `📎 <a href="${escapeCardHtml(a.url)}">${escapeCardHtml(a.filename)}</a>`,
+              )
+              .join('<br>'),
+          }
+        : null;
     postToGoogleChatSafe(
       webhookUrl,
-      { text },
+      buildChatCardMessage({
+        cardId: `editing-comment-${args.link.id}`,
+        title: `${emoji} ${args.authorName} ${verb}`,
+        subtitle: `${clientName} · ${projectName}`,
+        paragraphs: [quotedHtml, attachmentsHtml],
+        buttons: [{ text: 'Open review', url: shareUrl }],
+        fallback,
+      }),
       `editing-comment ${args.link.id}`,
     );
   }
@@ -444,10 +475,17 @@ async function postEditingChatForComment(args: {
     const setting = await getNotificationSetting('editing_all_approved_chat');
     if (!setting.enabled) return;
     const noun = nounForProjectType(projectType);
-    const text = `🎉 All ${noun.plural} in ${clientName} · ${projectName} are approved.\n${shareUrl}`;
+    const fallback = `🎉 All ${noun.plural} in ${clientName} · ${projectName} are approved.\n${shareUrl}`;
     postToGoogleChatSafe(
       webhookUrl,
-      { text },
+      buildChatCardMessage({
+        cardId: `editing-all-approved-${args.link.id}`,
+        title: `🎉 All ${noun.plural} approved`,
+        subtitle: `${clientName} · ${projectName}`,
+        paragraphs: [`Every ${noun.singular} on the review board has been approved.`],
+        buttons: [{ text: 'Open review', url: shareUrl }],
+        fallback,
+      }),
       `editing-all-approved ${args.link.id}`,
     );
   }
@@ -659,12 +697,19 @@ async function maybeFireEditingRevisionsCompleteNotification(
 
   if (webhookUrl) {
     const noun = nounForProjectType(projectType);
-    const text =
+    const fallback =
       `✅ All revisions are ready for *${clientName} · ${projectName}*.\n` +
       `Take another look and approve the ${noun.plural} that are good to go:\n${shareUrl}`;
     postToGoogleChatSafe(
       webhookUrl,
-      { text },
+      buildChatCardMessage({
+        cardId: `editing-revisions-complete-${args.link.id}`,
+        title: '✅ All revisions ready',
+        subtitle: `${clientName} · ${projectName}`,
+        paragraphs: [`Take another look and approve the ${noun.plural} that are good to go.`],
+        buttons: [{ text: 'Open review', url: shareUrl }],
+        fallback,
+      }),
       `editing-revisions-complete ${args.link.id}`,
     );
   }

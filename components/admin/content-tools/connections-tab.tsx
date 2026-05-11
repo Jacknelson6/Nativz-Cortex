@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   AlertTriangle,
@@ -121,6 +122,16 @@ interface MatrixResponse {
   };
 }
 
+const ALL_PLATFORM_KEYS = new Set<string>(ALL_PLATFORMS.map((p) => p.key));
+
+function parsePlatformsParam(raw: string | null): PlatformKey[] {
+  if (!raw) return [];
+  return raw
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter((s): s is PlatformKey => ALL_PLATFORM_KEYS.has(s));
+}
+
 export function ConnectionsTab() {
   const [data, setData] = useState<MatrixResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -129,6 +140,18 @@ export function ConnectionsTab() {
   const [activeOnly, setActiveOnly] = useState(false);
   const [showAllPlatforms, setShowAllPlatforms] = useState(false);
   const [inviteFor, setInviteFor] = useState<ClientRow | null>(null);
+  // Platforms the deep-link wanted pre-selected. Only honoured on the
+  // initial auto-open from the Google Chat alert; subsequent manual
+  // clicks on a brand row clear this back to null so the modal falls
+  // back to its "every non-connected platform" default.
+  const [presetPlatforms, setPresetPlatforms] = useState<PlatformKey[] | null>(
+    null,
+  );
+  // One-shot guard so we don't re-trigger the deep-link auto-open on
+  // every load() refetch.
+  const [deepLinkConsumed, setDeepLinkConsumed] = useState(false);
+
+  const searchParams = useSearchParams();
 
   async function load(silent = false) {
     if (silent) setRefreshing(true);
@@ -188,6 +211,27 @@ export function ConnectionsTab() {
   useEffect(() => {
     void load();
   }, []);
+
+  // Deep-link from the Google Chat pre-expiry / expired alert:
+  //   /admin/content-tools?tab=connections&clientId=<uuid>&platforms=tiktok,instagram
+  // Once the matrix has loaded, find the brand and pop the Invite
+  // Builder with the failing platforms pre-checked. Single-shot so the
+  // user can close the modal without it reopening on the next refetch.
+  useEffect(() => {
+    if (deepLinkConsumed || !data || !searchParams) return;
+    const clientId = searchParams.get('clientId');
+    if (!clientId) return;
+    const row = data.clients.find((c) => c.id === clientId);
+    if (!row) {
+      toast.error('Brand from invite link not found');
+      setDeepLinkConsumed(true);
+      return;
+    }
+    const platforms = parsePlatformsParam(searchParams.get('platforms'));
+    setPresetPlatforms(platforms.length > 0 ? platforms : null);
+    setInviteFor(row);
+    setDeepLinkConsumed(true);
+  }, [data, searchParams, deepLinkConsumed]);
 
   const visiblePlatforms: readonly PlatformDef[] = showAllPlatforms
     ? ALL_PLATFORMS
@@ -302,7 +346,13 @@ export function ConnectionsTab() {
         <MatrixTable
           rows={filtered}
           platforms={visiblePlatforms}
-          onPickClient={setInviteFor}
+          onPickClient={(c) => {
+            // Manual click clears any leftover deep-link preset so the
+            // modal falls back to its "every non-connected platform"
+            // default for this brand.
+            setPresetPlatforms(null);
+            setInviteFor(c);
+          }}
           onCycleOwner={async (clientId, platformKey, nextOwner) => {
             setData((prev) => {
               if (!prev) return prev;
@@ -350,9 +400,14 @@ export function ConnectionsTab() {
 
       <InviteBuilderModal
         client={inviteFor}
-        onClose={() => setInviteFor(null)}
+        preselectedPlatforms={presetPlatforms}
+        onClose={() => {
+          setInviteFor(null);
+          setPresetPlatforms(null);
+        }}
         onSent={() => {
           setInviteFor(null);
+          setPresetPlatforms(null);
           void load(true);
         }}
       />
@@ -654,10 +709,18 @@ interface InviteContext {
  */
 function InviteBuilderModal({
   client,
+  preselectedPlatforms,
   onClose,
   onSent,
 }: {
   client: ClientRow | null;
+  /**
+   * Optional: when set, these platforms are pre-checked instead of
+   * the default "every non-connected core platform". Used by the
+   * Google Chat pre-expiry / expired deep-link so the admin sees the
+   * exact set that prompted the alert.
+   */
+  preselectedPlatforms?: PlatformKey[] | null;
   onClose: () => void;
   onSent: () => void;
 }) {
@@ -689,12 +752,20 @@ function InviteBuilderModal({
     return allFirstTime ? 'connect' : 'reconnect';
   }, [client, selectedPlatforms]);
 
-  // Reset state every time we open for a new brand.
+  // Reset state every time we open for a new brand. When the modal
+  // opens via the Google Chat deep-link, `preselectedPlatforms` carries
+  // the exact set the cron flagged (expired / expiring), so we honour
+  // it verbatim; otherwise fall back to "every non-connected core
+  // platform" which is the normal manual-open default.
   useEffect(() => {
     if (!client) return;
     const defaults = new Set<PlatformKey>();
-    for (const p of CORE_PLATFORMS) {
-      if (client.profiles[p.key].status !== 'connected') defaults.add(p.key);
+    if (preselectedPlatforms && preselectedPlatforms.length > 0) {
+      for (const k of preselectedPlatforms) defaults.add(k);
+    } else {
+      for (const p of CORE_PLATFORMS) {
+        if (client.profiles[p.key].status !== 'connected') defaults.add(p.key);
+      }
     }
     setSelectedPlatforms(defaults);
     setSelectedContactIds(new Set());
@@ -720,7 +791,7 @@ function InviteBuilderModal({
         setCtxLoading(false);
       }
     })();
-  }, [client]);
+  }, [client, preselectedPlatforms]);
 
   const togglePlatform = (key: PlatformKey) =>
     setSelectedPlatforms((prev) => {

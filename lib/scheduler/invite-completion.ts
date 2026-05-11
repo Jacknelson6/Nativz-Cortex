@@ -13,7 +13,10 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import {
+  buildChatCardMessage,
+  postToGoogleChatSafe,
+} from '@/lib/chat/post-to-google-chat';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 
 const PLATFORM_LABEL: Record<string, string> = {
@@ -95,7 +98,13 @@ export async function handleInviteCompletion(opts: {
   const webhook = resolved ?? process.env.OPS_GOOGLE_CHAT_WEBHOOK ?? null;
   postToGoogleChatSafe(
     webhook,
-    { text: `🔌 ${summary}` },
+    buildChatCardMessage({
+      cardId: `connection-invite-${clientId}-${platform}`,
+      title: `🔌 ${brandName} reconnected ${platformLabel}`,
+      subtitle: handle,
+      paragraphs: [summary],
+      fallback: `🔌 ${summary}`,
+    }),
     `connection-invite:${platform}:${clientId}`,
   );
 }

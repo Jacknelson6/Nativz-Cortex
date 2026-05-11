@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
-import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import {
+  buildChatCardMessage,
+  postToGoogleChatSafe,
+} from '@/lib/chat/post-to-google-chat';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 
@@ -200,10 +203,32 @@ async function handleGet(request: NextRequest) {
         : '';
     const urlFragment = shareUrl ? `\nLink: ${shareUrl}` : '';
 
-    const text =
+    const fallback =
       `⏰ ${clientName}: ${variantLabel}${subjectFragment} sent ${hoursSilent}h ago${recipientFragment} hasn't been clicked yet.${urlFragment}`;
+    const subjectLine = row.subject ? `Subject: "${row.subject}"` : null;
+    const recipientLine =
+      Array.isArray(row.to_emails) && row.to_emails.length > 0
+        ? `To: ${row.to_emails.join(', ')}`
+        : null;
+    const timingLine = `Sent ${hoursSilent}h ago, still no click.`;
+    const paragraphs = [subjectLine, recipientLine, timingLine].filter(
+      (s): s is string => !!s,
+    );
 
-    postToGoogleChatSafe(opsWebhook, { text }, `calendar-no-click-escalation:${row.id}`);
+    postToGoogleChatSafe(
+      opsWebhook,
+      buildChatCardMessage({
+        cardId: `calendar-no-click-${row.id}`,
+        title: `⏰ ${clientName}, no click yet`,
+        subtitle: variantLabel,
+        paragraphs,
+        buttons: shareUrl
+          ? [{ text: 'Open share link', url: shareUrl }]
+          : undefined,
+        fallback,
+      }),
+      `calendar-no-click-escalation:${row.id}`,
+    );
     results.push({ messageId: row.id, clientName, ok: true });
   }
 

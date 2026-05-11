@@ -2,7 +2,11 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createNotification } from '@/lib/notifications/create';
-import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import {
+  buildChatCardMessage,
+  escapeCardHtml,
+  postToGoogleChatSafe,
+} from '@/lib/chat/post-to-google-chat';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { formatPostTimeForChat } from '@/lib/chat/format-post-time';
 import { getBrandFromAgency } from '@/lib/agency/detect';
@@ -139,12 +143,29 @@ async function notifyOfCaptionEdit(
   if (chatWebhookUrl) {
     const postTimeLine = formatPostTimeForChat(edit.scheduledAt);
     const postLine = postTimeLine ? `\n_Post scheduled for ${postTimeLine}_` : '';
-    const text =
+    const fallback =
       `*${edit.authorName}* edited a caption for *${clientName}*.${postLine}\n` +
       `_Before:_ ${before}\n` +
       `_After:_ ${after}\n` +
       `Share link: ${shareUrl}`;
-    postToGoogleChatSafe(chatWebhookUrl, { text }, `caption-edit ${dropId}`);
+    const subtitle = postTimeLine
+      ? `${clientName} · Post scheduled for ${postTimeLine}`
+      : clientName;
+    postToGoogleChatSafe(
+      chatWebhookUrl,
+      buildChatCardMessage({
+        cardId: `caption-edit-${dropId}`,
+        title: `✏️ ${edit.authorName} edited a caption`,
+        subtitle,
+        paragraphs: [
+          { html: `<b>Before:</b> ${escapeCardHtml(before)}` },
+          { html: `<b>After:</b> ${escapeCardHtml(after)}` },
+        ],
+        buttons: [{ text: 'Open calendar', url: shareUrl }],
+        fallback,
+      }),
+      `caption-edit ${dropId}`,
+    );
   }
 
   // Keep the in-app bell notification so admins see it inside Cortex too.

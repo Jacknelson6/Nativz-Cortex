@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   BadgeDollarSign,
@@ -280,8 +281,30 @@ const TABS: {
   },
 ];
 
+const VALID_TABS: readonly ContentToolsTab[] = [
+  'projects',
+  'organic_social',
+  'paid_social',
+  'quick-schedule',
+  'history',
+  'connections',
+  'notifications',
+];
+
+function isContentToolsTab(value: string | null): value is ContentToolsTab {
+  return !!value && (VALID_TABS as readonly string[]).includes(value);
+}
+
 export function ContentToolsShell() {
-  const [tab, setTab] = useState<ContentToolsTab>('projects');
+  // `?tab=connections` (and a few other slugs) gets honoured on mount
+  // so the Google Chat pre-expiry alert can deep-link straight into
+  // the Connections tab. We read it lazily on the initial `useState`
+  // so the first render already has the right tab selected, no flash.
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState<ContentToolsTab>(() => {
+    const initial = searchParams?.get('tab');
+    return isContentToolsTab(initial) ? initial : 'projects';
+  });
 
   // Projects state lives at the shell level so the same fetch backs
   // every project-type tab. Cross-tab navigation is instant because

@@ -8,7 +8,10 @@ import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 import { getNotificationSetting } from '@/lib/notifications/get-setting';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
-import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import {
+  buildChatCardMessage,
+  postToGoogleChatSafe,
+} from '@/lib/chat/post-to-google-chat';
 import { getClientNotificationRecipients } from '@/lib/email/notification-recipients';
 import { archiveShareLinkEmail } from '@/lib/content-tools/archive-share-email';
 import { notifyAdmins } from '@/lib/notifications';
@@ -244,9 +247,14 @@ async function handleGet(request: NextRequest) {
       const stageLabel = stage === 3 ? 'Final call' : `Follow-up ${stage}`;
       postToGoogleChatSafe(
         opsWebhook,
-        {
-          text: `📣 ${stageLabel} sent to *${client.name}*, ${pending}/${total} posts still pending. ${shareUrl}`,
-        },
+        buildChatCardMessage({
+          cardId: `cadence-ops-${link.id}-${stage}`,
+          title: `📣 ${stageLabel} sent`,
+          subtitle: client.name,
+          paragraphs: [`${pending} of ${total} posts still pending review.`],
+          buttons: [{ text: 'Open share link', url: shareUrl }],
+          fallback: `📣 ${stageLabel} sent to *${client.name}*, ${pending}/${total} posts still pending. ${shareUrl}`,
+        }),
         `cadence_ops:${link.id}:${stage}`,
       );
 
@@ -514,9 +522,14 @@ async function autoApprovePending(
   const opsWebhook = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
   postToGoogleChatSafe(
     opsWebhook,
-    {
-      text: `✅ Auto-approved *${pendingPostIds.length}* posts on *${client.name}*'s calendar, no client activity for 9 days. ${args.shareUrl}`,
-    },
+    buildChatCardMessage({
+      cardId: `cadence-auto-approve-${link.id}`,
+      title: `✅ Auto-approved ${pendingPostIds.length} posts`,
+      subtitle: client.name,
+      paragraphs: ['No client activity for 9 days. Posts will publish on their scheduled times.'],
+      buttons: [{ text: 'Open share link', url: args.shareUrl }],
+      fallback: `✅ Auto-approved *${pendingPostIds.length}* posts on *${client.name}*'s calendar, no client activity for 9 days. ${args.shareUrl}`,
+    }),
     `cadence_ops_auto_approve:${link.id}`,
   );
 

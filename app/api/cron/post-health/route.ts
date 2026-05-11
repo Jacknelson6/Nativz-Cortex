@@ -5,7 +5,10 @@ import {
   type PostHealthFailedPost,
   type PostHealthDisconnect,
 } from '@/lib/email/resend';
-import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import {
+  buildChatCardMessage,
+  postToGoogleChatSafe,
+} from '@/lib/chat/post-to-google-chat';
 import { createNotification } from '@/lib/notifications/create';
 import { getPostingService } from '@/lib/posting';
 
@@ -201,24 +204,50 @@ async function handleGet(request: NextRequest) {
     // cron no longer fans it out.
 
     // Google Chat (ops space)
-    const chatLines: string[] = [`*Cortex post-health alert* — ${summary}`];
+    const failedLines: string[] = [];
     if (failedPosts.length > 0) {
-      chatLines.push('', '*Failed posts:*');
       for (const p of failedPosts.slice(0, 10)) {
-        const reason = p.failureReason ? ` — \`${p.failureReason.slice(0, 120)}\`` : '';
-        chatLines.push(`• ${p.clientName} (retries: ${p.retryCount})${reason}`);
+        const reason = p.failureReason ? `, ${p.failureReason.slice(0, 120)}` : '';
+        failedLines.push(`• ${p.clientName} (retries: ${p.retryCount})${reason}`);
       }
-      if (failedPosts.length > 10) chatLines.push(`…and ${failedPosts.length - 10} more.`);
+      if (failedPosts.length > 10) failedLines.push(`…and ${failedPosts.length - 10} more.`);
     }
+    const disconnectLines: string[] = [];
     if (disconnects.length > 0) {
-      chatLines.push('', '*Disconnected accounts:*');
       for (const d of disconnects.slice(0, 10)) {
-        chatLines.push(`• ${d.clientName} — ${d.platform}${d.username ? ` (@${d.username})` : ''}`);
+        disconnectLines.push(`• ${d.clientName}, ${d.platform}${d.username ? ` (@${d.username})` : ''}`);
       }
-      if (disconnects.length > 10) chatLines.push(`…and ${disconnects.length - 10} more.`);
+      if (disconnects.length > 10) disconnectLines.push(`…and ${disconnects.length - 10} more.`);
     }
-    chatLines.push('', 'https://cortex.nativz.io/admin/calendar');
-    postToGoogleChatSafe(process.env.OPS_CHAT_WEBHOOK_URL, { text: chatLines.join('\n') }, 'post-health');
+    const fallbackLines: string[] = [`*Cortex post-health alert*, ${summary}`];
+    if (failedLines.length > 0) fallbackLines.push('', '*Failed posts:*', ...failedLines);
+    if (disconnectLines.length > 0) fallbackLines.push('', '*Disconnected accounts:*', ...disconnectLines);
+    fallbackLines.push('', 'https://cortex.nativz.io/admin/calendar');
+
+    const paragraphs: Array<string | { html: string } | null> = [];
+    if (failedLines.length > 0) {
+      paragraphs.push({
+        html: `<b>Failed posts:</b><br>${failedLines.map((l) => l.replace(/^/, '')).join('<br>')}`,
+      });
+    }
+    if (disconnectLines.length > 0) {
+      paragraphs.push({
+        html: `<b>Disconnected accounts:</b><br>${disconnectLines.join('<br>')}`,
+      });
+    }
+
+    postToGoogleChatSafe(
+      process.env.OPS_CHAT_WEBHOOK_URL,
+      buildChatCardMessage({
+        cardId: 'post-health-alert',
+        title: '🚨 Cortex post-health alert',
+        subtitle: summary,
+        paragraphs,
+        buttons: [{ text: 'Open calendar', url: 'https://cortex.nativz.io/admin/calendar' }],
+        fallback: fallbackLines.join('\n'),
+      }),
+      'post-health',
+    );
 
     // In-app notification (lookup Jack's user id; super-admin always)
     const { data: jackRow } = await admin

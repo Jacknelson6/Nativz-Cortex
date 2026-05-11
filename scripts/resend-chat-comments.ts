@@ -19,7 +19,11 @@ import { config } from 'dotenv';
 config({ path: '.env.local' });
 
 import { createAdminClient } from '@/lib/supabase/admin';
-import { postToGoogleChat } from '@/lib/chat/post-to-google-chat';
+import {
+  buildChatCardMessage,
+  escapeCardHtml,
+  postToGoogleChat,
+} from '@/lib/chat/post-to-google-chat';
 
 const args = process.argv.slice(2);
 const slug = args.find((a) => !a.startsWith('--'));
@@ -113,6 +117,7 @@ async function main() {
 
   for (const c of realtime) {
     const verb = c.status === 'changes_requested' ? 'requested changes' : 'commented';
+    const emoji = c.status === 'changes_requested' ? '✏️' : '💬';
     const quoted = c.content
       .split('\n')
       .map((line) => `> ${line}`)
@@ -122,7 +127,7 @@ async function main() {
       attachments.length > 0
         ? '\n\n' + attachments.map((a) => `📎 ${a.filename}\n${a.url}`).join('\n\n')
         : '';
-    const text = `*${c.author_name}* ${verb} on ${client.name}:\n${quoted}${attachmentBlock}\n\n${dropUrl}`;
+    const fallback = `*${c.author_name}* ${verb} on ${client.name}:\n${quoted}${attachmentBlock}\n\n${dropUrl}`;
     console.log(`[${c.created_at}] ${c.author_name} (${c.status})`);
     const oneLine = c.content.replace(/\n/g, ' ');
     console.log(`  content: ${oneLine.slice(0, 80)}${oneLine.length > 80 ? '…' : ''}`);
@@ -133,7 +138,31 @@ async function main() {
       console.log('  (dry-run, not posting)');
     } else {
       try {
-        await postToGoogleChat(client.chat_webhook_url!, { text });
+        const quotedHtml = c.content.trim()
+          ? { html: `<i>${escapeCardHtml(c.content).replace(/\n/g, '<br>')}</i>` }
+          : null;
+        const attachmentsHtml =
+          attachments.length > 0
+            ? {
+                html: attachments
+                  .map(
+                    (a) =>
+                      `📎 <a href="${escapeCardHtml(a.url)}">${escapeCardHtml(a.filename)}</a>`,
+                  )
+                  .join('<br>'),
+              }
+            : null;
+        await postToGoogleChat(
+          client.chat_webhook_url!,
+          buildChatCardMessage({
+            cardId: `resend-comment-${c.created_at}`,
+            title: `${emoji} ${c.author_name} ${verb}`,
+            subtitle: client.name,
+            paragraphs: [quotedHtml, attachmentsHtml],
+            buttons: [{ text: 'Open calendar', url: dropUrl }],
+            fallback,
+          }),
+        );
         console.log('  ✓ posted');
       } catch (err) {
         console.error('  ✗ post failed:', err instanceof Error ? err.message : err);
@@ -157,17 +186,27 @@ async function main() {
       const approvedSet = new Set((approvals ?? []).map((a) => a.review_link_id as string));
       const allApproved = reviewLinkIds.every((id) => approvedSet.has(id));
       if (allApproved) {
-        const text = `🎉 All ${reviewLinkIds.length} posts in ${client.name}'s calendar are approved.\n${dropUrl}`;
+        const fallback = `🎉 All ${reviewLinkIds.length} posts in ${client.name}'s calendar are approved.\n${dropUrl}`;
         console.log('---');
-        console.log('All posts approved — firing all-approved message.');
+        console.log('All posts approved, firing all-approved message.');
         if (dryRun) {
           console.log('(dry-run)');
         } else {
-          await postToGoogleChat(client.chat_webhook_url!, { text });
+          await postToGoogleChat(
+            client.chat_webhook_url!,
+            buildChatCardMessage({
+              cardId: `resend-all-approved-${shareLink.drop_id ?? client.id}`,
+              title: '🎉 All posts approved',
+              subtitle: `${client.name} · ${reviewLinkIds.length} posts`,
+              paragraphs: ['Every scheduled post in this drop has been approved.'],
+              buttons: [{ text: 'Open calendar', url: dropUrl }],
+              fallback,
+            }),
+          );
           console.log('✓ posted');
         }
       } else {
-        console.log(`---\nNot all posts approved (${approvedSet.size}/${reviewLinkIds.length}) — skipping all-approved message.`);
+        console.log(`---\nNot all posts approved (${approvedSet.size}/${reviewLinkIds.length}), skipping all-approved message.`);
       }
     }
   }

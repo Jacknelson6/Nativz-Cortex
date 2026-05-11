@@ -9,7 +9,11 @@ import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
 import { verifyAndReconcilePost } from '@/lib/calendar/verify-post';
 import { notifyPartialFailureGuarded } from '@/lib/calendar/notify-partial-failure';
 import { resolveScheduledPostMedia } from '@/lib/calendar/resolve-media';
-import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import {
+  buildChatCardMessage,
+  escapeCardHtml,
+  postToGoogleChatSafe,
+} from '@/lib/chat/post-to-google-chat';
 import {
   isAccountLevelLegError,
   isZernioGlobalAuthError,
@@ -1344,12 +1348,28 @@ async function sendFailureNotification(
   if (opsWebhook) {
     const reason = (post.failure_reason as string | null) ?? 'unknown error';
     const truncatedReason = reason.length > 280 ? reason.substring(0, 280) + '…' : reason;
-    const text =
+    const captionEllipsis = ((post.caption as string) ?? '').length > 100 ? '…' : '';
+    const captionText = `${caption}${captionEllipsis}`;
+    const fallback =
       `🚨 *Post failed to publish for ${clientName}*\n` +
-      `Caption: "${caption}${((post.caption as string) ?? '').length > 100 ? '…' : ''}"\n` +
+      `Caption: "${captionText}"\n` +
       `Reason: ${truncatedReason}\n` +
       `${postUrl}`;
-    postToGoogleChatSafe(opsWebhook, { text }, `publish-failure ${postId}`);
+    postToGoogleChatSafe(
+      opsWebhook,
+      buildChatCardMessage({
+        cardId: `publish-failure-${postId}`,
+        title: '🚨 Post failed to publish',
+        subtitle: clientName,
+        paragraphs: [
+          { html: `<b>Caption:</b> "${escapeCardHtml(captionText)}"` },
+          { html: `<b>Reason:</b> ${escapeCardHtml(truncatedReason)}` },
+        ],
+        buttons: [{ text: 'Open post', url: postUrl }],
+        fallback,
+      }),
+      `publish-failure ${postId}`,
+    );
   }
 
   console.log(`[PUBLISH FAILURE] postId=${postId} clientId=${clientId} reason=${post.failure_reason}`);
@@ -1397,19 +1417,37 @@ async function sendPartialFailureNotification(
   if (opsWebhook) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
     const postUrl = `${appUrl}${linkPath}`;
-    const failureLines = failures
-      .map((f) => {
-        const who = f.username ? `${f.platform} (@${f.username})` : f.platform;
-        const reason = f.reason.length > 200 ? f.reason.substring(0, 200) + '…' : f.reason;
-        return `• ${who}: ${reason}`;
-      })
-      .join('\n');
-    const text =
+    const failureRows = failures.map((f) => {
+      const who = f.username ? `${f.platform} (@${f.username})` : f.platform;
+      const reason = f.reason.length > 200 ? f.reason.substring(0, 200) + '…' : f.reason;
+      return { who, reason };
+    });
+    const failureLines = failureRows.map((r) => `• ${r.who}: ${r.reason}`).join('\n');
+    const captionEllipsis = ((post.caption as string) ?? '').length > 100 ? '…' : '';
+    const captionText = `${caption}${captionEllipsis}`;
+    const fallback =
       `⚠️ *Post partially failed to publish for ${clientName}*\n` +
-      `Caption: "${caption}${((post.caption as string) ?? '').length > 100 ? '…' : ''}"\n` +
+      `Caption: "${captionText}"\n` +
       `${failureLines}\n` +
       `${postUrl}`;
-    postToGoogleChatSafe(opsWebhook, { text }, `publish-partial ${postId}`);
+    const failureHtml = failureRows
+      .map((r) => `• ${escapeCardHtml(r.who)}: ${escapeCardHtml(r.reason)}`)
+      .join('<br>');
+    postToGoogleChatSafe(
+      opsWebhook,
+      buildChatCardMessage({
+        cardId: `publish-partial-${postId}`,
+        title: '⚠️ Post partially failed',
+        subtitle: clientName,
+        paragraphs: [
+          { html: `<b>Caption:</b> "${escapeCardHtml(captionText)}"` },
+          { html: `<b>Failed platforms:</b><br>${failureHtml}` },
+        ],
+        buttons: [{ text: 'Open post', url: postUrl }],
+        fallback,
+      }),
+      `publish-partial ${postId}`,
+    );
   }
 
   console.log(

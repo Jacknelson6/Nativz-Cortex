@@ -3,7 +3,10 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/auth/permissions';
-import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import {
+  buildChatCardMessage,
+  postToGoogleChatSafe,
+} from '@/lib/chat/post-to-google-chat';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { formatPostTimeForChat } from '@/lib/chat/format-post-time';
 import { getBrandFromAgency } from '@/lib/agency/detect';
@@ -158,13 +161,25 @@ export async function POST(
 
   if (chatWebhookUrl) {
     const word = pendingForLink.length === 1 ? 'video has' : 'videos have';
-    const postsBlock = postTimes.length > 0
-      ? '\n' + postTimes.map((t) => `• ${t}`).join('\n')
-      : '';
-    const text =
-      `*${editorName}* re-uploaded ${pendingForLink.length} revised ${word} for *${clientName}*.${postsBlock}\n` +
-      `Open the share link to review the new cuts:\n${shareUrl}`;
-    postToGoogleChatSafe(chatWebhookUrl, { text }, `revised-videos ${link.drop_id}`);
+    const postsList = postTimes.length > 0
+      ? postTimes.map((t) => `• ${t}`).join('\n')
+      : null;
+    const fallback =
+      `*${editorName}* re-uploaded ${pendingForLink.length} revised ${word} for *${clientName}*.` +
+      (postsList ? `\n${postsList}` : '') +
+      `\nOpen the share link to review the new cuts:\n${shareUrl}`;
+    postToGoogleChatSafe(
+      chatWebhookUrl,
+      buildChatCardMessage({
+        cardId: `revised-videos-${link.drop_id}`,
+        title: `🔄 ${editorName} re-uploaded revised ${word === 'video has' ? 'video' : 'videos'}`,
+        subtitle: `${clientName} · ${pendingForLink.length} revised ${word === 'video has' ? 'video' : 'videos'}`,
+        paragraphs: [postsList],
+        buttons: [{ text: 'Review new cuts', url: shareUrl }],
+        fallback,
+      }),
+      `revised-videos ${link.drop_id}`,
+    );
   }
 
   // Build the email payload. We pull every `changes_requested` comment on the

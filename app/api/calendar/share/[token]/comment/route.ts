@@ -4,7 +4,11 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createNotification } from '@/lib/notifications/create';
 import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
 import { reschedulePastDueDrafts } from '@/lib/calendar/reschedule-past-due';
-import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import {
+  buildChatCardMessage,
+  escapeCardHtml,
+  postToGoogleChatSafe,
+} from '@/lib/chat/post-to-google-chat';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
@@ -501,12 +505,21 @@ async function maybeFireRevisionsCompleteNotification(
   const shareUrl = `${getCortexAppUrl(getBrandFromAgency(drop?.clients?.agency ?? null))}/s/${args.token}`;
 
   if (chatWebhookUrl) {
-    const text =
+    const fallback =
       `✅ All revisions are ready for *${clientName}*.\n` +
       `Take another look at the calendar and approve the ones that are good to go:\n${shareUrl}`;
     postToGoogleChatSafe(
       chatWebhookUrl,
-      { text },
+      buildChatCardMessage({
+        cardId: `revisions-complete-${args.linkId}`,
+        title: `✅ Revisions ready for ${clientName}`,
+        subtitle: 'All requested changes have been addressed',
+        paragraphs: [
+          'Take another look at the calendar and approve the posts that are good to go.',
+        ],
+        buttons: [{ text: 'Open calendar', url: shareUrl }],
+        fallback,
+      }),
       `revisions-complete ${args.linkId}`,
     );
   }
@@ -637,14 +650,17 @@ async function notifyAdminsOfComment(
   if (targetWebhookUrl) {
     if (comment.status === 'comment' || comment.status === 'changes_requested') {
       const verb = comment.status === 'changes_requested' ? 'requested changes' : 'commented';
+      const emoji = comment.status === 'changes_requested' ? '✏️' : '💬';
       const trimmed = comment.content.trim();
       // When the reviewer attaches files without typing anything, skip the
-      // empty `> ` quote block so the message doesn't lead with a stray
-      // dangling quote line.
-      const quotedBlock = trimmed
+      // empty quote block so the message doesn't lead with a stray dangling
+      // quote line. Cards render the quote as italics (the card payload has
+      // no built-in blockquote widget); the fallback text keeps the legacy
+      // `>` prefix so plain-text clients still get the visual indent.
+      const quotedBlockFallback = trimmed
         ? '\n' + trimmed.split('\n').map((line) => `> ${line}`).join('\n')
         : '';
-      const attachmentBlock =
+      const attachmentBlockFallback =
         comment.attachments.length > 0
           ? '\n\n' +
             comment.attachments.map((a) => `📎 ${a.filename}\n${a.url}`).join('\n\n')
@@ -652,8 +668,32 @@ async function notifyAdminsOfComment(
       // Show *which* post — by scheduled date/time — so the team can scan
       // the chat without opening the share link.
       const postLine = postTimeLine ? `\n_Post scheduled for ${postTimeLine}_` : '';
-      const text = `*${comment.authorName}* ${verb} on ${clientName}:${postLine}${quotedBlock}${attachmentBlock}\n\n${shareUrl}`;
-      postToGoogleChatSafe(targetWebhookUrl, { text }, `comment ${dropId}`);
+      const fallback = `*${comment.authorName}* ${verb} on ${clientName}:${postLine}${quotedBlockFallback}${attachmentBlockFallback}\n\n${shareUrl}`;
+
+      const subtitle = postTimeLine
+        ? `${clientName} · Post scheduled for ${postTimeLine}`
+        : clientName;
+      const attachmentParagraphs = comment.attachments.map(
+        (a) => `📎 ${a.filename}\n${a.url}`,
+      );
+
+      postToGoogleChatSafe(
+        targetWebhookUrl,
+        buildChatCardMessage({
+          cardId: `comment-${dropId}-${comment.postId}`,
+          title: `${emoji} ${comment.authorName} ${verb}`,
+          subtitle,
+          paragraphs: [
+            trimmed
+              ? { html: `<i>${escapeCardHtml(trimmed).replace(/\n/g, '<br>')}</i>` }
+              : null,
+            ...attachmentParagraphs,
+          ],
+          buttons: [{ text: 'Open calendar', url: shareUrl }],
+          fallback,
+        }),
+        `comment ${dropId}`,
+      );
     } else if (allApprovedClaim === 'won') {
       const reviewLinkIds = Object.values(reviewLinkMap);
       // Surface the share-link's admin-facing name so the chat ping reads
@@ -663,8 +703,19 @@ async function notifyAdminsOfComment(
       const subject = linkName
         ? `${clientName}'s ${linkName} project`
         : `${clientName}'s calendar`;
-      const text = `🎉 All ${reviewLinkIds.length} posts from ${subject} are approved!\n${shareUrl}`;
-      postToGoogleChatSafe(targetWebhookUrl, { text }, `all-approved ${dropId}`);
+      const fallback = `🎉 All ${reviewLinkIds.length} posts from ${subject} are approved!\n${shareUrl}`;
+      postToGoogleChatSafe(
+        targetWebhookUrl,
+        buildChatCardMessage({
+          cardId: `all-approved-${dropId}`,
+          title: `🎉 All ${reviewLinkIds.length} posts approved`,
+          subtitle: subject,
+          paragraphs: ['Every post in this share link has been approved by the client.'],
+          buttons: [{ text: 'Open calendar', url: shareUrl }],
+          fallback,
+        }),
+        `all-approved ${dropId}`,
+      );
     }
   }
 
@@ -700,8 +751,21 @@ async function pingPaidMediaTeam(clientName: string, startDate: string): Promise
   const item = await findContentCalendarItem(clientName, groupTitle);
   const folder = item?.editedVideosFolderUrl;
   const folderLine = folder ? folder : '(edited videos folder link not set in Monday)';
-  const text = `Hey all, content from ${clientName} is now approved: ${folderLine}`;
-  postToGoogleChatSafe(webhook.url, { text }, `paid-media-approved ${clientName}`);
+  const fallback = `Hey all, content from ${clientName} is now approved: ${folderLine}`;
+  postToGoogleChatSafe(
+    webhook.url,
+    buildChatCardMessage({
+      cardId: `paid-media-approved-${clientName}`,
+      title: `🎬 ${clientName} content approved`,
+      subtitle: 'Ready for paid-media handoff',
+      paragraphs: [folder ? null : '(edited videos folder link not set in Monday)'],
+      buttons: folder
+        ? [{ text: 'Open edited videos folder', url: folder }]
+        : undefined,
+      fallback,
+    }),
+    `paid-media-approved ${clientName}`,
+  );
 }
 
 async function checkAllApproved(
@@ -763,16 +827,32 @@ async function notifyPastDueFixup(
 
   const lines: string[] = [];
   lines.push(`⏰ ${clientName}: late approval rescheduled ${result.moves.length} past-due post(s).`);
+  const movesParagraph = result.moves
+    .map((m) => {
+      const tag = m.doubledUp ? ' (doubled up, month is full)' : '';
+      return `• was ${fmt(m.oldScheduledAt)} -> now ${fmt(m.newScheduledAt)}${tag}`;
+    })
+    .join('\n');
   for (const m of result.moves) {
     const tag = m.doubledUp ? ' (doubled up, month is full)' : '';
-    lines.push(`  • was ${fmt(m.oldScheduledAt)} → now ${fmt(m.newScheduledAt)}${tag}`);
+    lines.push(`  • was ${fmt(m.oldScheduledAt)} -> now ${fmt(m.newScheduledAt)}${tag}`);
   }
-  if (result.overflow.length > 0) {
-    lines.push(
-      `⚠️ ${result.overflow.length} post(s) couldn't fit in this month, left at original time. Manual reschedule needed.`,
-    );
-  }
+  const overflowLine =
+    result.overflow.length > 0
+      ? `⚠️ ${result.overflow.length} post(s) couldn't fit in this month, left at original time. Manual reschedule needed.`
+      : null;
+  if (overflowLine) lines.push(overflowLine);
 
-  postToGoogleChatSafe(targetWebhookUrl, { text: lines.join('\n') }, `past-due-fixup ${dropId}`);
+  postToGoogleChatSafe(
+    targetWebhookUrl,
+    buildChatCardMessage({
+      cardId: `past-due-fixup-${dropId}`,
+      title: `⏰ ${result.moves.length} past-due post(s) rescheduled`,
+      subtitle: `${clientName} · late approval recovery`,
+      paragraphs: [movesParagraph, overflowLine],
+      fallback: lines.join('\n'),
+    }),
+    `past-due-fixup ${dropId}`,
+  );
 }
 
