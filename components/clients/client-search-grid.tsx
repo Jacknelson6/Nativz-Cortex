@@ -12,7 +12,6 @@ import {
   Link2,
   Trash2,
   ArrowRight,
-  AlertTriangle,
   Pause,
   Play,
   Rocket,
@@ -47,8 +46,6 @@ interface ClientItem {
   groupId?: string | null;
   /** Derived server-side — true if the client has an active or paused onboarding tracker. */
   inOnboarding?: boolean;
-  /** Derived server-side. True when the client has no chat_webhook_url AND no agency-catchall covers them. */
-  missingWebhook?: boolean;
 }
 
 interface ClientGroup {
@@ -461,24 +458,6 @@ function ActionMenu({
   );
 }
 
-// ─── Webhook warning badge ─────────────────────────────────────────────────
-// Surfaces clients that have no Google Chat webhook configured AND aren't
-// covered by an agency-catchall webhook. These clients silently fall through
-// to OPS_CHAT_WEBHOOK_URL (or no chat ping at all), so past-due alerts,
-// approval pings, and creative comments don't reach a strategist's room.
-
-function WebhookWarning({ clientName }: { clientName: string }) {
-  return (
-    <span
-      className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-amber-500/10 text-amber-400 shrink-0"
-      title={`No Google Chat webhook configured for ${clientName}. Past-due alerts and approval pings will fall through to the OPS webhook (or be silent if unset). Configure on the client's Integrations settings.`}
-      aria-label="Missing Google Chat webhook"
-    >
-      <AlertTriangle size={11} />
-    </span>
-  );
-}
-
 // ─── Client card ───────────────────────────────────────────────────────────
 
 function ClientCard({
@@ -582,9 +561,6 @@ function ClientCard({
               {formatRelativeTime(client.lastActivityAt)}
             </span>
           )}
-          {client.missingWebhook && currentBucket !== 'prospect' && (
-            <WebhookWarning clientName={client.name} />
-          )}
           <HealthBadge healthScore={client.healthScore} />
           {actionButtons}
         </div>
@@ -612,11 +588,6 @@ function ClientCard({
                 <p className="text-sm font-semibold text-text-primary truncate leading-tight" title={client.name}>{client.name}</p>
                 <p className="text-xs text-text-muted truncate mt-0.5">{client.industry || 'General'}</p>
               </div>
-              {client.missingWebhook && currentBucket !== 'prospect' && (
-                <div className="mt-0.5">
-                  <WebhookWarning clientName={client.name} />
-                </div>
-              )}
               <HealthBadge
                 healthScore={client.healthScore}
                 className="shrink-0 mt-0.5"
