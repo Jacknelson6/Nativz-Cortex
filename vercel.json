@@ -164,6 +164,10 @@
       "schedule": "0 6 1 * *"
     },
     {
+      "path": "/api/cron/generate-monthly-calendars",
+      "schedule": "30 6 1 * *"
+    },
+    {
       "path": "/api/cron/reconcile-zernio",
       "schedule": "0 4 * * *"
     },
