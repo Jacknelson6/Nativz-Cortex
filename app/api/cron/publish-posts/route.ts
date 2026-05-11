@@ -706,8 +706,16 @@ async function handleGet(request: NextRequest) {
             // token keeps failing until the user reconnects. Flip the
             // profile to inactive + fire a one-time disconnect notification
             // so the team can ask the client to reconnect, instead of
-            // burning the rest of MAX_RETRIES on the same dead token.
-            if (isAccountLevelLegError(reason)) {
+            // burning the rest of MAX_RETRIES on the same dead token. Prefer
+            // the structured envelope (errorCode/errorType) when Zernio
+            // surfaced it — regex fallback if not.
+            if (
+              isAccountLevelLegError({
+                errorCode: platformResult.errorCode,
+                errorType: platformResult.errorType,
+                message: platformResult.errorMessage ?? reason,
+              })
+            ) {
               try {
                 await markProfileDisconnectedFromLegFailure({
                   admin: adminClient,

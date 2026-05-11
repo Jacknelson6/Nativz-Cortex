@@ -115,6 +115,12 @@ export interface PlatformResult {
   externalPostId?: string;
   externalPostUrl?: string;
   error?: string;
+  // Structured Zernio error envelope preserved alongside the composed
+  // `error` string. Consumers (e.g. publish cron's account-disconnect
+  // classifier) prefer branching on `errorCode` over regex-matching `error`.
+  errorCode?: string;
+  errorType?: string;
+  errorMessage?: string;
 }
 
 export interface PostStatusResult {

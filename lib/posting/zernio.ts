@@ -79,6 +79,37 @@ export class ZernioApiError extends Error {
   }
 }
 
+/**
+ * Pull a structured summary out of an error thrown by `zernioRequest`. Most
+ * methods in `ZernioPostingService` want both (a) a string for logging /
+ * matching `404` / `402` graceful-degrade paths and (b) the structured
+ * Stripe-like fields Zernio returns on every 4xx/5xx. Pre-fix every per-
+ * method catch block called `err.message` and threw `type`/`code` away.
+ *
+ * `msg` is always populated (`ZernioApiError.message` already embeds
+ * `type/code/status` so callers logging only `msg` still get the structured
+ * info in the log line). `status`/`type`/`code` are exposed for callers
+ * that want to BRANCH on them — e.g. `sync.ts` writing the structured
+ * `error_code` column on `platform_snapshot_errors`.
+ */
+export function zernioErrSummary(err: unknown): {
+  msg: string;
+  status?: number;
+  type?: string;
+  code?: string;
+} {
+  if (err instanceof ZernioApiError) {
+    return {
+      msg: err.message,
+      status: err.status,
+      type: err.type,
+      code: err.code,
+    };
+  }
+  const msg = err instanceof Error ? err.message : String(err);
+  return { msg };
+}
+
 const ANALYTICS_PLATFORMS: SocialPlatform[] = [
   'instagram',
   'tiktok',
@@ -758,6 +789,12 @@ function mapPublishPlatforms(
   status?: string;
   platformPostUrl?: string;
   error?: string;
+  // Structured fields preserved alongside the composed `error` string so
+  // downstream classifiers (e.g. `isAccountLevelLegError`) can branch on
+  // Zernio's stable error codes instead of regex-matching the message.
+  errorCode?: string;
+  errorType?: string;
+  errorMessage?: string;
 }> {
   const post = unwrapPostPayload(raw);
   const pl = post.platforms;
@@ -768,8 +805,9 @@ function mapPublishPlatforms(
     // `errorMessage` on failed legs (per docs/error-handling). Prefer a
     // composed "TIKTOK_THUMBNAIL_FAILED: ffmpeg packaging error" form so
     // operators get the actionable code, not just the human sentence.
-    const errCode = pickString(o, 'errorCode', 'error_code', 'code');
-    const errMsg = pickString(o, 'errorMessage', 'error_message', 'error', 'message');
+    const errCode = pickString(o, 'errorCode', 'error_code', 'code') ?? undefined;
+    const errType = pickString(o, 'errorType', 'error_type', 'type') ?? undefined;
+    const errMsg = pickString(o, 'errorMessage', 'error_message', 'error', 'message') ?? undefined;
     const composedError = errCode && errMsg ? `${errCode}: ${errMsg}` : errCode ?? errMsg ?? undefined;
     return {
       // `platformPostId` is Zernio's first-class field for the published
@@ -783,6 +821,9 @@ function mapPublishPlatforms(
       platformPostUrl:
         pickString(o, 'platformPostUrl', 'platform_post_url', 'url') ?? undefined,
       error: composedError,
+      errorCode: errCode,
+      errorType: errType,
+      errorMessage: errMsg,
     };
   });
 }
@@ -794,6 +835,9 @@ function mapPlatformRow(r: {
   status?: string;
   platformPostUrl?: string;
   error?: string;
+  errorCode?: string;
+  errorType?: string;
+  errorMessage?: string;
 }): PublishResult['platforms'][0] {
   const plat = PLATFORM_MAP[r.platform ?? ''] ?? ('instagram' as SocialPlatform);
   const profileId = r.accountId ?? r.id ?? '';
@@ -804,6 +848,9 @@ function mapPlatformRow(r: {
     externalPostId: r.id ?? r.accountId,
     externalPostUrl: r.platformPostUrl,
     error: r.error,
+    errorCode: r.errorCode,
+    errorType: r.errorType,
+    errorMessage: r.errorMessage,
   };
 }
 
@@ -1200,7 +1247,7 @@ export class ZernioPostingService implements PostingService {
         series,
       };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const { msg } = zernioErrSummary(err);
       // 402 = analytics add-on required, 404 = unsupported — degrade gracefully.
       if (!msg.includes('402') && !msg.includes('404') && !msg.includes('501')) {
         console.warn(`[zernio] follower-stats failed for ${accountId}: ${msg}`);
@@ -1273,7 +1320,7 @@ export class ZernioPostingService implements PostingService {
         reachSeries: toSeries('reach'),
       };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const { msg } = zernioErrSummary(err);
       if (!msg.includes('402') && !msg.includes('404') && !msg.includes('501')) {
         console.warn(`[zernio] IG insights failed for ${accountId}: ${msg}`);
       }
@@ -1367,7 +1414,7 @@ export class ZernioPostingService implements PostingService {
         unfollows,
       };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const { msg } = zernioErrSummary(err);
       if (!msg.includes('402') && !msg.includes('404') && !msg.includes('501')) {
         console.warn(`[zernio] IG account metrics failed for ${accountId}: ${msg}`);
       }
@@ -1428,7 +1475,7 @@ export class ZernioPostingService implements PostingService {
         videoViewSeconds: pickWindow('page_video_view_time', 'video_view_time'),
       };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const { msg } = zernioErrSummary(err);
       if (!msg.includes('402') && !msg.includes('404') && !msg.includes('501')) {
         console.warn(`[zernio] FB page insights failed for ${accountId}: ${msg}`);
       }
@@ -1472,7 +1519,7 @@ export class ZernioPostingService implements PostingService {
           pickNum(metrics, 'averageViewDuration') || pickNum(metrics, 'average_view_duration'),
       };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const { msg } = zernioErrSummary(err);
       if (!msg.includes('402') && !msg.includes('404') && !msg.includes('501')) {
         console.warn(`[zernio] YT channel insights failed for ${accountId}: ${msg}`);
       }
@@ -1533,7 +1580,7 @@ export class ZernioPostingService implements PostingService {
         pageViewsByPage,
       };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const { msg } = zernioErrSummary(err);
       if (msg.includes('412')) {
         // Surface the re-auth link if Zernio included one so the admin UI
         // can prompt the connected user to grant the missing scopes.
@@ -1588,7 +1635,7 @@ export class ZernioPostingService implements PostingService {
           pickNum(metrics, 'videos'),
       };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const { msg } = zernioErrSummary(err);
       if (!msg.includes('402') && !msg.includes('404') && !msg.includes('501')) {
         console.warn(`[zernio] TT account insights failed for ${accountId}: ${msg}`);
       }
@@ -1634,7 +1681,7 @@ export class ZernioPostingService implements PostingService {
         })
         .filter((x): x is { date: string; followers: number } => x !== null);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const { msg } = zernioErrSummary(err);
       if (!msg.includes('402') && !msg.includes('404') && !msg.includes('501')) {
         console.warn(`[zernio] IG follower history failed for ${accountId}: ${msg}`);
       }
@@ -1669,7 +1716,7 @@ export class ZernioPostingService implements PostingService {
         const raw = await zernioRequest<unknown>(`/analytics?${params}`);
         root = asRecord(raw) ?? {};
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const { msg } = zernioErrSummary(err);
         console.warn(`[zernio] /analytics page ${page} for ${query.accountId}: ${msg}`);
         break;
       }
@@ -1748,7 +1795,7 @@ export class ZernioPostingService implements PostingService {
           impressions: pickNum(data, 'impressions') || null,
         };
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const { msg } = zernioErrSummary(err);
         if (msg.includes('404') || msg.includes('501')) {
           continue; // try next path
         }
@@ -1789,7 +1836,7 @@ export class ZernioPostingService implements PostingService {
         })
         .filter((x): x is { date: string; followers: number } => x !== null);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const { msg } = zernioErrSummary(err);
       if (!msg.includes('404') && !msg.includes('501')) {
         console.warn(`[zernio] follower series failed for ${accountId}:`, msg);
       }
@@ -1840,7 +1887,7 @@ export class ZernioPostingService implements PostingService {
         raw: root,
       };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const { msg } = zernioErrSummary(err);
       if (!msg.includes('404')) console.warn(`[zernio] health ${accountId}:`, msg);
       return null;
     }
@@ -1905,7 +1952,7 @@ export class ZernioPostingService implements PostingService {
         })
         .filter((x): x is NonNullable<typeof x> => x !== null && x.timestamp !== '');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const { msg } = zernioErrSummary(err);
       if (!msg.includes('404')) console.warn(`[zernio] post-timeline ${postId}:`, msg);
       return [];
     }
@@ -1946,7 +1993,7 @@ export class ZernioPostingService implements PostingService {
             })
             .filter((x): x is { dimension: string; value: number } => x !== null && x.dimension !== '');
         } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
+          const { msg } = zernioErrSummary(err);
           if (!msg.includes('404') && !msg.includes('402')) {
             console.warn(`[zernio] IG demographics ${bd} for ${accountId}:`, msg);
           }
@@ -1981,7 +2028,7 @@ export class ZernioPostingService implements PostingService {
       };
       return { age: toRows(demo.age), gender: toRows(demo.gender), country: toRows(demo.country) };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const { msg } = zernioErrSummary(err);
       if (!msg.includes('404') && !msg.includes('402')) {
         console.warn(`[zernio] YT demographics ${accountId}:`, msg);
       }
@@ -2025,7 +2072,7 @@ export class ZernioPostingService implements PostingService {
         .filter((x): x is NonNullable<typeof x> => x !== null && x.date !== '')
         .sort((a, b) => a.date.localeCompare(b.date));
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const { msg } = zernioErrSummary(err);
       if (!msg.includes('404')) console.warn(`[zernio] YT daily-views ${videoId}:`, msg);
       return [];
     }
@@ -2053,7 +2100,7 @@ export class ZernioPostingService implements PostingService {
         })
         .filter((x): x is NonNullable<typeof x> => x !== null && x.id !== '');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const { msg } = zernioErrSummary(err);
       if (!msg.includes('404')) console.warn(`[zernio] LI orgs ${accountId}:`, msg);
       return [];
     }
@@ -2071,7 +2118,7 @@ export class ZernioPostingService implements PostingService {
       );
       return asRecord(raw);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const { msg } = zernioErrSummary(err);
       if (!msg.includes('404')) console.warn(`[zernio] LI post-analytics:`, msg);
       return null;
     }
@@ -2089,7 +2136,7 @@ export class ZernioPostingService implements PostingService {
       );
       return asRecord(raw);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const { msg } = zernioErrSummary(err);
       if (!msg.includes('404')) console.warn(`[zernio] LI post-reactions:`, msg);
       return null;
     }
@@ -2128,7 +2175,7 @@ export class ZernioPostingService implements PostingService {
           .filter((x): x is { value: string; label: string } => x !== null && x.value !== ''),
       };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const { msg } = zernioErrSummary(err);
       if (!msg.includes('404')) console.warn(`[zernio] TT creator-info ${accountId}:`, msg);
       return null;
     }
@@ -2162,7 +2209,7 @@ export class ZernioPostingService implements PostingService {
         })
         .filter((x): x is NonNullable<typeof x> => x !== null);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const { msg } = zernioErrSummary(err);
       if (!msg.includes('404')) console.warn('[zernio] best-time:', msg);
       return [];
     }
@@ -2181,7 +2228,7 @@ export class ZernioPostingService implements PostingService {
       const raw = await zernioRequest<unknown>(`/analytics/googlebusiness/performance?${params}`);
       return asRecord(raw);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const { msg } = zernioErrSummary(err);
       if (!msg.includes('404')) console.warn('[zernio] GMB performance:', msg);
       return null;
     }
@@ -2215,7 +2262,7 @@ export class ZernioPostingService implements PostingService {
         })
         .filter((x): x is NonNullable<typeof x> => x !== null && x.keyword !== '');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const { msg } = zernioErrSummary(err);
       if (!msg.includes('404')) console.warn('[zernio] GMB keywords:', msg);
       return [];
     }
@@ -2242,7 +2289,7 @@ export class ZernioPostingService implements PostingService {
         })
         .filter((x): x is NonNullable<typeof x> => x !== null && x.id !== '');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const { msg } = zernioErrSummary(err);
       if (!msg.includes('404')) console.warn('[zernio] FB pages:', msg);
       return [];
     }
@@ -2274,7 +2321,7 @@ export class ZernioPostingService implements PostingService {
         hasAccess: root.hasAccess === true,
       };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const { msg } = zernioErrSummary(err);
       if (!msg.includes('404')) console.warn('[zernio] usage-stats:', msg);
       return null;
     }

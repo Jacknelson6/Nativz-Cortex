@@ -606,7 +606,14 @@ export async function publishScheduledPost(
       })
       .eq('id', sppId);
 
-    if (platformResult.status === 'failed' && isAccountLevelLegError(reason)) {
+    if (
+      platformResult.status === 'failed' &&
+      isAccountLevelLegError({
+        errorCode: platformResult.errorCode,
+        errorType: platformResult.errorType,
+        message: platformResult.errorMessage ?? reason,
+      })
+    ) {
       try {
         await markProfileDisconnectedFromLegFailure({
           admin,
