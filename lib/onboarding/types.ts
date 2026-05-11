@@ -26,6 +26,22 @@ export type EmailLogKind =
   | 'ops_handoff'
   | 'poc_invite';
 
+export interface AdminStepOverrideEntry {
+  checked: boolean;
+  by?: string | null;
+  at?: string | null;
+}
+
+export type AdminStepOverrides = Record<string, AdminStepOverrideEntry>;
+
+export interface CompletionRequirements {
+  video_count?: number | null;
+  boosting_budget_cents?: number | null;
+  paid_media_webhook_ack?: boolean;
+  editing_webhook_ack?: boolean;
+  notes?: string | null;
+}
+
 /** Row shape for `public.onboardings`. */
 export interface OnboardingRow {
   id: string;
@@ -35,6 +51,8 @@ export interface OnboardingRow {
   current_step: number;
   share_token: string;
   step_state: Record<string, unknown>;
+  admin_step_overrides: AdminStepOverrides;
+  completion_requirements: CompletionRequirements;
   status: OnboardingStatus;
   started_at: string;
   completed_at: string | null;

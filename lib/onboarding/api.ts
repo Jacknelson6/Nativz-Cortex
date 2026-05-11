@@ -27,7 +27,7 @@ import type {
 } from './types';
 
 const ONBOARDING_COLUMNS =
-  'id, client_id, kind, platforms, current_step, share_token, step_state, status, started_at, completed_at, created_at, updated_at';
+  'id, client_id, kind, platforms, current_step, share_token, step_state, admin_step_overrides, completion_requirements, status, started_at, completed_at, created_at, updated_at';
 
 function dbOk<T>(data: T | null, error: { message?: string } | null, label: string): T {
   if (error) {
@@ -165,6 +165,57 @@ export async function advanceStep(
     .select(ONBOARDING_COLUMNS)
     .single();
   return dbOk(data as OnboardingRow | null, error, 'advanceStep');
+}
+
+/**
+ * Set or clear an admin override for one screen. UI shows the screen as
+ * "done" if the client walked past it OR an admin manually ticked it.
+ */
+export async function setStepOverride(
+  id: string,
+  screenKey: string,
+  checked: boolean,
+  triggeredBy: string | null,
+): Promise<OnboardingRow> {
+  const current = await getOnboardingById(id);
+  if (!current) throw new Error('[onboarding/setStepOverride] row not found');
+
+  const next = { ...(current.admin_step_overrides ?? {}) };
+  if (checked) {
+    next[screenKey] = { checked: true, by: triggeredBy, at: new Date().toISOString() };
+  } else {
+    delete next[screenKey];
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from('onboardings')
+    .update({ admin_step_overrides: next })
+    .eq('id', id)
+    .select(ONBOARDING_COLUMNS)
+    .single();
+  return dbOk(data as OnboardingRow | null, error, 'setStepOverride');
+}
+
+/**
+ * Merge a partial completion_requirements patch.
+ */
+export async function patchCompletionRequirements(
+  id: string,
+  patch: Record<string, unknown>,
+): Promise<OnboardingRow> {
+  const current = await getOnboardingById(id);
+  if (!current) throw new Error('[onboarding/patchCompletionRequirements] row not found');
+
+  const merged = { ...(current.completion_requirements ?? {}), ...patch };
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from('onboardings')
+    .update({ completion_requirements: merged })
+    .eq('id', id)
+    .select(ONBOARDING_COLUMNS)
+    .single();
+  return dbOk(data as OnboardingRow | null, error, 'patchCompletionRequirements');
 }
 
 export async function setStatus(id: string, status: OnboardingStatus): Promise<OnboardingRow> {

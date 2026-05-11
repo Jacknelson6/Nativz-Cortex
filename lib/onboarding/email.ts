@@ -242,19 +242,27 @@ export async function sendOnboardingWelcomeEmail(opts: {
 
 type NudgeKind = 'manual' | 'step_reminder' | 'lagging_nudge';
 
-export async function sendOnboardingNudgeEmail(opts: {
+interface NudgeRender {
+  subject: string;
+  eyebrow: string;
+  heroTitle: string;
+  intro: string;
+  cta: string;
+  url: string;
+  brandBlue: string;
+  agency: AgencyBrand;
+  progress: string;
+  preview: string;
+}
+
+async function renderNudge(opts: {
   onboarding: OnboardingRow;
   kind: NudgeKind;
-  recipient_email?: string;
-  /** Optional admin-authored note. If present, replaces the default body copy. */
   message?: string;
-  triggered_by?: string;
-}): Promise<OnboardingEmailResult[]> {
+}): Promise<NudgeRender> {
   const client = await loadClient(opts.onboarding.client_id);
-  const recipients = await resolveRecipients(client.client_id, opts.recipient_email);
   const brand = getEmailBrand(client.agency);
   const url = shareUrl(client.agency, opts.onboarding.share_token);
-
   const progress = progressLine(opts.onboarding.kind, opts.onboarding.current_step);
 
   let eyebrow: string;
@@ -285,27 +293,75 @@ export async function sendOnboardingNudgeEmail(opts: {
     cta = 'Open onboarding';
   }
 
-  const previewBody = opts.message
-    ? preview(opts.message)
-    : preview(intro.replace(/<[^>]+>/g, ''));
+  return {
+    subject,
+    eyebrow,
+    heroTitle,
+    intro,
+    cta,
+    url,
+    brandBlue: brand.blue,
+    agency: client.agency,
+    progress,
+    preview: opts.message
+      ? preview(opts.message)
+      : preview(intro.replace(/<[^>]+>/g, '')),
+  };
+}
 
-  const results: OnboardingEmailResult[] = [];
-  for (const recipient of recipients) {
-    const body = `
+function nudgeBodyHtml(r: NudgeRender, recipient: RecipientCtx): string {
+  return `
       <p class="subtext">${greeting(recipient.first_name)},</p>
-      <p class="subtext">${intro}</p>
-      <p class="subtext"><em>${escape(progress)}</em></p>
+      <p class="subtext">${r.intro}</p>
+      <p class="subtext"><em>${escape(r.progress)}</em></p>
       <div class="button-wrap" style="text-align:center;">
-        <a href="${url}" class="button">${cta}</a>
+        <a href="${r.url}" class="button">${r.cta}</a>
       </div>
       <hr class="divider" />
       <p class="small" style="text-align:center;">
         If the button doesn't work, paste this into your browser:<br />
-        <a href="${url}" style="color:${brand.blue};">${url}</a>
+        <a href="${r.url}" style="color:${r.brandBlue};">${r.url}</a>
       </p>
     `;
+}
 
-    const html = layout(body, client.agency, { eyebrow, heroTitle });
+/**
+ * Render the full nudge HTML for preview, without sending. Uses a
+ * placeholder "Recipient" greeting since the live send fan-outs per POC.
+ */
+export async function previewOnboardingNudgeEmail(opts: {
+  onboarding: OnboardingRow;
+  kind: NudgeKind;
+  message?: string;
+}): Promise<{ subject: string; html: string }> {
+  const r = await renderNudge(opts);
+  const html = layout(
+    nudgeBodyHtml(r, { email: '', first_name: null }),
+    r.agency,
+    { eyebrow: r.eyebrow, heroTitle: r.heroTitle },
+  );
+  return { subject: r.subject, html };
+}
+
+export async function sendOnboardingNudgeEmail(opts: {
+  onboarding: OnboardingRow;
+  kind: NudgeKind;
+  recipient_email?: string;
+  /** Optional admin-authored note. If present, replaces the default body copy. */
+  message?: string;
+  triggered_by?: string;
+}): Promise<OnboardingEmailResult[]> {
+  const client = await loadClient(opts.onboarding.client_id);
+  const recipients = await resolveRecipients(client.client_id, opts.recipient_email);
+  const r = await renderNudge(opts);
+  const previewBody = r.preview;
+
+  const results: OnboardingEmailResult[] = [];
+  for (const recipient of recipients) {
+    const html = layout(nudgeBodyHtml(r, recipient), r.agency, {
+      eyebrow: r.eyebrow,
+      heroTitle: r.heroTitle,
+    });
 
     const sent = await sendAndLog({
       category: 'transactional',
@@ -313,7 +369,7 @@ export async function sendOnboardingNudgeEmail(opts: {
       agency: client.agency,
       to: recipient.email,
       recipientName: recipient.first_name,
-      subject,
+      subject: r.subject,
       html,
       clientId: client.client_id,
       metadata: {
@@ -325,10 +381,64 @@ export async function sendOnboardingNudgeEmail(opts: {
       },
     });
 
-    results.push(shellResult(recipient.email, subject, previewBody, sent));
+    results.push(shellResult(recipient.email, r.subject, previewBody, sent));
   }
 
   return results;
+}
+
+// ── Team assignment (internal: ping the Nativz teammate just assigned) ───
+
+/**
+ * Internal-only: fires when an admin assigns a team member to an
+ * onboarding. The teammate gets a short "you're on this brand" email
+ * pointing at the admin detail page.
+ */
+export async function sendOnboardingTeamAssignedEmail(opts: {
+  onboarding: OnboardingRow;
+  to: string;
+  recipient_name: string | null;
+  role_label: string;
+  triggered_by?: string;
+}): Promise<OnboardingEmailResult> {
+  const client = await loadClient(opts.onboarding.client_id);
+
+  const subject = `You're on ${client.client_name} (${opts.role_label})`;
+  const eyebrow = 'New brand assignment';
+  const heroTitle = `${client.client_name} - ${opts.role_label}`;
+
+  const adminLink = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://cortex.nativz.io'}/admin/onboarding/${opts.onboarding.id}`;
+
+  const intro = `You've been assigned as ${opts.role_label} for ${escape(client.client_name)}. Their onboarding is in flight; the link below opens the admin tracker so you can see step state, contacts, and the latest email touches.`;
+
+  const body = `
+    <p class="subtext">${greeting(firstName(opts.recipient_name))},</p>
+    <p class="subtext">${intro}</p>
+    <div class="button-wrap" style="text-align:center;">
+      <a href="${adminLink}" class="button">Open in Cortex</a>
+    </div>
+  `;
+
+  const html = layout(body, client.agency, { eyebrow, heroTitle });
+
+  const sent = await sendAndLog({
+    category: 'transactional',
+    typeKey: 'onboarding_team_assigned',
+    agency: client.agency,
+    to: opts.to,
+    recipientName: opts.recipient_name,
+    subject,
+    html,
+    clientId: client.client_id,
+    metadata: {
+      onboarding_id: opts.onboarding.id,
+      kind: opts.onboarding.kind,
+      role: opts.role_label,
+      triggered_by: opts.triggered_by ?? null,
+    },
+  });
+
+  return shellResult(opts.to, subject, preview(intro), sent);
 }
 
 // ── Completion (sent once when status flips to 'completed') ──────────────

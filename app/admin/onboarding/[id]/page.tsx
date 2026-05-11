@@ -27,6 +27,17 @@ interface ClientLite {
   slug: string;
   agency: string | null;
   logo_url: string | null;
+  chat_webhook_url: string | null;
+  paid_media_webhook_url: string | null;
+}
+
+interface ContactLite {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  role: string | null;
+  is_primary: boolean | null;
 }
 
 export default async function AdminOnboardingDetailPage({
@@ -39,10 +50,10 @@ export default async function AdminOnboardingDetailPage({
   if (!row) notFound();
 
   const admin = createAdminClient();
-  const [{ data: clientRow }, emails, team, { data: members }] = await Promise.all([
+  const [{ data: clientRow }, emails, team, { data: members }, { data: contacts }] = await Promise.all([
     admin
       .from('clients')
-      .select('id, name, slug, agency, logo_url')
+      .select('id, name, slug, agency, logo_url, chat_webhook_url, paid_media_webhook_url')
       .eq('id', row.client_id)
       .single<ClientLite>(),
     listEmailLog(id),
@@ -52,6 +63,13 @@ export default async function AdminOnboardingDetailPage({
       .select('id, name, email, role')
       .eq('is_active', true)
       .order('name'),
+    admin
+      .from('contacts')
+      .select('id, name, email, phone, role, is_primary')
+      .eq('client_id', row.client_id)
+      .order('is_primary', { ascending: false })
+      .order('name')
+      .returns<ContactLite[]>(),
   ]);
 
   const progress = describeProgress(row);
@@ -73,6 +91,7 @@ export default async function AdminOnboardingDetailPage({
         emails={emails}
         team={team}
         members={members ?? []}
+        contacts={contacts ?? []}
         progress={progress}
         screens={screens}
       />

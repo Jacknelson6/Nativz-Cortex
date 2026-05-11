@@ -16,9 +16,13 @@ import { getOnboardingAdminContext } from '@/lib/onboarding/admin-auth';
 import {
   getOnboardingById,
   listTeamAssignments,
+  logEmail,
   upsertTeamAssignment,
 } from '@/lib/onboarding/api';
+import { sendOnboardingTeamAssignedEmail } from '@/lib/onboarding/email';
 import type { TeamRole } from '@/lib/onboarding/types';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { postToGoogleChat, isGoogleChatWebhook } from '@/lib/chat/post-to-google-chat';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -90,6 +94,69 @@ export async function POST(
       role: parsed.data.role,
       is_primary: parsed.data.is_primary,
     });
+
+    // Fire-and-forget notifications: load the teammate row + client chat
+    // webhook in parallel, then send email + Google Chat ping. Failures
+    // are logged but never roll back the assignment.
+    const admin = createAdminClient();
+    const [{ data: member }, { data: clientRow }] = await Promise.all([
+      admin
+        .from('team_members')
+        .select('id, name, email')
+        .eq('id', parsed.data.team_member_id)
+        .single<{ id: string; name: string | null; email: string | null }>(),
+      admin
+        .from('clients')
+        .select('chat_webhook_url, name')
+        .eq('id', row.client_id)
+        .single<{ chat_webhook_url: string | null; name: string }>(),
+    ]);
+
+    const roleLabel: Record<TeamRole, string> = {
+      account_manager: 'Account manager',
+      strategist: 'Strategist',
+      smm: 'SMM',
+      editor: 'Editor',
+      videographer: 'Videographer',
+      poc: 'Client POC',
+    };
+
+    if (member?.email) {
+      try {
+        const sent = await sendOnboardingTeamAssignedEmail({
+          onboarding: row,
+          to: member.email,
+          recipient_name: member.name,
+          role_label: roleLabel[parsed.data.role],
+          triggered_by: guard.ctx.user.id,
+        });
+        await logEmail({
+          onboarding_id: row.id,
+          kind: 'team_assigned',
+          to_email: sent.to,
+          subject: sent.subject,
+          body_preview: sent.body_preview,
+          resend_id: sent.resend_id,
+          ok: sent.ok,
+          error: sent.error,
+          triggered_by: guard.ctx.user.id,
+        });
+      } catch (notifyErr) {
+        console.warn('[onboarding/team] assign email failed:', notifyErr);
+      }
+    }
+
+    if (clientRow?.chat_webhook_url && isGoogleChatWebhook(clientRow.chat_webhook_url)) {
+      try {
+        const memberLabel = member?.name ?? member?.email ?? 'A teammate';
+        await postToGoogleChat(clientRow.chat_webhook_url, {
+          text: `*${memberLabel}* assigned as ${roleLabel[parsed.data.role]} on ${clientRow.name}.`,
+        });
+      } catch (chatErr) {
+        console.warn('[onboarding/team] chat ping failed:', chatErr);
+      }
+    }
+
     return NextResponse.json({ assignment }, { status: 201 });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown error';
