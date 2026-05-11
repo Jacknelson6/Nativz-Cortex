@@ -74,6 +74,16 @@ export interface ReviewLinkRow {
   client_logo_url: string | null;
   post_count: number;
   approved_count: number;
+  /**
+   * Approved deliverable breakdown by media type. Drives the accounting
+   * CSV export which bills $50/video and $15/static. Calendar rows split
+   * the count via `content_drop_videos.media_type`; editing-project rows
+   * (always video-only) put the full `approved_count` on the video field.
+   * Optional so legacy serialized rows in tests / mocks still satisfy the
+   * type without backfilling.
+   */
+  approved_video_count?: number;
+  approved_image_count?: number;
   changes_count: number;
   pending_count: number;
   status: ReviewLinkStatus;

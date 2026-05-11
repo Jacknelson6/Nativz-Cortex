@@ -59,12 +59,12 @@ const GROUP_BY_OPTIONS: { value: GroupByMonth; label: string }[] = [
   { value: 'approved', label: 'Approved in month' },
 ];
 
-const PROJECT_TYPE_CSV_LABEL: Record<string, string> = {
-  organic_content: 'Organic Content',
-  social_ads: 'Social Ads',
-  ctv_ads: 'CTV Ads',
-  other: 'Other',
-};
+// Accounting math. Finance bills clients by deliverable count, split by
+// media type. Kept as named constants so the CSV stays the single source
+// of truth — if rates change, update them here and the invoice math
+// re-flows on next export.
+const VIDEO_UNIT_COST = 50;
+const STATIC_UNIT_COST = 15;
 
 function csvEscape(value: string): string {
   // Wrap in quotes whenever the value contains a comma, quote, or newline
@@ -77,38 +77,47 @@ function csvEscape(value: string): string {
   return value;
 }
 
+/** Dollar amount formatted like `$1,250.00` for the accounting sheet. */
+function formatMoney(amount: number): string {
+  return `$${amount.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
 function downloadApprovedMonthCsv(
   monthLabel: string,
   rows: ReviewLinkRow[],
 ): void {
   // Finance records completed deliverables per calendar month so we can
-  // invoice in arrears. One row per approved deliverable, columns chosen
-  // to match the finance team's existing accounting sheet.
+  // invoice in arrears. Brand-first, project last (Jack's preferred read
+  // order), and rows with zero approved deliverables drop out entirely —
+  // they're noise for the invoice. Each row breaks the count into Videos
+  // ($50 each) vs Statics ($15 each) so the team can reconcile against
+  // the per-unit rate without re-counting media types by hand.
+  const billableRows = rows.filter((r) => (r.approved_count ?? 0) > 0);
   const header = [
-    'Approved date',
     'Brand',
+    'Videos',
+    'Video cost',
+    'Statics',
+    'Static cost',
+    'Total',
     'Project',
-    'Type',
-    'Deliverables',
-    'Project ID',
   ];
-  const body = rows.map((r) => {
-    const approved = r.approved_at
-      ? new Date(r.approved_at).toISOString().slice(0, 10)
-      : '';
-    const typeLabel =
-      r.project_type === 'other'
-        ? r.project_type_other?.trim() || 'Other'
-        : r.project_type
-          ? PROJECT_TYPE_CSV_LABEL[r.project_type] ?? r.project_type
-          : '';
+  const body = billableRows.map((r) => {
+    const videos = r.approved_video_count ?? 0;
+    const statics = r.approved_image_count ?? 0;
+    const videoCost = videos * VIDEO_UNIT_COST;
+    const staticCost = statics * STATIC_UNIT_COST;
     return [
-      approved,
       r.client_name ?? '',
+      String(videos),
+      formatMoney(videoCost),
+      String(statics),
+      formatMoney(staticCost),
+      formatMoney(videoCost + staticCost),
       r.name ?? '',
-      typeLabel,
-      String(r.approved_count ?? 0),
-      r.editing_project_id ?? r.id,
     ].map(csvEscape).join(',');
   });
   const csv = [header.join(','), ...body].join('\n');
@@ -322,6 +331,10 @@ function editingProjectToRow(p: EditingProject): ReviewLinkRow {
     client_logo_url: p.client_logo_url,
     post_count: p.video_count,
     approved_count: p.approved_count,
+    // Editing projects are video-only deliverables (raw clips → final cuts),
+    // so every approved item bills at the video rate.
+    approved_video_count: p.approved_count,
+    approved_image_count: 0,
     changes_count: p.changes_count,
     pending_count: p.pending_count,
     status: reviewDerivedStatus ?? statusForReview(p.status),

@@ -183,12 +183,40 @@ export async function GET(req: Request) {
     return null;
   }
 
+  // Step 5b: pull media_type for every included post so the accounting CSV
+  // can split approved deliverables into "video" vs "static" buckets (Jack
+  // bills $50/video, $15/static). `content_drop_videos` is misnamed: it
+  // holds both video and image posts, with `media_type` ('video'|'image')
+  // as the discriminator. We only need the IDs that are actually referenced
+  // by an unarchived share link, so the query stays cheap even on big
+  // accounts.
+  const includedPostIds = new Set<string>();
+  for (const l of links as LinkRow[]) {
+    for (const id of l.included_post_ids ?? []) {
+      if (typeof id === 'string') includedPostIds.add(id);
+    }
+  }
+  const mediaTypeByPostId = new Map<string, 'video' | 'image'>();
+  if (includedPostIds.size > 0) {
+    const { data: postMedia } = await admin
+      .from('content_drop_videos')
+      .select('id, media_type')
+      .in('id', Array.from(includedPostIds));
+    for (const row of (postMedia ?? []) as { id: string; media_type: string | null }[]) {
+      if (row.media_type === 'image' || row.media_type === 'video') {
+        mediaTypeByPostId.set(row.id, row.media_type);
+      }
+    }
+  }
+
   const now = Date.now();
   const out = (links as LinkRow[]).map((link) => {
     const drop = dropById.get(link.drop_id);
     const client = drop ? clientById.get(drop.client_id) : null;
 
     let approvedCount = 0;
+    let approvedVideoCount = 0;
+    let approvedImageCount = 0;
     let changesCount = 0;
     let pendingCount = 0;
     for (const postId of link.included_post_ids ?? []) {
@@ -197,8 +225,14 @@ export async function GET(req: Request) {
         ? commentsByReviewLink.get(reviewLinkId) ?? []
         : [];
       const s = postStatus(comments);
-      if (s === 'approved') approvedCount += 1;
-      else if (s === 'changes_requested') changesCount += 1;
+      if (s === 'approved') {
+        approvedCount += 1;
+        // Default unknown media_type to 'video' so legacy rows still bill;
+        // pre-migration drops were video-only.
+        const mt = mediaTypeByPostId.get(postId) ?? 'video';
+        if (mt === 'image') approvedImageCount += 1;
+        else approvedVideoCount += 1;
+      } else if (s === 'changes_requested') changesCount += 1;
       else pendingCount += 1;
     }
 
@@ -259,6 +293,8 @@ export async function GET(req: Request) {
       client_logo_url: client?.logo_url ?? null,
       post_count: link.included_post_ids?.length ?? 0,
       approved_count: approvedCount,
+      approved_video_count: approvedVideoCount,
+      approved_image_count: approvedImageCount,
       changes_count: changesCount,
       pending_count: pendingCount,
       status,
