@@ -15,6 +15,13 @@ export interface SocialProfile {
   username: string;
   avatarUrl: string | null;
   isActive: boolean;
+  /**
+   * Zernio profile id this account is attached to. Stored on
+   * `clients.late_profile_id`. May be null when Zernio omits the field
+   * (older accounts) — callers should treat null as "unknown attachment"
+   * and skip reconciliation rather than nuke local rows.
+   */
+  profileId?: string | null;
 }
 
 export type PublishMediaItem = {

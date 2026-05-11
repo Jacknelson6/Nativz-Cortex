@@ -1036,6 +1036,15 @@ export class ZernioPostingService implements PostingService {
       const o = asRecord(item) ?? {};
       const id = pickString(o, '_id', 'id') ?? '';
       const platformStr = pickString(o, 'platform') ?? 'instagram';
+      // Zernio returns `profileId` as a nested object `{ _id, name }` on
+      // GET /accounts (populated reference), not the bare ObjectId pickString
+      // expects. We unwrap both shapes so callers (and the missing-account
+      // reconciler below) can always rely on a flat string profile id.
+      const profileIdRaw = o.profileId ?? o.profile_id;
+      const profileId =
+        typeof profileIdRaw === 'string'
+          ? profileIdRaw
+          : pickString(asRecord(profileIdRaw) ?? {}, '_id', 'id') ?? null;
       return {
         id,
         platform: PLATFORM_MAP[platformStr] ?? (platformStr as SocialPlatform),
@@ -1043,6 +1052,7 @@ export class ZernioPostingService implements PostingService {
         username: pickString(o, 'username') ?? '',
         avatarUrl: pickString(o, 'avatarUrl', 'avatar_url', 'avatar'),
         isActive: o.isActive !== false && o.is_active !== false,
+        profileId,
       };
     });
   }

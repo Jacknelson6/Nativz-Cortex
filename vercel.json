@@ -140,6 +140,10 @@
       "schedule": "0 10 * * *"
     },
     {
+      "path": "/api/cron/sync-zernio-accounts",
+      "schedule": "0 * * * *"
+    },
+    {
       "path": "/api/cron/refresh-openrouter-models",
       "schedule": "0 4 1,15 * *"
     },
