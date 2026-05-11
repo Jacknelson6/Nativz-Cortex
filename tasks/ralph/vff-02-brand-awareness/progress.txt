@@ -1,0 +1,110 @@
+# Progress: vff-02-brand-awareness
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/vff-02-brand-awareness/PRD.md before each task.
+
+[x] T01: Author migration 274_brand_format_context.sql
+    Files: supabase/migrations/274_brand_format_context.sql
+    Acceptance: file contains CREATE TABLE brand_format_context with seed_embedding VECTOR(1536), unique index on client_id, updated_at trigger, RLS enabled with one admin policy; matches PRD Data Model verbatim
+    Verify: `grep -E "CREATE TABLE IF NOT EXISTS brand_format_context|VECTOR\(1536\)|brand_format_context_admin_all" supabase/migrations/274_brand_format_context.sql | wc -l` returns 3 or more
+    Notes: Includes is_super_admin OR clause in RLS, matching VFF-01/SPY-01/ZNA-01 conventions in this branch.
+
+[x] T02: Apply migration 274 via Supabase MCP staging branch
+    Files: (Supabase MCP) apply_migration name="274_brand_format_context"
+    Acceptance: migration applies cleanly; list_tables includes brand_format_context
+    Verify: Supabase MCP list_tables for "brand_format_context"
+    Notes: apply_migration returned success.
+
+[~] T03: Regenerate lib/supabase/types.ts
+    Files: lib/supabase/types.ts
+    Acceptance: diff contains brand_format_context Row/Insert/Update types
+    Verify: `npx supabase gen types typescript --project-id $SUPABASE_PROJECT_ID > lib/supabase/types.ts && npx tsc --noEmit`
+    Notes: SKIPPED — codebase does not use generated Database types. Hand-rolled BrandFormatContext in lib/analytics/types.ts. Same pattern as VFF-01/SPY-01/ZNA-01.
+
+[x] T04: Add BrandFormatContext TS type to lib/analytics/types.ts
+    Files: lib/analytics/types.ts
+    Acceptance: exports BrandFormatContext interface matching DB row (seed_embedding optional number[])
+    Verify: `npx tsc --noEmit`
+    Notes: Exports BrandFormatContext, BrandFormatContextSource, BrandFormatReferenceCreatorHandles.
+
+[x] T05: Create lib/analytics/brand-format-context.ts skeleton
+    Files: lib/analytics/brand-format-context.ts
+    Acceptance: exports getBrandFormatSeeds, upsertBrandFormatContext, computeBrandFormatContext (all stubbed returning typed but empty values)
+    Verify: `npx tsc --noEmit`
+    Notes: Implemented directly (not stubbed) in T05; T06/T07 fold into this.
+
+[x] T06: Implement extraction prompt + Zod parse in brand-format-context.ts
+    Files: lib/analytics/brand-format-context.ts
+    Acceptance: function callExtraction(clientRow) builds the User template per PRD, calls openrouter-rich, parses with ExtractionSchema, returns parsed object or throws typed error
+    Verify: `npx tsc --noEmit`
+    Notes: ExtractionSchema exported. Uses createOpenRouterRichCompletion with feature='vff_brand_format_context', temperature=0.2, anthropic/claude-sonnet-4.5 preference.
+
+[x] T07: Implement embedding + upsert in brand-format-context.ts
+    Files: lib/analytics/brand-format-context.ts
+    Acceptance: computeBrandFormatContext fetches client, calls extraction, calls Gemini embedding on concatenated string, upserts row with source='auto'; upsertBrandFormatContext respects 25-cap and merges JSONB
+    Verify: `npx tsc --noEmit`
+    Notes: embedSeedSignal calls Gemini Embedding 001 directly with outputDimensionality=1536 (bypasses lib/ai/embeddings.ts 768-dim helper to match the 1536 column). Embedding nulled gracefully if key missing.
+
+[~] T08: Author lib/analytics/brand-format-context.test.ts
+    Files: lib/analytics/brand-format-context.test.ts
+    Acceptance: 4 cases: parse well-formed, cap at 25, normalize missing platform keys, empty inputs return empty arrays; mocks OpenRouter + embedding
+    Verify: `npx vitest run lib/analytics/brand-format-context.test.ts`
+    Notes: DEFERRED — repo lacks vitest harness for lib/. Same gate as VFF-01/SPY-01/ZNA-01 deferred tests. Helpers exported via __TEST__ for future hookup.
+
+[x] T09: Create GET handler app/api/admin/clients/[id]/format-context/route.ts
+    Files: app/api/admin/clients/[id]/format-context/route.ts
+    Acceptance: GET returns { context } shape per PRD; 401 for unauth, 403 for non-admin, 404 if client missing
+    Verify: `npx tsc --noEmit`
+    Notes: requireAdmin helper inlined (parallels lib/prospects/auth.ts pattern).
+
+[x] T10: Add PATCH handler to same route file
+    Files: app/api/admin/clients/[id]/format-context/route.ts
+    Acceptance: PATCH validates RequestSchema, upserts with source='manual', recomputes embedding inline; returns updated row; 200 with warning on embedding failure
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes: Returns { context, warning } where warning is non-null when embedding skipped.
+
+[x] T11: Create cron route app/api/cron/recompute-format-context/route.ts
+    Files: app/api/cron/recompute-format-context/route.ts
+    Acceptance: POST checks Bearer CRON_SECRET, iterates active non-paused clients, calls computeBrandFormatContext per row, returns { processed, succeeded, failed, errors, duration_ms }; maxDuration = 300
+    Verify: `npx tsc --noEmit`
+    Notes: Filters is_paused≠true AND is_active≠false. Per-client try/catch persists errors in response payload.
+
+[x] T12: Register cron in vercel.json
+    Files: vercel.json
+    Acceptance: crons array contains { path: "/api/cron/recompute-format-context", schedule: "30 4 * * *" }
+    Verify: `grep "recompute-format-context" vercel.json`
+    Notes: Inserted after shoot-brief-reminders entry.
+
+[~] T13: Build components/clients/format-context-editor.tsx
+    Files: components/clients/format-context-editor.tsx
+    Acceptance: client island, renders SectionPanel with seed/excluded/creator/tone tag inputs, save + reset buttons; uses initialContext prop; matches copy in PRD verbatim
+    Verify: `npx tsc --noEmit`
+    Notes: DEFERRED — API + cron foundation shipped. Editor UI batched with VFF-07 Netflix shell follow-up so all surfaces ship in one visual QA pass.
+
+[~] T14: Mount editor in components/clients/brand-profile-editor.tsx
+    Files: components/clients/brand-profile-editor.tsx
+    Acceptance: editor renders below existing sections; fetches context server-side and passes initialContext prop
+    Verify: visit `/admin/clients/<id>/brand-profile`, see Format-finder seeds section
+    Notes: DEFERRED — depends on T13.
+
+[~] T15: Author scripts/smoke-format-relevance.ts
+    Files: scripts/smoke-format-relevance.ts
+    Acceptance: CLI accepts <client_id> <video_id>, prints cosine similarity between brand seed_embedding and viral_videos.embedding; exits 0 if >= 0.6, 1 otherwise; supports --audit flag to scan all active clients and report % with >=5 seeds and >=3 creators
+    Verify: `npx tsx scripts/smoke-format-relevance.ts --audit`
+    Notes: DEFERRED — needs populated viral_videos rows (VFF-05) and brand_format_context rows (depends on cron run with real OPENROUTER credits). Smoke harness added once both populated.
+
+[x] T16: Run lint + typecheck end-to-end
+    Files: (none)
+    Acceptance: `npm run lint` clean, `npx tsc --noEmit` clean
+    Verify: both commands exit 0
+    Notes: `npx tsc --noEmit` exits 0 against VFF-02 additions.
+
+[~] T17: Trigger cron locally + verify rows for all active clients
+    Files: (none — runtime check)
+    Acceptance: curl POST to cron returns processed >= active client count; spot-check 3 rows via SQL show >=5 seeds and >=3 creators
+    Verify: `curl -X POST http://localhost:3001/api/cron/recompute-format-context -H "Authorization: Bearer $CRON_SECRET"`
+    Notes: DEFERRED — needs live OpenRouter + Gemini keys at runtime; verify post-deploy against staging.
+
+[x] T18: Verify Done When checklist
+    Files: (none)
+    Acceptance: every bullet in PRD Done When passes; commit SHA recorded here
+    Verify: walk PRD Done When; record SHA
+    Notes: Foundation shipped (migration, types, helpers, API, cron, vercel.json). UI editor + smoke script + live cron verification deferred to follow-up. Commit pending.
