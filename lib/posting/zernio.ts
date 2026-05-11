@@ -1090,11 +1090,24 @@ export class ZernioPostingService implements PostingService {
    * on days a post shipped and double-counted lifetime impressions).
    */
   async getDailyMetrics(query: DailyMetricsQuery): Promise<DailyMetric[]> {
+    // Zernio canon: account_id + platform + from + to + granularity. We keep
+    // the legacy camelCase aliases too (accountId/fromDate/toDate) because
+    // older "Late"-era endpoints still accepted those, and Zernio's gateway
+    // is tolerant. Adding the canonical snake_case + platform is the fix
+    // for the audit drift: without `platform`, cross-platform aggregates
+    // were leaking into per-platform reads.
     const params = new URLSearchParams({
       accountId: query.accountId,
+      account_id: query.accountId,
       fromDate: query.startDate,
+      from: query.startDate,
       toDate: query.endDate,
+      to: query.endDate,
+      granularity: 'daily',
     });
+    if (query.platform) {
+      params.set('platform', query.platform);
+    }
     const raw = await zernioRequest<unknown>(`/analytics/daily-metrics?${params}`);
     const root = asRecord(raw) ?? {};
     const dailyData = Array.isArray(root.dailyData) ? root.dailyData : [];
@@ -1834,17 +1847,35 @@ export class ZernioPostingService implements PostingService {
   }
 
   /**
-   * GET /v1/analytics/post-timeline?postId=… — per-post engagement timeline
-   * (hourly engagement accumulation). Returns null when the post isn't
+   * GET /v1/analytics/post-timeline?post_id=… — per-post engagement timeline
+   * (hourly cumulative + delta accumulation). Returns [] when the post isn't
    * indexed yet. Used for drill-down on a single high-performing post.
+   *
+   * Canon: `post_id` (snake_case). We send both forms for back-compat with
+   * older Late routes. Response shape expands beyond just impressions /
+   * engagement: views, likes, comments, shares, saves are all available
+   * per-point. Consumers can read whichever they care about.
    */
   async getPostTimeline(
     postId: string,
-  ): Promise<Array<{ timestamp: string; impressions: number; engagement: number }>> {
+  ): Promise<
+    Array<{
+      timestamp: string;
+      impressions: number;
+      engagement: number;
+      views: number;
+      likes: number;
+      comments: number;
+      shares: number;
+      saves: number;
+    }>
+  > {
     try {
-      const raw = await zernioRequest<unknown>(
-        `/analytics/post-timeline?postId=${encodeURIComponent(postId)}`,
-      );
+      const params = new URLSearchParams({
+        post_id: postId,
+        postId,
+      });
+      const raw = await zernioRequest<unknown>(`/analytics/post-timeline?${params}`);
       const root = asRecord(raw) ?? {};
       const tl = Array.isArray(root.timeline)
         ? root.timeline
@@ -1855,10 +1886,21 @@ export class ZernioPostingService implements PostingService {
         .map((p) => {
           const r = asRecord(p);
           if (!r) return null;
+          const likes = pickNum(r, 'likes');
+          const comments = pickNum(r, 'comments');
+          const shares = pickNum(r, 'shares');
+          const saves = pickNum(r, 'saves');
           return {
             timestamp: pickString(r, 'timestamp', 'date', 'time') ?? '',
             impressions: pickNum(r, 'impressions'),
-            engagement: pickNum(r, 'engagement'),
+            // Fall back to summing component metrics when Zernio doesn't
+            // pre-roll an `engagement` field on the timeline point.
+            engagement: pickNum(r, 'engagement') || likes + comments + shares + saves,
+            views: pickNum(r, 'views'),
+            likes,
+            comments,
+            shares,
+            saves,
           };
         })
         .filter((x): x is NonNullable<typeof x> => x !== null && x.timestamp !== '');

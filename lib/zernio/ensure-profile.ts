@@ -17,6 +17,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getZernioApiBase, getZernioApiKey } from '@/lib/posting';
+import { ZernioApiError } from '@/lib/posting/zernio';
 
 export async function ensureZernioProfile(
   admin: SupabaseClient,
@@ -40,7 +41,10 @@ export async function ensureZernioProfile(
     body: JSON.stringify({ name: clientName }),
   });
   if (!res.ok) {
-    throw new Error(`Failed to create Zernio profile: ${await res.text()}`);
+    // Preserve the Zernio error envelope ({ type, code, message }) so callers
+    // can branch on `.type === 'authentication_error'` / `.code` instead of
+    // string-matching the message. Pre-fix this path discarded all structure.
+    throw new ZernioApiError(res.status, await res.text());
   }
   const body = (await res.json()) as { profile?: { _id?: string; id?: string } };
   const profileId = body.profile?._id ?? body.profile?.id;

@@ -182,6 +182,11 @@ export interface DailyMetricsQuery {
   accountId: string;
   startDate: string;
   endDate: string;
+  // Optional but strongly recommended per Zernio canon: without `platform`,
+  // the daily-metrics endpoint can return cross-platform aggregate rows
+  // rather than per-platform per-account rows. Callers should pass the
+  // SocialPlatform they're syncing.
+  platform?: SocialPlatform;
 }
 
 export interface DailyMetric {

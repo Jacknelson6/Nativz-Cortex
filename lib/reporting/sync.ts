@@ -69,6 +69,9 @@ export async function syncSocialProfile(
         accountId: lateAccountId,
         startDate: dateRange.start,
         endDate: dateRange.end,
+        // Critical per Zernio audit: without `platform`, the daily-metrics
+        // endpoint may return cross-platform aggregate rows. Pin it.
+        platform,
       }),
       platform === 'instagram'
         ? zernio.getInstagramInsights(lateAccountId, dateRange.start, dateRange.end)
