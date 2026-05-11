@@ -308,14 +308,21 @@ export async function POST(
   const recipients = filteredEligible.map((c) => c.email);
   const pocFirstNames = filteredEligible.map((c) => firstName(c.name));
 
-  // Build the cc[] list. Server-resolved `cc_self` adds the admin's own
-  // email; we de-dupe against `to` so the admin doesn't double-receive
-  // when they're already on the brand contacts list.
+  // Build the cc[] list. The admin-supplied `cc[]` array is treated as
+  // intentional (visible CC, recipients see those addresses); `cc_self`
+  // routes to BCC instead so the recipient never sees the admin's email.
+  // This matters when the agency identity on the email (e.g. Anderson
+  // Collaborative) doesn't match the admin account domain (e.g. nativz.io)
+  // — without BCC, the client would see a stray cross-brand address.
   const ccCandidates = new Set<string>();
   for (const addr of parsed.data.cc ?? []) ccCandidates.add(addr.toLowerCase());
-  if (parsed.data.cc_self && userEmail) ccCandidates.add(userEmail.toLowerCase());
   for (const r of recipients) ccCandidates.delete(r.toLowerCase());
   const ccList = Array.from(ccCandidates);
+  const bccCandidates = new Set<string>();
+  if (parsed.data.cc_self && userEmail) bccCandidates.add(userEmail.toLowerCase());
+  for (const r of recipients) bccCandidates.delete(r.toLowerCase());
+  for (const cc of ccList) bccCandidates.delete(cc.toLowerCase());
+  const bccList = Array.from(bccCandidates);
 
   // Recompute the draft locally so we have the resolved subject for the
   // archive write below; the send helper applies the same fallback chain
@@ -336,6 +343,7 @@ export async function POST(
   const result = await sendCalendarShareSendEmail({
     to: recipients,
     cc: ccList.length > 0 ? ccList : undefined,
+    bcc: bccList.length > 0 ? bccList : undefined,
     pocFirstNames,
     clientName,
     shareUrl,

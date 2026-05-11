@@ -1490,6 +1490,14 @@ export function buildCalendarShareSendHtml(opts: {
 export async function sendCalendarShareSendEmail(opts: {
   to: string | string[];
   cc?: string | string[];
+  /**
+   * BCC list. Used by the "BCC me" admin checkbox so the admin gets a
+   * receipt without the recipient seeing their email address in the
+   * headers — important when the email goes out under one agency identity
+   * (e.g. Anderson Collaborative) but the admin's account email is on
+   * another domain (e.g. nativz.io).
+   */
+  bcc?: string | string[];
   pocFirstNames: string[];
   clientName: string;
   shareUrl: string;
@@ -1546,6 +1554,7 @@ export async function sendCalendarShareSendEmail(opts: {
     agency,
     to: opts.to,
     cc: opts.cc,
+    bcc: opts.bcc,
     subject,
     html,
     replyToOverride: replyTo,

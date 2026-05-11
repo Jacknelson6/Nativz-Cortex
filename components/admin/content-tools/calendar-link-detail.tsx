@@ -1645,14 +1645,17 @@ function SendPreviewDialog({
                     );
                   })}
                 </div>
-                <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-[11px] text-text-secondary">
+                <label
+                  className="mt-2 inline-flex cursor-pointer items-center gap-2 text-[11px] text-text-secondary"
+                  title="Sends as BCC so the recipient can't see your email — important when the calendar goes out under one agency identity (e.g. Anderson Collaborative) but your admin account is on another domain."
+                >
                   <input
                     type="checkbox"
                     checked={ccSelf}
                     onChange={(e) => onChangeCcSelf(e.target.checked)}
                     className="h-3.5 w-3.5 rounded border-nativz-border bg-background text-accent focus:ring-1 focus:ring-accent"
                   />
-                  CC me on this email
+                  BCC me on this email
                 </label>
               </Section>
 
