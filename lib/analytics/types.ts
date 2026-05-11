@@ -84,3 +84,65 @@ export interface ViralCollectionVideo {
   pinned_at: string;
   notes: string | null;
 }
+
+// ============================================================
+// ZNA-01 — Analytics source routing (migration 278)
+// ============================================================
+
+export type AnalyticsSource = 'zernio' | 'scrape' | 'apify';
+
+export type AnalyticsPlatform = 'tiktok' | 'instagram' | 'facebook' | 'youtube';
+
+export interface SourceResolution {
+  source: AnalyticsSource;
+  source_version: string;
+  reason:
+    | 'zernio_connected'
+    | 'scrape_fallback'
+    | 'apify_fallback'
+    | 'no_profile';
+}
+
+export interface PlatformSnapshotInsert {
+  client_id: string;
+  social_profile_id: string;
+  platform: AnalyticsPlatform;
+  snapshot_date: string; // YYYY-MM-DD UTC
+  follower_count: number | null;
+  following_count?: number | null;
+  post_count?: number | null;
+  engagement_rate?: number | null;
+  reach?: number | null;
+  impressions?: number | null;
+  profile_views?: number | null;
+  source: AnalyticsSource;
+  source_version: string;
+  captured_at?: string;
+}
+
+export interface PostMetricInsert {
+  client_id: string;
+  social_profile_id: string;
+  platform: AnalyticsPlatform;
+  external_post_id: string;
+  posted_at: string;
+  views?: number | null;
+  likes?: number | null;
+  comments?: number | null;
+  shares?: number | null;
+  saves?: number | null;
+  watch_time_seconds?: number | null;
+  source: AnalyticsSource;
+  source_version: string;
+}
+
+export interface PlatformSnapshotErrorRow {
+  id: string;
+  client_id: string | null;
+  social_profile_id: string | null;
+  platform: AnalyticsPlatform;
+  attempted_source: AnalyticsSource;
+  error_code: string | null;
+  error_message: string | null;
+  attempted_at: string;
+}
