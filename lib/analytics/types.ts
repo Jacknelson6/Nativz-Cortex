@@ -33,6 +33,38 @@ export type ViralVideoAnalysisStatus =
 // `lib/analytics/reject-reasons.ts`.
 export type { RejectReason } from '@/lib/analytics/reject-reasons';
 
+// VFF-06 — Format taxonomy + proposal queue.
+export interface TaxonomyRow {
+  id: string;
+  kind: ViralFormatKind;
+  slug: string;
+  display_name: string;
+  description: string | null;
+  aliases: string[];
+  is_seeded: boolean;
+  archived_at: string | null;
+  example_video_id: string | null;
+  video_count: number;
+}
+
+export type ProposalStatus = 'pending' | 'approved' | 'rejected' | 'merged';
+
+export interface TaxonomyProposal {
+  id: string;
+  kind: ViralFormatKind;
+  slug: string;
+  display_name: string;
+  proposed_description: string | null;
+  evidence_video_id: string | null;
+  proposal_count: number;
+  status: ProposalStatus;
+  merged_into_format_id: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ViralVideo {
   id: string;
   platform: ViralVideoPlatform;
