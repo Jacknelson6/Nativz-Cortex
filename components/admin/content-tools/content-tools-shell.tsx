@@ -47,11 +47,12 @@ import { CalendarLinkDetail } from './calendar-link-detail';
 import { subscribeToCompletion } from '@/lib/editing/upload-store';
 
 /**
- * Group rows into month buckets keyed by `YYYY-MM`, using the project's
- * `approved_at` date. Rows missing that date land in the `null` bucket
- * so they still render under a fallback "No date" header instead of
- * vanishing. `default` mode keeps the flat list; `approval` mode is the
- * grouped view used for arrears invoicing.
+ * Group rows into month buckets keyed by `YYYY-MM`, using either
+ * `created_at` ("default" — when the project was started) or
+ * `approved_at` ("approval" — when it cleared review, used for arrears
+ * invoicing). Rows missing the chosen date land in the `null` bucket so
+ * they still render under a fallback "No date" header instead of
+ * vanishing.
  */
 type GroupBy = 'default' | 'approval';
 
@@ -152,12 +153,13 @@ function monthLabel(key: string): string {
   });
 }
 
-function groupRowsByApprovalMonth(
+function groupRowsByMonth(
   rows: ReviewLinkRow[],
+  mode: GroupBy,
 ): { key: string | null; label: string; rows: ReviewLinkRow[] }[] {
   const buckets = new Map<string | null, ReviewLinkRow[]>();
   for (const row of rows) {
-    const iso = row.approved_at ?? null;
+    const iso = mode === 'approval' ? row.approved_at ?? null : row.created_at;
     const key = monthKey(iso);
     const existing = buckets.get(key);
     if (existing) {
@@ -575,13 +577,12 @@ export function ContentToolsShell() {
   // active because the column-sort intent ("show me by date sent") is
   // incompatible with "show me each month's batch in order."
   const monthGroups = useMemo(() => {
-    if (groupBy === 'default') return [];
-    const groups = groupRowsByApprovalMonth(visibleProjects);
+    const groups = groupRowsByMonth(visibleProjects, groupBy);
     return groups.map((g) => ({
       ...g,
       rows: [...g.rows].sort((a, b) => {
-        const aIso = a.approved_at ?? '';
-        const bIso = b.approved_at ?? '';
+        const aIso = groupBy === 'approval' ? a.approved_at ?? '' : a.created_at;
+        const bIso = groupBy === 'approval' ? b.approved_at ?? '' : b.created_at;
         return bIso.localeCompare(aIso);
       }),
     }));
@@ -816,20 +817,6 @@ export function ContentToolsShell() {
               <ProjectsTableSkeleton />
             ) : allRows.length === 0 ? (
               <ProjectsEmptyState />
-            ) : groupBy === 'default' ? (
-              <ReviewTableCard
-                rows={visibleProjects}
-                showBrand
-                onPatchLink={patchLink}
-                onArchiveLink={archiveLink}
-                onPromoteToCalendar={promoteToCalendar}
-                title={PROJECT_TAB_LABEL[activeProjectTab]}
-                sort={sort}
-                onSortChange={setSort}
-                hideColumns={PROJECT_TAB_HIDE[activeProjectTab]}
-                onOpenEditingProject={(id) => setActiveEditingId(id)}
-                onOpenCalendarLink={(link) => setActiveCalendarLink(link)}
-              />
             ) : focusedGroup ? (
               // Month-grouped mode: focus a single month and page between
               // them with the chevrons so the page reads like a
@@ -874,6 +861,7 @@ export function ContentToolsShell() {
                   showBrand
                   onPatchLink={patchLink}
                   onArchiveLink={archiveLink}
+                  onPromoteToCalendar={promoteToCalendar}
                   sort={sort}
                   onSortChange={setSort}
                   hideColumns={PROJECT_TAB_HIDE[activeProjectTab]}
