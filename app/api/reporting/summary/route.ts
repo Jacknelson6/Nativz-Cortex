@@ -333,12 +333,39 @@ export async function GET(request: NextRequest) {
             ) / prevSnapsForProfile.length
           : 0;
 
-      combinedViews += totalViews;
-      combinedPrevViews += prevViews;
+      // Prefer the account-level window total when Zernio surfaced one
+      // (IG only today — FB's getFacebookPageInsights returns 0 for views,
+      // which we treat as "missing" so the post-sum fallback kicks in).
+      // This matches what Meta Business Suite shows because the account
+      // metric counts all content views (reels, stories, profile activity),
+      // not just posts published inside the window.
+      const endSnapForCombined =
+        snapsAsc.length > 0 ? snapsAsc[snapsAsc.length - 1] : null;
+      const prevEndSnapForCombined =
+        prevSnapsAsc.length > 0 ? prevSnapsAsc[prevSnapsAsc.length - 1] : null;
+      const accountViewsForCombined = endSnapForCombined?.account_views_count;
+      const accountEngForCombined =
+        endSnapForCombined?.account_engagement_count;
+      const prevAccountViewsForCombined =
+        prevEndSnapForCombined?.account_views_count;
+      const prevAccountEngForCombined =
+        prevEndSnapForCombined?.account_engagement_count;
+      // Zero counts as "not exposed" — only non-zero account totals override
+      // the post-sum. Treats FB's hardcoded-zero views the same as null.
+      const pickTotal = (
+        accountVal: number | null | undefined,
+        postSum: number,
+      ) => (accountVal && accountVal > 0 ? accountVal : postSum);
+
+      combinedViews += pickTotal(accountViewsForCombined, totalViews);
+      combinedPrevViews += pickTotal(prevAccountViewsForCombined, prevViews);
       combinedFollowerChange += totalFollowerChange;
       combinedPrevFollowerChange += prevFollowerChange;
-      combinedEngagement += totalEngagement;
-      combinedPrevEngagement += prevEngagement;
+      combinedEngagement += pickTotal(accountEngForCombined, totalEngagement);
+      combinedPrevEngagement += pickTotal(
+        prevAccountEngForCombined,
+        prevEngagement,
+      );
       combinedEngRate += avgEngRate;
       combinedPrevEngRate += prevAvgEngRate;
       platformCount++;
@@ -516,8 +543,16 @@ export async function GET(request: NextRequest) {
         followerChange: totalFollowerChange,
         newFollows: accountFollows ?? undefined,
         unfollows: accountUnfollows ?? undefined,
-        totalViews: accountViews ?? totalViews,
-        totalEngagement: accountEngagement ?? totalEngagement,
+        // Same "0 = not exposed" rule as the combined rollup — FB's Zernio
+        // account_views always lands as 0, so nullish coalescing alone would
+        // hide its real post-views total. Use the post-sum when the account
+        // metric is 0 or null.
+        totalViews:
+          accountViews && accountViews > 0 ? accountViews : totalViews,
+        totalEngagement:
+          accountEngagement && accountEngagement > 0
+            ? accountEngagement
+            : totalEngagement,
         engagementRate: Math.round(avgEngRate * 100) / 100,
         postsCount,
         watchTimeSeconds: totalWatchTimeSeconds,
