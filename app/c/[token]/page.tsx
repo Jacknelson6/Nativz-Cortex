@@ -2940,55 +2940,6 @@ function PostCard({
           setPlayerReady(!!handle);
         }}
       />
-      {/* Top-right overlay cluster — Download (everyone) sits left, Replace
-          (editor-only, video posts) sits right. Same affordance pattern as
-          the "Edit" pencil that overlays the caption: small, contextual,
-          doesn't compete with primary content. Backdrop blur keeps both
-          readable over any frame; while uploading, Replace widens to show
-          progress in-place. Carousels download as a single zip so the
-          reviewer doesn't fight the popup blocker on N anchor clicks. */}
-      <div className="absolute right-2 top-2 flex items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => void handlePostDownload()}
-          disabled={downloadingPost || buildPostDownloadTargets(post, 0).length === 0}
-          className="inline-flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1.5 text-[11px] font-medium text-white backdrop-blur-md ring-1 ring-white/15 transition-all hover:bg-black/75 hover:ring-white/30 disabled:opacity-60"
-          title={
-            post.media_type === 'image'
-              ? post.assets.length > 1
-                ? 'Download this carousel as a zip'
-                : 'Download this image'
-              : 'Download this video'
-          }
-        >
-          {downloadingPost ? (
-            <Loader2 size={12} className="animate-spin" />
-          ) : (
-            <Download size={12} />
-          )}
-          {downloadingPost ? 'Downloading…' : 'Download'}
-        </button>
-        {isEditor && (post.media_type !== 'image' || post.assets.length === 1) && (
-          <button
-            type="button"
-            onClick={() => revisionInputRef.current?.click()}
-            disabled={uploadingRevision || submitting || uploading}
-            className="inline-flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1.5 text-[11px] font-medium text-white backdrop-blur-md ring-1 ring-white/15 transition-all hover:bg-black/75 hover:ring-white/30 disabled:opacity-60"
-            title={
-              isImagePost
-                ? 'Replace this image with a new upload'
-                : 'Replace the current cut with a new upload'
-            }
-          >
-            {uploadingRevision ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-            {uploadingRevision
-              ? uploadProgress !== null
-                ? `${uploadProgress}%`
-                : 'Uploading…'
-              : 'Replace'}
-          </button>
-        )}
-      </div>
     </div>
   );
 
@@ -3208,6 +3159,62 @@ function PostCard({
         >
           <MessageSquare size={14} /> Request change
         </button>
+        {/* Secondary cluster — Download (everyone), Replace (editor-only,
+            single-asset posts), Remove (editor-only). On sm+ they collapse
+            into a right-aligned icon row so they don't visually compete
+            with the two primary CTAs; on mobile they expand to full-width
+            labelled buttons. Carousels download as a single zip so the
+            reviewer doesn't fight the popup blocker on N anchor clicks. */}
+        <button
+          type="button"
+          onClick={() => void handlePostDownload()}
+          disabled={downloadingPost || buildPostDownloadTargets(post, 0).length === 0}
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-transparent bg-transparent px-3 py-2 text-xs font-medium text-text-muted transition-all hover:border-nativz-border hover:bg-surface-hover hover:text-text-primary disabled:opacity-50 sm:ml-auto sm:h-9 sm:w-9 sm:px-0 sm:py-0"
+          title={
+            post.media_type === 'image'
+              ? post.assets.length > 1
+                ? 'Download this carousel as a zip'
+                : 'Download this image'
+              : 'Download this video'
+          }
+          aria-label={
+            post.media_type === 'image'
+              ? post.assets.length > 1
+                ? 'Download this carousel as a zip'
+                : 'Download this image'
+              : 'Download this video'
+          }
+        >
+          {downloadingPost ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+          <span className="sm:hidden">{downloadingPost ? 'Downloading…' : 'Download'}</span>
+        </button>
+        {isEditor && (post.media_type !== 'image' || post.assets.length === 1) && (
+          <button
+            type="button"
+            onClick={() => revisionInputRef.current?.click()}
+            disabled={uploadingRevision || submitting || uploading}
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-transparent bg-transparent px-3 py-2 text-xs font-medium text-text-muted transition-all hover:border-nativz-border hover:bg-surface-hover hover:text-text-primary disabled:opacity-50 sm:h-9 sm:w-9 sm:px-0 sm:py-0"
+            title={
+              isImagePost
+                ? 'Replace this image with a new upload'
+                : 'Replace the current cut with a new upload'
+            }
+            aria-label={
+              isImagePost
+                ? 'Replace this image with a new upload'
+                : 'Replace the current cut with a new upload'
+            }
+          >
+            {uploadingRevision ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+            <span className="sm:hidden">
+              {uploadingRevision
+                ? uploadProgress !== null
+                  ? `Uploading ${uploadProgress}%`
+                  : 'Uploading…'
+                : 'Replace'}
+            </span>
+          </button>
+        )}
         {/* Editor-only remove. Icon-only on sm+ to avoid competing with
             the two primary CTAs visually; full-width labelled button
             below them on mobile so the destructive action stays
@@ -3217,7 +3224,7 @@ function PostCard({
             type="button"
             onClick={() => setRemoveOpen(true)}
             disabled={submitting || uploading || removing}
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-transparent bg-transparent px-3 py-2 text-xs font-medium text-text-muted transition-all hover:border-status-danger/40 hover:bg-status-danger/10 hover:text-status-danger disabled:opacity-50 sm:ml-auto sm:h-9 sm:w-9 sm:px-0 sm:py-0"
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-transparent bg-transparent px-3 py-2 text-xs font-medium text-text-muted transition-all hover:border-status-danger/40 hover:bg-status-danger/10 hover:text-status-danger disabled:opacity-50 sm:h-9 sm:w-9 sm:px-0 sm:py-0"
             title="Remove this post from the calendar"
             aria-label="Remove this post from the calendar"
           >
@@ -3277,13 +3284,18 @@ function PostCard({
   // comments rail. Image posts are 4:5 (letting card height drive width
   // makes the column ~62vh wide and squashes the comments column), so
   // cap to ~44vh so the right column keeps room.
-  // No background here — the inner MediaSurface paints its own black behind
-  // the player, and an extra `bg-black` on this wrapper was showing as a
-  // letterbox frame around the player whenever the column geometry didn't
-  // perfectly match the player's intrinsic aspect.
+  // Two letterbox fixes layered together. (1) No `bg-black` on the wrapper —
+  // the inner MediaSurface paints its own black behind the player, and an
+  // extra wrapper bg was showing as a frame around the player whenever the
+  // column geometry didn't perfectly match the player's intrinsic aspect.
+  // (2) No `md:h-full` on video — the column hugs its 9:16 aspect-ratio so
+  // the player fills it edge-to-edge. With `h-full` the col stretched to
+  // the card's fixed 78/88vh height while the Mux player stayed pinned at
+  // its 9:16 aspect, leaving an empty strip under the player. `self-start`
+  // keeps the right (comments) column free to take the full card height.
   const videoColSizing = isImagePost
     ? 'w-full md:w-[44vh] md:max-w-[480px] md:flex-shrink-0 md:self-center'
-    : 'w-full md:h-full md:w-[44vh] md:max-w-[440px] md:flex-shrink-0';
+    : 'w-full md:w-[44vh] md:max-w-[440px] md:flex-shrink-0 md:self-start';
   return (
     <article
       id={layoutMode === 'inline' ? `post-${index}` : undefined}
