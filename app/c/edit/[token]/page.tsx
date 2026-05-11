@@ -1348,6 +1348,12 @@ function VideoCard({
           className="block h-full w-full bg-black"
           style={{
             ['--media-object-fit' as string]: 'contain',
+            // Mux Player controls inherit the active brand accent (Nativz
+            // cyan on cortex.nativz.io, AC teal on cortex.andersoncollab…)
+            // via the `--accent` token set by [data-brand-mode] in
+            // globals.css.
+            ['--media-accent-color' as string]: 'var(--accent)',
+            ['--media-primary-color' as string]: 'var(--accent)',
             aspectRatio: 'auto',
           }}
           onLoadedMetadata={() => setPlayerReady(true)}
@@ -1556,6 +1562,23 @@ function VideoCard({
                 <MapPin size={13} /> Reference timestamp
               </button>
             ))}
+          <button
+            type="button"
+            onClick={() => submit('changes_requested')}
+            disabled={
+              submitting ||
+              uploading ||
+              (!commentText.trim() && pendingAttachments.length === 0)
+            }
+            className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 disabled:hover:bg-accent"
+          >
+            {submitting ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <Send size={12} />
+            )}
+            Send
+          </button>
         </div>
       </div>
 
@@ -1585,24 +1608,6 @@ function VideoCard({
             <CheckCircle size={14} /> Approve
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => submit('changes_requested')}
-          disabled={
-            submitting ||
-            uploading ||
-            (!commentText.trim() && pendingAttachments.length === 0)
-          }
-          data-tour="request-change"
-          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-4 py-2.5 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50 sm:flex-none sm:py-2"
-        >
-          {submitting ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : (
-            <MessageSquare size={14} />
-          )}{' '}
-          Request change
-        </button>
         {isEditor && (
           <button
             type="button"
