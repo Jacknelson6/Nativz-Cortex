@@ -12,6 +12,12 @@ const ScheduleSchema = z.object({
   scheduledAt: z.string().datetime(),
   caption: z.string().min(1).max(2200),
   hashtags: z.array(z.string()).max(50).optional(),
+  // Subset of the brand's connected Zernio social_profiles ids to target.
+  // Omitted = fan out to every connected profile (legacy behavior). The
+  // modal sends the editor's checkbox selection; we then filter the
+  // server-side connected-profile list to that subset so a profile that
+  // disconnected between modal-open and submit can't slip through.
+  socialProfileIds: z.array(z.string().uuid()).optional(),
 });
 
 interface ShareLinkRow {
@@ -81,7 +87,7 @@ export async function POST(
       { status: 400 },
     );
   }
-  const { scheduledAt, caption, hashtags } = parsed.data;
+  const { scheduledAt, caption, hashtags, socialProfileIds } = parsed.data;
 
   const admin = createAdminClient();
   const { data: link } = await admin
@@ -156,7 +162,7 @@ export async function POST(
     .eq('client_id', link.client_id)
     .eq('is_active', true);
 
-  const lateProfiles = (profiles ?? []).filter(
+  const allLateProfiles = (profiles ?? []).filter(
     (p): p is {
       id: string;
       platform: SocialPlatform;
@@ -166,9 +172,26 @@ export async function POST(
       typeof (p as { late_account_id?: unknown }).late_account_id === 'string' &&
       (p as { late_account_id: string }).late_account_id.length > 0,
   );
-  if (lateProfiles.length === 0) {
+  if (allLateProfiles.length === 0) {
     return NextResponse.json(
       { error: 'No connected social profiles for this brand. Connect Zernio profiles first.' },
+      { status: 409 },
+    );
+  }
+
+  // If the editor picked a subset, intersect with the live connected list
+  // so a profile that disconnected between modal-open and submit can't
+  // sneak through. Empty selection falls back to "all connected" — that
+  // matches the previous behavior and avoids creating an orphan post.
+  const targetIds = socialProfileIds && socialProfileIds.length > 0
+    ? new Set(socialProfileIds)
+    : null;
+  const lateProfiles = targetIds
+    ? allLateProfiles.filter((p) => targetIds.has(p.id))
+    : allLateProfiles;
+  if (lateProfiles.length === 0) {
+    return NextResponse.json(
+      { error: 'None of the selected profiles are connected to Zernio.' },
       { status: 409 },
     );
   }

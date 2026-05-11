@@ -4203,6 +4203,13 @@ function buildSmmZipFilename(
  *      parent refetches so the new card pops into the list with a fresh
  *      review composer.
  */
+interface AddVideoPlatform {
+  id: string;
+  platform: 'facebook' | 'instagram' | 'tiktok' | 'youtube' | 'linkedin' | 'googlebusiness';
+  username: string | null;
+  avatarUrl: string | null;
+}
+
 function AddVideoModal({
   open,
   onClose,
@@ -4228,6 +4235,9 @@ function AddVideoModal({
   const [statusValue, setStatusValue] = useState<string | null>(null);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [pickedDay, setPickedDay] = useState<string>('');
+  const [pickedFile, setPickedFile] = useState<File | null>(null);
+  const [platforms, setPlatforms] = useState<AddVideoPlatform[]>([]);
+  const [selectedPlatformIds, setSelectedPlatformIds] = useState<Set<string>>(new Set());
 
   // Reset every time the modal opens fresh.
   useEffect(() => {
@@ -4241,7 +4251,34 @@ function AddVideoModal({
     setStatusValue(null);
     setErrorDetail(null);
     setPickedDay(suggestNextDay(drop, existingScheduledAt));
+    setPickedFile(null);
   }, [open, drop, existingScheduledAt]);
+
+  // Fetch connected Zernio profiles once when the modal opens so the
+  // platform pills are ready by the time the editor finishes picking a
+  // file. Default selection is "all connected" — editor unticks anything
+  // they don't want this clip going to.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/calendar/share/${token}/add-post/platforms`);
+        const json = await res.json().catch(() => null);
+        if (cancelled) return;
+        if (res.ok && Array.isArray(json?.platforms)) {
+          const list = json.platforms as AddVideoPlatform[];
+          setPlatforms(list);
+          setSelectedPlatformIds(new Set(list.map((p) => p.id)));
+        }
+      } catch {
+        // non-fatal — schedule endpoint will still default to all on submit
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, token]);
 
   // Poll status during processing.
   useEffect(() => {
@@ -4289,6 +4326,7 @@ function AddVideoModal({
       toast.error('Choose a video file');
       return;
     }
+    setPickedFile(file);
     setPhase('uploading');
     setProgress(0);
     try {
@@ -4361,6 +4399,10 @@ function AddVideoModal({
       toast.error('Pick a day');
       return;
     }
+    if (platforms.length > 0 && selectedPlatformIds.size === 0) {
+      toast.error('Pick at least one platform');
+      return;
+    }
     const scheduledAt = chicagoNoonUtcLocal(pickedDay);
     const cleanTags = hashtagsText
       .split(/[\s,]+/)
@@ -4378,6 +4420,7 @@ function AddVideoModal({
             scheduledAt,
             caption: caption.trim(),
             hashtags: cleanTags,
+            socialProfileIds: Array.from(selectedPlatformIds),
           }),
         },
       );
@@ -4385,7 +4428,7 @@ function AddVideoModal({
       if (!res.ok) {
         throw new Error(typeof json?.error === 'string' ? json.error : 'Failed to schedule');
       }
-      toast.success('Post added — link bounced back to needs approval');
+      toast.success('Post added — the link bounced back to needs approval');
       await onDone();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to schedule');
@@ -4393,75 +4436,69 @@ function AddVideoModal({
     }
   }
 
+  function togglePlatform(id: string) {
+    setSelectedPlatformIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const isWorking = phase === 'uploading' || phase === 'processing' || phase === 'scheduling';
+  const headerSubtitle =
+    phase === 'pick'
+      ? 'Drop a clip. We’ll transcribe it, write the caption, and queue it on your share link for approval.'
+      : phase === 'uploading'
+        ? 'Sending bytes to Mux. Don’t close this tab.'
+        : phase === 'processing'
+          ? 'Mux is packaging the file. AI captioning kicks off the moment a streamable copy lands.'
+          : phase === 'ready' || phase === 'scheduling'
+            ? 'Review the caption, pick where it goes, and pin it to a day.'
+            : 'Something went sideways. Details below.';
+
   return (
     <Dialog open={open} onClose={onClose} title="" maxWidth="2xl">
-      <div className="space-y-4">
-        <header className="flex items-start justify-between">
-          <div>
-            <h2 className="font-display text-lg font-semibold tracking-tight text-text-primary">
-              Add new video
-            </h2>
-            <p className="mt-1 text-xs text-text-muted">
-              Upload a video, we’ll auto-caption it, then pick a day to schedule.
-            </p>
-          </div>
+      <div className="space-y-5">
+        <header className="space-y-1.5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-text">
+            New post
+          </p>
+          <h2 className="font-display text-2xl font-semibold tracking-tight text-text-primary">
+            Add a video to the calendar
+          </h2>
+          <p className="text-sm leading-relaxed text-text-secondary">{headerSubtitle}</p>
         </header>
 
         {phase === 'pick' && (
-          <AddVideoPicker onPick={handlePick} />
+          <AddVideoPicker onPick={handlePick} platformCount={platforms.length} />
         )}
 
         {phase === 'uploading' && (
-          <div className="space-y-3 rounded-lg border border-nativz-border bg-background/40 px-4 py-6">
-            <div className="flex items-center gap-2 text-sm text-text-secondary">
-              <Loader2 size={14} className="animate-spin" /> Uploading to Mux…
-            </div>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-surface-hover">
-              <div
-                className="h-full bg-accent transition-all"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <div className="text-right text-[11px] text-text-muted">{progress}%</div>
-          </div>
+          <UploadingPanel file={pickedFile} progress={progress} />
         )}
 
         {phase === 'processing' && (
-          <div className="space-y-3 rounded-lg border border-nativz-border bg-background/40 px-4 py-6">
-            <div className="flex items-center gap-2 text-sm text-text-secondary">
-              <Loader2 size={14} className="animate-spin" />
-              {statusValue === 'analyzing'
-                ? 'Transcribing audio…'
-                : statusValue === 'caption_pending'
-                  ? 'Generating caption…'
-                  : 'Mux is packaging the video…'}
-            </div>
-            {thumbUrlState && (
-              <Image
-                src={thumbUrlState}
-                alt=""
-                width={120}
-                height={213}
-                className="rounded-md object-cover"
-              />
-            )}
-            <p className="text-[11px] text-text-muted">
-              You can leave this open — this usually takes 30 to 90 seconds.
-            </p>
-          </div>
+          <ProcessingPanel
+            statusValue={statusValue}
+            thumbnailUrl={thumbUrlState}
+            filename={pickedFile?.name ?? null}
+          />
         )}
 
         {phase === 'failed' && (
-          <div className="space-y-3 rounded-lg border border-status-danger/40 bg-status-danger/10 px-4 py-6">
-            <div className="flex items-center gap-2 text-sm text-status-danger">
-              <AlertCircle size={14} /> Something went wrong
+          <div className="space-y-3 rounded-[var(--nz-radius-md)] border border-status-danger/40 bg-status-danger/10 px-4 py-5">
+            <div className="flex items-center gap-2 text-sm font-medium text-status-danger">
+              <AlertCircle size={14} aria-hidden /> Upload couldn’t finish
             </div>
-            <p className="text-xs text-text-secondary">{errorDetail}</p>
+            <p className="text-xs leading-relaxed text-text-secondary">
+              {errorDetail ?? 'Unknown error'}
+            </p>
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-lg border border-nativz-border bg-transparent px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover"
+                className="rounded-full border border-nativz-border bg-transparent px-4 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-hover"
               >
                 Close
               </button>
@@ -4470,89 +4507,165 @@ function AddVideoModal({
         )}
 
         {(phase === 'ready' || phase === 'scheduling') && (
-          <div className="space-y-4">
+          <div className="space-y-5">
             {thumbUrlState && (
-              <div className="flex items-center gap-3 rounded-lg border border-nativz-border bg-background/40 p-3">
+              <div className="flex items-center gap-3 rounded-[var(--nz-radius-md)] border border-nativz-border bg-background/40 p-3">
                 <Image
                   src={thumbUrlState}
                   alt=""
                   width={64}
                   height={114}
-                  className="rounded object-cover"
+                  className="rounded-[var(--nz-radius-sm)] object-cover"
                 />
-                <div className="text-xs text-text-muted">
-                  Caption was generated from the transcript. Edit it before scheduling.
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <p className="truncate text-sm font-medium text-text-primary">
+                    {pickedFile?.name ?? 'New video'}
+                  </p>
+                  <p className="text-[11px] text-text-muted">
+                    Captioned from the transcript. Edit anything before scheduling.
+                  </p>
                 </div>
+                <span className="inline-flex items-center gap-1 rounded-full bg-accent-surface px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-accent-text">
+                  <CheckCircle size={10} /> Ready
+                </span>
               </div>
             )}
-            <div>
-              <label className="mb-1 block text-xs font-medium text-text-secondary">
-                Caption
-              </label>
+
+            <section className="space-y-2">
+              <SectionLabel>Caption</SectionLabel>
               <textarea
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
                 rows={5}
-                className="w-full resize-none rounded-lg border border-nativz-border bg-background/40 px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                className="w-full resize-none rounded-[var(--nz-radius-md)] border border-nativz-border bg-background/40 px-3 py-2.5 text-sm leading-relaxed text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                 placeholder="Caption…"
               />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-text-secondary">
-                Hashtags
-              </label>
+              <p className="text-[11px] text-text-muted">
+                {caption.length}/2200 · written by Cortex from the transcript
+              </p>
+            </section>
+
+            <section className="space-y-2">
+              <SectionLabel>Hashtags</SectionLabel>
               <input
                 value={hashtagsText}
                 onChange={(e) => setHashtagsText(e.target.value)}
-                className="w-full rounded-lg border border-nativz-border bg-background/40 px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                className="w-full rounded-[var(--nz-radius-md)] border border-nativz-border bg-background/40 px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                 placeholder="#tag1 #tag2"
               />
-              <p className="mt-1 text-[11px] text-text-muted">
-                Separate with spaces or commas. The # is optional.
+              <p className="text-[11px] text-text-muted">
+                Spaces or commas, # optional.
               </p>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-text-secondary">
-                Post date
-              </label>
-              <input
-                type="date"
+            </section>
+
+            <section className="space-y-2">
+              <SectionLabel hint={platforms.length > 0 ? `${selectedPlatformIds.size}/${platforms.length} selected` : undefined}>
+                Platforms
+              </SectionLabel>
+              {platforms.length === 0 ? (
+                <div className="rounded-[var(--nz-radius-md)] border border-dashed border-nativz-border bg-background/40 px-3 py-3 text-[11px] text-text-muted">
+                  No Zernio profiles connected for this brand yet. Connect them in admin
+                  before this can publish.
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {platforms.map((p) => {
+                    const selected = selectedPlatformIds.has(p.id);
+                    const color = PLATFORM_COLOR[p.platform];
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => togglePlatform(p.id)}
+                        className={`group inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                          selected
+                            ? 'border-accent/60 bg-accent-surface text-text-primary'
+                            : 'border-nativz-border bg-background/40 text-text-muted hover:border-accent/30 hover:text-text-secondary'
+                        }`}
+                        aria-pressed={selected}
+                      >
+                        <span
+                          className="inline-flex h-2 w-2 rounded-full"
+                          style={{ backgroundColor: color }}
+                          aria-hidden
+                        />
+                        <span className="font-medium">
+                          {PLATFORM_LABEL[p.platform]}
+                        </span>
+                        {p.username && (
+                          <span className="text-text-muted">@{p.username}</span>
+                        )}
+                        {selected ? (
+                          <CheckCircle size={12} className="text-accent-text" />
+                        ) : (
+                          <span className="h-3 w-3 rounded-full border border-nativz-border" aria-hidden />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
+            <section className="space-y-2">
+              <SectionLabel>Post date</SectionLabel>
+              <DayChipRow
                 value={pickedDay}
-                min={todayYyyyMmDd()}
-                onChange={(e) => setPickedDay(e.target.value)}
-                className="w-full rounded-lg border border-nativz-border bg-background/40 px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                onChange={setPickedDay}
+                drop={drop}
+                taken={existingScheduledAt}
               />
-              <p className="mt-1 text-[11px] text-text-muted">
-                Defaults to the next unscheduled day in this batch. Posts at the brand’s
-                default time (Chicago).
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={pickedDay}
+                  min={todayYyyyMmDd()}
+                  onChange={(e) => setPickedDay(e.target.value)}
+                  className="rounded-[var(--nz-radius-md)] border border-nativz-border bg-background/40 px-3 py-1.5 text-xs text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+                <span className="text-[11px] text-text-muted">
+                  Posts at {drop.default_post_time?.slice(0, 5) ?? '12:00'} America/Chicago.
+                </span>
+              </div>
+            </section>
+
+            <footer className="flex items-center justify-between gap-3 border-t border-nativz-border pt-4">
+              <p className="text-[11px] text-text-muted">
+                Lands as a draft on this share link. Goes live only after the client
+                approves.
               </p>
-            </div>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={phase === 'scheduling'}
-                className="rounded-lg border border-nativz-border bg-transparent px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={submitSchedule}
-                disabled={phase === 'scheduling' || !caption.trim() || !pickedDay}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-contrast hover:opacity-90 disabled:opacity-50"
-              >
-                {phase === 'scheduling' ? (
-                  <>
-                    <Loader2 size={12} className="animate-spin" /> Scheduling…
-                  </>
-                ) : (
-                  <>
-                    <CalendarDays size={12} /> Add to calendar
-                  </>
-                )}
-              </button>
-            </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={isWorking}
+                  className="rounded-full border border-nativz-border bg-transparent px-4 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={submitSchedule}
+                  disabled={
+                    isWorking ||
+                    !caption.trim() ||
+                    !pickedDay ||
+                    (platforms.length > 0 && selectedPlatformIds.size === 0)
+                  }
+                  className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-xs font-semibold text-accent-contrast shadow-[var(--shadow-card)] transition-all hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50"
+                >
+                  {phase === 'scheduling' ? (
+                    <>
+                      <Loader2 size={12} className="animate-spin" /> Scheduling…
+                    </>
+                  ) : (
+                    <>
+                      <CalendarDays size={12} /> Add to calendar
+                    </>
+                  )}
+                </button>
+              </div>
+            </footer>
           </div>
         )}
       </div>
@@ -4560,7 +4673,244 @@ function AddVideoModal({
   );
 }
 
-function AddVideoPicker({ onPick }: { onPick: (file: File) => void }) {
+function SectionLabel({ children, hint }: { children: React.ReactNode; hint?: string }) {
+  return (
+    <div className="flex items-baseline justify-between">
+      <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-secondary">
+        {children}
+      </label>
+      {hint && <span className="text-[10px] text-text-muted">{hint}</span>}
+    </div>
+  );
+}
+
+function UploadingPanel({ file, progress }: { file: File | null; progress: number }) {
+  return (
+    <div className="space-y-4 rounded-[var(--nz-radius-md)] border border-nativz-border bg-background/40 px-4 py-5">
+      <div className="flex items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent-surface">
+          <Film size={16} className="text-accent-text" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-text-primary">
+            {file?.name ?? 'New video'}
+          </p>
+          <p className="text-[11px] text-text-muted">
+            {file ? `${formatBytes(file.size)} · ` : ''}Uploading to Mux…
+          </p>
+        </div>
+        <span className="font-mono text-xs tabular-nums text-text-secondary">{progress}%</span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-hover">
+        <div
+          className="h-full rounded-full bg-accent transition-[width] duration-300 ease-out"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ProcessingPanel({
+  statusValue,
+  thumbnailUrl,
+  filename,
+}: {
+  statusValue: string | null;
+  thumbnailUrl: string | null;
+  filename: string | null;
+}) {
+  // The three Cortex-side steps the editor cares about. Each step is
+  // "active" while the corresponding status is the current one, and
+  // "done" once we move past it.
+  const steps: { key: string; label: string; sub: string; status: 'todo' | 'doing' | 'done' }[] = [
+    {
+      key: 'mux',
+      label: 'Packaging on Mux',
+      sub: 'capped 1080p MP4',
+      status:
+        statusValue === 'analyzing' || statusValue === 'caption_pending' || statusValue === 'ready'
+          ? 'done'
+          : 'doing',
+    },
+    {
+      key: 'whisper',
+      label: 'Transcribing audio',
+      sub: 'Whisper',
+      status:
+        statusValue === 'caption_pending' || statusValue === 'ready'
+          ? 'done'
+          : statusValue === 'analyzing'
+            ? 'doing'
+            : 'todo',
+    },
+    {
+      key: 'caption',
+      label: 'Writing caption',
+      sub: 'Sonnet via OpenRouter, brand voice + saved-caption examples',
+      status:
+        statusValue === 'ready'
+          ? 'done'
+          : statusValue === 'caption_pending'
+            ? 'doing'
+            : 'todo',
+    },
+  ];
+
+  return (
+    <div className="flex gap-4 rounded-[var(--nz-radius-md)] border border-nativz-border bg-background/40 p-4">
+      <div className="relative h-32 w-[72px] flex-shrink-0 overflow-hidden rounded-[var(--nz-radius-sm)] bg-nativz-border/40">
+        {thumbnailUrl ? (
+          <Image
+            src={thumbnailUrl}
+            alt=""
+            fill
+            sizes="72px"
+            className="object-cover"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <Film size={18} className="text-text-muted" />
+          </div>
+        )}
+        <div className="absolute inset-0 animate-pulse bg-gradient-to-b from-transparent via-accent/5 to-transparent" />
+      </div>
+      <div className="flex flex-1 flex-col justify-between">
+        <div>
+          {filename && (
+            <p className="mb-3 truncate text-sm font-medium text-text-primary">{filename}</p>
+          )}
+          <ol className="space-y-2">
+            {steps.map((step) => (
+              <li key={step.key} className="flex items-start gap-2.5">
+                <span className="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center">
+                  {step.status === 'done' ? (
+                    <CheckCircle size={14} className="text-accent-text" />
+                  ) : step.status === 'doing' ? (
+                    <Loader2 size={12} className="animate-spin text-accent-text" />
+                  ) : (
+                    <span className="h-2 w-2 rounded-full bg-nativz-border" />
+                  )}
+                </span>
+                <div className="min-w-0">
+                  <p
+                    className={`text-xs font-medium ${
+                      step.status === 'todo' ? 'text-text-muted' : 'text-text-primary'
+                    }`}
+                  >
+                    {step.label}
+                  </p>
+                  <p className="font-mono text-[10px] text-text-muted">{step.sub}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+        <p className="text-[11px] text-text-muted">
+          Usually 30 to 90 seconds. Safe to leave this open.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function DayChipRow({
+  value,
+  onChange,
+  drop,
+  taken,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  drop: { start_date: string; end_date: string };
+  taken: string[];
+}) {
+  const takenSet = useMemo(
+    () =>
+      new Set(
+        taken
+          .map((iso) => {
+            try {
+              return new Date(iso).toISOString().slice(0, 10);
+            } catch {
+              return '';
+            }
+          })
+          .filter(Boolean),
+      ),
+    [taken],
+  );
+
+  // Show every day in the drop window from "today" forward, capped at 10
+  // chips so we don't blow out the modal width on long campaigns. The
+  // free-form <input type="date"> below the row covers anything outside.
+  const days = useMemo(() => {
+    const out: string[] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(drop.start_date);
+    const end = new Date(drop.end_date);
+    const cursor = new Date(Math.max(start.getTime(), today.getTime()));
+    while (cursor <= end && out.length < 10) {
+      out.push(cursor.toISOString().slice(0, 10));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return out;
+  }, [drop.start_date, drop.end_date]);
+
+  if (days.length === 0) return null;
+
+  return (
+    <div className="-mx-1 flex flex-wrap gap-1.5 px-1">
+      {days.map((ymd) => {
+        const date = new Date(`${ymd}T12:00:00Z`);
+        const dayLabel = date.toLocaleDateString(undefined, {
+          weekday: 'short',
+          timeZone: 'UTC',
+        });
+        const dateLabel = date.toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          timeZone: 'UTC',
+        });
+        const isSelected = value === ymd;
+        const isTaken = takenSet.has(ymd);
+        return (
+          <button
+            key={ymd}
+            type="button"
+            onClick={() => onChange(ymd)}
+            className={`relative flex min-w-[58px] flex-col items-center rounded-[var(--nz-radius-md)] border px-2.5 py-1.5 text-center transition-colors ${
+              isSelected
+                ? 'border-accent/60 bg-accent-surface text-text-primary'
+                : isTaken
+                  ? 'border-nativz-border bg-background/40 text-text-muted hover:border-accent/30 hover:text-text-secondary'
+                  : 'border-nativz-border bg-background/40 text-text-secondary hover:border-accent/30'
+            }`}
+            aria-pressed={isSelected}
+            title={isTaken ? 'Already has a post on this day' : undefined}
+          >
+            <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+              {dayLabel}
+            </span>
+            <span className="text-xs font-semibold text-current">{dateLabel}</span>
+            {isTaken && !isSelected && (
+              <span className="absolute -top-1 -right-1 h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function AddVideoPicker({
+  onPick,
+  platformCount,
+}: {
+  onPick: (file: File) => void;
+  platformCount: number;
+}) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragOver, setDragOver] = useState(false);
   return (
@@ -4576,22 +4926,33 @@ function AddVideoPicker({ onPick }: { onPick: (file: File) => void }) {
         const file = e.dataTransfer.files?.[0];
         if (file) onPick(file);
       }}
-      className={`flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-10 text-center transition-colors ${
+      className={`flex flex-col items-center justify-center gap-3 rounded-[var(--nz-radius-md)] border border-dashed px-4 py-12 text-center transition-colors ${
         dragOver
           ? 'border-accent/60 bg-accent-surface'
-          : 'border-nativz-border bg-background/40'
+          : 'border-nativz-border bg-background/40 hover:border-accent/40'
       }`}
     >
-      <Upload size={24} className="text-text-muted" />
-      <p className="text-sm font-medium text-text-secondary">Drop a video here</p>
-      <p className="text-[11px] text-text-muted">MP4 / MOV up to a few hundred MB</p>
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-surface">
+        <Upload size={20} className="text-accent-text" />
+      </div>
+      <div className="space-y-1">
+        <p className="text-sm font-semibold text-text-primary">Drop a video here</p>
+        <p className="text-[11px] text-text-muted">
+          MP4, MOV, or HEVC up to ~500MB · vertical short-form looks best
+        </p>
+      </div>
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-nativz-border bg-surface px-3 py-1.5 text-xs font-medium text-text-secondary transition-all hover:border-accent/50 hover:bg-accent-surface hover:text-accent-text"
+        className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent-surface px-4 py-1.5 text-xs font-semibold text-accent-text transition-colors hover:border-accent/60 hover:bg-accent-surface/80"
       >
         Choose file
       </button>
+      {platformCount > 0 && (
+        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-text-muted">
+          {platformCount} {platformCount === 1 ? 'platform' : 'platforms'} ready
+        </p>
+      )}
       <input
         ref={inputRef}
         type="file"
@@ -4605,6 +4966,34 @@ function AddVideoPicker({ onPick }: { onPick: (file: File) => void }) {
       />
     </div>
   );
+}
+
+// Per-platform brand dot color. Mirrors components/scheduler/types.ts
+// PLATFORM_BORDER_COLOR. Inlined here so the public share page doesn't
+// pull in the admin-scheduler bundle just for a constants table.
+const PLATFORM_COLOR: Record<AddVideoPlatform['platform'], string> = {
+  facebook: '#3b82f6',
+  instagram: '#ec4899',
+  tiktok: '#22d3ee',
+  youtube: '#ef4444',
+  linkedin: '#0a66c2',
+  googlebusiness: '#10b981',
+};
+
+const PLATFORM_LABEL: Record<AddVideoPlatform['platform'], string> = {
+  facebook: 'Facebook',
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  youtube: 'YouTube',
+  linkedin: 'LinkedIn',
+  googlebusiness: 'Google Business',
+};
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 // Default picker target. Pick the earliest day inside the drop window that
