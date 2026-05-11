@@ -14,13 +14,8 @@ import {
 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Select } from '@/components/ui/select';
 import { ScheduleRangePicker } from '@/components/ui/schedule-range-picker';
 import { ClientLogo } from '@/components/clients/client-logo';
-import {
-  EDITING_TYPE_LABEL,
-  type EditingProjectType,
-} from '@/lib/editing/types';
 import {
   runCalendarUploads,
   type CalendarUploadFile,
@@ -51,10 +46,6 @@ interface ClientOption {
   slug: string | null;
   logo_url: string | null;
 }
-
-const TYPE_OPTIONS: { value: EditingProjectType; label: string }[] = (
-  Object.keys(EDITING_TYPE_LABEL) as EditingProjectType[]
-).map((value) => ({ value, label: EDITING_TYPE_LABEL[value] }));
 
 const MAX_FILES = 60;
 
@@ -102,9 +93,10 @@ export function EditingNewProjectDialog({
   const [clientId, setClientId] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Editing-project fields
+  // Editing-project fields. Type is no longer exposed: the kind toggle
+  // ("Editing project" vs "Content calendar") fully resolves project_type,
+  // so the editing branch hardcodes 'editing' on submit.
   const [name, setName] = useState('');
-  const [type, setType] = useState<EditingProjectType>('organic_content');
   const [notes, setNotes] = useState('');
 
   // Calendar fields
@@ -146,7 +138,6 @@ export function EditingNewProjectDialog({
     setKind('editing');
     setClientId('');
     setName('');
-    setType('organic_content');
     setNotes('');
     setFiles([]);
     setProgress(new Map());
@@ -166,7 +157,7 @@ export function EditingNewProjectDialog({
           body: JSON.stringify({
             client_id: clientId,
             name: name.trim(),
-            project_type: type,
+            project_type: 'editing',
             notes: notes.trim() || undefined,
           }),
         });
@@ -305,8 +296,6 @@ export function EditingNewProjectDialog({
           <EditingFields
             name={name}
             setName={setName}
-            type={type}
-            setType={setType}
             notes={notes}
             setNotes={setNotes}
           />
@@ -405,15 +394,11 @@ function KindToggle({
 function EditingFields({
   name,
   setName,
-  type,
-  setType,
   notes,
   setNotes,
 }: {
   name: string;
   setName: (v: string) => void;
-  type: EditingProjectType;
-  setType: (v: EditingProjectType) => void;
   notes: string;
   setNotes: (v: string) => void;
 }) {
@@ -425,15 +410,6 @@ function EditingFields({
           onChange={(e) => setName(e.target.value)}
           placeholder="Q2 Reel batch 3"
           className="block w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_var(--focus-ring)]"
-        />
-      </Field>
-
-      <Field label="Type">
-        <Select
-          id="editing-type"
-          value={type}
-          onChange={(e) => setType(e.target.value as EditingProjectType)}
-          options={TYPE_OPTIONS}
         />
       </Field>
 

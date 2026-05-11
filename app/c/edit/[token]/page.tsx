@@ -1646,35 +1646,24 @@ function VideoCard({
     </div>
   );
 
-  // Aspect + layout switch by project type. The media column drives its own
-  // height via `aspect-[…]`; the card hugs whichever side is taller so the
-  // video frame stays flush with the card edges (no letterboxing) and the
-  // comment thread renders inline instead of inside a scroll well.
-  const isCtv = projectType === 'ctv_ads';
-  const isSocialAd = projectType === 'social_ads';
-  const stackVertical = isCtv;
-  const layoutDirection = stackVertical ? '' : 'md:flex-row md:items-stretch';
-  const videoColAspect = isCtv
-    ? 'aspect-video'
-    : isSocialAd
-      ? 'aspect-square'
-      : isImage
-        ? 'aspect-[4/5]'
-        : 'aspect-[9/16]';
-  // Width caps mirror the prior visual scale (≈78vh tall × aspect-ratio).
-  // We drop the explicit `md:h-full` so the column's intrinsic height comes
-  // from `aspect-[…]` and width — that's what kills the black bars.
-  const videoColSizing = stackVertical
-    ? 'w-full'
-    : isImage
-      ? 'w-full md:w-[44vh] md:max-w-[480px] md:flex-shrink-0 md:self-start'
-      : isSocialAd
-        ? 'w-full md:w-[78vh] md:max-w-[560px] md:flex-shrink-0 md:self-start'
-        : 'w-full md:w-[44vh] md:max-w-[440px] md:flex-shrink-0 md:self-start';
+  // Post-migration 302 project_type is binary (editing | calendar). Both
+  // default to 9:16; image deliverables get a 4:5 column. The media column
+  // drives its own height via `aspect-[...]`; the card hugs whichever side
+  // is taller (`md:items-stretch`) so the video frame stays flush with the
+  // card edges (no letterboxing) and the comment thread renders inline
+  // instead of inside a scroll well.
+  void projectType;
+  const videoColAspect = isImage ? 'aspect-[4/5]' : 'aspect-[9/16]';
+  // Width caps mirror the prior visual scale (~78vh tall x aspect-ratio).
+  // `md:self-start` keeps the media column at its intrinsic aspect-ratio
+  // height; the comments rail stretches to fill, kept off the bottom edge.
+  const videoColSizing = isImage
+    ? 'w-full md:w-[44vh] md:max-w-[480px] md:flex-shrink-0 md:self-start'
+    : 'w-full md:w-[44vh] md:max-w-[440px] md:flex-shrink-0 md:self-start';
   return (
     <article
       id={`video-${index}`}
-      className={`flex flex-col overflow-hidden rounded-xl border border-nativz-border bg-surface ${layoutDirection}`}
+      className="flex flex-col overflow-hidden rounded-xl border border-nativz-border bg-surface md:flex-row md:items-stretch"
     >
       {revisionInput}
       <div

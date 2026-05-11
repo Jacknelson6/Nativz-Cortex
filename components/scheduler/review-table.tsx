@@ -145,15 +145,12 @@ const PROJECT_TYPE_OPTIONS: {
   value: ReviewProjectType;
   label: string;
 }[] = [
-  { value: 'organic_content', label: 'Organic Content' },
-  { value: 'social_ads', label: 'Social Ads' },
-  { value: 'ctv_ads', label: 'CTV Ads' },
-  { value: 'other', label: 'Other' },
+  { value: 'editing', label: 'Editing' },
+  { value: 'calendar', label: 'Calendar' },
 ];
 
 function projectTypeLabel(row: ReviewLinkRow): string {
   if (!row.project_type) return '—';
-  if (row.project_type === 'other') return row.project_type_other?.trim() || 'Other';
   return PROJECT_TYPE_OPTIONS.find((o) => o.value === row.project_type)?.label ?? '—';
 }
 
@@ -848,16 +845,15 @@ function ProjectTypeCell({
   async function setType(value: ReviewProjectType | null) {
     onPatch({
       project_type: value,
-      // Clear the freeform other-label when switching away from "other".
-      project_type_other: value === 'other' ? link.project_type_other : null,
+      // Legacy column; never set under the binary enum. Always cleared.
+      project_type_other: null,
     });
     try {
       // Editing endpoint requires a non-null project_type (no "Clear
       // type" support). When clearing on an editing row, fall through
-      // to 'general' so the PATCH is accepted; the projected row will
-      // re-render as 'other' on next reload.
+      // to 'editing' so the PATCH is accepted.
       const payloadValue =
-        link.kind === 'editing' && value === null ? 'general' : value;
+        link.kind === 'editing' && value === null ? 'editing' : value;
       const res = await fetch(rowPatchUrl(link), {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },

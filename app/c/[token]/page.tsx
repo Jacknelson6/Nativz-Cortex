@@ -109,11 +109,13 @@ interface SharedPost {
   comments: SharedComment[];
 }
 
-// Drives per-creative layout: organic uses the original 9:16 + caption flow;
-// the ad / "other" types swap caption for an editable title and adjust the
-// video aspect ratio. Falls back to organic_content for legacy share links
-// that predate the project_type column.
-type ShareProjectType = 'organic_content' | 'social_ads' | 'ctv_ads' | 'other';
+// Drives per-creative layout: calendar uses the 9:16 + caption flow;
+// editing swaps caption for an editable title (no schedule, no handles).
+// Falls back to calendar for legacy share links that predate the
+// project_type column. Migration 302 collapsed this to a binary; the
+// API's normalizeProjectType() folds pre-migration values onto these
+// two before they reach the page.
+type ShareProjectType = 'editing' | 'calendar';
 
 interface SharedDrop {
   /** Client UUID, used by the soft-block modal as the Stripe checkout subject. */
@@ -2109,17 +2111,17 @@ function PostCard({
    */
   layoutMode?: 'inline' | 'modal';
 }) {
-  // Project-type-driven layout decisions. Organic content keeps the original
-  // 9:16 + caption + tag/collab + schedule flow. Ad / "other" types swap the
-  // caption block for an editable title and adjust the video aspect ratio.
-  const isOrganic = projectType === 'organic_content';
-  const isCtv = projectType === 'ctv_ads';
-  const isSocialAd = projectType === 'social_ads';
-  const isOther = projectType === 'other';
+  // Project-type-driven layout decisions. Calendar keeps the 9:16 +
+  // caption + tag/collab + schedule flow. Editing swaps the caption
+  // block for an editable title and drops the schedule/handles surfaces
+  // (deliverables don't auto-schedule). Aspect ratio defaults to 9:16
+  // for both since the unified Upload Content modal feeds whatever the
+  // user actually shot.
+  const isCalendar = projectType === 'calendar';
   const isImagePost = post.media_type === 'image';
-  const showCaptionFlow = isOrganic;
-  const showHandles = isOrganic;
-  const showSchedule = isOrganic;
+  const showCaptionFlow = isCalendar;
+  const showHandles = isCalendar;
+  const showSchedule = isCalendar;
   const displayTitle =
     (post.title && post.title.trim()) ||
     (post.filename_fallback && post.filename_fallback.trim()) ||
@@ -2888,13 +2890,10 @@ function PostCard({
   // Image posts always use 4:5 (Instagram feed max-vertical). Their cropped
   // render is 1080×1350 — putting that inside a 9:16 container creates
   // top/bottom pillarbox bars, which is what the customer was seeing.
-  const videoAspectRatioStyle = isCtv
-    ? '16 / 9'
-    : isSocialAd
-      ? '1 / 1'
-      : isImagePost
-        ? '4 / 5'
-        : '9 / 16';
+  // Post-migration 302 both project types default to 9:16; the legacy
+  // 16:9 (CTV) and 1:1 (social ad) branches were dropped along with the
+  // type dropdown.
+  const videoAspectRatioStyle = isImagePost ? '4 / 5' : '9 / 16';
   const videoPanel = (
     <div
       ref={videoSectionRef}
@@ -2903,15 +2902,7 @@ function PostCard({
       <MediaSurface
         post={post}
         className="block h-full w-full"
-        aspectClass={
-          isCtv
-            ? 'aspect-video'
-            : isSocialAd
-              ? 'aspect-square'
-              : isImagePost
-                ? 'aspect-[4/5]'
-                : 'aspect-[9/16]'
-        }
+        aspectClass={isImagePost ? 'aspect-[4/5]' : 'aspect-[9/16]'}
         aspectRatioStyle={videoAspectRatioStyle}
         onPlayerReady={(handle) => {
           playerHandleRef.current = handle;
@@ -3226,20 +3217,10 @@ function PostCard({
     </div>
   );
 
-  // Layout switches by project type:
-  //
-  //   organic_content (9:16 short-form): video pinned left, comments scroll
-  //     right. Original behavior — preserved exactly so existing share
-  //     links don't visually shift.
-  //
-  //   social_ads (1:1) / other: same horizontal split but the video column
-  //     hugs a square aspect ratio. Comments still flow to the right.
-  //
-  //   ctv_ads (16:9 landscape): horizontal split breaks down — the video
-  //     would be a thin letterboxed strip with most of the card empty.
-  //     Switch to a stacked layout: video on top filling card width at
-  //     16:9, comments fill the rest of the height below. Frame.io uses
-  //     the same flip for landscape ads.
+  // Layout: video pinned left at 9:16 (or 4:5 for stills), comments
+  // scroll right. Post-migration 302 both project types default to 9:16
+  // so the legacy CTV vertical-stack + 1:1 square-ad layouts are gone;
+  // feedstock is whatever the user actually uploaded.
   // Image posts get a smaller fixed height than video. The 78vh card was
   // scoped to the video review case (frame.io-style chrome where the
   // comments column scrolls inside a bounded right panel) — for a still
@@ -3254,39 +3235,20 @@ function PostCard({
     : layoutMode === 'modal'
       ? 'md:h-[88vh]'
       : 'md:h-[78vh]';
-  const stackVertical = isCtv;
-  const layoutDirection = stackVertical ? '' : 'md:flex-row';
   const articleChrome =
     layoutMode === 'modal'
-      ? `flex flex-col overflow-hidden bg-surface ${layoutDirection} ${heightPx}`
-      : `flex flex-col overflow-hidden rounded-xl border border-nativz-border bg-surface ${layoutDirection} ${heightPx}`;
-  // Aspect ratio for the video column. Ad-type viewers got a custom shape;
-  // organic and "other" stay 9:16 to match the existing media library.
-  const videoColAspect = isCtv
-    ? 'aspect-video'
-    : isSocialAd
-      ? 'aspect-square'
-      : isImagePost
-        ? 'aspect-[4/5]'
-        : 'aspect-[9/16]';
-  // For CTV (vertical stack) the video occupies full card width with its
-  // natural 16:9 height; for the side-by-side layouts the video column is
-  // height-constrained so it hugs the card height.
-  // Image posts are 4:5 — letting card height drive width makes the column
-  // ~62vh wide and squashes the comments column. Width-cap to ~44vh so it
-  // matches the 9:16 video footprint and the right column keeps room.
+      ? `flex flex-col overflow-hidden bg-surface md:flex-row ${heightPx}`
+      : `flex flex-col overflow-hidden rounded-xl border border-nativz-border bg-surface md:flex-row ${heightPx}`;
+  const videoColAspect = isImagePost ? 'aspect-[4/5]' : 'aspect-[9/16]';
   // Width-pin the media column instead of relying on `md:w-auto` +
   // aspect-ratio. The auto path was resolving to the <mux-player>
   // intrinsic content size in some Chromium builds and collapsing the
-  // comments rail. Matches the 78vh × ratio math the aspect-[…] class
-  // was supposed to produce.
-  const videoColSizing = stackVertical
-    ? 'w-full bg-black'
-    : isImagePost
-      ? 'w-full bg-black md:w-[44vh] md:max-w-[480px] md:flex-shrink-0 md:self-center'
-      : isSocialAd
-        ? 'w-full bg-black md:h-full md:w-[78vh] md:max-w-[560px] md:flex-shrink-0 md:self-center'
-        : 'w-full bg-black md:h-full md:w-[44vh] md:max-w-[440px] md:flex-shrink-0';
+  // comments rail. Image posts are 4:5 (letting card height drive width
+  // makes the column ~62vh wide and squashes the comments column), so
+  // cap to ~44vh so the right column keeps room.
+  const videoColSizing = isImagePost
+    ? 'w-full bg-black md:w-[44vh] md:max-w-[480px] md:flex-shrink-0 md:self-center'
+    : 'w-full bg-black md:h-full md:w-[44vh] md:max-w-[440px] md:flex-shrink-0';
   return (
     <article
       id={layoutMode === 'inline' ? `post-${index}` : undefined}

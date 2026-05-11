@@ -159,7 +159,7 @@ export function EditingProjectDetail({
   const [name, setName] = useState('');
   const [notes, setNotes] = useState('');
   const [driveUrl, setDriveUrl] = useState('');
-  const [type, setType] = useState<EditingProjectType>('organic_content');
+  const [type, setType] = useState<EditingProjectType>('editing');
   const [status, setStatus] = useState<EditingProjectStatus>('editing');
   const [dragActive, setDragActive] = useState(false);
   const [tab, setTab] = useState<DetailTab>('details');

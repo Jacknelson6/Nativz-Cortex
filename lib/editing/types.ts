@@ -4,12 +4,18 @@
  * the editor UI share one shape.
  */
 
-export type EditingProjectType =
-  | 'organic_content'
-  | 'social_ads'
-  | 'ctv_ads'
-  | 'general'
-  | 'other';
+/**
+ * Binary discriminator for the editing pipeline. Collapsed from a 5-way
+ * enum (organic_content / social_ads / ctv_ads / general / other) in
+ * migration 302 — the Upload Content modal lets Jack pick between
+ * "Editing project" and "Content calendar" as the project kind, which
+ * fully resolves the type, so the old dropdown went away.
+ *   - 'editing'  — a deliverable produced through the editing pipeline
+ *                  (ads, social cuts, anything Jack edits to spec).
+ *   - 'calendar' — an organic content calendar (post grid, no
+ *                  deliverable turnaround).
+ */
+export type EditingProjectType = 'editing' | 'calendar';
 
 export type EditingProjectStatus =
   | 'editing'
@@ -166,9 +172,6 @@ export const EDITING_STATUS_LABEL: Record<EditingProjectStatus, string> = {
 };
 
 export const EDITING_TYPE_LABEL: Record<EditingProjectType, string> = {
-  organic_content: 'Organic content',
-  social_ads: 'Social ads',
-  ctv_ads: 'CTV ads',
-  general: 'General',
-  other: 'Other',
+  editing: 'Editing',
+  calendar: 'Calendar',
 };

@@ -34,9 +34,7 @@ const ListQuery = z.object({
 const CreateBody = z.object({
   client_id: z.string().uuid(),
   name: z.string().min(1).max(200),
-  project_type: z
-    .enum(['organic_content', 'social_ads', 'ctv_ads', 'general', 'other'])
-    .default('organic_content'),
+  project_type: z.enum(['editing', 'calendar']).default('editing'),
   drive_folder_url: z.string().url().optional(),
   notes: z.string().max(2000).optional(),
 });

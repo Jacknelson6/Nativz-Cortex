@@ -32,7 +32,7 @@ import { getCortexAppUrl } from '@/lib/agency/cortex-url';
  * clients they can't access.
  */
 
-export type ReviewProjectType = 'social_ads' | 'ctv_ads' | 'organic_content' | 'other';
+export type ReviewProjectType = 'editing' | 'calendar';
 export type ReviewLinkStatus =
   | 'abandoned'
   | 'expired'

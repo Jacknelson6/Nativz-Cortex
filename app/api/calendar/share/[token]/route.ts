@@ -19,13 +19,18 @@ interface ShareLinkRow {
   name: string | null;
 }
 
-type ShareProjectType = 'organic_content' | 'social_ads' | 'ctv_ads' | 'other';
+type ShareProjectType = 'editing' | 'calendar';
 
 function normalizeProjectType(raw: string | null | undefined): ShareProjectType {
-  // Defaults to organic_content so legacy share links keep working with
-  // the existing caption/hashtag/tag/schedule UI.
-  if (raw === 'social_ads' || raw === 'ctv_ads' || raw === 'other') return raw;
-  return 'organic_content';
+  // Post-migration 302 the enum is binary. Anything else (NULL or a
+  // pre-migration value that somehow didn't get rewritten) defaults to
+  // 'calendar' so legacy share links keep working with the existing
+  // caption / hashtag / tag / schedule UI.
+  if (raw === 'editing') return 'editing';
+  if (raw === 'social_ads' || raw === 'ctv_ads' || raw === 'other' || raw === 'general') {
+    return 'editing';
+  }
+  return 'calendar';
 }
 
 function stripFileExtension(filename: string | null): string | null {

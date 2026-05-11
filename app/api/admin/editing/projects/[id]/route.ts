@@ -18,9 +18,7 @@ export const dynamic = 'force-dynamic';
 const PatchBody = z
   .object({
     name: z.string().min(1).max(200).optional(),
-    project_type: z
-      .enum(['organic_content', 'social_ads', 'ctv_ads', 'general', 'other'])
-      .optional(),
+    project_type: z.enum(['editing', 'calendar']).optional(),
     status: z
       .enum(['editing', 'need_approval', 'revising', 'approved', 'done', 'archived'])
       .optional(),

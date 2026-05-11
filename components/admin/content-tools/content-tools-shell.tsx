@@ -186,8 +186,8 @@ function groupRowsByMonth(
  * and a single-type breakdown without reaching for filters.
  *
  *   All projects    - every share-link the agency has out (default).
- *   Organic social  - filtered to project_type = organic_content.
- *   Paid social     - filtered to project_type = social_ads.
+ *   Calendar        - filtered to project_type = calendar.
+ *   Editing         - filtered to project_type = editing.
  *   Quick schedule  - Monday "EM Approved" videos -> thumbnail extract
  *                     + transcribe + caption write -> kick off scheduler.
  *   Connections     - integration health (Drive / Monday / Resend /
@@ -211,8 +211,8 @@ function groupRowsByMonth(
 
 type ProjectTabSlug =
   | 'projects'
-  | 'organic_social'
-  | 'paid_social';
+  | 'calendar'
+  | 'editing';
 
 type ContentToolsTab =
   | ProjectTabSlug
@@ -227,20 +227,20 @@ type ContentToolsTab =
  */
 const PROJECT_TAB_FILTER: Record<ProjectTabSlug, ReviewProjectType | null> = {
   projects: null,
-  organic_social: 'organic_content',
-  paid_social: 'social_ads',
+  calendar: 'calendar',
+  editing: 'editing',
 };
 
 const PROJECT_TAB_HIDE: Record<ProjectTabSlug, ReviewHideableColumn[]> = {
   projects: [],
-  organic_social: ['project_type'],
-  paid_social: ['project_type'],
+  calendar: ['project_type'],
+  editing: ['project_type'],
 };
 
 const PROJECT_TAB_LABEL: Record<ProjectTabSlug, string> = {
   projects: 'All projects',
-  organic_social: 'Organic social',
-  paid_social: 'Paid social',
+  calendar: 'Calendar',
+  editing: 'Editing',
 };
 
 function isProjectTab(tab: ContentToolsTab): tab is ProjectTabSlug {
@@ -248,24 +248,15 @@ function isProjectTab(tab: ContentToolsTab): tab is ProjectTabSlug {
 }
 
 /**
- * Map an editing project's `project_type` into a `ReviewProjectType`
- * so it can ride in the unified table. The editing model carries an
- * extra `general` bucket for pre-typed legacy rows; we collapse that
- * into `other` here so a row never falls outside the four shared
- * project tabs.
+ * Map an editing project's `project_type` into a `ReviewProjectType`.
+ * Post-migration 302 both enums are the same binary set so this is a
+ * straight passthrough; kept as a function so any future schema drift
+ * has a single place to land.
  */
 function projectTypeForReview(
   type: EditingProjectType,
 ): ReviewProjectType {
-  switch (type) {
-    case 'organic_content':
-    case 'social_ads':
-    case 'ctv_ads':
-      return type;
-    case 'general':
-    case 'other':
-      return 'other';
-  }
+  return type;
 }
 
 /**
@@ -385,13 +376,13 @@ const TABS: {
     icon: <FileText className="size-3.5" />,
   },
   {
-    slug: 'organic_social',
-    label: 'Organic social',
+    slug: 'calendar',
+    label: 'Calendar',
     icon: <Megaphone className="size-3.5" />,
   },
   {
-    slug: 'paid_social',
-    label: 'Paid social',
+    slug: 'editing',
+    label: 'Editing',
     icon: <BadgeDollarSign className="size-3.5" />,
   },
   {
@@ -551,22 +542,15 @@ export function ContentToolsShell() {
   const projectTabCounts = useMemo(() => {
     const counts: Record<ProjectTabSlug, number> = {
       projects: allRows.length,
-      organic_social: 0,
-      paid_social: 0,
+      calendar: 0,
+      editing: 0,
     };
     for (const row of allRows) {
-      const type: ReviewProjectType = row.project_type ?? 'other';
-      switch (type) {
-        case 'organic_content':
-          counts.organic_social += 1;
-          break;
-        case 'social_ads':
-          counts.paid_social += 1;
-          break;
-        case 'ctv_ads':
-        case 'other':
-          break;
-      }
+      // Rows with NULL project_type bucket into Editing by default (it's
+      // the binary's "everything that isn't a calendar" half). The
+      // calendar tab only shows rows explicitly tagged as such.
+      if (row.project_type === 'calendar') counts.calendar += 1;
+      else counts.editing += 1;
     }
     return counts;
   }, [allRows]);
@@ -577,7 +561,7 @@ export function ContentToolsShell() {
     const filter = PROJECT_TAB_FILTER[activeProjectTab];
     if (filter === null) return sortedLinks;
     return sortedLinks.filter((link) => {
-      const type: ReviewProjectType = link.project_type ?? 'other';
+      const type: ReviewProjectType = link.project_type ?? 'editing';
       return type === filter;
     });
   }, [sortedLinks, activeProjectTab]);
