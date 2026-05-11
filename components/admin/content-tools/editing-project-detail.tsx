@@ -259,12 +259,22 @@ export function EditingProjectDetail({
   }, [projectId]);
 
   useEffect(() => {
-    if (open) {
+    if (open && project) {
+      // Seed the editable fields from the row data we already have, so
+      // Status / Type / Strategist / Editor / Name / Notes / Drive URL
+      // render instantly when the modal opens. `load()` then fills in
+      // the things we don't have on the row (videos, comments, etc.)
+      // and refreshes the seeded fields with canonical values.
+      setName(project.name);
+      setNotes(project.notes ?? '');
+      setDriveUrl(project.drive_folder_url ?? '');
+      setType(project.project_type);
+      setStatus(project.status);
       void load();
       void loadShareLinks();
       setExpiresOverride(null);
       setRefreshedThisSession(false);
-    } else {
+    } else if (!open) {
       setData(null);
       setTab('details');
       setArchivedEmails(null);
@@ -275,7 +285,7 @@ export function EditingProjectDetail({
       setPreviewError(null);
       setCopied(false);
     }
-  }, [open, load, loadShareLinks]);
+  }, [open, project, load, loadShareLinks]);
 
   // Brand POC contacts. Cache hit shows instantly; revalidate in background.
   useEffect(() => {

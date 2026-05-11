@@ -12,6 +12,28 @@ import {
   type EditingProjectType,
 } from '@/lib/editing/types';
 
+interface TeamOption {
+  id: string;
+  label: string;
+}
+
+type RoleTag = 'strategist' | 'editor';
+
+async function fetchTeam(role: RoleTag): Promise<TeamOption[]> {
+  const res = await fetch(
+    `/api/admin/editing/team?role=${encodeURIComponent(role)}`,
+    { cache: 'no-store' },
+  );
+  if (!res.ok) throw new Error('Failed to load team');
+  const body = (await res.json()) as {
+    members: Array<{ id: string; full_name: string | null; email: string }>;
+  };
+  return (body.members ?? []).map((m) => ({
+    id: m.id,
+    label: m.full_name?.trim() || (m.email ? m.email.split('@')[0] : 'Unnamed'),
+  }));
+}
+
 /**
  * Two-field create flow: pick a brand, name the project. Type defaults
  * to "Organic content" because that's the dominant flow; editors can
@@ -44,6 +66,10 @@ export function EditingNewProjectDialog({
   const [name, setName] = useState('');
   const [type, setType] = useState<EditingProjectType>('organic_content');
   const [notes, setNotes] = useState('');
+  const [strategists, setStrategists] = useState<TeamOption[]>([]);
+  const [editors, setEditors] = useState<TeamOption[]>([]);
+  const [strategistId, setStrategistId] = useState<string>('');
+  const [editorId, setEditorId] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -51,12 +77,22 @@ export function EditingNewProjectDialog({
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch('/api/clients', { cache: 'no-store' });
-        if (!res.ok) throw new Error('Failed to load clients');
-        const data = (await res.json()) as ClientOption[];
-        if (!cancelled) setClients(data);
+        const [clientsRes, strategistRoster, editorRoster] = await Promise.all([
+          fetch('/api/clients', { cache: 'no-store' }).then(async (res) => {
+            if (!res.ok) throw new Error('Failed to load clients');
+            return (await res.json()) as ClientOption[];
+          }),
+          fetchTeam('strategist'),
+          fetchTeam('editor'),
+        ]);
+        if (cancelled) return;
+        setClients(clientsRes);
+        setStrategists(strategistRoster);
+        setEditors(editorRoster);
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to load clients');
+        if (!cancelled) {
+          toast.error(err instanceof Error ? err.message : 'Failed to load form data');
+        }
       }
     })();
     return () => {
@@ -69,11 +105,15 @@ export function EditingNewProjectDialog({
     setName('');
     setType('organic_content');
     setNotes('');
+    setStrategistId('');
+    setEditorId('');
   }
 
   async function submit() {
     if (!clientId) return toast.error('Pick a brand first');
     if (!name.trim()) return toast.error('Give the project a name');
+    if (!strategistId) return toast.error('Pick a strategist');
+    if (!editorId) return toast.error('Pick an editor');
     setSubmitting(true);
     try {
       const res = await fetch('/api/admin/editing/projects', {
@@ -83,6 +123,8 @@ export function EditingNewProjectDialog({
           client_id: clientId,
           name: name.trim(),
           project_type: type,
+          strategist_id: strategistId,
+          editor_id: editorId,
           notes: notes.trim() || undefined,
         }),
       });
@@ -128,6 +170,32 @@ export function EditingNewProjectDialog({
           />
         </Field>
 
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Strategist">
+            <Select
+              id="editing-strategist"
+              value={strategistId}
+              onChange={(e) => setStrategistId(e.target.value)}
+              options={[
+                { value: '', label: strategists.length ? 'Pick a strategist' : 'Loading...' },
+                ...strategists.map((s) => ({ value: s.id, label: s.label })),
+              ]}
+            />
+          </Field>
+
+          <Field label="Editor">
+            <Select
+              id="editing-editor"
+              value={editorId}
+              onChange={(e) => setEditorId(e.target.value)}
+              options={[
+                { value: '', label: editors.length ? 'Pick an editor' : 'Loading...' },
+                ...editors.map((m) => ({ value: m.id, label: m.label })),
+              ]}
+            />
+          </Field>
+        </div>
+
         <Field label="Notes">
           <textarea
             value={notes}
@@ -142,7 +210,17 @@ export function EditingNewProjectDialog({
           <Button variant="ghost" size="sm" onClick={onClose}>
             Cancel
           </Button>
-          <Button size="sm" onClick={() => void submit()} disabled={submitting}>
+          <Button
+            size="sm"
+            onClick={() => void submit()}
+            disabled={
+              submitting ||
+              !clientId ||
+              !name.trim() ||
+              !strategistId ||
+              !editorId
+            }
+          >
             {submitting ? 'Creating...' : 'Create project'}
           </Button>
         </div>

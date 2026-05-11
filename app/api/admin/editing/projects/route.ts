@@ -37,6 +37,11 @@ const CreateBody = z.object({
   project_type: z
     .enum(['organic_content', 'social_ads', 'ctv_ads', 'general', 'other'])
     .default('organic_content'),
+  // Strategist + editor are required at create time so the project never
+  // lands in the board unassigned. The dialog enforces this client-side
+  // too; this is the server-side guard.
+  strategist_id: z.string().uuid({ message: 'Pick a strategist' }),
+  editor_id: z.string().uuid({ message: 'Pick an editor' }),
   drive_folder_url: z.string().url().optional(),
   notes: z.string().max(2000).optional(),
 });
@@ -305,20 +310,10 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
 
-  // editor_id now FKs into team_members (migration 212, renamed from
-  // assignee_id in migration 240), so translate the current admin's
-  // auth user id to their team_members row if there is one. If the
-  // admin doesn't have a roster entry (e.g. a super-admin with no
-  // team_members row) we leave it null and let the user pick later.
-  const { data: teamRow } = await admin
-    .from('team_members')
-    .select('id')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  const defaultEditorId = (teamRow?.id as string | undefined) ?? null;
-
+  // Strategist + editor are required by the schema above so we just pass
+  // the picked team_members ids straight through. (Previously we fell
+  // back to "creator's team_members row," which produced unassigned
+  // projects whenever a super-admin without a roster entry created one.)
   const { data, error } = await admin
     .from('editing_projects')
     .insert({
@@ -328,7 +323,8 @@ export async function POST(req: Request) {
       drive_folder_url: parsed.data.drive_folder_url ?? null,
       notes: parsed.data.notes ?? null,
       created_by: user.id,
-      editor_id: defaultEditorId,
+      strategist_id: parsed.data.strategist_id,
+      editor_id: parsed.data.editor_id,
     })
     .select('id')
     .single();
