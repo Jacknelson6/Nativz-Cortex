@@ -4,6 +4,10 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/auth/permissions';
 import type { SocialPlatform } from '@/lib/posting';
+import {
+  assertNoSameDayCollision,
+  SameDayScheduleError,
+} from '@/lib/calendar/scheduling-rules';
 
 const ScheduleSchema = z.object({
   // ISO timestamp for the post slot. The browser computes Chicago noon UTC
@@ -194,6 +198,29 @@ export async function POST(
       { error: 'None of the selected profiles are connected to Zernio.' },
       { status: 409 },
     );
+  }
+
+  // Enforce 1/(client, platform)/Central-day before we mint any rows. The
+  // selected profile set determines which platforms count for the collision
+  // check.
+  const targetPlatforms = lateProfiles.map((p) => p.platform);
+  try {
+    await assertNoSameDayCollision(admin, {
+      clientId: link.client_id,
+      platforms: targetPlatforms,
+      scheduledAt,
+    });
+  } catch (err) {
+    if (err instanceof SameDayScheduleError) {
+      return NextResponse.json(
+        {
+          error: 'another post is already scheduled on that day for this platform',
+          collisions: err.collisions,
+        },
+        { status: 409 },
+      );
+    }
+    throw err;
   }
 
   const muxMp4Url = `https://stream.mux.com/${video.mux_playback_id}/capped-1080p.mp4`;

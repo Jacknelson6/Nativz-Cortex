@@ -4,6 +4,10 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { z } from 'zod';
 import { getPostingService } from '@/lib/posting';
 import type { SocialPlatform } from '@/lib/posting/types';
+import {
+  assertNoSameDayCollision,
+  SameDayScheduleError,
+} from '@/lib/calendar/scheduling-rules';
 
 const CreatePostSchema = z.object({
   client_id: z.string().uuid(),
@@ -73,6 +77,33 @@ export async function POST(request: NextRequest) {
     const data = parsed.data;
 
     const adminClient = createAdminClient();
+
+    // Enforce 1/(client, platform)/Central-day. Resolve platforms from the
+    // profile ids the caller passed in, then check for collisions. Drafts
+    // (scheduled_at=null) bypass the check.
+    if (data.scheduled_at && data.platform_profile_ids.length > 0) {
+      const { data: profileRows } = await adminClient
+        .from('social_profiles')
+        .select('platform')
+        .in('id', data.platform_profile_ids);
+      const platforms = (profileRows ?? [])
+        .map((p: { platform: SocialPlatform | string }) => p.platform as SocialPlatform);
+      try {
+        await assertNoSameDayCollision(adminClient, {
+          clientId: data.client_id,
+          platforms,
+          scheduledAt: data.scheduled_at,
+        });
+      } catch (e) {
+        if (e instanceof SameDayScheduleError) {
+          return NextResponse.json(
+            { error: e.message, collisions: e.collisions },
+            { status: 409 },
+          );
+        }
+        throw e;
+      }
+    }
 
     // Create the post
     const { data: post, error: postError } = await adminClient

@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateApiKey } from '@/lib/api-keys/validate';
 import { createAdminClient } from '@/lib/supabase/admin';
+import type { SocialPlatform } from '@/lib/posting/types';
+import {
+  assertNoSameDayCollision,
+  SameDayScheduleError,
+} from '@/lib/calendar/scheduling-rules';
 
 const createPostSchema = z.object({
   client_id: z.string().uuid(),
@@ -87,6 +92,38 @@ export async function POST(request: NextRequest) {
 
   const data = parsed.data;
   const admin = createAdminClient();
+
+  // Enforce 1/(client, platform)/Central-day before insert. Public API has no
+  // override — callers integrating against v1 should always pick a free slot.
+  if (data.scheduled_at && data.platform_profile_ids.length > 0) {
+    const { data: profiles } = await admin
+      .from('social_profiles')
+      .select('platform')
+      .in('id', data.platform_profile_ids);
+    const platforms = (profiles ?? []).map(
+      (p: { platform: SocialPlatform | string }) => p.platform as SocialPlatform,
+    );
+    if (platforms.length > 0) {
+      try {
+        await assertNoSameDayCollision(admin, {
+          clientId: data.client_id,
+          platforms,
+          scheduledAt: data.scheduled_at,
+        });
+      } catch (err) {
+        if (err instanceof SameDayScheduleError) {
+          return NextResponse.json(
+            {
+              error: 'another post is already scheduled on that day for this platform',
+              collisions: err.collisions,
+            },
+            { status: 409 },
+          );
+        }
+        throw err;
+      }
+    }
+  }
 
   const { data: post, error } = await admin
     .from('scheduled_posts')

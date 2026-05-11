@@ -3,6 +3,8 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createCompletion } from '@/lib/ai/client';
 import { z } from 'zod';
+import type { SocialPlatform } from '@/lib/posting/types';
+import { nextFreeSlot } from '@/lib/calendar/scheduling-rules';
 
 const AutoScheduleSchema = z.object({
   client_id: z.string().uuid(),
@@ -120,10 +122,20 @@ ${examples}`;
     // 4. Generate captions + create posts for each media item
     const results: Array<{ media_id: string; post_id: string; scheduled_at: string; status: 'success' | 'error'; error?: string }> = [];
 
+    // Pre-resolve the platform set so the per-slot collision check doesn't
+    // re-query for every iteration.
+    const { data: profileRows } = await adminClient
+      .from('social_profiles')
+      .select('platform')
+      .in('id', data.platform_profile_ids);
+    const targetPlatforms = (profileRows ?? []).map(
+      (p: { platform: SocialPlatform | string }) => p.platform as SocialPlatform,
+    );
+
     for (let i = 0; i < mediaItems.length; i++) {
       const mediaItem = mediaItems[i];
-      const scheduledAt = scheduleDates[i];
-      if (!scheduledAt) break; // More media than available slots
+      const baseSlot = scheduleDates[i];
+      if (!baseSlot) break; // More media than available slots
 
       try {
         // Generate caption via AI
@@ -137,6 +149,14 @@ ${examples}`;
 
         // Parse caption and hashtags
         const { captionText, hashtags } = parseCaptionAndHashtags(caption);
+
+        // Enforce 1/(client, platform)/Central-day — walk the slot forward if
+        // the brand already has a post on this day for any of these platforms.
+        const { scheduledAt } = await nextFreeSlot(adminClient, {
+          clientId: data.client_id,
+          platforms: targetPlatforms,
+          scheduledAt: baseSlot,
+        });
 
         // Create the post
         const { data: post, error: postError } = await adminClient
@@ -190,7 +210,9 @@ ${examples}`;
         results.push({
           media_id: mediaItem.id,
           post_id: '',
-          scheduled_at: scheduledAt,
+          // Fall back to the base slot — if `nextFreeSlot` threw before
+          // producing one, that's the best timestamp we have for the row.
+          scheduled_at: baseSlot,
           status: 'error',
           error: err instanceof Error ? err.message : 'Unknown error',
         });

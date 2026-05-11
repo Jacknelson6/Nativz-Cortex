@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
+import type { SocialPlatform } from '@/lib/posting/types';
+import {
+  assertNoSameDayCollision,
+  SameDayScheduleError,
+} from '@/lib/calendar/scheduling-rules';
 
 const BodySchema = z.object({
   postId: z.string().uuid(),
@@ -44,9 +49,9 @@ export async function POST(
 
   const { data: post } = await admin
     .from('scheduled_posts')
-    .select('id, scheduled_at, status')
+    .select('id, client_id, scheduled_at, status')
     .eq('id', parsed.data.postId)
-    .single<{ id: string; scheduled_at: string | null; status: string }>();
+    .single<{ id: string; client_id: string; scheduled_at: string | null; status: string }>();
   if (!post) return NextResponse.json({ error: 'post not found' }, { status: 404 });
 
   // Once a post is published or in-flight, the date is no longer the client's
@@ -59,6 +64,48 @@ export async function POST(
   const nextAt = parsed.data.scheduledAt;
   if ((previousAt ?? null) === (nextAt ?? null)) {
     return NextResponse.json({ ok: true, scheduledAt: nextAt, comment: null });
+  }
+
+  // Enforce the 1/(client, platform)/Central-day invariant before we touch
+  // scheduled_at. The share-link client is intentionally not allowed to opt
+  // out — they should never stack two posts on the same day.
+  if (nextAt) {
+    const { data: legs } = await admin
+      .from('scheduled_post_platforms')
+      .select('social_profile_id')
+      .eq('post_id', parsed.data.postId);
+    const profileIds = (legs ?? []).map((l: { social_profile_id: string }) => l.social_profile_id);
+    let platforms: SocialPlatform[] = [];
+    if (profileIds.length > 0) {
+      const { data: profiles } = await admin
+        .from('social_profiles')
+        .select('platform')
+        .in('id', profileIds);
+      platforms = (profiles ?? []).map(
+        (p: { platform: SocialPlatform | string }) => p.platform as SocialPlatform,
+      );
+    }
+    if (platforms.length > 0) {
+      try {
+        await assertNoSameDayCollision(admin, {
+          clientId: post.client_id,
+          platforms,
+          scheduledAt: nextAt,
+          excludePostId: parsed.data.postId,
+        });
+      } catch (err) {
+        if (err instanceof SameDayScheduleError) {
+          return NextResponse.json(
+            {
+              error: 'another post is already scheduled on that day for this platform',
+              collisions: err.collisions,
+            },
+            { status: 409 },
+          );
+        }
+        throw err;
+      }
+    }
   }
 
   const { error: updErr } = await admin

@@ -5,6 +5,7 @@ import type { CaptionVariants } from '@/lib/types/calendar';
 import { distributeSlots } from './distribute-slots';
 import { verifyAndReconcilePost } from './verify-post';
 import { resolveScheduledPostMedia } from './resolve-media';
+import { nextFreeSlot } from './scheduling-rules';
 import { preflightInstagramAspectForPost } from '@/lib/posting/validate-image-aspect';
 import {
   isAccountLevelLegError,
@@ -241,6 +242,16 @@ export async function scheduleDrop(
       // sat in the queue waiting for the cron to publish it without ever
       // having been routed through Zernio. That was the root cause of the
       // unapproved-posts-going-live incident.
+      // Enforce 1/(client, platform)/Central-day. If the computed slot would
+      // double-up an existing scheduled post for any of this drop's
+      // platforms, walk forward to the next free day. See
+      // lib/calendar/scheduling-rules.ts for the rule and opt-out.
+      const { scheduledAt: safeSlot } = await nextFreeSlot(admin, {
+        clientId: (drop as DropRow).client_id,
+        platforms: lateProfiles.map((p) => p.platform),
+        scheduledAt: slot.scheduledAt,
+      });
+
       const { data: post, error: postErr } = await admin
         .from('scheduled_posts')
         .insert({
@@ -248,7 +259,7 @@ export async function scheduleDrop(
           created_by: (drop as DropRow).created_by,
           caption: video.draft_caption,
           hashtags: video.draft_hashtags ?? [],
-          scheduled_at: slot.scheduledAt,
+          scheduled_at: safeSlot,
           status: 'draft',
           cover_image_url: coverImageUrl,
           post_type: postType,
@@ -281,7 +292,7 @@ export async function scheduleDrop(
         .from('content_drop_videos')
         .update({
           scheduled_post_id: post.id,
-          draft_scheduled_at: slot.scheduledAt,
+          draft_scheduled_at: safeSlot,
         })
         .eq('id', video.id);
 

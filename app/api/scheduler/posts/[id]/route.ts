@@ -4,6 +4,11 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/auth/permissions';
 import { z } from 'zod';
 import { getPostingService } from '@/lib/posting';
+import type { SocialPlatform } from '@/lib/posting/types';
+import {
+  assertNoSameDayCollision,
+  SameDayScheduleError,
+} from '@/lib/calendar/scheduling-rules';
 
 /**
  * Resolve the client_id a scheduled post belongs to and assert that the
@@ -172,6 +177,48 @@ export async function PUT(
             },
             { status: 422 },
           );
+        }
+      }
+    }
+
+    // Enforce 1/(client, platform)/Central-day when the caller is moving
+    // `scheduled_at`. Drafts (null) and field-only updates skip the check.
+    // Excludes this post id so re-saving the same scheduled_at doesn't trip.
+    if (data.scheduled_at) {
+      const { data: existingPost } = await adminClient
+        .from('scheduled_posts')
+        .select('client_id, scheduled_post_platforms(social_profile_id)')
+        .eq('id', id)
+        .single<{
+          client_id: string;
+          scheduled_post_platforms: Array<{ social_profile_id: string }>;
+        }>();
+      if (existingPost) {
+        const profileIds =
+          data.platform_profile_ids ??
+          existingPost.scheduled_post_platforms.map((p) => p.social_profile_id);
+        const { data: profileRows } = await adminClient
+          .from('social_profiles')
+          .select('platform')
+          .in('id', profileIds);
+        const platforms = (profileRows ?? []).map(
+          (p: { platform: SocialPlatform | string }) => p.platform as SocialPlatform,
+        );
+        try {
+          await assertNoSameDayCollision(adminClient, {
+            clientId: existingPost.client_id,
+            platforms,
+            scheduledAt: data.scheduled_at,
+            excludePostId: id,
+          });
+        } catch (e) {
+          if (e instanceof SameDayScheduleError) {
+            return NextResponse.json(
+              { error: e.message, collisions: e.collisions },
+              { status: 409 },
+            );
+          }
+          throw e;
         }
       }
     }

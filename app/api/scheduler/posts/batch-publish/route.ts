@@ -104,7 +104,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Set all eligible posts to 'publishing' status with scheduled_at = now
+    // Set all eligible posts to 'publishing' status with scheduled_at = now.
+    //
+    // This intentionally bypasses the 1/(client, platform)/Central-day collision
+    // rule from `lib/calendar/scheduling-rules.ts`. Batch-publish is "publish
+    // these immediately" — not a scheduling decision — and the explicit user
+    // intent (clicking publish-now on N posts) overrides the same-day guard.
     const { data: updated, error } = await adminClient
       .from('scheduled_posts')
       .update({

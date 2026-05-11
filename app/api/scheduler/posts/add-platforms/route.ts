@@ -3,6 +3,8 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/auth/permissions';
 import { z } from 'zod';
+import type { SocialPlatform } from '@/lib/posting/types';
+import { nextFreeSlot } from '@/lib/calendar/scheduling-rules';
 
 const Schema = z.object({
   post_ids: z.array(z.string().uuid()).min(1),
@@ -192,10 +194,24 @@ export async function POST(request: NextRequest) {
       }
 
       // Already shipped: clone the post with only the new legs.
-      const cloneScheduledAt = new Date(
+      const baseSlot = new Date(
         Date.now() + clone_offset_minutes * 60_000 + cloneCounter * clone_spacing_minutes * 60_000,
       ).toISOString();
       cloneCounter += 1;
+
+      // Walk the clone forward if any of the new legs would collide with
+      // an existing scheduled post on the same (client, platform) Central day.
+      // The 1/(client, platform)/day rule applies to clones too: even
+      // though this flow is "intentionally creating a new post," the
+      // platforms it targets aren't supposed to double up.
+      const clonePlatforms = toAdd
+        .map((p) => p.platform as SocialPlatform)
+        .filter((p): p is SocialPlatform => typeof p === 'string');
+      const { scheduledAt: cloneScheduledAt } = await nextFreeSlot(admin, {
+        clientId: post.client_id,
+        platforms: clonePlatforms,
+        scheduledAt: baseSlot,
+      });
 
       const { data: clone, error: cloneErr } = await admin
         .from('scheduled_posts')
