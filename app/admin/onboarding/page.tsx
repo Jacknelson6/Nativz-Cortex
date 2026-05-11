@@ -13,6 +13,7 @@ import { listOnboardingsForAdmin, describeProgress } from '@/lib/onboarding/api'
 import { SectionHeader } from '@/components/admin/section-tabs';
 import { EmptyState } from '@/components/shared/empty-state';
 import { OnboardingNewButton } from '@/components/onboarding/onboarding-new-button';
+import { ClientLogo } from '@/components/clients/client-logo';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,53 +71,57 @@ export default async function AdminOnboardingPage() {
           action={<OnboardingNewButton clients={clients} />}
         />
       ) : (
-        <div className="rounded-2xl border border-border bg-surface overflow-hidden">
-          <div className="grid grid-cols-12 gap-3 px-4 py-3 text-[11px] uppercase tracking-wide text-text-secondary border-b border-border">
-            <div className="col-span-4">Client</div>
-            <div className="col-span-2">Kind</div>
-            <div className="col-span-3">Progress</div>
-            <div className="col-span-2">Last email</div>
-            <div className="col-span-1 text-right">Status</div>
+        <div className="rounded-2xl border border-nativz-border bg-surface overflow-hidden">
+          <div className="grid grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,1fr)_5.5rem] items-center gap-4 px-4 py-3 text-[11px] uppercase tracking-wide text-text-secondary border-b border-nativz-border">
+            <div>Client</div>
+            <div>Kind</div>
+            <div>Progress</div>
+            <div>Last email</div>
+            <div className="text-right">Status</div>
           </div>
           {rosterRows.map((row) => {
             const progress = describeProgress(row);
             const clientName = row.client?.name ?? 'Unknown';
             const slug = row.client?.slug;
+            const logoUrl = row.client?.logo_url ?? null;
             return (
               <Link
                 key={row.id}
                 href={`/admin/onboarding/${row.id}`}
-                className="grid grid-cols-12 gap-3 px-4 py-3 border-b border-border last:border-b-0 hover:bg-background transition-colors"
+                className="grid grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,1fr)_5.5rem] items-center gap-4 px-4 py-3 border-b border-nativz-border last:border-b-0 hover:bg-surface-hover transition-colors"
               >
-                <div className="col-span-4 flex flex-col">
-                  <span className="text-sm text-foreground">{clientName}</span>
-                  {slug ? (
-                    <span className="text-xs text-text-muted">/{slug}</span>
-                  ) : null}
+                <div className="flex items-center gap-3 min-w-0">
+                  <ClientLogo src={logoUrl} name={clientName} size="sm" className="shrink-0" />
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate text-sm text-text-primary">{clientName}</span>
+                    {slug ? (
+                      <span className="truncate text-xs text-text-muted">/{slug}</span>
+                    ) : null}
+                  </div>
                 </div>
-                <div className="col-span-2 text-sm text-text-secondary capitalize">
+                <div className="text-sm text-text-secondary capitalize">
                   {row.kind}
                 </div>
-                <div className="col-span-3 flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
                   <div className="flex-1 h-1.5 rounded-full bg-background overflow-hidden">
                     <div
                       className="h-full bg-accent"
-                      style={{ width: `${progress.pct}%` }}
+                      style={{ width: `${Math.max(progress.pct, 4)}%` }}
                     />
                   </div>
-                  <span className="text-xs text-text-secondary whitespace-nowrap">
+                  <span className="text-xs text-text-secondary tabular-nums whitespace-nowrap">
                     {progress.current_step + 1}/{progress.total}
                   </span>
                 </div>
-                <div className="col-span-2 text-sm text-text-secondary">
+                <div className="text-sm text-text-secondary truncate">
                   {relTime(row.last_email_at)}
                 </div>
-                <div className="col-span-1 text-right">
+                <div className="flex justify-end">
                   <span
                     className={
                       row.status === 'paused'
-                        ? 'text-xs text-amber-400'
-                        : 'text-xs text-accent-text'
+                        ? 'inline-flex items-center rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-300'
+                        : 'inline-flex items-center rounded-full bg-accent/15 px-2 py-0.5 text-[11px] font-medium text-accent-text'
                     }
                   >
                     {row.status === 'paused' ? 'Paused' : 'Active'}

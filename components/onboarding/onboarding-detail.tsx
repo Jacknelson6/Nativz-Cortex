@@ -124,13 +124,13 @@ export function OnboardingDetail(props: {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="rounded-2xl border border-border bg-surface p-6">
+      <div className="rounded-2xl border border-nativz-border bg-surface p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1.5">
             <div className="text-[11px] uppercase tracking-wide text-text-secondary">
               {row.kind === 'smm' ? 'Social media onboarding' : 'Editing onboarding'}
             </div>
-            <h1 className="text-2xl font-semibold text-foreground">
+            <h1 className="text-2xl font-semibold text-text-primary">
               {client?.name ?? 'Unknown client'}
             </h1>
             <div className="text-sm text-text-secondary">
@@ -162,7 +162,7 @@ export function OnboardingDetail(props: {
                 href={shareUrl(row.share_token, client?.agency ?? null)}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-text-secondary hover:bg-background hover:text-foreground transition-colors"
+                className="inline-flex items-center gap-1 rounded-lg border border-nativz-border px-2.5 py-1.5 text-xs text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors"
               >
                 <ExternalLink size={12} />
                 Open
@@ -194,11 +194,11 @@ export function OnboardingDetail(props: {
       ) : null}
 
       {/* Steps */}
-      <div className="rounded-2xl border border-border bg-surface overflow-hidden">
-        <div className="px-4 py-3 border-b border-border text-[11px] uppercase tracking-wide text-text-secondary">
+      <div className="rounded-2xl border border-nativz-border bg-surface overflow-hidden">
+        <div className="px-4 py-3 border-b border-nativz-border text-[11px] uppercase tracking-wide text-text-secondary">
           Steps
         </div>
-        <div className="divide-y divide-border">
+        <div className="divide-y divide-nativz-border">
           {screens.map((screen, idx) => {
             const done = idx < row.current_step || row.status === 'completed';
             const current = idx === row.current_step && row.status !== 'completed';
@@ -214,12 +214,12 @@ export function OnboardingDetail(props: {
                     ) : current ? (
                       <Circle size={16} className="text-accent-text fill-current" />
                     ) : (
-                      <Circle size={16} className="text-muted" />
+                      <Circle size={16} className="text-text-muted" />
                     )}
                   </div>
                   <div className="flex-1 space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-foreground">{screen.label}</span>
+                      <span className="text-sm text-text-primary">{screen.label}</span>
                       {current ? (
                         <span className="text-[10px] uppercase tracking-wide text-accent-text">
                           current
@@ -247,7 +247,7 @@ export function OnboardingDetail(props: {
                         })
                       }
                       disabled={busy !== null}
-                      className="rounded-lg border border-border px-2 py-1 text-xs text-muted hover:bg-background"
+                      className="rounded-lg border border-nativz-border px-2 py-1 text-xs text-text-muted hover:bg-surface-hover"
                     >
                       Jump here
                     </button>
@@ -260,13 +260,13 @@ export function OnboardingDetail(props: {
       </div>
 
       {/* Team assignments */}
-      <div className="rounded-2xl border border-border bg-surface overflow-hidden">
-        <div className="px-4 py-3 border-b border-border text-[11px] uppercase tracking-wide text-text-secondary">
+      <div className="rounded-2xl border border-nativz-border bg-surface overflow-hidden">
+        <div className="px-4 py-3 border-b border-nativz-border text-[11px] uppercase tracking-wide text-text-secondary">
           Team
         </div>
-        <div className="divide-y divide-border">
+        <div className="divide-y divide-nativz-border">
           {team.length === 0 ? (
-            <div className="px-4 py-6 text-sm text-muted">
+            <div className="px-4 py-6 text-sm text-text-muted">
               No team assigned yet. Pick a member below to start.
             </div>
           ) : (
@@ -275,10 +275,10 @@ export function OnboardingDetail(props: {
               return (
                 <div key={t.id} className="flex items-center justify-between px-4 py-2.5">
                   <div className="flex items-center gap-3">
-                    <span className="text-sm text-foreground">
+                    <span className="text-sm text-text-primary">
                       {member?.name ?? '(unknown)'}
                     </span>
-                    <span className="text-xs text-muted">
+                    <span className="text-xs text-text-muted">
                       {ROLE_LABELS[t.role]}
                       {t.is_primary ? ' · primary' : null}
                     </span>
@@ -292,7 +292,7 @@ export function OnboardingDetail(props: {
                       )
                     }
                     disabled={busy !== null}
-                    className="text-muted hover:text-rose-300"
+                    className="text-text-muted hover:text-rose-300"
                     aria-label="Remove"
                   >
                     <Trash2 size={14} />
@@ -303,7 +303,7 @@ export function OnboardingDetail(props: {
           )}
         </div>
 
-        <div className="flex items-center gap-2 border-t border-border px-4 py-3">
+        <div className="flex items-center gap-2 border-t border-nativz-border px-4 py-3">
           <select
             value={newRole}
             onChange={(e) => setNewRole(e.target.value as TeamRole)}
@@ -344,8 +344,8 @@ export function OnboardingDetail(props: {
       </div>
 
       {/* Email log */}
-      <div className="rounded-2xl border border-border bg-surface overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+      <div className="rounded-2xl border border-nativz-border bg-surface overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-nativz-border">
           <span className="text-[11px] uppercase tracking-wide text-text-secondary">Emails</span>
           <Button
             size="sm"
@@ -358,9 +358,9 @@ export function OnboardingDetail(props: {
         </div>
 
         {nudgeOpen ? (
-          <div className="space-y-3 border-b border-border px-4 py-4">
+          <div className="space-y-3 border-b border-nativz-border px-4 py-4">
             <div className="space-y-1.5">
-              <label className="text-xs uppercase tracking-wide text-muted">
+              <label className="text-xs uppercase tracking-wide text-text-muted">
                 Override recipient (optional)
               </label>
               <Input
@@ -371,7 +371,7 @@ export function OnboardingDetail(props: {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs uppercase tracking-wide text-muted">
+              <label className="text-xs uppercase tracking-wide text-text-muted">
                 Note (optional)
               </label>
               <Textarea
@@ -404,25 +404,25 @@ export function OnboardingDetail(props: {
         ) : null}
 
         {emails.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-muted">No emails sent yet.</div>
+          <div className="px-4 py-6 text-sm text-text-muted">No emails sent yet.</div>
         ) : (
-          <div className="divide-y divide-border">
+          <div className="divide-y divide-nativz-border">
             {emails.map((e) => (
               <div key={e.id} className="px-4 py-3">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted capitalize">
+                  <span className="text-text-muted capitalize">
                     {e.kind.replace('_', ' ')}
                   </span>
                   <span className={e.ok ? 'text-emerald-400' : 'text-rose-300'}>
                     {e.ok ? 'sent' : 'failed'}
                   </span>
                 </div>
-                <div className="mt-1 text-sm text-foreground">{e.subject}</div>
-                <div className="mt-0.5 text-xs text-muted">
+                <div className="mt-1 text-sm text-text-primary">{e.subject}</div>
+                <div className="mt-0.5 text-xs text-text-muted">
                   to {e.to_email} · {formatTime(e.sent_at)}
                 </div>
                 {e.body_preview ? (
-                  <div className="mt-1 text-xs text-muted line-clamp-2">
+                  <div className="mt-1 text-xs text-text-muted line-clamp-2">
                     {e.body_preview}
                   </div>
                 ) : null}
@@ -436,7 +436,7 @@ export function OnboardingDetail(props: {
       </div>
 
       {/* Danger zone */}
-      <div className="rounded-2xl border border-border bg-surface px-4 py-3 flex items-center justify-end gap-2">
+      <div className="rounded-2xl border border-nativz-border bg-surface px-4 py-3 flex items-center justify-end gap-2">
         {row.status === 'in_progress' ? (
           <Button
             size="sm"

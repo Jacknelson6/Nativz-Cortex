@@ -303,7 +303,7 @@ export function StartOnboardingDialog({ open, onClose, clientId, clientName }: P
               </div>
               {contactError && <div className="text-xs text-status-error">{contactError}</div>}
               <div className="flex gap-2">
-                <Button size="xs" onClick={saveNewContact} disabled={savingContact || submitting}>
+                <Button size="sm" onClick={saveNewContact} disabled={savingContact || submitting}>
                   {savingContact ? (
                     <>
                       <Loader2 size={12} className="animate-spin" />
@@ -314,7 +314,7 @@ export function StartOnboardingDialog({ open, onClose, clientId, clientName }: P
                   )}
                 </Button>
                 <Button
-                  size="xs"
+                  size="sm"
                   variant="ghost"
                   onClick={() => {
                     setAddingContact(false);

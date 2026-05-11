@@ -61,7 +61,7 @@ export default async function AdminOnboardingDetailPage({
     <div className="cortex-page-gutter max-w-5xl mx-auto space-y-6">
       <Link
         href="/admin/onboarding"
-        className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-accent-text transition-colors"
+        className="inline-flex items-center gap-1.5 text-sm text-text-muted hover:text-accent-text transition-colors"
       >
         <ArrowLeft size={14} />
         Back to onboarding
