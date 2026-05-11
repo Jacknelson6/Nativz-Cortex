@@ -15,6 +15,14 @@ export interface SocialProfile {
   username: string;
   avatarUrl: string | null;
   isActive: boolean;
+  /**
+   * Zernio profile id this account hangs under. Stored on our side as
+   * `clients.late_profile_id`. Matching by `(profileId, platform)` lets
+   * the connections matrix link a Zernio account to a Cortex brand
+   * without depending on username string compares (which break when
+   * Zernio normalizes handles with underscores etc).
+   */
+  profileId?: string;
 }
 
 export type PublishMediaItem = {

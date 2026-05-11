@@ -14,11 +14,19 @@ export const runtime = 'nodejs';
  *
  * 1. Discover-and-link: list every account in our Zernio workspace
  *    (`/accounts`) and back-fill `late_account_id` on any matching
- *    `social_profiles` row that's missing it. Match key is
- *    `(platform, normalized_username)`. This catches the case where a
- *    client connected directly inside Zernio (not via our invite flow),
- *    so the matrix kept reading "Not connected" even though Zernio had
- *    a live token.
+ *    `social_profiles` row that's missing it.
+ *
+ *    Primary match key: `(clients.late_profile_id, platform)`. Zernio
+ *    accounts hang under a Zernio profile; we store that profile id on
+ *    the client. So if a brand has a `late_profile_id` and Zernio
+ *    returns an account on `instagram` under that profile, that account
+ *    is unambiguously that brand's IG connection — no username compare
+ *    needed (which used to break on `avondaleprivatelending` vs
+ *    `avondale_private_lending`).
+ *
+ *    Fallback match key: `(platform, normalized_username)`. Kept for
+ *    legacy rows that predate `late_profile_id`, or when Zernio's
+ *    `/accounts` payload doesn't echo `profileId` on a given row.
  *
  * 2. Health refresh: for every row that now has a `late_account_id`
  *    (including ones we just linked), hit `/accounts/{id}/health` and
@@ -68,15 +76,23 @@ export async function POST() {
   const service = new ZernioPostingService();
 
   // ── Pass 1: discover-and-link ────────────────────────────────────────
-  // Pull every Zernio account + every social_profiles row we know about
-  // in parallel. We only care about rows whose `late_account_id` is null
-  // for the link step; rows already linked are handled in pass 2.
-  const [zernioAccountsResult, profilesResult] = await Promise.allSettled([
-    service.getConnectedProfiles(),
-    admin
-      .from('social_profiles')
-      .select('id, client_id, platform, username, late_account_id, is_active'),
-  ]);
+  // Pull every Zernio account + every Cortex client w/ a Zernio profile
+  // id + every social_profiles row, in parallel. We only need rows whose
+  // `late_account_id` is null for the link step; rows already linked are
+  // handled in pass 2.
+  const [zernioAccountsResult, profilesResult, clientsResult] =
+    await Promise.allSettled([
+      service.getConnectedProfiles(),
+      admin
+        .from('social_profiles')
+        .select(
+          'id, client_id, platform, username, late_account_id, is_active',
+        ),
+      admin
+        .from('clients')
+        .select('id, late_profile_id')
+        .not('late_profile_id', 'is', null),
+    ]);
 
   let linked = 0;
   const ambiguous: { platform: string; username: string; matches: number }[] =
@@ -89,9 +105,11 @@ export async function POST() {
   ) {
     const zernioAccounts = zernioAccountsResult.value;
     const profiles = profilesResult.value.data ?? [];
+    const clients =
+      clientsResult.status === 'fulfilled' && !clientsResult.value.error
+        ? clientsResult.value.data ?? []
+        : [];
 
-    // Index unlinked rows by `${platform}|${normalizedUsername}` so we can
-    // O(1) match each Zernio account against candidate Supabase rows.
     type ProfileRow = {
       id: string;
       client_id: string;
@@ -100,18 +118,36 @@ export async function POST() {
       late_account_id: string | null;
       is_active: boolean | null;
     };
-    const unlinkedByKey = new Map<string, ProfileRow[]>();
+    type ClientRow = { id: string; late_profile_id: string | null };
+
+    // Primary index: `${client_id}|${platform}` → unlinked row(s) for
+    // that brand+platform. This is the no-username path.
+    const unlinkedByClientPlatform = new Map<string, ProfileRow[]>();
+    // Fallback index: `${platform}|${normalizedUsername}` for legacy
+    // rows where neither side has a profile id we can use.
+    const unlinkedByPlatformUsername = new Map<string, ProfileRow[]>();
     for (const p of profiles as ProfileRow[]) {
       if (p.late_account_id) continue;
-      const key = `${p.platform}|${normalizeUsername(p.username)}`;
-      const bucket = unlinkedByKey.get(key) ?? [];
-      bucket.push(p);
-      unlinkedByKey.set(key, bucket);
+      const cpKey = `${p.client_id}|${p.platform}`;
+      const cpBucket = unlinkedByClientPlatform.get(cpKey) ?? [];
+      cpBucket.push(p);
+      unlinkedByClientPlatform.set(cpKey, cpBucket);
+      const puKey = `${p.platform}|${normalizeUsername(p.username)}`;
+      const puBucket = unlinkedByPlatformUsername.get(puKey) ?? [];
+      puBucket.push(p);
+      unlinkedByPlatformUsername.set(puKey, puBucket);
+    }
+
+    // Zernio profile id → Cortex client id, so we can route an incoming
+    // Zernio account directly to the owning brand.
+    const clientByZernioProfile = new Map<string, string>();
+    for (const c of clients as ClientRow[]) {
+      if (c.late_profile_id) clientByZernioProfile.set(c.late_profile_id, c.id);
     }
 
     // Track which Zernio account IDs are already linked so we don't
     // accidentally double-link the same Zernio account to a different
-    // brand (would happen if two brands stored the same handle).
+    // brand.
     const alreadyLinkedIds = new Set(
       (profiles as ProfileRow[])
         .map((p) => p.late_account_id)
@@ -120,26 +156,54 @@ export async function POST() {
 
     await Promise.all(
       zernioAccounts.map(async (acct) => {
-        if (!acct.id || !acct.username) return;
+        if (!acct.id) return;
         if (alreadyLinkedIds.has(acct.id)) return;
-        const key = `${acct.platform}|${normalizeUsername(acct.username)}`;
-        const candidates = unlinkedByKey.get(key);
-        if (!candidates || candidates.length === 0) return;
-        if (candidates.length > 1) {
-          // Two brands claim the same handle on the same platform.
-          // Don't guess — let an admin sort it out manually.
-          ambiguous.push({
-            platform: acct.platform,
-            username: acct.username,
-            matches: candidates.length,
-          });
-          return;
+
+        // Path 1: profile-id match. Zernio echoes the parent profile id
+        // on each account; if it lines up with a Cortex client's
+        // `late_profile_id`, that's an unambiguous link regardless of
+        // how the platform mangled the username.
+        let target: ProfileRow | null = null;
+        const clientId = acct.profileId
+          ? clientByZernioProfile.get(acct.profileId) ?? null
+          : null;
+        if (clientId) {
+          const candidates = unlinkedByClientPlatform.get(
+            `${clientId}|${acct.platform}`,
+          );
+          if (candidates && candidates.length > 0) {
+            target = candidates[0];
+          }
         }
-        const target = candidates[0];
+
+        // Path 2 (fallback): username match. Kept for legacy data and
+        // for accounts where Zernio doesn't echo the profile id.
+        if (!target && acct.username) {
+          const candidates = unlinkedByPlatformUsername.get(
+            `${acct.platform}|${normalizeUsername(acct.username)}`,
+          );
+          if (candidates && candidates.length === 1) {
+            target = candidates[0];
+          } else if (candidates && candidates.length > 1) {
+            ambiguous.push({
+              platform: acct.platform,
+              username: acct.username,
+              matches: candidates.length,
+            });
+            return;
+          }
+        }
+
+        if (!target) return;
+
         const { error: linkErr } = await admin
           .from('social_profiles')
           .update({
             late_account_id: acct.id,
+            // Refresh the username while we're here so the matrix shows
+            // the handle the platform actually uses (e.g. underscores).
+            // Only overwrite if Zernio sent one; never clobber to null.
+            ...(acct.username ? { username: acct.username } : {}),
             // Zernio is the source of truth for active state at link time;
             // if it returned the account, treat the row as active.
             is_active:

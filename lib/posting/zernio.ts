@@ -996,6 +996,12 @@ export class ZernioPostingService implements PostingService {
         username: pickString(o, 'username') ?? '',
         avatarUrl: pickString(o, 'avatarUrl', 'avatar_url', 'avatar'),
         isActive: o.isActive !== false && o.is_active !== false,
+        // Zernio returns the parent profile id on each account row. We
+        // surface it so the connections matrix can pair an account to a
+        // Cortex client via `clients.late_profile_id` instead of
+        // brittle username string matching.
+        profileId:
+          pickString(o, 'profileId', 'profile_id', 'profile') ?? undefined,
       };
     });
   }
