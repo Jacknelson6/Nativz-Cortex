@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getNotificationDefinition } from '@/lib/notifications/registry';
+import { getPreview } from '@/lib/notifications/preview-map';
 import { AGENCY_CONFIG, type AgencyBrand } from '@/lib/agency/detect';
 
 const VALID_BRANDS = new Set<AgencyBrand>(Object.keys(AGENCY_CONFIG) as AgencyBrand[]);
@@ -29,7 +30,8 @@ export async function GET(
   const { key } = await params;
   const def = getNotificationDefinition(key);
   if (!def) return NextResponse.json({ error: 'unknown notification' }, { status: 404 });
-  if (!def.preview) {
+  const preview = getPreview(key);
+  if (!preview) {
     return NextResponse.json({ error: 'preview not available for this notification' }, { status: 404 });
   }
 
@@ -37,7 +39,7 @@ export async function GET(
   const requested = (url.searchParams.get('brand') ?? 'nativz') as AgencyBrand;
   const brand: AgencyBrand = VALID_BRANDS.has(requested) ? requested : 'nativz';
 
-  const result = await def.preview(brand);
+  const result = await preview(brand);
   if (!result || !result.html) {
     return NextResponse.json({ error: 'no html produced' }, { status: 500 });
   }

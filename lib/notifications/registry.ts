@@ -29,8 +29,6 @@
  *      windows without a deploy.
  */
 
-import type { AgencyBrand } from '@/lib/agency/detect';
-
 export type NotificationKind = 'email' | 'chat' | 'in_app';
 export type NotificationTrigger = 'cron' | 'event';
 export type NotificationChannel = 'chat' | 'email';
@@ -85,13 +83,14 @@ export interface NotificationDefinition {
   cronPath?: string;
   recipientLabel: string;
   params?: Record<string, NotificationParamSpec>;
-  /**
-   * Renders a preview. Returns null when a preview isn't wired yet so the
-   * UI can show "Preview coming soon" without crashing. Implementations
-   * should be pure — no DB writes, no real email sends.
-   */
-  preview?: (agency: AgencyBrand) => Promise<NotificationPreviewResult | null>;
 }
+
+/**
+ * Preview renderers live in `lib/notifications/preview-map.ts` (server-only).
+ * The registry itself is pure data so the per-client toggle grid in
+ * `components/clients/client-notifications-grid.tsx` can import it without
+ * pulling `lib/email/resend.ts` into the client bundle.
+ */
 
 export const NOTIFICATION_REGISTRY: NotificationDefinition[] = [
   {
@@ -109,12 +108,6 @@ export const NOTIFICATION_REGISTRY: NotificationDefinition[] = [
     cronSchedule: '0 13 * * *',
     cronPath: '/api/cron/calendar-comment-digest',
     recipientLabel: 'jack@nativz.io',
-    preview: async (agency) => {
-      const { previewCalendarCommentDigest } = await import(
-        './previews/calendar-comment-digest'
-      );
-      return previewCalendarCommentDigest(agency);
-    },
   },
   {
     key: 'calendar_comment_chat',
@@ -127,12 +120,6 @@ export const NOTIFICATION_REGISTRY: NotificationDefinition[] = [
     clientScoped: true,
     category: 'content_calendar',
     recipientLabel: 'Client Google Chat space',
-    preview: async () => {
-      const { previewCalendarCommentChat } = await import(
-        './previews/calendar-comment-chat'
-      );
-      return previewCalendarCommentChat();
-    },
   },
   {
     key: 'calendar_all_approved_chat',
@@ -145,12 +132,6 @@ export const NOTIFICATION_REGISTRY: NotificationDefinition[] = [
     clientScoped: true,
     category: 'content_calendar',
     recipientLabel: 'Client Google Chat space',
-    preview: async () => {
-      const { previewCalendarAllApprovedChat } = await import(
-        './previews/calendar-comment-chat'
-      );
-      return previewCalendarAllApprovedChat();
-    },
   },
   {
     key: 'calendar_paid_media_chat',
@@ -177,12 +158,6 @@ export const NOTIFICATION_REGISTRY: NotificationDefinition[] = [
     cronSchedule: '0 14 * * *',
     cronPath: '/api/cron/calendar-reminders',
     recipientLabel: 'Client primary contacts',
-    preview: async (agency) => {
-      const { previewCalendarCadenceFollowup } = await import(
-        './previews/calendar-reminders'
-      );
-      return previewCalendarCadenceFollowup(agency);
-    },
   },
   {
     key: 'calendar_auto_approve',
@@ -197,12 +172,6 @@ export const NOTIFICATION_REGISTRY: NotificationDefinition[] = [
     cronSchedule: '0 14 * * *',
     cronPath: '/api/cron/calendar-reminders',
     recipientLabel: 'Ops Google Chat space + admin notifications',
-    preview: async () => {
-      const { previewCalendarAutoApproveChat } = await import(
-        './previews/calendar-comment-chat'
-      );
-      return previewCalendarAutoApproveChat();
-    },
   },
   {
     key: 'calendar_revisions_complete',
@@ -215,12 +184,6 @@ export const NOTIFICATION_REGISTRY: NotificationDefinition[] = [
     clientScoped: true,
     category: 'content_calendar',
     recipientLabel: 'Client primary contact',
-    preview: async (agency) => {
-      const { previewCalendarRevisionsComplete } = await import(
-        './previews/calendar-reminders'
-      );
-      return previewCalendarRevisionsComplete(agency);
-    },
   },
   {
     key: 'editing_comment_chat',
@@ -233,12 +196,6 @@ export const NOTIFICATION_REGISTRY: NotificationDefinition[] = [
     clientScoped: true,
     category: 'editing',
     recipientLabel: 'Client Google Chat space',
-    preview: async () => {
-      const { previewEditingCommentChat } = await import(
-        './previews/calendar-comment-chat'
-      );
-      return previewEditingCommentChat();
-    },
   },
   {
     key: 'editing_all_approved_chat',
@@ -251,12 +208,6 @@ export const NOTIFICATION_REGISTRY: NotificationDefinition[] = [
     clientScoped: true,
     category: 'editing',
     recipientLabel: 'Client Google Chat space',
-    preview: async () => {
-      const { previewCalendarAllApprovedChat } = await import(
-        './previews/calendar-comment-chat'
-      );
-      return previewCalendarAllApprovedChat();
-    },
   },
   {
     key: 'editing_paid_media_chat',
@@ -283,12 +234,6 @@ export const NOTIFICATION_REGISTRY: NotificationDefinition[] = [
     cronSchedule: '0 14 * * *',
     cronPath: '/api/cron/editing-reminders',
     recipientLabel: 'Client primary contacts',
-    preview: async (agency) => {
-      const { previewEditingCadenceFollowup } = await import(
-        './previews/calendar-reminders'
-      );
-      return previewEditingCadenceFollowup(agency);
-    },
   },
   {
     key: 'editing_auto_approve',
@@ -303,12 +248,6 @@ export const NOTIFICATION_REGISTRY: NotificationDefinition[] = [
     cronSchedule: '0 14 * * *',
     cronPath: '/api/cron/editing-reminders',
     recipientLabel: 'Ops Google Chat space + admin notifications',
-    preview: async () => {
-      const { previewEditingAutoApproveChat } = await import(
-        './previews/calendar-comment-chat'
-      );
-      return previewEditingAutoApproveChat();
-    },
   },
   {
     key: 'editing_revisions_complete',
@@ -321,12 +260,6 @@ export const NOTIFICATION_REGISTRY: NotificationDefinition[] = [
     clientScoped: true,
     category: 'editing',
     recipientLabel: 'Client primary contact',
-    preview: async (agency) => {
-      const { previewEditingRevisionsComplete } = await import(
-        './previews/calendar-reminders'
-      );
-      return previewEditingRevisionsComplete(agency);
-    },
   },
   {
     key: 'weekly_social_report',
