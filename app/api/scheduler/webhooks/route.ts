@@ -114,7 +114,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
       }
     } else {
-      return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 500 });
+      // No secret configured: reject as unauthorized rather than 500.
+      // Returning 500 with a "secret not configured" body leaks the
+      // misconfiguration to anyone hitting the endpoint, and the auth
+      // dialog is the same regardless: callers without a valid signature
+      // should be told the request is unauthorized.
+      console.error('[zernio-webhook] ZERNIO_WEBHOOK_SECRET is not configured — rejecting request');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = JSON.parse(rawBody) as Record<string, unknown>;
@@ -198,9 +204,13 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        // Zernio's failure envelope includes both a human-readable `message`
+        // and a `platformError` blob with the raw platform response. Prefer
+        // the structured `platformError` when present (it's the most
+        // actionable string for ops), then fall back to message/reason.
         const failDetail =
-          pickStr(asRecord(data) ?? null, 'error', 'message', 'reason') ||
-          pickStr(postPayload, 'error', 'message', 'reason', 'failureReason', 'failure_reason') ||
+          pickStr(asRecord(data) ?? null, 'platformError', 'platform_error', 'error', 'message', 'reason') ||
+          pickStr(postPayload, 'platformError', 'platform_error', 'error', 'message', 'reason', 'failureReason', 'failure_reason') ||
           '';
 
         const { data: sched } = postId
@@ -271,9 +281,12 @@ export async function POST(request: NextRequest) {
       }
       case 'account.connected': {
         if (accountId) {
+          // Clear the disconnect alert stamp so a future disconnect can
+          // re-fire the notification — mirrors the publish-cron classifier
+          // pattern (alert once per incident, reset on reconnect).
           await adminClient
             .from('social_profiles')
-            .update({ is_active: true })
+            .update({ is_active: true, disconnect_alerted_at: null })
             .eq('late_account_id', accountId);
 
           // Mirror the connection into the client's active SMM onboarding so
@@ -391,20 +404,32 @@ export async function POST(request: NextRequest) {
         break;
       }
       case 'account.disconnected': {
-        if (accountId) {
-          await adminClient
-            .from('social_profiles')
-            .update({ is_active: false })
-            .eq('late_account_id', accountId);
-        }
-
+        // Pull current state BEFORE flipping is_active so we can dedupe the
+        // notification. `disconnect_alerted_at` mirrors the column used by
+        // the publish cron's per-leg classifier — once stamped, we skip the
+        // duplicate email until the account reconnects (which clears the
+        // stamp via the account.connected branch above).
         const { data: prof } = accountId
           ? await adminClient
               .from('social_profiles')
-              .select('platform, username, client_id, clients(name)')
+              .select('id, platform, username, client_id, disconnect_alerted_at, clients(name)')
               .eq('late_account_id', accountId)
               .maybeSingle()
           : { data: null };
+
+        const alreadyAlerted = (prof?.disconnect_alerted_at as string | null) != null;
+
+        if (accountId) {
+          await adminClient
+            .from('social_profiles')
+            .update({
+              is_active: false,
+              disconnect_alerted_at: alreadyAlerted
+                ? (prof?.disconnect_alerted_at as string)
+                : new Date().toISOString(),
+            })
+            .eq('late_account_id', accountId);
+        }
 
         const clientName =
           (prof?.clients as { name?: string } | null)?.name ?? 'Unknown client';
@@ -433,12 +458,46 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        await notifyZernioWebhookRecipients({
-          type: 'account_disconnected',
-          title: `Social account disconnected, ${clientName}`,
-          body: `${platform}${username ? ` (@${username})` : ''} lost connection in Zernio. Reconnect in scheduler or Zernio dashboard.`,
-          linkPath: '/admin/scheduler',
-        });
+        if (!alreadyAlerted) {
+          await notifyZernioWebhookRecipients({
+            type: 'account_disconnected',
+            title: `Social account disconnected, ${clientName}`,
+            body: `${platform}${username ? ` (@${username})` : ''} lost connection in Zernio. Reconnect in scheduler or Zernio dashboard.`,
+            linkPath: '/admin/scheduler',
+          });
+        }
+        break;
+      }
+      case 'post.cancelled':
+      case 'post.canceled': {
+        // Zernio cancelled the post upstream (operator action in their
+        // dashboard, scheduler conflict, etc.). Mirror that into the local
+        // row so the calendar reflects reality instead of an indefinite
+        // `scheduled` state. Guard against downgrading an already-published
+        // post — out-of-order webhook delivery would otherwise race here.
+        if (postId) {
+          const { data: parent } = await adminClient
+            .from('scheduled_posts')
+            .select('status')
+            .eq('late_post_id', postId)
+            .maybeSingle();
+          const cur = (parent as { status?: string } | null)?.status;
+          if (cur && cur !== 'published' && cur !== 'partially_failed') {
+            await adminClient
+              .from('scheduled_posts')
+              .update({ status: 'cancelled' })
+              .eq('late_post_id', postId);
+          }
+        }
+        break;
+      }
+      case 'post.recycled': {
+        // Zernio's recycle feature creates a fresh post from an existing
+        // template. We don't model recycled posts as separate rows — the
+        // original `late_post_id` is what's stored. Log for visibility but
+        // don't mutate parent status; the per-leg events that follow
+        // (post.published / post.failed) will drive reconcile.
+        console.log(`Zernio webhook: post.recycled for ${postId}`);
         break;
       }
       default: {
