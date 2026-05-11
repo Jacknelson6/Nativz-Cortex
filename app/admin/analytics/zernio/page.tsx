@@ -8,8 +8,10 @@ import { loadZernioTimeseries } from '@/lib/analytics/zernio-timeseries';
 import { computeDelta } from '@/lib/analytics/zernio-delta';
 import { ZernioPlatformCard } from '@/components/analytics/zernio-platform-card';
 import { ZernioPulseMount } from '@/components/analytics/zernio-pulse-mount';
+import { PostGrid } from '@/components/analytics/post-grid';
 import type { PulseShape } from '@/components/analytics/zernio-pulse-card';
 import type { AnalyticsPlatform, RangeKey } from '@/lib/analytics/types';
+import { loadPostsForGrid, type PostGridPlatform } from '@/lib/analytics/posts-query';
 
 export const dynamic = 'force-dynamic';
 
@@ -94,6 +96,32 @@ export default async function ZernioAnalyticsPage({
     .maybeSingle();
   const pulse: PulseShape | null = pulseRow && !pulseRow.is_dismissed ? (pulseRow as PulseShape) : null;
 
+  const POST_GRID_SINCE_DAYS = 90;
+  const initialPostsPage = await loadPostsForGrid({
+    supabase: admin,
+    clientId,
+    platforms: activePlatforms as PostGridPlatform[],
+    sort: 'published_at',
+    order: 'desc',
+    limit: 30,
+    sinceDays: POST_GRID_SINCE_DAYS,
+  });
+  const initialPostsResponse = {
+    client_id: clientId,
+    range_since_days: POST_GRID_SINCE_DAYS,
+    sort: 'published_at' as const,
+    order: 'desc' as const,
+    posts: initialPostsPage.posts,
+    next_cursor: initialPostsPage.nextCursor,
+  };
+
+  const { data: clientRow } = await admin
+    .from('clients')
+    .select('logo_url')
+    .eq('id', clientId)
+    .maybeSingle();
+  const brandAvatarUrl: string | null = (clientRow?.logo_url as string | null) ?? null;
+
   return (
     <div className="px-6 py-8 max-w-6xl mx-auto space-y-6">
       <div>
@@ -124,6 +152,23 @@ export default async function ZernioAnalyticsPage({
           ))}
         </div>
       )}
+      <div className="pt-2">
+        <div className="mb-3">
+          <h2 className="text-lg font-semibold">Recent posts</h2>
+          <p className="text-xs text-white/50 mt-0.5">
+            Last {POST_GRID_SINCE_DAYS} days across {activePlatforms.length} platform
+            {activePlatforms.length === 1 ? '' : 's'}.
+          </p>
+        </div>
+        <PostGrid
+          initial={initialPostsResponse}
+          endpoint="/api/analytics/zernio/posts"
+          clientId={clientId}
+          brandAvatarUrl={brandAvatarUrl}
+          availablePlatforms={activePlatforms as PostGridPlatform[]}
+          rangeSinceDays={POST_GRID_SINCE_DAYS}
+        />
+      </div>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getPostingService, ZernioPostingService } from '@/lib/posting';
+import { persistPostThumbnail } from '@/lib/analytics/post-thumbnail-persistence';
 import type { DateRange } from '@/lib/types/reporting';
 import type { SocialPlatform } from '@/lib/posting/types';
 
@@ -470,6 +471,68 @@ export async function syncSocialProfile(
         );
       } else {
         result.postsCount += posts.length;
+
+        // ZNA-04: persist Zernio CDN thumbnails to Supabase Storage so the
+        // analytics post grid renders 100% of tiles even after the CDN URL
+        // expires. Skip rows whose persisted URL is fresh; retry failures
+        // older than 24h. Concurrency cap 5. Wrapped in catch so a flaky
+        // upload never blocks the cron.
+        //
+        // TikTok watch_time gap: Zernio does not surface per-post watch_time
+        // for TikTok yet; that's why TikTok rows above record 0 and ZNA-04
+        // surfaces null in the grid. Not fixed here.
+        try {
+          const { data: persistTargets } = await adminClient
+            .from('post_metrics')
+            .select(
+              'id, thumbnail_url, thumbnail_storage_url, thumbnail_persist_failed_at, thumbnail_source_hash',
+            )
+            .eq('client_id', clientId)
+            .eq('platform', platform)
+            .in(
+              'external_post_id',
+              posts.map((p) => p.postId),
+            );
+
+          const now = Date.now();
+          const HOURS_24_MS = 24 * 60 * 60 * 1000;
+          const queue = (persistTargets ?? []).filter((row) => {
+            if (!row.thumbnail_url) return false;
+            if (!row.thumbnail_storage_url) return true;
+            if (row.thumbnail_persist_failed_at) {
+              const failedAt = new Date(row.thumbnail_persist_failed_at).getTime();
+              return now - failedAt >= HOURS_24_MS;
+            }
+            return false;
+          });
+
+          const CONCURRENCY = 5;
+          for (let i = 0; i < queue.length; i += CONCURRENCY) {
+            const slice = queue.slice(i, i + CONCURRENCY);
+            await Promise.all(
+              slice.map((row) =>
+                persistPostThumbnail({
+                  supabase: adminClient,
+                  postMetricId: row.id,
+                  clientId,
+                  zernioThumbnailUrl: row.thumbnail_url,
+                  existingHash: row.thumbnail_source_hash,
+                }).catch((err) => {
+                  console.error('[zna-04] thumbnail persist threw', {
+                    post_id: row.id,
+                    err: err instanceof Error ? err.message : String(err),
+                  });
+                }),
+              ),
+            );
+          }
+        } catch (err) {
+          console.error('[zna-04] thumbnail persist batch threw', {
+            client_id: clientId,
+            platform,
+            err: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
     }
 
