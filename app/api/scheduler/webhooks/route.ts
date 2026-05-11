@@ -7,7 +7,7 @@ import {
   reconcileParentStatusFromSpp,
 } from '@/lib/posting/zernio-reconcile';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
-import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import { buildChatCard, postToGoogleChatSafe, type ChatCardWidget } from '@/lib/chat/post-to-google-chat';
 import { autoBackfillNewPlatform } from '@/lib/scheduler/auto-backfill-platform';
 
 const PLATFORM_LABEL: Record<string, string> = {
@@ -357,17 +357,39 @@ export async function POST(request: NextRequest) {
                 const handle = username ? `@${username}` : 'their account';
                 const brand = client?.name ?? 'Unknown client';
 
-                const backfillSuffix =
+                const widgets: ChatCardWidget[] = [
+                  {
+                    type: 'text',
+                    text: `<b>${platformLabel}</b> just connected as <b>${handle}</b> via Zernio.`,
+                  },
+                ];
+                if (autoBackfillCount > 0) {
+                  widgets.push({
+                    type: 'kv',
+                    label: 'Auto-added to',
+                    value: `${autoBackfillCount} upcoming post${autoBackfillCount === 1 ? '' : 's'}`,
+                  });
+                }
+                widgets.push({
+                  type: 'text',
+                  text: '<i>Internal FYI, no email goes to the client. Open the scheduler and use <b>Add platform</b> to fan past posts onto the new account.</i>',
+                });
+
+                const backfillFallback =
                   autoBackfillCount > 0
                     ? ` Auto-added to ${autoBackfillCount} upcoming post${autoBackfillCount === 1 ? '' : 's'}.`
                     : '';
+
                 postToGoogleChatSafe(
                   webhookUrl,
-                  {
-                    text:
-                      `🔌 *${brand}* — ${platformLabel} just connected as ${handle} via Zernio.${backfillSuffix} ` +
-                      `Internal FYI, no email goes to the client. Open the scheduler and use *Add platform* to fan past posts onto the new account.`,
-                  },
+                  buildChatCard({
+                    cardId: `zernio-account-connected-${accountId}`,
+                    headerTitle: `🔌 ${platformLabel} connected`,
+                    headerSubtitle: brand,
+                    sections: [{ widgets }],
+                    fallbackText:
+                      `🔌 ${brand} — ${platformLabel} just connected as ${handle} via Zernio.${backfillFallback}`,
+                  }),
                   `zernio-webhook:account.connected:${accountId}`,
                 );
               } catch (err) {

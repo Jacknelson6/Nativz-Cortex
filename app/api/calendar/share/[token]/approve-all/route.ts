@@ -11,7 +11,11 @@ import {
   syncMondayApprovalForDrop,
 } from '@/lib/monday/calendar-approval';
 import { isMondayConfigured } from '@/lib/monday/client';
-import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import {
+  buildChatCard,
+  postToGoogleChatSafe,
+  type ChatCardWidget,
+} from '@/lib/chat/post-to-google-chat';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { resolvePaidMediaWebhook } from '@/lib/chat/resolve-paid-media-webhook';
 import { getBrandFromAgency } from '@/lib/agency/detect';
@@ -477,22 +481,42 @@ async function notifyPastDueFixup(
       timeZone: 'America/Chicago',
     });
 
-  const lines: string[] = [];
-  lines.push(
-    `⏰ *Internal:* late approval on *${clientName}* triggered past-due reshuffling. ` +
-      `Cortex auto-rescheduled ${result.moves.length} post(s); the client wasn't emailed about the new times:`,
-  );
-  for (const m of result.moves) {
-    const tag = m.doubledUp ? ' (doubled up, month is full)' : '';
-    lines.push(`  • was ${fmt(m.oldScheduledAt)} → now ${fmt(m.newScheduledAt)}${tag}`);
+  const moveLines = result.moves
+    .map((m) => {
+      const tag = m.doubledUp ? ' (doubled up, month full)' : '';
+      return `• was ${fmt(m.oldScheduledAt)} → now ${fmt(m.newScheduledAt)}${tag}`;
+    })
+    .join('<br>');
+
+  const widgets: ChatCardWidget[] = [
+    {
+      type: 'text',
+      text: `Late approval triggered past-due reshuffling. Cortex auto-rescheduled <b>${result.moves.length}</b> post(s). The client wasn't emailed about the new times.`,
+    },
+  ];
+  if (moveLines) {
+    widgets.push({ type: 'text', text: moveLines });
   }
   if (result.overflow.length > 0) {
-    lines.push(
-      `⚠️ ${result.overflow.length} post(s) couldn't fit in this month, left at original time. Manual reschedule needed.`,
-    );
+    widgets.push({
+      type: 'text',
+      text: `⚠️ <b>${result.overflow.length}</b> post(s) couldn't fit in this month and were left at their original time. Manual reschedule needed.`,
+    });
   }
 
-  postToGoogleChatSafe(targetWebhookUrl, { text: lines.join('\n') }, `past-due-fixup ${dropId}`);
+  postToGoogleChatSafe(
+    targetWebhookUrl,
+    buildChatCard({
+      cardId: `past-due-fixup-${dropId}`,
+      headerTitle: '⏰ Past-due reshuffling (internal)',
+      headerSubtitle: clientName,
+      sections: [{ widgets }],
+      fallbackText:
+        `⏰ ${clientName} — auto-rescheduled ${result.moves.length} post(s).` +
+        (result.overflow.length > 0 ? ` ${result.overflow.length} overflow.` : ''),
+    }),
+    `past-due-fixup ${dropId}`,
+  );
 }
 
 async function fireAllApprovedNotifications(
@@ -523,10 +547,27 @@ async function fireAllApprovedNotifications(
   const downloadUrl = `${appBase}/c/${shareToken}/download`;
 
   if (targetWebhookUrl) {
-    const text =
-      `🎉 *${clientName}* — client used the *Approve all* button to approve every post on this calendar (${postCount} total). ` +
-      `Calendar is locked; posts will publish on their scheduled times. No team action needed.\n${shareUrl}`;
-    postToGoogleChatSafe(targetWebhookUrl, { text }, `all-approved ${dropId}`);
+    postToGoogleChatSafe(
+      targetWebhookUrl,
+      buildChatCard({
+        cardId: `all-approved-${dropId}`,
+        headerTitle: `🎉 All ${postCount} posts approved`,
+        headerSubtitle: clientName,
+        sections: [
+          {
+            widgets: [
+              {
+                type: 'text',
+                text: 'Client used the <b>Approve all</b> button on this calendar. Posts will publish on their scheduled times. No team action needed.',
+              },
+              { type: 'button', text: 'Open calendar', url: shareUrl, filled: true },
+            ],
+          },
+        ],
+        fallbackText: `🎉 ${clientName} — approve-all (${postCount} posts). ${shareUrl}`,
+      }),
+      `all-approved ${dropId}`,
+    );
   }
 
   // Paid-media (ads team) ping. NAT-66: prefer the per-client webhook
@@ -543,20 +584,53 @@ async function fireAllApprovedNotifications(
     const groupTitle = groupTitleForCalendarStart(drop.start_date);
     const item = await findContentCalendarItem(clientName, groupTitle);
     const folder = item?.editedVideosFolderUrl;
-    const folderLine = folder ? folder : '(edited videos folder link not set in Monday)';
-    const text =
-      `🎬 *${clientName}* — client approved all calendar posts; creatives are ready to run for paid media. ` +
-      `Edited videos folder: ${folderLine}`;
-    postToGoogleChatSafe(paidMedia.url, { text }, `paid-media-approved ${clientName}`);
+    const widgets: ChatCardWidget[] = [
+      {
+        type: 'text',
+        text: 'Client approved all calendar posts. Creatives are ready to run for paid media.',
+      },
+    ];
+    if (folder) {
+      widgets.push({ type: 'button', text: 'Open edited videos folder', url: folder, filled: true });
+    } else {
+      widgets.push({
+        type: 'text',
+        text: '<i>Edited videos folder link is not set in Monday — pull assets manually.</i>',
+      });
+    }
+    postToGoogleChatSafe(
+      paidMedia.url,
+      buildChatCard({
+        cardId: `paid-media-legacy-approve-all-${dropId}`,
+        headerTitle: '🎬 Approved calendar ready for paid media',
+        headerSubtitle: clientName,
+        sections: [{ widgets }],
+        fallbackText: `🎬 ${clientName} — approved calendar ready for paid media. ${folder ?? ''}`.trim(),
+      }),
+      `paid-media-approved ${clientName}`,
+    );
     return;
   }
 
-  // DB-driven path: link the ads team straight to the dedicated download
-  // surface so they can grab every asset without scrolling the full review
-  // page or bouncing through Monday. Regular brand notifications still get
-  // the review URL above.
-  const text =
-    `🎬 *${clientName}* — client approved all calendar posts; creatives are ready to run for paid media. ` +
-    `Download all assets:\n${downloadUrl}`;
-  postToGoogleChatSafe(paidMedia.url, { text }, `paid-media-approved ${clientName}`);
+  postToGoogleChatSafe(
+    paidMedia.url,
+    buildChatCard({
+      cardId: `paid-media-db-approve-all-${dropId}`,
+      headerTitle: '🎬 Approved calendar ready for paid media',
+      headerSubtitle: clientName,
+      sections: [
+        {
+          widgets: [
+            {
+              type: 'text',
+              text: 'Client approved all calendar posts. Creatives are ready to run for paid media.',
+            },
+            { type: 'button', text: 'Download all assets', url: downloadUrl, filled: true },
+          ],
+        },
+      ],
+      fallbackText: `🎬 ${clientName} — approved calendar ready for paid media. ${downloadUrl}`,
+    }),
+    `paid-media-approved ${clientName}`,
+  );
 }

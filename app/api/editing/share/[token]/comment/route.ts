@@ -2,7 +2,11 @@ import { NextResponse, after } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createNotification } from '@/lib/notifications/create';
-import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import {
+  buildChatCard,
+  postToGoogleChatSafe,
+  type ChatCardWidget,
+} from '@/lib/chat/post-to-google-chat';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { resolvePaidMediaWebhook } from '@/lib/chat/resolve-paid-media-webhook';
 import { getBrandFromAgency } from '@/lib/agency/detect';
@@ -482,27 +486,59 @@ async function postEditingChatForComment(args: {
           : args.finalStatus === 'approved'
             ? 'approved'
             : 'commented';
+      const emoji =
+        args.finalStatus === 'changes_requested'
+          ? '✏️'
+          : args.finalStatus === 'approved'
+            ? '✅'
+            : '💬';
       const trimmed = args.content.trim();
-      const quotedBlock = trimmed
-        ? '\n' +
-          trimmed
-            .split('\n')
-            .map((line) => `> ${line}`)
-            .join('\n')
-        : '';
-      const attachmentBlock =
-        args.attachments.length > 0
-          ? '\n\n' +
-            args.attachments
-              .map((a) => `📎 ${a.filename}\n${a.url}`)
-              .join('\n\n')
-          : '';
-      const text =
-        `💬 *${args.authorName}* (client) ${verb} on *${clientName} · ${projectName}*${quotedBlock}${attachmentBlock}\n` +
-        `Reply from the share link, the client doesn't get an email until you respond:\n${linkedShareUrl}`;
+      const widgets: ChatCardWidget[] = [];
+      if (trimmed) {
+        widgets.push({ type: 'quote', text: trimmed });
+      } else if (args.finalStatus === 'approved') {
+        widgets.push({ type: 'text', text: '<i>Approved with no notes.</i>' });
+      }
+      if (args.attachments.length > 0) {
+        widgets.push({
+          type: 'kv',
+          label: `Attachments (${args.attachments.length})`,
+          value: args.attachments.map((a) => a.filename).join(', '),
+        });
+        widgets.push({
+          type: 'buttons',
+          buttons: args.attachments.slice(0, 4).map((a) => ({
+            text: a.filename.length > 32 ? `${a.filename.slice(0, 30)}…` : a.filename,
+            url: a.url,
+          })),
+        });
+      }
+      widgets.push({ type: 'divider' });
+      widgets.push({
+        type: 'text',
+        text: '<i>The client only gets an email once you reply from the share link.</i>',
+      });
+      widgets.push({
+        type: 'button',
+        text: args.finalStatus === 'changes_requested' ? 'Open & reply' : 'Open share link',
+        url: linkedShareUrl,
+        filled: true,
+      });
+
+      const fallback =
+        `${emoji} ${args.authorName} (client) ${verb} on ${clientName} · ${projectName}` +
+        (trimmed ? `\n"${trimmed}"` : '') +
+        `\n${linkedShareUrl}`;
+
       postToGoogleChatSafe(
         webhookUrl,
-        { text },
+        buildChatCard({
+          cardId: `editing-comment-${args.link.id}-${Date.now()}`,
+          headerTitle: `${emoji} ${args.authorName} ${verb}`,
+          headerSubtitle: `${clientName} · ${projectName}`,
+          sections: [{ widgets }],
+          fallbackText: fallback,
+        }),
         `editing-comment ${args.link.id}`,
       );
     }
@@ -516,12 +552,30 @@ async function postEditingChatForComment(args: {
     );
     if (!setting.enabled) return;
     const noun = nounForProjectType(projectType);
-    const text =
-      `🎉 *${clientName} · ${projectName}* — client approved every ${noun.singular}. ` +
-      `Project is marked done; no team action needed.\n${shareUrl}`;
     postToGoogleChatSafe(
       webhookUrl,
-      { text },
+      buildChatCard({
+        cardId: `editing-all-approved-${args.link.id}`,
+        headerTitle: `🎉 Every ${noun.singular} approved`,
+        headerSubtitle: `${clientName} · ${projectName}`,
+        sections: [
+          {
+            widgets: [
+              {
+                type: 'text',
+                text: `Client approved every ${noun.singular} in this project. It's marked done — no team action needed.`,
+              },
+              {
+                type: 'button',
+                text: 'Open project',
+                url: shareUrl,
+                filled: true,
+              },
+            ],
+          },
+        ],
+        fallbackText: `🎉 ${clientName} · ${projectName} — client approved every ${noun.singular}. ${shareUrl}`,
+      }),
       `editing-all-approved ${args.link.id}`,
     );
   }
@@ -572,12 +626,30 @@ async function pingPaidMediaForEditingApproval(args: {
   // only need the final cuts, not the comment thread or revision history.
   const downloadUrl = `${appUrl}/c/edit/${args.token}/download`;
 
-  const adsText =
-    `🎬 *${clientName}* — client approved every clip in this editing project; creatives are ready to run for paid media. ` +
-    `Download all assets:\n${downloadUrl}`;
   postToGoogleChatSafe(
     paidMedia.url,
-    { text: adsText },
+    buildChatCard({
+      cardId: `paid-media-editing-${args.linkId}`,
+      headerTitle: '🎬 Approved cuts ready for paid media',
+      headerSubtitle: clientName,
+      sections: [
+        {
+          widgets: [
+            {
+              type: 'text',
+              text: 'Client approved every clip in this editing project. Final cuts are ready to run.',
+            },
+            {
+              type: 'button',
+              text: 'Download all assets',
+              url: downloadUrl,
+              filled: true,
+            },
+          ],
+        },
+      ],
+      fallbackText: `🎬 ${clientName} — approved cuts ready. ${downloadUrl}`,
+    }),
     `paid-media-approved-editing ${args.linkId}`,
   );
 }
@@ -788,13 +860,34 @@ async function maybeFireEditingRevisionsCompleteNotification(
 
   if (webhookUrl) {
     const noun = nounForProjectType(projectType);
-    const text =
-      `✅ *Internal:* editor marked every revision request on *${clientName} · ${projectName}* as resolved. ` +
-      `No email has been sent to the client yet. ` +
-      `QA the new ${noun.plural}, then hit *Notify* in the share history to email them:\n${shareUrl}`;
     postToGoogleChatSafe(
       webhookUrl,
-      { text },
+      buildChatCard({
+        cardId: `editing-revisions-complete-${args.link.id}`,
+        headerTitle: '✅ Revisions resolved (internal)',
+        headerSubtitle: `${clientName} · ${projectName}`,
+        sections: [
+          {
+            widgets: [
+              {
+                type: 'text',
+                text: `Editor marked every revision request as resolved. The client has <b>not</b> been emailed yet.`,
+              },
+              {
+                type: 'text',
+                text: `QA the new ${noun.plural}, then hit <b>Notify</b> in the share history to email them.`,
+              },
+              {
+                type: 'button',
+                text: 'Open share history',
+                url: shareUrl,
+                filled: true,
+              },
+            ],
+          },
+        ],
+        fallbackText: `✅ Editor resolved every revision on ${clientName} · ${projectName}. QA then notify. ${shareUrl}`,
+      }),
       `editing-revisions-complete ${args.link.id}`,
     );
   }

@@ -3,7 +3,11 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/auth/permissions';
-import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import {
+  buildChatCard,
+  postToGoogleChatSafe,
+  type ChatCardWidget,
+} from '@/lib/chat/post-to-google-chat';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { formatPostTimeForChat } from '@/lib/chat/format-post-time';
 import { getBrandFromAgency } from '@/lib/agency/detect';
@@ -162,19 +166,37 @@ export async function POST(
     .sort();
 
   if (chatWebhookUrl) {
-    const word = pendingForLink.length === 1 ? 'video has' : 'videos have';
-    const postsBlock = postTimes.length > 0
-      ? '\n' + postTimes.map((t) => `• ${t}`).join('\n')
-      : '';
-    // This action ALSO emails the client's POCs below (sendCalendarRevisedVideosEmail).
-    // Surface that fact so the team doesn't double-email or wonder if the
-    // client knows yet. If no eligible POCs exist on the client, the email
-    // gets skipped (warning logged) but this chat still goes out, so phrase
-    // it as the team kicking off the notify, not as a hard delivery.
-    const text =
-      `📬 *${editorName}* re-uploaded ${pendingForLink.length} revised ${word} for *${clientName}* and is notifying the client's POCs now.${postsBlock}\n` +
-      `FYI for the team, the email is going out as part of this action. Share link if you want to spot-check:\n${shareUrl}`;
-    postToGoogleChatSafe(chatWebhookUrl, { text }, `revised-videos ${link.drop_id}`);
+    const word = pendingForLink.length === 1 ? 'video' : 'videos';
+    const widgets: ChatCardWidget[] = [
+      {
+        type: 'text',
+        text: `<b>${editorName}</b> re-uploaded <b>${pendingForLink.length}</b> revised ${word} and is notifying the client's POCs now.`,
+      },
+    ];
+    if (postTimes.length > 0) {
+      widgets.push({
+        type: 'kv',
+        label: 'Affected posts',
+        value: postTimes.map((t) => `• ${t}`).join('\n'),
+      });
+    }
+    widgets.push({
+      type: 'text',
+      text: '<i>FYI for the team — the email is going out as part of this action.</i>',
+    });
+    widgets.push({ type: 'button', text: 'Spot-check share link', url: shareUrl, filled: true });
+
+    postToGoogleChatSafe(
+      chatWebhookUrl,
+      buildChatCard({
+        cardId: `revised-videos-${link.drop_id}-${Date.now()}`,
+        headerTitle: `📬 ${pendingForLink.length} revised ${word} sent`,
+        headerSubtitle: clientName,
+        sections: [{ widgets }],
+        fallbackText: `📬 ${editorName} re-uploaded ${pendingForLink.length} revised ${word} for ${clientName}. ${shareUrl}`,
+      }),
+      `revised-videos ${link.drop_id}`,
+    );
   }
 
   // Build the email payload. We pull every `changes_requested` comment on the

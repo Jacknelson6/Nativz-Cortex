@@ -22,7 +22,7 @@ import {
 import { sendOnboardingTeamAssignedEmail } from '@/lib/onboarding/email';
 import type { TeamRole } from '@/lib/onboarding/types';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { postToGoogleChat, isGoogleChatWebhook } from '@/lib/chat/post-to-google-chat';
+import { buildChatCard, postToGoogleChat, isGoogleChatWebhook } from '@/lib/chat/post-to-google-chat';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -149,9 +149,32 @@ export async function POST(
     if (clientRow?.chat_webhook_url && isGoogleChatWebhook(clientRow.chat_webhook_url)) {
       try {
         const memberLabel = member?.name ?? member?.email ?? 'A teammate';
-        await postToGoogleChat(clientRow.chat_webhook_url, {
-          text: `*${memberLabel}* assigned as ${roleLabel[parsed.data.role]} on ${clientRow.name}.`,
-        });
+        const roleText = roleLabel[parsed.data.role];
+        await postToGoogleChat(
+          clientRow.chat_webhook_url,
+          buildChatCard({
+            cardId: `team-assigned-${row.id}-${parsed.data.team_member_id}-${parsed.data.role}`,
+            headerTitle: '👥 Team assignment',
+            headerSubtitle: clientRow.name,
+            sections: [
+              {
+                widgets: [
+                  {
+                    type: 'kv',
+                    label: 'Role',
+                    value: roleText,
+                  },
+                  {
+                    type: 'kv',
+                    label: 'Assignee',
+                    value: memberLabel,
+                  },
+                ],
+              },
+            ],
+            fallbackText: `${memberLabel} assigned as ${roleText} on ${clientRow.name}.`,
+          }),
+        );
       } catch (chatErr) {
         console.warn('[onboarding/team] chat ping failed:', chatErr);
       }

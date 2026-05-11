@@ -4,7 +4,11 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createNotification } from '@/lib/notifications/create';
 import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
 import { reschedulePastDueDrafts } from '@/lib/calendar/reschedule-past-due';
-import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import {
+  buildChatCard,
+  postToGoogleChatSafe,
+  type ChatCardWidget,
+} from '@/lib/chat/post-to-google-chat';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
@@ -503,15 +507,30 @@ async function maybeFireRevisionsCompleteNotification(
   if (chatWebhookUrl) {
     // Internal-only ping. The email to the client only goes out when an
     // admin hits *Notify* in the share-history panel (calls /notify-
-    // revisions). Make that crystal clear so the team doesn't assume
-    // Cortex already emailed the client.
-    const text =
-      `✅ *Internal:* editor marked every revision request on *${clientName}* as resolved. ` +
-      `No email has been sent to the client yet. ` +
-      `QA the new cuts, then hit *Notify* in the share history to email them:\n${shareUrl}`;
+    // revisions).
     postToGoogleChatSafe(
       chatWebhookUrl,
-      { text },
+      buildChatCard({
+        cardId: `revisions-complete-${args.linkId}`,
+        headerTitle: '✅ Revisions resolved (internal)',
+        headerSubtitle: clientName,
+        sections: [
+          {
+            widgets: [
+              {
+                type: 'text',
+                text: 'Editor marked every revision request as resolved. The client has <b>not</b> been emailed yet.',
+              },
+              {
+                type: 'text',
+                text: 'QA the new cuts, then hit <b>Notify</b> in the share history to email them.',
+              },
+              { type: 'button', text: 'Open share history', url: shareUrl, filled: true },
+            ],
+          },
+        ],
+        fallbackText: `✅ Editor resolved every revision on ${clientName}. QA then notify. ${shareUrl}`,
+      }),
       `revisions-complete ${args.linkId}`,
     );
   }
@@ -675,28 +694,58 @@ async function notifyAdminsOfComment(
       );
       if (commentSetting.enabled) {
         const verb = comment.status === 'changes_requested' ? 'requested changes' : 'commented';
+        const emoji = comment.status === 'changes_requested' ? '✏️' : '💬';
         const trimmed = comment.content.trim();
-        // When the reviewer attaches files without typing anything, skip the
-        // empty `> ` quote block so the message doesn't lead with a stray
-        // dangling quote line.
-        const quotedBlock = trimmed
-          ? '\n' + trimmed.split('\n').map((line) => `> ${line}`).join('\n')
-          : '';
-        const attachmentBlock =
-          comment.attachments.length > 0
-            ? '\n\n' +
-              comment.attachments.map((a) => `📎 ${a.filename}\n${a.url}`).join('\n\n')
-            : '';
-        // Show *which* post — by scheduled date/time — so the team can scan
-        // the chat without opening the share link.
-        const postLine = postTimeLine ? `\n_Post scheduled for ${postTimeLine}_` : '';
-        // Author = client (only the share link surfaces this form to non-
-        // team users). Label as "from the client" so the team knows this
-        // came in over the public link, not from Cortex chat.
-        const text =
-          `💬 *${comment.authorName}* (client) ${verb} on *${clientName}*${postLine}${quotedBlock}${attachmentBlock}\n` +
-          `Reply from the share link, the client doesn't get an email until you respond:\n${shareUrl}`;
-        postToGoogleChatSafe(targetWebhookUrl, { text }, `comment ${dropId}`);
+        const widgets: ChatCardWidget[] = [];
+        if (postTimeLine) {
+          widgets.push({ type: 'kv', label: 'Post scheduled for', value: postTimeLine });
+        }
+        if (trimmed) {
+          widgets.push({ type: 'quote', text: trimmed });
+        }
+        if (comment.attachments.length > 0) {
+          widgets.push({
+            type: 'kv',
+            label: `Attachments (${comment.attachments.length})`,
+            value: comment.attachments.map((a) => a.filename).join(', '),
+          });
+          widgets.push({
+            type: 'buttons',
+            buttons: comment.attachments.slice(0, 4).map((a) => ({
+              text: a.filename.length > 32 ? `${a.filename.slice(0, 30)}…` : a.filename,
+              url: a.url,
+            })),
+          });
+        }
+        widgets.push({ type: 'divider' });
+        widgets.push({
+          type: 'text',
+          text: '<i>The client only gets an email once you reply from the share link.</i>',
+        });
+        widgets.push({
+          type: 'button',
+          text: comment.status === 'changes_requested' ? 'Open & reply' : 'Open share link',
+          url: shareUrl,
+          filled: true,
+        });
+
+        const fallback =
+          `${emoji} ${comment.authorName} (client) ${verb} on ${clientName}` +
+          (postTimeLine ? `\nPost scheduled for ${postTimeLine}` : '') +
+          (trimmed ? `\n"${trimmed}"` : '') +
+          `\n${shareUrl}`;
+
+        postToGoogleChatSafe(
+          targetWebhookUrl,
+          buildChatCard({
+            cardId: `calendar-comment-${comment.postId}-${Date.now()}`,
+            headerTitle: `${emoji} ${comment.authorName} ${verb}`,
+            headerSubtitle: clientName,
+            sections: [{ widgets }],
+            fallbackText: fallback,
+          }),
+          `comment ${dropId}`,
+        );
       }
     } else if (allApprovedClaim === 'won') {
       const approvedSetting = await getClientNotificationSetting(
@@ -706,17 +755,30 @@ async function notifyAdminsOfComment(
       );
       if (approvedSetting.enabled) {
         const reviewLinkIds = Object.values(reviewLinkMap);
-        // Surface the share-link's admin-facing name so the chat ping reads
-        // "from <Client>'s <Project Title> project" rather than the generic
-        // "<Client>'s calendar". Falls back to "calendar" wording when the
-        // admin didn't bother labeling the share.
         const subject = linkName
-          ? `${clientName}'s ${linkName} project`
+          ? `${clientName} · ${linkName}`
           : `${clientName}'s calendar`;
-        const text =
-          `🎉 *${subject}* — client approved all ${reviewLinkIds.length} posts. ` +
-          `Calendar is locked; posts will publish on their scheduled times. No team action needed.\n${shareUrl}`;
-        postToGoogleChatSafe(targetWebhookUrl, { text }, `all-approved ${dropId}`);
+        postToGoogleChatSafe(
+          targetWebhookUrl,
+          buildChatCard({
+            cardId: `all-approved-${dropId}`,
+            headerTitle: `🎉 All ${reviewLinkIds.length} posts approved`,
+            headerSubtitle: subject,
+            sections: [
+              {
+                widgets: [
+                  {
+                    type: 'text',
+                    text: 'Calendar is locked; posts will publish on their scheduled times. No team action needed.',
+                  },
+                  { type: 'button', text: 'Open calendar', url: shareUrl, filled: true },
+                ],
+              },
+            ],
+            fallbackText: `🎉 ${subject} — client approved all ${reviewLinkIds.length} posts. ${shareUrl}`,
+          }),
+          `all-approved ${dropId}`,
+        );
       }
     }
   }
@@ -769,21 +831,58 @@ async function pingPaidMediaTeam(
     const groupTitle = groupTitleForCalendarStart(args.startDate);
     const item = await findContentCalendarItem(args.clientName, groupTitle);
     const folder = item?.editedVideosFolderUrl;
-    const folderLine = folder ? folder : '(edited videos folder link not set in Monday)';
-    const text =
-      `🎬 *${args.clientName}* — client approved all calendar posts; creatives are ready to run for paid media. ` +
-      `Edited videos folder: ${folderLine}`;
-    postToGoogleChatSafe(paidMedia.url, { text }, `paid-media-approved ${args.clientName}`);
+    const widgets: ChatCardWidget[] = [
+      {
+        type: 'text',
+        text: 'Client approved all calendar posts. Creatives are ready to run for paid media.',
+      },
+    ];
+    if (folder) {
+      widgets.push({ type: 'button', text: 'Open edited videos folder', url: folder, filled: true });
+    } else {
+      widgets.push({
+        type: 'text',
+        text: '<i>Edited videos folder link is not set in Monday — pull assets manually.</i>',
+      });
+    }
+    postToGoogleChatSafe(
+      paidMedia.url,
+      buildChatCard({
+        cardId: `paid-media-legacy-${args.clientName}-${args.startDate}`,
+        headerTitle: '🎬 Approved calendar ready for paid media',
+        headerSubtitle: args.clientName,
+        sections: [{ widgets }],
+        fallbackText: `🎬 ${args.clientName} — approved calendar ready for paid media. ${folder ?? ''}`.trim(),
+      }),
+      `paid-media-approved ${args.clientName}`,
+    );
     return;
   }
 
   // DB-driven path: drop the ads team straight onto the dedicated
   // download grid (caller wires `args.shareUrl` to the /download URL) so
   // they can pull every approved asset in one click.
-  const text =
-    `🎬 *${args.clientName}* — client approved all calendar posts; creatives are ready to run for paid media. ` +
-    `Download all assets:\n${args.shareUrl}`;
-  postToGoogleChatSafe(paidMedia.url, { text }, `paid-media-approved ${args.clientName}`);
+  postToGoogleChatSafe(
+    paidMedia.url,
+    buildChatCard({
+      cardId: `paid-media-db-${args.clientName}-${args.startDate}`,
+      headerTitle: '🎬 Approved calendar ready for paid media',
+      headerSubtitle: args.clientName,
+      sections: [
+        {
+          widgets: [
+            {
+              type: 'text',
+              text: 'Client approved all calendar posts. Creatives are ready to run for paid media.',
+            },
+            { type: 'button', text: 'Download all assets', url: args.shareUrl, filled: true },
+          ],
+        },
+      ],
+      fallbackText: `🎬 ${args.clientName} — approved calendar ready for paid media. ${args.shareUrl}`,
+    }),
+    `paid-media-approved ${args.clientName}`,
+  );
 }
 
 async function checkAllApproved(
@@ -841,21 +940,41 @@ async function notifyPastDueFixup(
       timeZone: 'America/Chicago',
     });
 
-  const lines: string[] = [];
-  lines.push(
-    `⏰ *Internal:* late approval on *${clientName}* triggered past-due reshuffling. ` +
-      `Cortex auto-rescheduled ${result.moves.length} post(s); the client wasn't emailed about the new times:`,
-  );
-  for (const m of result.moves) {
-    const tag = m.doubledUp ? ' (doubled up, month is full)' : '';
-    lines.push(`  • was ${fmt(m.oldScheduledAt)} → now ${fmt(m.newScheduledAt)}${tag}`);
+  const moveLines = result.moves
+    .map((m) => {
+      const tag = m.doubledUp ? ' (doubled up, month full)' : '';
+      return `• was ${fmt(m.oldScheduledAt)} → now ${fmt(m.newScheduledAt)}${tag}`;
+    })
+    .join('<br>');
+
+  const widgets: ChatCardWidget[] = [
+    {
+      type: 'text',
+      text: `Late approval triggered past-due reshuffling. Cortex auto-rescheduled <b>${result.moves.length}</b> post(s). The client wasn't emailed about the new times.`,
+    },
+  ];
+  if (moveLines) {
+    widgets.push({ type: 'text', text: moveLines });
   }
   if (result.overflow.length > 0) {
-    lines.push(
-      `⚠️ ${result.overflow.length} post(s) couldn't fit in this month, left at original time. Manual reschedule needed.`,
-    );
+    widgets.push({
+      type: 'text',
+      text: `⚠️ <b>${result.overflow.length}</b> post(s) couldn't fit in this month and were left at their original time. Manual reschedule needed.`,
+    });
   }
 
-  postToGoogleChatSafe(targetWebhookUrl, { text: lines.join('\n') }, `past-due-fixup ${dropId}`);
+  postToGoogleChatSafe(
+    targetWebhookUrl,
+    buildChatCard({
+      cardId: `past-due-fixup-${dropId}`,
+      headerTitle: '⏰ Past-due reshuffling (internal)',
+      headerSubtitle: clientName,
+      sections: [{ widgets }],
+      fallbackText:
+        `⏰ ${clientName} — auto-rescheduled ${result.moves.length} post(s).` +
+        (result.overflow.length > 0 ? ` ${result.overflow.length} overflow.` : ''),
+    }),
+    `past-due-fixup ${dropId}`,
+  );
 }
 

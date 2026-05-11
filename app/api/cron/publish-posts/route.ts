@@ -10,7 +10,7 @@ import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
 import { verifyAndReconcilePost } from '@/lib/calendar/verify-post';
 import { notifyPartialFailureGuarded } from '@/lib/calendar/notify-partial-failure';
 import { resolveScheduledPostMedia } from '@/lib/calendar/resolve-media';
-import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import { buildChatCard, postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
 import {
   isAccountLevelLegError,
   isZernioGlobalAuthError,
@@ -1469,13 +1469,30 @@ async function sendFailureNotification(
   if (opsWebhook) {
     const reason = (post.failure_reason as string | null) ?? 'unknown error';
     const truncatedReason = reason.length > 280 ? reason.substring(0, 280) + '…' : reason;
-    const text =
-      `🚨 *Internal alert:* publish FAILED for *${clientName}* after 3 retries on every platform. ` +
-      `The client was NOT notified; the post is stuck in failed state.\n` +
-      `Caption: "${caption}${((post.caption as string) ?? '').length > 100 ? '…' : ''}"\n` +
-      `Reason: ${truncatedReason}\n` +
-      `Open the post to investigate and retry or reassign manually:\n${postUrl}`;
-    postToGoogleChatSafe(opsWebhook, { text }, `publish-failure ${postId}`);
+    const captionTrunc = `${caption}${((post.caption as string) ?? '').length > 100 ? '…' : ''}`;
+    postToGoogleChatSafe(
+      opsWebhook,
+      buildChatCard({
+        cardId: `publish-failure-${postId}`,
+        headerTitle: '🚨 Publish FAILED (3 retries)',
+        headerSubtitle: clientName,
+        sections: [
+          {
+            widgets: [
+              {
+                type: 'text',
+                text: 'Failed on every platform after 3 retries. The client was <b>not</b> notified; the post is stuck in failed state.',
+              },
+              { type: 'kv', label: 'Caption', value: captionTrunc },
+              { type: 'kv', label: 'Reason', value: truncatedReason },
+              { type: 'button', text: 'Investigate', url: postUrl, filled: true },
+            ],
+          },
+        ],
+        fallbackText: `🚨 Publish FAILED for ${clientName}: ${truncatedReason}. ${postUrl}`,
+      }),
+      `publish-failure ${postId}`,
+    );
   }
 
   console.log(`[PUBLISH FAILURE] postId=${postId} clientId=${clientId} reason=${post.failure_reason}`);
@@ -1529,14 +1546,31 @@ async function sendPartialFailureNotification(
         const reason = f.reason.length > 200 ? f.reason.substring(0, 200) + '…' : f.reason;
         return `• ${who}: ${reason}`;
       })
-      .join('\n');
-    const text =
-      `⚠️ *Internal alert:* publish PARTIALLY failed for *${clientName}*, some platforms shipped, some did not. ` +
-      `Cron will NOT retry partials (the successes can't be unpublished). The client was NOT notified.\n` +
-      `Caption: "${caption}${((post.caption as string) ?? '').length > 100 ? '…' : ''}"\n` +
-      `Failed legs:\n${failureLines}\n` +
-      `Open the post to manually re-publish the failed platforms:\n${postUrl}`;
-    postToGoogleChatSafe(opsWebhook, { text }, `publish-partial ${postId}`);
+      .join('<br>');
+    const captionTrunc = `${caption}${((post.caption as string) ?? '').length > 100 ? '…' : ''}`;
+    postToGoogleChatSafe(
+      opsWebhook,
+      buildChatCard({
+        cardId: `publish-partial-${postId}`,
+        headerTitle: '⚠️ Publish PARTIALLY failed',
+        headerSubtitle: clientName,
+        sections: [
+          {
+            widgets: [
+              {
+                type: 'text',
+                text: 'Some platforms shipped, some did not. Cron will <b>not</b> retry partials (the successes can\'t be unpublished). The client was <b>not</b> notified.',
+              },
+              { type: 'kv', label: 'Caption', value: captionTrunc },
+              { type: 'kv', label: 'Failed legs', value: failureLines },
+              { type: 'button', text: 'Manually re-publish failed legs', url: postUrl, filled: true },
+            ],
+          },
+        ],
+        fallbackText: `⚠️ Publish partially failed for ${clientName}. ${postUrl}`,
+      }),
+      `publish-partial ${postId}`,
+    );
   }
 
   console.log(
