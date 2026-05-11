@@ -286,7 +286,7 @@ function paragraphToHtml(raw: string): string {
 }
 
 export function buildChatCardMessage(card: ChatCard): ChatMessage {
-  const widgets: Array<Record<string, unknown>> = [];
+  const widgets: CardV2Widget[] = [];
   for (const p of card.paragraphs) {
     if (!p) continue;
     const text = typeof p === 'string' ? paragraphToHtml(p) : p.html;
