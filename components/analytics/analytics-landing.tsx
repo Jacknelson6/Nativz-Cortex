@@ -21,7 +21,7 @@ const AuditBenchmarksPanel = dynamic(
 // brands carrying that contract item — so the tab strip collapses entirely
 // when Social would be the lone option.
 export type TabId = 'social' | 'affiliates';
-export type SubTabId = 'overview' | 'benchmarking';
+export type SubTabId = 'overview' | 'growth' | 'benchmarking';
 
 const ALL_TABS: { id: TabId; label: string; icon: typeof Share2 }[] = [
   { id: 'social', label: 'Social', icon: Share2 },
@@ -32,6 +32,7 @@ const TABS_WITH_SUBS: TabId[] = ['social'];
 
 const SUB_TABS: SubNavItem<SubTabId>[] = [
   { slug: 'overview', label: 'Overview' },
+  { slug: 'growth', label: 'Growth' },
   { slug: 'benchmarking', label: 'Benchmarking' },
 ];
 
@@ -41,6 +42,12 @@ interface AnalyticsLandingProps {
   initialTab: TabId;
   initialSub: SubTabId;
   hasAffiliates: boolean;
+  /**
+   * Server-rendered Growth panel. Computed in the page server component
+   * when ?sub=growth so first paint is filled. Null when growth isn't
+   * the active sub or no brand is pinned.
+   */
+  growthSlot?: React.ReactNode;
 }
 
 export function AnalyticsLanding({
@@ -49,6 +56,7 @@ export function AnalyticsLanding({
   initialTab,
   initialSub,
   hasAffiliates,
+  growthSlot,
 }: AnalyticsLandingProps) {
   const router = useRouter();
   // Client selection lives at the top-bar brand pill now — no in-page
@@ -143,6 +151,16 @@ export function AnalyticsLanding({
 
       {activeTab === 'social' && activeSub === 'overview' && (
         <AnalyticsDashboard initialClientId={selectedClientId} />
+      )}
+
+      {activeTab === 'social' && activeSub === 'growth' && (
+        growthSlot ?? (
+          <div className="rounded-xl border border-nativz-border bg-surface p-8 text-center">
+            <p className="text-sm text-text-muted">
+              No growth data yet for this brand.
+            </p>
+          </div>
+        )
       )}
 
       {activeTab === 'social' && activeSub === 'benchmarking' && (

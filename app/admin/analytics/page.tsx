@@ -7,9 +7,13 @@ import {
   type SubTabId,
 } from '@/components/analytics/analytics-landing';
 import { getActiveBrand } from '@/lib/active-brand';
+import {
+  ZernioGrowthPanel,
+  parseRange,
+} from '@/components/analytics/zernio-growth-panel';
 
 const VALID_TABS: readonly TabId[] = ['social', 'affiliates'];
-const VALID_SUBS: readonly SubTabId[] = ['overview', 'benchmarking'];
+const VALID_SUBS: readonly SubTabId[] = ['overview', 'growth', 'benchmarking'];
 
 function normalizeTabs(
   rawTab: string | undefined,
@@ -19,6 +23,11 @@ function normalizeTabs(
   // Legacy URL: ?tab=benchmarking → Social / Benchmarking
   if (rawTab === 'benchmarking') {
     return { tab: 'social', sub: 'benchmarking' };
+  }
+  // Legacy URL: ?tab=growth → Social / Growth (back-compat for anyone
+  // who deep-linked into the old standalone Zernio page).
+  if (rawTab === 'growth') {
+    return { tab: 'social', sub: 'growth' };
   }
   // Old paid/seo bookmarks fall through to Social rather than 404.
   let tab: TabId = (VALID_TABS as readonly string[]).includes(rawTab ?? '')
@@ -35,7 +44,7 @@ function normalizeTabs(
 export default async function AdminAnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ clientId?: string; tab?: string; sub?: string }>;
+  searchParams: Promise<{ clientId?: string; tab?: string; sub?: string; range?: string }>;
 }) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -47,7 +56,7 @@ export default async function AdminAnalyticsPage({
   // to every analytics page paint. Active-client pill is always fetched so
   // we don't need a trailing await when the URL omits ?clientId=.
   const [
-    { clientId, tab, sub },
+    { clientId, tab, sub, range: rangeRaw },
     { data: clients },
     { data: profiles },
     active,
@@ -92,6 +101,14 @@ export default async function AdminAnalyticsPage({
 
   const { tab: initialTab, sub: initialSub } = normalizeTabs(tab, sub, hasAffiliates);
 
+  // Pre-render the Growth panel server-side when it's the active sub and
+  // we have a brand to scope it to. Skipping this work when growth isn't
+  // showing keeps the page light for the more common Overview path.
+  const growthSlot =
+    initialTab === 'social' && initialSub === 'growth' && resolvedInitialClientId
+      ? <ZernioGrowthPanel clientId={resolvedInitialClientId} range={parseRange(rangeRaw)} />
+      : null;
+
   return (
     <AnalyticsLanding
       clients={portfolioClients}
@@ -99,6 +116,7 @@ export default async function AdminAnalyticsPage({
       initialTab={initialTab}
       initialSub={initialSub}
       hasAffiliates={hasAffiliates}
+      growthSlot={growthSlot}
     />
   );
 }
