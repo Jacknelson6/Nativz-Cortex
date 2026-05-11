@@ -42,6 +42,10 @@ export interface BrandedDeliverableTopic {
   metrics: BrandedDeliverableMetric[];
   /** "Why it works" caption below the metrics. */
   whyItWorks?: string;
+  /** VFF-10: viral-format badge at the top of the card ("FAST CUTS"). */
+  formatBadge?: string;
+  /** VFF-10: italic 1-line descriptor under the metrics row. */
+  formatDescriptor?: string;
 }
 
 export interface BrandedDeliverableSeries {

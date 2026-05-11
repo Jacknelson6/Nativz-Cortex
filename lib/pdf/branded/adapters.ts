@@ -62,8 +62,20 @@ function ideaMetrics(idea: TopicIdea): BrandedDeliverableMetric[] {
   return metrics;
 }
 
-function mapIdeaToTopic(idea: TopicIdea, seriesOffset: number): BrandedDeliverableTopic {
+function mapIdeaToTopic(
+  idea: TopicIdea,
+  seriesOffset: number,
+  planFormat?: { display_name: string; descriptor?: string | null } | null,
+): BrandedDeliverableTopic {
   const num = idea.number ?? seriesOffset;
+  // VFF-10: per-topic format_reference overrides the plan-level pin.
+  // Adapter contract: when set, badge shows the topic's own display_name
+  // and the descriptor renders as the italic caption.
+  const topicFormat = idea.format_reference ?? null;
+  const formatBadge = topicFormat?.display_name ?? planFormat?.display_name;
+  const formatDescriptor =
+    (topicFormat?.descriptor ?? null) ??
+    (topicFormat ? null : planFormat?.descriptor ?? null);
   return {
     number: `${String(num).padStart(2, '0')}.`,
     title: idea.title,
@@ -72,6 +84,8 @@ function mapIdeaToTopic(idea: TopicIdea, seriesOffset: number): BrandedDeliverab
     priorityLabel: idea.priority ? 'Priority' : undefined,
     metrics: ideaMetrics(idea),
     whyItWorks: idea.why_it_works ?? undefined,
+    formatBadge: formatBadge ? formatBadge.toUpperCase() : undefined,
+    formatDescriptor: formatDescriptor ?? undefined,
   };
 }
 
@@ -116,13 +130,24 @@ export function mapTopicPlanToBranded(
   const total = totalIdeas(plan);
   const highRes = totalHighResonance(plan);
 
+  // VFF-10: plan-level format pin. When set, every topic card gets a
+  // badge with the format's display name; the descriptor renders as a
+  // small italic line under the metrics. Individual topics with their
+  // own format_reference override the plan default per card.
+  const planFormat = plan.format_reference
+    ? {
+        display_name: plan.format_reference.display_name,
+        descriptor: plan.format_reference.descriptor ?? null,
+      }
+    : null;
+
   // Cumulative numbering across series
   let cumulative = 0;
   const series = plan.series.map((s, i) => {
     const mapped = mapSeries(s, i);
-    mapped.topics = s.ideas.map((idea, j) => {
+    mapped.topics = s.ideas.map((idea) => {
       cumulative++;
-      return mapIdeaToTopic(idea, cumulative);
+      return mapIdeaToTopic(idea, cumulative, planFormat);
     });
     return mapped;
   });

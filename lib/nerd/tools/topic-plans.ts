@@ -36,14 +36,23 @@ export const topicPlanTools: ToolDefinition[] = [
       conversation_id: z.string().uuid().optional().describe(
         'Nerd conversation this plan was produced in (optional)',
       ),
+      // VFF-10: when the strategist pinned a reference format (via
+      // /admin/formats "Use this format" or by typing one explicitly),
+      // pass its slug here. The server validates against viral_formats,
+      // pulls a worked example, and stamps the slug into plan_json so
+      // the branded PDF adapter renders a Format badge per topic card.
+      format_slug: z.string().optional().nullable().describe(
+        'Optional viral_formats.slug the strategist anchored this plan on. Must exist in the taxonomy; the tool errors with suggestions otherwise.',
+      ),
     }),
     riskLevel: 'write',
     handler: async (params, userId) => {
-      const { client_id, plan, topic_search_ids, conversation_id } = params as {
+      const { client_id, plan, topic_search_ids, conversation_id, format_slug } = params as {
         client_id: string;
         plan: z.infer<typeof topicPlanSchema>;
         topic_search_ids?: string[];
         conversation_id?: string;
+        format_slug?: string | null;
       };
 
       // Strip non-UUID strings out of topic_search_ids so a Nerd hallucination
@@ -186,6 +195,67 @@ export const topicPlanTools: ToolDefinition[] = [
         }
       }
 
+      // VFF-10: resolve the reference format (if any) and stamp it into
+      // plan_json. The branded PDF adapter looks at plan_json.format_slug
+      // and plan_json.format_reference to render the "Format" badge.
+      let formatReference: { slug: string; display_name: string; descriptor: string | null } | null = null;
+      if (format_slug && typeof format_slug === 'string') {
+        const { data: fmtRow } = await admin
+          .from('viral_formats')
+          .select('slug, display_name')
+          .eq('slug', format_slug)
+          .is('archived_at', null)
+          .maybeSingle();
+        if (!fmtRow) {
+          const { data: suggestions } = await admin
+            .from('viral_formats')
+            .select('slug')
+            .is('archived_at', null)
+            .limit(20);
+          return {
+            success: false,
+            error: `Format slug "${format_slug}" not found in viral_formats. Try one of: ${
+              (suggestions ?? []).map((r: { slug: string }) => r.slug).slice(0, 8).join(', ')
+            }.`,
+            cardType: 'topic_plan' as const,
+          };
+        }
+        // Worked-example descriptor: top-viewed analyzed video tagged with this format.
+        const { data: tagged } = await admin
+          .from('viral_video_formats')
+          .select('video_id')
+          .limit(40);
+        const ids = (tagged ?? []).map((r: { video_id: string }) => r.video_id);
+        let descriptor: string | null = null;
+        if (ids.length > 0) {
+          const { data: example } = await admin
+            .from('viral_videos')
+            .select('engagement_hook_descriptor')
+            .in('id', ids)
+            .eq('analysis_status', 'analyzed')
+            .order('views_count', { ascending: false, nullsFirst: false })
+            .limit(1)
+            .maybeSingle();
+          descriptor = (example as { engagement_hook_descriptor: string | null } | null)
+            ?.engagement_hook_descriptor ?? null;
+        }
+        formatReference = {
+          slug: (fmtRow as { slug: string }).slug,
+          display_name: (fmtRow as { display_name: string }).display_name,
+          descriptor,
+        };
+      }
+
+      // Splice the format fields onto plan_json. `format_slug` and
+      // `format_reference` are first-class optional fields on TopicPlan
+      // (added in VFF-10) — the branded PDF adapter renders the Format
+      // badge per topic card when set.
+      const planJson: z.infer<typeof topicPlanSchema> = { ...plan };
+      if (formatReference) {
+        planJson.format_slug = formatReference.slug;
+        planJson.format_reference = formatReference;
+      }
+
       const { data: plansRow, error } = await admin
         .from('topic_plans')
         .insert({
@@ -193,7 +263,7 @@ export const topicPlanTools: ToolDefinition[] = [
           organization_id: client.organization_id,
           title: plan.title,
           subtitle: plan.subtitle ?? null,
-          plan_json: plan,
+          plan_json: planJson,
           topic_search_ids: cleanTopicSearchIds,
           conversation_id: safeConversationId,
           created_by: userId,

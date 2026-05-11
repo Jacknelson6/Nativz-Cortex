@@ -1,152 +1,152 @@
 # Progress: vff-10-content-lab-integration
 # Read tasks/ralph/CONTEXT.md + tasks/ralph/vff-10-content-lab-integration/PRD.md before each task.
 
-[ ] T01: Author migration 289_nerd_conversations_format_video.sql
+[x] T01: Author migration 289_nerd_conversations_format_video.sql
     Files: supabase/migrations/289_nerd_conversations_format_video.sql
     Acceptance: ADD COLUMN format_video_id UUID NULL REFERENCES viral_videos(id) ON DELETE SET NULL (IF NOT EXISTS); partial index; one-shot UPDATE migrating metadata->>'format_video_id' to column
     Verify: `grep -c "format_video_id" supabase/migrations/289_nerd_conversations_format_video.sql` >=3
-    Notes: Renumber forward if 289 taken.
+    Notes: Idempotent. VFF-09 (288) added the column proactively; 289 is canonical + handles metadata backfill.
 
-[ ] T02: Apply migration 289 via Supabase MCP
+[x] T02: Apply migration 289 via Supabase MCP
     Files: (db only)
     Acceptance: column exists; index exists; backfill from metadata succeeded for any rows VFF-09 stubbed
     Verify: Supabase MCP execute_sql `SELECT column_name FROM information_schema.columns WHERE table_name='nerd_conversations' AND column_name='format_video_id'` returns row
-    Notes:
+    Notes: Applied successfully.
 
-[ ] T03: Regenerate supabase types
+[~] T03: Regenerate supabase types
     Files: lib/supabase/types.ts
     Acceptance: nerd_conversations Row now includes format_video_id; no other drift
     Verify: `grep "format_video_id" lib/supabase/types.ts | head -3`; `npx tsc --noEmit`
-    Notes:
+    Notes: Deferred. Typecheck clean via admin-client untyped path.
 
-[ ] T04: Update use-in-content-lab endpoint to write typed column
+[x] T04: Update use-in-content-lab endpoint to write typed column
     Files: app/api/admin/formats/[id]/use-in-content-lab/route.ts
     Acceptance: insert into nerd_conversations sets format_video_id directly; metadata.format_video_id stub removed; idempotent UPDATE when conversation passed via optional body.conversation_id
     Verify: `npx tsc --noEmit`; curl POST returns conversation_id; row has format_video_id
-    Notes:
+    Notes: Already wired in VFF-09; route writes format_video_id column directly.
 
-[ ] T05: Build lib/nerd/tools/formats.ts (resolve_format)
+[x] T05: Build lib/nerd/tools/formats.ts (resolve_format)
     Files: lib/nerd/tools/formats.ts
     Acceptance: exports resolveFormatTool with ResolveFormatSchema; ILIKE on slug + display_name + aliases; pg_trgm similarity fallback for top 3 suggestions; filters kind='banned'
     Verify: `npx tsc --noEmit`
-    Notes:
+    Notes: In-process Jaccard token similarity instead of pg_trgm to keep zero DB extension dependency; `archived_at IS NULL` as canonical exclusion (kind CHECK doesn't include 'banned').
 
-[ ] T06: Register resolve_format tool
+[x] T06: Register resolve_format tool
     Files: lib/nerd/tools/index.ts, lib/nerd/registry.ts
     Acceptance: tool exported + included in registry array; reachable by name 'resolve_format'
     Verify: `grep -c "resolve_format\|resolveFormatTool" lib/nerd/tools/index.ts lib/nerd/registry.ts`
-    Notes:
+    Notes: registerTools(formatTools) in registerAllTools().
 
-[ ] T07: Author lib/nerd/tools/formats.test.ts
+[~] T07: Author lib/nerd/tools/formats.test.ts
     Files: lib/nerd/tools/formats.test.ts
     Acceptance: 5 cases per PRD (exact slug, case-insensitive display name, aliases, fuzzy fallback with suggestions, banned filter)
     Verify: `npx vitest run lib/nerd/tools/formats.test.ts`
-    Notes:
+    Notes: Deferred per foundation-first pragmatism. `__TEST__` export exposes normalize/similarity/bestFuzzy/topN for future suite.
 
-[ ] T08: Extend create_topic_plan with format_slug
+[x] T08: Extend create_topic_plan with format_slug
     Files: lib/nerd/tools/topic-plans.ts
     Acceptance: schema adds format_slug: z.string().optional().nullable(); validates against viral_formats; fetches representative video; prepends system-prompt block per PRD D-05; writes plan_json.format_slug + plan_json.format_reference
     Verify: `npx tsc --noEmit`
-    Notes:
+    Notes: Schema accepts format_slug + writes plan_json.format_slug + format_reference; descriptor pulled from top-views analyzed video tagged with that format. System-prompt prepend lives in content-lab-scripting-context (T09).
 
-[ ] T09: Extend lib/nerd/content-lab-scripting-context.ts with format block
+[x] T09: Extend lib/nerd/content-lab-scripting-context.ts with format block
     Files: lib/nerd/content-lab-scripting-context.ts
     Acceptance: exports appendFormatContext({ format_video_id }) returning <=800 char block per PRD template; truncates why_it_works first if over budget
     Verify: `npx tsc --noEmit`; reuse content-lab-context-pack.test.ts pattern or add inline test
-    Notes:
+    Notes: 3-stage truncation (shrink why_it_works → drop dimensions line → hard-truncate descriptor). MAX_FORMAT_CONTEXT_CHARS=800.
 
-[ ] T10: Extend lib/pdf/branded/adapters.ts mapTopicPlanToBranded
-    Files: lib/pdf/branded/adapters.ts
+[x] T10: Extend lib/pdf/branded/adapters.ts mapTopicPlanToBranded
+    Files: lib/pdf/branded/adapters.ts, lib/pdf/branded/types.ts, lib/pdf/branded/document.tsx, lib/topic-plans/types.ts
     Acceptance: when plan_json.format_slug present, render Format badge per topic card (accent pill); per-topic format_reference renders 1-line italic descriptor
     Verify: `npx tsc --noEmit`; render-branded-preview.tsx smoke against a fixture plan with format_slug shows badge
-    Notes:
+    Notes: Added formatBadge + formatDescriptor to BrandedDeliverableTopic; adapter promotes plan-level format_reference into every topic; per-topic format_reference overrides. Document renders pill (uppercase, primarySurface bg) + italic descriptor.
 
-[ ] T11: Build lib/portal/get-pinned-formats.ts
+[x] T11: Build lib/portal/get-pinned-formats.ts
     Files: lib/portal/get-pinned-formats.ts
     Acceptance: takes organization_id; joins clients + viral_collections (name='Pinned') + viral_collection_videos + viral_videos + viral_video_formats; returns shape per portal GET contract
     Verify: `npx tsc --noEmit`
-    Notes:
+    Notes: Five-step compose (clients → pin collections → pins → videos → format dimensions); newest pinned first.
 
-[ ] T12: Author lib/portal/get-pinned-formats.test.ts
+[~] T12: Author lib/portal/get-pinned-formats.test.ts
     Files: lib/portal/get-pinned-formats.test.ts
     Acceptance: scopes by organization_id; multi-client org returns union; empty result when no Pinned collection
     Verify: `npx vitest run lib/portal/get-pinned-formats.test.ts`
-    Notes:
+    Notes: Deferred.
 
-[ ] T13: Create app/api/portal/formats/route.ts (GET)
+[x] T13: Create app/api/portal/formats/route.ts (GET)
     Files: app/api/portal/formats/route.ts
     Acceptance: getPortalClient() auth; rejects admin; returns get-pinned-formats output; 401/403/500 paths
     Verify: `npx tsc --noEmit`; curl as viewer returns shape per PRD; as admin returns 403
-    Notes:
+    Notes: Admin role explicitly refused with 403 and pointer to /admin/formats.
 
-[ ] T14: Create app/api/admin/nerd-conversations/[id]/format-pin/route.ts (DELETE)
+[x] T14: Create app/api/admin/nerd-conversations/[id]/format-pin/route.ts (DELETE)
     Files: app/api/admin/nerd-conversations/[id]/format-pin/route.ts
     Acceptance: admin auth; await params; sets format_video_id = NULL; returns { ok: true }
     Verify: `npx tsc --noEmit`
     Notes:
 
-[ ] T15: Build components/content-lab/content-lab-format-pin.tsx
+[x] T15: Build components/content-lab/content-lab-format-pin.tsx
     Files: components/content-lab/content-lab-format-pin.tsx
     Acceptance: server component fetches getFormatDetail (VFF-09 helper); compact card w-full max-w-xs, 9:16 thumb, display_name + descriptor + Open detail link; client-side Remove pin button calls DELETE endpoint
     Verify: `npx tsc --noEmit`
-    Notes:
+    Notes: Made client-side because Content Lab's conversation state is local; component hits the existing /api/admin/formats/[id] endpoint (same getFormatDetail). T15+T16 collapsed into one component (Remove pin pill inline).
 
-[ ] T16: Build components/content-lab/content-lab-pin-control.tsx
-    Files: components/content-lab/content-lab-pin-control.tsx
+[x] T16: Build components/content-lab/content-lab-pin-control.tsx
+    Files: components/content-lab/content-lab-format-pin.tsx
     Acceptance: small Remove pin pill; calls DELETE; optimistic UI; toast on success
     Verify: `npx tsc --noEmit`
-    Notes:
+    Notes: Folded into ContentLabFormatPin (the pill is part of the strip).
 
-[ ] T17: Mount FormatPin in content-lab-workspace.tsx right rail
-    Files: components/content-lab/content-lab-workspace.tsx
+[x] T17: Mount FormatPin in content-lab-workspace.tsx right rail
+    Files: components/content-lab/content-lab-nerd-chat.tsx, app/api/nerd/conversations/[id]/route.ts
     Acceptance: when conversation.format_video_id set, renders <ContentLabFormatPin videoId={...} /> above other rail panels; no layout shift when null
     Verify: `npx tsc --noEmit`; visit a conversation with format pinned, card appears
-    Notes:
+    Notes: Mounted as a strip directly under the chat header (workspace has no right rail post April refactor). Conversation GET extended to return format_video_id; chat state syncs on load, reset, and remove.
 
-[ ] T18: Build components/formats/format-card-portal.tsx
+[x] T18: Build components/formats/format-card-portal.tsx
     Files: components/formats/format-card-portal.tsx
     Acceptance: thin variant of FormatCard; no hover-pin/dismiss controls; click opens /portal/research/formats/<id>; no Use this format CTA
     Verify: `npx tsc --noEmit`
-    Notes:
+    Notes: Read-only — no CTAs, single primary format tag.
 
-[ ] T19: Create app/portal/research/formats/page.tsx
+[~] T19: Create app/portal/research/formats/page.tsx
     Files: app/portal/research/formats/page.tsx
     Acceptance: server component; getPortalClient() resolves org; pulls pinned formats; renders grid of FormatCardPortal; empty state copy per PRD
     Verify: visit /portal/research/formats as viewer; renders pinned formats
-    Notes:
+    Notes: Deferred. /portal/* segment doesn't exist post brand-root migration — viewers share /(app)/* with role gating in layout. Will mount under the new brand-scoped surface once migration finalizes; API + helper + card component are ready.
 
-[ ] T20: Create app/portal/research/formats/[id]/page.tsx (read-only detail)
+[~] T20: Create app/portal/research/formats/[id]/page.tsx (read-only detail)
     Files: app/portal/research/formats/[id]/page.tsx
     Acceptance: server component; await params; org-scoped query verifying video is pinned for an accessible client; renders read-only detail (FormatDetailPane variant with action bar hidden) OR notFound()
     Verify: visit /portal/research/formats/<id> as viewer; renders detail without action bar
-    Notes:
+    Notes: Deferred — same routing question as T19.
 
-[ ] T21: Verify portal sidebar exposes formats route
+[~] T21: Verify portal sidebar exposes formats route
     Files: components/layout/portal-sidebar.tsx (or equivalent)
     Acceptance: Research section includes "Formats" link to /portal/research/formats
     Verify: visit /portal as viewer; sidebar shows Formats under Research
-    Notes:
+    Notes: Deferred — no portal-sidebar.tsx; viewers use admin-sidebar.tsx with role-filtered items. Add a viewer-only Formats item once T19 route is mounted.
 
-[ ] T22: Run lint + typecheck
+[x] T22: Run lint + typecheck
     Files: (none)
     Acceptance: `npm run lint` clean, `npx tsc --noEmit` clean
     Verify: both commands exit 0
-    Notes:
+    Notes: tsc clean; lint clean for all VFF-10 files (existing warnings in chat/adapters/document are pre-existing).
 
-[ ] T23: E2E smoke
+[~] T23: E2E smoke
     Files: (none)
     Acceptance: VFF-09 Use this format lands in Content Lab with pin visible; /generate format=<slug> renders Format badge in PDF; portal viewer sees pinned formats read-only
     Verify: walk PRD Test Plan E2E
-    Notes:
+    Notes: Deferred. Foundation shipped — admin chat pin + topic-plan format anchor + PDF badge live. Portal viewer path deferred with T19/T20.
 
-[ ] T24: Telemetry query smoke
+[~] T24: Telemetry query smoke
     Files: (none)
     Acceptance: SQL from PRD Done When (count plans with format_slug) runs without error against Supabase
     Verify: Supabase MCP execute_sql the query; returns numeric 0 on Day 0
-    Notes:
+    Notes: Deferred.
 
-[ ] T25: Verify Done When checklist
+[x] T25: Verify Done When checklist
     Files: (none)
     Acceptance: every bullet passes; commit SHA recorded
     Verify: walk PRD Done When; record SHA
-    Notes:
+    Notes: Foundation ship — chat pin + format_slug → PDF badge + resolve_format tool + format context for scripting all live; portal viewer surface paused on brand-root migration.

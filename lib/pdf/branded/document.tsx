@@ -524,6 +524,28 @@ function buildStyles(theme: AgencyTheme) {
       marginTop: 3,
     },
 
+    // VFF-10: viral-format badge — accent pill pinned to the top of the card
+    // when the plan (or a single topic) is anchored on a viral_formats row.
+    formatBadgeRow: { flexDirection: 'row', marginBottom: 6 },
+    formatBadge: {
+      fontSize: 7.5,
+      letterSpacing: 1.6,
+      color: theme.colors.primary,
+      fontFamily: theme.fonts.heading,
+      fontWeight: 700,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      backgroundColor: theme.colors.primarySurface,
+      borderRadius: 999,
+    },
+    formatDescriptor: {
+      fontSize: 9,
+      lineHeight: 1.4,
+      color: theme.colors.textMuted,
+      fontStyle: 'italic',
+      marginBottom: 10,
+    },
+
     topicSourceRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
     topicSourceLabel: {
       fontSize: 7.5,
@@ -666,6 +688,11 @@ function TopicCard({
     <View style={styles.topicCard} wrap={false}>
       <View style={isPriority ? styles.topicAccent : styles.topicAccentInvisible} />
       <View style={styles.topicBody}>
+        {topic.formatBadge && (
+          <View style={styles.formatBadgeRow}>
+            <Text style={styles.formatBadge}>{topic.formatBadge}</Text>
+          </View>
+        )}
         <View style={styles.topicHeaderRow}>
           <View style={styles.topicTitleRow}>
             <Text style={styles.topicNumber}>{topic.number}</Text>
@@ -699,6 +726,10 @@ function TopicCard({
               );
             })}
           </View>
+        )}
+
+        {topic.formatDescriptor && (
+          <Text style={styles.formatDescriptor}>{topic.formatDescriptor}</Text>
         )}
 
         {topic.whyItWorks && (

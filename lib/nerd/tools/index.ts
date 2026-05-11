@@ -17,6 +17,7 @@ import { topicSignalTools } from './topic-signals';
 // import { agencyKnowledgeTools } from './agency-knowledge';
 import { fyxerTools } from './fyxer';
 import { analysisTools } from './analyses';
+import { formatTools } from './formats';
 
 /** Register all tool domains. Call once at startup. */
 export function registerAllTools() {
@@ -37,4 +38,6 @@ export function registerAllTools() {
   registerTools(fyxerTools);
   // Progressive-context tools for Strategy Lab + per-analysis drawer.
   registerTools(analysisTools);
+  // VFF-10: format taxonomy lookup for Content Lab + Nerd "in <X> format".
+  registerTools(formatTools);
 }
