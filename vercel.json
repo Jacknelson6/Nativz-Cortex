@@ -12,6 +12,10 @@
       "schedule": "0 9 * * *"
     },
     {
+      "path": "/api/cron/recompute-format-context",
+      "schedule": "30 4 * * *"
+    },
+    {
       "path": "/api/cron/sync-reporting",
       "schedule": "0 6 * * *"
     },

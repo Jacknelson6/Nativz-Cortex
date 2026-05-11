@@ -136,6 +136,33 @@ export interface PostMetricInsert {
   source_version: string;
 }
 
+// ============================================================
+// VFF-02 — Brand-aware ingestion signals (migration 274)
+// ============================================================
+
+export type BrandFormatContextSource = 'auto' | 'manual' | 'mixed';
+
+export interface BrandFormatReferenceCreatorHandles {
+  tiktok: string[];
+  instagram: string[];
+  youtube: string[];
+}
+
+export interface BrandFormatContext {
+  id: string;
+  client_id: string;
+  seed_terms: string[];
+  excluded_terms: string[];
+  reference_creator_handles: BrandFormatReferenceCreatorHandles;
+  pillar_weights: Record<string, number>;
+  tone_descriptors: string[];
+  seed_embedding?: number[] | null;
+  source: BrandFormatContextSource;
+  last_recomputed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface PlatformSnapshotErrorRow {
   id: string;
   client_id: string | null;
