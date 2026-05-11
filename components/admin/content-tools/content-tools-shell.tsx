@@ -52,12 +52,19 @@ import { CalendarLinkDetail } from './calendar-link-detail';
 import { subscribeToCompletion } from '@/lib/editing/upload-store';
 
 /**
- * Group rows into month buckets keyed by `YYYY-MM`, using either
- * `created_at` ("default" — when the project was started) or
- * `approved_at` ("approval" — when it cleared review, used for arrears
- * invoicing). Rows missing the chosen date land in the `null` bucket so
- * they still render under a fallback "No date" header instead of
- * vanishing.
+ * Group rows by date, either:
+ *  - `default`: full-month buckets keyed by `YYYY-MM` from `created_at`
+ *    (when the project was started); or
+ *  - `approval`: half-month buckets keyed by `YYYY-MM-H1` (1st-15th) /
+ *    `YYYY-MM-H2` (16th-EOM) from `approved_at`. Two periods per
+ *    calendar month mirrors how Jack invoices in arrears, so the table
+ *    reads like the billing sheet.
+ *
+ * Rows missing the chosen date land in the `null` bucket and render
+ * under a fallback "No date" / "No approval date" header so they never
+ * vanish. In `approval` mode the current period is always included
+ * (even when empty) so chevron navigation has a stable anchor and the
+ * default focus lands on "today's billing window."
  */
 type GroupBy = 'default' | 'approval';
 
@@ -92,8 +99,8 @@ function formatMoney(amount: number): string {
   })}`;
 }
 
-function downloadApprovedMonthCsv(
-  monthLabel: string,
+function downloadApprovedPeriodCsv(
+  periodLabel: string,
   rows: ReviewLinkRow[],
 ): void {
   // Finance records completed deliverables per calendar month so we can
@@ -132,9 +139,9 @@ function downloadApprovedMonthCsv(
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const safeMonth = monthLabel.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+  const safePeriod = periodLabel.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
   a.href = url;
-  a.download = `approved-deliverables-${safeMonth}.csv`;
+  a.download = `approved-deliverables-${safePeriod}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -158,48 +165,114 @@ function defaultPromoteRange(): ScheduleRange {
   return { start: fmt(start), end: fmt(end) };
 }
 
+/** Full-month key, `YYYY-MM`. Used by `default` (created_at) grouping. */
 function monthKey(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
 }
 
+/**
+ * Half-month bucket key, `YYYY-MM-H1` for days 1..15 or `YYYY-MM-H2`
+ * for 16..end-of-month. Computed in UTC so the bucket boundary doesn't
+ * drift across timezones, the approval timestamp is also stored UTC.
+ */
+function halfMonthKey(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const half = d.getUTCDate() <= 15 ? 'H1' : 'H2';
+  return `${y}-${m}-${half}`;
+}
+
+/** Build a half-month key for the current period (today's bucket). */
+function currentHalfMonthKey(now: Date = new Date()): string {
+  const y = now.getUTCFullYear();
+  const m = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const half = now.getUTCDate() <= 15 ? 'H1' : 'H2';
+  return `${y}-${m}-${half}`;
+}
+
+/** Last day of the given UTC month, e.g. 31 for May, 30 for April. */
+function lastDayOfMonth(year: number, monthIndex0: number): number {
+  // Day 0 of the next month rolls back to the last day of the current month.
+  return new Date(Date.UTC(year, monthIndex0 + 1, 0)).getUTCDate();
+}
+
+/** Human label for a full-month key. e.g. `2026-05` to "May 2026". */
 function monthLabel(key: string): string {
-  const [y, m] = key.split('-').map((n) => Number(n));
-  const d = new Date(Date.UTC(y, m - 1, 1));
-  return d.toLocaleDateString(undefined, {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
+  const [yStr, mStr] = key.split('-');
+  const year = Number(yStr);
+  const monthIndex0 = Number(mStr) - 1;
+  const monthName = new Date(Date.UTC(year, monthIndex0, 1)).toLocaleDateString(
+    undefined,
+    { month: 'long', timeZone: 'UTC' },
+  );
+  return `${monthName} ${year}`;
 }
 
+/**
+ * Human label for a half-month bucket key. e.g. `2026-05-H1` to
+ * "May 1 to 15, 2026", `2026-05-H2` to "May 16 to 31, 2026". Uses 'to'
+ * deliberately (no en/em dashes per project copy rule).
+ */
+function halfMonthLabel(key: string): string {
+  const [yStr, mStr, half] = key.split('-');
+  const year = Number(yStr);
+  const monthIndex0 = Number(mStr) - 1;
+  const monthName = new Date(Date.UTC(year, monthIndex0, 1)).toLocaleDateString(
+    undefined,
+    { month: 'long', timeZone: 'UTC' },
+  );
+  if (half === 'H1') return `${monthName} 1 to 15, ${year}`;
+  const end = lastDayOfMonth(year, monthIndex0);
+  return `${monthName} 16 to ${end}, ${year}`;
+}
+
+/**
+ * Bucket rows by date according to `mode`. In `approval` mode the
+ * current half-month period is always included (even when empty) so
+ * chevron navigation has a stable anchor and the default focus lands
+ * on "today's billing window" regardless of whether anyone approved
+ * yet. Newest bucket first, null/no-date bucket last.
+ */
 function groupRowsByMonth(
   rows: ReviewLinkRow[],
   mode: GroupBy,
 ): { key: string | null; label: string; rows: ReviewLinkRow[] }[] {
   const buckets = new Map<string | null, ReviewLinkRow[]>();
   for (const row of rows) {
-    const iso = mode === 'approval' ? row.approved_at ?? null : row.created_at;
-    const key = monthKey(iso);
+    const key =
+      mode === 'approval'
+        ? halfMonthKey(row.approved_at ?? null)
+        : monthKey(row.created_at);
     const existing = buckets.get(key);
-    if (existing) {
-      existing.push(row);
-    } else {
-      buckets.set(key, [row]);
-    }
+    if (existing) existing.push(row);
+    else buckets.set(key, [row]);
   }
-  // Sort buckets newest first, with the null/no-date bucket last so it
-  // doesn't visually anchor the page above real months.
+  if (mode === 'approval') {
+    const todayKey = currentHalfMonthKey();
+    if (!buckets.has(todayKey)) buckets.set(todayKey, []);
+  }
+
   const keys = Array.from(buckets.keys()).sort((a, b) => {
     if (a === null) return 1;
     if (b === null) return -1;
     return b.localeCompare(a);
   });
+  const nullLabel = mode === 'approval' ? 'No approval date' : 'No date';
   return keys.map((key) => ({
     key,
-    label: key ? monthLabel(key) : 'No date',
+    label: key
+      ? mode === 'approval'
+        ? halfMonthLabel(key)
+        : monthLabel(key)
+      : nullLabel,
     rows: buckets.get(key) ?? [],
   }));
 }
@@ -480,12 +553,14 @@ export function ContentToolsShell() {
   // chosen date so rows inside a month stay in temporal order.
   const [groupBy, setGroupBy] = useState<GroupBy>('default');
 
-  // When grouped, the user focuses on one month at a time and pages
-  // between months with the chevrons. Stored as the bucket key
-  // (`YYYY-MM` or `null` for the no-date bucket). Auto-snaps to the
-  // most recent bucket whenever the underlying group set changes so a
-  // freshly enabled group view doesn't land on an empty month.
-  const [focusedMonthKey, setFocusedMonthKey] = useState<string | null>(null);
+  // When grouped, the user focuses on one half-month period at a time
+  // and pages with the chevrons. Stored as the bucket key
+  // (`YYYY-MM-H1`, `YYYY-MM-H2`, or `null` for the no-date bucket).
+  // Defaults to today's bucket so finance lands on the current billing
+  // window on first paint instead of "No approval date".
+  const [focusedMonthKey, setFocusedMonthKey] = useState<string | null>(() =>
+    currentHalfMonthKey(),
+  );
 
   async function loadProjects(silent = false) {
     if (!silent) setLoading(true);
@@ -865,7 +940,7 @@ export function ContentToolsShell() {
                   variant="outline"
                   size="sm"
                   onClick={() =>
-                    downloadApprovedMonthCsv(focusedGroup.label, focusedGroup.rows)
+                    downloadApprovedPeriodCsv(focusedGroup.label, focusedGroup.rows)
                   }
                 >
                   <Download size={14} />

@@ -76,7 +76,7 @@ export async function GET(req: Request) {
   const { data: links } = await admin
     .from('content_drop_share_links')
     .select(
-      'id, drop_id, token, included_post_ids, post_review_link_map, expires_at, created_at, last_viewed_at, name, project_type, project_type_other, abandoned_at, last_followup_at, followup_count, first_sent_at, last_sent_at, send_count',
+      'id, drop_id, token, included_post_ids, post_review_link_map, expires_at, created_at, last_viewed_at, name, project_type, project_type_other, abandoned_at, last_followup_at, followup_count, first_sent_at, last_sent_at, send_count, all_approved_notified_at',
     )
     .in('drop_id', dropIds)
     .is('archived_at', null)
@@ -259,7 +259,16 @@ export async function GET(req: Request) {
       first_sent_at?: string | null;
       last_sent_at?: string | null;
       send_count?: number | null;
+      all_approved_notified_at?: string | null;
     };
+
+    // Calendar approved_at = the moment this share link tipped to 100%
+    // approved. Sourced from the atomic-claim stamp written by
+    // /approve-all and the per-post /comment route. Only meaningful when
+    // `status === 'approved'`; we null it otherwise so the half-month
+    // bucket logic on the client doesn't try to date a still-pending row.
+    const approvedAt =
+      status === 'approved' ? linkExtra.all_approved_notified_at ?? null : null;
 
     const brand = getBrandFromAgency(
       (client as { agency?: string | null } | undefined)?.agency ?? null,
@@ -310,6 +319,7 @@ export async function GET(req: Request) {
       first_sent_at: linkExtra.first_sent_at ?? null,
       last_sent_at: linkExtra.last_sent_at ?? null,
       send_count: linkExtra.send_count ?? 0,
+      approved_at: approvedAt,
       view_count: viewCountByLink.get(link.id) ?? 0,
       notes: dropExtra?.notes ?? null,
       strategist_id: dropExtra?.strategist_id ?? null,
