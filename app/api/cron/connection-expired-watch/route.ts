@@ -28,6 +28,12 @@ export const maxDuration = 60;
  *      or hand-send a reconnect invite from the matrix (client-owned,
  *      or unknown to be triaged first).
  *
+ * Recovery path: when Zernio reports a previously-inactive account
+ * healthy again (token now valid), we flip `is_active=true` and clear
+ * `disconnect_alerted_at`. This closes the loop for clients who
+ * reconnect through Zernio's dashboard instead of Cortex's OAuth flow,
+ * which is the only path that previously revived the row.
+ *
  * No client-facing email goes out from this cron. Reconnect emails are
  * hand-sent from the Connections matrix.
  *
@@ -107,6 +113,7 @@ async function handleGet(request: NextRequest) {
   const service = new ZernioPostingService();
   let probed = 0;
   let probeSkipped = 0;
+  let revived = 0;
   const alertCandidates: AlertCandidate[] = [];
 
   await Promise.all(
@@ -125,7 +132,14 @@ async function handleGet(request: NextRequest) {
       const wasAlerted = r.disconnect_alerted_at != null;
       const wasInactive = r.is_active === false;
       const nowBad = isBadStatus(status);
+      const nowGood = status === 'valid';
       const shouldFlag = nowBad && !wasAlerted && !wasInactive;
+      // Recovery path: if Zernio now reports the account healthy and we
+      // still have `is_active=false` locally, the user reconnected through
+      // Zernio's dashboard (not Cortex's OAuth callback). Flip it back so
+      // the publish cron stops short-circuiting the leg. Also clear
+      // `disconnect_alerted_at` so the next disconnect re-alerts.
+      const shouldRevive = nowGood && wasInactive;
 
       const update: Record<string, unknown> = {
         token_expires_at: health.tokenExpiresAt,
@@ -133,6 +147,10 @@ async function handleGet(request: NextRequest) {
       };
       if (shouldFlag) {
         update.disconnect_alerted_at = new Date().toISOString();
+      }
+      if (shouldRevive) {
+        update.is_active = true;
+        update.disconnect_alerted_at = null;
       }
 
       const { error: updateErr } = await admin
@@ -144,6 +162,7 @@ async function handleGet(request: NextRequest) {
         return;
       }
       probed += 1;
+      if (shouldRevive) revived += 1;
 
       if (shouldFlag) {
         alertCandidates.push({
@@ -161,6 +180,7 @@ async function handleGet(request: NextRequest) {
     return NextResponse.json({
       probed,
       probeSkipped,
+      revived,
       alerted: 0,
     });
   }
@@ -244,6 +264,7 @@ async function handleGet(request: NextRequest) {
   return NextResponse.json({
     probed,
     probeSkipped,
+    revived,
     alerted,
     clientsAlerted: byClient.size,
   });
