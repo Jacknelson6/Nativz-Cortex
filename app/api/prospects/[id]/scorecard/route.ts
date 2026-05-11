@@ -15,12 +15,20 @@ import { getLatestAnalysis } from '@/lib/prospects/analysis-queries';
 import { computeScorecard } from '@/lib/prospects/checklist';
 import { renderProspectScorecardPdf } from '@/lib/prospects/scorecard-pdf';
 import { uploadScorecardPdf, getSignedPdfUrl } from '@/lib/prospects/scorecard-storage';
+import {
+  getBenchmarkById,
+  getLatestBenchmark,
+} from '@/lib/prospects/benchmark-orchestrator';
+import type { ProspectCompetitorBenchmarkRow } from '@/lib/prospects/types';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
 
 const PostSchema = z.object({
   name: z.string().trim().max(120).optional(),
+  // SPY-05 T21: optional benchmark to bake into the PDF as Round 2.
+  // `null` skips the section entirely; omitted = pull latest succeeded/partial.
+  include_benchmark_id: z.string().uuid().nullable().optional(),
 });
 
 async function requireAdmin(): Promise<
@@ -98,11 +106,32 @@ export async function POST(
     const snapshot = computeScorecard(analysis);
     const token = crypto.randomBytes(24).toString('hex');
 
+    // Resolve benchmark to bake into Round 2.
+    // - explicit `null` → skip
+    // - explicit id → look it up (verify ownership)
+    // - omitted → pull latest succeeded/partial benchmark
+    let benchmark: ProspectCompetitorBenchmarkRow | null = null;
+    if (parsed.data.include_benchmark_id === undefined) {
+      const latest = await getLatestBenchmark(id);
+      if (
+        latest &&
+        (latest.status === 'succeeded' || latest.status === 'partial')
+      ) {
+        benchmark = latest;
+      }
+    } else if (parsed.data.include_benchmark_id) {
+      const fetched = await getBenchmarkById(parsed.data.include_benchmark_id);
+      if (fetched && fetched.prospect_id === id) {
+        benchmark = fetched;
+      }
+    }
+
     const pdfBuffer = await renderProspectScorecardPdf({
       brandName: prospect.brand_name,
       handle: analysis.handle,
       platform: analysis.platform,
       snapshot,
+      benchmark,
     });
 
     let pdfStoragePath: string | null = null;

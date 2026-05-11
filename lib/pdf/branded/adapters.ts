@@ -20,7 +20,11 @@ import type {
 import type { TopicPlan, TopicIdea, TopicSeries } from '@/lib/topic-plans/types';
 import { formatAudience, normalizeResonance, totalIdeas, totalHighResonance } from '@/lib/topic-plans/types';
 import type { CompetitorReportData, CompetitorReportCompetitor } from '@/lib/reporting/competitor-report-types';
-import type { ScorecardSnapshot, ChecklistScore } from '@/lib/prospects/checklist';
+import type { ScorecardSnapshot, ChecklistScore, ChecklistItemId } from '@/lib/prospects/checklist';
+import type {
+  ProspectCompetitorBenchmarkRow,
+  CompetitorScorecard,
+} from '@/lib/prospects/types';
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -382,12 +386,77 @@ export interface ProspectScorecardBrandedInput {
   snapshot: ScorecardSnapshot;
   /** Optional lead-capture CTA destination (e.g. mailto: link). */
   ctaUrl?: string | null;
+  /** SPY-05: optional Round 2 head-to-head benchmark. When provided, the
+   *  adapter appends a second series with one topic per checklist item
+   *  showing where the prospect lands vs each competitor. */
+  benchmark?: ProspectCompetitorBenchmarkRow | null;
+}
+
+function checklistItemTitle(
+  snapshot: ScorecardSnapshot,
+  id: ChecklistItemId,
+): { title: string; prospectScore: ChecklistScore } | null {
+  const item = snapshot.items.find((i) => i.id === id);
+  if (!item) return null;
+  return { title: item.title, prospectScore: item.score };
+}
+
+function buildBenchmarkSeries(
+  snapshot: ScorecardSnapshot,
+  benchmark: ProspectCompetitorBenchmarkRow,
+): BrandedDeliverableSeries | null {
+  const successCompetitors: CompetitorScorecard[] = benchmark.competitors.filter(
+    (c) => c.scorecard !== null,
+  );
+  if (successCompetitors.length === 0) return null;
+
+  const topics: BrandedDeliverableTopic[] = snapshot.items.map((item, i) => {
+    const compTiles: BrandedDeliverableMetric[] = successCompetitors.map((c) => {
+      const ci = c.scorecard?.items.find((x) => x.id === item.id);
+      return {
+        label: `@${c.handle}`,
+        value: ci ? SCORE_LABEL[ci.score] : 'No data',
+        tone: ci ? scoreTone(ci.score) : 'neutral',
+      };
+    });
+
+    return {
+      number: `${String(i + 1).padStart(2, '0')}.`,
+      title: item.title,
+      metrics: [
+        { label: 'You', value: SCORE_LABEL[item.score], tone: scoreTone(item.score) },
+        ...compTiles,
+      ],
+      whyItWorks: item.note,
+    };
+  });
+
+  const compLine = successCompetitors
+    .map((c) => `@${c.handle}`)
+    .join(', ');
+  const behindCount = (benchmark.deltas?.behind ?? []).length;
+  const aheadCount = (benchmark.deltas?.ahead ?? []).length;
+  const tiedCount = (benchmark.deltas?.tied ?? []).length;
+
+  void checklistItemTitle; // exported helper kept available for future use
+
+  return {
+    label: 'Round 2',
+    title: 'Head-to-head benchmark',
+    subtitle: `vs ${compLine}`,
+    stats: [
+      { value: String(behindCount), label: 'Behind' },
+      { value: String(aheadCount), label: 'Ahead' },
+      { value: String(tiedCount), label: 'Tied' },
+    ],
+    topics,
+  };
 }
 
 export function mapProspectScorecardToBranded(
   input: ProspectScorecardBrandedInput,
 ): BrandedDeliverableData {
-  const { brandName, handle, platform, snapshot } = input;
+  const { brandName, handle, platform, snapshot, benchmark } = input;
   const { items, summary } = snapshot;
 
   const topics: BrandedDeliverableTopic[] = items.map((item, i) => ({
@@ -416,6 +485,11 @@ export function mapProspectScorecardToBranded(
       topics,
     },
   ];
+
+  if (benchmark && benchmark.status !== 'failed' && benchmark.status !== 'cancelled') {
+    const round2 = buildBenchmarkSeries(snapshot, benchmark);
+    if (round2) series.push(round2);
+  }
 
   return {
     eyebrow: brandName,

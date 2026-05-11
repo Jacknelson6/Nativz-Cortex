@@ -149,6 +149,66 @@ export interface ProspectAnalysisRow {
   updated_at: string;
 }
 
+// ── SPY-05: prospect_competitor_benchmarks ───────────────────────────────────
+
+export type ProspectBenchmarkStatus =
+  | 'pending'
+  | 'discovering'
+  | 'scraping'
+  | 'grading'
+  | 'succeeded'
+  | 'partial'
+  | 'failed'
+  | 'cancelled';
+
+export type CompetitorPickSource = 'discovered' | 'manual';
+
+export interface PickedCompetitor {
+  platform: ProspectPlatform;
+  handle: string;
+  profile_url: string | null;
+  display_name: string | null;
+  source: CompetitorPickSource;
+  rationale: string | null;
+}
+
+export interface CompetitorScorecard {
+  platform: ProspectPlatform;
+  handle: string;
+  display_name: string | null;
+  status: 'succeeded' | 'partial' | 'failed';
+  scorecard: import('./checklist').ScorecardSnapshot | null;
+  error: string | null;
+  raw_inputs?: {
+    bio: string | null;
+    captions: string[];
+    followers: number | null;
+  };
+}
+
+export interface BenchmarkDeltas {
+  behind: import('./checklist').ChecklistItemId[];
+  ahead: import('./checklist').ChecklistItemId[];
+  tied: import('./checklist').ChecklistItemId[];
+}
+
+export interface ProspectCompetitorBenchmarkRow {
+  id: string;
+  prospect_id: string;
+  analysis_id: string | null;
+  status: ProspectBenchmarkStatus;
+  error_message: string | null;
+  duration_ms: number | null;
+  cost_cents: number | null;
+  cancelled_at: string | null;
+  picked_competitors: PickedCompetitor[];
+  competitors: CompetitorScorecard[];
+  deltas: BenchmarkDeltas;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export const LIFECYCLE_LABELS: Record<ProspectLifecycleState, string> = {
   discovered: 'Discovered',
   audited: 'Audited',
