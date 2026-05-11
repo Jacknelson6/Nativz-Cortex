@@ -699,7 +699,7 @@ export function ContentToolsShell() {
                 size="sm"
                 onClick={() => setNewEditingOpen(true)}
               >
-                New editing project
+                Upload content
               </Button>
               <Button
                 variant="ghost"
