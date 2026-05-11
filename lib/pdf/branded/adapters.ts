@@ -20,6 +20,7 @@ import type {
 import type { TopicPlan, TopicIdea, TopicSeries } from '@/lib/topic-plans/types';
 import { formatAudience, normalizeResonance, totalIdeas, totalHighResonance } from '@/lib/topic-plans/types';
 import type { CompetitorReportData, CompetitorReportCompetitor } from '@/lib/reporting/competitor-report-types';
+import type { ScorecardSnapshot, ChecklistScore } from '@/lib/prospects/checklist';
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -349,6 +350,85 @@ export function mapCompetitorReportToBranded(data: CompetitorReportData): Brande
     ],
     series,
     runningHeaderTitle: data.client_name,
+  };
+}
+
+// ── Prospect scorecard adapter ─────────────────────────────────────────────
+//
+// SPY-04 T11: maps a deterministic 10-item ScorecardSnapshot into the
+// existing BrandedDeliverableData shape. We map each checklist item to a
+// "topic" card so the renderer's existing layout (number + title + metric
+// row + whyItWorks) carries the row. The score becomes a single metric
+// tile tinted by tone (green→positive, red→negative, yellow/na→neutral).
+// The note is the whyItWorks body. This avoids any change to the renderer.
+
+const SCORE_LABEL: Record<ChecklistScore, string> = {
+  green: 'On point',
+  yellow: 'Tighten',
+  red: 'Fix',
+  na: 'No data',
+};
+
+function scoreTone(score: ChecklistScore): 'neutral' | 'positive' | 'negative' {
+  if (score === 'green') return 'positive';
+  if (score === 'red') return 'negative';
+  return 'neutral';
+}
+
+export interface ProspectScorecardBrandedInput {
+  brandName: string;
+  handle: string;
+  platform: string;
+  snapshot: ScorecardSnapshot;
+  /** Optional lead-capture CTA destination (e.g. mailto: link). */
+  ctaUrl?: string | null;
+}
+
+export function mapProspectScorecardToBranded(
+  input: ProspectScorecardBrandedInput,
+): BrandedDeliverableData {
+  const { brandName, handle, platform, snapshot } = input;
+  const { items, summary } = snapshot;
+
+  const topics: BrandedDeliverableTopic[] = items.map((item, i) => ({
+    number: `${String(i + 1).padStart(2, '0')}.`,
+    title: item.title,
+    metrics: [
+      {
+        label: 'Score',
+        value: SCORE_LABEL[item.score],
+        tone: scoreTone(item.score),
+      },
+    ],
+    whyItWorks: item.note,
+  }));
+
+  const series: BrandedDeliverableSeries[] = [
+    {
+      label: 'Scorecard',
+      title: 'Ten-point profile health',
+      subtitle: `@${handle} on ${platform}`,
+      stats: [
+        { value: String(summary.green), label: 'On point' },
+        { value: String(summary.yellow), label: 'Tighten' },
+        { value: String(summary.red), label: 'Fix' },
+      ],
+      topics,
+    },
+  ];
+
+  return {
+    eyebrow: brandName,
+    kicker: 'Profile Scorecard',
+    title: `${brandName} profile scorecard`,
+    summary: `A 10-point read of @${handle}'s ${platform} presence — what's working, what's tightening, what to fix first.`,
+    stats: [
+      { value: String(summary.green), label: 'Green' },
+      { value: String(summary.yellow), label: 'Yellow' },
+      { value: String(summary.red), label: 'Red' },
+    ],
+    series,
+    runningHeaderTitle: brandName,
   };
 }
 
