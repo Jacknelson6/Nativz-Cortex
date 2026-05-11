@@ -23,6 +23,8 @@ export type FormatFeedVideo = {
   analyzed_at: string | null;
   duration_seconds: number | null;
   brand_relevance: 'low' | 'medium' | 'high' | null;
+  hook_type_slug: string | null;
+  hook_type_label: string | null;
 };
 
 export type FormatFeedRow = {
@@ -56,15 +58,61 @@ function bucketRelevance(score: number | null | undefined): 'low' | 'medium' | '
   return 'high';
 }
 
-function decorate(rows: unknown[]): FormatFeedVideo[] {
-  return (rows as Array<FormatFeedVideo & { cosine_distance?: number | null }>).map((r) => ({
-    ...r,
-    // For-You rows attach `cosine_distance` via the RPC; for everyone else
-    // brand_relevance stays null.
-    brand_relevance: bucketRelevance(
-      typeof r.cosine_distance === 'number' ? 1 - r.cosine_distance : null,
-    ),
-  }));
+function decorate(
+  rows: unknown[],
+  hookMap: Map<string, { slug: string; label: string }>,
+): FormatFeedVideo[] {
+  return (rows as Array<FormatFeedVideo & { cosine_distance?: number | null }>).map((r) => {
+    const hook = hookMap.get(r.id);
+    return {
+      ...r,
+      // For-You rows attach `cosine_distance` via the RPC; for everyone else
+      // brand_relevance stays null.
+      brand_relevance: bucketRelevance(
+        typeof r.cosine_distance === 'number' ? 1 - r.cosine_distance : null,
+      ),
+      hook_type_slug: hook?.slug ?? null,
+      hook_type_label: hook?.label ?? null,
+    };
+  });
+}
+
+// Batch-fetch the primary hook_type (kind='hook_type') for a set of
+// viral_videos.id values. Returns a map keyed by video_id so all 8 rows
+// can resolve their pill labels without per-card joins. If a video has
+// multiple hook_type assignments, the first one wins; that's fine since
+// the analyzer typically writes one per video.
+async function buildHookTypeMap(
+  admin: ReturnType<typeof createAdminClient>,
+  videoIds: string[],
+): Promise<Map<string, { slug: string; label: string }>> {
+  const out = new Map<string, { slug: string; label: string }>();
+  if (videoIds.length === 0) return out;
+
+  const { data: links } = await admin
+    .from('viral_video_formats')
+    .select('video_id, format_id')
+    .in('video_id', videoIds);
+  if (!links?.length) return out;
+
+  const formatIds = Array.from(new Set(links.map((r: { format_id: string }) => r.format_id)));
+  const { data: formats } = await admin
+    .from('viral_formats')
+    .select('id, kind, slug, display_name')
+    .in('id', formatIds)
+    .eq('kind', 'hook_type');
+  if (!formats?.length) return out;
+
+  const formatLookup = new Map<string, { slug: string; label: string }>();
+  for (const f of formats as Array<{ id: string; slug: string; display_name: string }>) {
+    formatLookup.set(f.id, { slug: f.slug, label: f.display_name });
+  }
+  for (const link of links as Array<{ video_id: string; format_id: string }>) {
+    if (out.has(link.video_id)) continue;
+    const hit = formatLookup.get(link.format_id);
+    if (hit) out.set(link.video_id, hit);
+  }
+  return out;
 }
 
 export async function buildFormatFeed(
@@ -138,15 +186,31 @@ export async function buildFormatFeed(
     buildSavedRow(admin, clientId, limit),
   ]);
 
+  // Collect every video id across all 8 rows so we can resolve
+  // hook_type pills with a single batch query, not 8 joins.
+  const allIds = new Set<string>();
+  const collect = (rows: unknown[]) => {
+    for (const r of rows as Array<{ id?: string }>) if (r.id) allIds.add(r.id);
+  };
+  collect(forYou);
+  collect(trending.data ?? []);
+  collect(topHooks.data ?? []);
+  collect(comparison);
+  collect(pov);
+  collect(recent.data ?? []);
+  collect(competitors);
+  collect(saved);
+  const hookMap = await buildHookTypeMap(admin, Array.from(allIds));
+
   const rows: FormatFeedRow[] = [
-    { key: 'for_you', label: 'For you', videos: decorate(forYou) },
-    { key: 'trending', label: 'Trending this week', videos: decorate(trending.data ?? []) },
-    { key: 'top_hooks', label: 'Top hooks', videos: decorate(topHooks.data ?? []) },
-    { key: 'comparison', label: 'Comparison plays', videos: decorate(comparison) },
-    { key: 'pov', label: 'POV magic', videos: decorate(pov) },
-    { key: 'recent', label: 'Just analyzed', videos: decorate(recent.data ?? []) },
-    { key: 'worth_stealing', label: 'Worth stealing from competitors', videos: decorate(competitors) },
-    { key: 'saved', label: 'Your saved', videos: decorate(saved) },
+    { key: 'for_you', label: 'For you', videos: decorate(forYou, hookMap) },
+    { key: 'trending', label: 'Trending this week', videos: decorate(trending.data ?? [], hookMap) },
+    { key: 'top_hooks', label: 'Top hooks', videos: decorate(topHooks.data ?? [], hookMap) },
+    { key: 'comparison', label: 'Comparison plays', videos: decorate(comparison, hookMap) },
+    { key: 'pov', label: 'POV magic', videos: decorate(pov, hookMap) },
+    { key: 'recent', label: 'Just analyzed', videos: decorate(recent.data ?? [], hookMap) },
+    { key: 'worth_stealing', label: 'Worth stealing from competitors', videos: decorate(competitors, hookMap) },
+    { key: 'saved', label: 'Your saved', videos: decorate(saved, hookMap) },
   ];
 
   const hero = rows[0].videos[0] ?? rows[1].videos[0] ?? rows[2].videos[0] ?? null;

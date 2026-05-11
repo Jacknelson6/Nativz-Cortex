@@ -1,13 +1,14 @@
 'use client';
 
-// VFF-07 T09: horizontal snap-scroll row with chevron buttons (hover).
-// Placeholder cards aspect-[9/16] w-44 until VFF-08 replaces with the
-// real ThumbnailCard.
+// VFF-07 T09 + VFF-08 T05: horizontal snap-scroll row with chevron
+// buttons (hover-visible, only when >4 cards). Cards are the canonical
+// FormatCard (VFF-08); placeholder is gone.
 
 import { useRef } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { FormatFeedVideo } from '@/lib/analytics/format-feed';
 import { FormatRowEmpty } from './format-row-empty';
+import { FormatCard, type ViralVideoCard } from './format-card';
 
 type Props = {
   label: string;
@@ -37,7 +38,7 @@ export function FormatRow({ label, videos }: Props) {
           {videos.length === 0 ? (
             <FormatRowEmpty />
           ) : (
-            videos.map((v) => <PlaceholderCard key={v.id} video={v} />)
+            videos.map((v) => <FormatCard key={v.id} video={toCard(v)} />)
           )}
         </div>
         {videos.length > 4 ? (
@@ -65,32 +66,23 @@ export function FormatRow({ label, videos }: Props) {
   );
 }
 
-function PlaceholderCard({ video }: { video: FormatFeedVideo }) {
-  const thumb = video.thumbnail_storage_url ?? video.thumbnail_source_url ?? null;
-  const views = video.views_count;
-  const formatted = views == null ? '—' : views < 1000 ? String(views) : views < 1_000_000 ? `${(views / 1000).toFixed(1)}K` : `${(views / 1_000_000).toFixed(1)}M`;
-  return (
-    <a
-      href={`/admin/formats/${video.id}`}
-      className="group/card relative aspect-[9/16] w-44 shrink-0 snap-start overflow-hidden rounded-xl bg-surface/40"
-    >
-      {thumb ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={thumb}
-          alt=""
-          loading="lazy"
-          className="h-full w-full object-cover transition group-hover/card:scale-[1.03]"
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center text-[11px] uppercase tracking-wider text-white/40">
-          {video.platform}
-        </div>
-      )}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent px-2 pb-2 pt-6 text-[11px] text-white/90">
-        <div className="truncate">{video.creator_handle ?? '—'}</div>
-        <div className="text-white/60">{formatted} views</div>
-      </div>
-    </a>
-  );
+// Narrow the feed-row shape to the card-only fields. Keeps FormatCard
+// reusable outside this surface (e.g. saved-pinned modal) without
+// pulling the full FormatFeedVideo type along.
+function toCard(v: FormatFeedVideo): ViralVideoCard {
+  return {
+    id: v.id,
+    platform: v.platform,
+    source_url: v.source_url,
+    thumbnail_storage_url: v.thumbnail_storage_url,
+    thumbnail_source_url: v.thumbnail_source_url,
+    title: v.title,
+    engagement_hook_descriptor: v.engagement_hook_descriptor,
+    creator_handle: v.creator_handle,
+    views_count: v.views_count,
+    posted_at: v.posted_at,
+    hook_type_slug: v.hook_type_slug,
+    hook_type_label: v.hook_type_label,
+    brand_relevance: v.brand_relevance,
+  };
 }
