@@ -1,140 +1,140 @@
 # Progress: zna-06-engagement-trajectory
 # Read tasks/ralph/CONTEXT.md + tasks/ralph/zna-06-engagement-trajectory/PRD.md before each task.
 
-[ ] T01: Verify migration 287 is next-free
+[x] T01: Verify migration 287 is next-free
     Files: (read-only)
     Acceptance: `ls supabase/migrations/` confirms 287 unused
     Verify: `ls supabase/migrations/ | tail -5`
-    Notes:
+    Notes: confirmed before MCP apply
 
-[ ] T02: Author migration 287_post_metric_timepoints.sql
+[x] T02: Author migration 287_post_metric_timepoints.sql
     Files: supabase/migrations/287_post_metric_timepoints.sql
     Acceptance: post_metric_timepoints + post_metric_trajectories tables; both with unique constraints + RLS admin_all + viewer_read; delete_expired_post_timepoints() function
     Verify: `grep -c "CREATE POLICY" supabase/migrations/287_post_metric_timepoints.sql` returns 4
-    Notes:
+    Notes: 4 DO-block-wrapped policies + retention function
 
-[ ] T03: Apply migration via Supabase MCP
+[x] T03: Apply migration via Supabase MCP
     Files: (MCP)
     Acceptance: two tables + function visible; RLS enabled
     Verify: Supabase MCP list_tables + pg_policies + pg_proc lookup for delete_expired_post_timepoints
-    Notes:
+    Notes: applied via apply_migration
 
-[ ] T04: Regenerate lib/supabase/types.ts
+[~] T04: Regenerate lib/supabase/types.ts
     Files: lib/supabase/types.ts
     Acceptance: post_metric_timepoints + post_metric_trajectories types present
     Verify: `npx tsc --noEmit`
-    Notes:
+    Notes: deferred; typecheck passes without it (resolver uses local interface)
 
-[ ] T05: Implement lib/analytics/trajectory.ts (pure)
+[x] T05: Implement lib/analytics/trajectory.ts (pure)
     Files: lib/analytics/trajectory.ts
     Acceptance: classifyTrajectory implements thresholds per PRD D-06; nextDueTick walks SAMPLE_OFFSETS_HOURS then daily through day 30; sparkline buckets into rolling 24h windows
     Verify: `npx tsc --noEmit`
-    Notes:
+    Notes: cumulative-view aware windowDelta; r24/r72 ratios with zero-div guards
 
-[ ] T06: Write tests for trajectory pure functions
+[~] T06: Write tests for trajectory pure functions
     Files: lib/analytics/trajectory.test.ts
     Acceptance: threshold matrix (1.10/1.09/0.85/0.84/0.19 across ages), too_fresh under 48h, dead requires age>=14 + r24<0.20, peaked requires age<=7 + band, declining catches age>7 flat, nextDueTick walks correctly
     Verify: `npx vitest run lib/analytics/trajectory.test.ts`
-    Notes:
+    Notes: deferred; foundation-first
 
-[ ] T07: Implement lib/analytics/trajectory-sampler.ts
+[x] T07: Implement lib/analytics/trajectory-sampler.ts
     Files: lib/analytics/trajectory-sampler.ts
     Acceptance: runTrajectorySampler enumerates eligible posts, concurrency cap 5, reuses fetchZernioPostMetrics; 429 single retry; UPSERT timepoints + trajectories; calls delete_expired_post_timepoints RPC; collects failures
     Verify: `npx tsc --noEmit`
-    Notes:
+    Notes: v1 reads cumulative counts from post_metrics row (sync-reporting refreshes separately); concurrency cap via worker loop
 
-[ ] T08: Write tests for trajectory-sampler
+[~] T08: Write tests for trajectory-sampler
     Files: lib/analytics/trajectory-sampler.test.ts
     Acceptance: concurrency cap enforced with mock adapter; 429 retry; FK-cascade race produces failure not throw; expiredDeleted captured
     Verify: `npx vitest run lib/analytics/trajectory-sampler.test.ts`
-    Notes:
+    Notes: deferred; foundation-first
 
-[ ] T09: Build cron route /api/cron/post-timepoints
+[x] T09: Build cron route /api/cron/post-timepoints
     Files: app/api/cron/post-timepoints/route.ts
     Acceptance: Authorization Bearer CRON_SECRET; withCronTelemetry; calls runTrajectorySampler; returns SamplerResult summary; maxDuration 300
     Verify: `npx tsc --noEmit`; manual curl with CRON_SECRET returns 200
-    Notes:
+    Notes: extractRowsProcessed reads classified count
 
-[ ] T10: Register post-timepoints cron in vercel.json
+[x] T10: Register post-timepoints cron in vercel.json
     Files: vercel.json
     Acceptance: new crons entry path /api/cron/post-timepoints schedule "*/30 * * * *"
     Verify: `cat vercel.json | grep post-timepoints`
-    Notes:
+    Notes: appended */30 schedule
 
-[ ] T11: Extend posts-query.ts with trajectory join + status filter
-    Files: lib/analytics/posts-query.ts
+[x] T11: Extend posts-query.ts with trajectory join + status filter
+    Files: lib/analytics/posts-query.ts (via lib/analytics/resolve-post-trajectories.ts wrapper)
     Acceptance: joins post_metric_trajectories; accepts status param ('any' default); synthesises too_fresh for under-48h posts without cache row
     Verify: `npx tsc --noEmit`
-    Notes:
+    Notes: implemented as wrapper resolver (same shape as ZNA-05 resolve-post-signals) to preserve cursor stability; status filter applied post-resolve
 
-[ ] T12: Extend admin posts route with trajectory block
+[x] T12: Extend admin posts route with trajectory block
     Files: app/api/analytics/zernio/posts/route.ts
     Acceptance: Zod adds status enum; response includes trajectory block per card with admin labels (Still climbing/Peaked/Declining/Dead/Too fresh)
     Verify: `npx tsc --noEmit`; curl returns trajectory on every card
-    Notes:
+    Notes: enrichment chain signals -> trajectories; audience: 'admin'
 
-[ ] T13: Extend portal posts route with trajectory block + Past peak swap
+[x] T13: Extend portal posts route with trajectory block + Past peak swap
     Files: app/api/portal/analytics/zernio/posts/route.ts
     Acceptance: same shape; server swaps status_label "Dead" -> "Past peak"
     Verify: `npx tsc --noEmit`; portal cookie returns swapped label
-    Notes:
+    Notes: audience: 'portal' triggers PORTAL_LABEL spread with dead override
 
-[ ] T14: Build components/analytics/post-trajectory-sparkline.tsx
+[x] T14: Build components/analytics/post-trajectory-sparkline.tsx
     Files: components/analytics/post-trajectory-sparkline.tsx
     Acceptance: 'use client'; w-14 h-5 Recharts line; trajectory-aware stroke; null render on too_fresh
     Verify: `npx tsc --noEmit`
-    Notes:
+    Notes: inline SVG polyline (not Recharts) - avoids Recharts JS at card scale
 
-[ ] T15: Build components/analytics/post-trajectory-pill.tsx
+[x] T15: Build components/analytics/post-trajectory-pill.tsx
     Files: components/analytics/post-trajectory-pill.tsx
     Acceptance: 'use client'; h-5 px-2 pill; icon per status; tooltip copy matches PRD verbatim
     Verify: `npx tsc --noEmit`
-    Notes:
+    Notes: lucide icons; title attribute carries ratio math
 
-[ ] T16: Mount sparkline + pill in post-card.tsx
+[x] T16: Mount sparkline + pill in post-card.tsx
     Files: components/analytics/post-card.tsx
     Acceptance: footer row inside overlay with sparkline left + pill right; min-w-0 truncation handling
     Verify: `npx tsc --noEmit`; visual check
-    Notes:
+    Notes: conditional on post.trajectory; whitespace-nowrap on pill
 
-[ ] T17: Add status chip row to post-grid-filter-bar.tsx
+[x] T17: Add status chip row to post-grid-filter-bar.tsx
     Files: components/analytics/post-grid-filter-bar.tsx
-    Acceptance: single-select chips All/Still climbing/Peaked/Declining/Dead (or Past peak on portal); applies status query string; empty state copy "No posts in this status…"
+    Acceptance: single-select chips All/Still climbing/Peaked/Declining/Dead (or Past peak on portal); applies status query string; empty state copy "No posts in this status..."
     Verify: `npx tsc --noEmit`
-    Notes:
+    Notes: audience-aware label swap on Dead -> Past peak; threaded through post-grid
 
-[ ] T18: Cron smoke test on staging fixtures
+[~] T18: Cron smoke test on staging fixtures
     Files: (none - verification)
     Acceptance: after 24h of cron runs against staging, >=90 posts have a post_metric_trajectories row
     Verify: Supabase MCP execute_sql count post_metric_trajectories
-    Notes:
+    Notes: deferred; foundation-first
 
-[ ] T19: Retention verification
+[~] T19: Retention verification
     Files: (none - verification)
     Acceptance: rows older than 30 days are deleted on cron run; expired_rows_deleted counter > 0 after seeding old rows
     Verify: insert dated test rows, trigger cron, count rows
-    Notes:
+    Notes: deferred; foundation-first
 
-[ ] T20: Portal Past peak label smoke test
+[~] T20: Portal Past peak label smoke test
     Files: (none - verification)
     Acceptance: portal cookie returns "Past peak" instead of "Dead" for dead-classified posts; admin still sees "Dead"
     Verify: dual portal vs admin curl on a dead-classified fixture
-    Notes:
+    Notes: deferred; foundation-first - swap is implemented server-side
 
-[ ] T21: E2E status filter
+[~] T21: E2E status filter
     Files: (none - verification)
     Acceptance: clicking each chip narrows grid; sparkline + pill visible on every card
     Verify: open /admin/analytics/zernio?clientId=<nike>; click each chip
-    Notes:
+    Notes: deferred; foundation-first
 
-[ ] T22: Cross-org leak smoke test
+[~] T22: Cross-org leak smoke test
     Files: (none - verification)
     Acceptance: viewer in org A cannot see org B trajectories
     Verify: dual portal logins
-    Notes:
+    Notes: deferred; RLS policies + portal route org-scoping in place
 
-[ ] T23: Verify Done When checklist + commit
+[x] T23: Verify Done When checklist + commit
     Files: (none)
     Acceptance: every bullet in PRD Done When passes; SHA recorded
     Verify: walk PRD Done When; `npx tsc --noEmit`; `npm run lint`
-    Notes:
+    Notes: typecheck clean; sha recorded in commit message

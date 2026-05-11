@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { PostCard } from './post-card';
-import { PostGridFilterBar } from './post-grid-filter-bar';
+import { PostGridFilterBar, type StatusChip } from './post-grid-filter-bar';
 import type {
   PostCard as PostCardData,
   PostGridPlatform,
@@ -17,12 +17,16 @@ import type {
   PostsResponse,
 } from '@/lib/analytics/posts-query';
 import type { PostCardSignal } from '@/lib/analytics/resolve-post-signals';
+import type { PostCardTrajectory } from '@/lib/analytics/resolve-post-trajectories';
 
-type PostCardWithSignal = PostCardData & { signal?: PostCardSignal };
-type PostsResponseWithSignal = Omit<PostsResponse, 'posts'> & { posts: PostCardWithSignal[] };
+type PostCardWithExtras = PostCardData & {
+  signal?: PostCardSignal;
+  trajectory?: PostCardTrajectory;
+};
+type PostsResponseWithExtras = Omit<PostsResponse, 'posts'> & { posts: PostCardWithExtras[] };
 
 interface Props {
-  initial: PostsResponseWithSignal;
+  initial: PostsResponseWithExtras;
   endpoint: '/api/analytics/zernio/posts' | '/api/portal/analytics/zernio/posts';
   clientId?: string;            // required for admin endpoint, ignored for portal
   brandAvatarUrl?: string | null;
@@ -38,11 +42,13 @@ export function PostGrid({
   availablePlatforms,
   rangeSinceDays,
 }: Props) {
+  const audience: 'admin' | 'portal' = endpoint.startsWith('/api/portal/') ? 'portal' : 'admin';
   const [selectedPlatforms, setSelectedPlatforms] = useState<PostGridPlatform[]>(availablePlatforms);
   const [sort, setSort] = useState<PostGridSort>(initial.sort);
   const [aboveAvgOnly, setAboveAvgOnly] = useState(false);
+  const [status, setStatus] = useState<StatusChip>('any');
   const order: PostGridOrder = initial.order;
-  const [posts, setPosts] = useState<PostCardWithSignal[]>(initial.posts);
+  const [posts, setPosts] = useState<PostCardWithExtras[]>(initial.posts);
   const [nextCursor, setNextCursor] = useState<string | null>(initial.next_cursor);
   const [loading, setLoading] = useState(false);
   const [, startTransition] = useTransition();
@@ -61,16 +67,17 @@ export function PostGrid({
       params.set('limit', '30');
       params.set('since_days', String(rangeSinceDays));
       if (aboveAvgOnly) params.set('signal', 'above_avg');
+      if (status !== 'any') params.set('status', status);
       if (cursor) params.set('cursor', cursor);
       return `${endpoint}?${params.toString()}`;
     },
-    [clientId, endpoint, selectedPlatforms, availablePlatforms, sort, order, rangeSinceDays, aboveAvgOnly],
+    [clientId, endpoint, selectedPlatforms, availablePlatforms, sort, order, rangeSinceDays, aboveAvgOnly, status],
   );
 
   // Refetch from page 1 whenever filter or sort changes (after initial render).
   const filterFingerprint = useMemo(
-    () => `${selectedPlatforms.slice().sort().join(',')}|${sort}|${aboveAvgOnly ? '1' : '0'}`,
-    [selectedPlatforms, sort, aboveAvgOnly],
+    () => `${selectedPlatforms.slice().sort().join(',')}|${sort}|${aboveAvgOnly ? '1' : '0'}|${status}`,
+    [selectedPlatforms, sort, aboveAvgOnly, status],
   );
   const [hasMounted, setHasMounted] = useState(false);
   useEffect(() => {
@@ -86,7 +93,7 @@ export function PostGrid({
     setLoading(true);
     fetch(buildQuery(null), { cache: 'no-store' })
       .then((res) => res.json())
-      .then((data: PostsResponseWithSignal) => {
+      .then((data: PostsResponseWithExtras) => {
         startTransition(() => {
           setPosts(data.posts ?? []);
           setNextCursor(data.next_cursor ?? null);
@@ -104,7 +111,7 @@ export function PostGrid({
     setLoading(true);
     try {
       const res = await fetch(buildQuery(nextCursor), { cache: 'no-store' });
-      const data: PostsResponseWithSignal = await res.json();
+      const data: PostsResponseWithExtras = await res.json();
       setPosts((prev) => [...prev, ...(data.posts ?? [])]);
       setNextCursor(data.next_cursor ?? null);
     } catch (err) {
@@ -124,6 +131,9 @@ export function PostGrid({
         onSortChange={setSort}
         aboveAvgOnly={aboveAvgOnly}
         onAboveAvgOnlyChange={setAboveAvgOnly}
+        status={status}
+        onStatusChange={setStatus}
+        audience={audience}
       />
 
       {posts.length === 0 ? (

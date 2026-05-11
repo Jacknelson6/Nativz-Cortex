@@ -4,6 +4,9 @@
 // sort dropdown. Stays compact so the grid below has the spotlight.
 
 import type { PostGridPlatform, PostGridSort } from '@/lib/analytics/posts-query';
+import type { TrajectoryStatus } from '@/lib/analytics/trajectory';
+
+export type StatusChip = TrajectoryStatus | 'any';
 
 interface Props {
   platforms: PostGridPlatform[];
@@ -13,6 +16,9 @@ interface Props {
   onSortChange: (next: PostGridSort) => void;
   aboveAvgOnly: boolean;
   onAboveAvgOnlyChange: (next: boolean) => void;
+  status: StatusChip;
+  onStatusChange: (next: StatusChip) => void;
+  audience?: 'admin' | 'portal';
 }
 
 const PLATFORM_LABEL: Record<PostGridPlatform, string> = {
@@ -28,6 +34,17 @@ const SORT_LABEL: Record<PostGridSort, string> = {
   engagement_rate: 'Highest engagement',
 };
 
+const STATUS_CHIPS: StatusChip[] = ['any', 'still_climbing', 'peaked', 'declining', 'dead'];
+
+function statusLabel(s: StatusChip, audience: 'admin' | 'portal'): string {
+  if (s === 'any') return 'All';
+  if (s === 'still_climbing') return 'Still climbing';
+  if (s === 'peaked') return 'Peaked';
+  if (s === 'declining') return 'Declining';
+  if (s === 'dead') return audience === 'portal' ? 'Past peak' : 'Dead';
+  return s;
+}
+
 export function PostGridFilterBar({
   platforms,
   selectedPlatforms,
@@ -36,6 +53,9 @@ export function PostGridFilterBar({
   onSortChange,
   aboveAvgOnly,
   onAboveAvgOnlyChange,
+  status,
+  onStatusChange,
+  audience = 'admin',
 }: Props) {
   const togglePlatform = (p: PostGridPlatform) => {
     if (selectedPlatforms.includes(p)) {
@@ -81,6 +101,27 @@ export function PostGridFilterBar({
         <span className={`mr-1.5 inline-block h-2 w-2 rounded-full ${aboveAvgOnly ? 'bg-emerald-300' : 'bg-emerald-400/50'}`} />
         Above average only
       </button>
+
+      <div className="flex flex-wrap gap-1.5">
+        {STATUS_CHIPS.map((s) => {
+          const active = status === s;
+          return (
+            <button
+              key={s}
+              type="button"
+              onClick={() => onStatusChange(s)}
+              className={`inline-flex h-7 px-3 items-center rounded-full text-xs font-medium whitespace-nowrap transition ${
+                active
+                  ? 'bg-white text-zinc-900'
+                  : 'bg-white/5 text-white/70 hover:bg-white/10'
+              }`}
+              aria-pressed={active}
+            >
+              {statusLabel(s, audience)}
+            </button>
+          );
+        })}
+      </div>
 
       <div className="ml-auto">
         <label className="sr-only" htmlFor="post-grid-sort">

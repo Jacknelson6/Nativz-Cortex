@@ -13,6 +13,7 @@ import type { PulseShape } from '@/components/analytics/zernio-pulse-card';
 import type { AnalyticsPlatform, RangeKey } from '@/lib/analytics/types';
 import { loadPostsForGrid, type PostGridPlatform } from '@/lib/analytics/posts-query';
 import { resolvePostSignals } from '@/lib/analytics/resolve-post-signals';
+import { resolvePostTrajectories } from '@/lib/analytics/resolve-post-trajectories';
 
 export const dynamic = 'force-dynamic';
 
@@ -93,12 +94,18 @@ export default async function PortalAnalyticsPage({
     posts: initialPostsPage.posts,
     signalFilter: 'any',
   });
+  const initialPostsEnriched = await resolvePostTrajectories({
+    supabase: admin,
+    posts: initialPostsWithSignals,
+    audience: 'portal',
+    statusFilter: 'any',
+  });
   const initialPostsResponse = {
     client_id: clientId,
     range_since_days: POST_GRID_SINCE_DAYS,
     sort: 'published_at' as const,
     order: 'desc' as const,
-    posts: initialPostsWithSignals,
+    posts: initialPostsEnriched,
     next_cursor: initialPostsPage.nextCursor,
   };
   const { data: clientRow } = await admin

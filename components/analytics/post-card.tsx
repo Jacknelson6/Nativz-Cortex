@@ -7,11 +7,14 @@
 import Image from 'next/image';
 import { PlatformFallbackTile } from './platform-fallback-tile';
 import { PostSignalDot } from './post-signal-dot';
+import { PostTrajectorySparkline } from './post-trajectory-sparkline';
+import { PostTrajectoryPill } from './post-trajectory-pill';
 import type { PostCard as PostCardData, PostGridPlatform } from '@/lib/analytics/posts-query';
 import type { PostCardSignal } from '@/lib/analytics/resolve-post-signals';
+import type { PostCardTrajectory } from '@/lib/analytics/resolve-post-trajectories';
 
 interface Props {
-  post: PostCardData & { signal?: PostCardSignal };
+  post: PostCardData & { signal?: PostCardSignal; trajectory?: PostCardTrajectory };
   brandAvatarUrl?: string | null;
 }
 
@@ -80,12 +83,27 @@ export function PostCard({ post, brandAvatarUrl }: Props) {
         {post.signal && <PostSignalDot signal={post.signal} />}
       </div>
 
-      <div className="absolute inset-x-2 bottom-2 flex items-end justify-between gap-2 text-white">
-        <span className="text-xs text-white/70">{relativeDate(post.published_at)}</span>
-        <span className="text-sm font-semibold tabular-nums">
-          {numberFmt.format(post.views_count)}
-          <span className="text-white/60 font-normal"> · {erPretty}% ER</span>
-        </span>
+      <div className="absolute inset-x-2 bottom-2 flex flex-col gap-1 text-white">
+        <div className="flex items-end justify-between gap-2">
+          <span className="text-xs text-white/70">{relativeDate(post.published_at)}</span>
+          <span className="text-sm font-semibold tabular-nums">
+            {numberFmt.format(post.views_count)}
+            <span className="text-white/60 font-normal"> · {erPretty}% ER</span>
+          </span>
+        </div>
+        {post.trajectory ? (
+          <div className="flex items-center justify-between gap-2 min-w-0">
+            <PostTrajectorySparkline
+              views={post.trajectory.sparkline_views}
+              status={post.trajectory.status}
+            />
+            <PostTrajectoryPill
+              status={post.trajectory.status}
+              label={post.trajectory.status_label}
+              r24={post.trajectory.r24}
+            />
+          </div>
+        ) : null}
       </div>
     </div>
   );

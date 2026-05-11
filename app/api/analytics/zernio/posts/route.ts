@@ -16,6 +16,10 @@ import {
   resolvePostSignals,
   type SignalFilter,
 } from '@/lib/analytics/resolve-post-signals';
+import {
+  resolvePostTrajectories,
+  type StatusFilter,
+} from '@/lib/analytics/resolve-post-trajectories';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +38,7 @@ const QuerySchema = z.object({
   cursor: z.string().optional(),
   since_days: z.coerce.number().int().min(1).max(180).default(90),
   signal: z.enum(['above_avg', 'avg', 'below_avg', 'too_fresh', 'any']).default('any'),
+  status: z.enum(['still_climbing', 'peaked', 'declining', 'dead', 'too_fresh', 'any']).default('any'),
 });
 
 export async function GET(req: Request) {
@@ -50,6 +55,7 @@ export async function GET(req: Request) {
     cursor: url.searchParams.get('cursor') ?? undefined,
     since_days: url.searchParams.get('since_days') ?? undefined,
     signal: url.searchParams.get('signal') ?? undefined,
+    status: url.searchParams.get('status') ?? undefined,
   });
   if (!parsed.success) {
     return NextResponse.json(
@@ -80,11 +86,17 @@ export async function GET(req: Request) {
     sinceDays: parsed.data.since_days,
   });
 
-  const enriched = await resolvePostSignals({
+  const withSignals = await resolvePostSignals({
     supabase: admin,
     organizationId: (client as { organization_id: string }).organization_id,
     posts: result.posts,
     signalFilter: parsed.data.signal as SignalFilter,
+  });
+  const enriched = await resolvePostTrajectories({
+    supabase: admin,
+    posts: withSignals,
+    audience: 'admin',
+    statusFilter: parsed.data.status as StatusFilter,
   });
 
   return NextResponse.json(
@@ -94,6 +106,7 @@ export async function GET(req: Request) {
       sort: parsed.data.sort,
       order: parsed.data.order,
       signal: parsed.data.signal,
+      status: parsed.data.status,
       posts: enriched,
       next_cursor: result.nextCursor,
     },
