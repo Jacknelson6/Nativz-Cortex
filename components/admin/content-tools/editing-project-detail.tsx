@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { toast } from 'sonner';
 import {
+  Check,
   CheckCheck,
   CheckCircle2,
   Copy,
@@ -110,6 +111,9 @@ interface ShareLinkRow {
 interface SendPreview {
   subject: string;
   message: string;
+  /** Rendered email HTML for the "Rendered preview" tab. */
+  html: string;
+  cta_label: string;
   recipients: { email: string; name: string | null }[];
   client_name: string;
   project_name: string;
@@ -182,6 +186,17 @@ export function EditingProjectDetail({
   const [messageDraft, setMessageDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [renderMode, setRenderMode] = useState<'edit' | 'preview'>('edit');
+  // Recipient selection. Lowercase emails; default = every eligible POC
+  // selected so legacy "send to everyone" behavior survives unless the
+  // admin deselects.
+  const [selectedRecipients, setSelectedRecipients] = useState<Set<string>>(
+    new Set(),
+  );
+  // Live-rendered HTML for the Rendered preview tab. Starts as the default
+  // body returned by GET; re-fetched (debounced) when subject/message edits
+  // diverge from the defaults so the iframe always matches what will actually
+  // be sent.
+  const [livePreviewHtml, setLivePreviewHtml] = useState<string | null>(null);
 
   // Recipients (brand POC roster) for the Recipients section.
   const [contacts, setContacts] = useState<ContactRow[] | null>(null);
@@ -580,6 +595,10 @@ export function EditingProjectDetail({
       setPreview(dataPreview);
       setSubjectDraft(dataPreview.subject);
       setMessageDraft(dataPreview.message);
+      setLivePreviewHtml(dataPreview.html);
+      setSelectedRecipients(
+        new Set(dataPreview.recipients.map((r) => r.email.toLowerCase())),
+      );
     } catch (err) {
       setPreviewError(err instanceof Error ? err.message : 'Failed to load preview');
     } finally {
@@ -592,12 +611,63 @@ export function EditingProjectDetail({
     setPreviewVariant(null);
     setPreview(null);
     setPreviewError(null);
+    setLivePreviewHtml(null);
+    setSelectedRecipients(new Set());
   }
+
+  // Re-fetch rendered HTML (debounced) whenever the message body diverges
+  // from the loaded default so the iframe in the "Rendered preview" tab stays
+  // in sync with admin edits. Subject doesn't affect the body (it's the inbox
+  // envelope) so we don't refetch on subject typing. Mirrors the calendar
+  // share-link send flow.
+  useEffect(() => {
+    if (!projectId || !activeLink || !preview || !previewVariant) return;
+    const messageChanged = messageDraft.trim() !== preview.message.trim();
+    if (!messageChanged) {
+      setLivePreviewHtml(preview.html);
+      return;
+    }
+    const ctrl = new AbortController();
+    const t = window.setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ message: messageDraft });
+        const res = await fetch(
+          `/api/admin/editing/projects/${projectId}/share/${activeLink.id}/email?${params.toString()}`,
+          { cache: 'no-store', signal: ctrl.signal },
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as { html?: string };
+        if (data.html) setLivePreviewHtml(data.html);
+      } catch (err) {
+        if ((err as Error)?.name === 'AbortError') return;
+      }
+    }, 350);
+    return () => {
+      ctrl.abort();
+      window.clearTimeout(t);
+    };
+  }, [projectId, activeLink, preview, previewVariant, messageDraft]);
 
   async function confirmSend() {
     if (!projectId || !activeLink || !preview || !previewVariant || sending) return;
+    if (selectedRecipients.size === 0) {
+      toast.error('Select at least one recipient.');
+      return;
+    }
     setSending(true);
     try {
+      // Only send the recipient_emails field when the admin has narrowed the
+      // list. Sending all eligible matches the legacy default so we omit the
+      // field entirely in that case.
+      const allEmails = preview.recipients.map((r) => r.email.toLowerCase());
+      const allSelected =
+        selectedRecipients.size === allEmails.length &&
+        allEmails.every((e) => selectedRecipients.has(e));
+      const recipientEmails = allSelected
+        ? null
+        : preview.recipients
+            .filter((r) => selectedRecipients.has(r.email.toLowerCase()))
+            .map((r) => r.email);
       const res = await fetch(
         `/api/admin/editing/projects/${projectId}/share/${activeLink.id}/email`,
         {
@@ -610,6 +680,7 @@ export function EditingProjectDetail({
             ...(messageDraft.trim() !== preview.message.trim()
               ? { message: messageDraft.trim() }
               : {}),
+            ...(recipientEmails ? { recipient_emails: recipientEmails } : {}),
           }),
         },
       );
@@ -721,6 +792,17 @@ export function EditingProjectDetail({
         renderMode={renderMode}
         sending={sending}
         pendingCount={activeLink?.pending_revision_count ?? 0}
+        selectedRecipients={selectedRecipients}
+        livePreviewHtml={livePreviewHtml}
+        onToggleRecipient={(email) =>
+          setSelectedRecipients((prev) => {
+            const next = new Set(prev);
+            const key = email.toLowerCase();
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+          })
+        }
         onChangeSubject={setSubjectDraft}
         onChangeMessage={setMessageDraft}
         onChangeRenderMode={setRenderMode}
@@ -1201,6 +1283,9 @@ function SendPreviewDialog({
   renderMode,
   sending,
   pendingCount,
+  selectedRecipients,
+  livePreviewHtml,
+  onToggleRecipient,
   onChangeSubject,
   onChangeMessage,
   onChangeRenderMode,
@@ -1217,6 +1302,9 @@ function SendPreviewDialog({
   renderMode: 'edit' | 'preview';
   sending: boolean;
   pendingCount: number;
+  selectedRecipients: Set<string>;
+  livePreviewHtml: string | null;
+  onToggleRecipient: (email: string) => void;
   onChangeSubject: (v: string) => void;
   onChangeMessage: (v: string) => void;
   onChangeRenderMode: (m: 'edit' | 'preview') => void;
@@ -1251,20 +1339,49 @@ function SendPreviewDialog({
         ) : preview ? (
           <>
             <div className="flex-1 space-y-4 overflow-y-auto p-6">
-              <Section label={`Recipients (${preview.recipients.length})`}>
+              <Section
+                label={`Recipients (${selectedRecipients.size}/${preview.recipients.length})`}
+              >
                 <div className="flex flex-wrap gap-1.5">
-                  {preview.recipients.map((r) => (
-                    <span
-                      key={r.email}
-                      className="inline-flex items-center gap-1 rounded-full border border-nativz-border bg-surface px-2.5 py-1 text-[11px] text-text-secondary"
-                      title={r.email}
-                    >
-                      <span className="font-medium text-text-primary">
-                        {r.name ?? r.email}
-                      </span>
-                      {r.name && <span className="text-text-muted">· {r.email}</span>}
-                    </span>
-                  ))}
+                  {preview.recipients.map((r) => {
+                    const key = r.email.toLowerCase();
+                    const checked = selectedRecipients.has(key);
+                    return (
+                      <button
+                        type="button"
+                        key={r.email}
+                        onClick={() => onToggleRecipient(r.email)}
+                        title={r.email}
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                          checked
+                            ? 'border-accent/40 bg-accent/10 text-text-primary'
+                            : 'border-nativz-border bg-surface text-text-muted hover:text-text-secondary'
+                        }`}
+                      >
+                        <span
+                          className={`flex h-3 w-3 items-center justify-center rounded-[3px] border ${
+                            checked
+                              ? 'border-accent bg-accent text-background'
+                              : 'border-nativz-border bg-background'
+                          }`}
+                        >
+                          {checked && <Check size={9} strokeWidth={3} />}
+                        </span>
+                        <span
+                          className={
+                            checked
+                              ? 'font-medium text-text-primary'
+                              : 'font-medium'
+                          }
+                        >
+                          {r.name ?? r.email}
+                        </span>
+                        {r.name && (
+                          <span className="text-text-muted">· {r.email}</span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </Section>
 
@@ -1316,9 +1433,18 @@ function SendPreviewDialog({
                 </>
               ) : (
                 <Section label="Rendered email">
-                  <p className="text-[11px] text-text-muted">
-                    The rendered email uses the default copy as a layout reference. Subject and message edits apply at send time.
-                  </p>
+                  {livePreviewHtml ? (
+                    <iframe
+                      title="Email preview"
+                      srcDoc={livePreviewHtml}
+                      sandbox=""
+                      className="h-[480px] w-full rounded-md border border-nativz-border bg-white"
+                    />
+                  ) : (
+                    <p className="text-[11px] text-text-muted">
+                      Rendering preview…
+                    </p>
+                  )}
                 </Section>
               )}
             </div>
@@ -1331,14 +1457,19 @@ function SendPreviewDialog({
                 type="button"
                 size="sm"
                 onClick={onSend}
-                disabled={sending || !subject.trim() || !message.trim()}
+                disabled={
+                  sending ||
+                  !subject.trim() ||
+                  !message.trim() ||
+                  selectedRecipients.size === 0
+                }
               >
                 <Send size={13} />
                 {sending
                   ? 'Sending…'
                   : variant === 'delivery'
-                    ? `Send delivery to ${preview.recipients.length} ${preview.recipients.length === 1 ? 'recipient' : 'recipients'}`
-                    : `Send re-review to ${preview.recipients.length} ${preview.recipients.length === 1 ? 'recipient' : 'recipients'}`}
+                    ? `Send delivery to ${selectedRecipients.size} ${selectedRecipients.size === 1 ? 'recipient' : 'recipients'}`
+                    : `Send re-review to ${selectedRecipients.size} ${selectedRecipients.size === 1 ? 'recipient' : 'recipients'}`}
               </Button>
             </div>
           </>

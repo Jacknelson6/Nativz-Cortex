@@ -1030,7 +1030,7 @@ function escapeHtml(input: string): string {
     .replace(/'/g, '&#39;');
 }
 
-function messageToHtmlParagraphs(message: string): string {
+export function messageToHtmlParagraphs(message: string): string {
   const paragraphs = message
     .split(/\n{2,}/)
     .map((p) => p.trim())

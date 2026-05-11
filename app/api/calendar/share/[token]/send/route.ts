@@ -241,6 +241,13 @@ const PostBodySchema = z
     // to the cc[] list. Avoids exposing the admin's email to the client
     // bundle just so the dialog can render a "CC me" checkbox.
     cc_self: z.boolean().optional(),
+    /**
+     * Optional allow-list of recipient emails to send to. When omitted or
+     * empty, falls back to every eligible POC on the brand (legacy behavior).
+     * Submitted emails MUST be in the eligible roster, otherwise we'd let
+     * the admin email arbitrary addresses.
+     */
+    recipient_emails: z.array(z.string().email()).max(50).optional(),
   })
   .strict();
 
@@ -271,9 +278,35 @@ export async function POST(
     );
   }
 
+  // Optional caller-supplied recipient filter. Lowercase-compare against the
+  // eligible roster so the admin can't email arbitrary addresses by stuffing
+  // them in the body. Empty / missing list = legacy send-to-all behavior.
+  const requestedEmails = (parsed.data.recipient_emails ?? [])
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  const eligibleByEmail = new Map(
+    eligible.map((c) => [c.email.toLowerCase(), c]),
+  );
+  const filteredEligible =
+    requestedEmails.length > 0
+      ? requestedEmails
+          .map((e) => eligibleByEmail.get(e))
+          .filter((c): c is NonNullable<typeof c> => Boolean(c))
+      : eligible;
+
+  if (filteredEligible.length === 0) {
+    return NextResponse.json(
+      {
+        error:
+          'no valid recipients selected. Pick at least one contact from the brand roster.',
+      },
+      { status: 400 },
+    );
+  }
+
   const shareUrl = resolveShareUrl(agency, token);
-  const recipients = eligible.map((c) => c.email);
-  const pocFirstNames = eligible.map((c) => firstName(c.name));
+  const recipients = filteredEligible.map((c) => c.email);
+  const pocFirstNames = filteredEligible.map((c) => firstName(c.name));
 
   // Build the cc[] list. Server-resolved `cc_self` adds the admin's own
   // email; we de-dupe against `to` so the admin doesn't double-receive
@@ -356,7 +389,7 @@ export async function POST(
     kind: link.first_sent_at ? 'resend' : 'initial',
     subject: resolvedSubject,
     htmlBody: result.html,
-    recipients: eligible.map((c) => ({ email: c.email, name: c.name })),
+    recipients: filteredEligible.map((c) => ({ email: c.email, name: c.name })),
     sentBy: userId,
   });
 

@@ -75,27 +75,14 @@ function candidateDaysThisMonth(now: Date): string[] {
 }
 
 /**
- * Combine a YYYY-MM-DD with the time-of-day from an ISO timestamp.
- * If the resulting timestamp is in the past (e.g. picked today but the
- * original time-of-day is hours ago), advance day-by-day until future or
- * we run out of room in the month. Caller treats null as overflow.
+ * Returns true if combining `dayKey` with the time-of-day from `originalIso`
+ * would land in the future (with a 60s buffer). Used to filter candidate days
+ * so the picker honors occupancy on the day it actually places.
  */
-function combineDayWithTime(dayKey: string, originalIso: string, now: Date, lastDay: string): string | null {
-  const timeSuffix = originalIso.slice(11); // HH:MM:SS.sssZ
-  let day = dayKey;
-  // Allow a small 60s buffer so we don't pick a moment that's about to be in the past.
-  const cutoff = new Date(now.getTime() + 60_000);
-  while (day <= lastDay) {
-    const candidate = `${day}T${timeSuffix}`;
-    if (new Date(candidate).getTime() > cutoff.getTime()) {
-      return candidate;
-    }
-    // Advance one day.
-    const next = new Date(`${day}T00:00:00.000Z`);
-    next.setUTCDate(next.getUTCDate() + 1);
-    day = utcDayKey(next);
-  }
-  return null;
+function dayHasFutureSlot(dayKey: string, originalIso: string, now: Date): boolean {
+  const timeSuffix = originalIso.slice(11);
+  const candidate = `${dayKey}T${timeSuffix}`;
+  return new Date(candidate).getTime() > now.getTime() + 60_000;
 }
 
 /**
@@ -187,7 +174,6 @@ export async function reschedulePastDueDrafts(
   }
 
   const candidateDays = candidateDaysThisMonth(now);
-  const lastDay = candidateDays[candidateDays.length - 1] ?? utcDayKey(now);
 
   const moves: PastDueMove[] = [];
   const overflow: string[] = [];
@@ -205,10 +191,17 @@ export async function reschedulePastDueDrafts(
     const sorted = [...clientPosts].sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
 
     for (const post of sorted) {
-      // Pick the lightest-loaded day. Tie-break by earliest. Empty wins.
+      // Only consider days where the post's time-of-day still lies in the
+      // future, otherwise we'd pick a day with count=0, then silently shove
+      // the post onto the next day and double up with another past-due move.
+      const eligibleDays = candidateDays.filter((d) =>
+        dayHasFutureSlot(d, post.scheduled_at, now),
+      );
+
+      // Pick the lightest-loaded eligible day. Tie-break by earliest. Empty wins.
       let bestDay: string | null = null;
       let bestCount = Infinity;
-      for (const day of candidateDays) {
+      for (const day of eligibleDays) {
         const c = occupancy.get(day) ?? 0;
         if (c < bestCount) {
           bestCount = c;
@@ -222,11 +215,7 @@ export async function reschedulePastDueDrafts(
         continue;
       }
 
-      const newIso = combineDayWithTime(bestDay, post.scheduled_at, now, lastDay);
-      if (!newIso) {
-        overflow.push(post.id);
-        continue;
-      }
+      const newIso = `${bestDay}T${post.scheduled_at.slice(11)}`;
 
       const { error: updateErr } = await admin
         .from('scheduled_posts')
@@ -246,10 +235,9 @@ export async function reschedulePastDueDrafts(
         doubledUp: bestCount > 0,
       });
 
-      // Bump the day so the next past-due post in this client doesn't
+      // Bump the chosen day so the next past-due post in this client doesn't
       // pile onto the same slot.
-      const newDay = newIso.slice(0, 10);
-      occupancy.set(newDay, (occupancy.get(newDay) ?? 0) + 1);
+      occupancy.set(bestDay, (occupancy.get(bestDay) ?? 0) + 1);
     }
   }
 
