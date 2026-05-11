@@ -5759,6 +5759,14 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
   },
   {
     "method": "POST",
+    "path": "/api/calendar/drops/:id/finalize",
+    "description": "",
+    "auth": "",
+    "section": "Shoots & Calendar",
+    "sectionSlug": "shoots"
+  },
+  {
+    "method": "POST",
     "path": "/api/calendar/drops/:id/posts/:postId/revision/complete",
     "description": "Admin-only. Stamps `revisions_completed_at` on every `post_review_links` row tied to this post (across all share links for the drop). When this resolves the last open `changes_requested` in the drop, fires the `calendar_revisions_complete` event email to portal users for the client.",
     "auth": "",

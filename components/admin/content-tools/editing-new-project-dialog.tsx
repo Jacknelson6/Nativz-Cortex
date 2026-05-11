@@ -1,15 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Building2,
   CalendarRange,
-  FolderInput,
   Loader2,
   Plus,
   Scissors,
   Search,
+  UploadCloud,
+  X,
 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -20,13 +21,18 @@ import {
   EDITING_TYPE_LABEL,
   type EditingProjectType,
 } from '@/lib/editing/types';
+import {
+  runCalendarUploads,
+  type CalendarUploadFile,
+  type CalendarUploadProgress,
+} from '@/lib/calendar/upload-store';
 
 /**
  * Unified "Upload content" entry point. The same dialog mints either an
  * editing project (one-off cutdowns / paid creatives where editors work
- * inside a single deliverable row) or a content calendar (Drive folder
- * full of finals -> AI captions + scheduled posts). A pill at the top
- * picks the branch; everything below swaps to match.
+ * inside a single deliverable row) or a content calendar (direct file
+ * uploads -> AI captions + scheduled posts). A pill at the top picks the
+ * branch; everything below swaps to match.
  *
  * Why one dialog instead of two CTAs:
  *   - The header surface in content-tools is the obvious "make a new
@@ -49,6 +55,38 @@ interface ClientOption {
 const TYPE_OPTIONS: { value: EditingProjectType; label: string }[] = (
   Object.keys(EDITING_TYPE_LABEL) as EditingProjectType[]
 ).map((value) => ({ value, label: EDITING_TYPE_LABEL[value] }));
+
+const MAX_FILES = 60;
+
+type CalendarMediaType = 'video' | 'image' | 'mixed' | null;
+
+function detectMediaType(file: File): 'video' | 'image' | null {
+  const m = file.type.toLowerCase();
+  if (m.startsWith('video/')) return 'video';
+  if (m.startsWith('image/')) return 'image';
+  return null;
+}
+
+function summarizeMediaType(files: File[]): CalendarMediaType {
+  if (files.length === 0) return null;
+  let hasVideo = false;
+  let hasImage = false;
+  for (const f of files) {
+    const t = detectMediaType(f);
+    if (t === 'video') hasVideo = true;
+    else if (t === 'image') hasImage = true;
+    else return 'mixed'; // unsupported type counts as a mix conflict
+  }
+  if (hasVideo && hasImage) return 'mixed';
+  return hasVideo ? 'video' : 'image';
+}
+
+function formatBytes(b: number): string {
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  if (b < 1024 * 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
+  return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
 
 export function EditingNewProjectDialog({
   open,
@@ -78,16 +116,13 @@ export function EditingNewProjectDialog({
     );
     return last.toISOString().slice(0, 10);
   }, []);
-  const [folderUrl, setFolderUrl] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
+  const [progress, setProgress] = useState<Map<number, CalendarUploadProgress>>(new Map());
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(endOfStartMonth);
-  // Media type and default post time are no longer user-editable here.
-  // - Type is inferred server-side per file once the upload swap lands;
-  //   until then, the Drive folder ingest defaults to video, which is
-  //   how 100% of recent ingests have been used.
-  // - Every scheduled post lands at 12:00 America/Chicago via
-  //   `lib/calendar/distribute-slots.ts`. The API field is retained for
-  //   schema compatibility but we hardcode the wall-clock value.
+  // Media type is inferred from the selected files. Default post time is
+  // pinned to 12:00 America/Chicago by `lib/calendar/distribute-slots.ts`,
+  // so we don't expose either control here.
 
   useEffect(() => {
     if (!open) return;
@@ -113,7 +148,8 @@ export function EditingNewProjectDialog({
     setName('');
     setType('organic_content');
     setNotes('');
-    setFolderUrl('');
+    setFiles([]);
+    setProgress(new Map());
     setStartDate(today);
     setEndDate(endOfStartMonth);
   }
@@ -151,36 +187,86 @@ export function EditingNewProjectDialog({
     }
 
     // Calendar branch
-    if (!folderUrl.trim()) return toast.error('Drive folder URL required');
+    if (files.length === 0) return toast.error('Add at least one video or image');
+    const mediaSummary = summarizeMediaType(files);
+    if (mediaSummary === 'mixed') {
+      return toast.error('Upload either all videos or all images, not both.');
+    }
+    if (!mediaSummary) {
+      return toast.error('Unsupported file type — videos and images only.');
+    }
+
     setSubmitting(true);
     let success = false;
     try {
+      const manifest = files.map((f) => ({
+        filename: f.name,
+        mime_type: f.type || 'application/octet-stream',
+        size_bytes: f.size,
+      }));
       const res = await fetch('/api/calendar/drops', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           clientId,
-          driveFolderUrl: folderUrl.trim(),
-          // Default to video ingest. Image-folder ingestion shipped behind a
-          // flag and was never wired into this dialog; when direct uploads
-          // replace Drive, the server infers type per file from MIME and
-          // this field goes away.
-          mediaType: 'video',
+          files: manifest,
           startDate,
           endDate,
           // Pinned to 12:00 America/Chicago. distribute-slots ignores this
-          // value and forces 12:00 Central regardless, so the field is here
-          // strictly to satisfy the existing Zod schema.
+          // value and forces 12:00 Central regardless, but we still send
+          // it so the existing Zod schema accepts the body.
           defaultPostTime: '12:00',
         }),
       });
-      const data = (await res.json()) as { drop?: { id: string }; error?: string };
+      const data = (await res.json()) as {
+        drop?: { id: string };
+        uploads?: Array<{
+          index: number;
+          video_id: string;
+          asset_id?: string;
+          storage_path: string;
+          public_url: string;
+          upload_url: string;
+        }>;
+        error?: string;
+      };
       if (!res.ok) {
         throw new Error(
           typeof data.error === 'string' ? data.error : 'Failed to create content calendar',
         );
       }
-      if (!data.drop?.id) throw new Error('Server did not return a calendar id');
+      if (!data.drop?.id || !data.uploads) {
+        throw new Error('Server did not return upload tickets');
+      }
+
+      const uploads: CalendarUploadFile[] = data.uploads.map((u) => ({
+        index: u.index,
+        file: files[u.index],
+        video_id: u.video_id,
+        asset_id: u.asset_id,
+        storage_path: u.storage_path,
+        public_url: u.public_url,
+        upload_url: u.upload_url,
+      }));
+
+      // Seed progress map so the UI immediately shows one bar per file.
+      const seeded = new Map<number, CalendarUploadProgress>();
+      for (const u of uploads) {
+        seeded.set(u.index, { index: u.index, progress: 0, state: 'queued' });
+      }
+      setProgress(seeded);
+
+      await runCalendarUploads({
+        dropId: data.drop.id,
+        uploads,
+        onProgress: (next) =>
+          setProgress((prev) => {
+            const copy = new Map(prev);
+            copy.set(next.index, next);
+            return copy;
+          }),
+      });
+
       success = true;
       reset();
       onCreated(data.drop.id, 'calendar');
@@ -201,7 +287,7 @@ export function EditingNewProjectDialog({
         ? 'Creating...'
         : 'Create project'
       : submitting
-        ? 'Creating...'
+        ? 'Uploading...'
         : 'Create calendar';
 
   return (
@@ -226,8 +312,9 @@ export function EditingNewProjectDialog({
           />
         ) : (
           <CalendarFields
-            folderUrl={folderUrl}
-            setFolderUrl={setFolderUrl}
+            files={files}
+            setFiles={setFiles}
+            progress={progress}
             startDate={startDate}
             setStartDate={setStartDate}
             endDate={endDate}
@@ -278,7 +365,7 @@ function KindToggle({
       value: 'calendar',
       label: 'Content calendar',
       icon: <CalendarRange size={14} />,
-      hint: 'Drive folder of finals — we caption every file and schedule them across a date range.',
+      hint: 'Upload finished videos or images. We caption every file and schedule them across a date range.',
     },
   ];
   const active = options.find((o) => o.value === value);
@@ -364,42 +451,153 @@ function EditingFields({
 }
 
 function CalendarFields({
-  folderUrl,
-  setFolderUrl,
+  files,
+  setFiles,
+  progress,
   startDate,
   setStartDate,
   endDate,
   setEndDate,
   submitting,
 }: {
-  folderUrl: string;
-  setFolderUrl: (v: string) => void;
+  files: File[];
+  setFiles: (next: File[]) => void;
+  progress: Map<number, CalendarUploadProgress>;
   startDate: string;
   setStartDate: (v: string) => void;
   endDate: string;
   setEndDate: (v: string) => void;
   submitting: boolean;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+
+  const mediaSummary = summarizeMediaType(files);
+
+  function pushFiles(incoming: File[]) {
+    if (incoming.length === 0) return;
+    const combined = [...files, ...incoming].slice(0, MAX_FILES);
+    if (combined.length === files.length) {
+      toast.error(`Max ${MAX_FILES} files per calendar`);
+      return;
+    }
+    if (files.length + incoming.length > MAX_FILES) {
+      toast.error(`Only the first ${MAX_FILES} files were added`);
+    }
+    setFiles(combined);
+  }
+
   return (
     <>
       <div className="space-y-1.5">
         <label className="block text-sm font-medium text-text-secondary">
-          Google Drive folder
+          Content
         </label>
-        <div className="flex items-center gap-2 rounded-lg border border-nativz-border bg-surface px-3 py-2">
-          <FolderInput size={14} className="shrink-0 text-text-muted" />
-          <input
-            value={folderUrl}
-            onChange={(e) => setFolderUrl(e.target.value)}
-            placeholder="https://drive.google.com/drive/folders/..."
-            className="flex-1 bg-transparent text-sm text-text-primary placeholder-text-muted focus:outline-none"
-            disabled={submitting}
-          />
-        </div>
-        <p className="text-xs text-text-muted">
-          The folder must be shared so your connected Google account can read it. We&rsquo;ll caption every file in the folder and schedule them across the date range. Direct upload is coming soon.
-        </p>
+
+        <input
+          ref={inputRef}
+          type="file"
+          accept="video/*,image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            const list = e.target.files;
+            if (!list) return;
+            pushFiles(Array.from(list));
+            // Reset so re-picking the same file fires onChange.
+            if (inputRef.current) inputRef.current.value = '';
+          }}
+        />
+
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={() => inputRef.current?.click()}
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (!submitting) setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            if (submitting) return;
+            const list = Array.from(e.dataTransfer.files).filter(
+              (f) => f.type.startsWith('video/') || f.type.startsWith('image/'),
+            );
+            pushFiles(list);
+          }}
+          className={`flex w-full flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed px-3 py-6 text-sm transition-colors ${
+            dragging
+              ? 'border-accent bg-accent/5 text-accent-text'
+              : 'border-nativz-border bg-surface text-text-secondary hover:border-accent/60 hover:text-text-primary'
+          } disabled:cursor-not-allowed disabled:opacity-60`}
+        >
+          <UploadCloud size={18} className="text-text-muted" />
+          <span>
+            {files.length === 0
+              ? 'Drop videos or images here, or click to pick'
+              : `${files.length} file${files.length === 1 ? '' : 's'} selected — add more`}
+          </span>
+          <span className="text-xs text-text-muted">
+            Up to {MAX_FILES} files. Videos and images can&rsquo;t be mixed in one calendar.
+          </span>
+        </button>
+
+        {mediaSummary === 'mixed' && (
+          <p className="text-xs text-rose-400">
+            Mixed video and image files. Remove one type to continue.
+          </p>
+        )}
       </div>
+
+      {files.length > 0 && (
+        <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-nativz-border bg-surface p-1.5">
+          {files.map((f, idx) => {
+            const p = progress.get(idx);
+            const pct = p?.progress ?? 0;
+            const state = p?.state ?? 'queued';
+            return (
+              <div
+                key={`${f.name}-${idx}`}
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface-hover"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="truncate text-sm text-text-primary">{f.name}</span>
+                    <span className="shrink-0 text-[11px] text-text-muted">
+                      {formatBytes(f.size)}
+                    </span>
+                  </div>
+                  {(state === 'uploading' || state === 'done') && (
+                    <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-nativz-border">
+                      <div
+                        className="h-full bg-accent transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  )}
+                  {state === 'error' && (
+                    <p className="mt-0.5 truncate text-[11px] text-rose-400">
+                      {p?.error ?? 'Upload failed'}
+                    </p>
+                  )}
+                </div>
+                {!submitting && (
+                  <button
+                    type="button"
+                    onClick={() => setFiles(files.filter((_, i) => i !== idx))}
+                    className="text-text-muted transition-colors hover:text-text-primary"
+                    aria-label="Remove file"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div className="space-y-1.5">
         <label className="block text-sm font-medium text-text-secondary">

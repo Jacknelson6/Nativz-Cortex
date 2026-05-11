@@ -2,7 +2,7 @@
 
 > **For AI agents:** This document describes every API endpoint that exists on disk. Auto-generated from `app/api/**/route.ts` by `scripts/generate-api-docs.ts` — do not edit by hand. Re-run the script after adding/removing routes or tweaking a JSDoc block.
 
-**736 endpoints across 32 sections.**
+**737 endpoints across 32 sections.**
 
 ## Authentication
 
@@ -2291,6 +2291,8 @@ _Shoot scheduling, planning, Google Calendar integration._
 ### `PATCH /api/calendar/drops/:id`
 
 ### `GET /api/calendar/drops/:id/activity`
+
+### `POST /api/calendar/drops/:id/finalize`
 
 ### `POST /api/calendar/drops/:id/posts/:postId/revision/complete`
 
