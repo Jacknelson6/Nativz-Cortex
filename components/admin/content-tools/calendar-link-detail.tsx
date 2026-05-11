@@ -64,6 +64,11 @@ import type {
 } from '@/components/scheduler/review-board';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
+import {
+  type ContactRow,
+  getCachedContacts,
+  fetchContacts,
+} from '@/lib/content-tools/contacts-cache';
 
 type SendVariant = 'initial' | 'revised';
 
@@ -91,27 +96,6 @@ interface SendPreview {
   last_sent_at: string | null;
   send_count: number;
 }
-
-interface ContactRow {
-  id: string;
-  email: string;
-  name: string | null;
-  role: string | null;
-}
-
-/**
- * Module-level cache for brand POC contacts. Keyed by clientId. Brand
- * profile is the source of truth, so the recipients for a given brand
- * almost never change between dialog opens. Without this, every time
- * the admin clicks a row we re-hit /api/calendar/review/contacts and
- * spinner-flash for ~250ms — Jack flagged this as "those should not
- * have to reload every time."
- *
- * Strategy: cache hit shows instantly; we still revalidate in the
- * background so a contact change on the brand profile lands within
- * one dialog open.
- */
-const CONTACTS_CACHE = new Map<string, ContactRow[]>();
 
 /**
  * Cache for the editing-project-id bridged to a given share token.
@@ -385,7 +369,7 @@ export function CalendarLinkDetail({
       setContacts(null);
       return;
     }
-    const cached = CONTACTS_CACHE.get(clientId) ?? null;
+    const cached = getCachedContacts(clientId);
     setContacts(cached);
     let cancelled = false;
     void (async () => {
@@ -393,15 +377,8 @@ export function CalendarLinkDetail({
       // list renders instantly and we silently revalidate underneath.
       if (cached === null) setContactsLoading(true);
       try {
-        const res = await fetch(
-          `/api/calendar/review/contacts?clientId=${encodeURIComponent(clientId)}`,
-          { cache: 'no-store' },
-        );
-        if (!res.ok) throw new Error('failed');
-        const data = (await res.json()) as { contacts: ContactRow[] };
+        const next = await fetchContacts(clientId);
         if (cancelled) return;
-        const next = data.contacts ?? [];
-        CONTACTS_CACHE.set(clientId, next);
         setContacts(next);
       } catch {
         if (!cancelled && cached === null) setContacts([]);

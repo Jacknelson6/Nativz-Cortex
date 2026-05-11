@@ -61,6 +61,11 @@ import {
   subscribe as subscribeUploads,
   subscribeToCompletion,
 } from '@/lib/editing/upload-store';
+import {
+  type ContactRow,
+  getCachedContacts,
+  fetchContacts,
+} from '@/lib/content-tools/contacts-cache';
 
 /**
  * Detail panel for a single editing project. Drives:
@@ -117,20 +122,6 @@ interface SendPreview {
   kind: SendVariant;
   pending_count: number;
 }
-
-interface ContactRow {
-  id: string;
-  email: string;
-  name: string | null;
-  role: string | null;
-}
-
-/**
- * Module-level cache for brand POC contacts. Mirrors the calendar modal
- * cache so reopening the dialog for a recently-viewed brand renders the
- * recipient list instantly while we revalidate underneath.
- */
-const CONTACTS_CACHE = new Map<string, ContactRow[]>();
 
 export function EditingProjectDetail({
   project,
@@ -293,21 +284,14 @@ export function EditingProjectDetail({
       setContacts(null);
       return;
     }
-    const cached = CONTACTS_CACHE.get(clientId) ?? null;
+    const cached = getCachedContacts(clientId);
     setContacts(cached);
     let cancelled = false;
     void (async () => {
       if (cached === null) setContactsLoading(true);
       try {
-        const res = await fetch(
-          `/api/calendar/review/contacts?clientId=${encodeURIComponent(clientId)}`,
-          { cache: 'no-store' },
-        );
-        if (!res.ok) throw new Error('failed');
-        const json = (await res.json()) as { contacts: ContactRow[] };
+        const next = await fetchContacts(clientId);
         if (cancelled) return;
-        const next = json.contacts ?? [];
-        CONTACTS_CACHE.set(clientId, next);
         setContacts(next);
       } catch {
         if (!cancelled && cached === null) setContacts([]);

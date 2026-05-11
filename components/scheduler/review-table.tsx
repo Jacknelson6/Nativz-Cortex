@@ -58,6 +58,7 @@ import {
   UNIFIED_STATUS_LABEL,
   type UnifiedStatus,
 } from '@/lib/content-tools/unified-status';
+import { prefetchContacts } from '@/lib/content-tools/contacts-cache';
 
 /**
  * `/review` workspace — two subpages on a single tab strip:
@@ -628,6 +629,7 @@ function ReviewTableRow({
   const rowBody = (
     <TableRow
       onClick={openReview}
+      onMouseEnter={() => prefetchContacts(link.client_id)}
       className={`cursor-pointer ${dim ? 'opacity-70' : ''}`}
     >
       {showBrand && (
