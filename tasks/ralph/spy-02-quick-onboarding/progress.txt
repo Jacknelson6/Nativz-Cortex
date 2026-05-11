@@ -1,0 +1,105 @@
+# Progress: spy-02-quick-onboarding
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/spy-02-quick-onboarding/PRD.md before each task.
+# Depends on SPY-01 (prospects, prospect_socials, prospect_touchpoints, queries, types) being shipped.
+
+[ ] T01: Create lib/prospects/url-classifier.ts
+    Files: lib/prospects/url-classifier.ts
+    Acceptance: pure function classifyUrl(input) returns { kind: 'website' | 'social_profile'; platform: 'tiktok'|'instagram'|'youtube'|'facebook'|null; handle: string|null; canonicalUrl: string } or null; handles all forms in PRD Edge Cases
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T02: Add lib/prospects/url-classifier.test.ts
+    Files: lib/prospects/url-classifier.test.ts
+    Acceptance: 14 cases per PRD Test Plan; all green
+    Verify: `npx vitest run lib/prospects/url-classifier.test.ts`
+    Notes:
+
+[ ] T03: Create lib/prospects/detect-socials.ts orchestrator
+    Files: lib/prospects/detect-socials.ts
+    Acceptance: detectSocials({ classification }) returns { brand_name, favicon_url, website_url, socials[], detection_failed, detection_message }; calls scrape-website OR search-competitor-socials per classification
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T04: Add lib/prospects/detect-socials.test.ts
+    Files: lib/prospects/detect-socials.test.ts
+    Acceptance: stubbed scrape outputs cover website-success, website-failure, social-profile-seed; high/medium/low confidence assigned correctly
+    Verify: `npx vitest run lib/prospects/detect-socials.test.ts`
+    Notes:
+
+[ ] T05: Create lib/prospects/onboard-from-url.ts
+    Files: lib/prospects/onboard-from-url.ts
+    Acceptance: orchestrator runs classifier → detect-socials → dedupe check → insert prospect + touchpoint → returns { prospect, detection, existed }; uses createAdminClient
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T06: Add lib/prospects/onboard-from-url.test.ts
+    Files: lib/prospects/onboard-from-url.test.ts
+    Acceptance: covers dedupe-by-host, dedupe-by-handle, fresh insert, detection-failed bare save
+    Verify: `npx vitest run lib/prospects/onboard-from-url.test.ts`
+    Notes:
+
+[ ] T07: Implement POST /api/prospects/onboard
+    Files: app/api/prospects/onboard/route.ts
+    Acceptance: Zod validation, admin auth check, calls onboardFromUrl, returns shape per PRD; maxDuration=60; dynamic='force-dynamic'
+    Verify: `npx tsc --noEmit`; curl with invalid URL → 400; curl unauthenticated → 401
+    Notes:
+
+[ ] T08: Implement POST /api/prospects/[id]/confirm-socials
+    Files: app/api/prospects/[id]/confirm-socials/route.ts
+    Acceptance: Zod validation, admin auth check, upserts prospect_socials, patches primary_platform/handle, inserts touchpoint, fires runInitialAnalysis stub
+    Verify: `npx tsc --noEmit`; manual PATCH writes rows
+    Notes:
+
+[ ] T09: Create components/prospects/platform-confirm-row.tsx
+    Files: components/prospects/platform-confirm-row.tsx
+    Acceptance: client component with props per PRD; confidence dot + candidate list + manual-paste input; tokens match
+    Verify: `npx tsc --noEmit`; visual QA on storybook-equivalent fixture
+    Notes:
+
+[ ] T10: Create components/prospects/quick-onboard-form.tsx
+    Files: components/prospects/quick-onboard-form.tsx
+    Acceptance: state machine idle/detecting/confirm/done/error; calls /api/prospects/onboard and /api/prospects/[id]/confirm-socials; router.replace on done
+    Verify: `npx tsc --noEmit`; manual happy path
+    Notes:
+
+[ ] T11: Create components/prospects/analysis-pending-pill.tsx
+    Files: components/prospects/analysis-pending-pill.tsx
+    Acceptance: client component, polls /api/prospects/[id] every 5s until analysis exists then stops; tokens match
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T12: Create app/admin/prospects/new/page.tsx
+    Files: app/admin/prospects/new/page.tsx
+    Acceptance: server component shell, role check, renders QuickOnboardForm
+    Verify: visit /admin/prospects/new, screenshot
+    Notes:
+
+[ ] T13: Wire "+ New prospect" CTA on /admin/prospects to /admin/prospects/new
+    Files: app/admin/prospects/page.tsx
+    Acceptance: header CTA links to /admin/prospects/new (was stub in SPY-01)
+    Verify: click CTA, lands on new page
+    Notes:
+
+[ ] T14: Mount AnalysisPendingPill in detail page Analysis tab
+    Files: app/admin/prospects/[id]/page.tsx
+    Acceptance: pill renders when no prospect_analyses row exists
+    Verify: visit a fresh prospect detail
+    Notes:
+
+[ ] T15: E2E test: paste URL → confirm → land on detail
+    Files: tests/e2e/prospect-onboard.spec.ts
+    Acceptance: Playwright covers happy + dedupe + bare-save paths
+    Verify: `npm run test:e2e -- prospect-onboard`
+    Notes:
+
+[ ] T16: Manual latency QA (10 brands, p50/p95)
+    Files: (none; record in PRD progress Notes)
+    Acceptance: p50 ≤ 15s, p95 ≤ 30s across 10 distinct real URLs
+    Verify: stopwatch + browser DevTools network timing
+    Notes:
+
+[ ] T17: Verify Done When checklist + commit
+    Files: (none)
+    Acceptance: all Done When bullets pass; commit SHA recorded
+    Verify: walk PRD Done When
+    Notes:

@@ -1,0 +1,147 @@
+# Progress: spy-05-competitor-analysis
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/spy-05-competitor-analysis/PRD.md before each task.
+# Depends on SPY-03 + SPY-04.
+
+[ ] T01: Author migration 280_prospect_competitor_benchmarks.sql
+    Files: supabase/migrations/280_prospect_competitor_benchmarks.sql
+    Acceptance: matches PRD Data Model; 1 table, 2 indexes, RLS, updated trigger
+    Verify: `grep -c "CREATE INDEX" supabase/migrations/280_prospect_competitor_benchmarks.sql` returns ≥ 2
+    Notes:
+
+[ ] T02: Apply migration 280 via Supabase MCP
+    Files: (MCP apply_migration)
+    Acceptance: list_tables shows prospect_competitor_benchmarks
+    Verify: Supabase MCP list_tables
+    Notes:
+
+[ ] T03: Regenerate lib/supabase/types.ts
+    Files: lib/supabase/types.ts
+    Acceptance: new type present
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T04: Add benchmark types to lib/prospects/types.ts
+    Files: lib/prospects/types.ts
+    Acceptance: exports ProspectCompetitorBenchmarkRow, CompetitorScorecard, BenchmarkDeltas
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T05: Create lib/prospects/discover-competitors-for-prospect.ts
+    Files: lib/prospects/discover-competitors-for-prospect.ts
+    Acceptance: wraps lib/audit/discover-competitors.ts, threads prospect context, returns up to 5 candidates w/ rationale
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T06: Create lib/prospects/grade-competitor.ts (lightweight pipeline)
+    Files: lib/prospects/grade-competitor.ts
+    Acceptance: scrape + 3 LLM calls (bio, captions, comments) + computeScorecard; no profile-pic, no rollup
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T07: Add lib/prospects/grade-competitor.test.ts
+    Files: lib/prospects/grade-competitor.test.ts
+    Acceptance: stubbed scrape + LLM returns ScorecardSnapshot
+    Verify: `npx vitest run lib/prospects/grade-competitor.test.ts`
+    Notes:
+
+[ ] T08: Create lib/prospects/compute-deltas.ts
+    Files: lib/prospects/compute-deltas.ts
+    Acceptance: pure function (prospectSC, compSCs[]) → { behind, ahead, tied }
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T09: Add lib/prospects/compute-deltas.test.ts
+    Files: lib/prospects/compute-deltas.test.ts
+    Acceptance: 8+ cases including NA participation; all green
+    Verify: `npx vitest run lib/prospects/compute-deltas.test.ts`
+    Notes:
+
+[ ] T10: Create lib/prospects/benchmark-orchestrator.ts
+    Files: lib/prospects/benchmark-orchestrator.ts
+    Acceptance: runCompetitorBenchmark(prospectId, picks) handles status transitions, parallel scrape, partial-success, cancellation checks
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T11: Add lib/prospects/benchmark-orchestrator.test.ts
+    Files: lib/prospects/benchmark-orchestrator.test.ts
+    Acceptance: 3 happy + 1 partial + 1 cancel + 1 dedupe cases green
+    Verify: `npx vitest run lib/prospects/benchmark-orchestrator.test.ts`
+    Notes:
+
+[ ] T12: Implement POST /api/prospects/[id]/benchmark/discover
+    Files: app/api/prospects/[id]/benchmark/discover/route.ts
+    Acceptance: maxDuration=60; Zod; admin auth; returns 5 candidates
+    Verify: `npx tsc --noEmit`; manual curl
+    Notes:
+
+[ ] T13: Implement POST + GET /api/prospects/[id]/benchmark
+    Files: app/api/prospects/[id]/benchmark/route.ts
+    Acceptance: maxDuration=300; 24h rate limit; runs orchestrator; GET returns latest or by id
+    Verify: `npx tsc --noEmit`; curl returns 429 on second call
+    Notes:
+
+[ ] T14: Implement POST /api/prospects/[id]/benchmark/[benchmark_id]/cancel
+    Files: app/api/prospects/[id]/benchmark/[benchmark_id]/cancel/route.ts
+    Acceptance: sets cancelled_at + status; admin auth
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T15: Create components/prospects/run-benchmark-wizard.tsx
+    Files: components/prospects/run-benchmark-wizard.tsx
+    Acceptance: 3-step modal discover→confirm→run; max 3 picks; manual paste; tokens match
+    Verify: `npx tsc --noEmit`; visual QA
+    Notes:
+
+[ ] T16: Create components/prospects/benchmark-progress.tsx
+    Files: components/prospects/benchmark-progress.tsx
+    Acceptance: polls every 3s; renders status pill + per-stage check; cancel button
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T17: Create components/prospects/head-to-head-table.tsx
+    Files: components/prospects/head-to-head-table.tsx
+    Acceptance: 10×4 table; summary band; hover tooltip with notes
+    Verify: `npx tsc --noEmit`; visual QA
+    Notes:
+
+[ ] T18: Create components/prospects/competitor-benchmark-section.tsx
+    Files: components/prospects/competitor-benchmark-section.tsx
+    Acceptance: server-renderable wrapper; states none/running/done/failed; mounts wizard or table accordingly
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T19: Activate Competitors tab on /admin/prospects/[id]
+    Files: app/admin/prospects/[id]/page.tsx
+    Acceptance: mounts CompetitorBenchmarkSection passing latestBenchmark + canRun
+    Verify: visit prospect with succeeded benchmark, screenshot
+    Notes:
+
+[ ] T20: Extend SPY-04 PDF adapter to append Round 2 head-to-head
+    Files: lib/pdf/branded/adapters.ts
+    Acceptance: optional benchmark arg appends section; renders 10×4 grid in PDF
+    Verify: `npx tsc --noEmit`; PDF preview
+    Notes:
+
+[ ] T21: Thread benchmark id into POST /api/prospects/[id]/scorecard
+    Files: app/api/prospects/[id]/scorecard/route.ts
+    Acceptance: optional include_benchmark_id passes through to adapter
+    Verify: regenerate PDF on prospect with benchmark, Round 2 page visible
+    Notes:
+
+[ ] T22: E2E test: run benchmark → table → PDF regen with Round 2
+    Files: tests/e2e/prospect-benchmark.spec.ts
+    Acceptance: Playwright covers wizard + table + PDF regen
+    Verify: `npm run test:e2e -- prospect-benchmark`
+    Notes:
+
+[ ] T23: Manual strategist spot-check (10 prospects)
+    Files: (none; record in Notes)
+    Acceptance: ≥ 7/10 competitor picks rated "right"
+    Verify: strategist review
+    Notes:
+
+[ ] T24: Verify Done When checklist + commit
+    Files: (none)
+    Acceptance: all Done When bullets pass; commit SHA recorded
+    Verify: walk PRD Done When
+    Notes:

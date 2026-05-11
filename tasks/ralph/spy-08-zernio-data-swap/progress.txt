@@ -1,0 +1,106 @@
+# Progress: spy-08-zernio-data-swap
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/spy-08-zernio-data-swap/PRD.md before each task.
+# Depends on SPY-07 (clients.converted_from_prospect_id) + ZNA-01 (zernio_platform_analytics).
+# If ZNA-01 not yet shipped, zernio adapter returns empty; resolver still works.
+
+[ ] T01: Create lib/analytics/types.ts
+    Files: lib/analytics/types.ts
+    Acceptance: exports AnalyticsSource, SocialPlatform, AnalyticsRange, AnalyticsPoint, AnalyticsResult, AnalyticsAdapter per PRD
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T02: Create lib/analytics/source-router.ts
+    Files: lib/analytics/source-router.ts
+    Acceptance: resolveAnalyticsSource per PRD decision logic; handles missing connection, missing ZNA rows, mixed range, stale Zernio
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T03: Add lib/analytics/source-router.test.ts
+    Files: lib/analytics/source-router.test.ts
+    Acceptance: 10+ cases covering all 4 source outputs + mixed-range + stale; all green
+    Verify: `npx vitest run lib/analytics/source-router.test.ts`
+    Notes:
+
+[ ] T04: Create lib/analytics/adapters/zernio.ts
+    Files: lib/analytics/adapters/zernio.ts
+    Acceptance: implements AnalyticsAdapter; reads from zernio_platform_analytics (graceful empty if table missing)
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T05: Create lib/analytics/adapters/scrape.ts
+    Files: lib/analytics/adapters/scrape.ts
+    Acceptance: implements AnalyticsAdapter; resolves clientId → prospectId → snapshots/audits; emits per-day AnalyticsPoints
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T06: Create lib/analytics/data-source.ts entry point
+    Files: lib/analytics/data-source.ts
+    Acceptance: getAnalyticsForRange combines resolver + adapters; handles 'mixed' by stitching; wrapped in unstable_cache 5-min TTL
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T07: Add lib/analytics/data-source.test.ts
+    Files: lib/analytics/data-source.test.ts
+    Acceptance: 6+ cases including mixed stitching, none-state, stale Zernio; all green
+    Verify: `npx vitest run lib/analytics/data-source.test.ts`
+    Notes:
+
+[ ] T08: Implement GET /api/clients/[id]/analytics/source
+    Files: app/api/clients/[id]/analytics/source/route.ts
+    Acceptance: Zod query; admin OR portal-scoped auth; returns resolver result
+    Verify: `npx tsc --noEmit`; curl
+    Notes:
+
+[ ] T09: Implement GET /api/cron/zernio-reconcile
+    Files: app/api/cron/zernio-reconcile/route.ts
+    Acceptance: CRON_SECRET auth; iterates connections; pushes admin alert for stale > 24h; returns {checked, stale}
+    Verify: `npx tsc --noEmit`; manual curl
+    Notes:
+
+[ ] T10: Add reconcile cron to vercel.json
+    Files: vercel.json
+    Acceptance: cron entry `0 6 * * *` for /api/cron/zernio-reconcile
+    Verify: `cat vercel.json | jq '.crons'`
+    Notes:
+
+[ ] T11: Create components/analytics/data-source-pill.tsx
+    Files: components/analytics/data-source-pill.tsx
+    Acceptance: 4 visual states per PRD; uses existing pill primitive; tooltip explains stale + mixed
+    Verify: `npx tsc --noEmit`; visual QA
+    Notes:
+
+[ ] T12: Create components/analytics/analytics-card-shell.tsx
+    Files: components/analytics/analytics-card-shell.tsx
+    Acceptance: server component; fetches resolver; renders title + pill + children
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T13: Wrap 3 reference analytics surfaces with AnalyticsCardShell
+    Files: (pick 3 high-traffic admin/client analytics pages; record paths in Notes)
+    Acceptance: each shows correct pill; pre-existing charts unchanged below
+    Verify: visual QA on staging with seeded data
+    Notes:
+
+[ ] T14: Add integration test for full source-router + adapters
+    Files: tests/integration/analytics-source-router.test.ts
+    Acceptance: seeded fixtures covering all 4 source states; assertions on returned items
+    Verify: `npx vitest run tests/integration/analytics-source-router.test.ts`
+    Notes:
+
+[ ] T15: Manual stale simulation + push verification
+    Files: (none; record in Notes)
+    Acceptance: setting ZNA max(date)=25h ago triggers reconcile alert; push received on Jack's phone
+    Verify: manual
+    Notes:
+
+[ ] T16: Real swap-over verification on 1 converted client
+    Files: (none; record in Notes)
+    Acceptance: client converted via SPY-07, then Zernio-connected; pill flips from Pre-Zernio to Live within 24h reconcile
+    Verify: manual on staging
+    Notes:
+
+[ ] T17: Verify Done When checklist + commit
+    Files: (none)
+    Acceptance: all Done When bullets pass; commit SHA recorded
+    Verify: walk PRD Done When
+    Notes:

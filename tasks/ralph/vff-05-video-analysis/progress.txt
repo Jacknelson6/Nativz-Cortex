@@ -1,0 +1,98 @@
+# Progress: vff-05-video-analysis
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/vff-05-video-analysis/PRD.md before each task.
+
+[ ] T01: Add ViralAnalysisOutput type to lib/analytics/types.ts
+    Files: lib/analytics/types.ts
+    Acceptance: exports interface matching AnalysisSchema shape verbatim
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T02: Audit lib/audit/analyze-videos.ts for reusable MP4 trim helper
+    Files: (read-only) lib/audit/analyze-videos.ts
+    Acceptance: identify whether trimToFirstNSeconds (or equivalent) is already exported; record finding in Notes; extract a helper in T03 ONLY if needed
+    Verify: `grep -n "trim\|firstFrames\|download.*mp4" lib/audit/analyze-videos.ts`
+    Notes:
+
+[ ] T03: Create lib/analytics/analyze-viral-video.ts skeleton
+    Files: lib/analytics/analyze-viral-video.ts
+    Acceptance: exports analyzeViralVideo(videoId, opts?) returning typed but stubbed value; reads viral_videos row, reads brand seeds via brand_format_context join; logs but does not yet call Gemini
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T04: Implement Gemini call + AnalysisSchema parsing
+    Files: lib/analytics/analyze-viral-video.ts
+    Acceptance: builds prompt per PRD with current taxonomy from viral_formats, calls Gemini 2.5 Flash with video + caption + comments, parses with AnalysisSchema, returns parsed object
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T05: Implement persistence + format associations + embedding
+    Files: lib/analytics/analyze-viral-video.ts
+    Acceptance: writes 7 fields back to viral_videos; inserts 4 rows in viral_video_formats (one per dimension); generates embedding from concatenation per D-05; transitions analysis_status
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T06: Add proposal-emission path
+    Files: lib/analytics/analyze-viral-video.ts
+    Acceptance: when slug.propose=true OR slug not in taxonomy, insert into format_taxonomy_proposals (if table exists; else gate_metadata.proposals); never blocks success
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T07: Add retry + banned-content + failure paths
+    Files: lib/analytics/analyze-viral-video.ts
+    Acceptance: 3-attempt retry tracked in gate_metadata.analysis_attempts; banned_content slug short-circuits to 'failed'; mp4_unavailable + malformed_output map to specific gate_metadata.analysis_error values
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T08: Author lib/analytics/analyze-viral-video.test.ts
+    Files: lib/analytics/analyze-viral-video.test.ts
+    Acceptance: 5 cases per PRD Unit test plan; Gemini + embedding clients mocked
+    Verify: `npx vitest run lib/analytics/analyze-viral-video.test.ts`
+    Notes:
+
+[ ] T09: Create cron route app/api/cron/format-analyze/route.ts
+    Files: app/api/cron/format-analyze/route.ts
+    Acceptance: Bearer CRON_SECRET; claims up to 20 'analyzing' rows via UPDATE ... RETURNING; concurrency 3; aggregates response per PRD shape; export const maxDuration = 300
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes:
+
+[ ] T10: Register format-analyze cron in vercel.json
+    Files: vercel.json
+    Acceptance: crons entry { path: "/api/cron/format-analyze", schedule: "*/5 * * * *" }
+    Verify: `grep "format-analyze" vercel.json`
+    Notes:
+
+[ ] T11: Add embedding-backfill pass to cron
+    Files: app/api/cron/format-analyze/route.ts
+    Acceptance: after claiming 'analyzing' rows, also select up to 20 'analyzed' AND embedding IS NULL rows and regenerate embeddings only (no Gemini call)
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T12: Author scripts/reanalyze-viral-video.ts CLI
+    Files: scripts/reanalyze-viral-video.ts
+    Acceptance: accepts <video_id> [--force]; --force clears viral_video_formats rows + embedding then calls analyzeViralVideo; prints structured report; exits non-zero on failure
+    Verify: `npx tsx scripts/reanalyze-viral-video.ts <known-id>` exits 0
+    Notes:
+
+[ ] T13: Run lint + typecheck end-to-end
+    Files: (none)
+    Acceptance: `npm run lint` clean, `npx tsc --noEmit` clean
+    Verify: both commands exit 0
+    Notes:
+
+[ ] T14: Smoke test 50-video cohort
+    Files: (none — runtime)
+    Acceptance: 50 videos transition to 'analyzed' with all 7 fields + embedding non-null; cost averaged ≤ $0.02/video; p95 latency ≤ 45s
+    Verify: SQL aggregate + cron run reports
+    Notes:
+
+[ ] T15: Jack spot-check 20-video sample
+    Files: (none)
+    Acceptance: ≥17/20 rated "accurate or close enough" by Jack
+    Verify: pause for Jack review; record verdict in Notes
+    Notes:
+
+[ ] T16: Verify Done When checklist
+    Files: (none)
+    Acceptance: every bullet in PRD Done When passes; commit SHA recorded
+    Verify: walk PRD Done When; record SHA
+    Notes:

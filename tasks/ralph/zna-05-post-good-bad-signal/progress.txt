@@ -1,0 +1,104 @@
+# Progress: zna-05-post-good-bad-signal
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/zna-05-post-good-bad-signal/PRD.md before each task.
+
+[ ] T01: Verify migration 286 is next-free
+    Files: (read-only)
+    Acceptance: `ls supabase/migrations/` confirms 286 unused
+    Verify: `ls supabase/migrations/ | tail -5`
+    Notes:
+
+[ ] T02: Author migration 286_post_performance_signals.sql
+    Files: supabase/migrations/286_post_performance_signals.sql
+    Acceptance: CREATE TABLE post_performance_signals + unique(post_metric_id) + RLS admin_all + viewer_read; two indexes (client_id+signal, computed_at)
+    Verify: `grep -c "CREATE POLICY" supabase/migrations/286_post_performance_signals.sql` returns 2
+    Notes:
+
+[ ] T03: Apply migration via Supabase MCP
+    Files: (MCP)
+    Acceptance: table + RLS policies visible
+    Verify: Supabase MCP list_tables + pg_policies
+    Notes:
+
+[ ] T04: Regenerate lib/supabase/types.ts
+    Files: lib/supabase/types.ts
+    Acceptance: post_performance_signals types present
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T05: Implement lib/analytics/post-signal.ts (pure)
+    Files: lib/analytics/post-signal.ts
+    Acceptance: classifySignal handles too_fresh (<48h), sparse_baseline (<5), thresholds 1.30/0.70; computeBrandPlatformBaseline reads post_metrics 30d window excluding target post
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T06: Write tests for post-signal pure function
+    Files: lib/analytics/post-signal.test.ts
+    Acceptance: table-driven thresholds (1.30 above, 1.29 avg, 0.70 below, 0.71 avg); too_fresh path; sparse_baseline path; views=0 path; baselineMean=0 path; ratio rounding three decimals
+    Verify: `npx vitest run lib/analytics/post-signal.test.ts`
+    Notes:
+
+[ ] T07: Implement lib/analytics/post-signal-cache.ts
+    Files: lib/analytics/post-signal-cache.ts
+    Acceptance: upsertPostSignal onConflict post_metric_id; readPostSignals returns Map<postMetricId,row>
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T08: Extend posts-query.ts to accept signal filter
+    Files: lib/analytics/posts-query.ts
+    Acceptance: optional signal param plumbed; when provided, join post_performance_signals and filter; signal default 'any'
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T09: Extend admin posts route with signal block
+    Files: app/api/analytics/zernio/posts/route.ts
+    Acceptance: Zod adds signal enum; route loads posts, reads cached signals, recomputes stale/missing (synchronous for missing, fire-and-forget for stale), attaches signal block to each card
+    Verify: `npx tsc --noEmit`; curl returns signal on every card
+    Notes:
+
+[ ] T10: Extend portal posts route with signal block
+    Files: app/api/portal/analytics/zernio/posts/route.ts
+    Acceptance: same shape; portal scoping intact; signal filter respected
+    Verify: `npx tsc --noEmit`; portal cookie returns signal
+    Notes:
+
+[ ] T11: Build components/analytics/post-signal-dot.tsx
+    Files: components/analytics/post-signal-dot.tsx
+    Acceptance: 'use client'; absolute top-right; color tokens per PRD; Radix tooltip with copy variants for above/avg/below/too_fresh(too_fresh) and too_fresh(sparse_baseline)
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T12: Mount PostSignalDot inside post-card.tsx
+    Files: components/analytics/post-card.tsx
+    Acceptance: dot rendered absolute inside 9:16 card; does not break thumbnail layout
+    Verify: `npx tsc --noEmit`; visual check
+    Notes:
+
+[ ] T13: Add Above average only toggle to filter bar
+    Files: components/analytics/post-grid-filter-bar.tsx
+    Acceptance: toggle wires signal=above_avg into query string; helper text empty-state copy per PRD
+    Verify: `npx tsc --noEmit`; toggle flips, grid filters
+    Notes:
+
+[ ] T14: Seed Nike fixture for signal QA
+    Files: (none - QA data)
+    Acceptance: at least 10 posts spanning 7 days with distribution covering above/avg/below/too_fresh
+    Verify: Supabase MCP execute_sql distribution check
+    Notes:
+
+[ ] T15: E2E hover + filter check
+    Files: (none - verification)
+    Acceptance: dots render, tooltips display math copy verbatim; "Above average only" toggle filters as expected
+    Verify: open /admin/analytics/zernio?clientId=<nike>; manual hover; toggle
+    Notes:
+
+[ ] T16: Portal cross-org leak smoke test
+    Files: (none - verification)
+    Acceptance: viewer in org A cannot see org B signals
+    Verify: dual portal logins
+    Notes:
+
+[ ] T17: Verify Done When checklist + commit
+    Files: (none)
+    Acceptance: every bullet in PRD Done When passes; SHA recorded
+    Verify: walk PRD Done When; `npx tsc --noEmit`; `npm run lint`
+    Notes:

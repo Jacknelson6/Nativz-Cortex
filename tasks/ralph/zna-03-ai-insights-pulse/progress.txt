@@ -1,0 +1,140 @@
+# Progress: zna-03-ai-insights-pulse
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/zna-03-ai-insights-pulse/PRD.md before each task.
+
+[ ] T01: Verify migration 284 is next-free
+    Files: (read-only)
+    Acceptance: `ls supabase/migrations/` confirms 284 unused; PRD migration number unchanged
+    Verify: `ls supabase/migrations/ | tail -5`
+    Notes:
+
+[ ] T02: Author migration 284_client_analytics_pulses.sql
+    Files: supabase/migrations/284_client_analytics_pulses.sql
+    Acceptance: CREATE TABLE + indexes + RLS admin_all + viewer_read policies per PRD verbatim
+    Verify: `grep -c "CREATE POLICY" supabase/migrations/284_client_analytics_pulses.sql` returns 2
+    Notes:
+
+[ ] T03: Apply migration via Supabase MCP
+    Files: (MCP)
+    Acceptance: client_analytics_pulses table visible; RLS enabled
+    Verify: Supabase MCP list_tables + execute_sql `select * from pg_policies where tablename = 'client_analytics_pulses'`
+    Notes:
+
+[ ] T04: Regenerate lib/supabase/types.ts
+    Files: lib/supabase/types.ts
+    Acceptance: client_analytics_pulses Row/Insert/Update types present
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T05: Implement lib/analytics/zernio-pulse-signal.ts
+    Files: lib/analytics/zernio-pulse-signal.ts
+    Acceptance: exports buildSignalReport + findHighConfidencePosts; per-platform 14-day deltas; sparse_prior + trend_reversal flags; gate-trigger logic matches PRD (>=15% or reversal, sparse suppressed)
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T06: Write tests for zernio-pulse-signal
+    Files: lib/analytics/zernio-pulse-signal.test.ts
+    Acceptance: covers >=15% trigger, sparse suppression (<4 prior rows), trend_reversal detection, high-confidence 2x baseline
+    Verify: `npx vitest run lib/analytics/zernio-pulse-signal.test.ts`
+    Notes:
+
+[ ] T07: Implement lib/analytics/zernio-pulse.ts core
+    Files: lib/analytics/zernio-pulse.ts
+    Acceptance: exports generatePulse(); builds prompt; OpenRouter call with response_format json_object; Zod schema validation; one retry on schema/banned/sentence-count fail; upsert ON CONFLICT (client_id, pulse_date)
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T08: Write tests for zernio-pulse validators
+    Files: lib/analytics/zernio-pulse.test.ts
+    Acceptance: banned-topic regex catches every banned example; sentence counter handles 1/2/3/4/5 fixtures; dropped_banned + gated_out + persisted paths covered with mocked OpenRouter
+    Verify: `npx vitest run lib/analytics/zernio-pulse.test.ts`
+    Notes:
+
+[ ] T09: Build cron route /api/cron/zernio-pulse
+    Files: app/api/cron/zernio-pulse/route.ts
+    Acceptance: Authorization Bearer CRON_SECRET, withCronTelemetry, fan-out concurrency cap 5, returns generated/gated_out/dropped/failed counts, maxDuration 300
+    Verify: `npx tsc --noEmit`; manual curl with CRON_SECRET returns 200
+    Notes:
+
+[ ] T10: Register zernio-pulse cron in vercel.json
+    Files: vercel.json
+    Acceptance: new crons entry path /api/cron/zernio-pulse schedule "30 7 * * *"
+    Verify: `cat vercel.json | grep zernio-pulse`
+    Notes:
+
+[ ] T11: Implement GET /api/analytics/zernio/pulse (admin)
+    Files: app/api/analytics/zernio/pulse/route.ts
+    Acceptance: Zod client_id, admin role check, returns latest non-dismissed pulse for today_utc or null
+    Verify: `npx tsc --noEmit`; curl admin cookie
+    Notes:
+
+[ ] T12: Implement GET /api/portal/analytics/zernio/pulse (portal)
+    Files: app/api/portal/analytics/zernio/pulse/route.ts
+    Acceptance: getPortalClient() scoping, RLS plus defense-in-depth org filter, omits admin-only fields
+    Verify: `npx tsc --noEmit`; portal cookie returns row, cross-org returns null
+    Notes:
+
+[ ] T13: Implement POST /api/analytics/zernio/pulse/[id]/dismiss
+    Files: app/api/analytics/zernio/pulse/[id]/dismiss/route.ts
+    Acceptance: admin role check, sets is_dismissed=true + dismissed_at + dismissed_by; await params per Next 15
+    Verify: `npx tsc --noEmit`; curl returns {ok:true}
+    Notes:
+
+[ ] T14: Implement POST /api/analytics/zernio/pulse/[id]/lock
+    Files: app/api/analytics/zernio/pulse/[id]/lock/route.ts
+    Acceptance: Zod {locked:boolean}, toggles is_locked + locked_at + locked_by, returns new state
+    Verify: `npx tsc --noEmit`; curl toggles
+    Notes:
+
+[ ] T15: Implement POST /api/analytics/zernio/pulse/[id]/flag-wrong
+    Files: app/api/analytics/zernio/pulse/[id]/flag-wrong/route.ts
+    Acceptance: Zod {reason?:string<=500}, sets flagged_wrong_at + flagged_wrong_by + flagged_wrong_reason; no auto-regenerate
+    Verify: `npx tsc --noEmit`; curl returns {ok:true}
+    Notes:
+
+[ ] T16: Implement POST /api/analytics/zernio/pulse/regenerate
+    Files: app/api/analytics/zernio/pulse/regenerate/route.ts
+    Acceptance: admin auth, Zod {client_id}, calls generatePulse synchronously, returns new pulse or 422 no_signal/banned_topic
+    Verify: `npx tsc --noEmit`; curl returns pulse or 422
+    Notes:
+
+[ ] T17: Build components/analytics/zernio-pulse-card.tsx
+    Files: components/analytics/zernio-pulse-card.tsx
+    Acceptance: 'use client' top, props per PRD, action toolbar admin-only, locked + flagged border states, returns null when pulse is null
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T18: Mount pulse card in admin analytics page
+    Files: app/admin/analytics/zernio/page.tsx
+    Acceptance: server fetches today's pulse, hands to client card above platform grid; handlers wired to admin routes
+    Verify: `npx tsc --noEmit`; visual check on /admin/analytics/zernio
+    Notes:
+
+[ ] T19: Mount pulse card in portal analytics page
+    Files: app/portal/analytics/page.tsx
+    Acceptance: server fetches via /api/portal/.../pulse, renders card with isPortal=true and no handlers
+    Verify: `npx tsc --noEmit`; visual check on /portal/analytics
+    Notes:
+
+[ ] T20: Cron smoke test against staging
+    Files: (none - verification)
+    Acceptance: cron run logs generated + gated_out counts; at least one pulse persists; rows visible in client_analytics_pulses
+    Verify: trigger cron manually with CRON_SECRET; psql / Supabase MCP select
+    Notes:
+
+[ ] T21: Banned topic regression check
+    Files: (none - verification)
+    Acceptance: SQL grep on persisted bodies returns zero matches across all banned patterns
+    Verify: Supabase MCP execute_sql with banned regex
+    Notes:
+
+[ ] T22: Portal cross-org leak smoke test
+    Files: (none - verification)
+    Acceptance: viewer in org A cannot see org B pulses via portal route
+    Verify: log in as two viewers; compare scoped output
+    Notes:
+
+[ ] T23: Verify Done When checklist + commit
+    Files: (none)
+    Acceptance: every bullet in PRD Done When passes; SHA recorded
+    Verify: walk PRD Done When; `npx tsc --noEmit`; `npm run lint`
+    Notes:

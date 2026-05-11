@@ -1,0 +1,98 @@
+# Progress: vff-04-junk-filter
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/vff-04-junk-filter/PRD.md before each task.
+
+[ ] T01: Author migration 275_viral_videos_reject_columns.sql
+    Files: supabase/migrations/275_viral_videos_reject_columns.sql
+    Acceptance: ADD COLUMN IF NOT EXISTS for reject_reason, gate_metadata, gated_at; partial index on reject_reason
+    Verify: `grep -c "ADD COLUMN IF NOT EXISTS" supabase/migrations/275_viral_videos_reject_columns.sql` returns 3
+    Notes:
+
+[ ] T02: Apply migration 275 via Supabase MCP
+    Files: (Supabase MCP) apply_migration name="275_viral_videos_reject_columns"
+    Acceptance: applies cleanly; list_tables shows new columns
+    Verify: Supabase MCP execute_sql `SELECT column_name FROM information_schema.columns WHERE table_name='viral_videos' AND column_name IN ('reject_reason','gate_metadata','gated_at')` returns 3 rows
+    Notes:
+
+[ ] T03: Create lib/analytics/reject-reasons.ts
+    Files: lib/analytics/reject-reasons.ts
+    Acceptance: exports RejectReason union string literal type + REJECT_REASON_LABELS record per PRD; values are sentence-case strings
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T04: Regenerate lib/supabase/types.ts
+    Files: lib/supabase/types.ts
+    Acceptance: types reflect new columns
+    Verify: `npx supabase gen types typescript --project-id $SUPABASE_PROJECT_ID > lib/supabase/types.ts && npx tsc --noEmit`
+    Notes:
+
+[ ] T05: Create lib/analytics/junk-filter.ts heuristic gate
+    Files: lib/analytics/junk-filter.ts
+    Acceptance: exports gateHeuristic(video) returning { pass, reason?, metadata } applying all 6 heuristic rules + metadata_incomplete; pure (no IO)
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T06: Extend junk-filter.ts with LLM gate
+    Files: lib/analytics/junk-filter.ts
+    Acceptance: exports gateVideo(video, seedTerms) running heuristic then LLM (via openrouter-rich), returning final verdict; JSON parsed with GateSchema; primary model gpt-5.4-mini with haiku fallback
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T07: Author lib/analytics/junk-filter.test.ts
+    Files: lib/analytics/junk-filter.test.ts
+    Acceptance: 6 cases per PRD Unit test plan; OpenRouter call mocked
+    Verify: `npx vitest run lib/analytics/junk-filter.test.ts`
+    Notes:
+
+[ ] T08: Create cron route app/api/cron/format-gate/route.ts
+    Files: app/api/cron/format-gate/route.ts
+    Acceptance: Bearer CRON_SECRET; selects up to 100 pending rows; per-row calls gateVideo with brand seeds from joined brand_format_context; updates analysis_status + reject_reason + gate_metadata + gated_at; concurrency 10 via p-limit pattern; export const maxDuration = 300
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes:
+
+[ ] T09: Register format-gate cron in vercel.json
+    Files: vercel.json
+    Acceptance: crons array entry { path: "/api/cron/format-gate", schedule: "*/5 * * * *" }
+    Verify: `grep "format-gate" vercel.json`
+    Notes:
+
+[ ] T10: Create GET /api/admin/formats/rejected
+    Files: app/api/admin/formats/rejected/route.ts
+    Acceptance: admin-only, validates QuerySchema, returns paginated list; reason + platform filters applied if set
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T11: Create POST restore endpoint
+    Files: app/api/admin/formats/rejected/[id]/restore/route.ts
+    Acceptance: admin-only; 404 if not found OR not rejected; 409 if already analyzed; otherwise updates analysis_status='pending', clears reject_reason + gate_metadata + gated_at
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T12: Build components/formats/reject-card.tsx
+    Files: components/formats/reject-card.tsx
+    Acceptance: 9:16 card with reason badge, creator handle, views, Restore button; uses platform-tinted fallback when thumbnail null; onRestore prop handler
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T13: Build app/admin/formats/rejected/page.tsx
+    Files: app/admin/formats/rejected/page.tsx
+    Acceptance: server component fetches first page; client island for pagination + restore; filter dropdowns + grid render per PRD; sentence-case copy verbatim
+    Verify: visit /admin/formats/rejected, see grid; filter by reason works; restore works
+    Notes:
+
+[ ] T14: Run lint + typecheck
+    Files: (none)
+    Acceptance: `npm run lint` clean, `npx tsc --noEmit` clean
+    Verify: both commands exit 0
+    Notes:
+
+[ ] T15: Smoke test cron + measure rejection rate
+    Files: (none)
+    Acceptance: After 200 pending videos pass through, rejection rate >= 55%; 20-video spot-check shows <=5% false-rejects
+    Verify: SQL `SELECT analysis_status, COUNT(*) FROM viral_videos GROUP BY 1`
+    Notes:
+
+[ ] T16: Verify Done When checklist
+    Files: (none)
+    Acceptance: every bullet in PRD Done When passes; commit SHA recorded
+    Verify: walk PRD Done When; record SHA
+    Notes:
