@@ -136,7 +136,7 @@ function centralDayBounds(iso: string): { lo: string; hi: string } {
 }
 
 /**
- * Return any (client, platform, UTC-day) collisions that scheduling the
+ * Return any (client, platform, Central-day) collisions that scheduling the
  * given post would create. Empty array means scheduling is clear.
  *
  * Use this when you want to inspect collisions and decide what to do
@@ -213,7 +213,7 @@ export async function findSameDayCollisions(
 /**
  * Throw `SameDayScheduleError` if any platform in `input.platforms` would
  * collide with an existing scheduled post for the same client on the
- * same UTC day. Pass `allowSameDay: true` to skip the check entirely
+ * same Central-time day. Pass `allowSameDay: true` to skip the check entirely
  * (the documented escape hatch for cloned posts, batch-publish, and
  * explicit holiday-burst overrides).
  */
