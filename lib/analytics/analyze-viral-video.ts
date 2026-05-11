@@ -85,7 +85,7 @@ export async function analyzeViralVideo(
       )
       .eq('id', videoId)
       .single(),
-    admin.from('viral_formats').select('kind, slug'),
+    admin.from('viral_formats').select('kind, slug, aliases').is('archived_at', null),
   ]);
 
   if (rowRes.error || !rowRes.data) {
@@ -101,7 +101,13 @@ export async function analyzeViralVideo(
     analysis_status: string;
   };
 
-  const taxonomy = bucketTaxonomy((taxonomyRes.data ?? []) as { kind: string; slug: string }[]);
+  const taxonomyRows = (taxonomyRes.data ?? []) as {
+    kind: string;
+    slug: string;
+    aliases: string[] | null;
+  }[];
+  const taxonomy = bucketTaxonomy(taxonomyRows);
+  const aliases = bucketAliases(taxonomyRows);
 
   // 2. Download + upload MP4. On total failure mark mp4_unavailable.
   let fileRef: { fileUri: string; mimeType: string } | null = null;
@@ -130,6 +136,7 @@ export async function analyzeViralVideo(
         comments,
         duration: row.duration_seconds,
         taxonomy,
+        aliases,
       });
       const raw = await generateWithFile<unknown>({
         fileUri: fileRef.fileUri,
@@ -165,6 +172,7 @@ export async function analyzeViralVideo(
   const { proposals, embedding, embeddingError } = await persistAnalysis(admin, row, parsed, {
     force: opts.force ?? false,
     taxonomy,
+    aliases,
   });
 
   // 6. Telemetry — Gemini File-API + 2.5-flash cost is ~$0.005-0.015/video.
@@ -197,7 +205,7 @@ export async function analyzeViralVideo(
 // ---------------------------------------------------------------------------
 
 function bucketTaxonomy(
-  rows: { kind: string; slug: string }[],
+  rows: { kind: string; slug: string; aliases?: string[] | null }[],
 ): Record<'hook_type' | 'structure' | 'archetype' | 'pacing', string[]> {
   const out = {
     hook_type: [] as string[],
@@ -213,24 +221,50 @@ function bucketTaxonomy(
   return out;
 }
 
+// VFF-06: per-slug alias map keyed by kind so the prompt CSV resolves common
+// synonyms ("vo_broll" → "voiceover_b_roll") without breaking the pure-slug
+// membership check used elsewhere.
+function bucketAliases(
+  rows: { kind: string; slug: string; aliases?: string[] | null }[],
+): Record<'hook_type' | 'structure' | 'archetype' | 'pacing', Record<string, string[]>> {
+  const out: Record<'hook_type' | 'structure' | 'archetype' | 'pacing', Record<string, string[]>> = {
+    hook_type: {},
+    structure: {},
+    archetype: {},
+    pacing: {},
+  };
+  for (const r of rows) {
+    if (r.kind in out) {
+      out[r.kind as keyof typeof out][r.slug] = (r.aliases ?? []).filter(Boolean);
+    }
+  }
+  return out;
+}
+
 function buildUserPrompt(opts: {
   platform: string;
   caption: string;
   comments: string[];
   duration: number | null;
   taxonomy: Record<'hook_type' | 'structure' | 'archetype' | 'pacing', string[]>;
+  aliases?: Record<'hook_type' | 'structure' | 'archetype' | 'pacing', Record<string, string[]>>;
 }): string {
-  const csv = (xs: string[]) => (xs.length ? xs.join(', ') : '(none yet — propose)');
+  const labelFor = (kind: 'hook_type' | 'structure' | 'archetype' | 'pacing', slug: string) => {
+    const a = opts.aliases?.[kind]?.[slug] ?? [];
+    return a.length ? `${slug} (also: ${a.join(', ')})` : slug;
+  };
+  const csv = (kind: 'hook_type' | 'structure' | 'archetype' | 'pacing', xs: string[]) =>
+    xs.length ? xs.map((s) => labelFor(kind, s)).join(', ') : '(none yet — propose)';
   return [
     `PLATFORM: ${opts.platform}`,
     `CAPTION:\n${opts.caption || '(none)'}`,
     `TOP COMMENTS (by likes):\n${JSON.stringify(opts.comments.slice(0, 10))}`,
     `DURATION: ${opts.duration ?? 'unknown'}s (analyzing first ${MAX_DURATION_S}s)`,
-    'TAXONOMY (pick one slug per dimension or propose new):',
-    `hook_type: ${csv(opts.taxonomy.hook_type)}`,
-    `structure: ${csv(opts.taxonomy.structure)}`,
-    `archetype: ${csv(opts.taxonomy.archetype)}`,
-    `pacing: ${csv(opts.taxonomy.pacing)}`,
+    'TAXONOMY (pick the canonical slug per dimension; the (also: …) parens list synonyms that map to that slug; propose only if none fit):',
+    `hook_type: ${csv('hook_type', opts.taxonomy.hook_type)}`,
+    `structure: ${csv('structure', opts.taxonomy.structure)}`,
+    `archetype: ${csv('archetype', opts.taxonomy.archetype)}`,
+    `pacing: ${csv('pacing', opts.taxonomy.pacing)}`,
     '',
     'Return JSON with hook_type/structure/archetype/pacing objects ({ slug, confidence, propose }), engagement_hook_descriptor (<=80 chars, starts with a verb), why_it_works (2-3 sentences 60-280 chars), retention_pattern (one short phrase), and title (short ASCII or null).',
   ].join('\n');
@@ -340,6 +374,7 @@ async function persistAnalysis(
   ctx: {
     force: boolean;
     taxonomy: Record<'hook_type' | 'structure' | 'archetype' | 'pacing', string[]>;
+    aliases?: Record<'hook_type' | 'structure' | 'archetype' | 'pacing', Record<string, string[]>>;
   },
 ): Promise<{
   proposals: Array<{ kind: 'hook_type' | 'structure' | 'archetype' | 'pacing'; slug: string }>;
@@ -348,7 +383,35 @@ async function persistAnalysis(
 }> {
   const dims = ['hook_type', 'structure', 'archetype', 'pacing'] as const;
 
-  // Collect proposals (LLM-flagged OR slug not in taxonomy).
+  // VFF-06: resolve LLM slug → canonical slug if it matches an alias on any
+  // taxonomy row of the same kind. This keeps "vo_broll" from being filed as
+  // a fresh proposal when it should map to "voiceover_b_roll".
+  const resolveSlug = (
+    kind: (typeof dims)[number],
+    rawSlug: string,
+  ): { canonical: string; resolved: boolean } => {
+    if (ctx.taxonomy[kind].includes(rawSlug)) {
+      return { canonical: rawSlug, resolved: true };
+    }
+    const aliasMap = ctx.aliases?.[kind];
+    if (aliasMap) {
+      for (const [canonical, aliases] of Object.entries(aliasMap)) {
+        if (aliases.includes(rawSlug)) {
+          return { canonical, resolved: true };
+        }
+      }
+    }
+    return { canonical: rawSlug, resolved: false };
+  };
+
+  // Mutate parsed slugs in place so downstream writes use the canonical form.
+  for (const d of dims) {
+    const { canonical } = resolveSlug(d, parsed[d].slug);
+    parsed[d].slug = canonical;
+  }
+
+  // Collect proposals (LLM-flagged OR slug still not in taxonomy after alias
+  // resolution).
   const proposals: Array<{
     kind: (typeof dims)[number];
     slug: string;
