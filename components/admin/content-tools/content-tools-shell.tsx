@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   BadgeDollarSign,
@@ -407,6 +408,7 @@ const TABS: {
 ];
 
 export function ContentToolsShell() {
+  const router = useRouter();
   const [tab, setTab] = useState<ContentToolsTab>('projects');
 
   // Projects state lives at the shell level so the same fetch backs
@@ -663,6 +665,50 @@ export function ContentToolsShell() {
     }
   }
 
+  /**
+   * Promote an editing project to the content calendar. Creates one
+   * draft scheduled_post per latest video so the row appears on
+   * /calendar, where caption + scheduled time + platforms can be
+   * filled in. Editing rows only — `id` is `editing:<uuid>`.
+   */
+  async function promoteToCalendar(id: string) {
+    if (!id.startsWith('editing:')) return;
+    const projectId = id.slice('editing:'.length);
+    const project = editingProjects.find((p) => p.id === projectId);
+    const brandSlug = project?.client_slug ?? null;
+    const toastId = toast.loading('Promoting to calendar…');
+    try {
+      const res = await fetch(
+        `/api/admin/editing/projects/${projectId}/promote-to-calendar`,
+        { method: 'POST' },
+      );
+      const body = (await res.json().catch(() => ({}))) as {
+        post_count?: number;
+        error?: string;
+        detail?: string;
+      };
+      if (!res.ok) {
+        throw new Error(body.detail || body.error || 'Promote failed');
+      }
+      toast.success(
+        `Added ${body.post_count ?? 0} draft posts to the calendar`,
+        {
+          id: toastId,
+          action: brandSlug
+            ? {
+                label: 'Open calendar',
+                onClick: () => router.push(`/calendar?brand=${brandSlug}`),
+              }
+            : undefined,
+        },
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Promote failed', {
+        id: toastId,
+      });
+    }
+  }
+
   // Editing detail dialog reads its project from the live editing
   // slice so renames + status changes inside the dialog propagate
   // back into the table without an extra round-trip.
@@ -776,6 +822,7 @@ export function ContentToolsShell() {
                 showBrand
                 onPatchLink={patchLink}
                 onArchiveLink={archiveLink}
+                onPromoteToCalendar={promoteToCalendar}
                 title={PROJECT_TAB_LABEL[activeProjectTab]}
                 sort={sort}
                 onSortChange={setSort}

@@ -39,7 +39,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { Trash2 } from 'lucide-react';
+import { CalendarPlus, Trash2 } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -364,6 +364,12 @@ interface ReviewTableCardProps {
    */
   onArchiveLink?: (id: string) => void;
   /**
+   * Optional "Promote to calendar" handler for editing-project rows.
+   * Mints draft scheduled_posts from the project's latest videos so
+   * captions + schedule times can be filled in on /calendar.
+   */
+  onPromoteToCalendar?: (id: string) => void;
+  /**
    * Click handler for `kind: 'editing'` rows. Editing rows route here
    * so the parent can pop the editing-project detail dialog.
    */
@@ -399,6 +405,7 @@ export function ReviewTableCard({
   showBrand = false,
   onPatchLink,
   onArchiveLink,
+  onPromoteToCalendar,
   onOpenEditingProject,
   onOpenCalendarLink,
   title,
@@ -558,6 +565,11 @@ export function ReviewTableCard({
             showLastFollowup={showLastFollowup}
             onPatch={(patch) => onPatchLink(link.id, patch)}
             onArchive={onArchiveLink ? () => onArchiveLink(link.id) : undefined}
+            onPromoteToCalendar={
+              onPromoteToCalendar && link.kind === 'editing'
+                ? () => onPromoteToCalendar(link.id)
+                : undefined
+            }
             onOpenEditingProject={onOpenEditingProject}
             onOpenCalendarLink={onOpenCalendarLink}
           />
@@ -578,6 +590,11 @@ interface ReviewTableRowProps {
   onPatch: (patch: Partial<ReviewLinkRow>) => void;
   /** Right-click "Archive" handler. Hides the menu item when omitted. */
   onArchive?: () => void;
+  /**
+   * Right-click "Promote to calendar" handler. Only set for editing-
+   * project rows. Hides the menu item when omitted.
+   */
+  onPromoteToCalendar?: () => void;
   /** Editing-project click handler. Used when `link.kind === 'editing'`. */
   onOpenEditingProject?: (editingProjectId: string) => void;
   /**
@@ -599,6 +616,7 @@ function ReviewTableRow({
   showLastFollowup = true,
   onPatch,
   onArchive,
+  onPromoteToCalendar,
   onOpenEditingProject,
   onOpenCalendarLink,
 }: ReviewTableRowProps) {
@@ -685,22 +703,30 @@ function ReviewTableRow({
     </TableRow>
   );
 
-  // Without an archive handler, render the row directly. Wrapping in
-  // ContextMenu adds a Radix portal per row, which is wasted work for
-  // surfaces that don't support archive (e.g. read-only viewer view).
-  if (!onArchive) return rowBody;
+  // Without any context-menu handlers, render the row directly. Wrapping
+  // in ContextMenu adds a Radix portal per row, which is wasted work for
+  // surfaces that don't need it (e.g. read-only viewer view).
+  if (!onArchive && !onPromoteToCalendar) return rowBody;
 
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{rowBody}</ContextMenuTrigger>
-      <ContextMenuContent className="w-44">
-        <ContextMenuItem
-          onSelect={onArchive}
-          className="text-status-danger focus:text-status-danger"
-        >
-          <Trash2 size={14} />
-          Archive
-        </ContextMenuItem>
+      <ContextMenuContent className="w-52">
+        {onPromoteToCalendar && (
+          <ContextMenuItem onSelect={onPromoteToCalendar}>
+            <CalendarPlus size={14} />
+            Promote to calendar
+          </ContextMenuItem>
+        )}
+        {onArchive && (
+          <ContextMenuItem
+            onSelect={onArchive}
+            className="text-status-danger focus:text-status-danger"
+          >
+            <Trash2 size={14} />
+            Archive
+          </ContextMenuItem>
+        )}
       </ContextMenuContent>
     </ContextMenu>
   );
