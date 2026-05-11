@@ -8,6 +8,10 @@
   },
   "crons": [
     {
+      "path": "/api/cron/prospect-monitor-daily",
+      "schedule": "0 9 * * *"
+    },
+    {
       "path": "/api/cron/shoot-brief-reminders",
       "schedule": "0 9 * * *"
     },

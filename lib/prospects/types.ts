@@ -209,6 +209,71 @@ export interface ProspectCompetitorBenchmarkRow {
   updated_at: string;
 }
 
+// ── SPY-06: prospect_monitor_* ───────────────────────────────────────────────
+
+export type MonitorFrequency = 'weekly' | 'biweekly';
+
+export type AlertKind =
+  | 'follower_jump'
+  | 'viral_post'
+  | 'cadence_shift'
+  | 'format_pivot';
+
+export type AlertSeverity = 'low' | 'medium' | 'high';
+
+export interface ProspectMonitorConfigRow {
+  id: string;
+  prospect_id: string;
+  frequency: MonitorFrequency;
+  day_of_week: number; // 0=Sun
+  active: boolean;
+  paused_at: string | null;
+  last_run_at: string | null;
+  last_success_at: string | null;
+  last_error: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MonitorSnapshotMetrics {
+  followers_count: number | null;
+  posts_last_7d: number | null;
+  top_post: {
+    id: string | null;
+    views: number | null;
+    published_at: string | null;
+    archetype?: string | null;
+  } | null;
+  archetypes_last_5?: Array<string | null>;
+  median_views_last_10?: number | null;
+}
+
+export interface ProspectMonitorSnapshotRow {
+  id: string;
+  prospect_id: string;
+  captured_at: string;
+  competitor_handle: string;
+  competitor_platform: ProspectPlatform;
+  raw_metrics: MonitorSnapshotMetrics;
+  workflow_run_id: string | null;
+  created_at: string;
+}
+
+export interface ProspectMonitorAlertRow {
+  id: string;
+  prospect_id: string;
+  snapshot_id: string | null;
+  prior_snapshot_id: string | null;
+  kind: AlertKind;
+  severity: AlertSeverity;
+  message: string;
+  evidence: Record<string, unknown>;
+  acknowledged_at: string | null;
+  acknowledged_by: string | null;
+  occurred_at: string;
+}
+
 export const LIFECYCLE_LABELS: Record<ProspectLifecycleState, string> = {
   discovered: 'Discovered',
   audited: 'Audited',
