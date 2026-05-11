@@ -316,6 +316,90 @@ export interface PresentationSnapshot {
   contact: PresentationContact;
 }
 
+// ── SPY-10: Stickiness layer / digest subscriptions + drafts + events ───────
+
+export type DigestKind = 'weekly_competitor' | 'monthly_format';
+export type DigestStatus = 'drafted' | 'approved' | 'sent' | 'expired' | 'rejected';
+export type DigestEventKind =
+  | 'sent'
+  | 'opened'
+  | 'clicked'
+  | 'unsubscribed'
+  | 'bounced'
+  | 'complained';
+
+export interface DigestSubscription {
+  id: string;
+  prospect_id: string;
+  kind: DigestKind;
+  active: boolean;
+  start_date: string;
+  last_built_at: string | null;
+  last_sent_at: string | null;
+  unsubscribed_at: string | null;
+  unsubscribed_via: 'per_type' | 'all_stop' | null;
+  unsubscribe_token: string | null;
+}
+
+export interface WeeklyCompetitorPayload {
+  highlights: Array<{
+    competitor_handle: string;
+    competitor_platform: string;
+    headline: string;
+    body: string;
+    alert_id: string;
+  }>;
+  week_range: { from: string; to: string };
+  cta_url: string;
+  polish_fallback?: boolean;
+  evergreen?: boolean;
+}
+
+export interface MonthlyFormatPayload {
+  formats: Array<{
+    format_id: string;
+    format_name: string;
+    why_it_works: string;
+    sample_post_urls: string[];
+  }>;
+  month: string;
+  cta_url: string;
+  polish_fallback?: boolean;
+  evergreen?: boolean;
+}
+
+export interface DigestDraft {
+  id: string;
+  subscription_id: string;
+  prospect_id: string;
+  kind: DigestKind;
+  subject: string;
+  html: string;
+  text: string;
+  to_email: string;
+  reply_to_email: string;
+  status: DigestStatus;
+  resend_message_id: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  sent_at: string | null;
+  expires_at: string;
+  payload: WeeklyCompetitorPayload | MonthlyFormatPayload | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DigestEventRow {
+  id: string;
+  draft_id: string;
+  prospect_id: string;
+  kind: DigestEventKind;
+  target_url: string | null;
+  user_agent: string | null;
+  ip_hash: string | null;
+  occurred_at: string;
+}
+
 export const LIFECYCLE_LABELS: Record<ProspectLifecycleState, string> = {
   discovered: 'Discovered',
   audited: 'Audited',

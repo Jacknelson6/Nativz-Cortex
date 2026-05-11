@@ -12,6 +12,10 @@
       "schedule": "0 9 * * *"
     },
     {
+      "path": "/api/cron/prospect-digest-build",
+      "schedule": "0 8 * * *"
+    },
+    {
       "path": "/api/cron/shoot-brief-reminders",
       "schedule": "0 9 * * *"
     },

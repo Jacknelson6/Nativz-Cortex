@@ -28,6 +28,7 @@ import {
   Telescope,
   Workflow,
   Sparkles,
+  Mail,
 } from 'lucide-react';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
@@ -180,6 +181,7 @@ const NAV_SECTIONS: NavSection[] = [
           // (not Brand tools) because the feed is agency-wide rather than
           // brand-scoped — operators triage signals across the whole roster.
           { href: '/admin/prospects/alerts', label: 'Prospect Alerts', icon: Bell },
+          { href: '/admin/prospects/digests', label: 'Prospect Digests', icon: Mail },
           { href: '/admin/users', label: 'Users', icon: Users },
           { href: '/admin/accounting', label: 'Accounting', icon: Receipt, superAdminOnly: true },
           { href: '/admin/usage', label: 'Usage', icon: Gauge },
