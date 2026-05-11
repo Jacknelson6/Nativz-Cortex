@@ -6,15 +6,19 @@
  * normal scheduled post AND a backfill clone landing on the same day on
  * the same platform. Jack's rule (2026-05-11): every (client, platform)
  * gets at most one scheduled post per Central-time day, unless the
- * caller passes `allowSameDay: true` to explicitly opt out.
+ * caller explicitly opts out via `allowSameDay: true` or auto-walks via
+ * `nextFreeSlot`.
  *
- * Legitimate opt-out cases:
- *   - `app/api/scheduler/posts/add-platforms` cloned mode (splits a
- *     past-due post into a fresh clone targeting one platform)
- *   - `app/api/scheduler/posts/batch-publish` (flips status to
- *     `publishing`, scheduled_at moves to now() so a real publish runs)
- *   - holiday bursts / promotional double-drops the team explicitly
- *     approves at the call site
+ * Three ways to be exempt:
+ *   - `allowSameDay: true` on `assertNoSameDayCollision` (explicit override
+ *     for holiday bursts / promotional double-drops)
+ *   - calling `nextFreeSlot` instead (walks the slot forward to the next
+ *     clear Central day — used by `schedule-drop`, `auto-schedule`, and
+ *     `scheduler/posts/add-platforms` cloned mode)
+ *   - skipping the helper entirely (the only legitimate caller doing this
+ *     is `scheduler/posts/batch-publish`, which flips status to
+ *     `publishing` with `scheduled_at = now()` for an immediate publish —
+ *     not a scheduling decision)
  *
  * The check counts only live-pipeline posts (`draft`, `scheduled`,
  * `publishing`, `partially_failed`); terminal states (`published`,
