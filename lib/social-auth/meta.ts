@@ -93,11 +93,18 @@ export async function getFacebookPageProfile(
   pageId: string,
   pageToken: string,
 ): Promise<OAuthResult> {
+  // Request `username` (the vanity slug, when set) alongside `name`
+  // (display title). The vanity slug is what FB puts after the slash
+  // on a page URL — without it we used to store the display name,
+  // which produces an unclickable "facebook.com/My Cool Page" link.
+  // Fall back to the page id, which is a valid URL segment too.
   const res = await fetch(
-    `${META_GRAPH_URL}/${pageId}?fields=id,name,picture&access_token=${pageToken}`,
+    `${META_GRAPH_URL}/${pageId}?fields=id,name,username,picture&access_token=${pageToken}`,
   );
   const data = await res.json();
   if (data.error) throw new Error(data.error.message);
+
+  const urlSlug = (data.username as string | undefined)?.trim() || data.id;
 
   return {
     tokens: {
@@ -107,7 +114,7 @@ export async function getFacebookPageProfile(
     },
     profile: {
       platformUserId: data.id,
-      username: data.name ?? '',
+      username: urlSlug,
       avatarUrl: data.picture?.data?.url,
     },
   };

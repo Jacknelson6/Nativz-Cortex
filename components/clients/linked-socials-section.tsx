@@ -82,9 +82,33 @@ const PLATFORM_META: Record<Platform, { label: string; icon: React.ComponentType
 const PLATFORM_ORDER: Platform[] = ['instagram', 'tiktok', 'facebook', 'youtube'];
 
 /** Canonical URL for a platform + handle. Used for both display + the
- *  `href` on the external-link chip. */
+ *  `href` on the external-link chip.
+ *
+ *  Historical FB/YT OAuth runs stamped the display name (with spaces)
+ *  into `username`, which made the rendered URL unclickable. We
+ *  encodeURIComponent the path segment so those stale rows produce a
+ *  navigable link (it may still 404 on the platform, but at least the
+ *  anchor is valid). Slashes within YouTube custom URLs are preserved
+ *  by encoding each segment separately. */
 function canonicalUrl(platform: Platform, handle: string): string {
-  const h = handle.replace(/^@+/, '');
+  const h = handle.replace(/^@+/, '').trim();
+  const safe = h
+    .split('/')
+    .map((seg) => encodeURIComponent(seg))
+    .join('/');
+  switch (platform) {
+    case 'instagram': return `https://instagram.com/${safe}`;
+    case 'tiktok':    return `https://tiktok.com/@${safe}`;
+    case 'facebook':  return `https://facebook.com/${safe}`;
+    case 'youtube':   return `https://youtube.com/@${safe}`;
+  }
+}
+
+/** Human-readable rendering for the URL. We URL-encode for the href but
+ *  keep the original text for the visible label so the row still reads
+ *  naturally ("facebook.com/My Brand") instead of "facebook.com/My%20Brand". */
+function displayUrl(platform: Platform, handle: string): string {
+  const h = handle.replace(/^@+/, '').trim();
   switch (platform) {
     case 'instagram': return `https://instagram.com/${h}`;
     case 'tiktok':    return `https://tiktok.com/@${h}`;
@@ -222,6 +246,12 @@ function SlotRow({
   const Icon = meta.icon;
   const zernioManaged = slot?.zernio_connected ?? false;
   const currentUrl = slot?.handle ? canonicalUrl(platform, slot.handle) : '';
+  const currentDisplay = slot?.handle ? displayUrl(platform, slot.handle) : '';
+  // Flag handles that contain whitespace — older OAuth runs stamped
+  // display names (with spaces) here, producing broken URLs. We expose
+  // an inline edit affordance so admins can repair without re-OAuthing.
+  const handleHasSpaces = !!slot?.handle && /\s/.test(slot.handle);
+  const [overrideOpen, setOverrideOpen] = useState(false);
 
   // Draft mirrors the slot URL while the admin is typing. A change +
   // blur triggers a save; pressing Enter blurs.
@@ -231,8 +261,14 @@ function SlotRow({
   const dirty = draft.trim() !== currentUrl;
 
   function commit() {
-    if (!dirty) return;
+    if (!dirty) {
+      // Nothing changed — if we opened the override input solely to
+      // repair a Zernio row, treat the no-op blur as a cancel.
+      if (overrideOpen) setOverrideOpen(false);
+      return;
+    }
     onSave(draft);
+    if (overrideOpen) setOverrideOpen(false);
   }
 
   // Viewer mode — render a static link row regardless of Zernio status.
@@ -254,7 +290,7 @@ function SlotRow({
               rel="noreferrer noopener"
               className="flex-1 min-w-0 truncate text-sm text-accent-text hover:underline"
             >
-              {currentUrl}
+              {currentDisplay}
             </a>
           ) : (
             <span className="flex-1 text-sm text-text-muted italic">Not linked</span>
@@ -276,10 +312,14 @@ function SlotRow({
         <span className="text-sm font-medium text-text-primary">{meta.label}</span>
       </div>
 
-      {zernioManaged ? (
+      {zernioManaged && !overrideOpen ? (
         /* Zernio-OAuth-backed → show the URL as a static link. OAuth
            disconnection lives on the scheduler page; this surface never
-           disturbs a live connection. */
+           disturbs a live connection.
+           If the stored handle has whitespace (legacy OAuth runs that
+           captured the display name instead of the URL slug), show an
+           "Edit" affordance so admins can repair the handle without
+           re-OAuthing. The PATCH path preserves access tokens. */
         <div className="flex-1 flex items-center gap-2 min-w-0">
           <a
             href={currentUrl}
@@ -287,8 +327,18 @@ function SlotRow({
             rel="noreferrer noopener"
             className="flex-1 min-w-0 truncate text-sm text-accent-text hover:underline"
           >
-            {currentUrl}
+            {currentDisplay}
           </a>
+          {handleHasSpaces && (
+            <button
+              type="button"
+              onClick={() => setOverrideOpen(true)}
+              className="shrink-0 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-amber-500/40 bg-amber-500/10 text-amber-400 font-semibold hover:bg-amber-500/20 transition-colors"
+              title="Stored handle has spaces — click to repair"
+            >
+              Edit
+            </button>
+          )}
           <span className="shrink-0 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold">
             <Zap size={10} /> Connected
           </span>
