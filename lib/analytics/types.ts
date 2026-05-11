@@ -90,6 +90,28 @@ export interface ViralCollectionVideo {
   notes: string | null;
 }
 
+// VFF-05: structured output of analyzeViralVideo(). Mirrors the LLM
+// schema verbatim; persistence flattens slug fields onto viral_video_formats
+// rows + the 4 narrative columns on viral_videos.
+export interface ViralAnalysisOutput {
+  status: 'analyzed' | 'failed';
+  hook_type: { slug: string; confidence: number; propose: boolean };
+  structure: { slug: string; confidence: number; propose: boolean };
+  archetype: { slug: string; confidence: number; propose: boolean };
+  pacing: { slug: string; confidence: number; propose: boolean };
+  engagement_hook_descriptor: string;
+  why_it_works: string;
+  retention_pattern: string;
+  title: string | null;
+  proposals: Array<{
+    kind: 'hook_type' | 'structure' | 'archetype' | 'pacing';
+    slug: string;
+  }>;
+  cost_usd: number;
+  latency_ms: number;
+  error?: 'mp4_unavailable' | 'malformed_output' | 'banned_content' | 'embedding_failed' | 'gemini_error';
+}
+
 // ============================================================
 // ZNA-01 — Analytics source routing (migration 278)
 // ============================================================
