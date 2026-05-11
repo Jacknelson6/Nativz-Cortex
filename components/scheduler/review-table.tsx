@@ -665,8 +665,25 @@ function ReviewTableRow({
       )}
       {showStatus && (
         <TableCell className="whitespace-nowrap px-2.5 text-center">
-          <div className="flex justify-center">
+          <div className="flex flex-col items-center gap-0.5">
             <StatusPill link={link} />
+            {link.approved_at && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-[11px] tabular-nums text-text-muted">
+                    approved {formatShortDate(link.approved_at)}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="w-56">
+                  <div className="font-medium text-text-primary">
+                    Approved {formatShortDate(link.approved_at)}
+                  </div>
+                  <div className="mt-0.5 text-text-muted">
+                    Drives which half-month billing bucket this project lands in.
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            )}
           </div>
         </TableCell>
       )}
