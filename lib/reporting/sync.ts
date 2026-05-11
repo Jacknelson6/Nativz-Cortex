@@ -195,6 +195,79 @@ export async function syncSocialProfile(
         reach: liOrgAnalytics.impressions,
       };
     }
+    // Per-day gross follows / unfollows for IG and FB. Zernio's account-
+    // insights endpoints accept arbitrary `since`/`until` windows, so calling
+    // them with `since=date, until=date` returns one day's gross numbers
+    // (matching what Meta Business Suite shows when you scope its date
+    // picker to a single day). Fanning out lets us land a per-day value in
+    // every snapshot row, which the summary route then sums to produce a
+    // window total that lines up with MBS for any user-selected range.
+    //
+    // Cost: 1 request per day per platform (or 2 for IG, which splits
+    // totals + follows breakdown). Capped at 5-wide concurrency to stay
+    // under Zernio's 600/window rate limit. Other platforms keep using the
+    // single window-totals call — TikTok has no per-day account-insights
+    // endpoint, and YT/LI gross numbers come from a different route.
+    const perDayAccountGains = new Map<
+      string,
+      { newFollows: number; unfollows: number }
+    >();
+    if (platform === 'instagram' || platform === 'facebook') {
+      const winDays: string[] = [];
+      const sd = new Date(`${dateRange.start}T00:00:00Z`);
+      const ed = new Date(`${dateRange.end}T00:00:00Z`);
+      for (
+        let d = new Date(sd);
+        d.getTime() <= ed.getTime();
+        d.setUTCDate(d.getUTCDate() + 1)
+      ) {
+        winDays.push(d.toISOString().slice(0, 10));
+      }
+
+      const CONCURRENCY = 5;
+      for (let i = 0; i < winDays.length; i += CONCURRENCY) {
+        const batch = winDays.slice(i, i + CONCURRENCY);
+        const results = await Promise.all(
+          batch.map(async (date) => {
+            try {
+              if (platform === 'instagram') {
+                const r = await zernio.getInstagramAccountMetrics(
+                  lateAccountId,
+                  date,
+                  date,
+                );
+                return {
+                  date,
+                  newFollows: r?.newFollows ?? 0,
+                  unfollows: r?.unfollows ?? 0,
+                };
+              }
+              const r = await zernio.getFacebookPageInsights(
+                lateAccountId,
+                date,
+                date,
+              );
+              return {
+                date,
+                newFollows: r?.followersGained ?? 0,
+                unfollows: r?.followersLost ?? 0,
+              };
+            } catch {
+              // Per-day call failed — leave the day out of the map; the
+              // read side will treat it as 0 contribution for that day.
+              return { date, newFollows: 0, unfollows: 0 };
+            }
+          }),
+        );
+        for (const r of results) {
+          perDayAccountGains.set(r.date, {
+            newFollows: r.newFollows,
+            unfollows: r.unfollows,
+          });
+        }
+      }
+    }
+
     // TikTok account-insights is a current-state snapshot, not a window
     // aggregate — don't write it into account_views_count etc. (which are
     // window totals). It's used downstream as an authoritative follower
@@ -380,6 +453,11 @@ export async function syncSocialProfile(
       const rows = dailyMetrics.map((day) => {
         const isWindowEnd = day.date === endOfWindowDate;
         const totals = isWindowEnd ? accountTotals : null;
+        // IG/FB use the per-day gains map; other platforms use the
+        // window-total stamped on the end-of-window row only.
+        const dayGains = perDayAccountGains.get(day.date);
+        const dailyFollows = dayGains?.newFollows ?? null;
+        const dailyUnfollows = dayGains?.unfollows ?? null;
         return {
           social_profile_id: profile.id,
           client_id: clientId,
@@ -413,19 +491,22 @@ export async function syncSocialProfile(
           // IG / FB because Zernio doesn't expose watch-time for those platforms.
           watch_time_seconds: Math.round((ytWatchMinutesByDay.get(day.date) ?? 0) * 60),
           follower_growth_percent: followerStats.growthPercent,
-          // Account-wide window totals — written to the end-of-window row
-          // only. Each platform exposes a different subset; missing fields
-          // stay null so the UI's "MetricCard returns undefined when both
-          // totals are 0" path renders an honest empty state instead of a
-          // misleading zero.
-          new_follows_count: totals?.newFollows ?? null,
-          unfollows_count: totals?.unfollows ?? null,
+          // Account-wide totals. Gross follows / unfollows for IG/FB are
+          // per-day (from `perDayAccountGains`) and land on every row;
+          // YT/LI keep the legacy "stamp window total on end-of-window
+          // row only" behavior. All other account_* fields stay window
+          // aggregates on the end-of-window row. Read side sums
+          // new_follows_count / unfollows_count across the window, which
+          // works for both modes (sum of N daily values, or sum of one
+          // window-total + N-1 nulls).
+          new_follows_count: dailyFollows ?? totals?.newFollows ?? null,
+          unfollows_count: dailyUnfollows ?? totals?.unfollows ?? null,
           account_views_count: totals?.views ?? null,
           account_engagement_count: totals?.totalInteractions ?? null,
           account_reach_count: totals?.reach ?? null,
           account_profile_visits_count: totals?.profileLinksTaps ?? null,
           accounts_engaged_count: totals?.accountsEngaged ?? null,
-          window_days: totals ? windowDays : null,
+          window_days: dayGains ? 1 : totals ? windowDays : null,
         };
       });
 
@@ -437,6 +518,77 @@ export async function syncSocialProfile(
         result.errors.push(
           `Failed to upsert snapshots for ${platform}: ${snapshotError.message}`,
         );
+      }
+
+      // Fill in zero-activity placeholder rows for every day in the window
+      // that Zernio didn't return a dailyMetric for. Without these, sparse
+      // brands (Zernio only returns days with posting activity for some
+      // accounts) get a snapshot table with big gaps, which propagates to
+      // gappy sparklines and undercounts the windowed gross-follows total.
+      // Placeholder rows carry: the correct follower count for the day
+      // (via followerForDay's carry-forward), zeros on per-post activity
+      // columns, and — for IG/FB — the per-day gross follows/unfollows
+      // pulled from `perDayAccountGains`. ignoreDuplicates ensures we never
+      // overwrite a previously-written real row.
+      const measuredDates = new Set(dailyMetrics.map((d) => d.date));
+      const fillRows: typeof rows = [];
+      {
+        const cursor = new Date(`${dateRange.start}T00:00:00Z`);
+        const end = new Date(`${dateRange.end}T00:00:00Z`);
+        while (cursor.getTime() <= end.getTime()) {
+          const date = cursor.toISOString().split('T')[0];
+          if (!measuredDates.has(date)) {
+            const dayGains = perDayAccountGains.get(date);
+            fillRows.push({
+              social_profile_id: profile.id,
+              client_id: clientId,
+              platform,
+              snapshot_date: date,
+              source: ZERNIO_SOURCE,
+              source_version: ZERNIO_SOURCE_VERSION,
+              captured_at: capturedAt,
+              followers_count: followerForDay(date),
+              followers_change:
+                followerForDay(date) - followerForPrevDay(date),
+              views_count: 0,
+              engagement_count: 0,
+              engagement_rate: 0,
+              posts_count: 0,
+              reach_count: platform === 'tiktok' ? null : 0,
+              impressions_count: platform === 'tiktok' ? null : 0,
+              link_clicks_count: 0,
+              profile_visits_count: 0,
+              watch_time_seconds: 0,
+              follower_growth_percent: followerStats.growthPercent,
+              new_follows_count: dayGains?.newFollows ?? null,
+              unfollows_count: dayGains?.unfollows ?? null,
+              account_views_count: null,
+              account_engagement_count: null,
+              account_reach_count: null,
+              account_profile_visits_count: null,
+              accounts_engaged_count: null,
+              window_days: dayGains ? 1 : null,
+            });
+          }
+          cursor.setUTCDate(cursor.getUTCDate() + 1);
+        }
+      }
+      if (fillRows.length > 0) {
+        const { error: fillError } = await adminClient
+          .from('platform_snapshots')
+          .upsert(fillRows, {
+            onConflict: 'social_profile_id,snapshot_date',
+            ignoreDuplicates: true,
+          });
+        if (fillError) {
+          // Non-fatal — the row-set from dailyMetrics already landed. Log
+          // and keep moving so a fill-row failure doesn't bring down the
+          // whole sync.
+          console.warn(
+            `[sync-reporting] fill rows for ${platform} (${profile.id}) failed:`,
+            fillError.message,
+          );
+        }
       }
     }
 

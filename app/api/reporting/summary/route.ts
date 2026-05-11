@@ -221,6 +221,11 @@ export async function GET(request: NextRequest) {
     let combinedPrevViews = 0;
     let combinedFollowerChange = 0;
     let combinedPrevFollowerChange = 0;
+    // Gross follow events across all platforms (MBS-style). Falls back to
+    // net `followerChange` per platform on platforms that don't expose
+    // gross numbers, so the headline tile always reads ≥ net change.
+    let combinedNewFollows = 0;
+    let combinedPrevNewFollows = 0;
     let combinedEngagement = 0;
     let combinedPrevEngagement = 0;
     let combinedEngRate = 0;
@@ -406,17 +411,55 @@ export async function GET(request: NextRequest) {
       );
       const avgViewDurationSeconds = avgWatchDurationByProfile.get(profileId) ?? 0;
 
-      // Prefer account-level window totals from the end-of-window snapshot
-      // when Zernio exposed them (IG only today). These match Meta Business
-      // Suite's "Follows / Views / Content interactions" numbers because
-      // they count events across the whole account, not just posts published
-      // inside the window. Falls back to post-aggregate sums on other
-      // platforms.
+      // Prefer account-level window totals from snapshots when Zernio exposed
+      // them. These match Meta Business Suite's "Follows / Views / Content
+      // interactions" numbers because they count events across the whole
+      // account, not just posts published inside the window.
+      //
+      // Two storage shapes coexist in `platform_snapshots`:
+      //   (a) per-day rows (IG/FB): `new_follows_count` is stamped on every
+      //       day in the window, each row's `window_days = 1`. Summing the
+      //       column across the window yields the gross total.
+      //   (b) end-of-window aggregate (YT/LI legacy): a single row carries
+      //       the full window total with `window_days = N`; other rows are
+      //       null. Summing still works — null contributes 0.
+      // Same logic applies to `unfollows_count`. `account_views_count` and
+      // `account_engagement_count` remain end-of-window aggregates only.
+      const sumNullable = (key: keyof (typeof snapsAsc)[number]): number | null => {
+        let saw = false;
+        let total = 0;
+        for (const s of snapsAsc) {
+          const v = s[key] as number | null | undefined;
+          if (typeof v === 'number') {
+            saw = true;
+            total += v;
+          }
+        }
+        return saw ? total : null;
+      };
       const endSnap = snapsAsc.length > 0 ? snapsAsc[snapsAsc.length - 1] : null;
-      const accountFollows = endSnap?.new_follows_count ?? null;
-      const accountUnfollows = endSnap?.unfollows_count ?? null;
+      const accountFollows = sumNullable('new_follows_count');
+      const accountUnfollows = sumNullable('unfollows_count');
       const accountViews = endSnap?.account_views_count ?? null;
       const accountEngagement = endSnap?.account_engagement_count ?? null;
+
+      // Roll up gross follows into the org-wide headline. Platforms without
+      // gross data fall back to their net follower change so the combined
+      // total stays ≥ the net rollup. Same logic for the prior window.
+      const prevAccountFollows = (() => {
+        let saw = false;
+        let total = 0;
+        for (const s of prevSnapsForProfile) {
+          const v = s.new_follows_count;
+          if (typeof v === 'number') {
+            saw = true;
+            total += v;
+          }
+        }
+        return saw ? total : null;
+      })();
+      combinedNewFollows += accountFollows ?? totalFollowerChange;
+      combinedPrevNewFollows += prevAccountFollows ?? prevFollowerChange;
 
       platformSummaries.push({
         platform: profile.platform,
@@ -495,7 +538,13 @@ export async function GET(request: NextRequest) {
       const existing = dailyMap.get(d) ?? { views: 0, engagement: 0, followers: 0 };
       existing.views += snap.views_count ?? 0;
       existing.engagement += snap.engagement_count ?? 0;
-      existing.followers += Math.max(0, snap.followers_change ?? 0);
+      // Prefer gross new-follows (IG/FB) when present so the sparkline
+      // matches the gross headline. Fall back to net follower delta on
+      // platforms without gross data. Clamp to >=0 either way.
+      existing.followers += Math.max(
+        0,
+        snap.new_follows_count ?? snap.followers_change ?? 0,
+      );
       dailyMap.set(d, existing);
     }
 
@@ -516,7 +565,13 @@ export async function GET(request: NextRequest) {
       const existing = dMap.get(d) ?? { views: 0, engagement: 0, followers: 0 };
       existing.views += snap.views_count ?? 0;
       existing.engagement += snap.engagement_count ?? 0;
-      existing.followers += Math.max(0, snap.followers_change ?? 0);
+      // Prefer gross new-follows (IG/FB) when present so the sparkline
+      // matches the gross headline. Fall back to net follower delta on
+      // platforms without gross data. Clamp to >=0 either way.
+      existing.followers += Math.max(
+        0,
+        snap.new_follows_count ?? snap.followers_change ?? 0,
+      );
       dMap.set(d, existing);
     }
 
@@ -581,6 +636,11 @@ export async function GET(request: NextRequest) {
         totalFollowerChangeChange: calcChange(
           combinedFollowerChange,
           combinedPrevFollowerChange,
+        ),
+        totalNewFollows: combinedNewFollows,
+        totalNewFollowsChange: calcChange(
+          combinedNewFollows,
+          combinedPrevNewFollows,
         ),
         totalEngagement: combinedEngagement,
         totalEngagementChange: calcChange(

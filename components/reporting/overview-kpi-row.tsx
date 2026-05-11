@@ -53,26 +53,26 @@ export function OverviewKpiRow({
       value: Math.max(0, c.followers ?? 0),
     }));
 
-    // Sum the explicit per-platform followerChange when `combined` is empty.
-    // Per-platform values are already clamped server-side, but defensive
-    // `Math.max(0, …)` here keeps the rollup honest if any pre-clamp data
-    // ever sneaks back in (e.g. from a stale cache).
-    const summedPlatformFollowerChange = (data.platforms ?? []).reduce(
-      (sum, p) => sum + Math.max(0, p.followerChange ?? 0),
+    // Prefer the gross-follows rollup (matches Meta Business Suite's
+    // "Follows" number for IG/FB). Fall back to summed per-platform gross
+    // when available, then summed net follower change. The fallback chain
+    // keeps the tile honest for accounts that only expose net (YT/LI/TikTok).
+    const summedPlatformGrossFollows = (data.platforms ?? []).reduce(
+      (sum, p) => sum + Math.max(0, p.newFollows ?? p.followerChange ?? 0),
       0,
     );
     const totalFollowerChange =
-      data.combined.totalFollowerChange ?? summedPlatformFollowerChange ?? 0;
+      data.combined.totalNewFollows ?? summedPlatformGrossFollows ?? 0;
     const totalViews = data.combined.totalViews ?? 0;
     const totalEngagement = data.combined.totalEngagement ?? 0;
 
     const compareChart = compareData?.chart ?? [];
     const compareFollowersSummed = (compareData?.platforms ?? []).reduce(
-      (sum, p) => sum + (p.followerChange ?? 0),
+      (sum, p) => sum + (p.newFollows ?? p.followerChange ?? 0),
       0,
     );
     const compareFollowers =
-      compareData?.combined.totalFollowerChange ?? compareFollowersSummed ?? 0;
+      compareData?.combined.totalNewFollows ?? compareFollowersSummed ?? 0;
     const compareViews = compareData?.combined.totalViews ?? 0;
     const compareEngagement = compareData?.combined.totalEngagement ?? 0;
     const compareViewsSeries = compareChart.map((c) => ({ date: c.date, value: c.views }));
