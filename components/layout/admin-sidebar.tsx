@@ -7,7 +7,6 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import {
   LayoutDashboard,
   BarChart3,
-  Bell,
   ChevronRight,
   Contact,
   ImagePlus,
@@ -28,7 +27,6 @@ import {
   Telescope,
   Workflow,
   Sparkles,
-  Mail,
 } from 'lucide-react';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
@@ -178,11 +176,6 @@ const NAV_SECTIONS: NavSection[] = [
           // legacy "/admin/sales" pipeline was retired with the proposal
           // strip; the new flow lives at /admin/onboarding.
           { href: '/admin/onboarding', label: 'Onboarding', icon: Workflow },
-          // SPY-06: cross-prospect competitor-shift alerts. Lives in Admin
-          // (not Brand tools) because the feed is agency-wide rather than
-          // brand-scoped — operators triage signals across the whole roster.
-          { href: '/admin/prospects/alerts', label: 'Prospect Alerts', icon: Bell },
-          { href: '/admin/prospects/digests', label: 'Prospect Digests', icon: Mail },
           { href: '/admin/users', label: 'Users', icon: Users },
           { href: '/admin/accounting', label: 'Accounting', icon: Receipt, superAdminOnly: true },
           { href: '/admin/usage', label: 'Usage', icon: Gauge },
