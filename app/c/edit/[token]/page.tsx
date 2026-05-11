@@ -1696,11 +1696,23 @@ function VideoCard({
       : isImage
         ? 'aspect-[4/5]'
         : 'aspect-[9/16]';
+  // For side-by-side layouts we pin the media column to a width derived
+  // from the article height (78vh × aspect-ratio) instead of letting flex
+  // infer width via `md:w-auto` + `aspect-[…]`. The auto-width path
+  // resolved to the <mux-player> intrinsic content size in some Chromium
+  // builds and starved the comments rail down to ~12px — see issue from
+  // 2026-05-10. Hard-pinning is deterministic and matches the math that
+  // aspect-ratio was supposed to do.
+  //   9:16 video → 78vh × 9/16 ≈ 44vh
+  //   1:1 social → 78vh × 1   = 78vh (cap at 560px for ultrawide)
+  //   4:5 image  → 60vh × 4/5 = 48vh (already width-pinned below)
   const videoColSizing = stackVertical
     ? 'w-full'
     : isImage
       ? 'w-full md:w-[44vh] md:max-w-[480px] md:flex-shrink-0 md:self-center'
-      : 'w-full md:h-full md:w-auto md:flex-shrink-0';
+      : isSocialAd
+        ? 'w-full md:h-full md:w-[78vh] md:max-w-[560px] md:flex-shrink-0 md:self-center'
+        : 'w-full md:h-full md:w-[44vh] md:max-w-[440px] md:flex-shrink-0';
   return (
     <article
       id={`video-${index}`}

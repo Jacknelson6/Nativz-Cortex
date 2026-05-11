@@ -3270,11 +3270,18 @@ function PostCard({
   // Image posts are 4:5 — letting card height drive width makes the column
   // ~62vh wide and squashes the comments column. Width-cap to ~44vh so it
   // matches the 9:16 video footprint and the right column keeps room.
+  // Width-pin the media column instead of relying on `md:w-auto` +
+  // aspect-ratio. The auto path was resolving to the <mux-player>
+  // intrinsic content size in some Chromium builds and collapsing the
+  // comments rail. Matches the 78vh × ratio math the aspect-[…] class
+  // was supposed to produce.
   const videoColSizing = stackVertical
     ? 'w-full bg-black'
     : isImagePost
       ? 'w-full bg-black md:w-[44vh] md:max-w-[480px] md:flex-shrink-0 md:self-center'
-      : 'w-full bg-black md:w-auto md:flex-shrink-0 md:h-full';
+      : isSocialAd
+        ? 'w-full bg-black md:h-full md:w-[78vh] md:max-w-[560px] md:flex-shrink-0 md:self-center'
+        : 'w-full bg-black md:h-full md:w-[44vh] md:max-w-[440px] md:flex-shrink-0';
   return (
     <article
       id={layoutMode === 'inline' ? `post-${index}` : undefined}
