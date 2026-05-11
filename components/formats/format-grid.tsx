@@ -17,7 +17,13 @@ export function FormatGrid({ payload }: Props) {
       {payload.hero ? <FormatHero video={payload.hero} /> : null}
       <div className="space-y-6">
         {payload.rows.map((row) => (
-          <FormatRow key={row.key} label={row.label} videos={row.videos} />
+          <FormatRow
+            key={row.strategy_id}
+            label={row.title}
+            subtitle={row.subtitle}
+            badge={row.badge}
+            videos={row.videos}
+          />
         ))}
       </div>
     </div>

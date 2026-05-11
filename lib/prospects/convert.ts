@@ -245,6 +245,26 @@ export async function undoConversion(prospectId: string, actorUserId: string): P
   }
 
   const clientId = prospect.converted_to_client_id;
+
+  // SPY-07 hard rule from PRD edge cases: "Undo while invite has been
+  // redeemed → block undo, surface 'invite already redeemed; contact
+  // admin'." If the prospect's contact has already accepted the invite,
+  // there's now a real human user_client_access row tied to the brand,
+  // wiping it via cascade would silently revoke their access without a
+  // signal. Force a 409 so the strategist deals with it explicitly.
+  const { data: redeemed } = await admin
+    .from('invite_tokens')
+    .select('id')
+    .eq('client_id', clientId)
+    .not('used_at', 'is', null)
+    .limit(1)
+    .maybeSingle();
+  if (redeemed) {
+    throw new ConvertProspectError(
+      'Invite already redeemed, contact admin to revoke access manually.',
+      409,
+    );
+  }
   const { data: client } = await admin
     .from('clients')
     .select('id, organization_id')

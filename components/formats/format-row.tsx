@@ -10,12 +10,16 @@ import type { FormatFeedVideo } from '@/lib/analytics/format-feed';
 import { FormatRowEmpty } from './format-row-empty';
 import { FormatCard, type ViralVideoCard } from './format-card';
 
+type Badge = { label: string; tone: 'accent' | 'muted' };
+
 type Props = {
   label: string;
+  subtitle?: string | null;
+  badge?: Badge | null;
   videos: FormatFeedVideo[];
 };
 
-export function FormatRow({ label, videos }: Props) {
+export function FormatRow({ label, subtitle, badge, videos }: Props) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   const scroll = (dir: 1 | -1) => {
@@ -26,9 +30,25 @@ export function FormatRow({ label, videos }: Props) {
 
   return (
     <section className="group/row relative space-y-2">
-      <header className="flex items-baseline justify-between">
-        <h2 className="text-sm font-medium text-white/90">{label}</h2>
-        <span className="text-[11px] text-white/40">{videos.length}</span>
+      <header className="flex items-baseline justify-between gap-3">
+        <div className="flex items-baseline gap-2 min-w-0">
+          <h2 className="text-sm font-medium text-white/90 truncate">{label}</h2>
+          {subtitle ? (
+            <span className="text-[11px] text-white/50 truncate">{subtitle}</span>
+          ) : null}
+          {badge ? (
+            <span
+              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                badge.tone === 'accent'
+                  ? 'bg-blue-500/15 text-blue-300'
+                  : 'bg-white/10 text-white/60'
+              }`}
+            >
+              {badge.label}
+            </span>
+          ) : null}
+        </div>
+        <span className="text-[11px] text-white/40 shrink-0">{videos.length}</span>
       </header>
       <div className="relative">
         <div

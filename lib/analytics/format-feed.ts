@@ -27,13 +27,26 @@ export type FormatFeedVideo = {
   hook_type_label: string | null;
 };
 
+export type FormatFeedStrategyId =
+  | 'for_you'
+  | 'trending_in_niche'
+  | 'top_hooks_this_week'
+  | 'comparison_hooks'
+  | 'pov_stories'
+  | 'worth_stealing_from_competitors'
+  | 'recently_analyzed'
+  | 'saved_pinned';
+
 export type FormatFeedRow = {
-  key: string;
-  label: string;
+  strategy_id: FormatFeedStrategyId;
+  title: string;
+  subtitle: string | null;
+  badge: { label: string; tone: 'accent' | 'muted' } | null;
   videos: FormatFeedVideo[];
 };
 
 export type FormatFeedPayload = {
+  client_id: string | null;
   hero: FormatFeedVideo | null;
   rows: FormatFeedRow[];
   seeding: boolean;
@@ -42,10 +55,13 @@ export type FormatFeedPayload = {
 };
 
 export interface BuildFormatFeedOpts {
-  limitPerRow?: number;
+  /** Per-row card cap. Bounded to [4, 20] by the route schema. */
+  rowCap?: number;
 }
 
-const ROW_LIMIT = 16;
+const DEFAULT_ROW_CAP = 16;
+const MIN_ROW_CAP = 4;
+const MAX_ROW_CAP = 20;
 const SEEDING_THRESHOLD = 20;
 
 const VIDEO_SELECT =
@@ -117,12 +133,13 @@ async function buildHookTypeMap(
 
 export async function buildFormatFeed(
   clientId: string | null,
-  // Opts reserved for limit overrides + cursor pagination in VFF-08.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _opts: BuildFormatFeedOpts = {},
+  opts: BuildFormatFeedOpts = {},
 ): Promise<FormatFeedPayload> {
   const admin = createAdminClient();
-  const limit = ROW_LIMIT;
+  const limit = Math.max(
+    MIN_ROW_CAP,
+    Math.min(MAX_ROW_CAP, opts.rowCap ?? DEFAULT_ROW_CAP),
+  );
 
   // 1. Brand context (seed_embedding + name).
   const [contextRes, brandRes, analyzedCountRes] = await Promise.all([
@@ -217,20 +234,80 @@ export async function buildFormatFeed(
     return [...keep, ...sink];
   };
 
+  const forYouRow = demote(decorate(forYou, hookMap));
   const rows: FormatFeedRow[] = [
-    { key: 'for_you', label: 'For you', videos: demote(decorate(forYou, hookMap)) },
-    { key: 'trending', label: 'Trending this week', videos: demote(decorate(trending.data ?? [], hookMap)) },
-    { key: 'top_hooks', label: 'Top hooks', videos: demote(decorate(topHooks.data ?? [], hookMap)) },
-    { key: 'comparison', label: 'Comparison plays', videos: demote(decorate(comparison, hookMap)) },
-    { key: 'pov', label: 'POV magic', videos: demote(decorate(pov, hookMap)) },
-    { key: 'recent', label: 'Just analyzed', videos: demote(decorate(recent.data ?? [], hookMap)) },
-    { key: 'worth_stealing', label: 'Worth stealing from competitors', videos: demote(decorate(competitors, hookMap)) },
-    { key: 'saved', label: 'Your saved', videos: demote(decorate(saved, hookMap)) },
+    {
+      strategy_id: 'for_you',
+      title: brandName ? `For ${brandName}` : 'For you',
+      subtitle: null,
+      // VFF-07 D-09: badge the For-You row when we had to backfill with
+      // global top picks (seedEmbedding missing or seeding brand).
+      badge: !seedEmbedding && forYouRow.length > 0
+        ? { label: 'Mixed with global', tone: 'muted' }
+        : null,
+      videos: forYouRow,
+    },
+    {
+      strategy_id: 'trending_in_niche',
+      title: 'Trending in your niche',
+      subtitle: null,
+      badge: null,
+      videos: demote(decorate(trending.data ?? [], hookMap)),
+    },
+    {
+      strategy_id: 'top_hooks_this_week',
+      title: 'Top hooks this week',
+      subtitle: null,
+      badge: null,
+      videos: demote(decorate(topHooks.data ?? [], hookMap)),
+    },
+    {
+      strategy_id: 'comparison_hooks',
+      title: 'Comparison hooks',
+      subtitle: null,
+      badge: null,
+      videos: demote(decorate(comparison, hookMap)),
+    },
+    {
+      strategy_id: 'pov_stories',
+      title: 'POV stories',
+      subtitle: null,
+      badge: null,
+      videos: demote(decorate(pov, hookMap)),
+    },
+    {
+      strategy_id: 'worth_stealing_from_competitors',
+      title: 'Worth stealing from competitors',
+      subtitle: null,
+      badge: null,
+      videos: demote(decorate(competitors, hookMap)),
+    },
+    {
+      strategy_id: 'recently_analyzed',
+      title: 'Recently analyzed',
+      subtitle: null,
+      badge: null,
+      videos: demote(decorate(recent.data ?? [], hookMap)),
+    },
+    {
+      strategy_id: 'saved_pinned',
+      title: 'Saved by your team',
+      subtitle: null,
+      badge: null,
+      videos: demote(decorate(saved, hookMap)),
+    },
   ];
 
   const hero = rows[0].videos[0] ?? rows[1].videos[0] ?? rows[2].videos[0] ?? null;
 
-  return { hero, rows, seeding, analyzed_count: analyzedCount, brand_name: brandName };
+  return {
+    client_id: clientId,
+    hero,
+    rows,
+    seeding,
+    analyzed_count: analyzedCount,
+    brand_name: brandName,
+  };
 }
 
 async function buildForYou(

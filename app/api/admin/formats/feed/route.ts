@@ -11,7 +11,11 @@ import { buildFormatFeed, type FormatFeedPayload } from '@/lib/analytics/format-
 export const dynamic = 'force-dynamic';
 
 const QuerySchema = z.object({
+  // Optional in practice: when admins haven't selected a brand pill the
+  // feed falls back to global rows. The PRD's "required" framing is for
+  // brand-scoped paths; we keep nullable for the no-brand admin view.
   client_id: z.string().uuid().nullable().optional(),
+  row_cap: z.coerce.number().int().min(4).max(20).default(16),
 });
 
 const CACHE_TTL_MS = 60 * 1000;
@@ -40,13 +44,15 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const parsed = QuerySchema.safeParse({
     client_id: url.searchParams.get('client_id') ?? undefined,
+    row_cap: url.searchParams.get('row_cap') ?? undefined,
   });
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid query' }, { status: 400 });
   }
   const clientId = parsed.data.client_id ?? null;
+  const rowCap = parsed.data.row_cap;
 
-  const cacheKey = clientId ?? 'global';
+  const cacheKey = `${clientId ?? 'global'}:${rowCap}`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
     return NextResponse.json(cached.payload, {
@@ -54,7 +60,7 @@ export async function GET(req: Request) {
     });
   }
 
-  const payload = await buildFormatFeed(clientId);
+  const payload = await buildFormatFeed(clientId, { rowCap });
   cache.set(cacheKey, { at: Date.now(), payload });
   return NextResponse.json(payload, { headers: { 'x-cache': 'miss' } });
 }

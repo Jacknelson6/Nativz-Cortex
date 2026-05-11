@@ -89,17 +89,20 @@ export async function POST(
       return NextResponse.json({ error: 'Prospect not found' }, { status: 404 });
     }
 
+    // PRD requires 422 (Unprocessable Entity): the request is well-formed
+    // and authorized, but the precondition (a succeeded analysis on this
+    // prospect) is not met. 409 misrepresents this as a conflict.
     const analysis = await getLatestAnalysis(id);
     if (!analysis) {
       return NextResponse.json(
-        { error: 'No analysis available — run analysis first.' },
-        { status: 409 },
+        { error: 'No analysis available, run analysis first.' },
+        { status: 422 },
       );
     }
     if (analysis.status === 'failed') {
       return NextResponse.json(
-        { error: 'Latest analysis failed — re-run before generating a scorecard.' },
-        { status: 409 },
+        { error: 'Latest analysis failed, re-run before generating a scorecard.' },
+        { status: 422 },
       );
     }
 

@@ -49,11 +49,11 @@
     Verify: `npx tsc --noEmit`
     Notes: fetchZernioPlatformSnapshot wraps service.getFollowerStats; post metrics stubbed pending sync refactor.
 
-[x] T09: Implement lib/analytics/scrape-adapter.ts
+[~] T09: Implement lib/analytics/scrape-adapter.ts
     Files: lib/analytics/scrape-adapter.ts
     Acceptance: wraps existing lib/reporting/sync paths; signature matches Zernio adapter
     Verify: `npx tsc --noEmit`
-    Notes: Stub mirrors Zernio shape; real scrape calls still inline in lib/reporting/sync.ts. Adapter exists so the future sync refactor can swap without touching call sites.
+    Notes: PARTIAL — adapter scaffold (signature matching Zernio adapter) lives at lib/analytics/scrape-adapter.ts but the body is a stub; real scrape calls remain inline in lib/reporting/sync.ts. Promoted from [x] to [~] to match T10 status: this is gated by the same sync refactor and shouldn't read as fully done.
 
 [~] T10: Refactor lib/reporting/sync.ts to use router + persist errors
     Files: lib/reporting/sync.ts

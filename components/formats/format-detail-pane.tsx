@@ -20,9 +20,12 @@ const KIND_LABEL: Record<'hook_type' | 'structure' | 'archetype' | 'pacing', str
 type Props = {
   data: FormatDetailPayload;
   brand_name?: string | null;
+  // VFF-10: portal viewers see the same analysis but no save/pin/dismiss
+  // controls. Hides the action bar entirely when true.
+  readOnly?: boolean;
 };
 
-export function FormatDetailPane({ data, brand_name = null }: Props) {
+export function FormatDetailPane({ data, brand_name = null, readOnly = false }: Props) {
   const { video, brand_context } = data;
   const [commentsOpen, setCommentsOpen] = useState(false);
 
@@ -55,16 +58,18 @@ export function FormatDetailPane({ data, brand_name = null }: Props) {
           </h2>
         </header>
 
-        <FormatActionBar
-          video_id={video.id}
-          client_id={brand_context?.client_id ?? null}
-          initial={{
-            is_saved: brand_context?.is_saved ?? false,
-            is_pinned: brand_context?.is_pinned ?? false,
-            is_dismissed: brand_context?.is_dismissed ?? false,
-          }}
-          brand_name={brand_name}
-        />
+        {readOnly ? null : (
+          <FormatActionBar
+            video_id={video.id}
+            client_id={brand_context?.client_id ?? null}
+            initial={{
+              is_saved: brand_context?.is_saved ?? false,
+              is_pinned: brand_context?.is_pinned ?? false,
+              is_dismissed: brand_context?.is_dismissed ?? false,
+            }}
+            brand_name={brand_name}
+          />
+        )}
 
         {video.why_it_works ? (
           <section className="space-y-1">
