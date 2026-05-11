@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getMux } from '@/lib/mux/client';
 import { autoDeliverEditingProject } from '@/lib/editing/auto-deliver';
+import { analyzeAndCaptionFromMux } from '@/lib/calendar/analyze-from-mux';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
@@ -283,6 +284,45 @@ export async function POST(req: Request) {
     if (!matched) {
       console.warn('[mux-webhook] static_renditions.ready matched no row', { assetId, uploadId });
     }
+
+    // "+ Add new video" flow: when a content_drop_videos row uploaded
+    // directly via the share-page modal lands here, its status is sitting
+    // at 'mux_processing' waiting for the capped-1080p MP4. Now that we
+    // have it, kick off Whisper + caption generation. We don't await the
+    // analyze step — it can take 10-30s for Whisper + OpenRouter, and Mux
+    // retries the webhook if we return slowly. The helper handles its own
+    // status transitions + failure stamping.
+    if (matched === 'content_drop_videos') {
+      try {
+        const { data: addPostRow } = await admin
+          .from('content_drop_videos')
+          .select('id, status')
+          .eq('mux_asset_id', assetId)
+          .maybeSingle<{ id: string; status: string }>();
+        if (addPostRow?.status === 'mux_processing') {
+          // Fire-and-forget. The share page polls /add-post/[id]/status to
+          // see when the caption is ready.
+          void analyzeAndCaptionFromMux(admin, {
+            videoId: addPostRow.id,
+            // No real user id available inside a webhook — analyze helper
+            // only uses this for OpenRouter telemetry, so a deterministic
+            // sentinel keeps the call valid without misattributing usage.
+            userId: '00000000-0000-0000-0000-000000000000',
+          }).catch((err) => {
+            console.error('[mux-webhook] analyze-from-mux failed', {
+              videoId: addPostRow.id,
+              err: err instanceof Error ? err.message : String(err),
+            });
+          });
+        }
+      } catch (err) {
+        console.error('[mux-webhook] add-post analyze gate failed', {
+          assetId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
     return NextResponse.json({ ok: true });
   }
 

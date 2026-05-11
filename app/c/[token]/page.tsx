@@ -232,6 +232,7 @@ function SharedDropView({
   const [approveAllOpen, setApproveAllOpen] = useState(false);
   const [approvingAll, setApprovingAll] = useState(false);
   const [downloadingAll, setDownloadingAll] = useState(false);
+  const [addVideoOpen, setAddVideoOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -888,6 +889,22 @@ function SharedDropView({
             }}
           />
         )}
+
+        {/* Page-level "+ Add new video" trigger. Editor-only. Opens the
+            Mux upload + AI caption + schedule modal. Sits below the list /
+            calendar so it reads as "add another to this batch" rather than
+            attaching to any one post. */}
+        {data.isEditor && (
+          <div className="mx-auto mt-4 flex max-w-6xl justify-center sm:mt-6">
+            <button
+              type="button"
+              onClick={() => setAddVideoOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-nativz-border bg-transparent px-4 py-2 text-sm font-medium text-text-muted transition-all hover:border-accent/50 hover:bg-accent-surface hover:text-accent-text"
+            >
+              <Plus size={14} /> Add new video
+            </button>
+          </div>
+        )}
       </main>
 
       {data.isEditor && pendingRevisionCount > 0 && (
@@ -971,6 +988,20 @@ function SharedDropView({
           setNameModalOpen(true);
         }}
       />
+
+      {data.isEditor && (
+        <AddVideoModal
+          open={addVideoOpen}
+          onClose={() => setAddVideoOpen(false)}
+          token={token}
+          drop={data.drop}
+          existingScheduledAt={data.posts.map((p) => p.scheduled_at).filter((s): s is string => !!s)}
+          onDone={async () => {
+            setAddVideoOpen(false);
+            await refetch();
+          }}
+        />
+      )}
 
       <ConfirmDialog
         open={approveAllOpen}
@@ -3128,21 +3159,6 @@ function PostCard({
         )}
       </div>
 
-      {isEditor && (
-        <div className="mt-4 flex justify-center border-t border-nativz-border pt-4">
-          <button
-            type="button"
-            onClick={() => {
-              // TODO: open the new-video upload flow (Mux upload → auto-caption → schedule)
-              toast.message('Add new video flow coming soon');
-            }}
-            className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-nativz-border bg-transparent px-3 py-1.5 text-xs font-medium text-text-muted transition-all hover:border-accent/50 hover:bg-accent-surface hover:text-accent-text"
-          >
-            <Plus size={13} /> Add new video
-          </button>
-        </div>
-      )}
-
       {/* Project-standard ConfirmDialog — same shell used by Delete client
           and other destructive flows so the styling reads as native. The
           confirm path closes the dialog before firing so the auto-focused
@@ -4170,6 +4186,482 @@ function buildSmmZipFilename(
   }
   const stem = parts.filter(Boolean).join('-') || 'calendar-share';
   return `${stem}.zip`;
+}
+
+/**
+ * "+ Add new video" modal. Editor-only. Three phases:
+ *
+ *   1. Pick a file → POST /add-post/init → XHR PUT to Mux signed URL →
+ *      POST /add-post/[videoId]/finalize.
+ *   2. Poll /add-post/[videoId]/status while Mux packages + Whisper +
+ *      caption-gen run. Status moves through mux_processing → analyzing →
+ *      caption_pending → ready (or failed). Editor sees a chip + a
+ *      preview of the auto-caption once it lands.
+ *   3. Editor adjusts caption + hashtags, picks a day, hits Schedule →
+ *      POST /add-post/[videoId]/schedule, which inserts the draft
+ *      scheduled_post + wires it onto the share link. Modal closes and the
+ *      parent refetches so the new card pops into the list with a fresh
+ *      review composer.
+ */
+function AddVideoModal({
+  open,
+  onClose,
+  token,
+  drop,
+  existingScheduledAt,
+  onDone,
+}: {
+  open: boolean;
+  onClose: () => void;
+  token: string;
+  drop: { id: string; start_date: string; end_date: string; default_post_time: string };
+  existingScheduledAt: string[];
+  onDone: () => Promise<void> | void;
+}) {
+  type Phase = 'pick' | 'uploading' | 'processing' | 'ready' | 'failed' | 'scheduling';
+  const [phase, setPhase] = useState<Phase>('pick');
+  const [progress, setProgress] = useState(0);
+  const [videoId, setVideoId] = useState<string | null>(null);
+  const [thumbUrlState, setThumbUrlState] = useState<string | null>(null);
+  const [caption, setCaption] = useState('');
+  const [hashtagsText, setHashtagsText] = useState('');
+  const [statusValue, setStatusValue] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
+  const [pickedDay, setPickedDay] = useState<string>('');
+
+  // Reset every time the modal opens fresh.
+  useEffect(() => {
+    if (!open) return;
+    setPhase('pick');
+    setProgress(0);
+    setVideoId(null);
+    setThumbUrlState(null);
+    setCaption('');
+    setHashtagsText('');
+    setStatusValue(null);
+    setErrorDetail(null);
+    setPickedDay(suggestNextDay(drop, existingScheduledAt));
+  }, [open, drop, existingScheduledAt]);
+
+  // Poll status during processing.
+  useEffect(() => {
+    if (!videoId) return;
+    if (phase !== 'processing') return;
+    let cancelled = false;
+    let timer: number | null = null;
+
+    async function tick() {
+      try {
+        const res = await fetch(`/api/calendar/share/${token}/add-post/${videoId}/status`);
+        const json = await res.json().catch(() => null);
+        if (cancelled) return;
+        if (res.ok && json) {
+          setStatusValue(json.status ?? null);
+          if (json.thumbnailUrl) setThumbUrlState(json.thumbnailUrl);
+          if (json.status === 'ready') {
+            setCaption(json.draftCaption ?? '');
+            const tags = Array.isArray(json.draftHashtags) ? (json.draftHashtags as string[]) : [];
+            setHashtagsText(tags.map((t) => `#${t.replace(/^#/, '')}`).join(' '));
+            setPhase('ready');
+            return;
+          }
+          if (json.status === 'failed') {
+            setErrorDetail(json.errorDetail ?? 'Processing failed');
+            setPhase('failed');
+            return;
+          }
+        }
+      } catch {
+        // transient — keep polling
+      }
+      timer = window.setTimeout(tick, 3000);
+    }
+
+    timer = window.setTimeout(tick, 1500);
+    return () => {
+      cancelled = true;
+      if (timer != null) window.clearTimeout(timer);
+    };
+  }, [videoId, phase, token]);
+
+  async function handlePick(file: File) {
+    if (!file.type.startsWith('video/')) {
+      toast.error('Choose a video file');
+      return;
+    }
+    setPhase('uploading');
+    setProgress(0);
+    try {
+      const initRes = await fetch(`/api/calendar/share/${token}/add-post/init`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name }),
+      });
+      const initJson = await initRes.json().catch(() => null);
+      if (!initRes.ok || !initJson?.uploadUrl) {
+        throw new Error(
+          typeof initJson?.error === 'string' ? initJson.error : 'Could not start upload',
+        );
+      }
+      const { uploadUrl, uploadId, videoId: vid } = initJson as {
+        uploadUrl: string;
+        uploadId: string;
+        videoId: string;
+      };
+      setVideoId(vid);
+
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', uploadUrl);
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            setProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        });
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve();
+          else reject(new Error(`Mux upload failed (${xhr.status})`));
+        };
+        xhr.onerror = () => reject(new Error('Network error during upload'));
+        xhr.onabort = () => reject(new Error('Upload aborted'));
+        xhr.send(file);
+      });
+
+      const finRes = await fetch(
+        `/api/calendar/share/${token}/add-post/${vid}/finalize`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uploadId }),
+        },
+      );
+      const finJson = await finRes.json().catch(() => null);
+      if (!finRes.ok) {
+        throw new Error(
+          typeof finJson?.error === 'string' ? finJson.error : 'Finalize failed',
+        );
+      }
+      setPhase('processing');
+      setStatusValue('mux_processing');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Upload failed';
+      setErrorDetail(msg);
+      setPhase('failed');
+      toast.error(msg);
+    }
+  }
+
+  async function submitSchedule() {
+    if (!videoId) return;
+    if (!caption.trim()) {
+      toast.error('Caption can’t be empty');
+      return;
+    }
+    if (!pickedDay) {
+      toast.error('Pick a day');
+      return;
+    }
+    const scheduledAt = chicagoNoonUtcLocal(pickedDay);
+    const cleanTags = hashtagsText
+      .split(/[\s,]+/)
+      .map((t) => t.replace(/^#/, '').trim())
+      .filter(Boolean);
+
+    setPhase('scheduling');
+    try {
+      const res = await fetch(
+        `/api/calendar/share/${token}/add-post/${videoId}/schedule`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            scheduledAt,
+            caption: caption.trim(),
+            hashtags: cleanTags,
+          }),
+        },
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(typeof json?.error === 'string' ? json.error : 'Failed to schedule');
+      }
+      toast.success('Post added — link bounced back to needs approval');
+      await onDone();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to schedule');
+      setPhase('ready');
+    }
+  }
+
+  return (
+    <Dialog open={open} onClose={onClose} title="" maxWidth="2xl">
+      <div className="space-y-4">
+        <header className="flex items-start justify-between">
+          <div>
+            <h2 className="font-display text-lg font-semibold tracking-tight text-text-primary">
+              Add new video
+            </h2>
+            <p className="mt-1 text-xs text-text-muted">
+              Upload a video, we’ll auto-caption it, then pick a day to schedule.
+            </p>
+          </div>
+        </header>
+
+        {phase === 'pick' && (
+          <AddVideoPicker onPick={handlePick} />
+        )}
+
+        {phase === 'uploading' && (
+          <div className="space-y-3 rounded-lg border border-nativz-border bg-background/40 px-4 py-6">
+            <div className="flex items-center gap-2 text-sm text-text-secondary">
+              <Loader2 size={14} className="animate-spin" /> Uploading to Mux…
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-surface-hover">
+              <div
+                className="h-full bg-accent transition-all"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <div className="text-right text-[11px] text-text-muted">{progress}%</div>
+          </div>
+        )}
+
+        {phase === 'processing' && (
+          <div className="space-y-3 rounded-lg border border-nativz-border bg-background/40 px-4 py-6">
+            <div className="flex items-center gap-2 text-sm text-text-secondary">
+              <Loader2 size={14} className="animate-spin" />
+              {statusValue === 'analyzing'
+                ? 'Transcribing audio…'
+                : statusValue === 'caption_pending'
+                  ? 'Generating caption…'
+                  : 'Mux is packaging the video…'}
+            </div>
+            {thumbUrlState && (
+              <Image
+                src={thumbUrlState}
+                alt=""
+                width={120}
+                height={213}
+                className="rounded-md object-cover"
+              />
+            )}
+            <p className="text-[11px] text-text-muted">
+              You can leave this open — this usually takes 30 to 90 seconds.
+            </p>
+          </div>
+        )}
+
+        {phase === 'failed' && (
+          <div className="space-y-3 rounded-lg border border-status-danger/40 bg-status-danger/10 px-4 py-6">
+            <div className="flex items-center gap-2 text-sm text-status-danger">
+              <AlertCircle size={14} /> Something went wrong
+            </div>
+            <p className="text-xs text-text-secondary">{errorDetail}</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-lg border border-nativz-border bg-transparent px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+
+        {(phase === 'ready' || phase === 'scheduling') && (
+          <div className="space-y-4">
+            {thumbUrlState && (
+              <div className="flex items-center gap-3 rounded-lg border border-nativz-border bg-background/40 p-3">
+                <Image
+                  src={thumbUrlState}
+                  alt=""
+                  width={64}
+                  height={114}
+                  className="rounded object-cover"
+                />
+                <div className="text-xs text-text-muted">
+                  Caption was generated from the transcript. Edit it before scheduling.
+                </div>
+              </div>
+            )}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text-secondary">
+                Caption
+              </label>
+              <textarea
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                rows={5}
+                className="w-full resize-none rounded-lg border border-nativz-border bg-background/40 px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                placeholder="Caption…"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text-secondary">
+                Hashtags
+              </label>
+              <input
+                value={hashtagsText}
+                onChange={(e) => setHashtagsText(e.target.value)}
+                className="w-full rounded-lg border border-nativz-border bg-background/40 px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                placeholder="#tag1 #tag2"
+              />
+              <p className="mt-1 text-[11px] text-text-muted">
+                Separate with spaces or commas. The # is optional.
+              </p>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text-secondary">
+                Post date
+              </label>
+              <input
+                type="date"
+                value={pickedDay}
+                min={todayYyyyMmDd()}
+                onChange={(e) => setPickedDay(e.target.value)}
+                className="w-full rounded-lg border border-nativz-border bg-background/40 px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+              <p className="mt-1 text-[11px] text-text-muted">
+                Defaults to the next unscheduled day in this batch. Posts at the brand’s
+                default time (Chicago).
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={phase === 'scheduling'}
+                className="rounded-lg border border-nativz-border bg-transparent px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-hover disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitSchedule}
+                disabled={phase === 'scheduling' || !caption.trim() || !pickedDay}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-contrast hover:opacity-90 disabled:opacity-50"
+              >
+                {phase === 'scheduling' ? (
+                  <>
+                    <Loader2 size={12} className="animate-spin" /> Scheduling…
+                  </>
+                ) : (
+                  <>
+                    <CalendarDays size={12} /> Add to calendar
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </Dialog>
+  );
+}
+
+function AddVideoPicker({ onPick }: { onPick: (file: File) => void }) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  return (
+    <div
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const file = e.dataTransfer.files?.[0];
+        if (file) onPick(file);
+      }}
+      className={`flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-10 text-center transition-colors ${
+        dragOver
+          ? 'border-accent/60 bg-accent-surface'
+          : 'border-nativz-border bg-background/40'
+      }`}
+    >
+      <Upload size={24} className="text-text-muted" />
+      <p className="text-sm font-medium text-text-secondary">Drop a video here</p>
+      <p className="text-[11px] text-text-muted">MP4 / MOV up to a few hundred MB</p>
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-nativz-border bg-surface px-3 py-1.5 text-xs font-medium text-text-secondary transition-all hover:border-accent/50 hover:bg-accent-surface hover:text-accent-text"
+      >
+        Choose file
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="video/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onPick(file);
+          if (inputRef.current) inputRef.current.value = '';
+        }}
+      />
+    </div>
+  );
+}
+
+// Default picker target. Pick the earliest day inside the drop window that
+// doesn't already have a scheduled post. If every day is taken (or the
+// window is in the past), fall back to "tomorrow" so the editor still gets
+// a reasonable default they can adjust.
+function suggestNextDay(
+  drop: { start_date: string; end_date: string },
+  existing: string[],
+): string {
+  const taken = new Set(
+    existing
+      .map((iso) => {
+        try {
+          return new Date(iso).toISOString().slice(0, 10);
+        } catch {
+          return '';
+        }
+      })
+      .filter(Boolean),
+  );
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const start = new Date(drop.start_date);
+  const end = new Date(drop.end_date);
+  const cursor = new Date(Math.max(start.getTime(), today.getTime()));
+  while (cursor <= end) {
+    const ymd = cursor.toISOString().slice(0, 10);
+    if (!taken.has(ymd)) return ymd;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return tomorrow.toISOString().slice(0, 10);
+}
+
+function todayYyyyMmDd(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// Returns the UTC ISO string for 12:00 wall-clock America/Chicago on a
+// given YYYY-MM-DD. Mirrors lib/calendar/distribute-slots.ts so the +Add
+// flow matches the bulk-pipeline scheduling format exactly.
+function chicagoNoonUtcLocal(yyyyMmDd: string): string {
+  const utcNoon = new Date(`${yyyyMmDd}T12:00:00Z`);
+  const chicagoHour = parseInt(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Chicago',
+      hour: 'numeric',
+      hour12: false,
+    }).format(utcNoon),
+    10,
+  );
+  const hoursToAdd = 12 - chicagoHour;
+  return new Date(utcNoon.getTime() + hoursToAdd * 60 * 60 * 1000).toISOString();
 }
 
 // Map raw fetch / parse errors to copy that makes sense to a non-engineer
