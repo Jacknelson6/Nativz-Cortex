@@ -24,6 +24,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/format-analyze",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/sync-reporting",
       "schedule": "0 6 * * *"
     },
