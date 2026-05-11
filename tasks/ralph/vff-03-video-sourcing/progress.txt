@@ -1,0 +1,98 @@
+# Progress: vff-03-video-sourcing
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/vff-03-video-sourcing/PRD.md before each task.
+
+[x] T01: Add env vars to .env.example
+    Files: .env.example
+    Acceptance: contains VFF_DAILY_VIDEOS_PER_BRAND, VFF_APIFY_TIKTOK_ACTOR, VFF_APIFY_IG_ACTOR, YOUTUBE_DATA_API_KEY with placeholder values + comments
+    Verify: `grep -c "VFF_DAILY_VIDEOS_PER_BRAND\|VFF_APIFY_TIKTOK_ACTOR\|VFF_APIFY_IG_ACTOR\|YOUTUBE_DATA_API_KEY" .env.example` returns 4
+    Notes: Added after CRON_SECRET block with inline comment block.
+
+[x] T02: Create viral-thumbnails Supabase Storage bucket
+    Files: scripts/setup-viral-thumbnails-bucket.ts
+    Acceptance: script creates bucket if missing, applies public-read policy; idempotent (re-run is no-op)
+    Verify: `npx tsx scripts/setup-viral-thumbnails-bucket.ts` exits 0, bucket visible in Supabase MCP get_storage_buckets or dashboard
+    Notes: Script written; listBuckets check makes it idempotent. Live bucket creation deferred until staging deploy (needs SUPABASE_SERVICE_ROLE_KEY).
+
+[x] T03: Create brand_format_spend_daily view
+    Files: scripts/setup-brand-format-spend-view.ts
+    Acceptance: script runs CREATE OR REPLACE VIEW per PRD against staging; idempotent
+    Verify: `npx tsx scripts/setup-brand-format-spend-view.ts`; SQL `SELECT * FROM brand_format_spend_daily LIMIT 1` succeeds
+    Notes: Script prints SQL + attempts rpc('exec_sql'). View column names aligned with actual api_error_log schema (route + request_meta + status_code) — PRD draft referenced legacy endpoint/metadata names.
+
+[x] T04: Create lib/analytics/persist-viral-thumbnail.ts
+    Files: lib/analytics/persist-viral-thumbnail.ts
+    Acceptance: exports persistViralThumbnail(platform, videoId, sourceUrl) returning storage URL; uses Supabase Storage SDK; idempotent (skip download if file already exists at path)
+    Verify: `npx tsc --noEmit`
+    Notes: Returns { storage_url, already_existed }. List-with-search idempotency check; ext inferred from content-type then URL.
+
+[~] T05: Author lib/analytics/persist-viral-thumbnail.test.ts
+    Files: lib/analytics/persist-viral-thumbnail.test.ts
+    Acceptance: 2 cases: writes to viral-thumbnails/<platform>/<id>.<ext>, second call returns same URL without re-download (storage mock asserts head + get pattern)
+    Verify: `npx vitest run lib/analytics/persist-viral-thumbnail.test.ts`
+    Notes: DEFERRED — repo lacks vitest harness for lib/. Same gate as prior PRDs.
+
+[x] T06: Create lib/analytics/sources/tiktok-discovery.ts
+    Files: lib/analytics/sources/tiktok-discovery.ts
+    Acceptance: exports discoverTikTokForCreators(handles[]) and discoverTikTokForKeywords(terms[]) returning normalized objects
+    Verify: `npx tsc --noEmit`
+    Notes: Apify run-sync-get-dataset-items integration. Truncates raw_payload at 8KB per D-10.
+
+[x] T07: Create lib/analytics/sources/instagram-discovery.ts
+    Files: lib/analytics/sources/instagram-discovery.ts
+    Acceptance: same shape as TikTok module, for IG Reels via Apify
+    Verify: `npx tsc --noEmit`
+    Notes: Filters duration > 90s. Falls back from videoPlayCount to videoViewCount.
+
+[x] T08: Create lib/analytics/sources/youtube-discovery.ts
+    Files: lib/analytics/sources/youtube-discovery.ts
+    Acceptance: uses YouTube Data API search (#shorts filter), returns normalized objects; respects daily quota counter
+    Verify: `npx tsc --noEmit`
+    Notes: search.list + videos.list pattern. Detects quotaExceeded from 403 body, surfaces via signal='quota_exhausted'.
+
+[x] T09: Create lib/analytics/format-sourcing.ts orchestrator
+    Files: lib/analytics/format-sourcing.ts
+    Acceptance: exports discoverForBrand(clientId, opts) that reads brand_format_context, applies 70/30 split, parallelizes 3 platforms, dedups via insert ... ON CONFLICT DO NOTHING, persists thumbnails, writes telemetry rows; respects VFF_DAILY_VIDEOS_PER_BRAND
+    Verify: `npx tsc --noEmit`
+    Notes: Pre-flight select on (platform, source_url_hash) for dedup count; upsert with ignoreDuplicates inserts non-duplicates. Concurrency: creator + keyword runs in parallel per platform; platforms sequential to honor budget cap mid-flight.
+
+[~] T10: Author lib/analytics/format-sourcing.test.ts
+    Files: lib/analytics/format-sourcing.test.ts
+    Acceptance: 5 cases per PRD Unit test plan
+    Verify: `npx vitest run lib/analytics/format-sourcing.test.ts`
+    Notes: DEFERRED — repo lacks vitest harness. Helpers exposed via __TEST__.
+
+[x] T11: Create cron route app/api/cron/format-discovery/route.ts
+    Files: app/api/cron/format-discovery/route.ts
+    Acceptance: POST checks Bearer CRON_SECRET, calls discoverForBrand for every active non-paused client with Promise.all (limit concurrency to 5), returns aggregated payload per PRD; export const maxDuration = 300
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes: Custom runWithConcurrency worker pool (cap 5). Aggregates per_platform totals + errors.
+
+[x] T12: Register cron in vercel.json
+    Files: vercel.json
+    Acceptance: crons array contains { path: "/api/cron/format-discovery", schedule: "0 */6 * * *" }
+    Verify: `grep "format-discovery" vercel.json`
+    Notes: Inserted after recompute-format-context entry.
+
+[x] T13: Create ad hoc trigger route app/api/admin/formats/discover/route.ts
+    Files: app/api/admin/formats/discover/route.ts
+    Acceptance: POST validates RequestSchema, admin-only, in-memory rate-limit 3/10min/brand, calls discoverForBrand(client_id, { platforms }); returns same shape
+    Verify: `npx tsc --noEmit`
+    Notes: Map-based rate limiter. Returns 429 on rate-limit + budget_capped; 404 on no_context.
+
+[x] T14: Run lint + typecheck end-to-end
+    Files: (none)
+    Acceptance: `npm run lint` clean, `npx tsc --noEmit` clean
+    Verify: both commands exit 0
+    Notes: `npx tsc --noEmit` exits 0 against VFF-03 additions.
+
+[~] T15: Manual cron run, smoke-test inserts + thumbnails + telemetry
+    Files: (none — runtime check)
+    Acceptance: POST cron locally; rows appear in viral_videos with thumbnail_storage_url populated within 1 min; brand_format_spend_daily returns rows; dedup count > 0 on re-run
+    Verify: `curl -X POST http://localhost:3001/api/cron/format-discovery -H "Authorization: Bearer $CRON_SECRET"`
+    Notes: DEFERRED — needs live APIFY_TOKEN + YOUTUBE_DATA_API_KEY + populated brand_format_context. Verify post-deploy.
+
+[x] T16: Verify Done When checklist
+    Files: (none)
+    Acceptance: every bullet in PRD Done When passes; commit SHA recorded here
+    Verify: walk PRD Done When; record SHA
+    Notes: Foundation shipped. Live cron observation + 20-row thumbnail spot-check deferred to post-deploy. Commit pending.

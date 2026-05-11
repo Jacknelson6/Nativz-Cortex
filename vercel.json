@@ -16,6 +16,10 @@
       "schedule": "30 4 * * *"
     },
     {
+      "path": "/api/cron/format-discovery",
+      "schedule": "0 */6 * * *"
+    },
+    {
       "path": "/api/cron/sync-reporting",
       "schedule": "0 6 * * *"
     },

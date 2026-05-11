@@ -1,0 +1,189 @@
+# Progress: spy-06-recurring-monitor
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/spy-06-recurring-monitor/PRD.md before each task.
+# Depends on SPY-05 (prospect_competitor_benchmarks) being shipped.
+
+[ ] T01: Author migration 281_prospect_monitor.sql
+    Files: supabase/migrations/281_prospect_monitor.sql
+    Acceptance: 3 tables (config, snapshots, alerts); indexes; RLS admin-only; updated trigger on config
+    Verify: `grep -c "CREATE TABLE IF NOT EXISTS prospect_monitor" supabase/migrations/281_prospect_monitor.sql` returns 3
+    Notes:
+
+[ ] T02: Apply migration 281 via Supabase MCP
+    Files: (MCP apply_migration)
+    Acceptance: list_tables shows the 3 new tables
+    Verify: Supabase MCP list_tables
+    Notes:
+
+[ ] T03: Regenerate lib/supabase/types.ts
+    Files: lib/supabase/types.ts
+    Acceptance: new types present
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T04: Add monitor types to lib/prospects/types.ts
+    Files: lib/prospects/types.ts
+    Acceptance: exports ProspectMonitorConfig, ProspectMonitorSnapshot, ProspectMonitorAlert, AlertKind, AlertSeverity
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T05: Install @vercel/workflow dependency
+    Files: package.json, package-lock.json
+    Acceptance: dependency present at latest stable
+    Verify: `npm ls @vercel/workflow`
+    Notes:
+
+[ ] T06: Create lib/prospects/delta-rules/follower-jump.ts
+    Files: lib/prospects/delta-rules/follower-jump.ts
+    Acceptance: pure fn (prevSnapshot, currSnapshot) => alert | null; threshold from env PROSPECT_MONITOR_FOLLOWER_JUMP_PCT (default 10)
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T07: Create lib/prospects/delta-rules/viral-post.ts
+    Files: lib/prospects/delta-rules/viral-post.ts
+    Acceptance: pure fn detects posts with views > N x median of last 10; threshold env PROSPECT_MONITOR_VIRAL_MULT (default 5)
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T08: Create lib/prospects/delta-rules/cadence-shift.ts
+    Files: lib/prospects/delta-rules/cadence-shift.ts
+    Acceptance: pure fn detects posts/week change > 30%
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T09: Create lib/prospects/delta-rules/format-pivot.ts
+    Files: lib/prospects/delta-rules/format-pivot.ts
+    Acceptance: pure fn detects format mix change (carousel vs reel vs static) > 40 pts
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T10: Create lib/prospects/delta-rules/index.ts aggregate
+    Files: lib/prospects/delta-rules/index.ts
+    Acceptance: exports runDeltaRules(prev, curr) => Alert[]; calls all 4 rules
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T11: Add lib/prospects/delta-rules/index.test.ts
+    Files: lib/prospects/delta-rules/index.test.ts
+    Acceptance: 12+ cases covering each rule's positive/negative/edge; all green
+    Verify: `npx vitest run lib/prospects/delta-rules/index.test.ts`
+    Notes:
+
+[ ] T12: Create lib/prospects/monitor-orchestrator.ts
+    Files: lib/prospects/monitor-orchestrator.ts
+    Acceptance: runMonitor(prospectId) loads competitors from latest benchmark, scrapes each, persists snapshot, calls delta rules vs previous snapshot, writes alerts
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T13: Add lib/prospects/monitor-orchestrator.test.ts
+    Files: lib/prospects/monitor-orchestrator.test.ts
+    Acceptance: happy path + no-prior-snapshot + scrape-fail-one-of-three + needs-benchmark cases
+    Verify: `npx vitest run lib/prospects/monitor-orchestrator.test.ts`
+    Notes:
+
+[ ] T14: Create lib/workflows/prospect-monitor-run.ts (Workflow DevKit)
+    Files: lib/workflows/prospect-monitor-run.ts
+    Acceptance: DurableAgent workflow with stages load-config, scrape-competitors, persist-snapshot, run-deltas, write-alerts, notify; retry-friendly; idempotent via run_id
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T15: Implement GET + POST /api/prospects/[id]/monitor (config)
+    Files: app/api/prospects/[id]/monitor/route.ts
+    Acceptance: Zod; admin auth; GET returns config or null; POST upserts {active, frequency, day_of_week}
+    Verify: `npx tsc --noEmit`; curl GET + POST
+    Notes:
+
+[ ] T16: Implement POST /api/prospects/[id]/monitor/run-now
+    Files: app/api/prospects/[id]/monitor/run-now/route.ts
+    Acceptance: maxDuration=300; triggers workflow synchronously; rate-limit 1/24h
+    Verify: `npx tsc --noEmit`; curl
+    Notes:
+
+[ ] T17: Implement POST /api/prospects/[id]/monitor/alerts/[alert_id]/ack
+    Files: app/api/prospects/[id]/monitor/alerts/[alert_id]/ack/route.ts
+    Acceptance: sets acknowledged_at + acknowledged_by; admin auth
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T18: Implement GET /api/prospects/alerts (global feed)
+    Files: app/api/prospects/alerts/route.ts
+    Acceptance: Zod query (severity, kind, since, prospect_id); admin auth; paginated
+    Verify: `npx tsc --noEmit`; curl with filters
+    Notes:
+
+[ ] T19: Implement GET /api/cron/prospect-monitor-daily/route.ts
+    Files: app/api/cron/prospect-monitor-daily/route.ts
+    Acceptance: maxDuration=60; auth via CRON_SECRET; selects active configs where day_of_week=<today>; fires workflow per row; returns count
+    Verify: `npx tsc --noEmit`; manual curl with secret
+    Notes:
+
+[ ] T20: Add cron entry to vercel.json
+    Files: vercel.json
+    Acceptance: cron entry `0 9 * * *` for /api/cron/prospect-monitor-daily
+    Verify: `cat vercel.json | jq '.crons'`
+    Notes:
+
+[ ] T21: Wire push notification on high-severity alerts
+    Files: lib/prospects/monitor-orchestrator.ts (or notify helper)
+    Acceptance: after alerts written, concat high-severity bodies (<=280 chars), call existing PushNotification helper for owner_user_id
+    Verify: `npx tsc --noEmit`; manual fire with seeded data
+    Notes:
+
+[ ] T22: Add .env.example entries
+    Files: .env.example
+    Acceptance: PROSPECT_MONITOR_FOLLOWER_JUMP_PCT, PROSPECT_MONITOR_VIRAL_MULT, CRON_SECRET (if missing)
+    Verify: grep .env.example
+    Notes:
+
+[ ] T23: Create components/prospects/monitor-config-card.tsx
+    Files: components/prospects/monitor-config-card.tsx
+    Acceptance: active toggle + frequency select + day-of-week select; PATCHes /api/prospects/[id]/monitor; needs-benchmark warning state
+    Verify: `npx tsc --noEmit`; visual QA
+    Notes:
+
+[ ] T24: Create components/prospects/alert-row.tsx
+    Files: components/prospects/alert-row.tsx
+    Acceptance: renders kind icon + severity pill + summary text + timestamp + ack button
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T25: Create components/prospects/alert-feed.tsx
+    Files: components/prospects/alert-feed.tsx
+    Acceptance: list of alert-row with empty state; prop variants prospectId or global
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T26: Mount Monitor tab on /admin/prospects/[id]
+    Files: app/admin/prospects/[id]/page.tsx
+    Acceptance: Monitor tab shows monitor-config-card + alert-feed scoped to prospect
+    Verify: visit prospect detail Monitor tab
+    Notes:
+
+[ ] T27: Create global /admin/prospects/alerts page
+    Files: app/admin/prospects/alerts/page.tsx
+    Acceptance: filters (severity, kind, since); paginated alert-feed
+    Verify: visit /admin/prospects/alerts
+    Notes:
+
+[ ] T28: Add Alerts sidebar entry
+    Files: components/layout/admin-sidebar.tsx
+    Acceptance: "Alerts" entry under Prospects section linking to /admin/prospects/alerts
+    Verify: visual sidebar check; Title Case "Alerts"
+    Notes:
+
+[ ] T29: E2E test: toggle monitor + run-now + verify alert appears
+    Files: tests/e2e/prospect-monitor.spec.ts
+    Acceptance: Playwright covers toggle + run-now + alert ack
+    Verify: `npm run test:e2e -- prospect-monitor`
+    Notes:
+
+[ ] T30: 2-week stability QA (real cron firings)
+    Files: (none; record in Notes)
+    Acceptance: 4+ runs across 2 weeks; success rate observed; false-positive rate logged
+    Verify: dashboard + Supabase query
+    Notes:
+
+[ ] T31: Verify Done When checklist + commit
+    Files: (none)
+    Acceptance: all Done When bullets pass; commit SHA recorded
+    Verify: walk PRD Done When
+    Notes:

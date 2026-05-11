@@ -1,0 +1,92 @@
+# Progress: vff-06-format-taxonomy
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/vff-06-format-taxonomy/PRD.md before each task.
+
+[ ] T01: Author migration 276_format_taxonomy_seed.sql
+    Files: supabase/migrations/276_format_taxonomy_seed.sql
+    Acceptance: ALTER TABLE viral_formats ADD aliases/archived_at/example_video_id; CREATE TABLE format_taxonomy_proposals with unique partial index on (kind, lower(slug)) WHERE status='pending'; RLS policy; INSERT seed rows matching PRD verbatim (47 rows)
+    Verify: `grep -c "INSERT INTO viral_formats" supabase/migrations/276_format_taxonomy_seed.sql` returns 1; row count after run is 47
+    Notes:
+
+[ ] T02: Apply migration 276 via Supabase MCP
+    Files: (Supabase MCP) apply_migration name="276_format_taxonomy_seed"
+    Acceptance: applies cleanly; SELECT count(*) FROM viral_formats >= 47; SELECT count(*) FROM format_taxonomy_proposals = 0
+    Verify: Supabase MCP execute_sql confirms counts
+    Notes:
+
+[ ] T03: Regenerate lib/supabase/types.ts
+    Files: lib/supabase/types.ts
+    Acceptance: includes format_taxonomy_proposals + new viral_formats columns
+    Verify: `npx supabase gen types typescript --project-id $SUPABASE_PROJECT_ID > lib/supabase/types.ts && npx tsc --noEmit`
+    Notes:
+
+[ ] T04: Add TaxonomyRow + TaxonomyProposal types
+    Files: lib/analytics/types.ts
+    Acceptance: exports both interfaces mirroring DB rows + video_count derived field
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T05: Create GET + POST app/api/admin/formats/taxonomy/route.ts
+    Files: app/api/admin/formats/taxonomy/route.ts
+    Acceptance: GET joins viral_video_formats to compute video_count; POST creates row with super_admin check; 409 on duplicate
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T06: Create PATCH app/api/admin/formats/taxonomy/[id]/route.ts
+    Files: app/api/admin/formats/taxonomy/[id]/route.ts
+    Acceptance: validates PatchSchema; archive sets/clears archived_at; super_admin only
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T07: Create GET app/api/admin/formats/taxonomy/proposals/route.ts
+    Files: app/api/admin/formats/taxonomy/proposals/route.ts
+    Acceptance: returns proposals filtered by status + optional kind; admin-only read
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T08: Create approve/reject/merge endpoints
+    Files: app/api/admin/formats/taxonomy/proposals/[id]/approve/route.ts, .../reject/route.ts, .../merge/route.ts
+    Acceptance: all three endpoints follow PRD contracts; approve handles retag_existing flag; merge rewrites viral_video_formats rows; super_admin only
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T09: Build components/formats/taxonomy-column.tsx
+    Files: components/formats/taxonomy-column.tsx
+    Acceptance: renders title, rows with chips, edit/archive icons; super_admin actions hidden via canEdit prop
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T10: Build components/formats/proposal-card.tsx
+    Files: components/formats/proposal-card.tsx
+    Acceptance: renders kind badge, slug, evidence thumbnail; three actions wired via props; merge dialog autocompletes existing slugs in same kind
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T11: Build app/admin/formats/taxonomy/page.tsx
+    Files: app/admin/formats/taxonomy/page.tsx
+    Acceptance: server component fetches taxonomy + proposals; client island for tab switch + actions; uses 4 columns + copy from PRD verbatim
+    Verify: visit /admin/formats/taxonomy, see 4 columns; switch to Proposals tab
+    Notes:
+
+[ ] T12: Confirm VFF-05 consumes alias-augmented taxonomy CSV
+    Files: (read-only) lib/analytics/analyze-viral-video.ts
+    Acceptance: prompt builder maps `formats.map(f => "{display_name} (aliases: {aliases.join(', ')})")` into CSV; record line numbers
+    Verify: `grep -n "aliases" lib/analytics/analyze-viral-video.ts`
+    Notes:
+
+[ ] T13: Run lint + typecheck
+    Files: (none)
+    Acceptance: `npm run lint` clean, `npx tsc --noEmit` clean
+    Verify: both commands exit 0
+    Notes:
+
+[ ] T14: Manual smoke: approve a real proposal end-to-end
+    Files: (none — runtime)
+    Acceptance: VFF-05 emits at least one proposal; admin approves with retag_existing; viral_video_formats row count for new format > 0
+    Verify: SQL aggregate confirms
+    Notes:
+
+[ ] T15: Verify Done When checklist
+    Files: (none)
+    Acceptance: every bullet passes; commit SHA recorded
+    Verify: walk PRD Done When; record SHA
+    Notes:

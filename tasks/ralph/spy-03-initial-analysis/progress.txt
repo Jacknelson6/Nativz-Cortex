@@ -1,0 +1,153 @@
+# Progress: spy-03-initial-analysis
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/spy-03-initial-analysis/PRD.md before each task.
+# Depends on SPY-01 (prospects + touchpoints) and SPY-02 (onboard fires this).
+
+[ ] T01: Author migration 278_prospect_analyses.sql
+    Files: supabase/migrations/278_prospect_analyses.sql
+    Acceptance: matches PRD Data Model verbatim; 1 table, 3 indexes, RLS, updated trigger
+    Verify: `grep -c "CREATE INDEX" supabase/migrations/278_prospect_analyses.sql` returns ≥ 3
+    Notes:
+
+[ ] T02: Apply migration 278 via Supabase MCP
+    Files: (MCP apply_migration)
+    Acceptance: list_tables shows prospect_analyses
+    Verify: Supabase MCP list_tables
+    Notes:
+
+[ ] T03: Regenerate lib/supabase/types.ts
+    Files: lib/supabase/types.ts
+    Acceptance: prospect_analyses type present
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T04: Add ProspectAnalysisRow + sub-field types in lib/prospects/types.ts
+    Files: lib/prospects/types.ts
+    Acceptance: exports ProspectAnalysisRow, ProfilePicAssessment, BioAssessment, CaptionPattern, CommentSignal, PostingCadence
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T05: Create lib/prospects/initial-analysis-prompts.ts (4 prompts + Zod schemas)
+    Files: lib/prospects/initial-analysis-prompts.ts
+    Acceptance: exports buildProfilePicPrompt, buildBioPrompt, buildCaptionPrompt, buildCommentPrompt, buildRollupPrompt, plus their Zod output schemas
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T06: Add lib/prospects/initial-analysis-prompts.test.ts (snapshots)
+    Files: lib/prospects/initial-analysis-prompts.test.ts
+    Acceptance: snapshot each prompt rendering with a canonical fixture
+    Verify: `npx vitest run lib/prospects/initial-analysis-prompts.test.ts`
+    Notes:
+
+[ ] T07: Create lib/prospects/analysis-queries.ts
+    Files: lib/prospects/analysis-queries.ts
+    Acceptance: exports getLatestAnalysis, getAnalysisById, canRerun (returns { ok, retryAfterSec })
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T08: Add lib/prospects/analysis-queries.test.ts
+    Files: lib/prospects/analysis-queries.test.ts
+    Acceptance: canRerun returns false when latest succeeded <6h ago; true otherwise
+    Verify: `npx vitest run lib/prospects/analysis-queries.test.ts`
+    Notes:
+
+[ ] T09: Create lib/prospects/initial-analysis.ts orchestrator
+    Files: lib/prospects/initial-analysis.ts
+    Acceptance: runInitialAnalysis(prospectId) inserts pending row, runs pipeline, updates row, fires touchpoint + state advance; handles partial/failed/banned-topic
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T10: Add lib/prospects/initial-analysis.test.ts (12 fixture cases)
+    Files: lib/prospects/initial-analysis.test.ts
+    Acceptance: happy + private + <3 posts + malformed JSON + banned topic + rate-limited cases all green
+    Verify: `npx vitest run lib/prospects/initial-analysis.test.ts`
+    Notes:
+
+[ ] T11: Implement POST /api/prospects/[id]/analyze
+    Files: app/api/prospects/[id]/analyze/route.ts
+    Acceptance: maxDuration=300; Zod force flag; 429 rate-limit path; synchronous call to runInitialAnalysis
+    Verify: `npx tsc --noEmit`; manual curl returns 429 on second call inside 6h
+    Notes:
+
+[ ] T12: Implement GET + PATCH /api/prospects/[id]/analysis
+    Files: app/api/prospects/[id]/analysis/route.ts
+    Acceptance: GET returns latest or by run_id; PATCH merges overrides + writes touchpoint
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T13: Wire SPY-02 confirm-socials route to call runInitialAnalysis
+    Files: app/api/prospects/[id]/confirm-socials/route.ts
+    Acceptance: replace SPY-02 stub call with real import; fire-and-forget via Promise.resolve().then; do not await
+    Verify: confirm-socials still returns within ~1s; analysis row appears within 90s
+    Notes:
+
+[ ] T14: Create components/prospects/profile-pic-card.tsx
+    Files: components/prospects/profile-pic-card.tsx
+    Acceptance: client component, props per PRD; inline edit pencil; rating dot
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T15: Create components/prospects/bio-card.tsx
+    Files: components/prospects/bio-card.tsx
+    Acceptance: renders hook + cta + rating + note with override pencil
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T16: Create components/prospects/caption-pattern-card.tsx
+    Files: components/prospects/caption-pattern-card.tsx
+    Acceptance: renders two number stats with bars + voice note
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T17: Create components/prospects/comment-signal-card.tsx
+    Files: components/prospects/comment-signal-card.tsx
+    Acceptance: sentiment-split-bar + recurring themes pill row + reply rate percentage
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T18: Create components/prospects/posting-cadence-card.tsx
+    Files: components/prospects/posting-cadence-card.tsx
+    Acceptance: posts/week headline + trend arrow + label
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T19: Create components/prospects/observations-list.tsx + biggest-opportunity-card.tsx
+    Files: components/prospects/observations-list.tsx, components/prospects/biggest-opportunity-card.tsx
+    Acceptance: both render with override pencil paths
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T20: Create components/prospects/prospect-analysis-card.tsx wrapper
+    Files: components/prospects/prospect-analysis-card.tsx
+    Acceptance: composes 5 sub-cards + observations + opportunity + re-run CTA; states pending/partial/failed/succeeded
+    Verify: visual QA
+    Notes:
+
+[ ] T21: Activate Analysis tab on /admin/prospects/[id]
+    Files: app/admin/prospects/[id]/page.tsx
+    Acceptance: server-renders ProspectAnalysisCard via getLatestAnalysis; passes canRerun
+    Verify: visit a real prospect with analysis row, screenshot
+    Notes:
+
+[ ] T22: Integration test: full pipeline against fixtures
+    Files: tests/integration/prospect-analyze.test.ts
+    Acceptance: stubbed scrape + LLM fixtures; full row written with succeeded status; state advance to audited
+    Verify: `npx vitest run tests/integration/prospect-analyze.test.ts`
+    Notes:
+
+[ ] T23: E2E test: trigger + populate + override
+    Files: tests/e2e/prospect-analysis.spec.ts
+    Acceptance: Playwright covers fire-from-confirm → populate → override → persist
+    Verify: `npm run test:e2e -- prospect-analysis`
+    Notes:
+
+[ ] T24: Manual cost + quality QA (20 prospects)
+    Files: (none; record in progress.txt Notes)
+    Acceptance: p95 ≤ 90s; cost ≤ $0.10 mean; ≥16/20 strategist spot-checks fair
+    Verify: cost_cents query + strategist review
+    Notes:
+
+[ ] T25: Verify Done When checklist + commit
+    Files: (none)
+    Acceptance: all Done When bullets pass; commit SHA recorded
+    Verify: walk PRD Done When
+    Notes:

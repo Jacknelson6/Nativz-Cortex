@@ -1,0 +1,105 @@
+# Progress: spy-07-prospect-to-client
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/spy-07-prospect-to-client/PRD.md before each task.
+# Depends on SPY-01..SPY-06 being shipped.
+
+[ ] T01: Author migration 282_prospect_conversion.sql
+    Files: supabase/migrations/282_prospect_conversion.sql
+    Acceptance: adds clients.converted_from_prospect_id (UNIQUE), prospects.converted_to_client_id (UNIQUE), prospects.archived_at, 3 partial indexes
+    Verify: `grep -c "ADD COLUMN IF NOT EXISTS" supabase/migrations/282_prospect_conversion.sql` returns 3
+    Notes:
+
+[ ] T02: Apply migration 282 via Supabase MCP
+    Files: (MCP apply_migration)
+    Acceptance: list_tables shows new columns; FKs valid
+    Verify: Supabase MCP list_tables
+    Notes:
+
+[ ] T03: Regenerate lib/supabase/types.ts
+    Files: lib/supabase/types.ts
+    Acceptance: new columns present
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T04: Create lib/prospects/convert.ts orchestrator
+    Files: lib/prospects/convert.ts
+    Acceptance: convertProspect({prospectId, body}) handles org-or-merge, client, invite, monitor-pause, activity-log, push, all in a single transaction-equivalent flow
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T05: Add lib/prospects/convert.test.ts
+    Files: lib/prospects/convert.test.ts
+    Acceptance: 5 cases: happy, already-converted, org-merge, invalid-tier, monitor-pause-noop; all green
+    Verify: `npx vitest run lib/prospects/convert.test.ts`
+    Notes:
+
+[ ] T06: Implement POST /api/prospects/[id]/convert
+    Files: app/api/prospects/[id]/convert/route.ts
+    Acceptance: Zod; admin auth; returns {client_id, organization_id, invite_token, invite_url}; 409 on double-convert
+    Verify: `npx tsc --noEmit`; curl
+    Notes:
+
+[ ] T07: Implement POST /api/prospects/[id]/convert/undo
+    Files: app/api/prospects/[id]/convert/undo/route.ts
+    Acceptance: deletes client/org/invite + restores prospect within 1h; 410 outside window
+    Verify: `npx tsc --noEmit`; curl
+    Notes:
+
+[ ] T08: Implement GET /api/clients/[id]/from-prospecting
+    Files: app/api/clients/[id]/from-prospecting/route.ts
+    Acceptance: returns aggregated prospect-era data shape per PRD; 404 if not converted-from-prospect
+    Verify: `npx tsc --noEmit`; curl
+    Notes:
+
+[ ] T09: Create components/prospects/convert-prospect-modal.tsx
+    Files: components/prospects/convert-prospect-modal.tsx
+    Acceptance: 6 fields per PRD; collision dialog; copy invite URL on success; navigates to new client
+    Verify: `npx tsc --noEmit`; visual QA
+    Notes:
+
+[ ] T10: Create components/clients/from-prospecting-panel.tsx
+    Files: components/clients/from-prospecting-panel.tsx
+    Acceptance: IconCard with 5 sub-sections + links; empty state for non-converted clients
+    Verify: `npx tsc --noEmit`; visual QA
+    Notes:
+
+[ ] T11: Create components/prospects/undo-conversion-banner.tsx
+    Files: components/prospects/undo-conversion-banner.tsx
+    Acceptance: countdown timer; confirm dialog; POSTs undo
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T12: Mount Convert button + modal on /admin/prospects/[id]
+    Files: app/admin/prospects/[id]/page.tsx
+    Acceptance: button hidden when archived/converted; modal opens; matches sibling header layout
+    Verify: visit prospect detail
+    Notes:
+
+[ ] T13: Mount FromProspectingPanel + UndoBanner on /admin/clients/[id]
+    Files: app/admin/clients/[id]/page.tsx
+    Acceptance: panel only renders when converted_from_prospect_id present; UndoBanner only when within 1h
+    Verify: visit client detail post-conversion
+    Notes:
+
+[ ] T14: Filter archived prospects from /admin/prospects index
+    Files: app/admin/prospects/page.tsx
+    Acceptance: default query excludes archived; "Show archived" toggle re-includes
+    Verify: visit /admin/prospects; toggle filter
+    Notes:
+
+[ ] T15: E2E test: full conversion + undo + from-prospecting render
+    Files: tests/e2e/prospect-convert.spec.ts
+    Acceptance: Playwright covers convert + undo + panel render
+    Verify: `npm run test:e2e -- prospect-convert`
+    Notes:
+
+[ ] T16: Manual conversion smoke test on 3 staging prospects
+    Files: (none; record in Notes)
+    Acceptance: 3 successful conversions; invite redemption confirmed; panel verified
+    Verify: manual
+    Notes:
+
+[ ] T17: Verify Done When checklist + commit
+    Files: (none)
+    Acceptance: all Done When bullets pass; commit SHA recorded
+    Verify: walk PRD Done When
+    Notes:

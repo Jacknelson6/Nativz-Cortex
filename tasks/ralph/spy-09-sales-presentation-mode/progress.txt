@@ -1,0 +1,166 @@
+# Progress: spy-09-sales-presentation-mode
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/spy-09-sales-presentation-mode/PRD.md before each task.
+# Depends on SPY-03 (analyses + scorecard) + SPY-04 (share-links). SPY-05 optional.
+# NO new migration; reuses SPY-03/SPY-04 JSONB columns.
+
+[ ] T01: Add ThirtyDayPlan + PresentationSnapshot types to lib/prospects/types.ts
+    Files: lib/prospects/types.ts
+    Acceptance: exports ThirtyDayPlanItem, ThirtyDayPlan, PresentationSnapshot
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T02: Create lib/prospects/draft-30-day-plan.ts
+    Files: lib/prospects/draft-30-day-plan.ts
+    Acceptance: calls Sonnet 4.5 via OpenRouter with PRD prompt; returns ThirtyDayPlan; JSON-parses; validates exactly 3 items
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T03: Add lib/prospects/draft-30-day-plan.test.ts
+    Files: lib/prospects/draft-30-day-plan.test.ts
+    Acceptance: stubbed LLM happy + malformed-json + wrong-count cases
+    Verify: `npx vitest run lib/prospects/draft-30-day-plan.test.ts`
+    Notes:
+
+[ ] T04: Create lib/prospects/snapshot-presentation.ts
+    Files: lib/prospects/snapshot-presentation.ts
+    Acceptance: pure fn assembles PresentationSnapshot from prospect + analysis + benchmark + plan + rep contact
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T05: Add lib/prospects/snapshot-presentation.test.ts
+    Files: lib/prospects/snapshot-presentation.test.ts
+    Acceptance: happy + missing-benchmark + missing-plan cases
+    Verify: `npx vitest run lib/prospects/snapshot-presentation.test.ts`
+    Notes:
+
+[ ] T06: Implement POST /api/prospects/[id]/present/draft-plan
+    Files: app/api/prospects/[id]/present/draft-plan/route.ts
+    Acceptance: admin auth; calls draft-30-day-plan; persists into prospect_analyses.summary.thirty_day_plan
+    Verify: `npx tsc --noEmit`; curl
+    Notes:
+
+[ ] T07: Implement PATCH /api/prospects/[id]/present/plan
+    Files: app/api/prospects/[id]/present/plan/route.ts
+    Acceptance: Zod 3-item body; admin auth; sets strategist_edited=true
+    Verify: `npx tsc --noEmit`; curl
+    Notes:
+
+[ ] T08: Implement POST /api/prospects/[id]/present/mint-link
+    Files: app/api/prospects/[id]/present/mint-link/route.ts
+    Acceptance: mints prospect_share_links kind='presentation', expires_at=now+30d, presentation_snapshot stored in metadata JSONB; admin auth
+    Verify: `npx tsc --noEmit`; curl returns token + url
+    Notes:
+
+[ ] T09: Implement GET /api/shared/prospect-present/[token]
+    Files: app/api/shared/prospect-present/[token]/route.ts
+    Acceptance: public, no auth; returns PresentationSnapshot; 404 archived; 410 expired
+    Verify: `npx tsc --noEmit`; curl without auth
+    Notes:
+
+[ ] T10: Implement POST /api/shared/prospect-present/[token]/lead
+    Files: app/api/shared/prospect-present/[token]/lead/route.ts
+    Acceptance: Zod; IP-hash rate-limit 3/hr/token; sends Resend email to owner sales rep
+    Verify: `npx tsc --noEmit`; curl; verify inbound email
+    Notes:
+
+[ ] T11: Create components/prospects/present-panels/panel-cover.tsx
+    Files: components/prospects/present-panels/panel-cover.tsx
+    Acceptance: 72px headline, brand logo + Nativz lockup, prepared-for date
+    Verify: `npx tsc --noEmit`; visual QA at 1080p
+    Notes:
+
+[ ] T12: Create components/prospects/present-panels/panel-current-state.tsx
+    Files: components/prospects/present-panels/panel-current-state.tsx
+    Acceptance: 48px section headline; 10 R/Y/G rows; 24px body
+    Verify: `npx tsc --noEmit`; visual QA
+    Notes:
+
+[ ] T13: Create components/prospects/present-panels/panel-vs-competitors.tsx
+    Files: components/prospects/present-panels/panel-vs-competitors.tsx
+    Acceptance: big-number scores prospect vs competitors; empty state when benchmark missing
+    Verify: `npx tsc --noEmit`; visual QA
+    Notes:
+
+[ ] T14: Create components/prospects/present-panels/panel-biggest-opportunity.tsx
+    Files: components/prospects/present-panels/panel-biggest-opportunity.tsx
+    Acceptance: single bold callout pulled from analysis summary
+    Verify: `npx tsc --noEmit`; visual QA
+    Notes:
+
+[ ] T15: Create components/prospects/present-panels/panel-thirty-day-plan.tsx
+    Files: components/prospects/present-panels/panel-thirty-day-plan.tsx
+    Acceptance: 3 items with title/body/rationale; sentence case; no em dashes
+    Verify: `npx tsc --noEmit`; visual QA
+    Notes:
+
+[ ] T16: Create components/prospects/present-panels/panel-next-step.tsx
+    Files: components/prospects/present-panels/panel-next-step.tsx
+    Acceptance: internal variant = CTA; public variant = lead-capture form
+    Verify: `npx tsc --noEmit`; visual QA
+    Notes:
+
+[ ] T17: Create components/prospects/present-hotkeys.tsx
+    Files: components/prospects/present-hotkeys.tsx
+    Acceptance: 'use client'; arrows + space advance; Esc exits; updates URL hash
+    Verify: `npx tsc --noEmit`; manual hotkey QA
+    Notes:
+
+[ ] T18: Create components/prospects/present-mode-shell.tsx
+    Files: components/prospects/present-mode-shell.tsx
+    Acceptance: full-viewport dark wrapper; renders panel array; mounts hotkeys; 200ms cross-fade
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T19: Create components/prospects/thirty-day-plan-editor.tsx
+    Files: components/prospects/thirty-day-plan-editor.tsx
+    Acceptance: 3 editable rows; Regenerate button; Save button; shows strategist_edited flag
+    Verify: `npx tsc --noEmit`; visual QA
+    Notes:
+
+[ ] T20: Create components/prospects/present-mint-button.tsx
+    Files: components/prospects/present-mint-button.tsx
+    Acceptance: mints link, copies URL, toast confirmation
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T21: Create app/admin/prospects/[id]/present/page.tsx
+    Files: app/admin/prospects/[id]/present/page.tsx
+    Acceptance: admin auth; loads snapshot inline; PresentModeShell variant='internal'; minimal layout
+    Verify: visit page; press P from detail; arrows advance
+    Notes:
+
+[ ] T22: Create app/present/[token]/layout.tsx + page.tsx
+    Files: app/present/[token]/layout.tsx, app/present/[token]/page.tsx
+    Acceptance: no admin chrome; loads snapshot via token; tracks view via SPY-04 view-tracking
+    Verify: visit /present/<token> incognito; mobile QA
+    Notes:
+
+[ ] T23: Mount editor + mint button + present hotkey on /admin/prospects/[id]
+    Files: app/admin/prospects/[id]/page.tsx
+    Acceptance: editor in Analysis tab; mint button in header; 'P' hotkey navigates to /present
+    Verify: visit detail page
+    Notes:
+
+[ ] T24: E2E test: draft plan + mint link + present + public view + lead submit
+    Files: tests/e2e/prospect-present.spec.ts
+    Acceptance: Playwright covers full happy path
+    Verify: `npm run test:e2e -- prospect-present`
+    Notes:
+
+[ ] T25: Visual QA at 1080p + mobile
+    Files: (none; record screenshots in Notes)
+    Acceptance: typography reads at 1920x1080 Zoom; public stacks well on 390x844
+    Verify: manual
+    Notes:
+
+[ ] T26: Real sales-call dry run
+    Files: (none; record in Notes)
+    Acceptance: 1 sales rep runs demo; feedback captured
+    Verify: manual
+    Notes:
+
+[ ] T27: Verify Done When checklist + commit
+    Files: (none)
+    Acceptance: all Done When bullets pass; commit SHA recorded
+    Verify: walk PRD Done When
+    Notes:

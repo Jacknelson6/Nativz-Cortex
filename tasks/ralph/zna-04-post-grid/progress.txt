@@ -1,0 +1,140 @@
+# Progress: zna-04-post-grid
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/zna-04-post-grid/PRD.md before each task.
+
+[ ] T01: Verify migration 285 is next-free + Postgres version
+    Files: (read-only)
+    Acceptance: `ls supabase/migrations/` confirms 285 unused; Supabase MCP confirms Postgres >=15 for CREATE POLICY IF NOT EXISTS
+    Verify: Supabase MCP execute_sql `select version()`
+    Notes:
+
+[ ] T02: Author migration 285_post_metrics_thumbnail_storage.sql
+    Files: supabase/migrations/285_post_metrics_thumbnail_storage.sql
+    Acceptance: ALTER post_metrics adds 5 columns; partial index on thumbnail_storage_url IS NULL; bucket post-thumbnails inserted; storage.objects policies created
+    Verify: `grep -c "ADD COLUMN IF NOT EXISTS" supabase/migrations/285_post_metrics_thumbnail_storage.sql` returns 5
+    Notes:
+
+[ ] T03: Apply migration via Supabase MCP
+    Files: (MCP)
+    Acceptance: new columns visible; bucket exists; policies registered
+    Verify: Supabase MCP list_tables + execute_sql storage.buckets + pg_policies
+    Notes:
+
+[ ] T04: Regenerate lib/supabase/types.ts
+    Files: lib/supabase/types.ts
+    Acceptance: post_metrics Row/Insert types include thumbnail_storage_url + thumbnail_persisted_at + thumbnail_persist_failed_at + thumbnail_persist_attempts + thumbnail_source_hash
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T05: Add Supabase Storage hostname to next.config images.remotePatterns
+    Files: next.config.ts (or next.config.mjs)
+    Acceptance: remotePatterns includes the Supabase project hostname for /storage/v1/object/public/post-thumbnails/**
+    Verify: `npx tsc --noEmit`; dev server boots without warning
+    Notes:
+
+[ ] T06: Implement lib/analytics/post-thumbnail-persistence.ts
+    Files: lib/analytics/post-thumbnail-persistence.ts
+    Acceptance: persistPostThumbnail returns one of (persisted/unchanged/no_source/fetch_failed/upload_failed); uses sharp 720w q80 jpeg; writes thumbnail_storage_url + thumbnail_persisted_at; resets failure timestamp on success
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T07: Write tests for post-thumbnail-persistence
+    Files: lib/analytics/post-thumbnail-persistence.test.ts
+    Acceptance: covers no_source, unchanged (hash match), fetch_failed (404), upload_failed (mock), persisted; attempts counter increments
+    Verify: `npx vitest run lib/analytics/post-thumbnail-persistence.test.ts`
+    Notes:
+
+[ ] T08: Hook persistPostThumbnail into lib/reporting/sync.ts
+    Files: lib/reporting/sync.ts
+    Acceptance: after each post_metrics upsert, call persistPostThumbnail conditionally (null storage URL OR failed >24h ago); concurrency cap 5 via Promise.all batch; errors swallowed with console.error, never throw
+    Verify: `npx tsc --noEmit`; trigger sync locally on Nike demo
+    Notes:
+
+[ ] T09: Implement lib/analytics/posts-query.ts
+    Files: lib/analytics/posts-query.ts
+    Acceptance: loadPostsForGrid returns PostCard[] + nextCursor; cursor base64 round-trips; thumbnail_source resolution storage/cdn/fallback; ER recomputed with views denominator
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T10: Write tests for posts-query
+    Files: lib/analytics/posts-query.test.ts
+    Acceptance: cursor encode/decode round trip, ER recompute (saves excluded), thumbnail_source precedence, since_days clamp
+    Verify: `npx vitest run lib/analytics/posts-query.test.ts`
+    Notes:
+
+[ ] T11: Implement GET /api/analytics/zernio/posts (admin)
+    Files: app/api/analytics/zernio/posts/route.ts
+    Acceptance: Zod query schema with platforms csv transform; admin role check; calls loadPostsForGrid; returns PostsResponse; 400/401/404
+    Verify: `npx tsc --noEmit`; curl with admin cookie returns posts
+    Notes:
+
+[ ] T12: Implement GET /api/portal/analytics/zernio/posts (portal)
+    Files: app/api/portal/analytics/zernio/posts/route.ts
+    Acceptance: getPortalClient() scoping; ignores client_id from query; org filter on join; same response shape
+    Verify: `npx tsc --noEmit`; portal cookie returns scoped posts
+    Notes:
+
+[ ] T13: Build components/analytics/platform-fallback-tile.tsx
+    Files: components/analytics/platform-fallback-tile.tsx
+    Acceptance: 9:16 gradient per platform; centered platform glyph 40% opacity; optional brand avatar bottom-left; never broken image element
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T14: Build components/analytics/post-card.tsx
+    Files: components/analytics/post-card.tsx
+    Acceptance: 'use client' top; 9:16 aspect; next/image when thumbnail present; fallback tile otherwise; platform pill + relative date + views + ER suffix; hover tooltip with likes/comments/shares
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T15: Build components/analytics/post-grid-filter-bar.tsx
+    Files: components/analytics/post-grid-filter-bar.tsx
+    Acceptance: 'use client'; platform multi-select chips; sort dropdown with three options; helper text when empty selection
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T16: Build components/analytics/post-grid.tsx
+    Files: components/analytics/post-grid.tsx
+    Acceptance: 'use client'; renders filter bar + grid (2/3/4/5 cols responsive); load-more button on cursor; empty state copy "No posts in the last {since_days} days."
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[ ] T17: Mount post grid in admin analytics page
+    Files: app/admin/analytics/zernio/page.tsx
+    Acceptance: server-fetches first page; passes to <PostGrid initial={...} />; placed below platform cards
+    Verify: `npx tsc --noEmit`; visual check
+    Notes:
+
+[ ] T18: Mount post grid in portal analytics page
+    Files: app/portal/analytics/page.tsx
+    Acceptance: portal scoped fetch; renders <PostGrid isPortal /> below platform cards
+    Verify: `npx tsc --noEmit`; portal visual check
+    Notes:
+
+[ ] T19: Trigger sync-reporting + verify thumbnail persistence
+    Files: (none - verification)
+    Acceptance: after cron run on staging, >=90% of recent post_metrics rows have thumbnail_storage_url populated
+    Verify: Supabase MCP execute_sql count(thumbnail_storage_url) / count(*) >= 0.9
+    Notes:
+
+[ ] T20: Random URL HEAD-check regression
+    Files: (none - verification)
+    Acceptance: 100 random persisted URLs return 200 HEAD; report failure ratio
+    Verify: small node script + fetch HEAD against random sample
+    Notes:
+
+[ ] T21: Force fallback tile rendering
+    Files: (none - verification)
+    Acceptance: nulling thumbnail_url on a fixture post renders PlatformFallbackTile cleanly; no broken-image element
+    Verify: edit one fixture row, reload /admin/analytics/zernio
+    Notes:
+
+[ ] T22: Portal cross-org leak smoke test
+    Files: (none - verification)
+    Acceptance: viewer in org A cannot see org B posts; query string client_id ignored
+    Verify: dual portal logins
+    Notes:
+
+[ ] T23: Verify Done When checklist + commit
+    Files: (none)
+    Acceptance: every bullet in PRD Done When passes; SHA recorded
+    Verify: walk PRD Done When; `npx tsc --noEmit`; `npm run lint`
+    Notes:
