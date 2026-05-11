@@ -16,9 +16,13 @@ import type {
   PostGridOrder,
   PostsResponse,
 } from '@/lib/analytics/posts-query';
+import type { PostCardSignal } from '@/lib/analytics/resolve-post-signals';
+
+type PostCardWithSignal = PostCardData & { signal?: PostCardSignal };
+type PostsResponseWithSignal = Omit<PostsResponse, 'posts'> & { posts: PostCardWithSignal[] };
 
 interface Props {
-  initial: PostsResponse;
+  initial: PostsResponseWithSignal;
   endpoint: '/api/analytics/zernio/posts' | '/api/portal/analytics/zernio/posts';
   clientId?: string;            // required for admin endpoint, ignored for portal
   brandAvatarUrl?: string | null;
@@ -36,8 +40,9 @@ export function PostGrid({
 }: Props) {
   const [selectedPlatforms, setSelectedPlatforms] = useState<PostGridPlatform[]>(availablePlatforms);
   const [sort, setSort] = useState<PostGridSort>(initial.sort);
+  const [aboveAvgOnly, setAboveAvgOnly] = useState(false);
   const order: PostGridOrder = initial.order;
-  const [posts, setPosts] = useState<PostCardData[]>(initial.posts);
+  const [posts, setPosts] = useState<PostCardWithSignal[]>(initial.posts);
   const [nextCursor, setNextCursor] = useState<string | null>(initial.next_cursor);
   const [loading, setLoading] = useState(false);
   const [, startTransition] = useTransition();
@@ -55,16 +60,17 @@ export function PostGrid({
       params.set('order', order);
       params.set('limit', '30');
       params.set('since_days', String(rangeSinceDays));
+      if (aboveAvgOnly) params.set('signal', 'above_avg');
       if (cursor) params.set('cursor', cursor);
       return `${endpoint}?${params.toString()}`;
     },
-    [clientId, endpoint, selectedPlatforms, availablePlatforms, sort, order, rangeSinceDays],
+    [clientId, endpoint, selectedPlatforms, availablePlatforms, sort, order, rangeSinceDays, aboveAvgOnly],
   );
 
   // Refetch from page 1 whenever filter or sort changes (after initial render).
   const filterFingerprint = useMemo(
-    () => `${selectedPlatforms.slice().sort().join(',')}|${sort}`,
-    [selectedPlatforms, sort],
+    () => `${selectedPlatforms.slice().sort().join(',')}|${sort}|${aboveAvgOnly ? '1' : '0'}`,
+    [selectedPlatforms, sort, aboveAvgOnly],
   );
   const [hasMounted, setHasMounted] = useState(false);
   useEffect(() => {
@@ -80,7 +86,7 @@ export function PostGrid({
     setLoading(true);
     fetch(buildQuery(null), { cache: 'no-store' })
       .then((res) => res.json())
-      .then((data: PostsResponse) => {
+      .then((data: PostsResponseWithSignal) => {
         startTransition(() => {
           setPosts(data.posts ?? []);
           setNextCursor(data.next_cursor ?? null);
@@ -98,7 +104,7 @@ export function PostGrid({
     setLoading(true);
     try {
       const res = await fetch(buildQuery(nextCursor), { cache: 'no-store' });
-      const data: PostsResponse = await res.json();
+      const data: PostsResponseWithSignal = await res.json();
       setPosts((prev) => [...prev, ...(data.posts ?? [])]);
       setNextCursor(data.next_cursor ?? null);
     } catch (err) {
@@ -116,6 +122,8 @@ export function PostGrid({
         onPlatformChange={setSelectedPlatforms}
         sort={sort}
         onSortChange={setSort}
+        aboveAvgOnly={aboveAvgOnly}
+        onAboveAvgOnlyChange={setAboveAvgOnly}
       />
 
       {posts.length === 0 ? (

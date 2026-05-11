@@ -12,6 +12,10 @@ import {
   type PostGridSort,
   type PostGridOrder,
 } from '@/lib/analytics/posts-query';
+import {
+  resolvePostSignals,
+  type SignalFilter,
+} from '@/lib/analytics/resolve-post-signals';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +33,7 @@ const QuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(30),
   cursor: z.string().optional(),
   since_days: z.coerce.number().int().min(1).max(180).default(90),
+  signal: z.enum(['above_avg', 'avg', 'below_avg', 'too_fresh', 'any']).default('any'),
 });
 
 export async function GET(req: Request) {
@@ -44,6 +49,7 @@ export async function GET(req: Request) {
     limit: url.searchParams.get('limit') ?? undefined,
     cursor: url.searchParams.get('cursor') ?? undefined,
     since_days: url.searchParams.get('since_days') ?? undefined,
+    signal: url.searchParams.get('signal') ?? undefined,
   });
   if (!parsed.success) {
     return NextResponse.json(
@@ -56,7 +62,7 @@ export async function GET(req: Request) {
 
   const { data: client } = await admin
     .from('clients')
-    .select('id')
+    .select('id, organization_id')
     .eq('id', parsed.data.client_id)
     .maybeSingle();
   if (!client) {
@@ -74,13 +80,21 @@ export async function GET(req: Request) {
     sinceDays: parsed.data.since_days,
   });
 
+  const enriched = await resolvePostSignals({
+    supabase: admin,
+    organizationId: (client as { organization_id: string }).organization_id,
+    posts: result.posts,
+    signalFilter: parsed.data.signal as SignalFilter,
+  });
+
   return NextResponse.json(
     {
       client_id: parsed.data.client_id,
       range_since_days: parsed.data.since_days,
       sort: parsed.data.sort,
       order: parsed.data.order,
-      posts: result.posts,
+      signal: parsed.data.signal,
+      posts: enriched,
       next_cursor: result.nextCursor,
     },
     {

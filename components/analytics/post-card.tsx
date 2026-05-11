@@ -6,10 +6,12 @@
 
 import Image from 'next/image';
 import { PlatformFallbackTile } from './platform-fallback-tile';
+import { PostSignalDot } from './post-signal-dot';
 import type { PostCard as PostCardData, PostGridPlatform } from '@/lib/analytics/posts-query';
+import type { PostCardSignal } from '@/lib/analytics/resolve-post-signals';
 
 interface Props {
-  post: PostCardData;
+  post: PostCardData & { signal?: PostCardSignal };
   brandAvatarUrl?: string | null;
 }
 
@@ -69,12 +71,13 @@ export function PostCard({ post, brandAvatarUrl }: Props) {
 
       <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/85 via-black/40 to-transparent pointer-events-none" />
 
-      <div className="absolute inset-x-2 top-2 flex justify-start">
+      <div className="absolute inset-x-2 top-2 flex items-center justify-between">
         <span
           className={`inline-flex h-5 px-2 items-center rounded-full text-[11px] font-medium ${PLATFORM_PILL_CLASS[post.platform]}`}
         >
           {PLATFORM_LABEL[post.platform]}
         </span>
+        {post.signal && <PostSignalDot signal={post.signal} />}
       </div>
 
       <div className="absolute inset-x-2 bottom-2 flex items-end justify-between gap-2 text-white">

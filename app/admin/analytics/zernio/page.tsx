@@ -12,6 +12,7 @@ import { PostGrid } from '@/components/analytics/post-grid';
 import type { PulseShape } from '@/components/analytics/zernio-pulse-card';
 import type { AnalyticsPlatform, RangeKey } from '@/lib/analytics/types';
 import { loadPostsForGrid, type PostGridPlatform } from '@/lib/analytics/posts-query';
+import { resolvePostSignals } from '@/lib/analytics/resolve-post-signals';
 
 export const dynamic = 'force-dynamic';
 
@@ -117,10 +118,18 @@ export default async function ZernioAnalyticsPage({
 
   const { data: clientRow } = await admin
     .from('clients')
-    .select('logo_url')
+    .select('logo_url, organization_id')
     .eq('id', clientId)
     .maybeSingle();
   const brandAvatarUrl: string | null = (clientRow?.logo_url as string | null) ?? null;
+
+  const initialPostsWithSignals = await resolvePostSignals({
+    supabase: admin,
+    organizationId: (clientRow as { organization_id?: string } | null)?.organization_id ?? '',
+    posts: initialPostsPage.posts,
+    signalFilter: 'any',
+  });
+  initialPostsResponse.posts = initialPostsWithSignals as typeof initialPostsResponse.posts;
 
   return (
     <div className="px-6 py-8 max-w-6xl mx-auto space-y-6">
