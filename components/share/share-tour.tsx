@@ -137,7 +137,11 @@ export function ShareTour({ enabled, beats, storageKey }: ShareTourProps) {
   const [stepIdx, setStepIdx] = useState(0);
   const [rect, setRect] = useState<Rect | null>(null);
   const [cursorPhase, setCursorPhase] = useState<'enter' | 'travel' | 'rest'>('enter');
+  const [cardPos, setCardPos] = useState<{ top: number; placement: 'above' | 'below' } | null>(
+    null,
+  );
   const targetElRef = useRef<HTMLElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
 
   // Decide whether to start. Only on the first eligible mount.
   useEffect(() => {
@@ -253,6 +257,37 @@ export function ShareTour({ enabled, beats, storageKey }: ShareTourProps) {
     };
   }, [active, stepIdx, resolveStep, beats, storageKey]);
 
+  // Position the unified hint card relative to the focal ring. Prefer
+  // sitting above the ring; flip below if there isn't enough room. The
+  // measurement runs after the card mounts so it can read its own
+  // height — the first render uses a far-offscreen fallback to avoid a
+  // visual jump. Re-runs when the rect or active step changes.
+  useLayoutEffect(() => {
+    if (!active || !rect) return;
+    const card = cardRef.current;
+    if (!card) return;
+    const cardH = card.offsetHeight;
+    const gap = 18;
+    const safeTop = 16;
+    const safeBot = 16;
+    const vh = window.innerHeight;
+
+    const above = rect.top - cardH - gap;
+    const below = rect.top + rect.height + gap;
+
+    let placement: 'above' | 'below' = 'above';
+    let top = above;
+    if (above < safeTop) {
+      placement = 'below';
+      top = below;
+    }
+    if (top + cardH > vh - safeBot) {
+      // Neither side fits cleanly — clamp inside the viewport.
+      top = Math.max(safeTop, vh - cardH - safeBot);
+    }
+    setCardPos({ top, placement });
+  }, [active, rect, stepIdx]);
+
   // Esc to dismiss.
   useEffect(() => {
     if (!active) return;
@@ -367,28 +402,29 @@ export function ShareTour({ enabled, beats, storageKey }: ShareTourProps) {
         <CursorGlyph />
       </div>
 
-      {/* Top caption band — copy only. Skip/Next live in a fixed bar at
-          the bottom of the viewport so the thumb-friendly tap target
-          stays in the same place across beats and never jumps with the
-          spotlight rect. */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center px-4 pt-[max(env(safe-area-inset-top),24px)]">
-        <div className="pointer-events-auto w-full max-w-2xl rounded-2xl border border-nativz-border bg-surface/95 px-5 py-4 text-center shadow-[var(--shadow-card-hover)] backdrop-blur-md">
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
-            Quick tour {stepsBefore + 1} / {stepsTotal}
-          </div>
-          <h2 className="font-display text-xl font-semibold tracking-tight text-text-primary sm:text-2xl">
-            {beat.caption}
-          </h2>
-          <p className="mx-auto mt-1.5 max-w-xl text-sm leading-relaxed text-text-secondary">
-            {beat.detail}
-          </p>
+      {/* Unified hint card — caption + detail + Skip/Next stacked in a
+          single tile that hugs the focal ring. Pre-measure positioning
+          via the cardPos useLayoutEffect; while measuring the card sits
+          offscreen so there's no first-frame flash. */}
+      <div
+        ref={cardRef}
+        className="pointer-events-auto absolute left-1/2 w-[min(94vw,32rem)] -translate-x-1/2 rounded-2xl border border-nativz-border bg-surface/95 px-5 py-4 text-center shadow-[var(--shadow-card-hover)] backdrop-blur-md"
+        style={{
+          top: cardPos?.top ?? -9999,
+          opacity: cardPos ? 1 : 0,
+          transition: 'top 220ms ease-out, opacity 160ms ease-out',
+        }}
+      >
+        <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
+          Quick tour {stepsBefore + 1} / {stepsTotal}
         </div>
-      </div>
-
-      {/* Bottom control bar — Skip + Next pinned to a thumb-reachable
-          spot regardless of where the spotlight is on the page. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-4 pb-[max(env(safe-area-inset-bottom),24px)]">
-        <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-nativz-border bg-surface/95 px-2 py-2 shadow-[var(--shadow-card-hover)] backdrop-blur-md">
+        <h2 className="font-display text-lg font-semibold tracking-tight text-text-primary sm:text-xl">
+          {beat.caption}
+        </h2>
+        <p className="mx-auto mt-1 max-w-xl text-sm leading-relaxed text-text-secondary">
+          {beat.detail}
+        </p>
+        <div className="mt-3 flex items-center justify-center gap-2">
           <button
             type="button"
             onClick={close}
