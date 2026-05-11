@@ -69,7 +69,9 @@ async function handleGet(request: NextRequest) {
             platform,
             username,
             access_token_ref,
-            late_account_id
+            late_account_id,
+            is_active,
+            token_status
           )
         ),
         scheduled_post_media (
@@ -243,21 +245,41 @@ async function handleGet(request: NextRequest) {
         };
         // Stamp legs whose social profile is NOT connected to Zernio (NULL
         // late_account_id) as 'failed' with a clear reason BEFORE filtering.
-        // Silently dropping them (the prior behaviour) hid the root cause —
+        // Silently dropping them (the prior behaviour) hid the root cause,
         // the spp row stayed 'pending' forever, the calendar UI showed no
         // failure, and the team had no breadcrumb that "Reconnect Zernio"
         // was the fix. Now the leg-level failure_reason names the platform
         // and the publishing UX has a real signal.
+        //
+        // Phase 5 extension: also short-circuit legs whose profile is
+        // marked inactive (is_active=false) or whose cached token_status
+        // is bad (expired / needs_refresh). Both columns are kept current
+        // by the webhook handler and the connection-expired-watch cron
+        // respectively. Skipping these BEFORE we hit Zernio saves a
+        // round-trip that would 401 anyway, and gives operators a
+        // surgical reason like "TikTok token expired, reconnect" instead
+        // of a generic Zernio error.
         const unconnectedFailures: { platform: string; username: string | null; reason: string }[] = [];
         for (const spp of (post.scheduled_post_platforms ?? []) as Record<string, unknown>[]) {
           const sppStatus = (spp.status as string | null) ?? 'pending';
           if (sppStatus !== 'pending' && sppStatus !== 'failed') continue;
           const profile = spp.social_profiles as Record<string, unknown> | null;
           const lateAccountId = (profile?.late_account_id ?? null) as string | null;
-          if (lateAccountId) continue;
+          const isActive = (profile?.is_active as boolean | null) ?? true;
+          const tokenStatus = (profile?.token_status as string | null) ?? null;
           const platformName = (profile?.platform as string | null) ?? 'unknown';
           const username = (profile?.username as string | null) ?? null;
-          const reason = `${platformName} profile is not connected to Zernio (no late_account_id). Reconnect the profile in social settings before retrying.`;
+
+          let reason: string | null = null;
+          if (!lateAccountId) {
+            reason = `${platformName} profile is not connected to Zernio (no late_account_id). Reconnect the profile in social settings before retrying.`;
+          } else if (!isActive) {
+            reason = `${platformName} profile is inactive — Zernio reported the account disconnected. Reconnect in scheduler before retrying.`;
+          } else if (tokenStatus === 'expired' || tokenStatus === 'needs_refresh') {
+            reason = `${platformName} token is ${tokenStatus.replace('_', ' ')}. Reconnect the account so Zernio can refresh authorization.`;
+          }
+          if (!reason) continue;
+
           await adminClient
             .from('scheduled_post_platforms')
             .update({ status: 'failed', failure_reason: reason })
@@ -270,11 +292,20 @@ async function handleGet(request: NextRequest) {
         )
           .map((spp: Record<string, unknown>): PlatformProfile | null => {
             const sppStatus = (spp.status as string | null) ?? 'pending';
-            // Skip legs that already published — never re-fire them.
+            // Skip legs that already published, never re-fire them, AND
+            // skip the legs we just stamped 'failed' above (inactive /
+            // bad token / no late_account_id). The unconnectedFailures
+            // loop already wrote the failure_reason; trying to publish
+            // them again here would either 401 or worse, succeed on a
+            // resurrected account and create a ghost post.
             if (sppStatus !== 'pending' && sppStatus !== 'failed') return null;
             const profile = spp.social_profiles as Record<string, unknown> | null;
             const lateAccountId = (profile?.late_account_id ?? null) as string | null;
+            const isActive = (profile?.is_active as boolean | null) ?? true;
+            const tokenStatus = (profile?.token_status as string | null) ?? null;
             if (!lateAccountId) return null;
+            if (!isActive) return null;
+            if (tokenStatus === 'expired' || tokenStatus === 'needs_refresh') return null;
             return {
               profileId: spp.social_profile_id as string,
               lateAccountId,
