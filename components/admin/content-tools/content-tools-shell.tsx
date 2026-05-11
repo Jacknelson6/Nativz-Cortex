@@ -877,10 +877,23 @@ export function ContentToolsShell() {
         <EditingNewProjectDialog
           open={newEditingOpen}
           onClose={() => setNewEditingOpen(false)}
-          onCreated={async (id) => {
+          onCreated={(id, kind) => {
             setNewEditingOpen(false);
-            await loadProjects(true);
-            setActiveEditingId(id);
+            void loadProjects(true);
+            if (kind === 'editing') {
+              // Editing API returns the project id directly, which is the
+              // same id the table keys by, so we can pop the detail
+              // dialog open without waiting on the refresh.
+              setActiveEditingId(id);
+              return;
+            }
+            // Calendar API returns a content_drop id, while the table
+            // keys by share_link id. Switch to the All projects tab so
+            // the new row is visible, but let Jack click in himself
+            // once it appears. Saves us a stale-closure dance over a
+            // second-or-two refresh window.
+            setTab('projects');
+            toast.success('Calendar added. Open it from the table once captions finish.');
           }}
         />
         <CalendarLinkDetail
