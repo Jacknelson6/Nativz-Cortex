@@ -136,6 +136,10 @@
       "schedule": "0 */6 * * *"
     },
     {
+      "path": "/api/cron/missing-core-platforms",
+      "schedule": "0 10 * * *"
+    },
+    {
       "path": "/api/cron/refresh-openrouter-models",
       "schedule": "0 4 1,15 * *"
     },
