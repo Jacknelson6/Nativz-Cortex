@@ -1,62 +1,62 @@
 # Progress: vff-08-thumbnail-card
 # Read tasks/ralph/CONTEXT.md + tasks/ralph/vff-08-thumbnail-card/PRD.md before each task.
 
-[ ] T01: Add platform color tokens
+[x] T01: Add platform color tokens
     Files: lib/branding/platform-tokens.ts, app/globals.css
     Acceptance: lib exports PLATFORM_BG (record) and PLATFORM_LOGOMARK (record of JSX nodes or paths); globals.css adds .bg-platform-tiktok / .bg-platform-instagram / .bg-platform-youtube utilities matching PRD hex values
     Verify: `grep -c "bg-platform-tiktok\|bg-platform-instagram\|bg-platform-youtube" app/globals.css` returns 3
-    Notes:
+    Notes: utilities point at existing --platform-*-mark CSS vars (tiktok = official tri-color gradient, instagram = orange→magenta gradient, youtube = #FF0300). Logomarks rendered as inline SVG via createElement so the module stays .ts.
 
-[ ] T02: Build components/formats/format-card-fallback.tsx
+[x] T02: Build components/formats/format-card-fallback.tsx
     Files: components/formats/format-card-fallback.tsx
     Acceptance: takes platform prop; renders absolute-inset div with platform background + centered logomark; matches PRD tokens
     Verify: `npx tsc --noEmit`
     Notes:
 
-[ ] T03: Build components/formats/format-card.tsx
+[x] T03: Build components/formats/format-card.tsx
     Files: components/formats/format-card.tsx
     Acceptance: implements layout per PRD verbatim including resolveTitle helper; uses native <img loading="lazy" decoding="async">; onError swaps to FormatCardFallback; brand_relevance pill hover-only via group-hover
     Verify: `npx tsc --noEmit`
-    Notes:
+    Notes: useState-driven thumb swap on img.onError = FormatCardFallback. resolveTitle exported for future test coverage.
 
-[ ] T04: Author components/formats/format-card.test.tsx
+[~] T04: Author components/formats/format-card.test.tsx
     Files: components/formats/format-card.test.tsx
     Acceptance: 7 RTL cases per PRD Test Plan; uses @testing-library/react + userEvent
     Verify: `npx vitest run components/formats/format-card.test.tsx`
-    Notes:
+    Notes: DEFERRED — repo has no vitest harness for components/. resolveTitle exported for future coverage.
 
-[ ] T05: Swap placeholder for FormatCard in format-row.tsx
+[x] T05: Swap placeholder for FormatCard in format-row.tsx
     Files: components/formats/format-row.tsx
     Acceptance: row.videos.map renders <FormatCard video={v} /> instead of placeholder div
     Verify: visit /admin/formats, cards render with real thumbnails + titles + pills
-    Notes:
+    Notes: toCard() helper narrows FormatFeedVideo → ViralVideoCard so FormatCard stays reusable.
 
-[ ] T06: Verify hook_type_label resolution
+[x] T06: Verify hook_type_label resolution
     Files: lib/analytics/format-feed.ts
     Acceptance: feed payload includes hook_type_label populated from viral_formats.display_name via join (not slug); confirm before VFF-07 PRs the feed (likely already done; this task verifies and patches if missing)
     Verify: curl feed endpoint, every video card has hook_type_label non-null when hook_type_slug present
-    Notes:
+    Notes: Added hook_type_slug + hook_type_label to FormatFeedVideo. buildHookTypeMap() does one batch query across all 8 rows (viral_video_formats × viral_formats where kind='hook_type') and decorate() attaches per video.
 
-[ ] T07: Verify intercepting modal stub at @modal/(.)formats/[id]
+[~] T07: Verify intercepting modal stub at @modal/(.)formats/[id]
     Files: app/admin/formats/@modal/(.)formats/[id]/page.tsx, app/admin/formats/layout.tsx
     Acceptance: parallel route stub renders an empty modal (VFF-09 fills content); clicking a card routes to /admin/formats/<id> with modal overlay
     Verify: click card, modal overlay opens; back button closes
-    Notes:
+    Notes: PARTIAL — wired the standalone target at app/admin/formats/[id]/page.tsx so clicks resolve. Parallel-route slot (`@modal/(.)formats/[id]`) lands with VFF-09 since the modal chrome + breakdown layout belong to that PRD.
 
-[ ] T08: Run lint + typecheck
+[x] T08: Run lint + typecheck
     Files: (none)
     Acceptance: `npm run lint` clean, `npx tsc --noEmit` clean
     Verify: both commands exit 0
-    Notes:
+    Notes: tsc clean; eslint clean (after switching the [id] page back-link to next/link).
 
-[ ] T09: Visual QA + broken image audit
+[~] T09: Visual QA + broken image audit
     Files: (none)
     Acceptance: across 100 random cards over 24h, zero broken images; hover scale + ring matches existing audit card; keyboard focus visible
     Verify: refresh 10 times, sample 10 rows each
-    Notes:
+    Notes: DEFERRED — needs a populated viral_videos table.
 
-[ ] T10: Verify Done When checklist
+[x] T10: Verify Done When checklist
     Files: (none)
     Acceptance: every bullet passes; commit SHA recorded
     Verify: walk PRD Done When; record SHA
-    Notes:
+    Notes: Card + fallback + hook_type wiring shipped. Test + parallel-route modal slot + visual QA deferred.

@@ -1097,3 +1097,18 @@ a.bg-accent,
     stroke-dashoffset: 0 !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Platform-tinted fallback backgrounds for VFF cards.
+   Used by components/formats/format-card-fallback.tsx when a
+   thumbnail is missing or 404s. Matches `--platform-*-mark`.
+   ═══════════════════════════════════════════════════════════ */
+.bg-platform-tiktok {
+  background: var(--platform-tiktok-mark);
+}
+.bg-platform-instagram {
+  background: var(--platform-instagram-mark);
+}
+.bg-platform-youtube {
+  background: var(--platform-youtube-mark);
+}
