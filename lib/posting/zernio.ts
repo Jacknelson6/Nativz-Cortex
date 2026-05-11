@@ -1059,6 +1059,149 @@ export class ZernioPostingService implements PostingService {
     });
   }
 
+  /**
+   * POST /v1/tools/validate/media — verify a media URL meets the
+   * destination platforms' format / size / duration requirements
+   * before publishing. Returns an `ok` boolean plus a list of per-
+   * platform issues (e.g. "TikTok requires .mp4, got .mov") so the
+   * UI can surface a fix path instead of letting publish fail later.
+   *
+   * Failures here are NOT rate-limited and don't consume publish credits,
+   * so call eagerly at approval time / scheduler save rather than waiting
+   * for the publish cron to fail.
+   */
+  async validateMedia(args: {
+    mediaUrl: string;
+    platforms: SocialPlatform[];
+    mediaType?: 'video' | 'image';
+  }): Promise<{
+    ok: boolean;
+    issues: Array<{
+      platform: SocialPlatform | string;
+      code: string | null;
+      message: string;
+    }>;
+    raw: Record<string, unknown>;
+  }> {
+    try {
+      const raw = await zernioRequest<unknown>('/tools/validate/media', {
+        method: 'POST',
+        body: JSON.stringify({
+          mediaUrl: args.mediaUrl,
+          platforms: args.platforms,
+          mediaType: args.mediaType ?? 'video',
+        }),
+      });
+      const root = asRecord(raw) ?? {};
+      const ok = root.ok === true || root.valid === true;
+      const issuesRaw = Array.isArray(root.issues)
+        ? root.issues
+        : Array.isArray(root.errors)
+          ? root.errors
+          : [];
+      const issues = issuesRaw
+        .map((it) => {
+          const r = asRecord(it);
+          if (!r) return null;
+          return {
+            platform: pickString(r, 'platform') ?? '',
+            code: pickString(r, 'code', 'errorCode') ?? null,
+            message: pickString(r, 'message', 'detail', 'reason') ?? 'Unknown issue',
+          };
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null);
+      return { ok, issues, raw: root };
+    } catch (err) {
+      // A 404 on the validate endpoint means the Zernio plan doesn't
+      // include validation, treat as "skip silently" rather than blocking
+      // publish. Real errors surface to the caller via the issues array.
+      const { msg, status } = zernioErrSummary(err);
+      if (status === 404) return { ok: true, issues: [], raw: {} };
+      console.warn(`[zernio] validateMedia failed: ${msg}`);
+      return {
+        ok: false,
+        issues: [
+          {
+            platform: 'zernio',
+            code: 'validate_unavailable',
+            message: msg,
+          },
+        ],
+        raw: {},
+      };
+    }
+  }
+
+  /**
+   * POST /v1/tools/validate/post — pre-flight check for the full
+   * publish payload (caption length, hashtag count, media combo, per-
+   * platform field requirements like YouTube title). Cheaper to call
+   * than `publishPost` and returns the same shape of issues array.
+   */
+  async validatePost(args: {
+    caption: string;
+    hashtags?: string[];
+    mediaUrls?: string[];
+    platforms: SocialPlatform[];
+  }): Promise<{
+    ok: boolean;
+    issues: Array<{
+      platform: SocialPlatform | string;
+      field: string | null;
+      code: string | null;
+      message: string;
+    }>;
+    raw: Record<string, unknown>;
+  }> {
+    try {
+      const raw = await zernioRequest<unknown>('/tools/validate/post', {
+        method: 'POST',
+        body: JSON.stringify({
+          caption: args.caption,
+          hashtags: args.hashtags ?? [],
+          mediaUrls: args.mediaUrls ?? [],
+          platforms: args.platforms,
+        }),
+      });
+      const root = asRecord(raw) ?? {};
+      const ok = root.ok === true || root.valid === true;
+      const issuesRaw = Array.isArray(root.issues)
+        ? root.issues
+        : Array.isArray(root.errors)
+          ? root.errors
+          : [];
+      const issues = issuesRaw
+        .map((it) => {
+          const r = asRecord(it);
+          if (!r) return null;
+          return {
+            platform: pickString(r, 'platform') ?? '',
+            field: pickString(r, 'field', 'param') ?? null,
+            code: pickString(r, 'code', 'errorCode') ?? null,
+            message: pickString(r, 'message', 'detail', 'reason') ?? 'Unknown issue',
+          };
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null);
+      return { ok, issues, raw: root };
+    } catch (err) {
+      const { msg, status } = zernioErrSummary(err);
+      if (status === 404) return { ok: true, issues: [], raw: {} };
+      console.warn(`[zernio] validatePost failed: ${msg}`);
+      return {
+        ok: false,
+        issues: [
+          {
+            platform: 'zernio',
+            field: null,
+            code: 'validate_unavailable',
+            message: msg,
+          },
+        ],
+        raw: {},
+      };
+    }
+  }
+
   async listPosts(query?: ListPostsQuery): Promise<LatePost[]> {
     const params = new URLSearchParams();
     if (query?.platform) params.set('platform', query.platform);

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getPostingService, type SocialPlatform } from '@/lib/posting';
+import { ZernioPostingService } from '@/lib/posting/zernio';
 import type { CaptionVariants } from '@/lib/types/calendar';
 import { distributeSlots } from './distribute-slots';
 import { verifyAndReconcilePost } from './verify-post';
@@ -526,6 +527,37 @@ export async function publishScheduledPost(
     video?.caption_variants ?? null,
     filteredLateProfiles,
   );
+
+  // Pre-flight validation: ask Zernio to validate the full payload (caption
+  // length, hashtag count, media combo, per-platform field requirements) BEFORE
+  // we burn a publish slot. Zernio's publish endpoint would reject the same
+  // malformed payload after the credit is consumed; calling validatePost first
+  // turns a hard-fail-during-publish into a clean error stamped on the row.
+  // The method silently no-ops on 404 (plan doesn't include validation), so
+  // this is safe to call unconditionally.
+  const mediaUrlsForValidate = mediaItems?.length
+    ? mediaItems.map((m) => m.url).filter((u): u is string => !!u)
+    : videoUrl
+      ? [videoUrl]
+      : [];
+  const zernioPreflight = new ZernioPostingService();
+  const validateResult = await zernioPreflight.validatePost({
+    caption: post.caption,
+    hashtags: post.hashtags ?? [],
+    mediaUrls: mediaUrlsForValidate,
+    platforms: filteredLateProfiles.map((p) => p.platform),
+  });
+  if (!validateResult.ok && validateResult.issues.length > 0) {
+    const summary = validateResult.issues
+      .map((i) => {
+        const platform = i.platform ? `${i.platform}: ` : '';
+        const field = i.field ? `[${i.field}] ` : '';
+        const code = i.code ? ` (${i.code})` : '';
+        return `${platform}${field}${i.message}${code}`;
+      })
+      .join('; ');
+    throw new Error(`Zernio pre-flight validation rejected this post: ${summary}`);
+  }
 
   const service = getPostingService();
   const publish = await service.publishPost({

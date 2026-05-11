@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getPostingService } from '@/lib/posting';
+import { ZernioPostingService } from '@/lib/posting/zernio';
 import type { SocialPlatform } from '@/lib/posting/types';
 import { preflightInstagramAspectForPost } from '@/lib/posting/validate-image-aspect';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
@@ -657,6 +658,84 @@ async function handleGet(request: NextRequest) {
           linkedin_disable_link_preview: boolean | null;
           first_comment: string | null;
         };
+
+        // Pre-flight: ask Zernio to validate the payload before we burn a
+        // publish slot. Validation failures are deterministic (caption too
+        // long, missing field, unsupported media combo) — retrying buys
+        // nothing. Mark the post terminal-failed and notify, so the team
+        // fixes the payload rather than letting the retry queue grind.
+        // Method silently no-ops on 404 if Zernio's plan excludes validation.
+        const validateMediaUrls = mediaItems?.length
+          ? mediaItems.map((m) => m.url).filter((u): u is string => !!u)
+          : videoUrl
+            ? [videoUrl]
+            : [];
+        const zernioPreflight = new ZernioPostingService();
+        const validation = await zernioPreflight.validatePost({
+          caption: post.caption ?? '',
+          hashtags: post.hashtags ?? [],
+          mediaUrls: validateMediaUrls,
+          platforms: platformProfiles.map((pp: PlatformProfile) => pp.platform),
+        });
+        if (!validation.ok && validation.issues.length > 0) {
+          const reasonText = validation.issues
+            .map((i) => {
+              const platform = i.platform ? `${i.platform}: ` : '';
+              const field = i.field ? `[${i.field}] ` : '';
+              const code = i.code ? ` (${i.code})` : '';
+              return `${platform}${field}${i.message}${code}`;
+            })
+            .join(' | ');
+          console.warn(
+            `[publish-cron] Zernio validatePost rejected ${post.id}: ${reasonText}`,
+          );
+          await adminClient
+            .from('scheduled_posts')
+            .update({
+              status: 'partially_failed',
+              retry_count: MAX_RETRIES,
+              failure_reason: `Zernio pre-flight validation rejected: ${reasonText}`,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', post.id);
+          // Stamp the relevant per-platform leg(s) so the UI surfaces what
+          // failed; issues with no platform get applied to every leg.
+          for (const issue of validation.issues) {
+            const targetLegs = (post.scheduled_post_platforms ?? []).filter(
+              (s: Record<string, unknown>) => {
+                if (!issue.platform) return true;
+                const sp = s.social_profiles as { platform?: string } | undefined;
+                return sp?.platform === issue.platform;
+              },
+            );
+            for (const leg of targetLegs) {
+              await adminClient
+                .from('scheduled_post_platforms')
+                .update({
+                  status: 'failed',
+                  failure_reason: `${issue.field ? `[${issue.field}] ` : ''}${issue.message}${issue.code ? ` (${issue.code})` : ''}`,
+                })
+                .eq('id', (leg as Record<string, unknown>).id);
+            }
+          }
+          try {
+            await notifyPartialFailureGuarded(
+              adminClient,
+              post,
+              validation.issues.map((i) => ({
+                platform: typeof i.platform === 'string' ? i.platform : 'unknown',
+                username: null,
+                reason: i.message,
+              })),
+              sendPartialFailureNotification,
+            );
+          } catch (notifyErr) {
+            console.error('Failed to send validation failure notification:', notifyErr);
+          }
+          failedCount++;
+          continue;
+        }
+
         const result = await postingService.publishPost({
           videoUrl,
           mediaItems,
