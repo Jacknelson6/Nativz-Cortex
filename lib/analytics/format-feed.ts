@@ -200,17 +200,32 @@ export async function buildFormatFeed(
   collect(recent.data ?? []);
   collect(competitors);
   collect(saved);
-  const hookMap = await buildHookTypeMap(admin, Array.from(allIds));
+  const [hookMap, dismissedSet] = await Promise.all([
+    buildHookTypeMap(admin, Array.from(allIds)),
+    buildDismissedSet(admin, clientId, Array.from(allIds)),
+  ]);
+
+  // VFF-09 T17: dismissed videos still surface (so users can undo and
+  // so the strategist sees signal) but always sink to the bottom of
+  // every row. Stable sort preserves the original ranking inside each
+  // bucket (not-dismissed first, dismissed second).
+  const demote = (videos: FormatFeedVideo[]): FormatFeedVideo[] => {
+    if (dismissedSet.size === 0) return videos;
+    const keep: FormatFeedVideo[] = [];
+    const sink: FormatFeedVideo[] = [];
+    for (const v of videos) (dismissedSet.has(v.id) ? sink : keep).push(v);
+    return [...keep, ...sink];
+  };
 
   const rows: FormatFeedRow[] = [
-    { key: 'for_you', label: 'For you', videos: decorate(forYou, hookMap) },
-    { key: 'trending', label: 'Trending this week', videos: decorate(trending.data ?? [], hookMap) },
-    { key: 'top_hooks', label: 'Top hooks', videos: decorate(topHooks.data ?? [], hookMap) },
-    { key: 'comparison', label: 'Comparison plays', videos: decorate(comparison, hookMap) },
-    { key: 'pov', label: 'POV magic', videos: decorate(pov, hookMap) },
-    { key: 'recent', label: 'Just analyzed', videos: decorate(recent.data ?? [], hookMap) },
-    { key: 'worth_stealing', label: 'Worth stealing from competitors', videos: decorate(competitors, hookMap) },
-    { key: 'saved', label: 'Your saved', videos: decorate(saved, hookMap) },
+    { key: 'for_you', label: 'For you', videos: demote(decorate(forYou, hookMap)) },
+    { key: 'trending', label: 'Trending this week', videos: demote(decorate(trending.data ?? [], hookMap)) },
+    { key: 'top_hooks', label: 'Top hooks', videos: demote(decorate(topHooks.data ?? [], hookMap)) },
+    { key: 'comparison', label: 'Comparison plays', videos: demote(decorate(comparison, hookMap)) },
+    { key: 'pov', label: 'POV magic', videos: demote(decorate(pov, hookMap)) },
+    { key: 'recent', label: 'Just analyzed', videos: demote(decorate(recent.data ?? [], hookMap)) },
+    { key: 'worth_stealing', label: 'Worth stealing from competitors', videos: demote(decorate(competitors, hookMap)) },
+    { key: 'saved', label: 'Your saved', videos: demote(decorate(saved, hookMap)) },
   ];
 
   const hero = rows[0].videos[0] ?? rows[1].videos[0] ?? rows[2].videos[0] ?? null;
@@ -326,6 +341,22 @@ async function buildSavedRow(
     .order('analyzed_at', { ascending: false, nullsFirst: false })
     .limit(limit);
   return data ?? [];
+}
+
+async function buildDismissedSet(
+  admin: ReturnType<typeof createAdminClient>,
+  clientId: string | null,
+  videoIds: string[],
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (!clientId || videoIds.length === 0) return out;
+  const { data } = await admin
+    .from('viral_video_brand_dismissals')
+    .select('video_id')
+    .eq('client_id', clientId)
+    .in('video_id', videoIds);
+  for (const r of (data ?? []) as Array<{ video_id: string }>) out.add(r.video_id);
+  return out;
 }
 
 export const __TEST__ = { bucketRelevance };
