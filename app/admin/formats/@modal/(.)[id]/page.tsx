@@ -1,21 +1,21 @@
-// VFF-09 T15: standalone full-page detail. Used when the user lands on
-// /admin/formats/<id> directly (deep link, refresh, or new tab). The
-// intercepting modal at app/admin/formats/@modal/(.)formats/[id] takes
-// over when navigating in-app from the feed.
+// VFF-09 T16: intercepting route that renders the format detail in a
+// modal when the user clicks a card in the feed, without losing the
+// scroll position on /admin/formats. A direct visit / refresh of the
+// same URL falls through to the standalone full-page route at
+// `app/admin/formats/[id]/page.tsx`.
 
-import Link from 'next/link';
 import { redirect, notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getActiveBrand } from '@/lib/active-brand';
 import { getFormatDetail } from '@/lib/analytics/format-detail';
-import { FormatDetailPane } from '@/components/formats/format-detail-pane';
+import { FormatDetailModal } from '@/components/formats/format-detail-modal';
 
 export const dynamic = 'force-dynamic';
 
 type Params = Promise<{ id: string }>;
 
-export default async function FormatDetailPage({ params }: { params: Params }) {
+export default async function InterceptedFormatDetail({ params }: { params: Params }) {
   const { id } = await params;
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -40,12 +40,5 @@ export default async function FormatDetailPage({ params }: { params: Params }) {
   const data = await getFormatDetail(id, clientId, user.id);
   if (!data) notFound();
 
-  return (
-    <div className="space-y-4 p-6">
-      <Link className="text-xs text-white/50 hover:text-white/80" href="/admin/formats">
-        &larr; Back to formats
-      </Link>
-      <FormatDetailPane data={data} brand_name={active.brand?.name ?? null} />
-    </div>
-  );
+  return <FormatDetailModal data={data} brand_name={active.brand?.name ?? null} />;
 }
