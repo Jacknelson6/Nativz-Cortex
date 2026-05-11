@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { isAdmin } from '@/lib/auth/permissions';
 import { z } from 'zod';
 import { getPostingService } from '@/lib/posting';
 import type { SocialPlatform } from '@/lib/posting/types';
@@ -13,12 +14,16 @@ const PublishDraftsSchema = z.object({
  * POST /api/scheduler/posts/publish-drafts
  *
  * Promote all draft posts with a scheduled date for a client to 'scheduled' status
- * and sync each to the Late API. Posts without Late-connected profiles are skipped.
- * Late sync errors per post are logged but non-fatal.
+ * and sync each to the Late API. Drop-derived drafts without a client approval
+ * comment get a synthetic admin-attributed approval comment minted in-place
+ * (same escape hatch as the per-post /force-approve route), so the admin's
+ * explicit "set drafts to auto-publish" action does what it says on the tin.
+ * Posts without Late-connected profiles are skipped during sync. Late sync
+ * errors per post are logged but non-fatal.
  *
- * @auth Required (any authenticated user)
+ * @auth Admin only
  * @body client_id - Client UUID whose drafts to promote (required)
- * @returns {{ published: number, synced: number, message: string }}
+ * @returns {{ published: number, synced: number, force_approved: number, message: string }}
  */
 export async function POST(request: NextRequest) {
   try {
@@ -26,6 +31,10 @@ export async function POST(request: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (!(await isAdmin(user.id))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const body = await request.json();
@@ -58,25 +67,27 @@ export async function POST(request: NextRequest) {
     // APPROVAL GATE — see the publish-cron's gate for context.
     //
     // Drop-derived posts (rows linked from `content_drop_videos`) MUST have
-    // an approved `post_review_comments` row before we ship them. The
-    // calendar scheduler shares this UI's "Publish all drafts" button for
-    // admin-initiated publishes, but that button MUST NOT bypass the
-    // share-link approval flow. Anything without approval is filtered out
-    // here — non-drop drafts (quick-schedule, social ads, etc.) pass
-    // through unchanged.
+    // an approved `post_review_comments` row before the cron ships them.
+    // This bulk action is admin-only and explicitly labelled "Set drafts to
+    // auto-publish", so it functions as the bulk equivalent of the per-post
+    // /force-approve escape hatch: for any drop drafts missing an approval
+    // comment, we mint a synthetic one attributed to the admin and proceed.
+    // Non-drop drafts (quick-schedule, social ads, etc.) pass through with
+    // no synthetic approval needed.
     const draftIds = allDrafts.map((d) => d.id);
     const { data: dropVideoRows } = await adminClient
       .from('content_drop_videos')
       .select('scheduled_post_id')
       .in('scheduled_post_id', draftIds);
     const dropDraftIds = new Set(
-      (dropVideoRows ?? []).map(
-        (r) => (r as { scheduled_post_id: string }).scheduled_post_id,
-      ),
+      (dropVideoRows ?? [])
+        .map((r) => (r as { scheduled_post_id: string }).scheduled_post_id)
+        .filter((id): id is string => !!id),
     );
 
     const dropDraftIdList = Array.from(dropDraftIds);
     const approvedDropDraftIds = new Set<string>();
+    const postIdToLinkId = new Map<string, string>();
     if (dropDraftIdList.length > 0) {
       const { data: reviewLinks } = await adminClient
         .from('post_review_links')
@@ -84,10 +95,13 @@ export async function POST(request: NextRequest) {
         .in('post_id', dropDraftIdList);
       const linkIdToPostId = new Map<string, string>();
       for (const r of reviewLinks ?? []) {
-        linkIdToPostId.set(
-          (r as { id: string; post_id: string }).id,
-          (r as { id: string; post_id: string }).post_id,
-        );
+        const row = r as { id: string; post_id: string };
+        linkIdToPostId.set(row.id, row.post_id);
+        // Reuse the first review link we find per post; force-approve only
+        // needs a target FK and never surfaces this row to the client.
+        if (!postIdToLinkId.has(row.post_id)) {
+          postIdToLinkId.set(row.post_id, row.id);
+        }
       }
       if (linkIdToPostId.size > 0) {
         const { data: approvedComments } = await adminClient
@@ -104,23 +118,68 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const drafts = allDrafts.filter((d) => {
-      if (!dropDraftIds.has(d.id)) return true;
-      return approvedDropDraftIds.has(d.id);
-    });
-    const skippedUnapprovedCount = allDrafts.length - drafts.length;
+    // Drop drafts that still need a synthetic approval comment minted.
+    const unapprovedDropDraftIds = Array.from(dropDraftIds).filter(
+      (id) => !approvedDropDraftIds.has(id),
+    );
 
-    if (drafts.length === 0) {
-      return NextResponse.json({
-        published: 0,
-        skipped_unapproved: skippedUnapprovedCount,
-        message:
-          skippedUnapprovedCount > 0
-            ? `${skippedUnapprovedCount} drop post${skippedUnapprovedCount === 1 ? '' : 's'} skipped (no approval comment).`
-            : 'No drafts to publish',
-      });
+    let forceApprovedCount = 0;
+    if (unapprovedDropDraftIds.length > 0) {
+      const { data: profile } = await adminClient
+        .from('users')
+        .select('full_name, email')
+        .eq('id', user.id)
+        .maybeSingle();
+      const authorLabel = `${profile?.full_name || profile?.email || 'Admin'} (admin)`;
+      const today = new Date().toISOString().slice(0, 10);
+
+      // For drop drafts that have no review link yet, mint one so the
+      // synthetic approved-comment FK has a target. 90-day expiry matches
+      // the per-post /force-approve route.
+      const postsNeedingLink = unapprovedDropDraftIds.filter(
+        (id) => !postIdToLinkId.has(id),
+      );
+      if (postsNeedingLink.length > 0) {
+        const expires = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: newLinks, error: linkErr } = await adminClient
+          .from('post_review_links')
+          .insert(
+            postsNeedingLink.map((post_id) => ({ post_id, expires_at: expires })),
+          )
+          .select('id, post_id');
+        if (linkErr) {
+          console.error('publish-drafts: bulk link insert error:', linkErr);
+        } else {
+          for (const row of newLinks ?? []) {
+            const r = row as { id: string; post_id: string };
+            postIdToLinkId.set(r.post_id, r.id);
+          }
+        }
+      }
+
+      const commentRows = unapprovedDropDraftIds
+        .map((postId) => postIdToLinkId.get(postId))
+        .filter((linkId): linkId is string => !!linkId)
+        .map((review_link_id) => ({
+          review_link_id,
+          author_name: authorLabel,
+          content: `Admin force-approve via bulk Set drafts to auto-publish on ${today}.`,
+          status: 'approved' as const,
+        }));
+
+      if (commentRows.length > 0) {
+        const { error: commentErr } = await adminClient
+          .from('post_review_comments')
+          .insert(commentRows);
+        if (commentErr) {
+          console.error('publish-drafts: bulk approval comment insert error:', commentErr);
+        } else {
+          forceApprovedCount = commentRows.length;
+        }
+      }
     }
 
+    const drafts = allDrafts;
     const postIds = drafts.map((d) => d.id);
 
     // Update all to scheduled
@@ -219,11 +278,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       published: postIds.length,
       synced,
-      skipped_unapproved: skippedUnapprovedCount,
+      force_approved: forceApprovedCount,
       message:
-        skippedUnapprovedCount > 0
-          ? `${postIds.length} draft${postIds.length === 1 ? '' : 's'} set to publish; ${skippedUnapprovedCount} drop post${skippedUnapprovedCount === 1 ? '' : 's'} skipped (no approval comment).`
-          : `${postIds.length} draft${postIds.length === 1 ? '' : 's'} set to publish`,
+        forceApprovedCount > 0
+          ? `${postIds.length} draft${postIds.length === 1 ? '' : 's'} set to auto-publish (${forceApprovedCount} force-approved in your name).`
+          : `${postIds.length} draft${postIds.length === 1 ? '' : 's'} set to auto-publish.`,
     });
   } catch (error) {
     console.error('POST /api/scheduler/posts/publish-drafts error:', error);

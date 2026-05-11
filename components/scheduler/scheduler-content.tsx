@@ -236,9 +236,9 @@ function SchedulerInner({
   const draftCount = posts.filter((p) => p.status === 'draft').length;
 
   const { confirm: confirmPublishDrafts, dialog: publishDraftsDialog } = useConfirm({
-    title: 'Publish all drafts',
-    description: `Set ${draftCount} draft post${draftCount === 1 ? '' : 's'} to auto-publish? They will be published at their scheduled times.`,
-    confirmLabel: 'Publish all',
+    title: 'Set drafts to auto-publish',
+    description: `Flip ${draftCount} draft${draftCount === 1 ? '' : 's'} to auto-publish at their scheduled times. Drop posts without a client approval comment will be force-approved in your name.`,
+    confirmLabel: 'Set to auto-publish',
   });
 
   const { confirm: confirmPublishNow, dialog: publishNowDialog } = useConfirm({
@@ -389,7 +389,7 @@ function SchedulerInner({
               onClick={handlePublishAllDrafts}
             >
               <Send size={14} />
-              Publish {draftCount} draft{draftCount === 1 ? '' : 's'}
+              Set {draftCount} draft{draftCount === 1 ? '' : 's'} to auto-publish
             </Button>
           )}
           {isAdmin && (
