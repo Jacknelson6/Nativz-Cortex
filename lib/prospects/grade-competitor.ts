@@ -261,6 +261,7 @@ export async function gradeCompetitor(input: GradeCompetitorInput): Promise<Grad
     posting_cadence: cadence,
     observations: null,
     biggest_opportunity: null,
+    thirty_day_plan: null,
     overrides: {},
     created_by: null,
     created_at: new Date().toISOString(),

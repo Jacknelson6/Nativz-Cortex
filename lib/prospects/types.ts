@@ -143,6 +143,8 @@ export interface ProspectAnalysisRow {
   posting_cadence: PostingCadence | null;
   observations: string[] | null;
   biggest_opportunity: string | null;
+  /** SPY-09: optional LLM-drafted 30-day plan, mutable by strategist. */
+  thirty_day_plan: ThirtyDayPlan | null;
   overrides: Record<string, unknown>;
   created_by: string | null;
   created_at: string;
@@ -272,6 +274,46 @@ export interface ProspectMonitorAlertRow {
   acknowledged_at: string | null;
   acknowledged_by: string | null;
   occurred_at: string;
+}
+
+// ── SPY-09: Sales call presentation mode ─────────────────────────────────────
+
+export interface ThirtyDayPlanItem {
+  id: string; // stable id, e.g. action_01
+  title: string; // <= 80 chars
+  body: string; // <= 240 chars
+  rationale: string; // why this matters, <= 200 chars
+}
+
+export interface ThirtyDayPlan {
+  generated_at: string;
+  items: ThirtyDayPlanItem[]; // exactly 3
+  strategist_edited: boolean;
+}
+
+export interface PresentationCover {
+  brand_name: string;
+  brand_logo_url: string | null;
+  prepared_for_date: string;
+}
+
+export interface PresentationVsCompetitors {
+  prospectScore: number;
+  competitorScores: Array<{ handle: string; score: number }>;
+}
+
+export interface PresentationContact {
+  sales_rep_name: string;
+  sales_rep_email: string;
+}
+
+export interface PresentationSnapshot {
+  cover: PresentationCover;
+  current_state: import('./checklist').ScorecardSnapshot;
+  vs_competitors: PresentationVsCompetitors | null;
+  biggest_opportunity: { title: string; body: string };
+  thirty_day_plan: ThirtyDayPlan;
+  contact: PresentationContact;
 }
 
 export const LIFECYCLE_LABELS: Record<ProspectLifecycleState, string> = {
