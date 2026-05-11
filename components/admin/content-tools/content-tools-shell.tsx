@@ -46,17 +46,17 @@ import { CalendarLinkDetail } from './calendar-link-detail';
 import { subscribeToCompletion } from '@/lib/editing/upload-store';
 
 /**
- * Group rows into month buckets keyed by `YYYY-MM`, using whichever
- * date the user chose ("created" or "approved"). Rows missing the
- * chosen date land in the `null` bucket so they still render under a
- * fallback "No date" header instead of vanishing.
+ * Group rows into month buckets keyed by `YYYY-MM`, using the project's
+ * `approved_at` date. Rows missing that date land in the `null` bucket
+ * so they still render under a fallback "No date" header instead of
+ * vanishing. `default` mode keeps the flat list; `approval` mode is the
+ * grouped view used for arrears invoicing.
  */
-type GroupByMonth = 'none' | 'created' | 'approved';
+type GroupBy = 'default' | 'approval';
 
-const GROUP_BY_OPTIONS: { value: GroupByMonth; label: string }[] = [
-  { value: 'none', label: 'None' },
-  { value: 'created', label: 'Started in month' },
-  { value: 'approved', label: 'Approved in month' },
+const GROUP_BY_OPTIONS: { value: GroupBy; label: string }[] = [
+  { value: 'default', label: 'Default' },
+  { value: 'approval', label: 'Approval' },
 ];
 
 // Accounting math. Finance bills clients by deliverable count, split by
@@ -151,13 +151,12 @@ function monthLabel(key: string): string {
   });
 }
 
-function groupRowsByMonth(
+function groupRowsByApprovalMonth(
   rows: ReviewLinkRow[],
-  field: Exclude<GroupByMonth, 'none'>,
 ): { key: string | null; label: string; rows: ReviewLinkRow[] }[] {
   const buckets = new Map<string | null, ReviewLinkRow[]>();
   for (const row of rows) {
-    const iso = field === 'created' ? row.created_at : row.approved_at ?? null;
+    const iso = row.approved_at ?? null;
     const key = monthKey(iso);
     const existing = buckets.get(key);
     if (existing) {
@@ -443,7 +442,7 @@ export function ContentToolsShell() {
   // <Month> sections (newest first) so the table reads like a list-view
   // calendar. The active value also forces the in-bucket sort onto the
   // chosen date so rows inside a month stay in temporal order.
-  const [groupBy, setGroupBy] = useState<GroupByMonth>('none');
+  const [groupBy, setGroupBy] = useState<GroupBy>('default');
 
   // When grouped, the user focuses on one month at a time and pages
   // between months with the chevrons. Stored as the bucket key
@@ -574,13 +573,13 @@ export function ContentToolsShell() {
   // active because the column-sort intent ("show me by date sent") is
   // incompatible with "show me each month's batch in order."
   const monthGroups = useMemo(() => {
-    if (groupBy === 'none') return [];
-    const groups = groupRowsByMonth(visibleProjects, groupBy);
+    if (groupBy === 'default') return [];
+    const groups = groupRowsByApprovalMonth(visibleProjects);
     return groups.map((g) => ({
       ...g,
       rows: [...g.rows].sort((a, b) => {
-        const aIso = groupBy === 'created' ? a.created_at : a.approved_at ?? '';
-        const bIso = groupBy === 'created' ? b.created_at : b.approved_at ?? '';
+        const aIso = a.approved_at ?? '';
+        const bIso = b.approved_at ?? '';
         return bIso.localeCompare(aIso);
       }),
     }));
@@ -726,11 +725,11 @@ export function ContentToolsShell() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-xs">
                 <span className="font-medium uppercase tracking-wide text-text-muted">
-                  Group by month
+                  Group by:
                 </span>
                 <div
                   role="tablist"
-                  aria-label="Group projects by month"
+                  aria-label="Group projects"
                   className="inline-flex rounded-md border border-nativz-border bg-surface p-0.5"
                 >
                   {GROUP_BY_OPTIONS.map((opt) => {
@@ -753,13 +752,8 @@ export function ContentToolsShell() {
                     );
                   })}
                 </div>
-                {groupBy === 'approved' && (
-                  <span className="ml-2 hidden text-[11px] text-text-muted sm:inline">
-                    For arrears invoicing to the finance team.
-                  </span>
-                )}
               </div>
-              {groupBy === 'approved' && focusedGroup && focusedGroup.rows.length > 0 && (
+              {groupBy === 'approval' && focusedGroup && focusedGroup.rows.length > 0 && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -768,7 +762,7 @@ export function ContentToolsShell() {
                   }
                 >
                   <Download size={14} />
-                  Export for accounting
+                  Export CSV
                 </Button>
               )}
             </div>
@@ -776,7 +770,7 @@ export function ContentToolsShell() {
               <ProjectsTableSkeleton />
             ) : allRows.length === 0 ? (
               <ProjectsEmptyState />
-            ) : groupBy === 'none' ? (
+            ) : groupBy === 'default' ? (
               <ReviewTableCard
                 rows={visibleProjects}
                 showBrand
@@ -827,15 +821,6 @@ export function ContentToolsShell() {
                       <ChevronRight size={16} />
                     </button>
                   </div>
-                  <span className="text-xs text-text-muted">
-                    {focusedGroup.rows.length}{' '}
-                    {focusedGroup.rows.length === 1 ? 'project' : 'projects'}
-                    {monthGroups.length > 1 && (
-                      <span className="ml-2 opacity-60">
-                        {focusedGroupIndex + 1} of {monthGroups.length}
-                      </span>
-                    )}
-                  </span>
                 </div>
                 <ReviewTableCard
                   rows={focusedGroup.rows}

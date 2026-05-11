@@ -343,50 +343,39 @@ function KindToggle({
   onChange: (next: UploadKind) => void;
   disabled: boolean;
 }) {
-  const options: { value: UploadKind; label: string; icon: React.ReactNode; hint: string }[] = [
+  const options: { value: UploadKind; label: string; icon: React.ReactNode }[] = [
     {
       value: 'editing',
       label: 'Editing project',
       icon: <Scissors size={14} />,
-      hint: 'One-off cutdowns, paid creatives, or any deliverable where editors collaborate on a single batch.',
     },
     {
       value: 'calendar',
       label: 'Content calendar',
       icon: <CalendarRange size={14} />,
-      hint: 'Upload finished videos or images. We caption every file and schedule them across a date range.',
     },
   ];
-  const active = options.find((o) => o.value === value);
   return (
-    <div className="space-y-1.5">
-      <label className="block text-sm font-medium text-text-secondary">
-        What are you uploading?
-      </label>
-      <div className="grid grid-cols-2 gap-2">
-        {options.map((o) => {
-          const isActive = o.value === value;
-          return (
-            <button
-              key={o.value}
-              type="button"
-              disabled={disabled}
-              onClick={() => onChange(o.value)}
-              className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                isActive
-                  ? 'border-accent bg-accent/10 text-accent-text'
-                  : 'border-nativz-border bg-surface text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              {o.icon}
-              {o.label}
-            </button>
-          );
-        })}
-      </div>
-      {active && (
-        <p className="text-xs text-text-muted">{active.hint}</p>
-      )}
+    <div className="grid grid-cols-2 gap-2">
+      {options.map((o) => {
+        const isActive = o.value === value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(o.value)}
+            className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+              isActive
+                ? 'border-accent bg-accent/10 text-accent-text'
+                : 'border-nativz-border bg-surface text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            {o.icon}
+            {o.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
