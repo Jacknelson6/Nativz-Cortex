@@ -78,6 +78,77 @@ export const LIFECYCLE_STATES: ProspectLifecycleState[] = [
   'lost',
 ];
 
+// ── SPY-03: prospect_analyses ────────────────────────────────────────────────
+
+export type ProspectAnalysisStatus =
+  | 'pending'
+  | 'running'
+  | 'succeeded'
+  | 'partial'
+  | 'failed';
+
+export type AssessmentRating = 'good' | 'okay' | 'weak';
+
+export interface ProfilePicAssessment {
+  rating: AssessmentRating;
+  note: string;
+  image_url: string | null;
+}
+
+export interface BioAssessment {
+  hook: string | null;
+  cta: string | null;
+  rating: AssessmentRating;
+  note: string;
+}
+
+export interface CaptionPattern {
+  hook_quality_avg: number;
+  cta_rate: number;
+  voice_note: string;
+}
+
+export interface CommentSignal {
+  sentiment_score: number;
+  recurring_themes: string[];
+  reply_rate: number;
+  note?: string;
+}
+
+export type CadenceTrend = 'climbing' | 'flat' | 'declining' | 'unknown';
+
+export interface PostingCadence {
+  posts_per_week: number;
+  trend: CadenceTrend;
+  note?: string;
+}
+
+export interface ProspectAnalysisRow {
+  id: string;
+  prospect_id: string;
+  run_id: string;
+  platform: ProspectPlatform;
+  handle: string;
+  status: ProspectAnalysisStatus;
+  error_message: string | null;
+  duration_ms: number | null;
+  cost_cents: number | null;
+  raw_profile: Record<string, unknown>;
+  raw_captions: unknown[];
+  raw_comments: unknown[];
+  profile_pic_assessment: ProfilePicAssessment | null;
+  bio_assessment: BioAssessment | null;
+  caption_pattern: CaptionPattern | null;
+  comment_signal: CommentSignal | null;
+  posting_cadence: PostingCadence | null;
+  observations: string[] | null;
+  biggest_opportunity: string | null;
+  overrides: Record<string, unknown>;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export const LIFECYCLE_LABELS: Record<ProspectLifecycleState, string> = {
   discovered: 'Discovered',
   audited: 'Audited',
