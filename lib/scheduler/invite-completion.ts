@@ -114,7 +114,9 @@ export async function handleInviteCompletion(opts: {
     backfillCount > 0
       ? ` Auto-added to ${backfillCount} upcoming post${backfillCount === 1 ? '' : 's'}.`
       : '';
-  const summary = `${brandName} just reconnected ${platformLabel} as ${handle}.${backfillSuffix}`;
+  const summary =
+    `*${brandName}* just reconnected ${platformLabel} as ${handle} after a Cortex invite.${backfillSuffix} ` +
+    `Internal FYI, no team action needed unless the handle looks wrong.`;
 
   // Resolver: client's own webhook → agency miscellaneous catchall → ops env.
   const resolved = await resolveTeamChatWebhook(admin, {

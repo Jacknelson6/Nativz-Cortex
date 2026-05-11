@@ -250,7 +250,9 @@ async function handleGet(request: NextRequest) {
       postToGoogleChatSafe(
         opsWebhook,
         {
-          text: `📣 ${stageLabel} sent to *${client.name}*, ${pending}/${total} posts still pending. ${shareUrl}`,
+          text:
+            `📣 *${client.name}* — ${stageLabel} follow-up email auto-sent to the client by the cron ` +
+            `(${pending}/${total} posts still need approval). FYI, no team action needed unless the client goes dark through the final call.\n${shareUrl}`,
         },
         `cadence_ops:${link.id}:${stage}`,
       );
@@ -520,7 +522,9 @@ async function autoApprovePending(
   postToGoogleChatSafe(
     opsWebhook,
     {
-      text: `✅ Auto-approved *${pendingPostIds.length}* posts on *${client.name}*'s calendar, no client activity for 9 days. ${args.shareUrl}`,
+      text:
+        `✅ *Internal:* cron auto-approved ${pendingPostIds.length} pending post(s) on *${client.name}*'s calendar after 9 days of zero client activity. ` +
+        `Posts will publish on their scheduled times. The client was NOT emailed about the auto-approval, this is a Cortex policy fallback.\n${args.shareUrl}`,
     },
     `cadence_ops_auto_approve:${link.id}`,
   );

@@ -214,10 +214,11 @@ async function handleGet(request: NextRequest) {
       })
       .join('\n');
     const text = [
-      `🔄 *${meta.name}* picked up new social accounts from Zernio`,
+      `🔄 *Internal:* Cortex picked up new social accounts on *${meta.name}* from Zernio`,
       lines,
       ``,
-      `These accounts were connected on Zernio's side but missing from Cortex. Backfilled automatically. Future posts will include them on the cadence.`,
+      `These accounts were connected on Zernio's side but missing from Cortex. Cron backfilled them automatically; future posts will include them on the cadence. ` +
+        `Client was NOT emailed, this is a behind-the-scenes sync. No team action needed unless an account looks wrong.`,
     ].join('\n');
     postToGoogleChatSafe(
       finalWebhook,

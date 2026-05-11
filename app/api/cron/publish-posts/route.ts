@@ -1470,10 +1470,11 @@ async function sendFailureNotification(
     const reason = (post.failure_reason as string | null) ?? 'unknown error';
     const truncatedReason = reason.length > 280 ? reason.substring(0, 280) + '…' : reason;
     const text =
-      `🚨 *Post failed to publish for ${clientName}*\n` +
+      `🚨 *Internal alert:* publish FAILED for *${clientName}* after 3 retries on every platform. ` +
+      `The client was NOT notified; the post is stuck in failed state.\n` +
       `Caption: "${caption}${((post.caption as string) ?? '').length > 100 ? '…' : ''}"\n` +
       `Reason: ${truncatedReason}\n` +
-      `${postUrl}`;
+      `Open the post to investigate and retry or reassign manually:\n${postUrl}`;
     postToGoogleChatSafe(opsWebhook, { text }, `publish-failure ${postId}`);
   }
 
@@ -1530,10 +1531,11 @@ async function sendPartialFailureNotification(
       })
       .join('\n');
     const text =
-      `⚠️ *Post partially failed to publish for ${clientName}*\n` +
+      `⚠️ *Internal alert:* publish PARTIALLY failed for *${clientName}*, some platforms shipped, some did not. ` +
+      `Cron will NOT retry partials (the successes can't be unpublished). The client was NOT notified.\n` +
       `Caption: "${caption}${((post.caption as string) ?? '').length > 100 ? '…' : ''}"\n` +
-      `${failureLines}\n` +
-      `${postUrl}`;
+      `Failed legs:\n${failureLines}\n` +
+      `Open the post to manually re-publish the failed platforms:\n${postUrl}`;
     postToGoogleChatSafe(opsWebhook, { text }, `publish-partial ${postId}`);
   }
 

@@ -178,10 +178,11 @@ async function handleGet(request: NextRequest) {
       .join('\n');
 
     const text = [
-      `📵 *${client.name}* is missing core platform connections`,
+      `📵 *Internal alert:* *${client.name}* is missing core platform connections`,
       platformLines,
       ``,
-      `We are actively scheduling posts for this client but these platforms have no connected account, so nothing is going out there. Send a reconnect invite from the Connections matrix.`,
+      `Cortex is actively scheduling posts for this client but these platforms have no connected account, so nothing is going out there. ` +
+        `Client has NOT been emailed about this, action required: send a reconnect invite from the Connections matrix.`,
     ].join('\n');
 
     postToGoogleChatSafe(

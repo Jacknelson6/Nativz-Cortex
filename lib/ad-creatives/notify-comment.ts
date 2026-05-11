@@ -155,7 +155,9 @@ export async function notifyAdminsOfAdConceptComment(
     const quotedBlock = trimmed
       ? '\n' + trimmed.split('\n').map((line) => `> ${line}`).join('\n')
       : '';
-    const text = `*${ev.authorName}* ${verb} *${conceptLabel}* for ${clientName}:${quotedBlock}\n\n${shareUrl}`;
+    const text =
+      `💬 *${ev.authorName}* (client) ${verb} *${conceptLabel}* for ${clientName}:${quotedBlock}\n` +
+      `Only the client has seen this so far. Reply from the share link:\n${shareUrl}`;
     postToGoogleChatSafe(
       targetWebhookUrl,
       { text },
@@ -170,7 +172,8 @@ export async function notifyAdminsOfAdConceptComment(
     const subject = projectTitle
       ? `${clientName}'s ${projectTitle} project`
       : `${clientName}'s gallery`;
-    const text = `🎉 All ad concepts from ${subject} are approved!\n${shareUrl}`;
+    const text =
+      `🎉 *${subject}* — client approved every ad concept. Gallery is locked; no team action needed.\n${shareUrl}`;
     postToGoogleChatSafe(
       targetWebhookUrl,
       { text },

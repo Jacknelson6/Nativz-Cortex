@@ -201,7 +201,8 @@ async function handleGet(request: NextRequest) {
     const urlFragment = shareUrl ? `\nLink: ${shareUrl}` : '';
 
     const text =
-      `⏰ ${clientName}: ${variantLabel}${subjectFragment} sent ${hoursSilent}h ago${recipientFragment} hasn't been clicked yet.${urlFragment}`;
+      `⏰ *Internal nudge:* ${clientName} hasn't opened the *${variantLabel}*${subjectFragment} email Cortex sent ${hoursSilent}h ago${recipientFragment} yet. ` +
+      `No automated follow-up went out, worth a manual ping (call or DM the contact) before the next cadence stage fires.${urlFragment}`;
 
     postToGoogleChatSafe(opsWebhook, { text }, `calendar-no-click-escalation:${row.id}`);
     results.push({ messageId: row.id, clientName, ok: true });

@@ -201,7 +201,10 @@ async function handleGet(request: NextRequest) {
     // cron no longer fans it out.
 
     // Google Chat (ops space)
-    const chatLines: string[] = [`*Cortex post-health alert* — ${summary}`];
+    const chatLines: string[] = [
+      `🩺 *Internal ops alert: Cortex post-health* — ${summary}`,
+      `Clients have NOT been notified; this is a system health roll-up. Triage from the calendar below.`,
+    ];
     if (failedPosts.length > 0) {
       chatLines.push('', '*Failed posts:*');
       for (const p of failedPosts.slice(0, 10)) {

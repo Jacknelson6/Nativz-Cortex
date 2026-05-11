@@ -166,9 +166,14 @@ export async function POST(
     const postsBlock = postTimes.length > 0
       ? '\n' + postTimes.map((t) => `• ${t}`).join('\n')
       : '';
+    // This action ALSO emails the client's POCs below (sendCalendarRevisedVideosEmail).
+    // Surface that fact so the team doesn't double-email or wonder if the
+    // client knows yet. If no eligible POCs exist on the client, the email
+    // gets skipped (warning logged) but this chat still goes out, so phrase
+    // it as the team kicking off the notify, not as a hard delivery.
     const text =
-      `*${editorName}* re-uploaded ${pendingForLink.length} revised ${word} for *${clientName}*.${postsBlock}\n` +
-      `Open the share link to review the new cuts:\n${shareUrl}`;
+      `📬 *${editorName}* re-uploaded ${pendingForLink.length} revised ${word} for *${clientName}* and is notifying the client's POCs now.${postsBlock}\n` +
+      `FYI for the team, the email is going out as part of this action. Share link if you want to spot-check:\n${shareUrl}`;
     postToGoogleChatSafe(chatWebhookUrl, { text }, `revised-videos ${link.drop_id}`);
   }
 

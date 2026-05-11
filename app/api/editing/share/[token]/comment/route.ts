@@ -497,7 +497,9 @@ async function postEditingChatForComment(args: {
               .map((a) => `📎 ${a.filename}\n${a.url}`)
               .join('\n\n')
           : '';
-      const text = `*${args.authorName} ${verb} on ${clientName} · ${projectName}*${quotedBlock}${attachmentBlock}\n\n${linkedShareUrl}`;
+      const text =
+        `💬 *${args.authorName}* (client) ${verb} on *${clientName} · ${projectName}*${quotedBlock}${attachmentBlock}\n` +
+        `Reply from the share link, the client doesn't get an email until you respond:\n${linkedShareUrl}`;
       postToGoogleChatSafe(
         webhookUrl,
         { text },
@@ -514,7 +516,9 @@ async function postEditingChatForComment(args: {
     );
     if (!setting.enabled) return;
     const noun = nounForProjectType(projectType);
-    const text = `🎉 All ${noun.plural} in ${clientName} · ${projectName} are approved.\n${shareUrl}`;
+    const text =
+      `🎉 *${clientName} · ${projectName}* — client approved every ${noun.singular}. ` +
+      `Project is marked done; no team action needed.\n${shareUrl}`;
     postToGoogleChatSafe(
       webhookUrl,
       { text },
@@ -566,7 +570,8 @@ async function pingPaidMediaForEditingApproval(args: {
       : getCortexAppUrl(brand);
   const shareUrl = `${appUrl}/s/${args.token}`;
 
-  const adsText = `🎬 ${clientName} creatives are approved and ready to run.\n${shareUrl}`;
+  const adsText =
+    `🎬 *${clientName}* — client approved every clip in this editing project; creatives are ready to run for paid media.\n${shareUrl}`;
   postToGoogleChatSafe(
     paidMedia.url,
     { text: adsText },
@@ -781,8 +786,9 @@ async function maybeFireEditingRevisionsCompleteNotification(
   if (webhookUrl) {
     const noun = nounForProjectType(projectType);
     const text =
-      `✅ All revisions are ready for *${clientName} · ${projectName}*.\n` +
-      `Take another look and approve the ${noun.plural} that are good to go:\n${shareUrl}`;
+      `✅ *Internal:* editor marked every revision request on *${clientName} · ${projectName}* as resolved. ` +
+      `No email has been sent to the client yet. ` +
+      `QA the new ${noun.plural}, then hit *Notify* in the share history to email them:\n${shareUrl}`;
     postToGoogleChatSafe(
       webhookUrl,
       { text },

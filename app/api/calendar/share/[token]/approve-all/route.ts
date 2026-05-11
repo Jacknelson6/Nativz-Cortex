@@ -348,7 +348,10 @@ async function notifyPastDueFixup(
     });
 
   const lines: string[] = [];
-  lines.push(`⏰ ${clientName}: late approval rescheduled ${result.moves.length} past-due post(s).`);
+  lines.push(
+    `⏰ *Internal:* late approval on *${clientName}* triggered past-due reshuffling. ` +
+      `Cortex auto-rescheduled ${result.moves.length} post(s); the client wasn't emailed about the new times:`,
+  );
   for (const m of result.moves) {
     const tag = m.doubledUp ? ' (doubled up, month is full)' : '';
     lines.push(`  • was ${fmt(m.oldScheduledAt)} → now ${fmt(m.newScheduledAt)}${tag}`);
@@ -388,7 +391,9 @@ async function fireAllApprovedNotifications(
   const shareUrl = `${getCortexAppUrl(getBrandFromAgency(drop.clients?.agency ?? null))}/s/${shareToken}`;
 
   if (targetWebhookUrl) {
-    const text = `🎉 All ${postCount} posts in ${clientName}'s calendar are approved.\n${shareUrl}`;
+    const text =
+      `🎉 *${clientName}* — client used the *Approve all* button to approve every post on this calendar (${postCount} total). ` +
+      `Calendar is locked; posts will publish on their scheduled times. No team action needed.\n${shareUrl}`;
     postToGoogleChatSafe(targetWebhookUrl, { text }, `all-approved ${dropId}`);
   }
 
@@ -407,13 +412,17 @@ async function fireAllApprovedNotifications(
     const item = await findContentCalendarItem(clientName, groupTitle);
     const folder = item?.editedVideosFolderUrl;
     const folderLine = folder ? folder : '(edited videos folder link not set in Monday)';
-    const text = `Hey all, content from ${clientName} is now approved: ${folderLine}`;
+    const text =
+      `🎬 *${clientName}* — client approved all calendar posts; creatives are ready to run for paid media. ` +
+      `Edited videos folder: ${folderLine}`;
     postToGoogleChatSafe(paidMedia.url, { text }, `paid-media-approved ${clientName}`);
     return;
   }
 
   // DB-driven path: include the share link directly so the ads team can
   // jump into Cortex without bouncing through Monday.
-  const text = `🎬 ${clientName} creatives are approved and ready to run.\n${shareUrl}`;
+  const text =
+    `🎬 *${clientName}* — client approved all calendar posts; creatives are ready to run for paid media. ` +
+    `Share link for thumbnails + final captions:\n${shareUrl}`;
   postToGoogleChatSafe(paidMedia.url, { text }, `paid-media-approved ${clientName}`);
 }

@@ -364,7 +364,9 @@ export async function POST(request: NextRequest) {
                 postToGoogleChatSafe(
                   webhookUrl,
                   {
-                    text: `🔌 *${brand}* connected ${platformLabel} as ${handle}.${backfillSuffix} Open the scheduler → Add platform to fan past posts onto it.`,
+                    text:
+                      `🔌 *${brand}* — ${platformLabel} just connected as ${handle} via Zernio.${backfillSuffix} ` +
+                      `Internal FYI, no email goes to the client. Open the scheduler and use *Add platform* to fan past posts onto the new account.`,
                   },
                   `zernio-webhook:account.connected:${accountId}`,
                 );

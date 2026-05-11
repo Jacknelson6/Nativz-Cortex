@@ -220,17 +220,17 @@ async function handleGet(request: NextRequest) {
 
     const fixHint =
       ownership === 'agency'
-        ? 'Refresh internally, do not email the client.'
+        ? 'Action: refresh internally, do NOT email the client.'
         : ownership === 'client'
-          ? 'Hand-send a reconnect invite from the Connections matrix.'
-          : 'Triage ownership in the Connections matrix, then act.';
+          ? 'Action: hand-send a reconnect invite from the Connections matrix.'
+          : 'Action: triage ownership in the Connections matrix, then act.';
 
     const text = [
-      `🔌 *${client.name}* social authorization expired`,
+      `🔌 *Internal alert:* *${client.name}* social authorization expired`,
       platformLines,
       ``,
       `Owner: ${ownerLine}`,
-      fixHint,
+      `Client has NOT been auto-emailed about this. ${fixHint}`,
     ].join('\n');
 
     postToGoogleChatSafe(

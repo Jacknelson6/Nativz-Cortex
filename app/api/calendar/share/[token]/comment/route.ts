@@ -501,9 +501,14 @@ async function maybeFireRevisionsCompleteNotification(
   const shareUrl = `${getCortexAppUrl(getBrandFromAgency(drop?.clients?.agency ?? null))}/s/${args.token}`;
 
   if (chatWebhookUrl) {
+    // Internal-only ping. The email to the client only goes out when an
+    // admin hits *Notify* in the share-history panel (calls /notify-
+    // revisions). Make that crystal clear so the team doesn't assume
+    // Cortex already emailed the client.
     const text =
-      `✅ All revisions are ready for *${clientName}*.\n` +
-      `Take another look at the calendar and approve the ones that are good to go:\n${shareUrl}`;
+      `✅ *Internal:* editor marked every revision request on *${clientName}* as resolved. ` +
+      `No email has been sent to the client yet. ` +
+      `QA the new cuts, then hit *Notify* in the share history to email them:\n${shareUrl}`;
     postToGoogleChatSafe(
       chatWebhookUrl,
       { text },
@@ -681,7 +686,12 @@ async function notifyAdminsOfComment(
         // Show *which* post — by scheduled date/time — so the team can scan
         // the chat without opening the share link.
         const postLine = postTimeLine ? `\n_Post scheduled for ${postTimeLine}_` : '';
-        const text = `*${comment.authorName} ${verb} on ${clientName}*${postLine}${quotedBlock}${attachmentBlock}\n\n${shareUrl}`;
+        // Author = client (only the share link surfaces this form to non-
+        // team users). Label as "from the client" so the team knows this
+        // came in over the public link, not from Cortex chat.
+        const text =
+          `💬 *${comment.authorName}* (client) ${verb} on *${clientName}*${postLine}${quotedBlock}${attachmentBlock}\n` +
+          `Reply from the share link, the client doesn't get an email until you respond:\n${shareUrl}`;
         postToGoogleChatSafe(targetWebhookUrl, { text }, `comment ${dropId}`);
       }
     } else if (allApprovedClaim === 'won') {
@@ -699,7 +709,9 @@ async function notifyAdminsOfComment(
         const subject = linkName
           ? `${clientName}'s ${linkName} project`
           : `${clientName}'s calendar`;
-        const text = `🎉 All ${reviewLinkIds.length} posts from ${subject} are approved!\n${shareUrl}`;
+        const text =
+          `🎉 *${subject}* — client approved all ${reviewLinkIds.length} posts. ` +
+          `Calendar is locked; posts will publish on their scheduled times. No team action needed.\n${shareUrl}`;
         postToGoogleChatSafe(targetWebhookUrl, { text }, `all-approved ${dropId}`);
       }
     }
@@ -754,14 +766,18 @@ async function pingPaidMediaTeam(
     const item = await findContentCalendarItem(args.clientName, groupTitle);
     const folder = item?.editedVideosFolderUrl;
     const folderLine = folder ? folder : '(edited videos folder link not set in Monday)';
-    const text = `Hey all, content from ${args.clientName} is now approved: ${folderLine}`;
+    const text =
+      `🎬 *${args.clientName}* — client approved all calendar posts; creatives are ready to run for paid media. ` +
+      `Edited videos folder: ${folderLine}`;
     postToGoogleChatSafe(paidMedia.url, { text }, `paid-media-approved ${args.clientName}`);
     return;
   }
 
   // DB-driven path: include the Cortex share link so the ads team can
   // pull thumbnails and final captions in one click.
-  const text = `🎬 ${args.clientName} creatives are approved and ready to run.\n${args.shareUrl}`;
+  const text =
+    `🎬 *${args.clientName}* — client approved all calendar posts; creatives are ready to run for paid media. ` +
+    `Share link for thumbnails + final captions:\n${args.shareUrl}`;
   postToGoogleChatSafe(paidMedia.url, { text }, `paid-media-approved ${args.clientName}`);
 }
 
@@ -821,7 +837,10 @@ async function notifyPastDueFixup(
     });
 
   const lines: string[] = [];
-  lines.push(`⏰ ${clientName}: late approval rescheduled ${result.moves.length} past-due post(s).`);
+  lines.push(
+    `⏰ *Internal:* late approval on *${clientName}* triggered past-due reshuffling. ` +
+      `Cortex auto-rescheduled ${result.moves.length} post(s); the client wasn't emailed about the new times:`,
+  );
   for (const m of result.moves) {
     const tag = m.doubledUp ? ' (doubled up, month is full)' : '';
     lines.push(`  • was ${fmt(m.oldScheduledAt)} → now ${fmt(m.newScheduledAt)}${tag}`);
