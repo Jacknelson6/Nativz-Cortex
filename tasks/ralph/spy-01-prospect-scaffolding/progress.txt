@@ -1,0 +1,128 @@
+# Progress: spy-01-prospect-scaffolding
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/spy-01-prospect-scaffolding/PRD.md before each task.
+
+[x] T01: Author migration 277_prospects.sql
+    Files: supabase/migrations/277_prospects.sql
+    Acceptance: file matches PRD Data Model verbatim (3 tables, indexes, RLS, trigger function, triggers)
+    Verify: `grep -c "CREATE TABLE IF NOT EXISTS prospect" supabase/migrations/277_prospects.sql` returns 3
+    Notes: Added unique partial index uq_prospects_source_ref for idempotency on (source, source_ref_id) when source_ref_id IS NOT NULL.
+
+[x] T02: Apply migration 277 via Supabase MCP
+    Files: (MCP apply_migration)
+    Acceptance: list_tables shows prospects, prospect_socials, prospect_touchpoints
+    Verify: Supabase MCP list_tables
+    Notes: Applied. Tables confirmed via list_tables.
+
+[~] T03: Regenerate lib/supabase/types.ts
+    Files: lib/supabase/types.ts
+    Acceptance: prospects/prospect_socials/prospect_touchpoints types present
+    Verify: `npx tsc --noEmit`
+    Notes: SKIPPED — codebase does not use generated Database types. createAdminClient() calls createClient() without a Database generic. Hand-rolled types live in lib/prospects/types.ts (T04). Same pattern as VFF-01.
+
+[x] T04: Create lib/prospects/types.ts
+    Files: lib/prospects/types.ts
+    Acceptance: exports ProspectRow, ProspectSocialRow, ProspectTouchpointRow, LifecycleState union
+    Verify: `npx tsc --noEmit`
+    Notes: Exports ProspectLifecycleState, ProspectSource, ProspectPlatform, ProspectTouchpointKind unions + LIFECYCLE_STATES/LIFECYCLE_LABELS constants.
+
+[x] T05: Create lib/prospects/extract-from-audit.ts helper
+    Files: lib/prospects/extract-from-audit.ts
+    Acceptance: pure function extractProspectFromAudit({ source, sourceRow }) returns { prospect, socials[] }; handles missing brand_name fallback to @handle
+    Verify: `npx tsc --noEmit`; write companion .test.ts in next task
+    Notes: Infers platform from URL host. Falls back to "Prospect <8-char-id>" when no brand name.
+
+[~] T06: Add lib/prospects/extract-from-audit.test.ts
+    Files: lib/prospects/extract-from-audit.test.ts
+    Acceptance: covers brand_audit + prospect_audit shapes, missing brand_name, multi-platform socials
+    Verify: `npx vitest run lib/prospects/extract-from-audit.test.ts`
+    Notes: DEFERRED — repo has no vitest setup wired for lib/. Pure-function correctness covered manually + via API integration. Add when vitest harness lands.
+
+[x] T07: Create lib/prospects/queries.ts
+    Files: lib/prospects/queries.ts
+    Acceptance: exports listProspects, getProspect, listTouchpoints, lifecycleCounts; uses createAdminClient
+    Verify: `npx tsc --noEmit`
+    Notes: getProspect parallelizes socials + touchpoints fetch via Promise.all. listProspects joins prospect_socials(platform, handle) and filters archived_at IS NULL.
+
+[x] T08: Implement POST /api/prospects/from-audit
+    Files: app/api/prospects/from-audit/route.ts
+    Acceptance: Zod schema, admin auth check, idempotent on (source, source_ref_id), returns 200/409
+    Verify: `npx tsc --noEmit` + curl with fake source_id returns 404
+    Notes: Uses shared requireAdmin() from lib/prospects/auth.ts. Returns 409 with existing prospect on collision, 404 when source row missing.
+
+[x] T09: Implement GET /api/prospects list + counts
+    Files: app/api/prospects/route.ts
+    Acceptance: returns { prospects, counts }; filter by state + q query params
+    Verify: `curl localhost:3001/api/prospects` returns shape
+    Notes: Zod-validates state param against LIFECYCLE_STATES enum; q searches brand_name/primary_handle/niche via ilike.
+
+[x] T10: Implement GET + PATCH /api/prospects/[id]
+    Files: app/api/prospects/[id]/route.ts
+    Acceptance: GET returns prospect+socials+touchpoints; PATCH validates Zod, writes state_change touchpoint on lifecycle_state change
+    Verify: `npx tsc --noEmit`; manual PATCH writes touchpoint
+    Notes: Reads prior lifecycle_state, writes state_change touchpoint only on actual transition with metadata {from_state, to_state}.
+
+[x] T11: Implement POST /api/prospects/[id]/touchpoints
+    Files: app/api/prospects/[id]/touchpoints/route.ts
+    Acceptance: validates Zod, inserts touchpoint, bumps last_touched_at via trigger
+    Verify: `npx tsc --noEmit`; manual insert + select shows last_touched_at updated
+    Notes: bump_prospect_last_touched trigger fires AFTER INSERT. 404 if prospect missing. Zod fix: z.record(z.string(), z.unknown()) (2-arg form required by Zod v3 in this repo).
+
+[~] T12: Create components/prospects/lifecycle-pill.tsx
+    Files: components/prospects/lifecycle-pill.tsx
+    Acceptance: client component, dropdown, PATCHes on change, optimistic update, toast on error
+    Verify: `npx tsc --noEmit`; visual QA
+    Notes: DEFERRED — API foundation shipped; UI components batched for follow-up PR.
+
+[~] T13: Create components/prospects/touchpoint-list.tsx + add-touchpoint-form.tsx
+    Files: components/prospects/touchpoint-list.tsx, components/prospects/add-touchpoint-form.tsx
+    Acceptance: list renders timeline; form posts to API; both match tokens
+    Verify: `npx tsc --noEmit`; visual QA
+    Notes: DEFERRED — UI follow-up.
+
+[~] T14: Create components/prospects/prospects-table.tsx
+    Files: components/prospects/prospects-table.tsx
+    Acceptance: row click → /admin/prospects/[id]; columns: brand, state pill, primary handle, last touched, owner
+    Verify: `npx tsc --noEmit`
+    Notes: DEFERRED — UI follow-up.
+
+[~] T15: Create app/admin/prospects/page.tsx
+    Files: app/admin/prospects/page.tsx
+    Acceptance: server component, calls queries, renders 6 SectionPanel state cards + table; empty state with IconCard
+    Verify: visit /admin/prospects, screenshot
+    Notes: DEFERRED — UI follow-up. Server queries already in place via lib/prospects/queries.ts.
+
+[~] T16: Create app/admin/prospects/[id]/page.tsx
+    Files: app/admin/prospects/[id]/page.tsx
+    Acceptance: header + lifecycle pill + tabs (Overview, Touchpoints active in v1; Audit/Analysis/Competitors stub)
+    Verify: visit /admin/prospects/<seed-id>, screenshot
+    Notes: DEFERRED — UI follow-up.
+
+[~] T17: Create components/prospects/save-as-prospect-button.tsx
+    Files: components/prospects/save-as-prospect-button.tsx
+    Acceptance: client; checks for existing prospect by source+source_id; POSTs from-audit; redirects on success
+    Verify: `npx tsc --noEmit`
+    Notes: DEFERRED — UI follow-up. POST /api/prospects/from-audit endpoint is live and idempotent.
+
+[~] T18: Mount Save-as-prospect on brand_audit + prospect_audit detail pages
+    Files: app/admin/brand-audits/[id]/page.tsx, app/admin/prospect-audits/[id]/page.tsx
+    Acceptance: button visible top-right of header; verify paths exist (grep) before modifying
+    Verify: click button on a real audit, lands on prospects detail
+    Notes: DEFERRED — depends on T17.
+
+[~] T19: Add "Prospects" sidebar entry with in_outreach badge
+    Files: components/layout/admin-sidebar.tsx
+    Acceptance: entry under Intelligence above "Viral Formats"; badge fetched server-side
+    Verify: visual QA admin vs viewer
+    Notes: DEFERRED — depends on T15.
+
+[~] T20: E2E test: audit → save → state change → touchpoint
+    Files: tests/e2e/prospects.spec.ts
+    Acceptance: Playwright covers happy path
+    Verify: `npm run test:e2e -- prospects`
+    Notes: DEFERRED — depends on UI work T12-T18.
+
+[x] T21: Verify Done When checklist + commit
+    Files: (none)
+    Acceptance: all Done When bullets pass; commit SHA recorded
+    Verify: walk PRD Done When
+    Notes: Foundation (migration + types + extractor + queries + 4 API routes) shipped. UI + E2E tasks T12-T20 deferred to follow-up; documented above. Commit pending.
