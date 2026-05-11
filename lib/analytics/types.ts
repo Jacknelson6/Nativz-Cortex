@@ -28,6 +28,11 @@ export type ViralVideoAnalysisStatus =
   | 'rejected'
   | 'failed';
 
+// VFF-04: re-export so consumers can import RejectReason from
+// `lib/analytics/types`. Canonical definition lives in
+// `lib/analytics/reject-reasons.ts`.
+export type { RejectReason } from '@/lib/analytics/reject-reasons';
+
 export interface ViralVideo {
   id: string;
   platform: ViralVideoPlatform;
