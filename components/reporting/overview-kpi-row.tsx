@@ -44,16 +44,14 @@ export function OverviewKpiRow({
     const viewsSeries = chart.map((c) => ({ date: c.date, value: c.views }));
     const engagementSeries = chart.map((c) => ({ date: c.date, value: c.engagement }));
 
-    // Followers Δ daily series — day-over-day change in cumulative followers
-    // across every connected profile. Clamp to >=0 so the sparkline matches
-    // the tile semantics ("New followers", not "Net follower change"). If
-    // `chart.followers` is absent the series ends up empty and the sparkline
-    // hides itself.
-    const followerDeltaSeries: Array<{ date: string; value: number }> = [];
-    for (let i = 1; i < chart.length; i++) {
-      const delta = (chart[i].followers ?? 0) - (chart[i - 1].followers ?? 0);
-      followerDeltaSeries.push({ date: chart[i].date, value: Math.max(0, delta) });
-    }
+    // Followers Δ daily series. The server already sends `chart.followers`
+    // as a per-day gain (sum of `followers_change` clamped to >=0), so we
+    // map it through directly — diffing it again here was producing the
+    // delta-of-a-delta and surfacing wildly wrong tooltip values.
+    const followerDeltaSeries = chart.map((c) => ({
+      date: c.date,
+      value: Math.max(0, c.followers ?? 0),
+    }));
 
     // Sum the explicit per-platform followerChange when `combined` is empty.
     // Per-platform values are already clamped server-side, but defensive
@@ -79,11 +77,12 @@ export function OverviewKpiRow({
     const compareEngagement = compareData?.combined.totalEngagement ?? 0;
     const compareViewsSeries = compareChart.map((c) => ({ date: c.date, value: c.views }));
     const compareEngagementSeries = compareChart.map((c) => ({ date: c.date, value: c.engagement }));
-    const compareFollowerSeries: Array<{ date: string; value: number }> = [];
-    for (let i = 1; i < compareChart.length; i++) {
-      const delta = (compareChart[i].followers ?? 0) - (compareChart[i - 1].followers ?? 0);
-      compareFollowerSeries.push({ date: compareChart[i].date, value: delta });
-    }
+    // Same fix as the primary series: `compareChart.followers` is already
+    // a per-day delta, so map it through directly.
+    const compareFollowerSeries = compareChart.map((c) => ({
+      date: c.date,
+      value: Math.max(0, c.followers ?? 0),
+    }));
 
     const followers: MetricCard = {
       total: totalFollowerChange,

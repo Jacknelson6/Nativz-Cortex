@@ -16,9 +16,12 @@ export function resolvePresetRange(
   const today = new Date();
   const end = toDateStr(today);
 
+  // "Last N days" means N inclusive days ending today. e.g. "Last 7 days"
+  // on May 11 = May 5 → May 11 (7 days, 7 sparkline dots), not May 4 → May 11
+  // which is 8 days. Industry convention (Meta, GA, Looker) matches.
   const daysAgo = (n: number): DateRange => {
     const start = new Date(today);
-    start.setDate(start.getDate() - n);
+    start.setDate(start.getDate() - (n - 1));
     return { start: toDateStr(start), end };
   };
 
