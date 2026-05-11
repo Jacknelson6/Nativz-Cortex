@@ -17,8 +17,16 @@
  * editing-share tour and the calendar-share tour gate independently.
  */
 
-import { ArrowRight, X } from 'lucide-react';
+import { ArrowRight, HelpCircle, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+
+/**
+ * Custom window event name used by `launchShareTour` /
+ * `<ShareTourLaunchButton>` to re-open the tour after a user has dismissed
+ * it. Scoped by storageKey so the editing-share tour and the calendar-share
+ * tour don't trigger each other.
+ */
+const LAUNCH_EVENT = 'cortex:share-tour:launch';
 
 export type Beat = {
   /** Selector queried via document.querySelector. First match wins. */
@@ -139,6 +147,21 @@ export function ShareTour({ enabled, beats, storageKey }: ShareTourProps) {
     const t = window.setTimeout(() => setActive(true), 350);
     return () => window.clearTimeout(t);
   }, [enabled, storageKey]);
+
+  // Listen for an explicit re-launch (e.g. a "How do I use this?" button at
+  // the top of the share page). Re-runs the tour even if the user has
+  // already dismissed it — we bypass the seen flag and reset the step.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onLaunch = (e: Event) => {
+      const ce = e as CustomEvent<{ storageKey: string }>;
+      if (ce.detail?.storageKey !== storageKey) return;
+      setStepIdx(0);
+      setActive(true);
+    };
+    window.addEventListener(LAUNCH_EVENT, onLaunch as EventListener);
+    return () => window.removeEventListener(LAUNCH_EVENT, onLaunch as EventListener);
+  }, [storageKey]);
 
   // Resolve the visible beat index, advancing past missing targets.
   const resolveStep = useCallback(
@@ -344,7 +367,10 @@ export function ShareTour({ enabled, beats, storageKey }: ShareTourProps) {
         <CursorGlyph />
       </div>
 
-      {/* Top caption band */}
+      {/* Top caption band — copy only. Skip/Next live in a fixed bar at
+          the bottom of the viewport so the thumb-friendly tap target
+          stays in the same place across beats and never jumps with the
+          spotlight rect. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center px-4 pt-[max(env(safe-area-inset-top),24px)]">
         <div className="pointer-events-auto w-full max-w-2xl rounded-2xl border border-nativz-border bg-surface/95 px-5 py-4 text-center shadow-[var(--shadow-card-hover)] backdrop-blur-md">
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
@@ -356,24 +382,29 @@ export function ShareTour({ enabled, beats, storageKey }: ShareTourProps) {
           <p className="mx-auto mt-1.5 max-w-xl text-sm leading-relaxed text-text-secondary">
             {beat.detail}
           </p>
-          <div className="mt-3 flex items-center justify-center gap-2">
-            <button
-              type="button"
-              onClick={close}
-              className="inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3 py-1.5 text-xs font-medium text-text-muted transition-all hover:bg-surface-hover hover:text-text-secondary"
-            >
-              <X size={12} /> Skip
-            </button>
-            <button
-              type="button"
-              onClick={() => (isLast ? close() : advance())}
-              className="inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-accent px-3.5 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
-              autoFocus
-            >
-              {isLast ? 'Got it' : 'Next'}
-              {!isLast && <ArrowRight size={12} />}
-            </button>
-          </div>
+        </div>
+      </div>
+
+      {/* Bottom control bar — Skip + Next pinned to a thumb-reachable
+          spot regardless of where the spotlight is on the page. */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-4 pb-[max(env(safe-area-inset-bottom),24px)]">
+        <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-nativz-border bg-surface/95 px-2 py-2 shadow-[var(--shadow-card-hover)] backdrop-blur-md">
+          <button
+            type="button"
+            onClick={close}
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary"
+          >
+            <X size={12} /> Skip
+          </button>
+          <button
+            type="button"
+            onClick={() => (isLast ? close() : advance())}
+            className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+            autoFocus
+          >
+            {isLast ? 'Got it' : 'Next'}
+            {!isLast && <ArrowRight size={12} />}
+          </button>
         </div>
       </div>
 
@@ -395,6 +426,50 @@ export function ShareTour({ enabled, beats, storageKey }: ShareTourProps) {
         }
       `}</style>
     </div>
+  );
+}
+
+/**
+ * Programmatically re-open a ShareTour. Pairs with `<ShareTourLaunchButton>`
+ * for the "How do I use this?" affordance at the top of share pages.
+ *
+ * The matching `<ShareTour>` instance must be mounted on the page with the
+ * same `storageKey` — this function fires a window event, the tour listens
+ * and re-activates from step 0 regardless of the seen flag.
+ */
+export function launchShareTour(storageKey: string): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent(LAUNCH_EVENT, { detail: { storageKey } }),
+  );
+}
+
+/**
+ * "How do I use this?" pill button that re-launches the share-link tour.
+ * Render at the top of a share page so a returning visitor (who already
+ * dismissed the first-visit walkthrough) can pull it back up on demand.
+ */
+export function ShareTourLaunchButton({
+  storageKey,
+  label = 'How do I use this?',
+  className = '',
+}: {
+  storageKey: string;
+  label?: string;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => launchShareTour(storageKey)}
+      className={
+        'inline-flex items-center gap-1.5 rounded-full border border-nativz-border bg-surface/80 px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary ' +
+        className
+      }
+    >
+      <HelpCircle size={13} />
+      {label}
+    </button>
   );
 }
 

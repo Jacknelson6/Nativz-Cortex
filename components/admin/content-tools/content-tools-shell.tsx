@@ -8,6 +8,7 @@ import {
   Cable,
   ChevronLeft,
   ChevronRight,
+  Download,
   FileText,
   History,
   Megaphone,
@@ -42,14 +43,7 @@ import { PostingHistoryTab } from './posting-history-tab';
 import { EditingNewProjectDialog } from './editing-new-project-dialog';
 import { EditingProjectDetail } from './editing-project-detail';
 import { CalendarLinkDetail } from './calendar-link-detail';
-import { MonthlyTargetPills } from './monthly-target-pills';
 import { subscribeToCompletion } from '@/lib/editing/upload-store';
-
-function firstOfMonthUTC(d: Date): string {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1))
-    .toISOString()
-    .slice(0, 10);
-}
 
 /**
  * Group rows into month buckets keyed by `YYYY-MM`, using whichever
@@ -58,6 +52,78 @@ function firstOfMonthUTC(d: Date): string {
  * fallback "No date" header instead of vanishing.
  */
 type GroupByMonth = 'none' | 'created' | 'approved';
+
+const GROUP_BY_OPTIONS: { value: GroupByMonth; label: string }[] = [
+  { value: 'none', label: 'None' },
+  { value: 'created', label: 'Started in month' },
+  { value: 'approved', label: 'Approved in month' },
+];
+
+const PROJECT_TYPE_CSV_LABEL: Record<string, string> = {
+  organic_content: 'Organic Content',
+  social_ads: 'Social Ads',
+  ctv_ads: 'CTV Ads',
+  other: 'Other',
+};
+
+function csvEscape(value: string): string {
+  // Wrap in quotes whenever the value contains a comma, quote, or newline
+  // and double up any embedded quotes per RFC 4180. Always quoting is also
+  // valid but inflates the file; quoting only when needed keeps the export
+  // readable when finance scrolls through it in Numbers/Excel.
+  if (/[",\n\r]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+function downloadApprovedMonthCsv(
+  monthLabel: string,
+  rows: ReviewLinkRow[],
+): void {
+  // Finance records completed deliverables per calendar month so we can
+  // invoice in arrears. One row per approved deliverable, columns chosen
+  // to match the finance team's existing accounting sheet.
+  const header = [
+    'Approved date',
+    'Brand',
+    'Project',
+    'Type',
+    'Deliverables',
+    'Project ID',
+  ];
+  const body = rows.map((r) => {
+    const approved = r.approved_at
+      ? new Date(r.approved_at).toISOString().slice(0, 10)
+      : '';
+    const typeLabel =
+      r.project_type === 'other'
+        ? r.project_type_other?.trim() || 'Other'
+        : r.project_type
+          ? PROJECT_TYPE_CSV_LABEL[r.project_type] ?? r.project_type
+          : '';
+    return [
+      approved,
+      r.client_name ?? '',
+      r.name ?? '',
+      typeLabel,
+      String(r.approved_count ?? 0),
+      r.editing_project_id ?? r.id,
+    ].map(csvEscape).join(',');
+  });
+  const csv = [header.join(','), ...body].join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const safeMonth = monthLabel.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+  a.href = url;
+  a.download = `approved-deliverables-${safeMonth}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 function monthKey(iso: string | null | undefined): string | null {
   if (!iso) return null;
@@ -382,16 +448,6 @@ export function ContentToolsShell() {
   // freshly enabled group view doesn't land on an empty month.
   const [focusedMonthKey, setFocusedMonthKey] = useState<string | null>(null);
 
-  // Month strip lives at the shell level so the pills + (future)
-  // by-month row filter share a single source of truth. Defaults to
-  // the current UTC month; nudged via the strip's chevrons.
-  const [selectedMonth, setSelectedMonth] = useState<string>(() =>
-    firstOfMonthUTC(new Date()),
-  );
-  // Tick-bumped after a delivery completes so the pills re-fetch
-  // without forcing a full table reload.
-  const [monthRefreshKey, setMonthRefreshKey] = useState(0);
-
   async function loadProjects(silent = false) {
     if (!silent) setLoading(true);
     else setRefreshing(true);
@@ -437,9 +493,6 @@ export function ContentToolsShell() {
   useEffect(() => {
     return subscribeToCompletion(() => {
       void loadProjects(true);
-      // A finished upload may flip a `monthly_deliverable_slots` row to
-      // `delivered` via auto-deliver; refresh the pills too.
-      setMonthRefreshKey((k) => k + 1);
       toast.success('Uploads finished');
     });
   }, []);
@@ -673,25 +726,54 @@ export function ContentToolsShell() {
 
         {activeProjectTab && (
           <>
-            <MonthlyTargetPills
-              selectedMonth={selectedMonth}
-              onMonthChange={setSelectedMonth}
-              refreshKey={monthRefreshKey}
-            />
-            <div className="flex items-center justify-end gap-2 text-xs text-text-muted">
-              <label htmlFor="group-by-month" className="font-medium uppercase tracking-wide">
-                Group by
-              </label>
-              <select
-                id="group-by-month"
-                value={groupBy}
-                onChange={(e) => setGroupBy(e.target.value as GroupByMonth)}
-                className="rounded-md border border-nativz-border bg-surface px-2 py-1 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-              >
-                <option value="none">None</option>
-                <option value="created">Created month</option>
-                <option value="approved">Approved month</option>
-              </select>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="font-medium uppercase tracking-wide text-text-muted">
+                  Group by month
+                </span>
+                <div
+                  role="tablist"
+                  aria-label="Group projects by month"
+                  className="inline-flex rounded-md border border-nativz-border bg-surface p-0.5"
+                >
+                  {GROUP_BY_OPTIONS.map((opt) => {
+                    const active = groupBy === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        role="tab"
+                        aria-selected={active}
+                        onClick={() => setGroupBy(opt.value)}
+                        className={`rounded px-2.5 py-1 text-xs transition-colors ${
+                          active
+                            ? 'bg-accent/15 text-accent-text'
+                            : 'text-text-muted hover:text-text-primary'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {groupBy === 'approved' && (
+                  <span className="ml-2 hidden text-[11px] text-text-muted sm:inline">
+                    For arrears invoicing to the finance team.
+                  </span>
+                )}
+              </div>
+              {groupBy === 'approved' && focusedGroup && focusedGroup.rows.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    downloadApprovedMonthCsv(focusedGroup.label, focusedGroup.rows)
+                  }
+                >
+                  <Download size={14} />
+                  Export for accounting
+                </Button>
+              )}
             </div>
             {loading ? (
               <ProjectsTableSkeleton />

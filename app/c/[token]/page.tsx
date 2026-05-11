@@ -22,7 +22,9 @@ import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import type { DeliverableBalance } from '@/lib/deliverables/get-balances';
 import type { AddonSku } from '@/lib/deliverables/addon-skus';
 import { thumbUrl } from '@/lib/calendar/thumb-url';
-import { ShareTour, CALENDAR_SHARE_BEATS } from '@/components/share/share-tour';
+import { ShareTour, ShareTourLaunchButton, CALENDAR_SHARE_BEATS } from '@/components/share/share-tour';
+
+const CALENDAR_TOUR_STORAGE_KEY = 'cortex.share.calendarTourSeen';
 import { mergeCaptionAndHashtags } from '@/lib/scheduler/caption-hashtags';
 
 // Mux Player is a heavy web-component-backed React component. Dynamic-import
@@ -771,6 +773,9 @@ function SharedDropView({
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2 md:ml-auto md:flex-nowrap">
+              {total > 0 && (
+                <ShareTourLaunchButton storageKey={CALENDAR_TOUR_STORAGE_KEY} />
+              )}
               {downloadableCount > 0 && (
                 <button
                   type="button"
@@ -1024,7 +1029,7 @@ function SharedDropView({
       <ShareTour
         enabled={!nameModalOpen && data.posts.length > 0}
         beats={CALENDAR_SHARE_BEATS}
-        storageKey="cortex.share.calendarTourSeen"
+        storageKey={CALENDAR_TOUR_STORAGE_KEY}
       />
     </div>
   );
