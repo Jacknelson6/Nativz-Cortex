@@ -314,6 +314,20 @@ const BenchmarkCard = memo(function BenchmarkCard({
                       dot={false}
                     />
                   ))}
+                  {/* "Your account" overlay — rendered last so it sits on top
+                      of the competitor lines, with a distinct accent stroke
+                      and slightly thicker weight so the read at a glance is
+                      "us vs. them". Skipped when the client has no follower
+                      data so the chart doesn't show a flat zero line. */}
+                  {clientSeries.length > 0 && (
+                    <Line
+                      type="monotone"
+                      dataKey={CLIENT_SERIES_KEY}
+                      stroke="var(--accent-text)"
+                      strokeWidth={3}
+                      dot={false}
+                    />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -336,6 +350,12 @@ const BenchmarkCard = memo(function BenchmarkCard({
 
 const CompetitorRow = memo(function CompetitorRow({ latest }: { latest: Snapshot }) {
   const hasError = !!latest.scrape_error;
+  // `Date.now()` is impure, so we capture "now" once at mount via a lazy
+  // useState initializer. The stale window is in days, not seconds, so the
+  // freshness read doesn't need to track the clock between renders.
+  const [mountTime] = useState(() => Date.now());
+  const ageMs = mountTime - new Date(latest.captured_at).getTime();
+  const stale = ageMs > 7 * 24 * 60 * 60 * 1000;
   return (
     <div className="rounded-lg border border-nativz-border bg-background/40 p-4 space-y-2">
       <div className="flex items-center justify-between gap-2">
@@ -365,26 +385,20 @@ const CompetitorRow = memo(function CompetitorRow({ latest }: { latest: Snapshot
         </div>
       )}
 
-      {(() => {
-        const ageMs = Date.now() - new Date(latest.captured_at).getTime();
-        const stale = ageMs > 7 * 24 * 60 * 60 * 1000;
-        return (
-          <p className={`text-[10px] ${stale ? 'text-amber-400' : 'text-text-muted/70'}`}>
-            Last updated:{' '}
-            {new Date(latest.captured_at).toLocaleString([], {
-              month: 'short',
-              day: 'numeric',
-              hour: 'numeric',
-              minute: '2-digit',
-            })}
-            {stale && (
-              <span className="ml-1.5 rounded-full bg-amber-500/15 px-1.5 py-0.5 font-medium">
-                stale
-              </span>
-            )}
-          </p>
-        );
-      })()}
+      <p className={`text-[10px] ${stale ? 'text-amber-400' : 'text-text-muted/70'}`}>
+        Last updated:{' '}
+        {new Date(latest.captured_at).toLocaleString([], {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+        })}
+        {stale && (
+          <span className="ml-1.5 rounded-full bg-amber-500/15 px-1.5 py-0.5 font-medium">
+            stale
+          </span>
+        )}
+      </p>
 
       {(latest.new_posts?.length ?? 0) > 0 && (
         <div className="space-y-1 border-t border-nativz-border/40 pt-2">

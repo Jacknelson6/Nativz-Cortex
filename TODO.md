@@ -29,7 +29,7 @@ Shared `@react-pdf` template at `lib/pdf/branded` — theme-swappable Nativz / A
 
 **Still open:**
 - [ ] **Migrate remaining 11 PDF templates** to branded shell — search results, audit, social report, brief, analysis, affiliate, strategy, conversation export, artifact export. Each needs an adapter in `lib/pdf/branded/adapters.ts`.
-- [ ] **Auto-export swap** — `looksLikeVideoIdeasResponse()` in `export-conversation-pdf.ts` still uses old `ContentLabConversationPdf`. Swap to call the branded API route.
+- [x] **Auto-export swap** — Resolved May 2026: the auto-export effect was already removed in commit `27da4f5c` because the `create_topic_plan` tool now ships a branded download card via `topic-plan-artifact-card.tsx`. Dead `looksLikeVideoIdeasResponse()` helper deleted from `export-conversation-pdf.ts`; the manual "Export PDF" button still uses `ContentLabConversationPdf` and gets covered by the broader "Migrate remaining 11 PDF templates" item above.
 - [ ] **Phase 2b — Goodjin skill-improvement loop UI.** Schema `ai_skill_proposals` shipped; admin-review UI not built.
 - [ ] **Composable skill graph (stretch).** Skills referencing other skills — architecture supports it, loader not wired.
 

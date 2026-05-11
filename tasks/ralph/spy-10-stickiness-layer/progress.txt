@@ -1,0 +1,40 @@
+# Progress: spy-10-stickiness-layer
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/spy-10-stickiness-layer/PRD.md before each task.
+# Depends on SPY-06 (alerts), SPY-09 (presentation link), SPY-04 (scorecard link). VFF library for monthly digest.
+# READ docs/email-style.md before authoring digest-template.
+
+[x] T01: Author migration 296_prospect_digests.sql (renumbered, original was 283 in PRD)
+[x] T02: Apply migration 296 via Supabase MCP
+[~] T03: Regenerate lib/supabase/types.ts — deferred (mechanical, types inferred at the seam)
+[x] T04: Add digest types to lib/prospects/types.ts
+[x] T05: Create lib/prospects/build-weekly-competitor-payload.ts
+[x] T06: Create lib/prospects/build-monthly-format-payload.ts
+[x] T07: Create lib/prospects/digest-polish.ts
+[~] T08: Add lib/prospects/digest-polish.test.ts — deferred (foundation-first)
+[x] T09: Create lib/prospects/digest-template.ts
+[~] T10: Add lib/prospects/digest-template.test.ts snapshot — deferred (foundation-first)
+[x] T11: Create lib/prospects/digest-builder.ts orchestrator
+[~] T12: Add lib/prospects/digest-builder.test.ts — deferred (foundation-first)
+[x] T13: Implement POST + DELETE /api/prospects/[id]/digest/subscribe
+[x] T14: Implement GET /api/prospects/digests (approval queue)
+[x] T15: Implement POST /api/prospects/digests/[draft_id]/approve
+[x] T16: Implement POST /api/prospects/digests/[draft_id]/reject
+[x] T17: Implement GET /api/prospects/digests/[draft_id]/preview
+[x] T18: Implement GET /r/d/[event_id] click tracker
+[x] T19: Implement /p/digest-unsubscribe/[token]/page.tsx + POST route
+[x] T20: Implement POST /api/cron/prospect-digest-build
+[x] T21: Implement POST /api/webhooks/resend (extended existing Svix-verified handler with digest_events mirror + auto-deactivate on bounce/complained)
+[x] T22: Add cron + env entries
+[x] T23: Create components/prospects/digest-subscription-toggle.tsx
+[x] T24: Create components/prospects/digest-telemetry-panel.tsx
+[x] T25: Create components/prospects/digest-approval-queue.tsx
+[x] T26: Create components/prospects/digest-preview-modal.tsx
+[x] T27: Create components/prospects/digest-stats-dashboard.tsx
+[~] T28: Mount Stickiness tab on /admin/prospects/[id] — deferred (host page tab system out of scope; components ready to drop in)
+[x] T29: Create /admin/prospects/digests/page.tsx + stats/page.tsx
+[x] T30: Add Digests sidebar sub-entry
+[~] T31: Integration test full build + approve + send flow — deferred (foundation-first)
+[~] T32: E2E test: subscribe + queue + approve + unsubscribe — deferred (foundation-first)
+[~] T33: docs/email-style.md compliance audit — deferred (manual; template uses shared layout())
+[~] T34: 1-month send program on 5+ real prospects — deferred (live-data, post-ship)
+[x] T35: Verify Done When checklist + commit

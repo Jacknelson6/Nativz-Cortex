@@ -4,8 +4,9 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/auth/permissions';
 import {
-  buildChatCardMessage,
+  buildChatCard,
   postToGoogleChatSafe,
+  type ChatCardWidget,
 } from '@/lib/chat/post-to-google-chat';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { formatPostTimeForChat } from '@/lib/chat/format-post-time';
@@ -60,7 +61,9 @@ export async function POST(
   const admin = createAdminClient();
   const { data: link } = await admin
     .from('content_drop_share_links')
-    .select('id, drop_id, post_review_link_map, expires_at, included_post_ids')
+    .select(
+      'id, drop_id, post_review_link_map, expires_at, included_post_ids, first_sent_at, last_sent_at, send_count',
+    )
     .eq('token', token)
     .single<{
       id: string;
@@ -68,6 +71,9 @@ export async function POST(
       post_review_link_map: Record<string, string>;
       expires_at: string;
       included_post_ids: string[];
+      first_sent_at: string | null;
+      last_sent_at: string | null;
+      send_count: number | null;
     }>();
   if (!link) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
@@ -160,23 +166,34 @@ export async function POST(
     .sort();
 
   if (chatWebhookUrl) {
-    const word = pendingForLink.length === 1 ? 'video has' : 'videos have';
-    const postsList = postTimes.length > 0
-      ? postTimes.map((t) => `• ${t}`).join('\n')
-      : null;
-    const fallback =
-      `*${editorName}* re-uploaded ${pendingForLink.length} revised ${word} for *${clientName}*.` +
-      (postsList ? `\n${postsList}` : '') +
-      `\nOpen the share link to review the new cuts:\n${shareUrl}`;
+    const word = pendingForLink.length === 1 ? 'video' : 'videos';
+    const widgets: ChatCardWidget[] = [
+      {
+        type: 'text',
+        text: `<b>${editorName}</b> re-uploaded <b>${pendingForLink.length}</b> revised ${word} and is notifying the client's POCs now.`,
+      },
+    ];
+    if (postTimes.length > 0) {
+      widgets.push({
+        type: 'kv',
+        label: 'Affected posts',
+        value: postTimes.map((t) => `• ${t}`).join('\n'),
+      });
+    }
+    widgets.push({
+      type: 'text',
+      text: '<i>FYI for the team — the email is going out as part of this action.</i>',
+    });
+    widgets.push({ type: 'button', text: 'Spot-check share link', url: shareUrl, filled: true });
+
     postToGoogleChatSafe(
       chatWebhookUrl,
-      buildChatCardMessage({
-        cardId: `revised-videos-${link.drop_id}`,
-        title: `🔄 ${editorName} re-uploaded revised ${word === 'video has' ? 'video' : 'videos'}`,
-        subtitle: `${clientName} · ${pendingForLink.length} revised ${word === 'video has' ? 'video' : 'videos'}`,
-        paragraphs: [postsList],
-        buttons: [{ text: 'Review new cuts', url: shareUrl }],
-        fallback,
+      buildChatCard({
+        cardId: `revised-videos-${link.drop_id}-${Date.now()}`,
+        headerTitle: `📬 ${pendingForLink.length} revised ${word} sent`,
+        headerSubtitle: clientName,
+        sections: [{ widgets }],
+        fallbackText: `📬 ${editorName} re-uploaded ${pendingForLink.length} revised ${word} for ${clientName}. ${shareUrl}`,
       }),
       `revised-videos ${link.drop_id}`,
     );
@@ -295,6 +312,24 @@ export async function POST(
           })),
           sentBy: user.id,
         });
+        // Bump send metadata so the unified pill flips out of
+        // "Ready to send" once the revisions email actually goes out.
+        // Without this, a re-review can ship and the row still reads
+        // as if we'd never contacted the client.
+        const nowIso = new Date().toISOString();
+        const update: {
+          last_sent_at: string;
+          send_count: number;
+          first_sent_at?: string;
+        } = {
+          last_sent_at: nowIso,
+          send_count: (link.send_count ?? 0) + 1,
+        };
+        if (!link.first_sent_at) update.first_sent_at = nowIso;
+        await admin
+          .from('content_drop_share_links')
+          .update(update)
+          .eq('id', link.id);
       }
     } catch (err) {
       console.error('[notify-revisions] revised-videos email threw:', err);

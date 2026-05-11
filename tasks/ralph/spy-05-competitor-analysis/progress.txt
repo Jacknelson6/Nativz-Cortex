@@ -1,0 +1,67 @@
+# Progress: spy-05-competitor-analysis
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/spy-05-competitor-analysis/PRD.md before each task.
+# Depends on SPY-03 + SPY-04.
+
+[x] T01: Author migration 292_prospect_competitor_benchmarks.sql
+    Files: supabase/migrations/292_prospect_competitor_benchmarks.sql
+    Notes: Renumbered from 280 to 292 (290=SPY-03, 291=SPY-04).
+
+[x] T02: Apply migration 292 via Supabase MCP
+    Notes: Applied as spy05_prospect_competitor_benchmarks.
+
+[~] T03: Regenerate lib/supabase/types.ts
+    Notes: Deferred. Typecheck clean without regen; revisit when adopting strict generated types.
+
+[x] T04: Add benchmark types to lib/prospects/types.ts
+    Notes: Added PickedCompetitor, CompetitorPickSource, ProspectBenchmarkStatus, ProspectCompetitorBenchmarkRow, BenchmarkDeltas, CompetitorScorecard.
+
+[x] T05: Create lib/prospects/discover-competitors-for-prospect.ts
+    Notes: Wrote a prospect-context LLM call (audit discovery is retired). Uses createCompletion with feature='prospect_benchmark_discovery'.
+
+[~] T06: Create lib/prospects/grade-competitor.ts
+    Notes: Done. Comments LLM call skipped; placeholderCommentSignal returns zero-signal until comments scrape is reliable.
+
+[~] T07: Add lib/prospects/grade-competitor.test.ts
+    Notes: Deferred. No vitest harness wired.
+
+[x] T08: Create lib/prospects/compute-deltas.ts
+
+[~] T09: Add lib/prospects/compute-deltas.test.ts
+    Notes: Deferred. No vitest harness wired.
+
+[x] T10: Create lib/prospects/benchmark-orchestrator.ts
+
+[~] T11: Add lib/prospects/benchmark-orchestrator.test.ts
+    Notes: Deferred. No vitest harness wired.
+
+[x] T12: Implement POST /api/prospects/[id]/benchmark/discover
+
+[x] T13: Implement POST + GET /api/prospects/[id]/benchmark
+
+[x] T14: Implement POST /api/prospects/[id]/benchmark/[benchmark_id]/cancel
+
+[x] T15: Create components/prospects/run-benchmark-wizard.tsx
+
+[x] T16: Create components/prospects/benchmark-progress.tsx
+
+[x] T17: Create components/prospects/head-to-head-table.tsx
+
+[x] T18: Create components/prospects/competitor-benchmark-section.tsx
+
+[~] T19: Activate Competitors tab on /admin/prospects/[id]
+    Notes: Deferred. Prospect detail page does not exist yet; section component ready to mount when SPY-09 lands its detail surface.
+
+[x] T20: Extend SPY-04 PDF adapter to append Round 2 head-to-head
+    Notes: buildBenchmarkSeries emits one topic per checklist item with prospect + per-competitor tiles.
+
+[x] T21: Thread benchmark id into POST /api/prospects/[id]/scorecard
+    Notes: omitted -> latest succeeded/partial; null -> skip; explicit id -> ownership-checked lookup.
+
+[~] T22: E2E test: run benchmark -> table -> PDF regen with Round 2
+    Notes: Deferred. No detail page to drive yet.
+
+[~] T23: Manual strategist spot-check (10 prospects)
+    Notes: Deferred. Strategist QA pass.
+
+[x] T24: Verify Done When checklist + commit
+    Notes: Typecheck clean; migration applied; foundation shipped.

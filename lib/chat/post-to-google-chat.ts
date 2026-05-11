@@ -4,9 +4,10 @@
  * Webhook URL format:
  *   https://chat.googleapis.com/v1/spaces/{SPACE}/messages?key=...&token=...
  *
- * Used by app/api/calendar/share/[token]/comment/route.ts and the daily
- * digest cron — fire-and-forget; we never block the user-facing path on
- * Google Chat being available.
+ * We post Card V2 messages by default (richer layout for change-requests,
+ * comments, approvals, etc.). `text` is still supported for plain pings
+ * and as a fallback string on cards so notification mirrors (email digest,
+ * etc.) get a sensible non-card representation.
  */
 
 const CHAT_WEBHOOK_PREFIX = 'https://chat.googleapis.com/';
@@ -16,31 +17,210 @@ export function isGoogleChatWebhook(url: string | null | undefined): boolean {
   return url.startsWith(CHAT_WEBHOOK_PREFIX);
 }
 
-/**
- * Google Chat message body. We send cardsV2-only messages (no `text`
- * field) because Chat renders the `text` as a separate plain-text
- * message above the card, which clutters the channel. The card header
- * doubles as the mobile notification + search preview.
- */
+// ---------------------------------------------------------------------------
+// Card V2 builder
+// ---------------------------------------------------------------------------
+
+export type ChatCardWidget =
+  | { type: 'text'; text: string }
+  | { type: 'quote'; text: string; label?: string }
+  | { type: 'kv'; label: string; value: string; bottomLabel?: string }
+  | { type: 'button'; text: string; url: string; filled?: boolean }
+  | {
+      type: 'buttons';
+      buttons: Array<{ text: string; url: string; filled?: boolean }>;
+    }
+  | { type: 'divider' };
+
+export interface ChatCardSection {
+  header?: string;
+  widgets: ChatCardWidget[];
+}
+
+export interface ChatCardInput {
+  /** Stable id so Chat de-dupes accidental retries of the same card. */
+  cardId: string;
+  headerTitle: string;
+  headerSubtitle?: string;
+  /** Optional avatar/icon image (square). */
+  headerImageUrl?: string;
+  sections: ChatCardSection[];
+  /** Plain-text fallback shown on devices that don't render cards. */
+  fallbackText?: string;
+}
+
+interface CardV2TextWidget {
+  textParagraph: { text: string };
+}
+interface CardV2DecoratedTextWidget {
+  decoratedText: {
+    topLabel?: string;
+    text: string;
+    bottomLabel?: string;
+    wrapText?: boolean;
+  };
+}
+interface CardV2ButtonListWidget {
+  buttonList: {
+    buttons: Array<{
+      text: string;
+      onClick: { openLink: { url: string } };
+      color?: { red: number; green: number; blue: number; alpha?: number };
+      type?: 'OUTLINED' | 'FILLED' | 'BORDERLESS';
+    }>;
+  };
+}
+interface CardV2DividerWidget {
+  divider: Record<string, never>;
+}
+
+type CardV2Widget =
+  | CardV2TextWidget
+  | CardV2DecoratedTextWidget
+  | CardV2ButtonListWidget
+  | CardV2DividerWidget;
+
+interface CardV2Section {
+  header?: string;
+  collapsible?: boolean;
+  widgets: CardV2Widget[];
+}
+
+interface CardV2 {
+  cardId: string;
+  card: {
+    header?: {
+      title: string;
+      subtitle?: string;
+      imageUrl?: string;
+      imageType?: 'CIRCLE' | 'SQUARE';
+    };
+    sections: CardV2Section[];
+  };
+}
+
 export interface ChatMessage {
   text?: string;
-  cardsV2?: Array<{
-    cardId: string;
-    card: {
-      header?: {
-        title?: string;
-        subtitle?: string;
-        imageUrl?: string;
-        imageType?: 'CIRCLE' | 'SQUARE';
-      };
-      sections?: Array<{
-        header?: string;
-        collapsible?: boolean;
-        widgets: Array<Record<string, unknown>>;
-      }>;
-    };
-  }>;
+  cardsV2?: CardV2[];
 }
+
+/**
+ * HTML-escape for textParagraph bodies. Card V2 textParagraph allows a
+ * limited HTML subset (<b>, <i>, <a href=...>, <br>, <font color>, etc.)
+ * so we only escape the destructive chars and leave whitespace alone.
+ */
+function escapeForCard(input: string): string {
+  return input
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+function widgetToCardV2(widget: ChatCardWidget): CardV2Widget | null {
+  switch (widget.type) {
+    case 'text':
+      return { textParagraph: { text: widget.text } };
+    case 'quote': {
+      // Render as a label + italic body block. Card V2 textParagraph supports
+      // <b>/<i>/<br>, so we line-break the quote and italicise it for the
+      // "blockquote" feel.
+      const lines = widget.text.split('\n').map(escapeForCard).join('<br>');
+      const body = `<i>${lines}</i>`;
+      return widget.label
+        ? {
+            decoratedText: {
+              topLabel: widget.label,
+              text: body,
+              wrapText: true,
+            },
+          }
+        : { textParagraph: { text: body } };
+    }
+    case 'kv':
+      return {
+        decoratedText: {
+          topLabel: widget.label,
+          text: widget.value,
+          bottomLabel: widget.bottomLabel,
+          wrapText: true,
+        },
+      };
+    case 'button':
+      return {
+        buttonList: {
+          buttons: [
+            {
+              text: widget.text,
+              onClick: { openLink: { url: widget.url } },
+              ...(widget.filled
+                ? { type: 'FILLED' as const }
+                : { type: 'OUTLINED' as const }),
+            },
+          ],
+        },
+      };
+    case 'buttons':
+      return {
+        buttonList: {
+          buttons: widget.buttons.map((b) => ({
+            text: b.text,
+            onClick: { openLink: { url: b.url } },
+            ...(b.filled
+              ? { type: 'FILLED' as const }
+              : { type: 'OUTLINED' as const }),
+          })),
+        },
+      };
+    case 'divider':
+      return { divider: {} };
+    default: {
+      const _exhaustive: never = widget;
+      void _exhaustive;
+      return null;
+    }
+  }
+}
+
+export function buildChatCard(input: ChatCardInput): ChatMessage {
+  const sections: CardV2Section[] = input.sections.map((s) => ({
+    ...(s.header ? { header: s.header } : {}),
+    widgets: s.widgets
+      .map(widgetToCardV2)
+      .filter((w): w is CardV2Widget => w !== null),
+  }));
+
+  const card: CardV2 = {
+    cardId: input.cardId,
+    card: {
+      ...(input.headerTitle || input.headerSubtitle || input.headerImageUrl
+        ? {
+            header: {
+              title: input.headerTitle,
+              ...(input.headerSubtitle
+                ? { subtitle: input.headerSubtitle }
+                : {}),
+              ...(input.headerImageUrl
+                ? {
+                    imageUrl: input.headerImageUrl,
+                    imageType: 'CIRCLE' as const,
+                  }
+                : {}),
+            },
+          }
+        : {}),
+      sections,
+    },
+  };
+
+  return {
+    ...(input.fallbackText ? { text: input.fallbackText } : {}),
+    cardsV2: [card],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Posters
+// ---------------------------------------------------------------------------
 
 export async function postToGoogleChat(
   webhookUrl: string,
@@ -67,62 +247,33 @@ export function postToGoogleChatSafe(
 ): void {
   if (!webhookUrl) return;
   postToGoogleChat(webhookUrl, message).catch((err) => {
-    console.error(`[google-chat] post failed${context ? ` (${context})` : ''}:`, err);
+    console.error(
+      `[google-chat] post failed${context ? ` (${context})` : ''}:`,
+      err,
+    );
   });
 }
 
-/**
- * Card-builder input. Lets every caller write a single high-level
- * object instead of hand-rolling the cardsV2 widget tree. The builder
- * always emits both a plain-text fallback (for mobile notifications
- * and Chat search previews) and a cardsV2 payload (for the rich-card
- * render in the team's space).
- *
- * Conventions Jack approved (2026-05-11):
- *   - emoji prefix on the title, e.g. "⏰ Avondale, expiring soon"
- *   - subtitle is the muted second line (client / project / context)
- *   - one paragraph per logical chunk; newlines inside a paragraph
- *     become <br>
- *   - buttons render as a single buttonList row at the bottom
- *   - quoted text inside paragraphs uses italic <i>...</i>, never the
- *     leading-`>` markdown form (which doesn't render in cards)
- */
+// ---------------------------------------------------------------------------
+// Simpler paragraph-based builder (alternative API to buildChatCard).
+//
+// Some call sites (cron digests, expiry watches, ad-creative notifies) read
+// more naturally as "title + a few paragraphs + buttons" than as a widget
+// tree. `buildChatCardMessage` accepts a flat ChatCard shape, escapes user
+// content, supports an `{ html }` escape hatch for agent-built markup, and
+// renders the same cardsV2 underneath. Either builder is fine; pick whichever
+// reads cleaner at the call site.
+// ---------------------------------------------------------------------------
+
 export interface ChatCard {
-  /** Stable per-card-type id used for cardsV2[].cardId. */
   cardId: string;
-  /** Header title; include any emoji as the prefix. */
   title: string;
-  /** Optional grey second line (client name, project, context). */
   subtitle?: string;
-  /** Body sections; each becomes a textParagraph widget. Empty / null
-   *  entries are dropped so callers can use `condition && string` inline.
-   *
-   *  Plain strings are HTML-escaped + newline-to-`<br>` converted, which
-   *  is what 95% of callers want (anything user-typed goes here). For
-   *  callers that need bold / italic / links inside agent-built copy,
-   *  pass `{ html: '<b>Owner:</b> agency-owned' }` instead — it gets
-   *  injected as-is. Never feed user input through the html escape
-   *  hatch. */
   paragraphs: Array<string | { html: string } | null | false | undefined>;
-  /** Optional buttons rendered in a single buttonList at the bottom. */
   buttons?: Array<{ text: string; url: string }>;
-  /** Optional plain-text fallback. Kept on the type so callers can write
-   *  one for documentation / future use, but it is no longer sent to
-   *  Chat: the API renders `text` as a separate plain-text message
-   *  above the card, which clutters channels. The card header doubles
-   *  as the mobile-notification + search-preview line. */
   fallback?: string;
 }
 
-/** Light HTML escape for cardsV2 textParagraph content. Cards accept a
- *  very small HTML subset (<b>, <i>, <br>, <a href>); everything else
- *  should be escaped so user-supplied input can't break the layout or
- *  inject markup. Exported so callers building a `{ html }` paragraph
- *  with user-supplied text inside can escape it first.
- *
- *  Note: does NOT touch newlines. Use `escapeCardText` when you want
- *  newlines to become `<br>` too, which is the default behaviour for
- *  plain-string paragraphs. */
 export function escapeCardHtml(raw: string): string {
   return raw
     .replace(/&/g, '&amp;')
@@ -130,8 +281,6 @@ export function escapeCardHtml(raw: string): string {
     .replace(/>/g, '&gt;');
 }
 
-/** Convert a paragraph string to cardsV2-safe HTML: escape, then turn
- *  newlines into <br> so callers don't have to think about it. */
 function paragraphToHtml(raw: string): string {
   return escapeCardHtml(raw).replace(/\n/g, '<br>');
 }

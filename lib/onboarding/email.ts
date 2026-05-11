@@ -107,15 +107,34 @@ async function loadClient(clientId: string): Promise<ClientCtx> {
 
 /**
  * Resolve every brand-profile POC we should email for this onboarding.
- * Falls back to the explicit `override` (single recipient) when the caller
- * passed one, since admin-triggered nudges accept a "send to" override field.
+ * Falls back to the explicit `override` (single email or list of emails)
+ * when the caller passed one, since admin-triggered nudges accept a
+ * "send to" override and the start-onboarding modal lets admins pick
+ * which subset of brand contacts gets the welcome email.
  */
 async function resolveRecipients(
   clientId: string,
-  override: string | undefined,
+  override: string | string[] | undefined,
 ): Promise<RecipientCtx[]> {
-  if (override) {
-    return [{ email: override, first_name: null }];
+  const overrideList = Array.isArray(override)
+    ? override.filter((e) => e.trim().length > 0)
+    : override
+      ? [override]
+      : [];
+  if (overrideList.length > 0) {
+    const admin = createAdminClient();
+    // Pull names for nicer first-name greetings when the override email
+    // matches a brand-profile contact. Unknown overrides fall back to no
+    // first name (the email body still works).
+    const pocs = await getClientNotificationRecipients(admin, clientId).catch(() => []);
+    const byEmail = new Map(pocs.map((p) => [p.email.toLowerCase(), p]));
+    return overrideList.map((email) => {
+      const match = byEmail.get(email.toLowerCase());
+      return {
+        email,
+        first_name: match ? firstName(match.name) : null,
+      };
+    });
   }
   const admin = createAdminClient();
   const pocs = await getClientNotificationRecipients(admin, clientId);
@@ -157,7 +176,7 @@ function shellResult(
 
 export async function sendOnboardingWelcomeEmail(opts: {
   onboarding: OnboardingRow;
-  recipient_email?: string;
+  recipient_email?: string | string[];
   triggered_by?: string;
 }): Promise<OnboardingEmailResult[]> {
   const client = await loadClient(opts.onboarding.client_id);
@@ -167,8 +186,8 @@ export async function sendOnboardingWelcomeEmail(opts: {
 
   const isSmm = opts.onboarding.kind === 'smm';
   const intro = isSmm
-    ? `We're getting ${escape(client.client_name)} set up for short-form social. The link below opens a quick guided walkthrough so we can lock down your brand basics, social accounts, content preferences, and a kickoff time.`
-    : `We're getting ${escape(client.client_name)} set up for editing. The link below opens a short guided walkthrough so we can capture your project brief, raw footage, and turnaround expectations.`;
+    ? `We're getting ${escape(client.client_name)} set up for short-form social. The link below opens a quick guided walkthrough so we can lock down your brand basics, connect your social accounts, and capture the points of contact we should loop in.`
+    : `We're getting ${escape(client.client_name)} set up for editing. The link below opens a short guided walkthrough so we can confirm your brand basics and grab links to any raw footage or reference edits the team should look at.`;
 
   const subject = isSmm
     ? `Let's kick off ${client.client_name} on Cortex`
@@ -223,19 +242,27 @@ export async function sendOnboardingWelcomeEmail(opts: {
 
 type NudgeKind = 'manual' | 'step_reminder' | 'lagging_nudge';
 
-export async function sendOnboardingNudgeEmail(opts: {
+interface NudgeRender {
+  subject: string;
+  eyebrow: string;
+  heroTitle: string;
+  intro: string;
+  cta: string;
+  url: string;
+  brandBlue: string;
+  agency: AgencyBrand;
+  progress: string;
+  preview: string;
+}
+
+async function renderNudge(opts: {
   onboarding: OnboardingRow;
   kind: NudgeKind;
-  recipient_email?: string;
-  /** Optional admin-authored note. If present, replaces the default body copy. */
   message?: string;
-  triggered_by?: string;
-}): Promise<OnboardingEmailResult[]> {
+}): Promise<NudgeRender> {
   const client = await loadClient(opts.onboarding.client_id);
-  const recipients = await resolveRecipients(client.client_id, opts.recipient_email);
   const brand = getEmailBrand(client.agency);
   const url = shareUrl(client.agency, opts.onboarding.share_token);
-
   const progress = progressLine(opts.onboarding.kind, opts.onboarding.current_step);
 
   let eyebrow: string;
@@ -266,27 +293,75 @@ export async function sendOnboardingNudgeEmail(opts: {
     cta = 'Open onboarding';
   }
 
-  const previewBody = opts.message
-    ? preview(opts.message)
-    : preview(intro.replace(/<[^>]+>/g, ''));
+  return {
+    subject,
+    eyebrow,
+    heroTitle,
+    intro,
+    cta,
+    url,
+    brandBlue: brand.blue,
+    agency: client.agency,
+    progress,
+    preview: opts.message
+      ? preview(opts.message)
+      : preview(intro.replace(/<[^>]+>/g, '')),
+  };
+}
 
-  const results: OnboardingEmailResult[] = [];
-  for (const recipient of recipients) {
-    const body = `
+function nudgeBodyHtml(r: NudgeRender, recipient: RecipientCtx): string {
+  return `
       <p class="subtext">${greeting(recipient.first_name)},</p>
-      <p class="subtext">${intro}</p>
-      <p class="subtext"><em>${escape(progress)}</em></p>
+      <p class="subtext">${r.intro}</p>
+      <p class="subtext"><em>${escape(r.progress)}</em></p>
       <div class="button-wrap" style="text-align:center;">
-        <a href="${url}" class="button">${cta}</a>
+        <a href="${r.url}" class="button">${r.cta}</a>
       </div>
       <hr class="divider" />
       <p class="small" style="text-align:center;">
         If the button doesn't work, paste this into your browser:<br />
-        <a href="${url}" style="color:${brand.blue};">${url}</a>
+        <a href="${r.url}" style="color:${r.brandBlue};">${r.url}</a>
       </p>
     `;
+}
 
-    const html = layout(body, client.agency, { eyebrow, heroTitle });
+/**
+ * Render the full nudge HTML for preview, without sending. Uses a
+ * placeholder "Recipient" greeting since the live send fan-outs per POC.
+ */
+export async function previewOnboardingNudgeEmail(opts: {
+  onboarding: OnboardingRow;
+  kind: NudgeKind;
+  message?: string;
+}): Promise<{ subject: string; html: string }> {
+  const r = await renderNudge(opts);
+  const html = layout(
+    nudgeBodyHtml(r, { email: '', first_name: null }),
+    r.agency,
+    { eyebrow: r.eyebrow, heroTitle: r.heroTitle },
+  );
+  return { subject: r.subject, html };
+}
+
+export async function sendOnboardingNudgeEmail(opts: {
+  onboarding: OnboardingRow;
+  kind: NudgeKind;
+  recipient_email?: string;
+  /** Optional admin-authored note. If present, replaces the default body copy. */
+  message?: string;
+  triggered_by?: string;
+}): Promise<OnboardingEmailResult[]> {
+  const client = await loadClient(opts.onboarding.client_id);
+  const recipients = await resolveRecipients(client.client_id, opts.recipient_email);
+  const r = await renderNudge(opts);
+  const previewBody = r.preview;
+
+  const results: OnboardingEmailResult[] = [];
+  for (const recipient of recipients) {
+    const html = layout(nudgeBodyHtml(r, recipient), r.agency, {
+      eyebrow: r.eyebrow,
+      heroTitle: r.heroTitle,
+    });
 
     const sent = await sendAndLog({
       category: 'transactional',
@@ -294,7 +369,7 @@ export async function sendOnboardingNudgeEmail(opts: {
       agency: client.agency,
       to: recipient.email,
       recipientName: recipient.first_name,
-      subject,
+      subject: r.subject,
       html,
       clientId: client.client_id,
       metadata: {
@@ -306,10 +381,64 @@ export async function sendOnboardingNudgeEmail(opts: {
       },
     });
 
-    results.push(shellResult(recipient.email, subject, previewBody, sent));
+    results.push(shellResult(recipient.email, r.subject, previewBody, sent));
   }
 
   return results;
+}
+
+// ── Team assignment (internal: ping the Nativz teammate just assigned) ───
+
+/**
+ * Internal-only: fires when an admin assigns a team member to an
+ * onboarding. The teammate gets a short "you're on this brand" email
+ * pointing at the admin detail page.
+ */
+export async function sendOnboardingTeamAssignedEmail(opts: {
+  onboarding: OnboardingRow;
+  to: string;
+  recipient_name: string | null;
+  role_label: string;
+  triggered_by?: string;
+}): Promise<OnboardingEmailResult> {
+  const client = await loadClient(opts.onboarding.client_id);
+
+  const subject = `You're on ${client.client_name} (${opts.role_label})`;
+  const eyebrow = 'New brand assignment';
+  const heroTitle = `${client.client_name} - ${opts.role_label}`;
+
+  const adminLink = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://cortex.nativz.io'}/admin/onboarding/${opts.onboarding.id}`;
+
+  const intro = `You've been assigned as ${opts.role_label} for ${escape(client.client_name)}. Their onboarding is in flight; the link below opens the admin tracker so you can see step state, contacts, and the latest email touches.`;
+
+  const body = `
+    <p class="subtext">${greeting(firstName(opts.recipient_name))},</p>
+    <p class="subtext">${intro}</p>
+    <div class="button-wrap" style="text-align:center;">
+      <a href="${adminLink}" class="button">Open in Cortex</a>
+    </div>
+  `;
+
+  const html = layout(body, client.agency, { eyebrow, heroTitle });
+
+  const sent = await sendAndLog({
+    category: 'transactional',
+    typeKey: 'onboarding_team_assigned',
+    agency: client.agency,
+    to: opts.to,
+    recipientName: opts.recipient_name,
+    subject,
+    html,
+    clientId: client.client_id,
+    metadata: {
+      onboarding_id: opts.onboarding.id,
+      kind: opts.onboarding.kind,
+      role: opts.role_label,
+      triggered_by: opts.triggered_by ?? null,
+    },
+  });
+
+  return shellResult(opts.to, subject, preview(intro), sent);
 }
 
 // ── Completion (sent once when status flips to 'completed') ──────────────
@@ -324,8 +453,8 @@ export async function sendOnboardingCompleteEmail(opts: {
   const isSmm = opts.onboarding.kind === 'smm';
 
   const intro = isSmm
-    ? `That's a wrap on onboarding for ${escape(client.client_name)}. We've got everything we need to start scheduling content. Your account lead will reach out shortly to lock in the kickoff call and walk through the first batch of posts.`
-    : `That's a wrap on onboarding for ${escape(client.client_name)}. We've got the brief, your raw assets, and the turnaround expectations. Editing kicks off now; expect a first cut within 5-7 business days.`;
+    ? `That's a wrap on onboarding for ${escape(client.client_name)}. Brand basics, socials, and points of contact are all in. Your account lead will be in touch shortly to confirm next steps and walk through the first batch of posts.`
+    : `That's a wrap on onboarding for ${escape(client.client_name)}. Brand basics and your footage references are all in. Your editor will reach out to book a quick kickoff call and confirm the first deliverable timeline.`;
 
   const subject = isSmm
     ? `${client.client_name} onboarding is complete`
@@ -364,4 +493,124 @@ export async function sendOnboardingCompleteEmail(opts: {
   }
 
   return results;
+}
+
+// ── Ops handoff (silent agency-side notification on completion) ───────────
+
+/**
+ * Internal-only: ping the agency ops inbox when a client wraps onboarding,
+ * with a one-line summary of what was captured. Editing onboardings prompt
+ * ops to schedule the 7-step kickoff call; SMM onboardings just notify.
+ *
+ * `to` is the agency theme's `opsEmail`, falling back to `supportEmail`.
+ */
+export async function sendOnboardingOpsHandoffEmail(opts: {
+  onboarding: OnboardingRow;
+  triggered_by?: string;
+}): Promise<OnboardingEmailResult> {
+  const { getTheme } = await import('@/lib/branding');
+  const client = await loadClient(opts.onboarding.client_id);
+  const theme = getTheme(client.agency);
+  const to = theme.opsEmail ?? theme.supportEmail;
+  const isSmm = opts.onboarding.kind === 'smm';
+
+  const eyebrow = 'Ops handoff';
+  const heroTitle = `${client.client_name} wrapped onboarding`;
+  const subject = `[${theme.shortName}] ${client.client_name} finished ${isSmm ? 'SMM' : 'editing'} onboarding`;
+
+  const summary = isSmm
+    ? `Brand basics, social connections, and points of contact are all in. Loop the strategist in on the next touchpoint.`
+    : `Brand basics and footage references are in. Book the kickoff call to walk through the 7-step cadence.`;
+
+  const adminLink = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://cortex.nativz.io'}/admin/onboarding/${opts.onboarding.id}`;
+
+  const body = `
+    <p class="subtext">${escape(client.client_name)} just finished their ${isSmm ? 'SMM' : 'editing'} onboarding.</p>
+    <p class="subtext">${escape(summary)}</p>
+    <div class="button-wrap" style="text-align:center;">
+      <a href="${adminLink}" class="button">Open in Cortex</a>
+    </div>
+  `;
+
+  const html = layout(body, client.agency, { eyebrow, heroTitle });
+
+  const sent = await sendAndLog({
+    category: 'transactional',
+    typeKey: `onboarding_ops_handoff_${opts.onboarding.kind}`,
+    agency: client.agency,
+    to,
+    recipientName: null,
+    subject,
+    html,
+    clientId: client.client_id,
+    metadata: {
+      onboarding_id: opts.onboarding.id,
+      kind: opts.onboarding.kind,
+      triggered_by: opts.triggered_by ?? null,
+    },
+  });
+
+  return shellResult(to, subject, preview(summary), sent);
+}
+
+// ── POC invite (client-triggered: send the link to a teammate) ────────────
+
+/**
+ * Sent when a client uses "send onboarding link" on the points_of_contact
+ * screen to forward the share URL to a teammate. Body is a short personal
+ * note; the recipient lands on the same shared stepper.
+ */
+export async function sendOnboardingPocInviteEmail(opts: {
+  onboarding: OnboardingRow;
+  to: string;
+  invitee_name?: string | null;
+  /** Free-text note from the sender. Optional. */
+  message?: string;
+  triggered_by?: string;
+}): Promise<OnboardingEmailResult> {
+  const client = await loadClient(opts.onboarding.client_id);
+  const brand = getEmailBrand(client.agency);
+  const url = shareUrl(client.agency, opts.onboarding.share_token);
+
+  const subject = `${client.client_name} onboarding - your teammate shared a link`;
+  const eyebrow = 'You were added';
+  const heroTitle = `Help finish ${client.client_name}'s onboarding`;
+
+  const note = opts.message?.trim()
+    ? `<p class="subtext"><em>"${escape(opts.message.trim())}"</em></p>`
+    : '';
+
+  const body = `
+    <p class="subtext">${greeting(firstName(opts.invitee_name ?? null))},</p>
+    <p class="subtext">A teammate at ${escape(client.client_name)} just added you to their ${brand.brandName} onboarding. The link below opens a short guided walkthrough so you can fill in any pieces only you have visibility on.</p>
+    ${note}
+    <div class="button-wrap" style="text-align:center;">
+      <a href="${url}" class="button">Open onboarding</a>
+    </div>
+    <hr class="divider" />
+    <p class="small" style="text-align:center;">
+      If the button doesn't work, paste this into your browser:<br />
+      <a href="${url}" style="color:${brand.blue};">${url}</a>
+    </p>
+  `;
+
+  const html = layout(body, client.agency, { eyebrow, heroTitle });
+
+  const sent = await sendAndLog({
+    category: 'transactional',
+    typeKey: `onboarding_poc_invite_${opts.onboarding.kind}`,
+    agency: client.agency,
+    to: opts.to,
+    recipientName: opts.invitee_name ?? null,
+    subject,
+    html,
+    clientId: client.client_id,
+    metadata: {
+      onboarding_id: opts.onboarding.id,
+      kind: opts.onboarding.kind,
+      triggered_by: opts.triggered_by ?? null,
+    },
+  });
+
+  return shellResult(opts.to, subject, preview(`Forwarded onboarding link to ${opts.to}`), sent);
 }

@@ -59,6 +59,15 @@ export async function exchangeYouTubeCode(code: string): Promise<OAuthResult> {
   const channelData = await channelRes.json();
   const channel = channelData.items?.[0];
 
+  // `snippet.customUrl` is the channel's @-handle (e.g. "@allshuttersandblinds")
+  // and is the canonical URL segment. Without it we used to store `title`
+  // (the display name), which produces an unclickable
+  // "youtube.com/@My Channel Name" link. Strip the leading @ since
+  // canonicalUrl re-adds it. Fall back to channel id (the /channel/UCxxx
+  // route works for every channel, even those without a custom URL set).
+  const rawCustomUrl = (channel?.snippet?.customUrl as string | undefined) ?? '';
+  const handle = rawCustomUrl.replace(/^@+/, '').trim() || channel?.id || '';
+
   return {
     tokens: {
       accessToken: data.access_token,
@@ -67,7 +76,7 @@ export async function exchangeYouTubeCode(code: string): Promise<OAuthResult> {
     },
     profile: {
       platformUserId: channel?.id ?? '',
-      username: channel?.snippet?.title ?? '',
+      username: handle,
       avatarUrl: channel?.snippet?.thumbnails?.default?.url,
     },
   };

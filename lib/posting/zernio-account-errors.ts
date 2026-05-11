@@ -42,13 +42,63 @@ const ACCOUNT_LEVEL_PATTERNS: RegExp[] = [
 ];
 
 /**
+ * Zernio's documented `errorCode` values that map to "account needs to
+ * reconnect." More reliable than regex matching the human-readable string
+ * because the codes are stable across platforms and Zernio versions. New
+ * codes can be added here without breaking existing pattern matching.
+ */
+const ACCOUNT_LEVEL_CODES = new Set<string>([
+  'token_expired',
+  'token_invalid',
+  'token_revoked',
+  'refresh_failed',
+  'reauth_required',
+  'unauthorized',
+  'permission_denied',
+  'access_denied',
+  'account_disconnected',
+  'account_suspended',
+  'account_inactive',
+  'invalid_credentials',
+  'oauth_invalid',
+  'session_expired',
+]);
+
+/**
+ * Zernio's documented `errorType` values (Stripe-like) that always mean the
+ * underlying account auth is the problem. Distinct from the code list above
+ * because `type` is broader: `authentication_error` covers multiple specific
+ * codes.
+ */
+const ACCOUNT_LEVEL_TYPES = new Set<string>([
+  'authentication_error',
+  'permission_error',
+]);
+
+/**
  * True when the error text strongly suggests the underlying social account
  * needs to be reconnected. Conservative — false negatives are preferable
  * to false positives (we don't want to mark a working account inactive
  * just because the leg failed once with a generic 5xx).
+ *
+ * Accepts either a flat reason string (legacy publish result) OR a
+ * structured `{ errorCode, errorType, message }` envelope (per-leg failure
+ * row from Zernio's publish response). Prefer the structured form when
+ * available — pattern matching is a fallback.
  */
-export function isAccountLevelLegError(reason: string | null | undefined): boolean {
+export function isAccountLevelLegError(
+  reason:
+    | string
+    | null
+    | undefined
+    | { errorCode?: string | null; errorType?: string | null; message?: string | null },
+): boolean {
   if (!reason) return false;
+  if (typeof reason === 'object') {
+    if (reason.errorCode && ACCOUNT_LEVEL_CODES.has(reason.errorCode)) return true;
+    if (reason.errorType && ACCOUNT_LEVEL_TYPES.has(reason.errorType)) return true;
+    return isAccountLevelLegError(reason.message ?? null);
+  }
   const text = reason.trim();
   if (!text) return false;
   return ACCOUNT_LEVEL_PATTERNS.some((re) => re.test(text));

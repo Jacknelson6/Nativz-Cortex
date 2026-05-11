@@ -205,11 +205,17 @@ export default async function CompetitorIntelligencePage() {
   const audits = (auditsResult.data ?? []).map((a) => {
     const attached = Array.isArray(a.attached_client) ? a.attached_client[0] : a.attached_client;
     const prospect = a.prospect_data as ProspectDataShape;
+    // Prefer the attached client's actual name. `prospect_data.name`/`displayName`
+    // is harvested from the website's <title> tag, which on most marketing
+    // pages is the SEO query string ("Private Lending for Residential…")
+    // instead of the brand. Falling back to it last means the rail stays
+    // scannable for audits paired with a real client row.
     return {
       id: a.id,
       status: a.status,
       created_at: a.created_at,
-      brand_name: prospect?.displayName ?? prospect?.name ?? attached?.name ?? 'Untitled audit',
+      brand_name:
+        attached?.name ?? prospect?.displayName ?? prospect?.name ?? 'Untitled audit',
       website: prospect?.website ?? null,
       favicon: prospect?.favicon ?? null,
     };

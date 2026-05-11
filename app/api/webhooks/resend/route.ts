@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
 
   const { data: message } = await admin
     .from('email_messages')
-    .select('id, open_count, click_count')
+    .select('id, open_count, click_count, type_key, metadata')
     .eq('resend_id', resendId)
     .maybeSingle();
 
@@ -194,6 +194,44 @@ export async function POST(request: NextRequest) {
   const cleanPatch = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
 
   await admin.from('email_messages').update(cleanPatch).eq('id', message.id);
+
+  // Mirror digest events into prospect_digest_events so the stickiness loop
+  // has its own first-party telemetry (independent of email_messages).
+  if (message.type_key === 'prospect_digest') {
+    const metadata = (message.metadata ?? {}) as { draft_id?: string; prospect_id?: string; subscription_id?: string };
+    const draftId = metadata.draft_id;
+    if (draftId) {
+      const eventKindMap: Record<string, string | null> = {
+        'email.opened': 'opened',
+        'email.clicked': 'clicked',
+        'email.bounced': 'bounced',
+        'email.complained': 'complained',
+      };
+      const digestKind = eventKindMap[event.type];
+      if (digestKind) {
+        await admin.from('prospect_digest_events').insert({
+          draft_id: draftId,
+          prospect_id: metadata.prospect_id ?? null,
+          kind: digestKind,
+          target_url: event.data?.click?.link ?? null,
+        });
+      }
+      // Bounce or complaint: deactivate the subscription so the cron stops
+      // building drafts for an address we know is bad.
+      if (event.type === 'email.bounced' || event.type === 'email.complained') {
+        if (metadata.subscription_id) {
+          await admin
+            .from('prospect_digest_subscriptions')
+            .update({
+              active: false,
+              unsubscribed_at: now,
+              unsubscribed_via: event.type === 'email.complained' ? 'complained' : 'bounced',
+            })
+            .eq('id', metadata.subscription_id);
+        }
+      }
+    }
+  }
 
   // Mirror bounce/complaint onto contact row so future sends skip.
   if (event.type === 'email.bounced' || event.type === 'email.complained') {

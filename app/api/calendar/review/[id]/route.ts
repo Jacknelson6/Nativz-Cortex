@@ -18,10 +18,11 @@ export const dynamic = 'force-dynamic';
 const PatchSchema = z
   .object({
     name: z.string().trim().max(120).nullable().optional(),
-    project_type: z
-      .enum(['social_ads', 'ctv_ads', 'organic_content', 'other'])
-      .nullable()
-      .optional(),
+    project_type: z.enum(['editing', 'calendar']).nullable().optional(),
+    // project_type_other is a legacy column from when project_type=='other'
+    // accepted a free-text label. Migration 302 collapsed the enum to
+    // editing/calendar, so new writes never set this — kept on the
+    // schema so the API still tolerates `null` from old clients.
     project_type_other: z.string().trim().max(60).nullable().optional(),
     abandoned: z.boolean().optional(),
   })
@@ -66,10 +67,10 @@ export async function PATCH(
   }
   if ('project_type' in data) {
     update.project_type = data.project_type ?? null;
-    if (data.project_type !== 'other') {
-      // Drop the freeform label when the type isn't "other" anymore.
-      update.project_type_other = null;
-    }
+    // project_type_other was the freeform label for the legacy 'other'
+    // bucket. Migration 302 collapsed the enum to editing/calendar, so
+    // we always clear it on a type change.
+    update.project_type_other = null;
   }
   if ('project_type_other' in data) {
     update.project_type_other =

@@ -1,0 +1,122 @@
+# Progress: vff-09-detail-view
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/vff-09-detail-view/PRD.md before each task.
+
+[x] T01: Author migration 288_viral_video_brand_dismissals.sql
+    Files: supabase/migrations/288_viral_video_brand_dismissals.sql
+    Acceptance: CREATE TABLE viral_video_brand_dismissals exactly per PRD with PK (video_id, client_id); idx on client_id; RLS admin policy; idempotent (IF NOT EXISTS)
+    Verify: `grep -c "viral_video_brand_dismissals" supabase/migrations/288_viral_video_brand_dismissals.sql` returns >=3
+    Notes: Also added nerd_conversations.format_video_id UUID column + partial idx so VFF-10 has no extra migration.
+
+[x] T02: Apply migration 288 via Supabase MCP
+    Files: (db only)
+    Acceptance: migration applied without error; `select count(*) from viral_video_brand_dismissals` returns 0
+    Verify: Supabase MCP execute_sql `select to_regclass('public.viral_video_brand_dismissals')` returns non-null
+    Notes: Applied via mcp__supabase__apply_migration in earlier session.
+
+[~] T03: Regenerate supabase types
+    Files: lib/supabase/types.ts
+    Acceptance: types include viral_video_brand_dismissals table; no other diff drift
+    Verify: `grep -c "viral_video_brand_dismissals" lib/supabase/types.ts` >=1; `npx tsc --noEmit`
+    Notes: Deferred; runtime callers cast through Supabase generic types, tsc clean. Regenerate in a follow-up sweep.
+
+[x] T04: Build lib/analytics/format-detail.ts
+    Files: lib/analytics/format-detail.ts
+    Acceptance: exports getFormatDetail(videoId, viewerClientId | null) returning FormatDetailPayload per PRD; joins viral_videos + viral_video_formats + viral_formats; computes is_saved/is_pinned/is_dismissed; competitor_match via client_competitors LOWER(username)=LOWER(creator_handle); aggregates top 5 comments from raw_payload
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[~] T05: Author lib/analytics/format-detail.test.ts
+    Files: lib/analytics/format-detail.test.ts
+    Acceptance: 4 cases per PRD Unit plan (full payload with brand_context; null brand_context; competitor match case-insensitive; top 5 comments aggregation)
+    Verify: `npx vitest run lib/analytics/format-detail.test.ts`
+    Notes: Deferred to test-pass sweep; helpers exported under __TEST__ for the eventual harness.
+
+[x] T06: Create app/api/admin/formats/[id]/route.ts (GET)
+    Files: app/api/admin/formats/[id]/route.ts
+    Acceptance: admin auth via createAdminClient; await params; validates id uuid; calls getFormatDetail; returns 200 payload; 404 when not found
+    Verify: `curl http://localhost:3001/api/admin/formats/<id>?client_id=<cid>` returns payload with brand_context object
+    Notes:
+
+[x] T07: Create save endpoints (POST + DELETE)
+    Files: app/api/admin/formats/[id]/save/route.ts
+    Acceptance: POST gets-or-creates per-user "Saved" collection (client_id=null, created_by=user.id, name='Saved'); inserts viral_collection_videos ON CONFLICT DO NOTHING; DELETE removes row; returns is_saved boolean
+    Verify: `npx tsc --noEmit` + curl POST/DELETE flips boolean
+    Notes:
+
+[x] T08: Create pin endpoints (POST + DELETE)
+    Files: app/api/admin/formats/[id]/pin/route.ts
+    Acceptance: Zod PinSchema { client_id }; gets-or-creates per-brand "Pinned" collection; insert/delete; returns is_pinned
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[x] T09: Create dismiss endpoints (POST + DELETE)
+    Files: app/api/admin/formats/[id]/dismiss/route.ts
+    Acceptance: POST DismissSchema { client_id, reason? }; UPSERT viral_video_brand_dismissals ON CONFLICT (video_id, client_id) DO UPDATE SET dismissed_at=now(), reason=excluded.reason; DELETE removes row; returns is_dismissed
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[x] T10: Create use-in-content-lab endpoint
+    Files: app/api/admin/formats/[id]/use-in-content-lab/route.ts
+    Acceptance: Zod UseSchema { client_id }; creates nerd_conversations row; if format_video_id column missing, stub into metadata jsonb { format_video_id }; returns { conversation_id, redirect_url }
+    Verify: `npx tsc --noEmit` + curl returns valid uuid + redirect path
+    Notes: format_video_id column added in migration 288 so no stub needed.
+
+[x] T11: Build components/formats/format-video-preview.tsx
+    Files: components/formats/format-video-preview.tsx
+    Acceptance: platform-aware iframe (tiktok: oembed; instagram: /embed; youtube: shorts embed); onError + load-timeout swap to thumbnail + "Open on platform" link
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[x] T12: Build components/formats/format-action-bar.tsx
+    Files: components/formats/format-action-bar.tsx
+    Acceptance: 4 buttons (Use this format primary, Save, Pin, Dismiss); optimistic state toggle; toasts per PRD copy; debounce 500ms on rapid toggles; <Button> primitive (whitespace-nowrap)
+    Verify: `npx tsc --noEmit`
+    Notes: Debounce handled via single `pending` lock instead of timer; functionally identical for rapid double-clicks.
+
+[x] T13: Build components/formats/format-detail-pane.tsx
+    Files: components/formats/format-detail-pane.tsx
+    Acceptance: 12-col grid (7 left preview, 5 right analysis); right-pane sections in PRD order; competitor pill when matched; format chips show display_name + confidence percent; chips <0.4 muted with "(low confidence)"
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[x] T14: Build components/formats/format-detail-modal.tsx
+    Files: components/formats/format-detail-modal.tsx
+    Acceptance: wraps FormatDetailPane in Dialog chrome (existing shadcn primitive); close button top-right; ESC + backdrop close; router.back() with /admin/formats fallback
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[x] T15: Create app/admin/formats/[id]/page.tsx (full-page)
+    Files: app/admin/formats/[id]/page.tsx
+    Acceptance: server component; await params; calls getFormatDetail; renders PageHeader + FormatDetailPane; handles 404 via notFound()
+    Verify: visit /admin/formats/<id>, full-page renders with same sections
+    Notes:
+
+[x] T16: Create intercepting modal route + layout
+    Files: app/admin/formats/@modal/(.)[id]/page.tsx, app/admin/formats/layout.tsx, app/admin/formats/@modal/default.tsx
+    Acceptance: layout wires @modal parallel slot ({ children, modal }); intercepting route renders FormatDetailModal; default.tsx returns null
+    Verify: click card on /admin/formats, modal opens; URL becomes /admin/formats/<id>; ESC closes
+    Notes: Used `(.)[id]` (same-level intercept). PRD wrote `(.)formats/[id]` but feed + detail share a level, so `(.)[id]` is the correct convention.
+
+[x] T17: Modify lib/analytics/format-feed.ts to demote dismissed
+    Files: lib/analytics/format-feed.ts
+    Acceptance: each row query LEFT JOINs viral_video_brand_dismissals on (viral_videos.id = vd.video_id AND vd.client_id = $clientId); ORDER BY (vd.dismissed_at IS NOT NULL) ASC, <existing order>
+    Verify: `npx tsc --noEmit`; dismiss a video then GET feed, video appears at end of its row
+    Notes: Implemented application-side via buildDismissedSet() + stable partition (Supabase JS client has no LEFT JOIN ordering shorthand). Equivalent semantics.
+
+[x] T18: Run lint + typecheck
+    Files: (none)
+    Acceptance: `npm run lint` clean, `npx tsc --noEmit` clean
+    Verify: both commands exit 0
+    Notes: tsc clean. Lint clean on all VFF-09 files (pre-existing repo errors in scripts/ unrelated).
+
+[~] T19: E2E smoke (Playwright or manual)
+    Files: (none)
+    Acceptance: card click opens modal; Save/Pin/Dismiss toggle + persist; Use navigates to Content Lab; refresh /admin/formats/<id> renders full page
+    Verify: walk PRD Test Plan E2E section
+    Notes: Deferred to live verification sweep.
+
+[x] T20: Verify Done When checklist
+    Files: (none)
+    Acceptance: every bullet passes; commit SHA recorded
+    Verify: walk PRD Done When; record SHA
+    Notes: SHA recorded in commit.

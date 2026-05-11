@@ -18,6 +18,19 @@ export interface AgencyTheme {
   /** Client-facing support address. */
   supportEmail: string;
 
+  /**
+   * Internal ops inbox. Used for onboarding completion notifications and
+   * other "team needs to act" events. Falls back to supportEmail if unset.
+   */
+  opsEmail?: string;
+
+  /**
+   * Meta Business Suite Partner ID, surfaced to clients in the onboarding
+   * "share Meta access" step. When unset the social-connect screen shows
+   * the email-fallback path instead of the partner-access path.
+   */
+  metaBusinessId?: string;
+
   /** Raw color palette. Use sparingly in components — prefer theme tokens. */
   colors: {
     /** Primary accent — CTAs, labels, highlighted data. */

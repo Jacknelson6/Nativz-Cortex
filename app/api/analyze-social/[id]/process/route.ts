@@ -11,7 +11,7 @@ import {
   buildPlatformReport,
   generateScorecard,
 } from '@/lib/audit/analyze';
-import { discoverCompetitorsByWebsite, scrapeProvidedCompetitors } from '@/lib/audit/discover-competitors';
+import { discoverCompetitorsByWebsite, scrapeProvidedCompetitors, type ConfirmedCompetitorSocials } from '@/lib/audit/discover-competitors';
 import type { PlatformReport, CompetitorProfile, WebsiteContext, SocialLink, AuditPlatform, FailedPlatform } from '@/lib/audit/types';
 import { persistAllScrapedImages, persistAllCompetitorImages } from '@/lib/audit/persist-scraped-images';
 import { filterLastNDays, aggregateEngagement } from '@/lib/audit/scrape-helpers';
@@ -208,10 +208,22 @@ export async function POST(
         // 2b: Competitor discovery + scraping.
         // If the user provided competitor URLs at the confirm-platforms step,
         // use those directly; otherwise fall back to LLM-driven discovery.
+        // `competitor_socials_override` carries the user's per-competitor
+        // platform handle picks — when present, scrapeProvidedCompetitors
+        // skips re-discovery for those brands and uses the chosen handles.
         (() => {
-          const override = (audit.analysis_data as any)?.competitor_urls_override as string[] | null | undefined;
+          const analysis = audit.analysis_data as Record<string, unknown> | null;
+          const override = analysis?.competitor_urls_override as string[] | null | undefined;
+          const confirmedSocials = analysis?.competitor_socials_override as
+            | ConfirmedCompetitorSocials[]
+            | null
+            | undefined;
           const competitorPromise = override && override.length > 0
-            ? scrapeProvidedCompetitors(override, platformsToScrape.map(p => p.platform))
+            ? scrapeProvidedCompetitors(
+                override,
+                platformsToScrape.map(p => p.platform),
+                confirmedSocials ?? undefined,
+              )
             : discoverCompetitorsByWebsite(websiteContext, []);
           return competitorPromise;
         })().catch((err) => {

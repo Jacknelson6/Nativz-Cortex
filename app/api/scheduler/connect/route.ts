@@ -7,8 +7,19 @@ import type { SocialPlatform } from '@/lib/posting/types';
 import { signState } from '@/lib/scheduler/oauth-state';
 import { ensureZernioProfile } from '@/lib/zernio/ensure-profile';
 
+// Platforms whose OAuth flow Zernio supports via `/connect/{platform}`.
+// `googlebusiness` is in the SocialPlatform union (lib/posting/types.ts) and
+// publishes through buildPublishBody's GMB router, but was missing from the
+// route schema — so the connect button rendered in the UI for it would 400.
 const ConnectSchema = z.object({
-  platform: z.enum(['facebook', 'instagram', 'tiktok', 'youtube', 'linkedin']),
+  platform: z.enum([
+    'facebook',
+    'instagram',
+    'tiktok',
+    'youtube',
+    'linkedin',
+    'googlebusiness',
+  ]),
   client_id: z.string().uuid(),
 });
 

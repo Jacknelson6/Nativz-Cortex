@@ -24,6 +24,36 @@ import { detectArtifactType, extractArtifactTitle } from '@/lib/artifacts/types'
 import { ConversationShareButton } from '@/components/ai/conversation-share-button';
 
 // ---------------------------------------------------------------------------
+// Empty-state quick prompts
+// ---------------------------------------------------------------------------
+
+// Generic Nerd suggestions (no client pinned by default — these work without
+// attached research). Each prompt loads into the composer on click so the
+// user can edit before sending. Kept short + verb-led so the row stays
+// scannable. Pattern mirrors content-lab-nerd-chat#SUGGESTIONS.
+const NERD_SUGGESTIONS: { label: string; prompt: string }[] = [
+  {
+    label: 'Audit a brand',
+    prompt: 'Run a competitor audit for @',
+  },
+  {
+    label: 'Brainstorm video angles',
+    prompt:
+      'Brainstorm 10 short-form video angles for @, pulling from their knowledge vault and any recent topic searches.',
+  },
+  {
+    label: 'Summarize a client',
+    prompt:
+      "Give me a one-paragraph current-state summary of @: what they sell, who they serve, what they're shipping this month, and what we're focused on.",
+  },
+  {
+    label: "What's in my inbox?",
+    prompt:
+      'Catch me up on what happened across all clients in the last 7 days. Pending approvals, fresh audits, scheduled posts, anything that needs my attention.',
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -694,6 +724,18 @@ export default function NerdPage() {
                   Full client context, knowledge vault access, research history, and analytics.
                   Use <span className="font-mono text-text-secondary">@</span> to mention a client or team member, or <span className="font-mono text-text-secondary">/</span> for a command.
                 </p>
+                <div className="flex max-w-2xl flex-wrap justify-center gap-2">
+                  {NERD_SUGGESTIONS.map((s) => (
+                    <button
+                      key={s.label}
+                      type="button"
+                      onClick={() => setInput(s.prompt)}
+                      className="cursor-pointer rounded-xl border border-nativz-border/60 bg-surface/40 px-4 py-2.5 text-sm text-text-secondary transition-colors hover:border-nativz-border hover:bg-surface-hover hover:text-text-primary"
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               {inputArea}
             </>

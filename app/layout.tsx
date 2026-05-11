@@ -5,7 +5,6 @@ import { Analytics } from '@vercel/analytics/next';
 import { headers } from 'next/headers';
 import './globals.css';
 import { BrandModeProvider } from '@/components/layout/brand-mode-provider';
-import { MobileBlocker } from '@/components/shared/mobile-blocker';
 import { getSupabaseUrl } from '@/lib/supabase/public-env';
 import { detectAgencyFromHostname } from '@/lib/agency/detect';
 
@@ -170,7 +169,6 @@ export default async function RootLayout({
         className={`${jost.variable} ${poppins.variable} ${rubik.variable} ${sora.variable} ${roboto.variable} font-sans antialiased`}
       >
         <BrandModeProvider forcedMode={forcedMode}>
-          <MobileBlocker />
           {children}
         </BrandModeProvider>
         <Analytics />

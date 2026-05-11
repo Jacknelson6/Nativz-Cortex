@@ -72,9 +72,15 @@ export async function GET(
 
   const { data: link } = await admin
     .from('editing_project_share_links')
-    .select('id, project_id, expires_at, archived_at')
+    .select('id, project_id, name, expires_at, archived_at')
     .eq('token', token)
-    .maybeSingle();
+    .maybeSingle<{
+      id: string;
+      project_id: string;
+      name: string | null;
+      expires_at: string;
+      archived_at: string | null;
+    }>();
 
   if (!link) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
@@ -112,7 +118,7 @@ export async function GET(
       admin
         .from('editing_project_videos')
         .select(
-          'id, filename, public_url, drive_file_id, mime_type, duration_s, thumbnail_url, version, position, created_at, mux_upload_id, mux_asset_id, mux_playback_id, mux_status',
+          'id, filename, title, public_url, drive_file_id, mime_type, duration_s, thumbnail_url, version, position, created_at, mux_upload_id, mux_asset_id, mux_playback_id, mux_status',
         )
         .eq('project_id', link.project_id)
         .order('position', { ascending: true })
@@ -139,6 +145,7 @@ export async function GET(
   type EditingVideoRow = {
     id: string;
     filename: string | null;
+    title: string | null;
     public_url: string | null;
     drive_file_id: string | null;
     mime_type: string | null;
@@ -192,6 +199,7 @@ export async function GET(
       {
         id: v.id,
         filename: v.filename,
+        title: v.title,
         public_url: v.public_url,
         drive_file_id: v.drive_file_id,
         mime_type: v.mime_type,
@@ -244,6 +252,10 @@ export async function GET(
 
   return NextResponse.json({
     isEditor,
+    share_link: {
+      id: link.id,
+      name: link.name,
+    },
     project: {
       id: project.id,
       name: project.name,

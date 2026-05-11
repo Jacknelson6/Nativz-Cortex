@@ -10,6 +10,8 @@ import {
   buildEditingRereviewDraft,
   sendEditingDeliverableEmail,
   sendEditingRereviewEmail,
+  messageToHtmlParagraphs,
+  layout,
 } from '@/lib/email/resend';
 import { getClientNotificationRecipients } from '@/lib/email/notification-recipients';
 import { archiveEditingShareLinkEmail } from '@/lib/content-tools/archive-editing-share-email';
@@ -188,7 +190,7 @@ async function loadEmailContext(projectId: string, linkId: string) {
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   ctx: { params: Promise<{ id: string; linkId: string }> },
 ) {
   const { id, linkId } = await ctx.params;
@@ -200,6 +202,7 @@ export async function GET(
     clientName,
     projectName,
     shareUrl,
+    agency,
     kind,
     pendingRevisionCount,
     contentKind,
@@ -232,12 +235,42 @@ export async function GET(
           noun,
         });
 
+  // Optional query overrides so the modal can re-fetch a live-preview HTML as
+  // the admin types in "Edit copy". Mirrors `/api/calendar/share/[token]/send`.
+  // Subject is part of the inbox envelope, not the rendered body, so it
+  // doesn't feed into the HTML preview, only `message` and `cta_label` do.
+  const url = new URL(req.url);
+  const messageParam = url.searchParams.get('message');
+  const ctaLabelParam = url.searchParams.get('cta_label');
+
+  const messageForPreview = messageParam?.trim() || draft.message;
+  const ctaLabelForPreview = ctaLabelParam?.trim() || draft.ctaLabel;
+
+  // Build the same HTML the send helpers compose so what you see in the
+  // preview matches the inbox 1:1. The re-review variant adds an optional
+  // revisions card, but the preview is intentionally summary-bullets-free
+  // because that bulleted card is rebuilt at send time from server state.
+  const html = layout(
+    `
+      ${messageToHtmlParagraphs(messageForPreview)}
+      <div class="button-wrap">
+        <a href="${shareUrl}" class="btn">${ctaLabelForPreview}</a>
+      </div>
+    `,
+    agency,
+    {
+      eyebrow: draft.eyebrow,
+      heroTitle: draft.heroTitle,
+    },
+  );
+
   return NextResponse.json({
     subject: draft.subject,
     message: draft.message,
     cta_label: draft.ctaLabel,
     eyebrow: draft.eyebrow,
     hero_title: draft.heroTitle,
+    html,
     recipients: eligible.map((c) => ({ email: c.email, name: c.name })),
     client_name: clientName,
     project_name: projectName,
@@ -254,6 +287,13 @@ const PostBodySchema = z
     subject: z.string().trim().min(1).max(200).optional(),
     message: z.string().trim().min(1).max(5000).optional(),
     cta_label: z.string().trim().min(1).max(80).optional(),
+    /**
+     * Optional allow-list of recipient emails to send to. When omitted or
+     * empty, falls back to every eligible POC on the brand (legacy behavior).
+     * Submitted emails MUST be in the eligible roster, otherwise we'd let
+     * the admin email arbitrary addresses.
+     */
+    recipient_emails: z.array(z.string().email()).max(50).optional(),
   })
   .strict();
 
@@ -301,8 +341,34 @@ export async function POST(
     );
   }
 
-  const recipients = eligible.map((c) => c.email);
-  const pocFirstNames = eligible.map((c) => firstName(c.name));
+  // Optional caller-supplied recipient filter. Lowercase-compare against the
+  // eligible roster to guard against arbitrary-email injection. Empty or
+  // missing list = legacy "send to all" behavior.
+  const requestedEmails = (parsed.data.recipient_emails ?? [])
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  const eligibleByEmail = new Map(
+    eligible.map((c) => [c.email.toLowerCase(), c]),
+  );
+  const filteredEligible =
+    requestedEmails.length > 0
+      ? requestedEmails
+          .map((e) => eligibleByEmail.get(e))
+          .filter((c): c is NonNullable<typeof c> => Boolean(c))
+      : eligible;
+
+  if (filteredEligible.length === 0) {
+    return NextResponse.json(
+      {
+        error:
+          'no valid recipients selected. Pick at least one contact from the brand roster.',
+      },
+      { status: 400 },
+    );
+  }
+
+  const recipients = filteredEligible.map((c) => c.email);
+  const pocFirstNames = filteredEligible.map((c) => firstName(c.name));
 
   // Recompute the draft locally so we can capture the resolved subject for the
   // archive row. The send helpers apply the same `override → default` fallback
@@ -387,7 +453,7 @@ export async function POST(
     kind: kind === 'rereview' ? 'rereview' : 'delivery',
     subject: resolvedSubject,
     htmlBody: result.html,
-    recipients: eligible.map((c) => ({ email: c.email, name: c.name })),
+    recipients: filteredEligible.map((c) => ({ email: c.email, name: c.name })),
     sentBy: userId,
   });
 

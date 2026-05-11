@@ -63,14 +63,12 @@ describe('SCREENS — structural invariants', () => {
 });
 
 describe('SCREENS — SMM screen order (drives milestones)', () => {
-  it('matches the canonical 7-step SMM flow', () => {
+  it('matches the canonical 5-step SMM flow', () => {
     expect(SCREENS.smm.map((s) => s.key)).toEqual([
       'welcome',
       'brand_basics',
       'social_connect',
-      'content_prefs',
-      'audience_tone',
-      'kickoff_pick',
+      'points_of_contact',
       'done',
     ]);
   });
@@ -79,42 +77,41 @@ describe('SCREENS — SMM screen order (drives milestones)', () => {
     expect(SCREENS.smm[2].key).toBe('social_connect');
   });
 
-  it('places kickoff_pick at index 5 (milestone fires when current_step crosses 5 to 6)', () => {
-    expect(SCREENS.smm[5].key).toBe('kickoff_pick');
+  it('places points_of_contact at index 3 (milestone fires when current_step crosses 3 to 4)', () => {
+    expect(SCREENS.smm[3].key).toBe('points_of_contact');
   });
 });
 
 describe('SCREENS — Editing screen order (drives milestones)', () => {
-  it('matches the canonical 5-step editing flow', () => {
+  it('matches the canonical 4-step editing flow', () => {
     expect(SCREENS.editing.map((s) => s.key)).toEqual([
       'welcome',
-      'project_brief',
-      'asset_link',
-      'turnaround_ack',
+      'brand_basics',
+      'footage_and_references',
       'done',
     ]);
   });
 
-  it('places asset_link at index 2 (milestone fires when current_step crosses 2 to 3)', () => {
-    expect(SCREENS.editing[2].key).toBe('asset_link');
+  it('places footage_and_references at index 2 (milestone fires when current_step crosses 2 to 3)', () => {
+    expect(SCREENS.editing[2].key).toBe('footage_and_references');
   });
 });
 
 describe('totalScreens', () => {
-  it('returns 7 for smm', () => {
-    expect(totalScreens('smm')).toBe(7);
+  it('returns 5 for smm', () => {
+    expect(totalScreens('smm')).toBe(5);
   });
 
-  it('returns 5 for editing', () => {
-    expect(totalScreens('editing')).toBe(5);
+  it('returns 4 for editing', () => {
+    expect(totalScreens('editing')).toBe(4);
   });
 });
 
 describe('screenAt', () => {
   it('returns the screen at a valid index', () => {
     expect(screenAt('smm', 0)?.key).toBe('welcome');
-    expect(screenAt('smm', 5)?.key).toBe('kickoff_pick');
-    expect(screenAt('editing', 2)?.key).toBe('asset_link');
+    expect(screenAt('smm', 3)?.key).toBe('points_of_contact');
+    expect(screenAt('editing', 2)?.key).toBe('footage_and_references');
   });
 
   it('returns null for negative indices', () => {
@@ -123,19 +120,19 @@ describe('screenAt', () => {
   });
 
   it('returns null for out-of-bounds indices', () => {
-    expect(screenAt('smm', 7)).toBeNull();
+    expect(screenAt('smm', 5)).toBeNull();
     expect(screenAt('smm', 999)).toBeNull();
-    expect(screenAt('editing', 5)).toBeNull();
+    expect(screenAt('editing', 4)).toBeNull();
   });
 });
 
 describe('doneIndex', () => {
-  it('returns the last index for smm (6)', () => {
-    expect(doneIndex('smm')).toBe(6);
+  it('returns the last index for smm (4)', () => {
+    expect(doneIndex('smm')).toBe(4);
   });
 
-  it('returns the last index for editing (4)', () => {
-    expect(doneIndex('editing')).toBe(4);
+  it('returns the last index for editing (3)', () => {
+    expect(doneIndex('editing')).toBe(3);
   });
 
   it('lands on the screen with key "done"', () => {
@@ -146,19 +143,19 @@ describe('doneIndex', () => {
 
 describe('isDoneStep', () => {
   it('returns true only on the terminal index', () => {
-    expect(isDoneStep('smm', 6)).toBe(true);
-    expect(isDoneStep('editing', 4)).toBe(true);
+    expect(isDoneStep('smm', 4)).toBe(true);
+    expect(isDoneStep('editing', 3)).toBe(true);
   });
 
   it('returns false on every other index', () => {
     expect(isDoneStep('smm', 0)).toBe(false);
-    expect(isDoneStep('smm', 5)).toBe(false);
+    expect(isDoneStep('smm', 3)).toBe(false);
     expect(isDoneStep('editing', 0)).toBe(false);
-    expect(isDoneStep('editing', 3)).toBe(false);
+    expect(isDoneStep('editing', 2)).toBe(false);
   });
 
   it('returns false on out-of-bounds indices (defensive)', () => {
-    expect(isDoneStep('smm', 7)).toBe(false);
+    expect(isDoneStep('smm', 5)).toBe(false);
     expect(isDoneStep('smm', -1)).toBe(false);
   });
 });

@@ -20,6 +20,7 @@ import { NotificationsTabContent } from '@/components/admin/settings/notificatio
 import type { EmailHubClientOption } from '@/components/tools/email-hub/email-hub-client';
 import { AISettingsSkillsPanel } from './skills-panel';
 import { NOTIFICATION_REGISTRY } from '@/lib/notifications/registry';
+import { PREVIEWABLE_NOTIFICATION_KEYS } from '@/lib/notifications/preview-map';
 
 export const dynamic = 'force-dynamic';
 
@@ -125,7 +126,7 @@ function renderTab(
             cronSchedule: n.cronSchedule,
             recipientLabel: n.recipientLabel,
             params: n.params ?? null,
-            previewable: Boolean(n.preview),
+            previewable: PREVIEWABLE_NOTIFICATION_KEYS.has(n.key),
           }))}
         />
       );

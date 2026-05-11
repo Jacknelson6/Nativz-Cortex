@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { ContentLabConversationExportButton } from './content-lab-conversation-export-button';
 import { ConversationShareButton } from '@/components/ai/conversation-share-button';
 import { ContentLabConversationHistoryRail } from './content-lab-conversation-history-rail';
+import { ContentLabFormatPin } from './content-lab-format-pin';
 import { ContentLabTopicSearchChipBar } from './content-lab-topic-search-chip-bar';
 import { ContentLabAttachResearchDialog } from './content-lab-attach-research-dialog';
 import { getCommand } from '@/lib/nerd/slash-commands';
@@ -133,6 +134,11 @@ export function ContentLabNerdChat({
   const [conversationTitle, setConversationTitle] = useState<string | null>(null);
   const [conversationMessageCount, setConversationMessageCount] = useState<number>(0);
   const [loadingConversation, setLoadingConversation] = useState(false);
+  // VFF-10: pinned viral_video for this conversation. The "Use this format"
+  // CTA on /admin/formats writes nerd_conversations.format_video_id; we
+  // mirror it client-side so the pin strip + remove-pill stay in sync with
+  // both the initial GET and the local DELETE.
+  const [formatVideoId, setFormatVideoId] = useState<string | null>(null);
   // Bumped whenever we create a new conversation or send a new user message
   // so the history dropdown refetches when the user pops it open next.
   const [conversationsRefreshToken, setConversationsRefreshToken] = useState(0);
@@ -244,6 +250,7 @@ export function ContentLabNerdChat({
         return res.json() as Promise<{
           id: string;
           title: string | null;
+          format_video_id: string | null;
           messages: Array<{ id: string; role: string; content: string; tool_results: unknown }>;
         }>;
       })
@@ -259,6 +266,7 @@ export function ContentLabNerdChat({
         setConversationId(data.id);
         setConversationTitle(data.title?.trim() ? data.title : null);
         setConversationMessageCount(loaded.length);
+        setFormatVideoId(data.format_video_id ?? null);
         // Resumed conversation — don't re-send the session hint on the first
         // new user turn, since the model already has the history.
         sessionHintRef.current = null;
@@ -634,6 +642,7 @@ export function ContentLabNerdChat({
     setConversationId(null);
     setConversationTitle(null);
     setConversationMessageCount(0);
+    setFormatVideoId(null);
     clearContentLabNerdConversationId(clientId);
     sessionHintRef.current = portalMode ? PORTAL_SESSION_HINT : ADMIN_SESSION_HINT;
     // Ask the picker to refetch the list — the current thread may no longer
@@ -675,6 +684,7 @@ export function ContentLabNerdChat({
         const data = (await res.json()) as {
           id: string;
           title: string | null;
+          format_video_id: string | null;
           messages: Array<{ id: string; role: string; content: string; tool_results: unknown }>;
         };
         const loaded: ChatMessage[] = (data.messages ?? []).map((m) => ({
@@ -687,6 +697,7 @@ export function ContentLabNerdChat({
         setConversationId(data.id);
         setConversationTitle(data.title?.trim() ? data.title : null);
         setConversationMessageCount(loaded.length);
+        setFormatVideoId(data.format_video_id ?? null);
         writeContentLabNerdConversationId(clientId, data.id);
         sessionHintRef.current = null;
       } catch {
@@ -794,6 +805,18 @@ export function ContentLabNerdChat({
             </div>
           )}
         </header>
+
+        {/* VFF-10: pinned-format strip. Only present when the conversation
+            was launched via "Use this format" or an earlier strip-clear
+            hasn't run. Sits directly under the header so the strategist
+            sees the anchor for every reply. */}
+        {formatVideoId && conversationId && (
+          <ContentLabFormatPin
+            videoId={formatVideoId}
+            conversationId={conversationId}
+            onRemoved={() => setFormatVideoId(null)}
+          />
+        )}
 
       {loadingConversation && messages.length === 0 ? (
         <>

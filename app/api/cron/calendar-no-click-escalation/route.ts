@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
-import {
-  buildChatCardMessage,
-  postToGoogleChatSafe,
-} from '@/lib/chat/post-to-google-chat';
+import { buildChatCard, postToGoogleChatSafe, type ChatCardWidget } from '@/lib/chat/post-to-google-chat';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 
@@ -196,36 +193,44 @@ async function handleGet(request: NextRequest) {
       : SILENT_HOURS;
     const variantLabel =
       row.type_key === 'calendar_revised_videos' ? 'revised videos' : 'calendar delivery';
-    const subjectFragment = row.subject ? ` "${row.subject}"` : '';
-    const recipientFragment =
-      Array.isArray(row.to_emails) && row.to_emails.length > 0
-        ? ` to ${row.to_emails.join(', ')}`
-        : '';
-    const urlFragment = shareUrl ? `\nLink: ${shareUrl}` : '';
+    const recipients =
+      Array.isArray(row.to_emails) && row.to_emails.length > 0 ? row.to_emails.join(', ') : '';
 
-    const fallback =
-      `⏰ ${clientName}: ${variantLabel}${subjectFragment} sent ${hoursSilent}h ago${recipientFragment} hasn't been clicked yet.${urlFragment}`;
-    const subjectLine = row.subject ? `Subject: "${row.subject}"` : null;
-    const recipientLine =
-      Array.isArray(row.to_emails) && row.to_emails.length > 0
-        ? `To: ${row.to_emails.join(', ')}`
-        : null;
-    const timingLine = `Sent ${hoursSilent}h ago, still no click.`;
-    const paragraphs = [subjectLine, recipientLine, timingLine].filter(
-      (s): s is string => !!s,
-    );
+    const widgets: ChatCardWidget[] = [
+      {
+        type: 'text',
+        text:
+          `<b>${clientName}</b> hasn't opened the <b>${variantLabel}</b> email Cortex sent <b>${hoursSilent}h</b> ago.`,
+      },
+    ];
+    if (row.subject) {
+      widgets.push({ type: 'kv', label: 'Subject', value: row.subject });
+    }
+    if (recipients) {
+      widgets.push({ type: 'kv', label: 'Sent to', value: recipients });
+    }
+    widgets.push({
+      type: 'text',
+      text: '<i>No automated follow-up went out, worth a manual ping (call or DM the contact) before the next cadence stage fires.</i>',
+    });
+    if (shareUrl) {
+      widgets.push({ type: 'button', text: 'Open share link', url: shareUrl, filled: true });
+    }
+
+    const subjectFragment = row.subject ? ` "${row.subject}"` : '';
+    const recipientFragment = recipients ? ` to ${recipients}` : '';
+    const urlFragment = shareUrl ? `\nLink: ${shareUrl}` : '';
+    const fallbackText =
+      `⏰ Internal nudge: ${clientName} hasn't opened the ${variantLabel}${subjectFragment} email Cortex sent ${hoursSilent}h ago${recipientFragment} yet.${urlFragment}`;
 
     postToGoogleChatSafe(
       opsWebhook,
-      buildChatCardMessage({
-        cardId: `calendar-no-click-${row.id}`,
-        title: `⏰ ${clientName}, no click yet`,
-        subtitle: variantLabel,
-        paragraphs,
-        buttons: shareUrl
-          ? [{ text: 'Open share link', url: shareUrl }]
-          : undefined,
-        fallback,
+      buildChatCard({
+        cardId: `no-click-escalation-${row.id}`,
+        headerTitle: '⏰ Internal nudge: unopened email',
+        headerSubtitle: clientName,
+        sections: [{ widgets }],
+        fallbackText,
       }),
       `calendar-no-click-escalation:${row.id}`,
     );

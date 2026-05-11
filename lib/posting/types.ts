@@ -20,9 +20,11 @@ export interface SocialProfile {
    * `clients.late_profile_id`. Matching by `(profileId, platform)` lets
    * the connections matrix link a Zernio account to a Cortex brand
    * without depending on username string compares (which break when
-   * Zernio normalizes handles with underscores etc).
+   * Zernio normalizes handles with underscores etc). May be null when
+   * Zernio omits the field (older accounts); callers should treat null
+   * as "unknown attachment" and skip reconciliation.
    */
-  profileId?: string;
+  profileId?: string | null;
 }
 
 export type PublishMediaItem = {
@@ -123,6 +125,12 @@ export interface PlatformResult {
   externalPostId?: string;
   externalPostUrl?: string;
   error?: string;
+  // Structured Zernio error envelope preserved alongside the composed
+  // `error` string. Consumers (e.g. publish cron's account-disconnect
+  // classifier) prefer branching on `errorCode` over regex-matching `error`.
+  errorCode?: string;
+  errorType?: string;
+  errorMessage?: string;
 }
 
 export interface PostStatusResult {
@@ -190,6 +198,11 @@ export interface DailyMetricsQuery {
   accountId: string;
   startDate: string;
   endDate: string;
+  // Optional but strongly recommended per Zernio canon: without `platform`,
+  // the daily-metrics endpoint can return cross-platform aggregate rows
+  // rather than per-platform per-account rows. Callers should pass the
+  // SocialPlatform they're syncing.
+  platform?: SocialPlatform;
 }
 
 export interface DailyMetric {

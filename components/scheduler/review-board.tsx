@@ -32,7 +32,7 @@ import { getCortexAppUrl } from '@/lib/agency/cortex-url';
  * clients they can't access.
  */
 
-export type ReviewProjectType = 'social_ads' | 'ctv_ads' | 'organic_content' | 'other';
+export type ReviewProjectType = 'editing' | 'calendar';
 export type ReviewLinkStatus =
   | 'abandoned'
   | 'expired'
@@ -74,6 +74,16 @@ export interface ReviewLinkRow {
   client_logo_url: string | null;
   post_count: number;
   approved_count: number;
+  /**
+   * Approved deliverable breakdown by media type. Drives the accounting
+   * CSV export which bills $50/video and $15/static. Calendar rows split
+   * the count via `content_drop_videos.media_type`; editing-project rows
+   * (always video-only) put the full `approved_count` on the video field.
+   * Optional so legacy serialized rows in tests / mocks still satisfy the
+   * type without backfilling.
+   */
+  approved_video_count?: number;
+  approved_image_count?: number;
   changes_count: number;
   pending_count: number;
   status: ReviewLinkStatus;
@@ -101,6 +111,14 @@ export interface ReviewLinkRow {
   last_sent_at: string | null;
   /** Count of calendar sends (initial + revised). */
   send_count: number;
+  /**
+   * Editing-project approval timestamp. NULL on calendar rows (calendar
+   * share links don't carry a project-level approved-at; their approval
+   * lives per-post). Drives the "group by approved month" mode on the
+   * content-tools shell so an editing project shows up under the month
+   * the deliverable was actually green-lit, not when it was created.
+   */
+  approved_at?: string | null;
   /**
    * Discriminator so a single table can render both calendar share-link
    * rows and editing-project rows side-by-side. `'calendar'` (or

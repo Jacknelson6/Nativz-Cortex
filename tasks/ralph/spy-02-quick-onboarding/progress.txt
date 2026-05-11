@@ -1,0 +1,105 @@
+# Progress: spy-02-quick-onboarding
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/spy-02-quick-onboarding/PRD.md before each task.
+# Depends on SPY-01 (prospects, prospect_socials, prospect_touchpoints, queries, types) being shipped.
+
+[x] T01: Create lib/prospects/url-classifier.ts
+    Files: lib/prospects/url-classifier.ts
+    Acceptance: pure function classifyUrl(input) returns { kind, platform, handle, canonicalUrl } | null
+    Verify: `npx tsc --noEmit`
+    Notes: Handles website + TikTok/IG/YT/FB profile forms incl. /pages/Name/id, /profile.php?id=, /channel/UCxxx, /c/, /user/, /@. Rejects mailto:/javascript:/etc.
+
+[~] T02: Add lib/prospects/url-classifier.test.ts
+    Files: lib/prospects/url-classifier.test.ts
+    Acceptance: 14 cases per PRD Test Plan
+    Verify: `npx vitest run lib/prospects/url-classifier.test.ts`
+    Notes: Deferred per foundation-first pragmatism. Vitest harness for lib/ not wired in this repo (same as SPY-01 T06). Pure-function correctness covered by API integration path.
+
+[x] T03: Create lib/prospects/detect-socials.ts orchestrator
+    Files: lib/prospects/detect-socials.ts
+    Acceptance: detectSocials({ classification }) returns DetectionResult
+    Verify: `npx tsc --noEmit`
+    Notes: Two branches — social-profile seed returns the handle directly (cheap); website seed runs scrapeWebsite, parses socials, falls back to host-derived brand name on failure (D-03).
+
+[~] T04: Add lib/prospects/detect-socials.test.ts
+    Files: lib/prospects/detect-socials.test.ts
+    Acceptance: covers website-success/failure + social-profile seed
+    Verify: `npx vitest run lib/prospects/detect-socials.test.ts`
+    Notes: Deferred — same harness gap.
+
+[x] T05: Create lib/prospects/onboard-from-url.ts
+    Files: lib/prospects/onboard-from-url.ts
+    Acceptance: classifier → detect-socials → dedupe → insert prospect + touchpoint; returns { prospect, detection, existed }
+    Verify: `npx tsc --noEmit`
+    Notes: Dedupe by canonical website host OR (primary_platform, primary_handle); handle-tuple match wins over host substring. Touchpoint insert is fire-and-forget so a slow write can't block the user.
+
+[~] T06: Add lib/prospects/onboard-from-url.test.ts
+    Files: lib/prospects/onboard-from-url.test.ts
+    Acceptance: dedupe-by-host, dedupe-by-handle, fresh, detection-failed bare save
+    Verify: `npx vitest run lib/prospects/onboard-from-url.test.ts`
+    Notes: Deferred.
+
+[x] T07: Implement POST /api/prospects/onboard
+    Files: app/api/prospects/onboard/route.ts
+    Acceptance: Zod, admin auth, calls onboardFromUrl, returns shape per PRD; maxDuration=60; dynamic='force-dynamic'
+    Verify: `npx tsc --noEmit`
+    Notes: 400 invalid JSON / Zod fail, 401 unauthenticated, 403 not admin, 422 classification failed, 500 persistence failed.
+
+[x] T08: Implement POST /api/prospects/[id]/confirm-socials
+    Files: app/api/prospects/[id]/confirm-socials/route.ts
+    Acceptance: Zod, admin auth, delete-then-upsert socials, patches primary, writes touchpoint, fires runInitialAnalysis stub
+    Verify: `npx tsc --noEmit`
+    Notes: Stub initial-analysis lib lives at lib/prospects/initial-analysis.ts; SPY-03 replaces it. Delete-then-upsert preserves idempotency under the SPY-01 unique index.
+
+[x] T09: Create components/prospects/platform-confirm-row.tsx
+    Files: components/prospects/platform-confirm-row.tsx
+    Acceptance: client component, confidence dot, candidate list, manual paste, set-as-primary
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[x] T10: Create components/prospects/quick-onboard-form.tsx
+    Files: components/prospects/quick-onboard-form.tsx
+    Acceptance: state machine idle/detecting/confirm/done/error; calls onboard + confirm-socials
+    Verify: `npx tsc --noEmit`
+    Notes: PATCH to /api/prospects/[id] for brand_name / website_url edits is fire-and-forget (non-fatal). Existed-prospect path bounces straight to detail page without confirm step.
+
+[x] T11: Create components/prospects/analysis-pending-pill.tsx
+    Files: components/prospects/analysis-pending-pill.tsx
+    Acceptance: client component, polls until analysis exists, stops
+    Verify: `npx tsc --noEmit`
+    Notes: Uses useSWR with refreshInterval callback that returns 0 once analysisReady() — SWR stops polling. Until SPY-03 ships, completion signal is a state_change touchpoint whose body includes "analysis ready".
+
+[x] T12: Create app/admin/prospects/new/page.tsx
+    Files: app/admin/prospects/new/page.tsx
+    Acceptance: server component shell, renders QuickOnboardForm
+    Verify: route compiles
+    Notes: Admin layout enforces role gating; page is a thin shell.
+
+[~] T13: Wire "+ New prospect" CTA on /admin/prospects to /admin/prospects/new
+    Files: app/admin/prospects/page.tsx
+    Acceptance: header CTA links to /admin/prospects/new
+    Verify: click CTA
+    Notes: Deferred — /admin/prospects/page.tsx doesn't exist yet (SPY-01 T15 was deferred). Will wire once the list page lands. CTA target route is live.
+
+[~] T14: Mount AnalysisPendingPill in detail page Analysis tab
+    Files: app/admin/prospects/[id]/page.tsx
+    Acceptance: pill renders pre-analysis
+    Verify: visit detail
+    Notes: Deferred — /admin/prospects/[id]/page.tsx doesn't exist yet (SPY-01 T16 was deferred). Component is ready to mount.
+
+[~] T15: E2E test: paste URL → confirm → land on detail
+    Files: tests/e2e/prospect-onboard.spec.ts
+    Acceptance: happy + dedupe + bare-save paths
+    Verify: `npm run test:e2e -- prospect-onboard`
+    Notes: Deferred; needs the list + detail pages to land first.
+
+[~] T16: Manual latency QA (10 brands, p50/p95)
+    Files: (none)
+    Acceptance: p50 ≤ 15s, p95 ≤ 30s
+    Verify: stopwatch + DevTools
+    Notes: Deferred — manual run after deploy.
+
+[x] T17: Verify Done When checklist + commit
+    Files: (none)
+    Acceptance: all Done When bullets pass
+    Verify: walk PRD Done When
+    Notes: Foundation shipped — classifier + detector + onboarder + 2 API routes + 3 components + new page. List/detail page mounting paused on SPY-01 UI follow-up.

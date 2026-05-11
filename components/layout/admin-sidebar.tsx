@@ -21,11 +21,11 @@ import {
   Calendar,
   CalendarDays,
   ClipboardCheck,
-  Coins,
   Cpu,
   Gauge,
   Telescope,
   Workflow,
+  Sparkles,
 } from 'lucide-react';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
@@ -97,7 +97,18 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Brand tools',
     items: [
-      { href: '/finder/new', label: 'Trend Finder', icon: TrendingUp },
+      {
+        // Trend Finder splits into a 2-child accordion: search-driven topic
+        // discovery (existing /finder/new) and a Netflix-style explore page
+        // of scalable, viral short-form formats (NAT-64).
+        href: '/finder/new',
+        label: 'Trend Finder',
+        icon: TrendingUp,
+        children: [
+          { href: '/finder/new', label: 'Trending topics', icon: TrendingUp },
+          { href: '/finder/formats', label: 'Viral formats', icon: Sparkles },
+        ],
+      },
       { href: '/lab', label: 'Strategy Lab', icon: MessagesSquare },
       {
         // "Content" parent — splits the old flat Calendar row into a
@@ -126,11 +137,6 @@ const NAV_SECTIONS: NavSection[] = [
       },
       { href: '/brand-profile', label: 'Brand Profile', icon: BookUser },
       { href: '/notes', label: 'Notes', icon: StickyNote },
-      // Deliverables is brand-scoped (follows the active pill) so it lives
-      // alongside the other brand tools rather than under Admin. Both
-      // admins (full controls) and viewers (production scope + add-ons) land
-      // on the same /deliverables URL; the body branches on role.
-      { href: '/deliverables', label: 'Deliverables', icon: Coins },
     ],
   },
   {
@@ -174,10 +180,11 @@ const NAV_SECTIONS: NavSection[] = [
 ];
 
 function isActivePath(pathname: string, href: string, searchParams?: URLSearchParams) {
-  // Trend Finder — sidebar href points at /finder/new; any /finder/*
-  // pathname (monitors, [id] detail, subtopics) should highlight this item.
+  // Trending topics child — matches /finder/new + /finder/[id] detail,
+  // subtopics, processing, etc, but NOT /finder/formats (its own sibling).
   if (href.endsWith('/finder/new')) {
     const prefix = href.replace('/finder/new', '');
+    if (pathname.startsWith(`${prefix}/finder/formats`)) return false;
     return pathname.startsWith(`${prefix}/finder`);
   }
 

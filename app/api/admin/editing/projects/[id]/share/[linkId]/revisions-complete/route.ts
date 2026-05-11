@@ -8,7 +8,7 @@ import {
   buildEditingRevisionsCompleteDraft,
   sendEditingRevisionsCompleteEmail,
 } from '@/lib/email/resend';
-import { getNotificationSetting } from '@/lib/notifications/get-setting';
+import { getClientNotificationSetting } from '@/lib/notifications/get-client-setting';
 import { getClientNotificationRecipients } from '@/lib/email/notification-recipients';
 import { archiveEditingShareLinkEmail } from '@/lib/content-tools/archive-editing-share-email';
 import { nounForProjectType } from '@/lib/editing/project-noun';
@@ -86,14 +86,6 @@ export async function POST(
     return NextResponse.json({ error: 'admin only' }, { status: 403 });
   }
 
-  const setting = await getNotificationSetting('editing_revisions_complete');
-  if (!setting.enabled) {
-    return NextResponse.json(
-      { error: 'editing_revisions_complete is disabled in notification settings' },
-      { status: 412 },
-    );
-  }
-
   const admin = createAdminClient();
 
   const { data: link } = await admin
@@ -148,6 +140,17 @@ export async function POST(
   }
 
   const clientId = project.clients?.id ?? project.client_id;
+  const setting = await getClientNotificationSetting(
+    'editing_revisions_complete',
+    'email',
+    clientId ?? null,
+  );
+  if (!setting.enabled) {
+    return NextResponse.json(
+      { error: 'editing_revisions_complete is disabled in notification settings' },
+      { status: 412 },
+    );
+  }
   const clientName = project.clients?.name ?? 'your brand';
   const projectName = project.name?.trim() || clientName;
   const brand = getBrandFromAgency(project.clients?.agency ?? null);

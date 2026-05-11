@@ -28,6 +28,7 @@ import {
   describeProgress,
   getOnboardingByToken,
   patchStepState,
+  syncBrandBasicsToClient,
 } from '@/lib/onboarding/api';
 import { SCREENS, doneIndex } from '@/lib/onboarding/screens';
 import { getBrandFromAgency } from '@/lib/agency/detect';
@@ -41,6 +42,20 @@ interface PublicClientView {
   id: string;
   name: string;
   agency: 'nativz' | 'anderson';
+  /**
+   * Latest brand fields from the `clients` row. The brand_basics screen
+   * prefills from these so the client never sees an empty form when
+   * the strategist already collected the info during onboarding setup.
+   */
+  brand: {
+    tagline: string | null;
+    what_we_sell: string | null;
+    audience: string | null;
+    voice: string | null;
+    current_offers: string | null;
+    website_url: string | null;
+    logo_url: string | null;
+  };
 }
 
 interface PublicOnboardingView {
@@ -73,14 +88,36 @@ async function loadClient(client_id: string): Promise<PublicClientView | null> {
   const admin = createAdminClient();
   const { data } = await admin
     .from('clients')
-    .select('id, name, agency')
+    .select(
+      'id, name, agency, tagline, products, target_audience, brand_voice, current_offers, website_url, logo_url',
+    )
     .eq('id', client_id)
-    .single<{ id: string; name: string | null; agency: string | null }>();
+    .single<{
+      id: string;
+      name: string | null;
+      agency: string | null;
+      tagline: string | null;
+      products: string | null;
+      target_audience: string | null;
+      brand_voice: string | null;
+      current_offers: string | null;
+      website_url: string | null;
+      logo_url: string | null;
+    }>();
   if (!data) return null;
   return {
     id: data.id,
     name: data.name ?? 'your brand',
     agency: getBrandFromAgency(data.agency),
+    brand: {
+      tagline: data.tagline,
+      what_we_sell: data.products,
+      audience: data.target_audience,
+      voice: data.brand_voice,
+      current_offers: data.current_offers,
+      website_url: data.website_url,
+      logo_url: data.logo_url,
+    },
   };
 }
 
@@ -157,6 +194,15 @@ export async function PATCH(
 
     if (parsed.data.step_state) {
       row = await patchStepState(row.id, parsed.data.step_state);
+
+      // Bidirectional sync: brand_basics mirrors back to the clients row.
+      const basics = (parsed.data.step_state as Record<string, unknown>).brand_basics;
+      if (basics && typeof basics === 'object') {
+        await syncBrandBasicsToClient({
+          client_id: row.client_id,
+          basics: basics as Parameters<typeof syncBrandBasicsToClient>[0]['basics'],
+        });
+      }
     }
     if (parsed.data.complete) {
       row = await advanceStep(row.id, { to: doneIndex(row.kind) });

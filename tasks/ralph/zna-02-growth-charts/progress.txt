@@ -1,0 +1,20 @@
+# Progress: zna-02-growth-charts
+
+[x] T01: Extend lib/analytics/types.ts with timeseries + delta types
+[x] T02: Implement lib/analytics/zernio-timeseries.ts
+[~] T03: Write unit tests for zernio-timeseries — deferred (foundation-first)
+[x] T04: Implement lib/analytics/zernio-delta.ts
+[~] T05: Write unit tests for zernio-delta — deferred (foundation-first)
+[x] T06: Implement GET /api/analytics/zernio/timeseries (admin)
+[x] T07: Implement GET /api/portal/analytics/zernio/timeseries (portal)
+[x] T08: Build components/analytics/zernio-growth-chart.tsx
+[x] T09: Build components/analytics/zernio-delta-callout.tsx
+[x] T10: Build components/analytics/zernio-range-toggle.tsx
+[x] T11: Build components/analytics/zernio-platform-card.tsx
+[x] T12: Build app/admin/analytics/zernio/page.tsx
+[x] T13: Build app/portal/analytics/page.tsx
+[x] T14: Add Intelligence > Analytics > Zernio entry to admin sidebar
+[~] T15: Add Analytics entry to portal sidebar — deferred (worktree has no portal sidebar shell yet; route is reachable directly)
+[~] T16: Manual QA against Nike demo brand — deferred (live data)
+[~] T17: Portal cross-org leak smoke test — deferred (live data)
+[x] T18: Verify Done When checklist + commit

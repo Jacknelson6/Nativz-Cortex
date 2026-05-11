@@ -20,6 +20,11 @@ import type {
 import type { TopicPlan, TopicIdea, TopicSeries } from '@/lib/topic-plans/types';
 import { formatAudience, normalizeResonance, totalIdeas, totalHighResonance } from '@/lib/topic-plans/types';
 import type { CompetitorReportData, CompetitorReportCompetitor } from '@/lib/reporting/competitor-report-types';
+import type { ScorecardSnapshot, ChecklistScore, ChecklistItemId } from '@/lib/prospects/checklist';
+import type {
+  ProspectCompetitorBenchmarkRow,
+  CompetitorScorecard,
+} from '@/lib/prospects/types';
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -62,8 +67,20 @@ function ideaMetrics(idea: TopicIdea): BrandedDeliverableMetric[] {
   return metrics;
 }
 
-function mapIdeaToTopic(idea: TopicIdea, seriesOffset: number): BrandedDeliverableTopic {
+function mapIdeaToTopic(
+  idea: TopicIdea,
+  seriesOffset: number,
+  planFormat?: { display_name: string; descriptor?: string | null } | null,
+): BrandedDeliverableTopic {
   const num = idea.number ?? seriesOffset;
+  // VFF-10: per-topic format_reference overrides the plan-level pin.
+  // Adapter contract: when set, badge shows the topic's own display_name
+  // and the descriptor renders as the italic caption.
+  const topicFormat = idea.format_reference ?? null;
+  const formatBadge = topicFormat?.display_name ?? planFormat?.display_name;
+  const formatDescriptor =
+    (topicFormat?.descriptor ?? null) ??
+    (topicFormat ? null : planFormat?.descriptor ?? null);
   return {
     number: `${String(num).padStart(2, '0')}.`,
     title: idea.title,
@@ -72,6 +89,8 @@ function mapIdeaToTopic(idea: TopicIdea, seriesOffset: number): BrandedDeliverab
     priorityLabel: idea.priority ? 'Priority' : undefined,
     metrics: ideaMetrics(idea),
     whyItWorks: idea.why_it_works ?? undefined,
+    formatBadge: formatBadge ? formatBadge.toUpperCase() : undefined,
+    formatDescriptor: formatDescriptor ?? undefined,
   };
 }
 
@@ -116,13 +135,24 @@ export function mapTopicPlanToBranded(
   const total = totalIdeas(plan);
   const highRes = totalHighResonance(plan);
 
+  // VFF-10: plan-level format pin. When set, every topic card gets a
+  // badge with the format's display name; the descriptor renders as a
+  // small italic line under the metrics. Individual topics with their
+  // own format_reference override the plan default per card.
+  const planFormat = plan.format_reference
+    ? {
+        display_name: plan.format_reference.display_name,
+        descriptor: plan.format_reference.descriptor ?? null,
+      }
+    : null;
+
   // Cumulative numbering across series
   let cumulative = 0;
   const series = plan.series.map((s, i) => {
     const mapped = mapSeries(s, i);
-    mapped.topics = s.ideas.map((idea, j) => {
+    mapped.topics = s.ideas.map((idea) => {
       cumulative++;
-      return mapIdeaToTopic(idea, cumulative);
+      return mapIdeaToTopic(idea, cumulative, planFormat);
     });
     return mapped;
   });
@@ -324,6 +354,155 @@ export function mapCompetitorReportToBranded(data: CompetitorReportData): Brande
     ],
     series,
     runningHeaderTitle: data.client_name,
+  };
+}
+
+// ── Prospect scorecard adapter ─────────────────────────────────────────────
+//
+// SPY-04 T11: maps a deterministic 10-item ScorecardSnapshot into the
+// existing BrandedDeliverableData shape. We map each checklist item to a
+// "topic" card so the renderer's existing layout (number + title + metric
+// row + whyItWorks) carries the row. The score becomes a single metric
+// tile tinted by tone (green→positive, red→negative, yellow/na→neutral).
+// The note is the whyItWorks body. This avoids any change to the renderer.
+
+const SCORE_LABEL: Record<ChecklistScore, string> = {
+  green: 'On point',
+  yellow: 'Tighten',
+  red: 'Fix',
+  na: 'No data',
+};
+
+function scoreTone(score: ChecklistScore): 'neutral' | 'positive' | 'negative' {
+  if (score === 'green') return 'positive';
+  if (score === 'red') return 'negative';
+  return 'neutral';
+}
+
+export interface ProspectScorecardBrandedInput {
+  brandName: string;
+  handle: string;
+  platform: string;
+  snapshot: ScorecardSnapshot;
+  /** Optional lead-capture CTA destination (e.g. mailto: link). */
+  ctaUrl?: string | null;
+  /** SPY-05: optional Round 2 head-to-head benchmark. When provided, the
+   *  adapter appends a second series with one topic per checklist item
+   *  showing where the prospect lands vs each competitor. */
+  benchmark?: ProspectCompetitorBenchmarkRow | null;
+}
+
+function checklistItemTitle(
+  snapshot: ScorecardSnapshot,
+  id: ChecklistItemId,
+): { title: string; prospectScore: ChecklistScore } | null {
+  const item = snapshot.items.find((i) => i.id === id);
+  if (!item) return null;
+  return { title: item.title, prospectScore: item.score };
+}
+
+function buildBenchmarkSeries(
+  snapshot: ScorecardSnapshot,
+  benchmark: ProspectCompetitorBenchmarkRow,
+): BrandedDeliverableSeries | null {
+  const successCompetitors: CompetitorScorecard[] = benchmark.competitors.filter(
+    (c) => c.scorecard !== null,
+  );
+  if (successCompetitors.length === 0) return null;
+
+  const topics: BrandedDeliverableTopic[] = snapshot.items.map((item, i) => {
+    const compTiles: BrandedDeliverableMetric[] = successCompetitors.map((c) => {
+      const ci = c.scorecard?.items.find((x) => x.id === item.id);
+      return {
+        label: `@${c.handle}`,
+        value: ci ? SCORE_LABEL[ci.score] : 'No data',
+        tone: ci ? scoreTone(ci.score) : 'neutral',
+      };
+    });
+
+    return {
+      number: `${String(i + 1).padStart(2, '0')}.`,
+      title: item.title,
+      metrics: [
+        { label: 'You', value: SCORE_LABEL[item.score], tone: scoreTone(item.score) },
+        ...compTiles,
+      ],
+      whyItWorks: item.note,
+    };
+  });
+
+  const compLine = successCompetitors
+    .map((c) => `@${c.handle}`)
+    .join(', ');
+  const behindCount = (benchmark.deltas?.behind ?? []).length;
+  const aheadCount = (benchmark.deltas?.ahead ?? []).length;
+  const tiedCount = (benchmark.deltas?.tied ?? []).length;
+
+  void checklistItemTitle; // exported helper kept available for future use
+
+  return {
+    label: 'Round 2',
+    title: 'Head-to-head benchmark',
+    subtitle: `vs ${compLine}`,
+    stats: [
+      { value: String(behindCount), label: 'Behind' },
+      { value: String(aheadCount), label: 'Ahead' },
+      { value: String(tiedCount), label: 'Tied' },
+    ],
+    topics,
+  };
+}
+
+export function mapProspectScorecardToBranded(
+  input: ProspectScorecardBrandedInput,
+): BrandedDeliverableData {
+  const { brandName, handle, platform, snapshot, benchmark } = input;
+  const { items, summary } = snapshot;
+
+  const topics: BrandedDeliverableTopic[] = items.map((item, i) => ({
+    number: `${String(i + 1).padStart(2, '0')}.`,
+    title: item.title,
+    metrics: [
+      {
+        label: 'Score',
+        value: SCORE_LABEL[item.score],
+        tone: scoreTone(item.score),
+      },
+    ],
+    whyItWorks: item.note,
+  }));
+
+  const series: BrandedDeliverableSeries[] = [
+    {
+      label: 'Scorecard',
+      title: 'Ten-point profile health',
+      subtitle: `@${handle} on ${platform}`,
+      stats: [
+        { value: String(summary.green), label: 'On point' },
+        { value: String(summary.yellow), label: 'Tighten' },
+        { value: String(summary.red), label: 'Fix' },
+      ],
+      topics,
+    },
+  ];
+
+  if (benchmark && benchmark.status !== 'failed' && benchmark.status !== 'cancelled') {
+    const round2 = buildBenchmarkSeries(snapshot, benchmark);
+    if (round2) series.push(round2);
+  }
+
+  return {
+    eyebrow: brandName,
+    kicker: 'Profile Scorecard',
+    title: `${brandName} profile scorecard`,
+    summary: `A 10-point read of @${handle}'s ${platform} presence — what's working, what's tightening, what to fix first.`,
+    stats: [
+      { value: String(summary.green), label: 'Green' },
+      { value: String(summary.yellow), label: 'Yellow' },
+      { value: String(summary.red), label: 'Red' },
+    ],
+    series,
+    runningHeaderTitle: brandName,
   };
 }
 

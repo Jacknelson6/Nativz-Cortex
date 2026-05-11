@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/auth/permissions';
 import { sendCalendarRevisionsCompleteEmail } from '@/lib/email/resend';
-import { getNotificationSetting } from '@/lib/notifications/get-setting';
+import { getClientNotificationSetting } from '@/lib/notifications/get-client-setting';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 import { syncMondayApprovalForDrop } from '@/lib/monday/calendar-approval';
@@ -175,13 +175,17 @@ async function maybeSendRevisionsCompleteEmail(opts: {
   dropId: string;
   shareLinks: unknown[];
 }): Promise<boolean> {
-  const setting = await getNotificationSetting('calendar_revisions_complete');
-  if (!setting.enabled) return false;
-
   // Pull client info from the first share link (all share links belong to the same drop/client).
   const first = opts.shareLinks[0] as ShareLinkWithClient | undefined;
   const client = first?.content_drops?.clients;
   if (!client) return false;
+
+  const setting = await getClientNotificationSetting(
+    'calendar_revisions_complete',
+    'email',
+    client.id,
+  );
+  if (!setting.enabled) return false;
 
   const brand = getBrandFromAgency(client.agency);
   const appUrl = process.env.NODE_ENV !== 'production'

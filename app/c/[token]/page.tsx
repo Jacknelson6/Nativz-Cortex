@@ -22,6 +22,10 @@ import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import type { DeliverableBalance } from '@/lib/deliverables/get-balances';
 import type { AddonSku } from '@/lib/deliverables/addon-skus';
 import { thumbUrl } from '@/lib/calendar/thumb-url';
+import { ShareTour, ShareTourLaunchButton, CALENDAR_SHARE_BEATS } from '@/components/share/share-tour';
+
+const CALENDAR_TOUR_STORAGE_KEY = 'cortex.share.calendarTourSeen';
+import { mergeCaptionAndHashtags } from '@/lib/scheduler/caption-hashtags';
 
 // Mux Player is a heavy web-component-backed React component. Dynamic-import
 // with ssr:false keeps it out of the initial server bundle and avoids
@@ -105,11 +109,13 @@ interface SharedPost {
   comments: SharedComment[];
 }
 
-// Drives per-creative layout: organic uses the original 9:16 + caption flow;
-// the ad / "other" types swap caption for an editable title and adjust the
-// video aspect ratio. Falls back to organic_content for legacy share links
-// that predate the project_type column.
-type ShareProjectType = 'organic_content' | 'social_ads' | 'ctv_ads' | 'other';
+// Drives per-creative layout: calendar uses the 9:16 + caption flow;
+// editing swaps caption for an editable title (no schedule, no handles).
+// Falls back to calendar for legacy share links that predate the
+// project_type column. Migration 302 collapsed this to a binary; the
+// API's normalizeProjectType() folds pre-migration values onto these
+// two before they reach the page.
+type ShareProjectType = 'editing' | 'calendar';
 
 interface SharedDrop {
   /** Client UUID, used by the soft-block modal as the Stripe checkout subject. */
@@ -260,6 +266,22 @@ function SharedDropView({
   // Show unscheduled posts at the top, then chronological by scheduled_at
   // ascending. Mirrors how editors think about the timeline.
   const sortedPosts = useMemo(() => sortPostsForList(data.posts), [data.posts]);
+
+  // Deep-link support: webhook chat pings include `#post-N` so the link
+  // jumps straight to the post under discussion. Browsers only auto-scroll
+  // on initial nav if the element is already in the DOM, so we re-run after
+  // the post list materializes.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const hash = window.location.hash;
+    if (!hash || !hash.startsWith('#post-')) return;
+    if (sortedPosts.length === 0) return;
+    const el = document.getElementById(hash.slice(1));
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [sortedPosts.length]);
 
   const total = data.posts.length;
   const approvedCount = data.posts.filter((p) => latestReview(p.comments) === 'approved').length;
@@ -427,14 +449,19 @@ function SharedDropView({
     }
   }
 
-  function updatePostCaption(postId: string, caption: string, comment: SharedComment) {
+  function updatePostCaption(
+    postId: string,
+    caption: string,
+    hashtags: string[],
+    comment: SharedComment,
+  ) {
     setData((prev) =>
       prev
         ? {
             ...prev,
             posts: prev.posts.map((p) =>
               p.id === postId
-                ? { ...p, caption, comments: [...p.comments, comment] }
+                ? { ...p, caption, hashtags, comments: [...p.comments, comment] }
                 : p,
             ),
           }
@@ -709,13 +736,21 @@ function SharedDropView({
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-nativz-border bg-surface px-3 py-5 sm:px-6 sm:py-7">
+      <header className="border-b border-nativz-border bg-surface px-4 py-7 sm:px-8 sm:py-9">
         <div className="mx-auto max-w-6xl">
-          <div className="mb-4 flex items-center sm:mb-5">
+          <div className="mb-6 flex items-center sm:mb-7">
             <ShareHeaderLogo />
           </div>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
+          {/*
+            Header row uses flex-wrap only below `sm` so a long project
+            name on phones can break to a new line without colliding
+            with the action cluster, but on tablet/desktop the title
+            truncates instead of pushing the actions to a second row.
+            `min-w-0 flex-1` on the title column is the bit that lets
+            the inner truncate actually shrink under flex.
+          */}
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-4 sm:flex-nowrap">
+            <div className="min-w-0 flex-1">
               {/*
                 Mirrors the portal "Your reviews" project-name column.
                 When the admin renames the share link there the same
@@ -735,12 +770,15 @@ function SharedDropView({
                 }
               />
               <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
-                <p className="text-sm text-text-secondary sm:text-base">
+                <p className="truncate text-sm text-text-secondary sm:text-base">
                   {total} post{total !== 1 ? 's' : ''} to review · scheduled {formatDropDateRange(data.drop.start_date, data.drop.end_date)}
                 </p>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 md:ml-auto md:flex-nowrap">
+            <div className="flex shrink-0 flex-wrap items-center gap-2 md:ml-auto md:flex-nowrap">
+              {total > 0 && (
+                <ShareTourLaunchButton storageKey={CALENDAR_TOUR_STORAGE_KEY} />
+              )}
               {downloadableCount > 0 && (
                 <button
                   type="button"
@@ -765,6 +803,7 @@ function SharedDropView({
               {unapprovedPosts.length > 0 && (
                 <button
                   type="button"
+                  data-tour="cal-approve-all"
                   onClick={() => {
                     if (!authorName.trim()) {
                       setPendingName(authorName);
@@ -830,7 +869,7 @@ function SharedDropView({
               </div>
             </div>
           </div>
-          <div className="mt-5 flex flex-wrap items-center gap-2 text-[13px] sm:text-sm">
+          <div className="mt-7 flex flex-wrap items-center gap-2 text-[13px] sm:text-sm">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-status-success/12 px-2.5 py-1 text-status-success">
               <CheckCircle size={14} /> {approvedCount} approved
             </span>
@@ -860,7 +899,9 @@ function SharedDropView({
                 onCommentAdded={(c) => appendComment(post.id, c)}
                 onCommentRemoved={(commentId) => removeComment(post.id, commentId)}
                 onCommentUpdated={(c) => updateComment(post.id, c)}
-                onCaptionUpdated={(caption, c) => updatePostCaption(post.id, caption, c)}
+                onCaptionUpdated={(caption, hashtags, c) =>
+                  updatePostCaption(post.id, caption, hashtags, c)
+                }
                 onHandlesUpdated={(field, next, c) => updatePostHandles(post.id, field, next, c)}
                 onScheduleUpdated={(at, c) => updatePostScheduledAt(post.id, at, c)}
                 onRevisionUploaded={(rev) => updatePostRevision(post.id, rev)}
@@ -1018,6 +1059,11 @@ function SharedDropView({
         }}
       />
 
+      <ShareTour
+        enabled={!nameModalOpen && data.posts.length > 0}
+        beats={CALENDAR_SHARE_BEATS}
+        storageKey={CALENDAR_TOUR_STORAGE_KEY}
+      />
     </div>
   );
 }
@@ -1064,7 +1110,15 @@ function ProjectNameHeader({
     'font-display text-xl font-semibold tracking-tight text-text-primary sm:text-3xl';
 
   if (!isEditor) {
-    return <h1 className={headingClass}>{projectName ?? fallback}</h1>;
+    // `block truncate` keeps the heading on a single line and ellipsises
+    // when the title is longer than the column. Without this, a long
+    // share-link name would force the row to grow and shove the action
+    // cluster onto a new line.
+    return (
+      <h1 className={`${headingClass} block w-full max-w-full truncate`}>
+        {projectName ?? fallback}
+      </h1>
+    );
   }
 
   async function save() {
@@ -1126,10 +1180,12 @@ function ProjectNameHeader({
         setDraft(projectName ?? '');
         setEditing(true);
       }}
-      className="group inline-flex max-w-full items-center gap-2 rounded-md text-left transition-colors hover:text-text-primary"
+      className="group flex w-full min-w-0 max-w-full items-center gap-2 rounded-md text-left transition-colors hover:text-text-primary"
       title="Rename"
     >
-      <span className={`${headingClass} truncate`}>{projectName ?? fallback}</span>
+      <span className={`${headingClass} block min-w-0 flex-1 truncate`}>
+        {projectName ?? fallback}
+      </span>
       <Pencil
         size={16}
         className="shrink-0 text-text-tertiary opacity-0 transition-opacity group-hover:opacity-100"
@@ -1612,7 +1668,7 @@ function PostDetailModal({
   onCommentAdded: (postId: string, c: SharedComment) => void;
   onCommentRemoved: (postId: string, commentId: string) => void;
   onCommentUpdated: (postId: string, c: SharedComment) => void;
-  onCaptionUpdated: (postId: string, caption: string, c: SharedComment) => void;
+  onCaptionUpdated: (postId: string, caption: string, hashtags: string[], c: SharedComment) => void;
   onHandlesUpdated: (
     postId: string,
     field: 'tagged_people' | 'collaborator_handles',
@@ -1650,7 +1706,9 @@ function PostDetailModal({
         onCommentAdded={(c) => onCommentAdded(post.id, c)}
         onCommentRemoved={(commentId) => onCommentRemoved(post.id, commentId)}
         onCommentUpdated={(c) => onCommentUpdated(post.id, c)}
-        onCaptionUpdated={(caption, c) => onCaptionUpdated(post.id, caption, c)}
+        onCaptionUpdated={(caption, hashtags, c) =>
+          onCaptionUpdated(post.id, caption, hashtags, c)
+        }
         onHandlesUpdated={(field, next, c) => onHandlesUpdated(post.id, field, next, c)}
         onScheduleUpdated={(at, c) => onScheduleUpdated(post.id, at, c)}
         onRevisionUploaded={(rev) => onRevisionUploaded(post.id, rev)}
@@ -2053,7 +2111,7 @@ function PostCard({
   onCommentAdded: (c: SharedComment) => void;
   onCommentRemoved: (commentId: string) => void;
   onCommentUpdated: (c: SharedComment) => void;
-  onCaptionUpdated: (caption: string, c: SharedComment) => void;
+  onCaptionUpdated: (caption: string, hashtags: string[], c: SharedComment) => void;
   onHandlesUpdated: (
     field: 'tagged_people' | 'collaborator_handles',
     next: string[],
@@ -2084,17 +2142,17 @@ function PostCard({
    */
   layoutMode?: 'inline' | 'modal';
 }) {
-  // Project-type-driven layout decisions. Organic content keeps the original
-  // 9:16 + caption + tag/collab + schedule flow. Ad / "other" types swap the
-  // caption block for an editable title and adjust the video aspect ratio.
-  const isOrganic = projectType === 'organic_content';
-  const isCtv = projectType === 'ctv_ads';
-  const isSocialAd = projectType === 'social_ads';
-  const isOther = projectType === 'other';
+  // Project-type-driven layout decisions. Calendar keeps the 9:16 +
+  // caption + tag/collab + schedule flow. Editing swaps the caption
+  // block for an editable title and drops the schedule/handles surfaces
+  // (deliverables don't auto-schedule). Aspect ratio defaults to 9:16
+  // for both since the unified Upload Content modal feeds whatever the
+  // user actually shot.
+  const isCalendar = projectType === 'calendar';
   const isImagePost = post.media_type === 'image';
-  const showCaptionFlow = isOrganic;
-  const showHandles = isOrganic;
-  const showSchedule = isOrganic;
+  const showCaptionFlow = isCalendar;
+  const showHandles = isCalendar;
+  const showSchedule = isCalendar;
   const displayTitle =
     (post.title && post.title.trim()) ||
     (post.filename_fallback && post.filename_fallback.trim()) ||
@@ -2105,8 +2163,16 @@ function PostCard({
   const [pendingAttachments, setPendingAttachments] = useState<CommentAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Hashtags live in their own DB column for the publisher pipeline, but
+  // reviewers think of them as part of the caption (because that's how they
+  // read on TikTok / IG). Present a single merged blob in the UI and let
+  // the API split it back out on save (see lib/scheduler/caption-hashtags).
+  const mergedCaption = mergeCaptionAndHashtags({
+    caption: post.caption,
+    hashtags: post.hashtags,
+  });
   const [editingCaption, setEditingCaption] = useState(false);
-  const [draftCaption, setDraftCaption] = useState(post.caption);
+  const [draftCaption, setDraftCaption] = useState(mergedCaption);
   const [savingCaption, setSavingCaption] = useState(false);
   const [schedulePopoverOpen, setSchedulePopoverOpen] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
@@ -2260,7 +2326,7 @@ function PostCard({
       return;
     }
     const next = draftCaption.trim();
-    if (next === post.caption.trim()) {
+    if (next === mergedCaption.trim()) {
       setEditingCaption(false);
       return;
     }
@@ -2277,7 +2343,11 @@ function PostCard({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Failed to save caption');
-      onCaptionUpdated(json.caption as string, json.comment as SharedComment);
+      onCaptionUpdated(
+        json.caption as string,
+        (json.hashtags as string[] | undefined) ?? [],
+        json.comment as SharedComment,
+      );
       setEditingCaption(false);
       toast.success('Caption updated');
     } catch (err) {
@@ -2700,6 +2770,11 @@ function PostCard({
             <AlertTriangle size={13} /> Changes requested
           </span>
         )}
+        {review === null && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-hover px-3 py-1.5 text-sm font-medium text-text-muted">
+            <MessageSquare size={13} /> Awaiting review
+          </span>
+        )}
       </div>
 
       {!showCaptionFlow && (
@@ -2717,7 +2792,24 @@ function PostCard({
         />
       )}
 
-      {showCaptionFlow && (editingCaption ? (
+      {showCaptionFlow && (isPublished ? (
+        // Once a post is in Zernio's hands the caption is locked. Render a
+        // read-only, dimmed copy of the caption + a "Published" confirmation
+        // card so the reviewer sees what shipped without thinking they can
+        // still tweak it.
+        <div className="space-y-2">
+          <div className="rounded-lg border border-nativz-border/60 bg-surface-hover/40 px-3 py-2.5">
+            <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-text-muted">
+              {mergedCaption.trim().length > 0 ? mergedCaption : (
+                <span className="italic">No caption</span>
+              )}
+            </p>
+          </div>
+          <div className="inline-flex items-center gap-1.5 rounded-md border border-status-success/30 bg-status-success/10 px-2.5 py-1 text-xs font-medium text-status-success">
+            <CheckCircle size={13} /> Published
+          </div>
+        </div>
+      ) : editingCaption ? (
         <div className="space-y-2">
           <textarea
             value={draftCaption}
@@ -2739,7 +2831,7 @@ function PostCard({
             <button
               type="button"
               onClick={() => {
-                setDraftCaption(post.caption);
+                setDraftCaption(mergedCaption);
                 setEditingCaption(false);
               }}
               disabled={savingCaption}
@@ -2761,7 +2853,7 @@ function PostCard({
       ) : (
         <div className="group relative">
           <p className="whitespace-pre-wrap pr-10 text-[15px] leading-relaxed text-text-primary">
-            {post.caption || (
+            {mergedCaption.trim().length > 0 ? mergedCaption : (
               <span className="italic text-text-muted">No caption yet</span>
             )}
           </p>
@@ -2772,9 +2864,10 @@ function PostCard({
                 requireName();
                 return;
               }
-              setDraftCaption(post.caption);
+              setDraftCaption(mergedCaption);
               setEditingCaption(true);
             }}
+            data-tour="cal-caption"
             className="absolute right-0 top-0 inline-flex items-center gap-1 rounded-md border border-nativz-border bg-surface px-2 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-hover"
             title="Edit caption"
           >
@@ -2783,24 +2876,8 @@ function PostCard({
         </div>
       ))}
 
-      {showCaptionFlow && !editingCaption && post.hashtags.length > 0 && (
-        // Hashtags are reference data, not links — the cyan accent wall
-        // visually competed with the Edit / Approve CTAs. Quieter chips on
-        // a low-contrast surface keep them scannable without shouting.
-        <div className="flex flex-wrap gap-1">
-          {post.hashtags.map((h) => (
-            <span
-              key={h}
-              className="rounded-md bg-surface-hover/60 px-2 py-0.5 text-xs text-text-muted"
-            >
-              #{h}
-            </span>
-          ))}
-        </div>
-      )}
-
       {showHandles && (
-        <>
+        <div data-tour="cal-collab" className="space-y-2">
           <HandleEditor
             label="Tagged"
             icon={Tag}
@@ -2827,7 +2904,7 @@ function PostCard({
             }}
             hasName={!!authorName.trim()}
           />
-        </>
+        </div>
       )}
     </div>
   );
@@ -2844,13 +2921,10 @@ function PostCard({
   // Image posts always use 4:5 (Instagram feed max-vertical). Their cropped
   // render is 1080×1350 — putting that inside a 9:16 container creates
   // top/bottom pillarbox bars, which is what the customer was seeing.
-  const videoAspectRatioStyle = isCtv
-    ? '16 / 9'
-    : isSocialAd
-      ? '1 / 1'
-      : isImagePost
-        ? '4 / 5'
-        : '9 / 16';
+  // Post-migration 302 both project types default to 9:16; the legacy
+  // 16:9 (CTV) and 1:1 (social ad) branches were dropped along with the
+  // type dropdown.
+  const videoAspectRatioStyle = isImagePost ? '4 / 5' : '9 / 16';
   const videoPanel = (
     <div
       ref={videoSectionRef}
@@ -2859,15 +2933,7 @@ function PostCard({
       <MediaSurface
         post={post}
         className="block h-full w-full"
-        aspectClass={
-          isCtv
-            ? 'aspect-video'
-            : isSocialAd
-              ? 'aspect-square'
-              : isImagePost
-                ? 'aspect-[4/5]'
-                : 'aspect-[9/16]'
-        }
+        aspectClass={isImagePost ? 'aspect-[4/5]' : 'aspect-[9/16]'}
         aspectRatioStyle={videoAspectRatioStyle}
         onPlayerReady={(handle) => {
           playerHandleRef.current = handle;
@@ -3119,6 +3185,7 @@ function PostCard({
             type="button"
             onClick={() => submit('approved')}
             disabled={submitting || uploading}
+            data-tour="cal-approve"
             className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-status-success px-4 py-2.5 text-sm font-medium text-white shadow-[var(--shadow-card)] transition-all hover:opacity-90 hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 sm:flex-none sm:py-2"
           >
             <CheckCircle size={14} /> Approve
@@ -3132,6 +3199,7 @@ function PostCard({
           onClick={() => setComposerExpanded((v) => !v)}
           disabled={submitting || uploading}
           aria-expanded={composerExpanded}
+          data-tour="cal-request-change"
           className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-50 sm:flex-none sm:py-2 ${
             composerExpanded
               ? 'border-accent/50 bg-accent-surface text-accent-text'
@@ -3180,20 +3248,10 @@ function PostCard({
     </div>
   );
 
-  // Layout switches by project type:
-  //
-  //   organic_content (9:16 short-form): video pinned left, comments scroll
-  //     right. Original behavior — preserved exactly so existing share
-  //     links don't visually shift.
-  //
-  //   social_ads (1:1) / other: same horizontal split but the video column
-  //     hugs a square aspect ratio. Comments still flow to the right.
-  //
-  //   ctv_ads (16:9 landscape): horizontal split breaks down — the video
-  //     would be a thin letterboxed strip with most of the card empty.
-  //     Switch to a stacked layout: video on top filling card width at
-  //     16:9, comments fill the rest of the height below. Frame.io uses
-  //     the same flip for landscape ads.
+  // Layout: video pinned left at 9:16 (or 4:5 for stills), comments
+  // scroll right. Post-migration 302 both project types default to 9:16
+  // so the legacy CTV vertical-stack + 1:1 square-ad layouts are gone;
+  // feedstock is whatever the user actually uploaded.
   // Image posts get a smaller fixed height than video. The 78vh card was
   // scoped to the video review case (frame.io-style chrome where the
   // comments column scrolls inside a bounded right panel) — for a still
@@ -3208,34 +3266,29 @@ function PostCard({
     : layoutMode === 'modal'
       ? 'md:h-[88vh]'
       : 'md:h-[78vh]';
-  const stackVertical = isCtv;
-  const layoutDirection = stackVertical ? '' : 'md:flex-row';
   const articleChrome =
     layoutMode === 'modal'
-      ? `flex flex-col overflow-hidden bg-surface ${layoutDirection} ${heightPx}`
-      : `flex flex-col overflow-hidden rounded-xl border border-nativz-border bg-surface ${layoutDirection} ${heightPx}`;
-  // Aspect ratio for the video column. Ad-type viewers got a custom shape;
-  // organic and "other" stay 9:16 to match the existing media library.
-  const videoColAspect = isCtv
-    ? 'aspect-video'
-    : isSocialAd
-      ? 'aspect-square'
-      : isImagePost
-        ? 'aspect-[4/5]'
-        : 'aspect-[9/16]';
-  // For CTV (vertical stack) the video occupies full card width with its
-  // natural 16:9 height; for the side-by-side layouts the video column is
-  // height-constrained so it hugs the card height.
-  // Image posts are 4:5 — letting card height drive width makes the column
-  // ~62vh wide and squashes the comments column. Width-cap to ~44vh so it
-  // matches the 9:16 video footprint and the right column keeps room.
-  const videoColSizing = stackVertical
-    ? 'w-full bg-black'
-    : isImagePost
-      ? 'w-full bg-black md:w-[44vh] md:max-w-[480px] md:flex-shrink-0 md:self-center'
-      : 'w-full bg-black md:w-auto md:flex-shrink-0 md:h-full';
+      ? `flex flex-col overflow-hidden bg-surface md:flex-row ${heightPx}`
+      : `flex flex-col overflow-hidden rounded-xl border border-nativz-border bg-surface md:flex-row ${heightPx}`;
+  const videoColAspect = isImagePost ? 'aspect-[4/5]' : 'aspect-[9/16]';
+  // Width-pin the media column instead of relying on `md:w-auto` +
+  // aspect-ratio. The auto path was resolving to the <mux-player>
+  // intrinsic content size in some Chromium builds and collapsing the
+  // comments rail. Image posts are 4:5 (letting card height drive width
+  // makes the column ~62vh wide and squashes the comments column), so
+  // cap to ~44vh so the right column keeps room.
+  // No background here — the inner MediaSurface paints its own black behind
+  // the player, and an extra `bg-black` on this wrapper was showing as a
+  // letterbox frame around the player whenever the column geometry didn't
+  // perfectly match the player's intrinsic aspect.
+  const videoColSizing = isImagePost
+    ? 'w-full md:w-[44vh] md:max-w-[480px] md:flex-shrink-0 md:self-center'
+    : 'w-full md:h-full md:w-[44vh] md:max-w-[440px] md:flex-shrink-0';
   return (
-    <article className={articleChrome}>
+    <article
+      id={layoutMode === 'inline' ? `post-${index}` : undefined}
+      className={articleChrome}
+    >
       {revisionInput}
       <div className={`${videoColAspect} ${videoColSizing}`}>
         {videoPanel}
@@ -3641,6 +3694,7 @@ function SchedulePill({
         type="button"
         onClick={() => onOpenChange(!open)}
         disabled={isPublished}
+        data-tour={isPublished ? undefined : 'cal-schedule'}
         className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-all ${
           isPublished
             ? 'bg-surface-hover text-text-muted'

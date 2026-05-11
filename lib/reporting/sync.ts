@@ -1,7 +1,31 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getPostingService, ZernioPostingService } from '@/lib/posting';
+import { zernioErrSummary } from '@/lib/posting/zernio';
+import { persistPostThumbnail } from '@/lib/analytics/post-thumbnail-persistence';
 import type { DateRange } from '@/lib/types/reporting';
 import type { SocialPlatform } from '@/lib/posting/types';
+import type { AnalyticsPlatform } from '@/lib/analytics/types';
+
+// ZNA-01: source-attribution constants used on every Zernio-sourced upsert.
+// Bump SOURCE_VERSION when the adapter shape changes so downstream consumers
+// can detect "old vs new" rows without a migration.
+const ZERNIO_SOURCE = 'zernio' as const;
+const ZERNIO_SOURCE_VERSION = 'zernio-v2';
+
+// platform_snapshot_errors.platform CHECK list (migration 278). Writing a
+// row for any platform outside this set raises a constraint violation, so
+// we silently skip those (linkedin, googlebusiness) — the operator-facing
+// `result.errors` array still captures the failure.
+const SNAPSHOT_ERROR_PLATFORMS: ReadonlySet<SocialPlatform> = new Set([
+  'facebook',
+  'instagram',
+  'tiktok',
+  'youtube',
+]);
+
+function isSnapshotErrorPlatform(p: SocialPlatform): p is AnalyticsPlatform {
+  return SNAPSHOT_ERROR_PLATFORMS.has(p);
+}
 
 interface SyncResult {
   synced: boolean;
@@ -68,6 +92,9 @@ export async function syncSocialProfile(
         accountId: lateAccountId,
         startDate: dateRange.start,
         endDate: dateRange.end,
+        // Critical per Zernio audit: without `platform`, the daily-metrics
+        // endpoint may return cross-platform aggregate rows. Pin it.
+        platform,
       }),
       platform === 'instagram'
         ? zernio.getInstagramInsights(lateAccountId, dateRange.start, dateRange.end)
@@ -168,6 +195,79 @@ export async function syncSocialProfile(
         reach: liOrgAnalytics.impressions,
       };
     }
+    // Per-day gross follows / unfollows for IG and FB. Zernio's account-
+    // insights endpoints accept arbitrary `since`/`until` windows, so calling
+    // them with `since=date, until=date` returns one day's gross numbers
+    // (matching what Meta Business Suite shows when you scope its date
+    // picker to a single day). Fanning out lets us land a per-day value in
+    // every snapshot row, which the summary route then sums to produce a
+    // window total that lines up with MBS for any user-selected range.
+    //
+    // Cost: 1 request per day per platform (or 2 for IG, which splits
+    // totals + follows breakdown). Capped at 5-wide concurrency to stay
+    // under Zernio's 600/window rate limit. Other platforms keep using the
+    // single window-totals call — TikTok has no per-day account-insights
+    // endpoint, and YT/LI gross numbers come from a different route.
+    const perDayAccountGains = new Map<
+      string,
+      { newFollows: number; unfollows: number }
+    >();
+    if (platform === 'instagram' || platform === 'facebook') {
+      const winDays: string[] = [];
+      const sd = new Date(`${dateRange.start}T00:00:00Z`);
+      const ed = new Date(`${dateRange.end}T00:00:00Z`);
+      for (
+        let d = new Date(sd);
+        d.getTime() <= ed.getTime();
+        d.setUTCDate(d.getUTCDate() + 1)
+      ) {
+        winDays.push(d.toISOString().slice(0, 10));
+      }
+
+      const CONCURRENCY = 5;
+      for (let i = 0; i < winDays.length; i += CONCURRENCY) {
+        const batch = winDays.slice(i, i + CONCURRENCY);
+        const results = await Promise.all(
+          batch.map(async (date) => {
+            try {
+              if (platform === 'instagram') {
+                const r = await zernio.getInstagramAccountMetrics(
+                  lateAccountId,
+                  date,
+                  date,
+                );
+                return {
+                  date,
+                  newFollows: r?.newFollows ?? 0,
+                  unfollows: r?.unfollows ?? 0,
+                };
+              }
+              const r = await zernio.getFacebookPageInsights(
+                lateAccountId,
+                date,
+                date,
+              );
+              return {
+                date,
+                newFollows: r?.followersGained ?? 0,
+                unfollows: r?.followersLost ?? 0,
+              };
+            } catch {
+              // Per-day call failed — leave the day out of the map; the
+              // read side will treat it as 0 contribution for that day.
+              return { date, newFollows: 0, unfollows: 0 };
+            }
+          }),
+        );
+        for (const r of results) {
+          perDayAccountGains.set(r.date, {
+            newFollows: r.newFollows,
+            unfollows: r.unfollows,
+          });
+        }
+      }
+    }
+
     // TikTok account-insights is a current-state snapshot, not a window
     // aggregate — don't write it into account_views_count etc. (which are
     // window totals). It's used downstream as an authoritative follower
@@ -349,22 +449,41 @@ export async function syncSocialProfile(
         .map((d) => d.date)
         .sort((a, b) => b.localeCompare(a))[0];
 
+      const capturedAt = new Date().toISOString();
       const rows = dailyMetrics.map((day) => {
         const isWindowEnd = day.date === endOfWindowDate;
         const totals = isWindowEnd ? accountTotals : null;
+        // IG/FB use the per-day gains map; other platforms use the
+        // window-total stamped on the end-of-window row only.
+        const dayGains = perDayAccountGains.get(day.date);
+        const dailyFollows = dayGains?.newFollows ?? null;
+        const dailyUnfollows = dayGains?.unfollows ?? null;
         return {
           social_profile_id: profile.id,
           client_id: clientId,
           platform,
           snapshot_date: day.date,
+          // ZNA-01: stamp source/version/captured_at on every Zernio row so
+          // downstream consumers can tell "this came from Zernio v2" vs the
+          // scrape fallback. captured_at is per-batch (not per-row) because
+          // the dailyMetrics window arrives in a single API call.
+          source: ZERNIO_SOURCE,
+          source_version: ZERNIO_SOURCE_VERSION,
+          captured_at: capturedAt,
           followers_count: followerForDay(day.date),
           followers_change: followerForDay(day.date) - followerForPrevDay(day.date),
           views_count: day.views,
           engagement_count: day.engagement,
           engagement_rate: day.engagementRate,
           posts_count: day.postsCount,
-          reach_count: igReachByDay.get(day.date) ?? day.reach,
-          impressions_count: day.impressions,
+          // TikTok doesn't expose impressions/reach via Zernio's daily-metrics
+          // endpoint — Zernio fills 0 for those keys. Writing 0 makes the
+          // chart read "TikTok had 0 reach today" instead of "TikTok doesn't
+          // report reach"; null forces the MetricCard / chart to render an
+          // honest empty state. Same treatment as account_reach_count above.
+          reach_count:
+            platform === 'tiktok' ? null : igReachByDay.get(day.date) ?? day.reach,
+          impressions_count: platform === 'tiktok' ? null : day.impressions,
           link_clicks_count: day.clicks,
           profile_visits_count: profileVisitsByDay.get(day.date) ?? 0,
           // Only YouTube exposes per-day watch time right now. Summed in seconds
@@ -372,19 +491,22 @@ export async function syncSocialProfile(
           // IG / FB because Zernio doesn't expose watch-time for those platforms.
           watch_time_seconds: Math.round((ytWatchMinutesByDay.get(day.date) ?? 0) * 60),
           follower_growth_percent: followerStats.growthPercent,
-          // Account-wide window totals — written to the end-of-window row
-          // only. Each platform exposes a different subset; missing fields
-          // stay null so the UI's "MetricCard returns undefined when both
-          // totals are 0" path renders an honest empty state instead of a
-          // misleading zero.
-          new_follows_count: totals?.newFollows ?? null,
-          unfollows_count: totals?.unfollows ?? null,
+          // Account-wide totals. Gross follows / unfollows for IG/FB are
+          // per-day (from `perDayAccountGains`) and land on every row;
+          // YT/LI keep the legacy "stamp window total on end-of-window
+          // row only" behavior. All other account_* fields stay window
+          // aggregates on the end-of-window row. Read side sums
+          // new_follows_count / unfollows_count across the window, which
+          // works for both modes (sum of N daily values, or sum of one
+          // window-total + N-1 nulls).
+          new_follows_count: dailyFollows ?? totals?.newFollows ?? null,
+          unfollows_count: dailyUnfollows ?? totals?.unfollows ?? null,
           account_views_count: totals?.views ?? null,
           account_engagement_count: totals?.totalInteractions ?? null,
           account_reach_count: totals?.reach ?? null,
           account_profile_visits_count: totals?.profileLinksTaps ?? null,
           accounts_engaged_count: totals?.accountsEngaged ?? null,
-          window_days: totals ? windowDays : null,
+          window_days: dayGains ? 1 : totals ? windowDays : null,
         };
       });
 
@@ -397,6 +519,107 @@ export async function syncSocialProfile(
           `Failed to upsert snapshots for ${platform}: ${snapshotError.message}`,
         );
       }
+
+      // Fill in zero-activity placeholder rows for every day in the window
+      // that Zernio didn't return a dailyMetric for. Without these, sparse
+      // brands (Zernio only returns days with posting activity for some
+      // accounts) get a snapshot table with big gaps, which propagates to
+      // gappy sparklines and undercounts the windowed gross-follows total.
+      // Placeholder rows carry: the correct follower count for the day
+      // (via followerForDay's carry-forward), zeros on per-post activity
+      // columns, and — for IG/FB — the per-day gross follows/unfollows
+      // pulled from `perDayAccountGains`. ignoreDuplicates ensures we never
+      // overwrite a previously-written real row.
+      const measuredDates = new Set(dailyMetrics.map((d) => d.date));
+      const fillRows: typeof rows = [];
+      {
+        const cursor = new Date(`${dateRange.start}T00:00:00Z`);
+        const end = new Date(`${dateRange.end}T00:00:00Z`);
+        while (cursor.getTime() <= end.getTime()) {
+          const date = cursor.toISOString().split('T')[0];
+          if (!measuredDates.has(date)) {
+            const dayGains = perDayAccountGains.get(date);
+            fillRows.push({
+              social_profile_id: profile.id,
+              client_id: clientId,
+              platform,
+              snapshot_date: date,
+              source: ZERNIO_SOURCE,
+              source_version: ZERNIO_SOURCE_VERSION,
+              captured_at: capturedAt,
+              followers_count: followerForDay(date),
+              followers_change:
+                followerForDay(date) - followerForPrevDay(date),
+              views_count: 0,
+              engagement_count: 0,
+              engagement_rate: 0,
+              posts_count: 0,
+              reach_count: platform === 'tiktok' ? null : 0,
+              impressions_count: platform === 'tiktok' ? null : 0,
+              link_clicks_count: 0,
+              profile_visits_count: 0,
+              watch_time_seconds: 0,
+              follower_growth_percent: followerStats.growthPercent,
+              new_follows_count: dayGains?.newFollows ?? null,
+              unfollows_count: dayGains?.unfollows ?? null,
+              account_views_count: null,
+              account_engagement_count: null,
+              account_reach_count: null,
+              account_profile_visits_count: null,
+              accounts_engaged_count: null,
+              window_days: dayGains ? 1 : null,
+            });
+          }
+          cursor.setUTCDate(cursor.getUTCDate() + 1);
+        }
+      }
+      if (fillRows.length > 0) {
+        const { error: fillError } = await adminClient
+          .from('platform_snapshots')
+          .upsert(fillRows, {
+            onConflict: 'social_profile_id,snapshot_date',
+            ignoreDuplicates: true,
+          });
+        if (fillError) {
+          // Non-fatal — the row-set from dailyMetrics already landed. Log
+          // and keep moving so a fill-row failure doesn't bring down the
+          // whole sync.
+          console.warn(
+            `[sync-reporting] fill rows for ${platform} (${profile.id}) failed:`,
+            fillError.message,
+          );
+        }
+      }
+
+      // Patch per-day gross follows / unfollows onto every existing row in
+      // the window. The fill-rows upsert above uses ignoreDuplicates so it
+      // doesn't clobber a row that already carries real post activity from a
+      // prior sync — but that also means previously-filled rows keep their
+      // stale (null) gross numbers. A targeted UPDATE touches only the three
+      // gross columns, leaving views_count / posts_count / etc. intact, so
+      // the windowed sum the read side computes lines up with Meta Business
+      // Suite for every day in the picker.
+      if (perDayAccountGains.size > 0) {
+        await Promise.all(
+          [...perDayAccountGains.entries()].map(async ([date, gains]) => {
+            const { error: patchError } = await adminClient
+              .from('platform_snapshots')
+              .update({
+                new_follows_count: gains.newFollows,
+                unfollows_count: gains.unfollows,
+                window_days: 1,
+              })
+              .eq('social_profile_id', profile.id)
+              .eq('snapshot_date', date);
+            if (patchError) {
+              console.warn(
+                `[sync-reporting] gross-follows patch for ${platform} ${date} failed:`,
+                patchError.message,
+              );
+            }
+          }),
+        );
+      }
     }
 
     if (dailyMetrics.length === 0 && followerStats.followers > 0) {
@@ -407,6 +630,9 @@ export async function syncSocialProfile(
           client_id: clientId,
           platform,
           snapshot_date: today,
+          source: ZERNIO_SOURCE,
+          source_version: ZERNIO_SOURCE_VERSION,
+          captured_at: new Date().toISOString(),
           followers_count: followerStats.followers,
           followers_change: followerStats.followerChange,
           follower_growth_percent: followerStats.growthPercent,
@@ -450,12 +676,21 @@ export async function syncSocialProfile(
           comments_count: p.comments ?? 0,
           shares_count: p.shares ?? 0,
           saves_count: p.saves ?? 0,
-          reach_count: p.reach ?? 0,
-          impressions_count: p.impressions ?? 0,
+          // TikTok exposes neither reach nor impressions on the per-post
+          // endpoint; persisting 0 mis-reads as "zero distribution" in the
+          // post-detail UI. Force null so downstream rendering shows "not
+          // tracked" rather than a misleading zero.
+          reach_count: platform === 'tiktok' ? null : p.reach ?? 0,
+          impressions_count: platform === 'tiktok' ? null : p.impressions ?? 0,
           watch_time_seconds: yt?.watchSec ?? 0,
           avg_view_duration_seconds: yt?.avgViewDur ?? 0,
           subscribers_gained: yt?.subsG ?? 0,
           subscribers_lost: yt?.subsL ?? 0,
+          // ZNA-01: source attribution for per-post rows. post_metrics
+          // gets the same source/version stamp as platform_snapshots so
+          // mixed-source environments can be filtered cleanly.
+          source: ZERNIO_SOURCE,
+          source_version: ZERNIO_SOURCE_VERSION,
           fetched_at: new Date().toISOString(),
         };
       });
@@ -470,13 +705,103 @@ export async function syncSocialProfile(
         );
       } else {
         result.postsCount += posts.length;
+
+        // ZNA-04: persist Zernio CDN thumbnails to Supabase Storage so the
+        // analytics post grid renders 100% of tiles even after the CDN URL
+        // expires. Skip rows whose persisted URL is fresh; retry failures
+        // older than 24h. Concurrency cap 5. Wrapped in catch so a flaky
+        // upload never blocks the cron.
+        //
+        // TikTok watch_time gap: Zernio does not surface per-post watch_time
+        // for TikTok yet; that's why TikTok rows above record 0 and ZNA-04
+        // surfaces null in the grid. Not fixed here.
+        try {
+          const { data: persistTargets } = await adminClient
+            .from('post_metrics')
+            .select(
+              'id, thumbnail_url, thumbnail_storage_url, thumbnail_persist_failed_at, thumbnail_source_hash',
+            )
+            .eq('client_id', clientId)
+            .eq('platform', platform)
+            .in(
+              'external_post_id',
+              posts.map((p) => p.postId),
+            );
+
+          const now = Date.now();
+          const HOURS_24_MS = 24 * 60 * 60 * 1000;
+          const queue = (persistTargets ?? []).filter((row) => {
+            if (!row.thumbnail_url) return false;
+            if (!row.thumbnail_storage_url) return true;
+            if (row.thumbnail_persist_failed_at) {
+              const failedAt = new Date(row.thumbnail_persist_failed_at).getTime();
+              return now - failedAt >= HOURS_24_MS;
+            }
+            return false;
+          });
+
+          const CONCURRENCY = 5;
+          for (let i = 0; i < queue.length; i += CONCURRENCY) {
+            const slice = queue.slice(i, i + CONCURRENCY);
+            await Promise.all(
+              slice.map((row) =>
+                persistPostThumbnail({
+                  supabase: adminClient,
+                  postMetricId: row.id,
+                  clientId,
+                  zernioThumbnailUrl: row.thumbnail_url,
+                  existingHash: row.thumbnail_source_hash,
+                }).catch((err) => {
+                  console.error('[zna-04] thumbnail persist threw', {
+                    post_id: row.id,
+                    err: err instanceof Error ? err.message : String(err),
+                  });
+                }),
+              ),
+            );
+          }
+        } catch (err) {
+          console.error('[zna-04] thumbnail persist batch threw', {
+            client_id: clientId,
+            platform,
+            err: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
     }
 
     result.platforms.push(platform);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    result.errors.push(`Failed to sync insights for ${platform}: ${message}`);
+    // Surface the structured Zernio envelope (status / type / code) when
+    // available — `zernioErrSummary` falls back to a plain message for
+    // non-Zernio errors. The structured form lets ops grep error_code in
+    // platform_snapshot_errors instead of regex-matching the message.
+    const { msg, status, type, code } = zernioErrSummary(err);
+    const composed = code
+      ? `${msg} (${code}${type ? `/${type}` : ''}${status ? `, http ${status}` : ''})`
+      : msg;
+    result.errors.push(`Failed to sync insights for ${platform}: ${composed}`);
+
+    // Persist a row in platform_snapshot_errors so the failure is
+    // observable beyond a single sync run's `result.errors` array. The
+    // table's CHECK constraint only allows IG/FB/TT/YT — guard so a
+    // LinkedIn / Google Business failure doesn't raise its own error.
+    if (isSnapshotErrorPlatform(platform)) {
+      try {
+        await adminClient.from('platform_snapshot_errors').insert({
+          client_id: clientId,
+          social_profile_id: profile.id,
+          platform,
+          attempted_source: ZERNIO_SOURCE,
+          error_code: code ?? null,
+          error_message: composed.slice(0, 2000),
+        });
+      } catch (writeErr) {
+        // Don't tear the cron down because the error log itself failed.
+        // The operator-facing `result.errors` already captured the original.
+        console.error('[reporting/sync] platform_snapshot_errors write failed:', writeErr);
+      }
+    }
   }
 }
 

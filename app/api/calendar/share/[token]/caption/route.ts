@@ -1,16 +1,10 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createNotification } from '@/lib/notifications/create';
 import {
-  buildChatCardMessage,
-  escapeCardHtml,
-  postToGoogleChatSafe,
-} from '@/lib/chat/post-to-google-chat';
-import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
-import { formatPostTimeForChat } from '@/lib/chat/format-post-time';
-import { getBrandFromAgency } from '@/lib/agency/detect';
-import { getCortexAppUrl } from '@/lib/agency/cortex-url';
+  mergeCaptionAndHashtags,
+  splitMergedCaption,
+} from '@/lib/scheduler/caption-hashtags';
 
 const BodySchema = z.object({
   postId: z.string().uuid(),
@@ -53,23 +47,30 @@ export async function POST(
     return NextResponse.json({ error: 'post is not part of this share link' }, { status: 400 });
   }
 
-  const newCaption = parsed.data.caption.trim();
+  const newMerged = parsed.data.caption.trim();
+  const { captionText: newCaption, hashtags: newHashtags } = splitMergedCaption(newMerged);
 
   const { data: post } = await admin
     .from('scheduled_posts')
-    .select('id, caption, scheduled_at')
+    .select('id, caption, hashtags, scheduled_at')
     .eq('id', parsed.data.postId)
-    .single<{ id: string; caption: string | null; scheduled_at: string | null }>();
+    .single<{ id: string; caption: string | null; hashtags: string[] | null; scheduled_at: string | null }>();
   if (!post) return NextResponse.json({ error: 'post not found' }, { status: 404 });
 
-  const previousCaption = post.caption ?? '';
-  if (previousCaption.trim() === newCaption) {
+  // Build the previous merged form so the no-op check matches what the user
+  // saw before they hit Save (otherwise re-submitting an unchanged blob with
+  // hashtags would always look "changed" because we compare body-only).
+  const previousMerged = mergeCaptionAndHashtags({
+    caption: post.caption,
+    hashtags: post.hashtags,
+  });
+  if (previousMerged.trim() === newMerged) {
     return NextResponse.json({ error: 'caption unchanged' }, { status: 400 });
   }
 
   const { error: updErr } = await admin
     .from('scheduled_posts')
-    .update({ caption: newCaption })
+    .update({ caption: newCaption, hashtags: newHashtags })
     .eq('id', parsed.data.postId);
   if (updErr) {
     return NextResponse.json({ error: updErr.message }, { status: 500 });
@@ -82,8 +83,10 @@ export async function POST(
       author_name: parsed.data.authorName.trim(),
       content: 'Updated the caption',
       status: 'caption_edit',
-      caption_before: previousCaption,
-      caption_after: newCaption,
+      // Store the merged form so the timeline diff matches what the
+      // reviewer actually edited in the textarea.
+      caption_before: previousMerged,
+      caption_after: newMerged,
       attachments: [],
     })
     .select('id, review_link_id, author_name, content, status, created_at, attachments, caption_before, caption_after, metadata')
@@ -92,94 +95,9 @@ export async function POST(
     return NextResponse.json({ error: insErr?.message ?? 'failed to record edit' }, { status: 500 });
   }
 
-  notifyOfCaptionEdit(admin, link.drop_id, token, {
-    authorName: parsed.data.authorName.trim(),
-    previousCaption,
-    newCaption,
-    scheduledAt: post.scheduled_at,
-  }).catch((err) => console.error('Caption-edit notification failed:', err));
-
   return NextResponse.json({
     caption: newCaption,
+    hashtags: newHashtags,
     comment: commentRow,
   });
-}
-
-async function notifyOfCaptionEdit(
-  admin: ReturnType<typeof createAdminClient>,
-  dropId: string,
-  token: string,
-  edit: {
-    authorName: string;
-    previousCaption: string;
-    newCaption: string;
-    scheduledAt: string | null;
-  },
-) {
-  const { data: drop } = await admin
-    .from('content_drops')
-    .select('id, created_by, client_id, clients(name, agency, chat_webhook_url)')
-    .eq('id', dropId)
-    .single<{
-      id: string;
-      created_by: string;
-      client_id: string | null;
-      clients: { name: string; agency: string | null; chat_webhook_url: string | null } | null;
-    }>();
-  if (!drop) return;
-
-  const clientName = drop.clients?.name ?? 'Client';
-  const chatWebhookUrl = await resolveTeamChatWebhook(admin, {
-    primaryUrl: drop.clients?.chat_webhook_url ?? null,
-    agency: drop.clients?.agency ?? null,
-  });
-  const shareUrl = `${getCortexAppUrl(getBrandFromAgency(drop.clients?.agency ?? null))}/s/${token}`;
-
-  const truncate = (s: string, max = 280) =>
-    s.length > max ? `${s.slice(0, max)}…` : s;
-  const before = truncate(edit.previousCaption || '(empty)');
-  const after = truncate(edit.newCaption || '(empty)');
-
-  if (chatWebhookUrl) {
-    const postTimeLine = formatPostTimeForChat(edit.scheduledAt);
-    const postLine = postTimeLine ? `\n_Post scheduled for ${postTimeLine}_` : '';
-    const fallback =
-      `*${edit.authorName}* edited a caption for *${clientName}*.${postLine}\n` +
-      `_Before:_ ${before}\n` +
-      `_After:_ ${after}\n` +
-      `Share link: ${shareUrl}`;
-    const subtitle = postTimeLine
-      ? `${clientName} · Post scheduled for ${postTimeLine}`
-      : clientName;
-    postToGoogleChatSafe(
-      chatWebhookUrl,
-      buildChatCardMessage({
-        cardId: `caption-edit-${dropId}`,
-        title: `✏️ ${edit.authorName} edited a caption`,
-        subtitle,
-        paragraphs: [
-          { html: `<b>Before:</b> ${escapeCardHtml(before)}` },
-          { html: `<b>After:</b> ${escapeCardHtml(after)}` },
-        ],
-        buttons: [{ text: 'Open calendar', url: shareUrl }],
-        fallback,
-      }),
-      `caption-edit ${dropId}`,
-    );
-  }
-
-  // Keep the in-app bell notification so admins see it inside Cortex too.
-  const title = `${edit.authorName} edited a caption in ${clientName}`;
-  const preview = `"${edit.newCaption.slice(0, 140)}${edit.newCaption.length > 140 ? '…' : ''}"`;
-  const linkPath = `/admin/calendar/${drop.id}`;
-  const { data: admins } = await admin.from('users').select('id').eq('role', 'admin');
-  for (const a of admins ?? []) {
-    createNotification({
-      recipientUserId: a.id,
-      type: 'general',
-      title,
-      body: preview,
-      linkPath,
-    }).catch(() => {});
-  }
 }

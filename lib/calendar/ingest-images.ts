@@ -7,28 +7,33 @@ const CONCURRENCY = 4;
 interface AssetRow {
   id: string;
   drop_video_id: string;
-  drive_file_id: string;
-  drive_file_name: string;
+  drive_file_id: string | null;
+  drive_file_name: string | null;
   mime_type: string | null;
+  asset_url: string | null;
 }
 
-function deriveExt(mimeType: string | null, filename: string): string {
+function deriveExt(mimeType: string | null, filename: string | null): string {
   const m = (mimeType ?? '').toLowerCase();
   if (m.includes('jpeg') || m.includes('jpg')) return 'jpg';
   if (m.includes('png')) return 'png';
   if (m.includes('webp')) return 'webp';
   if (m.includes('gif')) return 'gif';
   if (m.includes('heic') || m.includes('heif')) return 'jpg';
-  const dot = filename.lastIndexOf('.');
-  if (dot >= 0) return filename.slice(dot + 1).toLowerCase();
+  const safe = filename ?? '';
+  const dot = safe.lastIndexOf('.');
+  if (dot >= 0) return safe.slice(dot + 1).toLowerCase();
   return 'jpg';
 }
 
-// Ingest pending image assets for a drop. Each asset is downloaded from
-// Drive and uploaded to Supabase Storage (no compression, no thumbnail
-// extraction — the image is its own thumbnail). On success the row is
-// marked 'ready'. The parent post (content_drop_videos) is flipped to
-// 'caption_pending' once all of its assets land.
+// Ingest pending image assets for a drop.
+//   - Drive drops: download from Drive, upload to scheduler-media.
+//   - Direct uploads: row already has `asset_url` (stamped by /finalize),
+//     so we just flip it to `ready` and move on — bytes are already in
+//     storage. No compression, no thumbnail extraction (image is its own
+//     thumbnail).
+// In both paths the parent post (content_drop_videos) is flipped to
+// `caption_pending` once all of its assets land.
 export async function ingestDropImages(
   admin: SupabaseClient,
   opts: { dropId: string; userId: string },
@@ -36,7 +41,7 @@ export async function ingestDropImages(
   const { data: rows, error } = await admin
     .from('content_drop_post_assets')
     .select(
-      'id, drop_video_id, drive_file_id, drive_file_name, mime_type, content_drop_videos!inner(drop_id)',
+      'id, drop_video_id, drive_file_id, drive_file_name, mime_type, asset_url, content_drop_videos!inner(drop_id)',
     )
     .eq('content_drop_videos.drop_id', opts.dropId)
     .eq('status', 'pending');
@@ -48,6 +53,7 @@ export async function ingestDropImages(
     drive_file_id: r.drive_file_id,
     drive_file_name: r.drive_file_name,
     mime_type: r.mime_type,
+    asset_url: r.asset_url,
   }));
 
   let processed = 0;
@@ -60,27 +66,44 @@ export async function ingestDropImages(
         .from('content_drop_post_assets')
         .update({ status: 'uploading' })
         .eq('id', row.id);
-      const dl = await downloadDriveMedia(opts.userId, row.drive_file_id);
-      const mimeType = row.mime_type ?? dl.mimeType ?? 'image/jpeg';
-      const ext = deriveExt(mimeType, row.drive_file_name);
-      const url = await uploadImageAsset(admin, {
-        dropId: opts.dropId,
-        postId: row.drop_video_id,
-        assetId: row.id,
-        buffer: dl.buffer,
-        mimeType,
-        ext,
-      });
-      await admin
-        .from('content_drop_post_assets')
-        .update({
-          status: 'ready',
-          asset_url: url,
-          thumbnail_url: url,
-          mime_type: mimeType,
-          size_bytes: dl.size,
-        })
-        .eq('id', row.id);
+
+      if (row.drive_file_id) {
+        // Drive path: download then upload.
+        const dl = await downloadDriveMedia(opts.userId, row.drive_file_id);
+        const mimeType = row.mime_type ?? dl.mimeType ?? 'image/jpeg';
+        const ext = deriveExt(mimeType, row.drive_file_name);
+        const url = await uploadImageAsset(admin, {
+          dropId: opts.dropId,
+          postId: row.drop_video_id,
+          assetId: row.id,
+          buffer: dl.buffer,
+          mimeType,
+          ext,
+        });
+        await admin
+          .from('content_drop_post_assets')
+          .update({
+            status: 'ready',
+            asset_url: url,
+            thumbnail_url: url,
+            mime_type: mimeType,
+            size_bytes: dl.size,
+          })
+          .eq('id', row.id);
+      } else {
+        // Direct-upload path: bytes are already in storage (URL was
+        // stamped by /finalize). Just promote to ready.
+        if (!row.asset_url) {
+          throw new Error('Direct upload asset missing asset_url — finalize likely never ran');
+        }
+        await admin
+          .from('content_drop_post_assets')
+          .update({
+            status: 'ready',
+            thumbnail_url: row.asset_url,
+          })
+          .eq('id', row.id);
+      }
       processed += 1;
       touchedPosts.add(row.drop_video_id);
     } catch (err) {

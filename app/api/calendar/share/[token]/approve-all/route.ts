@@ -10,14 +10,14 @@ import {
   groupTitleForCalendarStart,
   syncMondayApprovalForDrop,
 } from '@/lib/monday/calendar-approval';
-import { isClientPaidMedia } from '@/lib/monday/paid-media';
 import { isMondayConfigured } from '@/lib/monday/client';
 import {
-  buildChatCardMessage,
+  buildChatCard,
   postToGoogleChatSafe,
+  type ChatCardWidget,
 } from '@/lib/chat/post-to-google-chat';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
-import { getCalendarTeamWebhook } from '@/lib/chat/calendar-team-webhooks';
+import { resolvePaidMediaWebhook } from '@/lib/chat/resolve-paid-media-webhook';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 
@@ -120,7 +120,92 @@ export async function POST(
     return NextResponse.json({ error: 'link expired' }, { status: 410 });
   }
 
-  const reviewLinkMap = link.post_review_link_map ?? {};
+  let reviewLinkMap = link.post_review_link_map ?? {};
+
+  // Backfill drift: a share link's `post_review_link_map` is built at share
+  // creation time, so any drop video added later (e.g. via the calendar
+  // upload flow that appends posts to an existing drop) ends up with a
+  // scheduled_post + content_drop_videos row but no entry in the map. The
+  // share page still tallies it in the "X / N" denominator, so approve-all
+  // can never close the gap and the calendar gets stuck at e.g. 9 / 10.
+  // Reconcile in-place: for any drop video whose post is missing from the
+  // map, mint a `post_review_links` row if one doesn't exist yet, then
+  // append the entry. Idempotent and cheap.
+  const { data: dropVideos } = await admin
+    .from('content_drop_videos')
+    .select('scheduled_post_id')
+    .eq('drop_id', link.drop_id);
+  const dropPostIds = new Set(
+    (dropVideos ?? [])
+      .map((r) => (r as { scheduled_post_id: string | null }).scheduled_post_id)
+      .filter((id): id is string => !!id),
+  );
+  const missingPostIds = Array.from(dropPostIds).filter(
+    (postId) => !(postId in reviewLinkMap),
+  );
+  if (missingPostIds.length > 0) {
+    // Only mint links for posts that still exist (skip orphaned drop_videos
+    // pointing to deleted scheduled_posts).
+    const { data: livePosts } = await admin
+      .from('scheduled_posts')
+      .select('id')
+      .in('id', missingPostIds);
+    const liveMissing = (livePosts ?? []).map((r) => (r as { id: string }).id);
+    if (liveMissing.length > 0) {
+      // Reuse any existing review_link for these posts, else mint a new one.
+      const { data: existingLinks } = await admin
+        .from('post_review_links')
+        .select('id, post_id')
+        .in('post_id', liveMissing);
+      const existingByPost = new Map<string, string>();
+      for (const row of existingLinks ?? []) {
+        const r = row as { id: string; post_id: string };
+        if (!existingByPost.has(r.post_id)) existingByPost.set(r.post_id, r.id);
+      }
+      const postsNeedingLink = liveMissing.filter((id) => !existingByPost.has(id));
+      if (postsNeedingLink.length > 0) {
+        const expires = new Date(
+          Date.now() + 90 * 24 * 60 * 60 * 1000,
+        ).toISOString();
+        const { data: newLinks, error: linkErr } = await admin
+          .from('post_review_links')
+          .insert(
+            postsNeedingLink.map((post_id) => ({ post_id, expires_at: expires })),
+          )
+          .select('id, post_id');
+        if (linkErr) {
+          console.error('approve-all: backfill link insert error:', linkErr);
+        } else {
+          for (const row of newLinks ?? []) {
+            const r = row as { id: string; post_id: string };
+            existingByPost.set(r.post_id, r.id);
+          }
+        }
+      }
+      const additions: Record<string, string> = {};
+      for (const postId of liveMissing) {
+        const lid = existingByPost.get(postId);
+        if (lid) additions[postId] = lid;
+      }
+      if (Object.keys(additions).length > 0) {
+        const merged = { ...reviewLinkMap, ...additions };
+        const { error: mapErr } = await admin
+          .from('content_drop_share_links')
+          .update({ post_review_link_map: merged })
+          .eq('id', link.id);
+        if (mapErr) {
+          console.error('approve-all: backfill map update error:', mapErr);
+        } else {
+          reviewLinkMap = merged;
+          console.warn(
+            `approve-all: backfilled ${Object.keys(additions).length} missing map ` +
+              `entr${Object.keys(additions).length === 1 ? 'y' : 'ies'} for share link ${link.id}`,
+          );
+        }
+      }
+    }
+  }
+
   const reviewLinkEntries = Object.entries(reviewLinkMap); // [postId, reviewLinkId][]
   if (reviewLinkEntries.length === 0) {
     return NextResponse.json({
@@ -154,10 +239,55 @@ export async function POST(
     commentsByReviewLink.set(row.review_link_id, arr);
   }
 
+  // Filter out orphaned map entries before doing any work. Share-link
+  // `post_review_link_map` is a denormalized JSON column, so if a
+  // scheduled_post or its post_review_links row gets deleted out from
+  // under us (e.g. by the draft cleanup cron), the stale (postId,
+  // reviewLinkId) pair lingers here and breaks every future approve-all
+  // with an FK violation on the comment insert. Drop those entries and
+  // log a warning instead of failing the whole bulk action.
+  const postIds = reviewLinkEntries.map(([postId]) => postId);
+  const reviewLinkIdSet = new Set(reviewLinkEntries.map(([, id]) => id));
+  const [existingPostsRes, existingLinksRes] = await Promise.all([
+    admin.from('scheduled_posts').select('id').in('id', postIds),
+    admin.from('post_review_links').select('id').in('id', Array.from(reviewLinkIdSet)),
+  ]);
+  const livePostIds = new Set(
+    (existingPostsRes.data ?? []).map((r) => (r as { id: string }).id),
+  );
+  const liveLinkIds = new Set(
+    (existingLinksRes.data ?? []).map((r) => (r as { id: string }).id),
+  );
+  const orphanedEntries = reviewLinkEntries.filter(
+    ([postId, reviewLinkId]) =>
+      !livePostIds.has(postId) || !liveLinkIds.has(reviewLinkId),
+  );
+  if (orphanedEntries.length > 0) {
+    console.warn(
+      `approve-all: pruning ${orphanedEntries.length} orphaned map entr` +
+        `${orphanedEntries.length === 1 ? 'y' : 'ies'} from share link ${link.id}:`,
+      orphanedEntries,
+    );
+    let prunedMap = reviewLinkMap;
+    for (const [postId] of orphanedEntries) {
+      const { [postId]: _drop, ...rest } = prunedMap;
+      void _drop;
+      prunedMap = rest;
+    }
+    const { error: pruneErr } = await admin
+      .from('content_drop_share_links')
+      .update({ post_review_link_map: prunedMap })
+      .eq('id', link.id);
+    if (pruneErr) {
+      console.error('approve-all: failed to prune orphaned map entries:', pruneErr);
+    }
+  }
+
   // Targets: posts whose latest live status is NOT 'approved'. Mirrors
   // `app/c/[token]/page.tsx:284`: pending and revising both count.
   const targets: Array<{ postId: string; reviewLinkId: string }> = [];
   for (const [postId, reviewLinkId] of reviewLinkEntries) {
+    if (!livePostIds.has(postId) || !liveLinkIds.has(reviewLinkId)) continue;
     const status = latestLiveStatus(commentsByReviewLink.get(reviewLinkId) ?? []);
     if (status !== 'approved') {
       targets.push({ postId, reviewLinkId });
@@ -314,10 +444,8 @@ export async function POST(
 /**
  * Posts a Jack-only summary to the client's Google Chat webhook explaining
  * which past-due posts were shifted to gaps in the current month, plus any
- * overflow posts that didn't fit. Never goes to the client.
- *
- * Falls back to OPS_CHAT_WEBHOOK_URL if the client has no webhook and no
- * agency catchall is configured.
+ * overflow posts that didn't fit. Never goes to the client. Silently no-ops
+ * if neither a per-client webhook nor an agency misc-catchall is configured.
  */
 async function notifyPastDueFixup(
   admin: ReturnType<typeof createAdminClient>,
@@ -338,12 +466,10 @@ async function notifyPastDueFixup(
   if (!drop) return;
 
   const clientName = drop.clients?.name ?? 'Client';
-  const chatWebhookUrl = await resolveTeamChatWebhook(admin, {
+  const targetWebhookUrl = await resolveTeamChatWebhook(admin, {
     primaryUrl: drop.clients?.chat_webhook_url ?? null,
     agency: drop.clients?.agency ?? null,
   });
-  const opsWebhookUrl = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
-  const targetWebhookUrl = chatWebhookUrl ?? opsWebhookUrl;
   if (!targetWebhookUrl) return;
 
   const fmt = (iso: string) =>
@@ -355,32 +481,39 @@ async function notifyPastDueFixup(
       timeZone: 'America/Chicago',
     });
 
-  const lines: string[] = [];
-  lines.push(`⏰ ${clientName}: late approval rescheduled ${result.moves.length} past-due post(s).`);
-  const movesParagraph = result.moves
+  const moveLines = result.moves
     .map((m) => {
-      const tag = m.doubledUp ? ' (doubled up, month is full)' : '';
-      return `• was ${fmt(m.oldScheduledAt)} -> now ${fmt(m.newScheduledAt)}${tag}`;
+      const tag = m.doubledUp ? ' (doubled up, month full)' : '';
+      return `• was ${fmt(m.oldScheduledAt)} → now ${fmt(m.newScheduledAt)}${tag}`;
     })
-    .join('\n');
-  for (const m of result.moves) {
-    const tag = m.doubledUp ? ' (doubled up, month is full)' : '';
-    lines.push(`  • was ${fmt(m.oldScheduledAt)} -> now ${fmt(m.newScheduledAt)}${tag}`);
+    .join('<br>');
+
+  const widgets: ChatCardWidget[] = [
+    {
+      type: 'text',
+      text: `Late approval triggered past-due reshuffling. Cortex auto-rescheduled <b>${result.moves.length}</b> post(s). The client wasn't emailed about the new times.`,
+    },
+  ];
+  if (moveLines) {
+    widgets.push({ type: 'text', text: moveLines });
   }
-  const overflowLine =
-    result.overflow.length > 0
-      ? `⚠️ ${result.overflow.length} post(s) couldn't fit in this month, left at original time. Manual reschedule needed.`
-      : null;
-  if (overflowLine) lines.push(overflowLine);
+  if (result.overflow.length > 0) {
+    widgets.push({
+      type: 'text',
+      text: `⚠️ <b>${result.overflow.length}</b> post(s) couldn't fit in this month and were left at their original time. Manual reschedule needed.`,
+    });
+  }
 
   postToGoogleChatSafe(
     targetWebhookUrl,
-    buildChatCardMessage({
+    buildChatCard({
       cardId: `past-due-fixup-${dropId}`,
-      title: `⏰ ${result.moves.length} past-due post(s) rescheduled`,
-      subtitle: `${clientName} · late approval recovery`,
-      paragraphs: [movesParagraph, overflowLine],
-      fallback: lines.join('\n'),
+      headerTitle: '⏰ Past-due reshuffling (internal)',
+      headerSubtitle: clientName,
+      sections: [{ widgets }],
+      fallbackText:
+        `⏰ ${clientName} — auto-rescheduled ${result.moves.length} post(s).` +
+        (result.overflow.length > 0 ? ` ${result.overflow.length} overflow.` : ''),
     }),
     `past-due-fixup ${dropId}`,
   );
@@ -394,64 +527,109 @@ async function fireAllApprovedNotifications(
 ): Promise<void> {
   const { data: drop } = await admin
     .from('content_drops')
-    .select('id, start_date, clients(name, agency, chat_webhook_url)')
+    .select('id, client_id, start_date, clients(name, agency, chat_webhook_url)')
     .eq('id', dropId)
     .single<{
       id: string;
+      client_id: string | null;
       start_date: string;
       clients: { name: string; agency: string | null; chat_webhook_url: string | null } | null;
     }>();
   if (!drop) return;
 
   const clientName = drop.clients?.name ?? 'Client';
-  const chatWebhookUrl = await resolveTeamChatWebhook(admin, {
+  const targetWebhookUrl = await resolveTeamChatWebhook(admin, {
     primaryUrl: drop.clients?.chat_webhook_url ?? null,
     agency: drop.clients?.agency ?? null,
   });
-  const opsWebhookUrl = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
-  const targetWebhookUrl = chatWebhookUrl ?? opsWebhookUrl;
-  const shareUrl = `${getCortexAppUrl(getBrandFromAgency(drop.clients?.agency ?? null))}/s/${shareToken}`;
+  const appBase = getCortexAppUrl(getBrandFromAgency(drop.clients?.agency ?? null));
+  const shareUrl = `${appBase}/s/${shareToken}`;
+  const downloadUrl = `${appBase}/c/${shareToken}/download`;
 
   if (targetWebhookUrl) {
-    const fallback = `🎉 All ${postCount} posts in ${clientName}'s calendar are approved.\n${shareUrl}`;
     postToGoogleChatSafe(
       targetWebhookUrl,
-      buildChatCardMessage({
+      buildChatCard({
         cardId: `all-approved-${dropId}`,
-        title: `🎉 All ${postCount} posts approved`,
-        subtitle: `${clientName}'s calendar`,
-        paragraphs: ['Every post in this share link has been approved by the client.'],
-        buttons: [{ text: 'Open calendar', url: shareUrl }],
-        fallback,
+        headerTitle: `🎉 All ${postCount} posts approved`,
+        headerSubtitle: clientName,
+        sections: [
+          {
+            widgets: [
+              {
+                type: 'text',
+                text: 'Client used the <b>Approve all</b> button on this calendar. Posts will publish on their scheduled times. No team action needed.',
+              },
+              { type: 'button', text: 'Open calendar', url: shareUrl, filled: true },
+            ],
+          },
+        ],
+        fallbackText: `🎉 ${clientName} — approve-all (${postCount} posts). ${shareUrl}`,
       }),
       `all-approved ${dropId}`,
     );
   }
 
-  if (!isMondayConfigured()) return;
-  const isPaidMedia = await isClientPaidMedia(clientName);
-  if (!isPaidMedia) return;
-  const teamWebhook = getCalendarTeamWebhook(clientName);
-  if (!teamWebhook) {
-    console.warn(`No team chat webhook mapped for ${clientName}`);
+  // Paid-media (ads team) ping. NAT-66: prefer the per-client webhook
+  // column over the legacy hard-coded map. The Monday folder enrichment
+  // only runs when we resolved via the legacy map, since that's the
+  // path that depends on Monday for the items board anyway.
+  const paidMedia = await resolvePaidMediaWebhook(admin, {
+    clientId: drop.client_id,
+    clientName,
+  });
+  if (!paidMedia) return;
+
+  if (paidMedia.source === 'legacy_map' && isMondayConfigured()) {
+    const groupTitle = groupTitleForCalendarStart(drop.start_date);
+    const item = await findContentCalendarItem(clientName, groupTitle);
+    const folder = item?.editedVideosFolderUrl;
+    const widgets: ChatCardWidget[] = [
+      {
+        type: 'text',
+        text: 'Client approved all calendar posts. Creatives are ready to run for paid media.',
+      },
+    ];
+    if (folder) {
+      widgets.push({ type: 'button', text: 'Open edited videos folder', url: folder, filled: true });
+    } else {
+      widgets.push({
+        type: 'text',
+        text: '<i>Edited videos folder link is not set in Monday — pull assets manually.</i>',
+      });
+    }
+    postToGoogleChatSafe(
+      paidMedia.url,
+      buildChatCard({
+        cardId: `paid-media-legacy-approve-all-${dropId}`,
+        headerTitle: '🎬 Approved calendar ready for paid media',
+        headerSubtitle: clientName,
+        sections: [{ widgets }],
+        fallbackText: `🎬 ${clientName} — approved calendar ready for paid media. ${folder ?? ''}`.trim(),
+      }),
+      `paid-media-approved ${clientName}`,
+    );
     return;
   }
-  const groupTitle = groupTitleForCalendarStart(drop.start_date);
-  const item = await findContentCalendarItem(clientName, groupTitle);
-  const folder = item?.editedVideosFolderUrl;
-  const folderLine = folder ? folder : '(edited videos folder link not set in Monday)';
-  const fallback = `Hey all, content from ${clientName} is now approved: ${folderLine}`;
+
   postToGoogleChatSafe(
-    teamWebhook.url,
-    buildChatCardMessage({
-      cardId: `paid-media-approved-${clientName}`,
-      title: `🎬 ${clientName} content approved`,
-      subtitle: 'Ready for paid-media handoff',
-      paragraphs: [folder ? null : '(edited videos folder link not set in Monday)'],
-      buttons: folder
-        ? [{ text: 'Open edited videos folder', url: folder }]
-        : undefined,
-      fallback,
+    paidMedia.url,
+    buildChatCard({
+      cardId: `paid-media-db-approve-all-${dropId}`,
+      headerTitle: '🎬 Approved calendar ready for paid media',
+      headerSubtitle: clientName,
+      sections: [
+        {
+          widgets: [
+            {
+              type: 'text',
+              text: 'Client approved all calendar posts. Creatives are ready to run for paid media.',
+            },
+            { type: 'button', text: 'Download all assets', url: downloadUrl, filled: true },
+          ],
+        },
+      ],
+      fallbackText: `🎬 ${clientName} — approved calendar ready for paid media. ${downloadUrl}`,
     }),
     `paid-media-approved ${clientName}`,
   );

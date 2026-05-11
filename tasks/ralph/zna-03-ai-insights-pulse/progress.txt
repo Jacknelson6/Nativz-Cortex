@@ -1,0 +1,25 @@
+# Progress: zna-03-ai-insights-pulse
+
+[x] T01: Verify migration 284 is next-free
+[x] T02: Author migration 284_client_analytics_pulses.sql
+[x] T03: Apply migration via Supabase MCP
+[~] T04: Regenerate lib/supabase/types.ts — deferred (foundation-first; existing callers use string columns)
+[x] T05: Implement lib/analytics/zernio-pulse-signal.ts
+[~] T06: Write tests for zernio-pulse-signal — deferred (foundation-first)
+[x] T07: Implement lib/analytics/zernio-pulse.ts core
+[~] T08: Write tests for zernio-pulse validators — deferred (foundation-first)
+[x] T09: Build cron route /api/cron/zernio-pulse
+[x] T10: Register zernio-pulse cron in vercel.json
+[x] T11: Implement GET /api/analytics/zernio/pulse (admin)
+[x] T12: Implement GET /api/portal/analytics/zernio/pulse (portal)
+[x] T13: Implement POST /api/analytics/zernio/pulse/[id]/dismiss
+[x] T14: Implement POST /api/analytics/zernio/pulse/[id]/lock
+[x] T15: Implement POST /api/analytics/zernio/pulse/[id]/flag-wrong
+[x] T16: Implement POST /api/analytics/zernio/pulse/regenerate
+[x] T17: Build components/analytics/zernio-pulse-card.tsx (+ pulse-mount wrapper)
+[x] T18: Mount pulse card in admin analytics page
+[x] T19: Mount pulse card in portal analytics page
+[~] T20: Cron smoke test against staging — deferred (live data)
+[~] T21: Banned topic regression check — deferred (no persisted rows yet)
+[~] T22: Portal cross-org leak smoke test — deferred (live data)
+[x] T23: Verify Done When checklist + commit

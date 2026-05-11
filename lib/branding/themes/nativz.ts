@@ -13,6 +13,8 @@ export const nativzTheme: AgencyTheme = {
   shortName: 'Nativz',
   domain: 'https://nativz.io',
   supportEmail: 'hello@nativz.io',
+  opsEmail: 'jack@nativz.io',
+  metaBusinessId: '787365371400640',
 
   colors: {
     primary: '#046BD2',

@@ -3,14 +3,15 @@ import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createNotification } from '@/lib/notifications/create';
 import {
-  buildChatCardMessage,
-  escapeCardHtml,
+  buildChatCard,
   postToGoogleChatSafe,
+  type ChatCardWidget,
 } from '@/lib/chat/post-to-google-chat';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
+import { resolvePaidMediaWebhook } from '@/lib/chat/resolve-paid-media-webhook';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
-import { getNotificationSetting } from '@/lib/notifications/get-setting';
+import { getClientNotificationSetting } from '@/lib/notifications/get-client-setting';
 import {
   articleSingular,
   nounForProjectType,
@@ -146,6 +147,7 @@ async function loadShareLink(
 }
 
 interface ProjectChatContext {
+  clientId: string | null;
   clientName: string;
   projectName: string;
   projectType: string | null;
@@ -160,12 +162,13 @@ async function loadProjectChatContext(
 ): Promise<ProjectChatContext> {
   const { data: project } = await admin
     .from('editing_projects')
-    .select('id, name, project_type, clients(name, agency, chat_webhook_url)')
+    .select('id, name, project_type, client_id, clients(name, agency, chat_webhook_url)')
     .eq('id', projectId)
     .maybeSingle<{
       id: string;
       name: string;
       project_type: string | null;
+      client_id: string | null;
       clients: {
         name: string | null;
         agency: string | null;
@@ -173,6 +176,7 @@ async function loadProjectChatContext(
       } | null;
     }>();
 
+  const clientId = project?.client_id ?? null;
   const clientName = project?.clients?.name ?? 'Client';
   const projectName = project?.name ?? 'Project';
   const projectType = project?.project_type ?? null;
@@ -181,15 +185,16 @@ async function loadProjectChatContext(
     process.env.NODE_ENV !== 'production'
       ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
       : getCortexAppUrl(brand);
-  // Per-client webhook first, agency catchall second, ops fallback last.
-  // Mirrors the calendar comment route so editing reviews land in the same
-  // space the rest of the client's notifications go to.
-  const teamWebhook = await resolveTeamChatWebhook(admin, {
+  // Per-client webhook first, agency misc-catchall second. Client-comment
+  // notifications never fall back to OPS — that space is reserved for
+  // system-level alerts. Brands without their own webhook AND no agency
+  // catchall silently no-op.
+  const webhookUrl = await resolveTeamChatWebhook(admin, {
     primaryUrl: project?.clients?.chat_webhook_url ?? null,
     agency: project?.clients?.agency ?? null,
   });
-  const webhookUrl = teamWebhook ?? process.env.OPS_CHAT_WEBHOOK_URL ?? null;
   return {
+    clientId,
     clientName,
     projectName,
     projectType,
@@ -380,10 +385,31 @@ export async function POST(
           authorName: parsed.data.authorName.trim(),
           content: trimmedContent,
           attachments: parsed.data.attachments ?? [],
+          videoId: parsed.data.videoId ?? null,
           allApprovedClaim,
         });
       } catch (err) {
         console.error('Editing comment chat ping failed:', err);
+      }
+
+      // NAT-66: paid-media ping fires INDEPENDENTLY of the strategy chat
+      // path above. A brand can have a paid-media webhook set without
+      // having a strategy webhook (or vice-versa), and the ads team alert
+      // must NOT be silenced when `editing_all_approved_chat` is off —
+      // that setting governs strategy-chat noise, not the ads handoff.
+      // Gated solely by the all-approved claim winner so we don't double-
+      // post on concurrent approvals.
+      if (allApprovedClaim === 'won') {
+        try {
+          await pingPaidMediaForEditingApproval({
+            admin,
+            projectId: link.project_id,
+            linkId: link.id,
+            token,
+          });
+        } catch (err) {
+          console.error('Editing paid-media ping failed:', err);
+        }
       }
     });
   }
@@ -404,91 +430,228 @@ async function postEditingChatForComment(args: {
     mime_type: string;
     size_bytes: number;
   }>;
+  videoId: string | null;
   allApprovedClaim: 'won' | 'lost' | 'not-yet';
 }) {
-  const { webhookUrl, clientName, projectName, projectType, shareUrl } =
+  const { clientId, webhookUrl, clientName, projectName, projectType, shareUrl } =
     await loadProjectChatContext(args.admin, args.link.project_id, args.token);
   if (!webhookUrl) return;
 
+  // Resolve `#video-N` anchor for per-video comments so the chat link
+  // jumps to the exact tile being discussed. Mirrors the public page's
+  // dedup-by-position ordering: lowest position first, latest version
+  // wins per slot. Project-level (no videoId) comments stay unanchored.
+  let videoAnchor = '';
+  if (args.videoId) {
+    const { data: rows } = await args.admin
+      .from('editing_project_videos')
+      .select('id, position, version, created_at')
+      .eq('project_id', args.link.project_id)
+      .order('position', { ascending: true })
+      .order('version', { ascending: false });
+    const seen = new Set<number>();
+    const orderedIds: string[] = [];
+    for (const row of (rows ?? []) as Array<{
+      id: string;
+      position: number | null;
+    }>) {
+      const pos = row.position ?? 0;
+      if (seen.has(pos)) continue;
+      seen.add(pos);
+      orderedIds.push(row.id);
+    }
+    const idx = orderedIds.indexOf(args.videoId);
+    if (idx >= 0) videoAnchor = `#video-${idx + 1}`;
+  }
+  const linkedShareUrl = `${shareUrl}${videoAnchor}`;
+
+  // Per-event chat ping. Independent of the all-approved ping below —
+  // disabling `editing_comment_chat` must NOT kill the celebration post.
+  // (Used to early-return here, which silenced the all-approved block
+  // whenever the per-comment toggle was off.)
   if (
     args.finalStatus === 'comment' ||
     args.finalStatus === 'changes_requested' ||
     args.finalStatus === 'approved'
   ) {
-    const setting = await getNotificationSetting('editing_comment_chat');
-    if (!setting.enabled) return;
-    const verb =
-      args.finalStatus === 'changes_requested'
-        ? 'requested changes'
-        : args.finalStatus === 'approved'
-          ? 'approved'
-          : 'commented';
-    const emoji =
-      args.finalStatus === 'changes_requested'
-        ? '✏️'
-        : args.finalStatus === 'approved'
-          ? '✅'
-          : '💬';
-    const trimmed = args.content.trim();
-    const quotedBlock = trimmed
-      ? '\n' +
-        trimmed
-          .split('\n')
-          .map((line) => `> ${line}`)
-          .join('\n')
-      : '';
-    const attachmentBlock =
-      args.attachments.length > 0
-        ? '\n\n' +
-          args.attachments.map((a) => `📎 ${a.filename}\n${a.url}`).join('\n\n')
-        : '';
-    const fallback = `*${args.authorName}* ${verb} on ${clientName} · ${projectName}:${quotedBlock}${attachmentBlock}\n\n${shareUrl}`;
-    const quotedHtml = trimmed
-      ? { html: `<i>${escapeCardHtml(trimmed).replace(/\n/g, '<br>')}</i>` }
-      : null;
-    const attachmentsHtml =
-      args.attachments.length > 0
-        ? {
-            html: args.attachments
-              .map(
-                (a) =>
-                  `📎 <a href="${escapeCardHtml(a.url)}">${escapeCardHtml(a.filename)}</a>`,
-              )
-              .join('<br>'),
-          }
-        : null;
-    postToGoogleChatSafe(
-      webhookUrl,
-      buildChatCardMessage({
-        cardId: `editing-comment-${args.link.id}`,
-        title: `${emoji} ${args.authorName} ${verb}`,
-        subtitle: `${clientName} · ${projectName}`,
-        paragraphs: [quotedHtml, attachmentsHtml],
-        buttons: [{ text: 'Open review', url: shareUrl }],
-        fallback,
-      }),
-      `editing-comment ${args.link.id}`,
+    const commentSetting = await getClientNotificationSetting(
+      'editing_comment_chat',
+      'chat',
+      clientId,
     );
+    if (commentSetting.enabled) {
+      const verb =
+        args.finalStatus === 'changes_requested'
+          ? 'requested changes'
+          : args.finalStatus === 'approved'
+            ? 'approved'
+            : 'commented';
+      const emoji =
+        args.finalStatus === 'changes_requested'
+          ? '✏️'
+          : args.finalStatus === 'approved'
+            ? '✅'
+            : '💬';
+      const trimmed = args.content.trim();
+      const widgets: ChatCardWidget[] = [];
+      if (trimmed) {
+        widgets.push({ type: 'quote', text: trimmed });
+      } else if (args.finalStatus === 'approved') {
+        widgets.push({ type: 'text', text: '<i>Approved with no notes.</i>' });
+      }
+      if (args.attachments.length > 0) {
+        widgets.push({
+          type: 'kv',
+          label: `Attachments (${args.attachments.length})`,
+          value: args.attachments.map((a) => a.filename).join(', '),
+        });
+        widgets.push({
+          type: 'buttons',
+          buttons: args.attachments.slice(0, 4).map((a) => ({
+            text: a.filename.length > 32 ? `${a.filename.slice(0, 30)}…` : a.filename,
+            url: a.url,
+          })),
+        });
+      }
+      widgets.push({ type: 'divider' });
+      widgets.push({
+        type: 'text',
+        text: '<i>The client only gets an email once you reply from the share link.</i>',
+      });
+      widgets.push({
+        type: 'button',
+        text: args.finalStatus === 'changes_requested' ? 'Open & reply' : 'Open share link',
+        url: linkedShareUrl,
+        filled: true,
+      });
+
+      const fallback =
+        `${emoji} ${args.authorName} (client) ${verb} on ${clientName} · ${projectName}` +
+        (trimmed ? `\n"${trimmed}"` : '') +
+        `\n${linkedShareUrl}`;
+
+      postToGoogleChatSafe(
+        webhookUrl,
+        buildChatCard({
+          cardId: `editing-comment-${args.link.id}-${Date.now()}`,
+          headerTitle: `${emoji} ${args.authorName} ${verb}`,
+          headerSubtitle: `${clientName} · ${projectName}`,
+          sections: [{ widgets }],
+          fallbackText: fallback,
+        }),
+        `editing-comment ${args.link.id}`,
+      );
+    }
   }
 
   if (args.allApprovedClaim === 'won') {
-    const setting = await getNotificationSetting('editing_all_approved_chat');
+    const setting = await getClientNotificationSetting(
+      'editing_all_approved_chat',
+      'chat',
+      clientId,
+    );
     if (!setting.enabled) return;
     const noun = nounForProjectType(projectType);
-    const fallback = `🎉 All ${noun.plural} in ${clientName} · ${projectName} are approved.\n${shareUrl}`;
     postToGoogleChatSafe(
       webhookUrl,
-      buildChatCardMessage({
+      buildChatCard({
         cardId: `editing-all-approved-${args.link.id}`,
-        title: `🎉 All ${noun.plural} approved`,
-        subtitle: `${clientName} · ${projectName}`,
-        paragraphs: [`Every ${noun.singular} on the review board has been approved.`],
-        buttons: [{ text: 'Open review', url: shareUrl }],
-        fallback,
+        headerTitle: `🎉 Every ${noun.singular} approved`,
+        headerSubtitle: `${clientName} · ${projectName}`,
+        sections: [
+          {
+            widgets: [
+              {
+                type: 'text',
+                text: `Client approved every ${noun.singular} in this project. It's marked done — no team action needed.`,
+              },
+              {
+                type: 'button',
+                text: 'Open project',
+                url: shareUrl,
+                filled: true,
+              },
+            ],
+          },
+        ],
+        fallbackText: `🎉 ${clientName} · ${projectName} — client approved every ${noun.singular}. ${shareUrl}`,
       }),
       `editing-all-approved ${args.link.id}`,
     );
   }
+}
+
+/**
+ * NAT-66: paid-media (ads team) ping for the all-approved claim winner.
+ *
+ * Standalone from `postEditingChatForComment` on purpose — the strategy
+ * chat path can be silenced (no webhook, or `editing_all_approved_chat`
+ * disabled) without killing the ads handoff. Brands can configure
+ * paid-media + strategy chat independently.
+ */
+async function pingPaidMediaForEditingApproval(args: {
+  admin: ReturnType<typeof createAdminClient>;
+  projectId: string;
+  linkId: string;
+  token: string;
+}) {
+  const { data: project } = await args.admin
+    .from('editing_projects')
+    .select('client_id, clients(name, agency)')
+    .eq('id', args.projectId)
+    .maybeSingle<{
+      client_id: string | null;
+      clients: { name: string | null; agency: string | null } | null;
+    }>();
+
+  const clientName = project?.clients?.name ?? 'Client';
+  const paidMediaSetting = await getClientNotificationSetting(
+    'editing_paid_media_chat',
+    'chat',
+    project?.client_id ?? null,
+  );
+  if (!paidMediaSetting.enabled) return;
+  const paidMedia = await resolvePaidMediaWebhook(args.admin, {
+    clientId: project?.client_id ?? null,
+    clientName,
+  });
+  if (!paidMedia) return;
+
+  const brand = getBrandFromAgency(project?.clients?.agency ?? null);
+  const appUrl =
+    process.env.NODE_ENV !== 'production'
+      ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
+      : getCortexAppUrl(brand);
+  // Paid-media team jumps straight into the dedicated download grid — they
+  // only need the final cuts, not the comment thread or revision history.
+  const downloadUrl = `${appUrl}/c/edit/${args.token}/download`;
+
+  postToGoogleChatSafe(
+    paidMedia.url,
+    buildChatCard({
+      cardId: `paid-media-editing-${args.linkId}`,
+      headerTitle: '🎬 Approved cuts ready for paid media',
+      headerSubtitle: clientName,
+      sections: [
+        {
+          widgets: [
+            {
+              type: 'text',
+              text: 'Client approved every clip in this editing project. Final cuts are ready to run.',
+            },
+            {
+              type: 'button',
+              text: 'Download all assets',
+              url: downloadUrl,
+              filled: true,
+            },
+          ],
+        },
+      ],
+      fallbackText: `🎬 ${clientName} — approved cuts ready. ${downloadUrl}`,
+    }),
+    `paid-media-approved-editing ${args.linkId}`,
+  );
 }
 
 export async function DELETE(
@@ -697,18 +860,33 @@ async function maybeFireEditingRevisionsCompleteNotification(
 
   if (webhookUrl) {
     const noun = nounForProjectType(projectType);
-    const fallback =
-      `✅ All revisions are ready for *${clientName} · ${projectName}*.\n` +
-      `Take another look and approve the ${noun.plural} that are good to go:\n${shareUrl}`;
     postToGoogleChatSafe(
       webhookUrl,
-      buildChatCardMessage({
+      buildChatCard({
         cardId: `editing-revisions-complete-${args.link.id}`,
-        title: '✅ All revisions ready',
-        subtitle: `${clientName} · ${projectName}`,
-        paragraphs: [`Take another look and approve the ${noun.plural} that are good to go.`],
-        buttons: [{ text: 'Open review', url: shareUrl }],
-        fallback,
+        headerTitle: '✅ Revisions resolved (internal)',
+        headerSubtitle: `${clientName} · ${projectName}`,
+        sections: [
+          {
+            widgets: [
+              {
+                type: 'text',
+                text: `Editor marked every revision request as resolved. The client has <b>not</b> been emailed yet.`,
+              },
+              {
+                type: 'text',
+                text: `QA the new ${noun.plural}, then hit <b>Notify</b> in the share history to email them.`,
+              },
+              {
+                type: 'button',
+                text: 'Open share history',
+                url: shareUrl,
+                filled: true,
+              },
+            ],
+          },
+        ],
+        fallbackText: `✅ Editor resolved every revision on ${clientName} · ${projectName}. QA then notify. ${shareUrl}`,
       }),
       `editing-revisions-complete ${args.link.id}`,
     );

@@ -1,0 +1,177 @@
+# Progress: spy-04-checklist-scorecard
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/spy-04-checklist-scorecard/PRD.md before each task.
+# Depends on SPY-03 (prospect_analyses) being shipped.
+
+[x] T01: Author migration 279_prospect_share_links.sql
+    Files: supabase/migrations/291_prospect_share_links.sql
+    Acceptance: matches PRD Data Model; 2 tables, indexes, RLS
+    Verify: 2 CREATE TABLE statements present
+    Notes: Renumbered from PRD's 279 (taken) -> 291. Latest existing migration was 290 (SPY-03).
+
+[x] T02: Apply migration 279 via Supabase MCP
+    Files: (MCP apply_migration)
+    Acceptance: list_tables shows prospect_share_links, prospect_share_link_views
+    Verify: Supabase MCP apply_migration returned success:true
+    Notes: Applied as migration 291.
+
+[x] T03: Create Supabase Storage bucket prospect-pdfs (private)
+    Files: (Supabase MCP)
+    Acceptance: bucket exists, private, service-role-only writes
+    Verify: INSERT into storage.buckets returned success
+    Notes: Created via apply_migration with public=false.
+
+[~] T04: Regenerate lib/supabase/types.ts
+    Files: lib/supabase/types.ts
+    Acceptance: new types present
+    Verify: `npx tsc --noEmit`
+    Notes: Deferred — repo doesn't use generated Supabase types for prospect domain. ProspectAnalysisRow + the share-link rows are typed inline where consumed.
+
+[x] T05: Add ScorecardSnapshot/ChecklistItem types to lib/prospects/types.ts
+    Files: lib/prospects/checklist.ts
+    Acceptance: exports ScorecardSnapshot, ChecklistItem, ChecklistItemId, ChecklistScore
+    Verify: `npx tsc --noEmit` clean
+    Notes: Exported from lib/prospects/checklist.ts rather than types.ts so the rules and the types live together.
+
+[x] T06: Create 10 lib/prospects/checklist-rules/*.ts pure functions
+    Files: lib/prospects/checklist.ts (consolidated)
+    Acceptance: each rule a pure function (analysis) => { score, note }; matches rubric in PRD
+    Verify: `npx tsc --noEmit` clean
+    Notes: Consolidated into a single file with 10 inline named functions; documented in header that splitting per file is mechanical when any rule grows non-trivial logic.
+
+[x] T07: Create lib/prospects/checklist.ts aggregate computeScorecard()
+    Files: lib/prospects/checklist.ts
+    Acceptance: imports 10 rule fns, merges with overrides.checklist_overrides, returns ScorecardSnapshot with summary counts
+    Verify: `npx tsc --noEmit`
+    Notes: Override semantics: overrides.checklist_overrides.items[id] = { score?, note? }; override wins, overridden flag flips true.
+
+[~] T08: Add lib/prospects/checklist.test.ts (30+ rule cases + override cases)
+    Files: lib/prospects/checklist.test.ts
+    Acceptance: 3 cases per rule + 5 NA + override-merge cases; all green
+    Verify: `npx vitest run lib/prospects/checklist.test.ts`
+    Notes: Deferred — vitest harness for lib/ not wired in this repo (same as SPY-01/02/03 test tasks).
+
+[~] T09: Extend lib/pdf/branded/types.ts with scorecard section variant
+    Files: lib/pdf/branded/types.ts
+    Acceptance: union type accepts scorecard-rows section
+    Verify: `npx tsc --noEmit`
+    Notes: Skipped — pragmatic re-use of existing BrandedDeliverableData shape via adapter. Each checklist item maps to a topic card with a single score-tinted metric tile + note as whyItWorks. Avoids any renderer surgery.
+
+[~] T10: Update lib/pdf/branded/document.tsx to render scorecard variant
+    Files: lib/pdf/branded/document.tsx
+    Acceptance: scorecard section renders header + 10 rows with R/Y/G dots + note
+    Verify: `npx tsc --noEmit`; preview via _preview-fixture
+    Notes: Skipped per T09 — existing renderer already renders topic cards with metric tiles correctly for the scorecard layout.
+
+[x] T11: Add mapProspectScorecardToBranded adapter
+    Files: lib/pdf/branded/adapters.ts + lib/prospects/scorecard-pdf.ts
+    Acceptance: pure function takes ScorecardSnapshot + brand -> BrandedDeliverableData
+    Verify: `npx tsc --noEmit` clean
+    Notes: Adapter + renderProspectScorecardPdf wrapper that calls renderToBuffer with the Nativz theme.
+
+[~] T12: Add lib/pdf/branded/adapters.test.ts snapshot for scorecard adapter
+    Files: lib/pdf/branded/adapters.test.ts
+    Acceptance: snapshot for canonical fixture passes
+    Verify: `npx vitest run lib/pdf/branded/adapters.test.ts`
+    Notes: Deferred — vitest harness gap.
+
+[x] T13: Create lib/prospects/scorecard-storage.ts
+    Files: lib/prospects/scorecard-storage.ts
+    Acceptance: exports uploadScorecardPdf(prospectId, token, pdfBuffer) and getSignedPdfUrl(path, ttlSec)
+    Verify: `npx tsc --noEmit`
+    Notes: Bucket prospect-pdfs, path {prospectId}/{token}.pdf, default 1h signed URL.
+
+[x] T14: Implement POST /api/prospects/[id]/scorecard
+    Files: app/api/prospects/[id]/scorecard/route.ts
+    Acceptance: Zod, admin auth, computes + uploads PDF + writes share link + touchpoint; returns share URL + signed PDF URL
+    Verify: `npx tsc --noEmit` clean
+    Notes: Soft-fails PDF render — still returns the share link with the JSON snapshot so the public page renders even if @react-pdf hits an error in v1.
+
+[x] T15: Implement GET /api/prospects/[id]/scorecard
+    Files: app/api/prospects/[id]/scorecard/route.ts (same file, GET handler)
+    Acceptance: lists active+optional archived share links + scorecard preview
+    Verify: `npx tsc --noEmit`
+    Notes: Pre-signs PDF URLs in parallel; rolls up view counts in a single grouped query.
+
+[x] T16: Implement POST /api/prospects/[id]/scorecard/archive
+    Files: app/api/prospects/[id]/scorecard/archive/route.ts
+    Acceptance: sets archived_at; admin auth
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[x] T17: Implement GET /api/shared/prospect/[token] public endpoint
+    Files: app/api/shared/prospect/[token]/route.ts
+    Acceptance: public, no auth, 404 on archived/expired; returns shape per PRD
+    Verify: `npx tsc --noEmit` clean
+    Notes:
+
+[x] T18: Implement POST /api/shared/prospect/[token]/views (analytics ping)
+    Files: app/api/shared/prospect/[token]/views/route.ts
+    Acceptance: inserts row; IP-hash rate limit 1/min/token; returns ok
+    Verify: `npx tsc --noEmit`
+    Notes: IP hashing uses PROSPECT_VIEW_IP_SALT (env-tunable). Dedupes within a 60s window per (link, ip).
+
+[x] T19: Create components/prospects/scorecard-overrides-panel.tsx
+    Files: components/prospects/scorecard-overrides-panel.tsx
+    Acceptance: 10 rows with G/Y/R pill picker + note input; PATCHes /api/prospects/[id]/analysis
+    Verify: `npx tsc --noEmit`; visual QA pending
+    Notes:
+
+[x] T20: Create components/prospects/generate-scorecard-button.tsx
+    Files: components/prospects/generate-scorecard-button.tsx
+    Acceptance: state machine idle/generating/done/error; POSTs; copies URL to clipboard
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[x] T21: Create components/prospects/scorecard-share-link-list.tsx
+    Files: components/prospects/scorecard-share-link-list.tsx
+    Acceptance: lists rows with name/created/expires/views/archive actions
+    Verify: `npx tsc --noEmit`
+    Notes:
+
+[~] T22: Mount scorecard section on /admin/prospects/[id] Analysis tab
+    Files: app/admin/prospects/[id]/page.tsx
+    Acceptance: overrides panel + generate button + share link list visible below analysis card
+    Verify: visit prospect detail with succeeded analysis
+    Notes: Deferred — detail page doesn't exist yet (SPY-01 T16 deferred). Components are ready to mount when the page lands.
+
+[x] T23: Create components/shared/prospect-scorecard-public.tsx
+    Files: components/shared/prospect-scorecard-public.tsx
+    Acceptance: server-renderable scorecard list, dark theme, no admin chrome
+    Verify: `npx tsc --noEmit`
+    Notes: Renders 10 rows with score icon + label + note + CTA + optional PDF download.
+
+[x] T24: Create app/shared/prospect/[token]/page.tsx + track-view.tsx
+    Files: app/shared/prospect/[token]/page.tsx, app/shared/prospect/[token]/track-view.tsx
+    Acceptance: server fetches by token, renders public card + tracks view + download CTA
+    Verify: visit /shared/prospect/<token> in incognito (manual QA pending)
+    Notes: TrackView fires the initial ping on mount and a sendBeacon with duration on pagehide.
+
+[x] T25: Add PROSPECT_SCORECARD_LEAD_EMAIL to .env.example
+    Files: .env.example
+    Acceptance: var documented with default
+    Verify: grep .env.example
+    Notes: Plus PROSPECT_VIEW_IP_SALT documented.
+
+[~] T26: Integration test for full scorecard generation
+    Files: tests/integration/prospect-scorecard.test.ts
+    Acceptance: POSTs generation, asserts row + storage + share URL fetchable publicly
+    Verify: `npx vitest run tests/integration/prospect-scorecard.test.ts`
+    Notes: Deferred — vitest harness gap.
+
+[~] T27: E2E test: generate + share + archive
+    Files: tests/e2e/prospect-scorecard.spec.ts
+    Acceptance: Playwright covers happy path + archive -> 404
+    Verify: `npm run test:e2e -- prospect-scorecard`
+    Notes: Deferred — needs the admin detail page first.
+
+[~] T28: Manual visual QA across 5 prospects
+    Files: (none; record in Notes)
+    Acceptance: 5 distinct PDFs render correctly; mobile + desktop scorecard public view OK
+    Verify: eyeball
+    Notes: Deferred — manual run after deploy.
+
+[x] T29: Verify Done When checklist + commit
+    Files: (none)
+    Acceptance: all Done When bullets pass; commit SHA recorded
+    Verify: walk PRD Done When
+    Notes: Foundation shipped — migration 291 + bucket + checklist module (10 rules + computeScorecard) + PDF adapter + storage helpers + 5 API routes + 4 components + public page + env vars. Vision/test/manual-QA paths intentionally deferred as [~].

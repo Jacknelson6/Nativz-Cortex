@@ -22,11 +22,35 @@ function calcChange(current: number, previous: number): number {
   return Math.round(((current - previous) / previous) * 100 * 100) / 100;
 }
 
+/**
+ * Enumerate every YYYY-MM-DD in [startISO, endISO], inclusive. Used to pad
+ * sparkline series out to one point per day in the requested window — the
+ * snapshot cron has gaps for some brands (it only writes when Zernio
+ * returns fresh data) and a 2-point sparkline reads as a straight-line
+ * decline even though the truth is "we measured 2 days out of 7." Filling
+ * missing days with 0 in the series makes the gap visible instead of
+ * dishonestly smooth.
+ */
+function enumerateDays(startISO: string, endISO: string): string[] {
+  const out: string[] = [];
+  const start = new Date(`${startISO}T00:00:00Z`);
+  const end = new Date(`${endISO}T00:00:00Z`);
+  for (
+    let d = new Date(start);
+    d.getTime() <= end.getTime();
+    d.setUTCDate(d.getUTCDate() + 1)
+  ) {
+    out.push(d.toISOString().slice(0, 10));
+  }
+  return out;
+}
+
 /** Build a MetricCard for one numeric column across a set of snapshots. */
 function buildMetricCard(
   snaps: PlatformSnapshot[],
   prevSnaps: PlatformSnapshot[],
   pick: (s: PlatformSnapshot) => number,
+  windowDays?: string[],
 ): MetricCard | undefined {
   let total = 0;
   const byDay = new Map<string, number>();
@@ -37,9 +61,14 @@ function buildMetricCard(
   }
   const prevTotal = prevSnaps.reduce((sum, s) => sum + (pick(s) || 0), 0);
   if (total === 0 && prevTotal === 0) return undefined;
-  const series: MetricSeriesPoint[] = [...byDay.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, value]) => ({ date, value }));
+  // When the caller supplies the canonical day list, emit one point per day
+  // (0 for days the cron didn't fire) so a 7-day window always renders 7
+  // points. Otherwise fall back to the legacy "only present days" shape.
+  const series: MetricSeriesPoint[] = windowDays
+    ? windowDays.map((date) => ({ date, value: byDay.get(date) ?? 0 }))
+    : [...byDay.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, value]) => ({ date, value }));
   return {
     total,
     previousTotal: prevTotal,
@@ -88,6 +117,11 @@ export async function GET(request: NextRequest) {
 
     const { clientId, start, end } = parsed.data;
     const dateRange: DateRange = { start, end };
+    // Canonical "every day in the window" list. Every sparkline is padded
+    // to this so a 7-day window always renders 7 points and the chart
+    // honestly shows where data is missing instead of interpolating across
+    // gaps.
+    const windowDays = enumerateDays(start, end);
 
     // Calculate previous period (same length before start)
     const startDate = new Date(start);
@@ -221,6 +255,11 @@ export async function GET(request: NextRequest) {
     let combinedPrevViews = 0;
     let combinedFollowerChange = 0;
     let combinedPrevFollowerChange = 0;
+    // Gross follow events across all platforms (MBS-style). Falls back to
+    // net `followerChange` per platform on platforms that don't expose
+    // gross numbers, so the headline tile always reads ≥ net change.
+    let combinedNewFollows = 0;
+    let combinedPrevNewFollows = 0;
     let combinedEngagement = 0;
     let combinedPrevEngagement = 0;
     let combinedEngRate = 0;
@@ -294,12 +333,39 @@ export async function GET(request: NextRequest) {
             ) / prevSnapsForProfile.length
           : 0;
 
-      combinedViews += totalViews;
-      combinedPrevViews += prevViews;
+      // Prefer the account-level window total when Zernio surfaced one
+      // (IG only today — FB's getFacebookPageInsights returns 0 for views,
+      // which we treat as "missing" so the post-sum fallback kicks in).
+      // This matches what Meta Business Suite shows because the account
+      // metric counts all content views (reels, stories, profile activity),
+      // not just posts published inside the window.
+      const endSnapForCombined =
+        snapsAsc.length > 0 ? snapsAsc[snapsAsc.length - 1] : null;
+      const prevEndSnapForCombined =
+        prevSnapsAsc.length > 0 ? prevSnapsAsc[prevSnapsAsc.length - 1] : null;
+      const accountViewsForCombined = endSnapForCombined?.account_views_count;
+      const accountEngForCombined =
+        endSnapForCombined?.account_engagement_count;
+      const prevAccountViewsForCombined =
+        prevEndSnapForCombined?.account_views_count;
+      const prevAccountEngForCombined =
+        prevEndSnapForCombined?.account_engagement_count;
+      // Zero counts as "not exposed" — only non-zero account totals override
+      // the post-sum. Treats FB's hardcoded-zero views the same as null.
+      const pickTotal = (
+        accountVal: number | null | undefined,
+        postSum: number,
+      ) => (accountVal && accountVal > 0 ? accountVal : postSum);
+
+      combinedViews += pickTotal(accountViewsForCombined, totalViews);
+      combinedPrevViews += pickTotal(prevAccountViewsForCombined, prevViews);
       combinedFollowerChange += totalFollowerChange;
       combinedPrevFollowerChange += prevFollowerChange;
-      combinedEngagement += totalEngagement;
-      combinedPrevEngagement += prevEngagement;
+      combinedEngagement += pickTotal(accountEngForCombined, totalEngagement);
+      combinedPrevEngagement += pickTotal(
+        prevAccountEngForCombined,
+        prevEngagement,
+      );
       combinedEngRate += avgEngRate;
       combinedPrevEngRate += prevAvgEngRate;
       platformCount++;
@@ -327,11 +393,13 @@ export async function GET(request: NextRequest) {
           snaps,
           prevSnapsForProfile,
           accountColumnPicker('views_count', 'account_views_count'),
+          windowDays,
         ),
         engagement: buildMetricCard(
           snaps,
           prevSnapsForProfile,
           accountColumnPicker('engagement_count', 'account_engagement_count'),
+          windowDays,
         ),
         followersGained: (() => {
           // Follower gains aren't summable — the series's `followers_change`
@@ -339,19 +407,22 @@ export async function GET(request: NextRequest) {
           // consecutive-day deltas of `followers_count` instead. Works for
           // both current (backfilled) and historical (all-zero) rows.
           if (totalFollowerChange === 0 && prevFollowerChange === 0) return undefined;
-          const series: MetricSeriesPoint[] = [];
+          // Index measured deltas by date, then emit one point per window
+          // day so the sparkline always has |windowDays| points.
+          const deltaByDate = new Map<string, number>();
           for (let i = 1; i < snapsAsc.length; i++) {
             const curr = snapsAsc[i];
             const prev = snapsAsc[i - 1];
-            // Clamp negative-day deltas to 0 so the sparkline never dips
-            // below the axis — matches the rollup tile semantics.
             const dailyDelta =
               (curr.followers_count ?? 0) - (prev.followers_count ?? 0);
-            series.push({
-              date: curr.snapshot_date,
-              value: Math.max(0, dailyDelta),
-            });
+            // Clamp negative-day deltas to 0 so the sparkline never dips
+            // below the axis — matches the rollup tile semantics.
+            deltaByDate.set(curr.snapshot_date, Math.max(0, dailyDelta));
           }
+          const series: MetricSeriesPoint[] = windowDays.map((date) => ({
+            date,
+            value: deltaByDate.get(date) ?? 0,
+          }));
           return {
             total: totalFollowerChange,
             previousTotal: prevFollowerChange,
@@ -363,16 +434,19 @@ export async function GET(request: NextRequest) {
           snaps,
           prevSnapsForProfile,
           accountColumnPicker('reach_count', 'account_reach_count'),
+          windowDays,
         ),
         impressions: buildMetricCard(
           snaps,
           prevSnapsForProfile,
           (s) => s.impressions_count ?? 0,
+          windowDays,
         ),
         profileVisits: buildMetricCard(
           snaps,
           prevSnapsForProfile,
           accountColumnPicker('profile_visits_count', 'account_profile_visits_count'),
+          windowDays,
         ),
         engagementRate: (() => {
           // Engagement rate isn't summable — report the window average and
@@ -389,16 +463,37 @@ export async function GET(request: NextRequest) {
           if (cur === 0 && prev === 0) return undefined;
           const byDay = new Map<string, number>();
           for (const s of snaps) byDay.set(s.snapshot_date, s.engagement_rate ?? 0);
+          // Pad to every day in the window — 0 on missing days. Engagement
+          // rate of 0 isn't quite "no data" semantically, but a flat 0 still
+          // reads more honestly than a 2-point line that pretends to know
+          // the curve in between.
           return {
             total: Math.round(cur * 100) / 100,
             previousTotal: Math.round(prev * 100) / 100,
             changePercent: calcChange(cur, prev),
-            series: [...byDay.entries()]
-              .sort(([a], [b]) => a.localeCompare(b))
-              .map(([date, value]) => ({ date, value })),
+            series: windowDays.map((date) => ({
+              date,
+              value: byDay.get(date) ?? 0,
+            })),
           };
         })(),
       };
+
+      // Platform-specific metric blacklist. Zernio gives us numbers for these
+      // but they're misleading enough that Jack asked to hide them entirely:
+      //  - IG impressions: Meta deprecated the impressions field in 2024;
+      //    what Zernio returns now is post-only and dramatically undercounts
+      //    real reach.
+      //  - IG / FB engagement rate: per-post engagement_rate from Zernio is
+      //    calculated against followers, not account views, so it skews wildly
+      //    on accounts with high non-follower reach.
+      if (profile.platform === 'instagram') {
+        metrics.impressions = undefined;
+        metrics.engagementRate = undefined;
+      }
+      if (profile.platform === 'facebook') {
+        metrics.engagementRate = undefined;
+      }
 
       const totalWatchTimeSeconds = snaps.reduce(
         (sum, s) => sum + (s.watch_time_seconds ?? 0),
@@ -406,17 +501,55 @@ export async function GET(request: NextRequest) {
       );
       const avgViewDurationSeconds = avgWatchDurationByProfile.get(profileId) ?? 0;
 
-      // Prefer account-level window totals from the end-of-window snapshot
-      // when Zernio exposed them (IG only today). These match Meta Business
-      // Suite's "Follows / Views / Content interactions" numbers because
-      // they count events across the whole account, not just posts published
-      // inside the window. Falls back to post-aggregate sums on other
-      // platforms.
+      // Prefer account-level window totals from snapshots when Zernio exposed
+      // them. These match Meta Business Suite's "Follows / Views / Content
+      // interactions" numbers because they count events across the whole
+      // account, not just posts published inside the window.
+      //
+      // Two storage shapes coexist in `platform_snapshots`:
+      //   (a) per-day rows (IG/FB): `new_follows_count` is stamped on every
+      //       day in the window, each row's `window_days = 1`. Summing the
+      //       column across the window yields the gross total.
+      //   (b) end-of-window aggregate (YT/LI legacy): a single row carries
+      //       the full window total with `window_days = N`; other rows are
+      //       null. Summing still works — null contributes 0.
+      // Same logic applies to `unfollows_count`. `account_views_count` and
+      // `account_engagement_count` remain end-of-window aggregates only.
+      const sumNullable = (key: keyof (typeof snapsAsc)[number]): number | null => {
+        let saw = false;
+        let total = 0;
+        for (const s of snapsAsc) {
+          const v = s[key] as number | null | undefined;
+          if (typeof v === 'number') {
+            saw = true;
+            total += v;
+          }
+        }
+        return saw ? total : null;
+      };
       const endSnap = snapsAsc.length > 0 ? snapsAsc[snapsAsc.length - 1] : null;
-      const accountFollows = endSnap?.new_follows_count ?? null;
-      const accountUnfollows = endSnap?.unfollows_count ?? null;
+      const accountFollows = sumNullable('new_follows_count');
+      const accountUnfollows = sumNullable('unfollows_count');
       const accountViews = endSnap?.account_views_count ?? null;
       const accountEngagement = endSnap?.account_engagement_count ?? null;
+
+      // Roll up gross follows into the org-wide headline. Platforms without
+      // gross data fall back to their net follower change so the combined
+      // total stays ≥ the net rollup. Same logic for the prior window.
+      const prevAccountFollows = (() => {
+        let saw = false;
+        let total = 0;
+        for (const s of prevSnapsForProfile) {
+          const v = s.new_follows_count;
+          if (typeof v === 'number') {
+            saw = true;
+            total += v;
+          }
+        }
+        return saw ? total : null;
+      })();
+      combinedNewFollows += accountFollows ?? totalFollowerChange;
+      combinedPrevNewFollows += prevAccountFollows ?? prevFollowerChange;
 
       platformSummaries.push({
         platform: profile.platform,
@@ -426,8 +559,16 @@ export async function GET(request: NextRequest) {
         followerChange: totalFollowerChange,
         newFollows: accountFollows ?? undefined,
         unfollows: accountUnfollows ?? undefined,
-        totalViews: accountViews ?? totalViews,
-        totalEngagement: accountEngagement ?? totalEngagement,
+        // Same "0 = not exposed" rule as the combined rollup — FB's Zernio
+        // account_views always lands as 0, so nullish coalescing alone would
+        // hide its real post-views total. Use the post-sum when the account
+        // metric is 0 or null.
+        totalViews:
+          accountViews && accountViews > 0 ? accountViews : totalViews,
+        totalEngagement:
+          accountEngagement && accountEngagement > 0
+            ? accountEngagement
+            : totalEngagement,
         engagementRate: Math.round(avgEngRate * 100) / 100,
         postsCount,
         watchTimeSeconds: totalWatchTimeSeconds,
@@ -495,13 +636,73 @@ export async function GET(request: NextRequest) {
       const existing = dailyMap.get(d) ?? { views: 0, engagement: 0, followers: 0 };
       existing.views += snap.views_count ?? 0;
       existing.engagement += snap.engagement_count ?? 0;
-      existing.followers += Math.max(0, snap.followers_change ?? 0);
+      // Prefer gross new-follows (IG/FB) when present so the sparkline
+      // matches the gross headline. Fall back to net follower delta on
+      // platforms without gross data. Clamp to >=0 either way.
+      existing.followers += Math.max(
+        0,
+        snap.new_follows_count ?? snap.followers_change ?? 0,
+      );
       dailyMap.set(d, existing);
     }
 
-    const chart = [...dailyMap.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, d]) => ({ date, views: d.views, engagement: d.engagement, followers: d.followers }));
+    // Pull the per-day follower table here so the combined chart can derive
+    // its "New followers" daily series from genuine daily data instead of
+    // the gappy snapshot table. platform_follower_daily is written every
+    // day Zernio returns a value, regardless of whether the snapshot cron
+    // wrote a full row that day, so a brand whose snapshots run weekly
+    // still gets a 7-point sparkline on a 7-day window.
+    const { data: followerDaily } = await supabase
+      .from('platform_follower_daily')
+      .select('platform, day, followers')
+      .eq('client_id', clientId)
+      .gte('day', start)
+      .lte('day', end)
+      .order('day', { ascending: true });
+
+    // Sum followers across platforms per day → cross-platform absolute total.
+    const totalFollowersByDay = new Map<string, number>();
+    for (const row of followerDaily ?? []) {
+      totalFollowersByDay.set(
+        row.day,
+        (totalFollowersByDay.get(row.day) ?? 0) + (row.followers ?? 0),
+      );
+    }
+    // Day-over-day delta of the cross-platform total, clamped to >=0 so a
+    // single platform's churn day doesn't pull the rollup negative. Day 1
+    // of the window has no prior reference inside the window, so its delta
+    // is 0 (we don't reach outside the window for the prior baseline).
+    const followerDeltaByDay = new Map<string, number>();
+    let priorTotal: number | null = null;
+    for (const date of windowDays) {
+      const totalToday = totalFollowersByDay.get(date);
+      if (totalToday === undefined) {
+        // No measurement that day — carry the prior total forward so the
+        // next measured day's delta is computed against the right baseline,
+        // and report a 0 delta for today.
+        followerDeltaByDay.set(date, 0);
+        continue;
+      }
+      if (priorTotal === null) {
+        followerDeltaByDay.set(date, 0);
+      } else {
+        followerDeltaByDay.set(date, Math.max(0, totalToday - priorTotal));
+      }
+      priorTotal = totalToday;
+    }
+
+    const chart = windowDays.map((date) => {
+      const measured = dailyMap.get(date);
+      return {
+        date,
+        views: measured?.views ?? 0,
+        engagement: measured?.engagement ?? 0,
+        // Followers comes from the daily follower table (reliable) rather
+        // than the snapshot table (gappy). When neither source covered a
+        // day, the delta is 0.
+        followers: followerDeltaByDay.get(date) ?? 0,
+      };
+    });
 
     // Build per-platform daily time-series. Same negative-clamp rule as the
     // combined chart — "Followers gained" never goes below zero on any tile.
@@ -516,42 +717,85 @@ export async function GET(request: NextRequest) {
       const existing = dMap.get(d) ?? { views: 0, engagement: 0, followers: 0 };
       existing.views += snap.views_count ?? 0;
       existing.engagement += snap.engagement_count ?? 0;
-      existing.followers += Math.max(0, snap.followers_change ?? 0);
+      // Prefer gross new-follows (IG/FB) when present so the sparkline
+      // matches the gross headline. Fall back to net follower delta on
+      // platforms without gross data. Clamp to >=0 either way.
+      existing.followers += Math.max(
+        0,
+        snap.new_follows_count ?? snap.followers_change ?? 0,
+      );
       dMap.set(d, existing);
     }
 
+    // Per-platform "followers gained" daily series derived from
+    // platform_follower_daily, mirroring what we did for the combined chart.
+    const followerDailyByPlatform = new Map<string, Map<string, number>>();
+    for (const row of followerDaily ?? []) {
+      if (!followerDailyByPlatform.has(row.platform)) {
+        followerDailyByPlatform.set(row.platform, new Map());
+      }
+      followerDailyByPlatform.get(row.platform)!.set(row.day, row.followers ?? 0);
+    }
+
     const platformCharts: Record<string, { date: string; views: number; engagement: number; followers: number }[]> = {};
-    for (const [platform, dMap] of platformDailyMaps) {
-      platformCharts[platform] = [...dMap.entries()]
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([date, d]) => ({ date, views: d.views, engagement: d.engagement, followers: d.followers }));
+    const platformsTouched = new Set<string>([
+      ...platformDailyMaps.keys(),
+      ...followerDailyByPlatform.keys(),
+    ]);
+    for (const platform of platformsTouched) {
+      const dMap = platformDailyMaps.get(platform);
+      const fMap = followerDailyByPlatform.get(platform);
+      // Day-over-day follower delta from platform_follower_daily for this
+      // platform specifically.
+      let prevForPlatform: number | null = null;
+      const platformFollowerDelta = new Map<string, number>();
+      for (const date of windowDays) {
+        const today = fMap?.get(date);
+        if (today === undefined) {
+          platformFollowerDelta.set(date, 0);
+          continue;
+        }
+        platformFollowerDelta.set(
+          date,
+          prevForPlatform === null ? 0 : Math.max(0, today - prevForPlatform),
+        );
+        prevForPlatform = today;
+      }
+      platformCharts[platform] = windowDays.map((date) => {
+        const m = dMap?.get(date);
+        return {
+          date,
+          views: m?.views ?? 0,
+          engagement: m?.engagement ?? 0,
+          followers: platformFollowerDelta.get(date) ?? 0,
+        };
+      });
     }
 
     // Sum total followers across all platforms (from latest snapshot each)
     const totalFollowers = platformSummaries.reduce((sum, p) => sum + (p.followers ?? 0), 0);
 
-    // Per-platform cumulative follower chart — one line per network. We
-    // read platform_follower_daily (stored by the sync in per-day
-    // granularity) rather than inferring from snapshots, so the chart
-    // matches the real ground truth Zernio reported for each day.
-    const { data: followerDaily } = await supabase
-      .from('platform_follower_daily')
-      .select('platform, day, followers')
-      .eq('client_id', clientId)
-      .gte('day', start)
-      .lte('day', end)
-      .order('day', { ascending: true });
-
+    // Per-platform cumulative follower chart — one line per network. Uses
+    // platform_follower_daily (queried up above for the combined chart),
+    // so the chart matches the real ground truth Zernio reported each day.
     // Pivot { platform, day, followers } → { day, [platform]: followers }
+    // and pad to every day in the window. Missing days carry the prior
+    // platform value forward so the line stays continuous (followers are
+    // cumulative — a missing snapshot doesn't mean 0 followers).
     const followerChartMap = new Map<string, Record<string, number>>();
     for (const row of followerDaily ?? []) {
       const entry = followerChartMap.get(row.day) ?? {};
       entry[row.platform] = row.followers ?? 0;
       followerChartMap.set(row.day, entry);
     }
-    const followerChart = [...followerChartMap.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, byPlatform]) => ({ date, ...byPlatform }));
+    const carryForward: Record<string, number> = {};
+    const followerChart = windowDays.map((date) => {
+      const measured = followerChartMap.get(date);
+      if (measured) {
+        for (const [p, v] of Object.entries(measured)) carryForward[p] = v;
+      }
+      return { date, ...carryForward };
+    });
 
     // Platform breakdown table: compact totals row per platform (Zernio-
     // dashboard-style) so the admin can scan all networks side by side.
@@ -581,6 +825,11 @@ export async function GET(request: NextRequest) {
         totalFollowerChangeChange: calcChange(
           combinedFollowerChange,
           combinedPrevFollowerChange,
+        ),
+        totalNewFollows: combinedNewFollows,
+        totalNewFollowsChange: calcChange(
+          combinedNewFollows,
+          combinedPrevNewFollows,
         ),
         totalEngagement: combinedEngagement,
         totalEngagementChange: calcChange(

@@ -203,7 +203,20 @@ function MetricSparklineCardImpl({
                 stroke={colorClass}
                 strokeWidth={1.5}
                 fill={`url(#${gradientId})`}
-                dot={false}
+                // Show per-point dots on short series (7-day windows etc.)
+                // so users can count "one dot per day" at a glance. Long
+                // series (30d+) get the cleaner dot-less line — dots stop
+                // adding signal once the line itself reads as a trend.
+                dot={
+                  card.series.length <= 14
+                    ? {
+                        r: 2.5,
+                        fill: colorClass,
+                        stroke: 'var(--background)',
+                        strokeWidth: 1,
+                      }
+                    : false
+                }
                 activeDot={{
                   r: 3,
                   fill: colorClass,

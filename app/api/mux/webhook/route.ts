@@ -41,6 +41,7 @@ const VIDEO_TABLES = [
   'content_drop_videos',
   'editing_project_videos',
   'editing_project_raw_videos',
+  'scheduler_media',
 ] as const;
 
 type VideoTable = (typeof VIDEO_TABLES)[number];
@@ -52,10 +53,22 @@ async function tryUpdateMuxRow(
   value: string,
   patch: Record<string, unknown>,
 ): Promise<boolean> {
-  // Only `content_drop_videos` has the revised_video_url/mp4 columns; strip
-  // them from the patch when targeting the editing tables to avoid 42703.
+  // Per-table column shape:
+  //   - content_drop_videos owns `revised_video_url` (HLS) +
+  //     `revised_mp4_url` (capped-1080p mp4). Both are publishing-payload
+  //     surfaces.
+  //   - editing_project* tables don't have those columns; we must strip
+  //     them or the UPDATE 42703s.
+  //   - scheduler_media reuses the same `late_media_url` slot the Zernio
+  //     publish path already reads, so a static_renditions.ready event
+  //     swaps the URL in place instead of adding a parallel column.
   const cleaned: Record<string, unknown> = { ...patch };
-  if (table !== 'content_drop_videos') {
+  const renditionMp4Url = cleaned.revised_mp4_url as string | undefined;
+  if (table === 'scheduler_media') {
+    delete cleaned.revised_video_url;
+    delete cleaned.revised_mp4_url;
+    if (renditionMp4Url) cleaned.late_media_url = renditionMp4Url;
+  } else if (table !== 'content_drop_videos') {
     delete cleaned.revised_video_url;
     delete cleaned.revised_mp4_url;
   }
@@ -68,7 +81,7 @@ async function tryUpdateMuxRow(
 }
 
 /**
- * Walk all three video tables looking for a row that matches the asset/upload
+ * Walk every Mux-aware table looking for a row that matches the asset/upload
  * id pair. Tries `mux_asset_id` first across each table, then falls back to
  * `mux_upload_id`. Returns the table that claimed the row, or null.
  */

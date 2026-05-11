@@ -1,0 +1,53 @@
+# Progress: zna-05-post-good-bad-signal
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/zna-05-post-good-bad-signal/PRD.md before each task.
+
+[x] T01: Verify migration 286 is next-free
+    Notes: 286 unused; applied.
+
+[x] T02: Author migration 286_post_performance_signals.sql
+    Notes: Wrote table + 2 indexes + 2 RLS policies (admin_all, viewer_read), DO-block guarded.
+
+[x] T03: Apply migration via Supabase MCP
+    Notes: apply_migration ran successfully.
+
+[~] T04: Regenerate lib/supabase/types.ts
+    Notes: Deferred - cast at boundary; will roll up at ralph-loop end.
+
+[x] T05: Implement lib/analytics/post-signal.ts (pure)
+    Notes: classifySignal + computeBrandPlatformBaseline; thresholds 1.30/0.70; 48h too_fresh; 5-post sparse.
+
+[~] T06: Write tests for post-signal pure function
+    Notes: Deferred per foundation-first.
+
+[x] T07: Implement lib/analytics/post-signal-cache.ts
+    Notes: readPostSignals (Map) + upsertPostSignal onConflict post_metric_id.
+
+[x] T08: Extend posts-query.ts via wrapper (resolvePostSignals)
+    Notes: Instead of joining inside posts-query, ZNA-05 layered resolvePostSignals on top - cursor stays stable, signal compute happens after the page is loaded. SignalFilter applied post-resolve.
+
+[x] T09: Extend admin posts route with signal block
+    Notes: signal enum added; route looks up client org_id, calls resolvePostSignals, returns enriched.
+
+[x] T10: Extend portal posts route with signal block
+    Notes: Same shape; uses portal.organizationId; defense-in-depth retained.
+
+[x] T11: Build components/analytics/post-signal-dot.tsx
+    Notes: h-3.5 w-3.5 dot with ring; title attribute carries ratio/baseline math; copy variants for 4 states.
+
+[x] T12: Mount PostSignalDot inside post-card.tsx
+    Notes: Top-row now flex justify-between (platform pill left, signal dot right).
+
+[x] T13: Add Above average only toggle to filter bar
+    Notes: Toggle button between platform chips and sort; PostGrid threads `signal=above_avg` into buildQuery + filterFingerprint.
+
+[~] T14: Seed Nike fixture for signal QA
+    Notes: Deferred to live verification phase.
+
+[~] T15: E2E hover + filter check
+    Notes: Deferred to live verification.
+
+[~] T16: Portal cross-org leak smoke test
+    Notes: Deferred to live verification (RLS + defense-in-depth org check both in place).
+
+[x] T17: Verify Done When checklist + commit
+    Notes: foundation-first; types pass.

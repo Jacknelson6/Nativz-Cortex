@@ -16,10 +16,25 @@ import { getOnboardingByToken } from '@/lib/onboarding/api';
 import { SCREENS } from '@/lib/onboarding/screens';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getBrandFromAgency } from '@/lib/agency/detect';
+import { getTheme } from '@/lib/branding';
 import { OnboardingStepper } from './stepper';
+import type { BrandBasicsPrefill } from '@/components/onboarding/screens/brand-basics';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+interface ClientRow {
+  id: string;
+  name: string | null;
+  agency: string | null;
+  logo_url: string | null;
+  website_url: string | null;
+  tagline: string | null;
+  products: string | null;
+  target_audience: string | null;
+  brand_voice: string | null;
+  current_offers: string | null;
+}
 
 export default async function OnboardingClientPage({
   params,
@@ -49,22 +64,37 @@ export default async function OnboardingClientPage({
   const admin = createAdminClient();
   const { data: clientRow } = await admin
     .from('clients')
-    .select('id, name, agency, logo_url')
+    .select(
+      'id, name, agency, logo_url, website_url, tagline, products, target_audience, brand_voice, current_offers',
+    )
     .eq('id', row.client_id)
-    .single<{ id: string; name: string | null; agency: string | null; logo_url: string | null }>();
+    .single<ClientRow>();
 
   if (!clientRow) notFound();
 
   const agency = getBrandFromAgency(clientRow.agency);
+  const theme = getTheme(agency);
   const screens = SCREENS[row.kind];
+
+  const prefill: BrandBasicsPrefill = {
+    tagline: clientRow.tagline,
+    what_we_sell: clientRow.products,
+    audience: clientRow.target_audience,
+    voice: clientRow.brand_voice,
+    current_offers: clientRow.current_offers,
+    website_url: clientRow.website_url,
+    logo_url: clientRow.logo_url,
+  };
 
   return (
     <div className="min-h-screen bg-background text-text-primary">
       <OnboardingStepper
         token={token}
         agency={agency}
+        theme={theme}
         clientName={clientRow.name ?? 'your brand'}
         clientLogoUrl={clientRow.logo_url}
+        brandPrefill={prefill}
         initial={{
           kind: row.kind,
           platforms: row.platforms,

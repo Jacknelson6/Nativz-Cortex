@@ -8,8 +8,32 @@
   },
   "crons": [
     {
+      "path": "/api/cron/prospect-monitor-daily",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/prospect-digest-build",
+      "schedule": "0 8 * * *"
+    },
+    {
       "path": "/api/cron/shoot-brief-reminders",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/recompute-format-context",
+      "schedule": "30 4 * * *"
+    },
+    {
+      "path": "/api/cron/format-discovery",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/format-gate",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/format-analyze",
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/sync-reporting",
@@ -18,6 +42,14 @@
     {
       "path": "/api/cron/sync-reporting",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/zernio-reconcile",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/zernio-pulse",
+      "schedule": "30 7 * * *"
     },
     {
       "path": "/api/cron/publish-posts",
@@ -104,6 +136,14 @@
       "schedule": "0 */6 * * *"
     },
     {
+      "path": "/api/cron/missing-core-platforms",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/sync-zernio-accounts",
+      "schedule": "0 * * * *"
+    },
+    {
       "path": "/api/cron/refresh-openrouter-models",
       "schedule": "0 4 1,15 * *"
     },
@@ -124,12 +164,20 @@
       "schedule": "0 6 1 * *"
     },
     {
+      "path": "/api/cron/generate-monthly-calendars",
+      "schedule": "30 6 1 * *"
+    },
+    {
       "path": "/api/cron/reconcile-zernio",
       "schedule": "0 4 * * *"
     },
     {
       "path": "/api/cron/missing-platforms-watch",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/post-timepoints",
+      "schedule": "*/30 * * * *"
     }
   ]
 }

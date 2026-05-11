@@ -131,21 +131,8 @@ export async function exportConversationPdf(opts: ExportConversationPdfOpts): Pr
   URL.revokeObjectURL(url);
 }
 
-/**
- * Heuristic check — does this assistant message look like a "video ideas"
- * deliverable worth auto-exporting? Deliberately strict so we don't
- * inadvertently export every chat response; the user can still hit the
- * manual Export PDF button for anything that fails the heuristic.
- *
- * Triggers when the message:
- *   (a) mentions "video ideas" or "video idea" (case-insensitive), AND
- *   (b) contains at least 5 numbered-list items
- */
-export function looksLikeVideoIdeasResponse(content: string): boolean {
-  if (!content || typeof content !== 'string') return false;
-  const lower = content.toLowerCase();
-  if (!lower.includes('video idea')) return false;
-  // Count top-level numbered list items: `1.` through `99.` at line starts.
-  const numberedItems = content.match(/^\s*\d{1,2}[.)]\s+/gm);
-  return (numberedItems?.length ?? 0) >= 5;
-}
+// looksLikeVideoIdeasResponse() lived here as a heuristic for stream-finish
+// auto-export. It was removed in commit 27da4f5c — the create_topic_plan
+// tool now produces a branded download card via topic-plan-artifact-card.tsx,
+// so the conversation-prose auto-export was a duplicate that shadowed the
+// real artifact. Kept this comment so the todo trail is greppable.

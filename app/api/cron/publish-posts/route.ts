@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getPostingService } from '@/lib/posting';
+import { ZernioPostingService } from '@/lib/posting/zernio';
 import type { SocialPlatform } from '@/lib/posting/types';
 import { preflightInstagramAspectForPost } from '@/lib/posting/validate-image-aspect';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
@@ -9,11 +10,7 @@ import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
 import { verifyAndReconcilePost } from '@/lib/calendar/verify-post';
 import { notifyPartialFailureGuarded } from '@/lib/calendar/notify-partial-failure';
 import { resolveScheduledPostMedia } from '@/lib/calendar/resolve-media';
-import {
-  buildChatCardMessage,
-  escapeCardHtml,
-  postToGoogleChatSafe,
-} from '@/lib/chat/post-to-google-chat';
+import { buildChatCard, postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
 import {
   isAccountLevelLegError,
   isZernioGlobalAuthError,
@@ -73,7 +70,9 @@ async function handleGet(request: NextRequest) {
             platform,
             username,
             access_token_ref,
-            late_account_id
+            late_account_id,
+            is_active,
+            token_status
           )
         ),
         scheduled_post_media (
@@ -247,21 +246,41 @@ async function handleGet(request: NextRequest) {
         };
         // Stamp legs whose social profile is NOT connected to Zernio (NULL
         // late_account_id) as 'failed' with a clear reason BEFORE filtering.
-        // Silently dropping them (the prior behaviour) hid the root cause —
+        // Silently dropping them (the prior behaviour) hid the root cause,
         // the spp row stayed 'pending' forever, the calendar UI showed no
         // failure, and the team had no breadcrumb that "Reconnect Zernio"
         // was the fix. Now the leg-level failure_reason names the platform
         // and the publishing UX has a real signal.
+        //
+        // Phase 5 extension: also short-circuit legs whose profile is
+        // marked inactive (is_active=false) or whose cached token_status
+        // is bad (expired / needs_refresh). Both columns are kept current
+        // by the webhook handler and the connection-expired-watch cron
+        // respectively. Skipping these BEFORE we hit Zernio saves a
+        // round-trip that would 401 anyway, and gives operators a
+        // surgical reason like "TikTok token expired, reconnect" instead
+        // of a generic Zernio error.
         const unconnectedFailures: { platform: string; username: string | null; reason: string }[] = [];
         for (const spp of (post.scheduled_post_platforms ?? []) as Record<string, unknown>[]) {
           const sppStatus = (spp.status as string | null) ?? 'pending';
           if (sppStatus !== 'pending' && sppStatus !== 'failed') continue;
           const profile = spp.social_profiles as Record<string, unknown> | null;
           const lateAccountId = (profile?.late_account_id ?? null) as string | null;
-          if (lateAccountId) continue;
+          const isActive = (profile?.is_active as boolean | null) ?? true;
+          const tokenStatus = (profile?.token_status as string | null) ?? null;
           const platformName = (profile?.platform as string | null) ?? 'unknown';
           const username = (profile?.username as string | null) ?? null;
-          const reason = `${platformName} profile is not connected to Zernio (no late_account_id). Reconnect the profile in social settings before retrying.`;
+
+          let reason: string | null = null;
+          if (!lateAccountId) {
+            reason = `${platformName} profile is not connected to Zernio (no late_account_id). Reconnect the profile in social settings before retrying.`;
+          } else if (!isActive) {
+            reason = `${platformName} profile is inactive — Zernio reported the account disconnected. Reconnect in scheduler before retrying.`;
+          } else if (tokenStatus === 'expired' || tokenStatus === 'needs_refresh') {
+            reason = `${platformName} token is ${tokenStatus.replace('_', ' ')}. Reconnect the account so Zernio can refresh authorization.`;
+          }
+          if (!reason) continue;
+
           await adminClient
             .from('scheduled_post_platforms')
             .update({ status: 'failed', failure_reason: reason })
@@ -274,11 +293,20 @@ async function handleGet(request: NextRequest) {
         )
           .map((spp: Record<string, unknown>): PlatformProfile | null => {
             const sppStatus = (spp.status as string | null) ?? 'pending';
-            // Skip legs that already published — never re-fire them.
+            // Skip legs that already published, never re-fire them, AND
+            // skip the legs we just stamped 'failed' above (inactive /
+            // bad token / no late_account_id). The unconnectedFailures
+            // loop already wrote the failure_reason; trying to publish
+            // them again here would either 401 or worse, succeed on a
+            // resurrected account and create a ghost post.
             if (sppStatus !== 'pending' && sppStatus !== 'failed') return null;
             const profile = spp.social_profiles as Record<string, unknown> | null;
             const lateAccountId = (profile?.late_account_id ?? null) as string | null;
+            const isActive = (profile?.is_active as boolean | null) ?? true;
+            const tokenStatus = (profile?.token_status as string | null) ?? null;
             if (!lateAccountId) return null;
+            if (!isActive) return null;
+            if (tokenStatus === 'expired' || tokenStatus === 'needs_refresh') return null;
             return {
               profileId: spp.social_profile_id as string,
               lateAccountId,
@@ -630,6 +658,84 @@ async function handleGet(request: NextRequest) {
           linkedin_disable_link_preview: boolean | null;
           first_comment: string | null;
         };
+
+        // Pre-flight: ask Zernio to validate the payload before we burn a
+        // publish slot. Validation failures are deterministic (caption too
+        // long, missing field, unsupported media combo) — retrying buys
+        // nothing. Mark the post terminal-failed and notify, so the team
+        // fixes the payload rather than letting the retry queue grind.
+        // Method silently no-ops on 404 if Zernio's plan excludes validation.
+        const validateMediaUrls = mediaItems?.length
+          ? mediaItems.map((m) => m.url).filter((u): u is string => !!u)
+          : videoUrl
+            ? [videoUrl]
+            : [];
+        const zernioPreflight = new ZernioPostingService();
+        const validation = await zernioPreflight.validatePost({
+          caption: post.caption ?? '',
+          hashtags: post.hashtags ?? [],
+          mediaUrls: validateMediaUrls,
+          platforms: platformProfiles.map((pp: PlatformProfile) => pp.platform),
+        });
+        if (!validation.ok && validation.issues.length > 0) {
+          const reasonText = validation.issues
+            .map((i) => {
+              const platform = i.platform ? `${i.platform}: ` : '';
+              const field = i.field ? `[${i.field}] ` : '';
+              const code = i.code ? ` (${i.code})` : '';
+              return `${platform}${field}${i.message}${code}`;
+            })
+            .join(' | ');
+          console.warn(
+            `[publish-cron] Zernio validatePost rejected ${post.id}: ${reasonText}`,
+          );
+          await adminClient
+            .from('scheduled_posts')
+            .update({
+              status: 'partially_failed',
+              retry_count: MAX_RETRIES,
+              failure_reason: `Zernio pre-flight validation rejected: ${reasonText}`,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', post.id);
+          // Stamp the relevant per-platform leg(s) so the UI surfaces what
+          // failed; issues with no platform get applied to every leg.
+          for (const issue of validation.issues) {
+            const targetLegs = (post.scheduled_post_platforms ?? []).filter(
+              (s: Record<string, unknown>) => {
+                if (!issue.platform) return true;
+                const sp = s.social_profiles as { platform?: string } | undefined;
+                return sp?.platform === issue.platform;
+              },
+            );
+            for (const leg of targetLegs) {
+              await adminClient
+                .from('scheduled_post_platforms')
+                .update({
+                  status: 'failed',
+                  failure_reason: `${issue.field ? `[${issue.field}] ` : ''}${issue.message}${issue.code ? ` (${issue.code})` : ''}`,
+                })
+                .eq('id', (leg as Record<string, unknown>).id);
+            }
+          }
+          try {
+            await notifyPartialFailureGuarded(
+              adminClient,
+              post,
+              validation.issues.map((i) => ({
+                platform: typeof i.platform === 'string' ? i.platform : 'unknown',
+                username: null,
+                reason: i.message,
+              })),
+              sendPartialFailureNotification,
+            );
+          } catch (notifyErr) {
+            console.error('Failed to send validation failure notification:', notifyErr);
+          }
+          failedCount++;
+          continue;
+        }
+
         const result = await postingService.publishPost({
           videoUrl,
           mediaItems,
@@ -710,8 +816,16 @@ async function handleGet(request: NextRequest) {
             // token keeps failing until the user reconnects. Flip the
             // profile to inactive + fire a one-time disconnect notification
             // so the team can ask the client to reconnect, instead of
-            // burning the rest of MAX_RETRIES on the same dead token.
-            if (isAccountLevelLegError(reason)) {
+            // burning the rest of MAX_RETRIES on the same dead token. Prefer
+            // the structured envelope (errorCode/errorType) when Zernio
+            // surfaced it — regex fallback if not.
+            if (
+              isAccountLevelLegError({
+                errorCode: platformResult.errorCode,
+                errorType: platformResult.errorType,
+                message: platformResult.errorMessage ?? reason,
+              })
+            ) {
               try {
                 await markProfileDisconnectedFromLegFailure({
                   admin: adminClient,
@@ -1017,15 +1131,22 @@ async function handleGet(request: NextRequest) {
     // back to 'published'. Only acts on rows whose failure_reason matches a
     // timeout pattern; real failures are left alone. Only flips failed →
     // published, never the reverse.
+    //
+    // Window is 7 days: the previous 24h cap meant any leg the cron didn't
+    // get to within a day fell out of view forever (the
+    // `scripts/reconcile-stale-timeouts.ts` backfill exists exactly for that
+    // reason). 7 days is wide enough that Zernio's authoritative state has
+    // settled on every platform, and the limit caps cost on the hot path.
     try {
-      const cutoffIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const cutoffIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const { data: reconcileCandidates } = await adminClient
         .from('scheduled_posts')
         .select('id')
         .in('status', ['partially_failed', 'failed'])
         .gte('updated_at', cutoffIso)
         .not('late_post_id', 'is', null)
-        .limit(10);
+        .order('updated_at', { ascending: false })
+        .limit(25);
 
       for (const c of reconcileCandidates ?? []) {
         const candidateId = (c as { id: string }).id;
@@ -1348,25 +1469,27 @@ async function sendFailureNotification(
   if (opsWebhook) {
     const reason = (post.failure_reason as string | null) ?? 'unknown error';
     const truncatedReason = reason.length > 280 ? reason.substring(0, 280) + '…' : reason;
-    const captionEllipsis = ((post.caption as string) ?? '').length > 100 ? '…' : '';
-    const captionText = `${caption}${captionEllipsis}`;
-    const fallback =
-      `🚨 *Post failed to publish for ${clientName}*\n` +
-      `Caption: "${captionText}"\n` +
-      `Reason: ${truncatedReason}\n` +
-      `${postUrl}`;
+    const captionTrunc = `${caption}${((post.caption as string) ?? '').length > 100 ? '…' : ''}`;
     postToGoogleChatSafe(
       opsWebhook,
-      buildChatCardMessage({
+      buildChatCard({
         cardId: `publish-failure-${postId}`,
-        title: '🚨 Post failed to publish',
-        subtitle: clientName,
-        paragraphs: [
-          { html: `<b>Caption:</b> "${escapeCardHtml(captionText)}"` },
-          { html: `<b>Reason:</b> ${escapeCardHtml(truncatedReason)}` },
+        headerTitle: '🚨 Publish FAILED (3 retries)',
+        headerSubtitle: clientName,
+        sections: [
+          {
+            widgets: [
+              {
+                type: 'text',
+                text: 'Failed on every platform after 3 retries. The client was <b>not</b> notified; the post is stuck in failed state.',
+              },
+              { type: 'kv', label: 'Caption', value: captionTrunc },
+              { type: 'kv', label: 'Reason', value: truncatedReason },
+              { type: 'button', text: 'Investigate', url: postUrl, filled: true },
+            ],
+          },
         ],
-        buttons: [{ text: 'Open post', url: postUrl }],
-        fallback,
+        fallbackText: `🚨 Publish FAILED for ${clientName}: ${truncatedReason}. ${postUrl}`,
       }),
       `publish-failure ${postId}`,
     );
@@ -1417,34 +1540,34 @@ async function sendPartialFailureNotification(
   if (opsWebhook) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
     const postUrl = `${appUrl}${linkPath}`;
-    const failureRows = failures.map((f) => {
-      const who = f.username ? `${f.platform} (@${f.username})` : f.platform;
-      const reason = f.reason.length > 200 ? f.reason.substring(0, 200) + '…' : f.reason;
-      return { who, reason };
-    });
-    const failureLines = failureRows.map((r) => `• ${r.who}: ${r.reason}`).join('\n');
-    const captionEllipsis = ((post.caption as string) ?? '').length > 100 ? '…' : '';
-    const captionText = `${caption}${captionEllipsis}`;
-    const fallback =
-      `⚠️ *Post partially failed to publish for ${clientName}*\n` +
-      `Caption: "${captionText}"\n` +
-      `${failureLines}\n` +
-      `${postUrl}`;
-    const failureHtml = failureRows
-      .map((r) => `• ${escapeCardHtml(r.who)}: ${escapeCardHtml(r.reason)}`)
+    const failureLines = failures
+      .map((f) => {
+        const who = f.username ? `${f.platform} (@${f.username})` : f.platform;
+        const reason = f.reason.length > 200 ? f.reason.substring(0, 200) + '…' : f.reason;
+        return `• ${who}: ${reason}`;
+      })
       .join('<br>');
+    const captionTrunc = `${caption}${((post.caption as string) ?? '').length > 100 ? '…' : ''}`;
     postToGoogleChatSafe(
       opsWebhook,
-      buildChatCardMessage({
+      buildChatCard({
         cardId: `publish-partial-${postId}`,
-        title: '⚠️ Post partially failed',
-        subtitle: clientName,
-        paragraphs: [
-          { html: `<b>Caption:</b> "${escapeCardHtml(captionText)}"` },
-          { html: `<b>Failed platforms:</b><br>${failureHtml}` },
+        headerTitle: '⚠️ Publish PARTIALLY failed',
+        headerSubtitle: clientName,
+        sections: [
+          {
+            widgets: [
+              {
+                type: 'text',
+                text: 'Some platforms shipped, some did not. Cron will <b>not</b> retry partials (the successes can\'t be unpublished). The client was <b>not</b> notified.',
+              },
+              { type: 'kv', label: 'Caption', value: captionTrunc },
+              { type: 'kv', label: 'Failed legs', value: failureLines },
+              { type: 'button', text: 'Manually re-publish failed legs', url: postUrl, filled: true },
+            ],
+          },
         ],
-        buttons: [{ text: 'Open post', url: postUrl }],
-        fallback,
+        fallbackText: `⚠️ Publish partially failed for ${clientName}. ${postUrl}`,
       }),
       `publish-partial ${postId}`,
     );

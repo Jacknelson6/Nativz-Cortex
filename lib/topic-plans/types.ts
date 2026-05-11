@@ -33,6 +33,17 @@ export const topicIdeaSchema = z.object({
   priority: z.boolean().nullish(),
   /** 1-2 sentences — why this topic is on-brand for the client. */
   why_it_works: z.string().max(600).nullish(),
+  // VFF-10: when a topic is anchored on a specific viral format (different
+  // from the plan-level format pin), the adapter renders a per-card italic
+  // descriptor under the metrics row.
+  format_reference: z
+    .object({
+      slug: z.string(),
+      display_name: z.string(),
+      descriptor: z.string().nullable().optional(),
+    })
+    .partial({ descriptor: true })
+    .nullish(),
 });
 export type TopicIdea = z.infer<typeof topicIdeaSchema>;
 
@@ -59,6 +70,19 @@ export const topicPlanSchema = z.object({
   north_star_metric: z.string().max(200).nullish(),
   /** Recommended content split. Free text. */
   content_split_note: z.string().max(500).nullish(),
+  // VFF-10: plan-level format pin. Stamped by create_topic_plan when the
+  // strategist anchored the deliverable on a viral format (slug resolved
+  // against viral_formats taxonomy). The branded PDF adapter renders a
+  // Format badge on every topic card when set.
+  format_slug: z.string().nullish(),
+  format_reference: z
+    .object({
+      slug: z.string(),
+      display_name: z.string(),
+      descriptor: z.string().nullable().optional(),
+    })
+    .partial({ descriptor: true })
+    .nullish(),
 });
 // Note: client_id and topic_search_ids live as table columns (topic_plans
 // row), not inside plan_json. Storing them in JSON would require the Nerd

@@ -56,8 +56,11 @@ const CreateSchema = z.object({
   platforms: z.array(z.string()).optional(),
   /** When true, fire the welcome email immediately. Default true. */
   send_welcome: z.boolean().optional(),
-  /** Optional first POC email. If omitted we fall back to the client's primary contact. */
+  /** Single POC email override (legacy). Kept for backwards compat. */
   poc_email: z.string().email().optional(),
+  /** Multi-select POC emails. When provided, only these contacts get the
+   *  welcome email. Empty/omitted falls back to all brand-profile POCs. */
+  poc_emails: z.array(z.string().email()).optional(),
 });
 
 export async function POST(req: Request) {
@@ -80,7 +83,9 @@ export async function POST(req: Request) {
     );
   }
 
-  const { client_id, kind, platforms, send_welcome, poc_email } = parsed.data;
+  const { client_id, kind, platforms, send_welcome, poc_email, poc_emails } = parsed.data;
+  const recipientOverride =
+    poc_emails && poc_emails.length > 0 ? poc_emails : poc_email;
   if (kind === 'editing' && platforms && platforms.length > 0) {
     return NextResponse.json(
       { error: 'editing kind does not accept platforms' },
@@ -97,7 +102,7 @@ export async function POST(req: Request) {
       try {
         const sentList = await sendOnboardingWelcomeEmail({
           onboarding: row,
-          recipient_email: poc_email,
+          recipient_email: recipientOverride,
           triggered_by: guard.ctx.user.id,
         });
         // One log row per POC; the welcome fan-out lands separate emails to

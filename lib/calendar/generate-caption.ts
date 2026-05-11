@@ -24,6 +24,12 @@ interface ClientContext {
   caption_hashtags: string[] | null;
   caption_cta_es: string | null;
   caption_hashtags_es: string[] | null;
+  // NAT-67: free-text strategist guidance. Distinct from the boilerplate
+  // above (caption_cta / caption_hashtags appended verbatim) — these
+  // shape the model's output, they don't get appended literally.
+  caption_notes: string | null;
+  hashtag_notes: string | null;
+  cta_notes: string | null;
 }
 
 interface SavedCaption {
@@ -45,7 +51,7 @@ export async function generateDropCaptions(
       .order('order_index'),
     admin
       .from('clients')
-      .select('name, industry, brand_voice, target_audience, topic_keywords, description, services, caption_cta, caption_hashtags, caption_cta_es, caption_hashtags_es')
+      .select('name, industry, brand_voice, target_audience, topic_keywords, description, services, caption_cta, caption_hashtags, caption_cta_es, caption_hashtags_es, caption_notes, hashtag_notes, cta_notes')
       .eq('id', opts.clientId)
       .single(),
     admin
@@ -119,7 +125,7 @@ export async function generateDropCaptions(
   return { generated, failed };
 }
 
-interface GenerateOptions {
+export interface GenerateOptions {
   context: VideoContext;
   thumbnailUrl: string | null;
   client: ClientContext | null;
@@ -128,7 +134,10 @@ interface GenerateOptions {
   userEmail?: string;
 }
 
-async function generateOneCaption(
+export type CaptionClientContext = ClientContext;
+export type CaptionSavedExample = SavedCaption;
+
+export async function generateOneCaption(
   opts: GenerateOptions,
 ): Promise<{ caption: string; hashtags: string[] }> {
   const brandBlock = renderBrandBlock(opts.client);
@@ -211,7 +220,23 @@ function renderBrandBlock(client: ClientContext | null): string {
   if (client.topic_keywords?.length) lines.push(`Keywords: ${client.topic_keywords.join(', ')}`);
   if (client.description) lines.push(`About: ${client.description}`);
   if (client.services?.length) lines.push(`Services: ${client.services.join(', ')}`);
-  return `\n\nClient context:\n${lines.join('\n')}`;
+
+  // NAT-67: per-brand strategist guidance. Each block is rendered only
+  // if the strategist actually filled it in — empty notes become silent
+  // so the prompt doesn't bloat with placeholder headings.
+  const guidance: string[] = [];
+  if (client.caption_notes?.trim()) {
+    guidance.push(`Caption guidance:\n${client.caption_notes.trim()}`);
+  }
+  if (client.hashtag_notes?.trim()) {
+    guidance.push(`Hashtag guidance:\n${client.hashtag_notes.trim()}`);
+  }
+  if (client.cta_notes?.trim()) {
+    guidance.push(`CTA guidance:\n${client.cta_notes.trim()}`);
+  }
+  const guidanceBlock = guidance.length ? `\n\n${guidance.join('\n\n')}` : '';
+
+  return `\n\nClient context:\n${lines.join('\n')}${guidanceBlock}`;
 }
 
 function renderSavedBlock(saved: SavedCaption[]): string {
@@ -250,6 +275,14 @@ function renderCtaBoilerplateBlock(client: ClientContext | null, language: strin
     );
   }
   return parts.length ? `\n\n${parts.join('\n\n')}` : '';
+}
+
+export function applyCaptionBoilerplate(
+  generated: { caption: string; hashtags: string[] },
+  client: ClientContext | null,
+  language: string,
+): { caption: string; hashtags: string[] } {
+  return applyBoilerplate(generated, client, language);
 }
 
 function applyBoilerplate(

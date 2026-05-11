@@ -182,6 +182,12 @@ export interface SummaryReport {
     totalViewsChange: number;
     totalFollowerChange: number;
     totalFollowerChangeChange: number;
+    /** Gross follow events across all platforms (MBS-style). Falls back to
+     * net follower change on platforms without gross data, so this number
+     * always renders ≥ `totalFollowerChange`. Drives the "New followers"
+     * headline tile. */
+    totalNewFollows?: number;
+    totalNewFollowsChange?: number;
     totalEngagement: number;
     totalEngagementChange: number;
     avgEngagementRate: number;

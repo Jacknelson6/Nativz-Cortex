@@ -34,14 +34,7 @@ const ListQuery = z.object({
 const CreateBody = z.object({
   client_id: z.string().uuid(),
   name: z.string().min(1).max(200),
-  project_type: z
-    .enum(['organic_content', 'social_ads', 'ctv_ads', 'general', 'other'])
-    .default('organic_content'),
-  // Strategist + editor are required at create time so the project never
-  // lands in the board unassigned. The dialog enforces this client-side
-  // too; this is the server-side guard.
-  strategist_id: z.string().uuid({ message: 'Pick a strategist' }),
-  editor_id: z.string().uuid({ message: 'Pick an editor' }),
+  project_type: z.enum(['editing', 'calendar']).default('editing'),
   drive_folder_url: z.string().url().optional(),
   notes: z.string().max(2000).optional(),
 });
@@ -68,7 +61,7 @@ export async function GET(req: Request) {
        videographer_id, strategist_id, project_brief, shoot_date,
        drive_folder_url, notes,
        drop_id, created_by, created_at, updated_at, ready_at, approved_at,
-       scheduled_at, archived_at,
+       scheduled_at, archived_at, promoted_at,
        client:clients!editing_projects_client_id_fkey(name, slug, logo_url),
        editor:team_members!editing_projects_editor_id_fkey(email, full_name),
        videographer:team_members!editing_projects_videographer_id_fkey(email, full_name),
@@ -277,6 +270,7 @@ export async function GET(req: Request) {
     approved_at: row.approved_at,
     scheduled_at: row.scheduled_at,
     archived_at: row.archived_at,
+    promoted_at: row.promoted_at ?? null,
     video_count: Array.isArray(row.videos) ? row.videos[0]?.count ?? 0 : 0,
     raw_video_count: Array.isArray(row.raw_videos) ? row.raw_videos[0]?.count ?? 0 : 0,
     first_sent_at: sendStats.get(row.id)?.first_sent_at ?? null,
@@ -310,10 +304,20 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
 
-  // Strategist + editor are required by the schema above so we just pass
-  // the picked team_members ids straight through. (Previously we fell
-  // back to "creator's team_members row," which produced unassigned
-  // projects whenever a super-admin without a roster entry created one.)
+  // editor_id now FKs into team_members (migration 212, renamed from
+  // assignee_id in migration 240), so translate the current admin's
+  // auth user id to their team_members row if there is one. If the
+  // admin doesn't have a roster entry (e.g. a super-admin with no
+  // team_members row) we leave it null and let the user pick later.
+  const { data: teamRow } = await admin
+    .from('team_members')
+    .select('id')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  const defaultEditorId = (teamRow?.id as string | undefined) ?? null;
+
   const { data, error } = await admin
     .from('editing_projects')
     .insert({
@@ -323,8 +327,7 @@ export async function POST(req: Request) {
       drive_folder_url: parsed.data.drive_folder_url ?? null,
       notes: parsed.data.notes ?? null,
       created_by: user.id,
-      strategist_id: parsed.data.strategist_id,
-      editor_id: parsed.data.editor_id,
+      editor_id: defaultEditorId,
     })
     .select('id')
     .single();

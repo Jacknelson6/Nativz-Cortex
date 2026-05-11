@@ -190,7 +190,7 @@ export async function POST(
       client_id: drop.client_id,
       drop_id: drop.id,
       name,
-      project_type: 'organic_content',
+      project_type: 'calendar',
       created_by: user.id,
       editor_id: (teamRow?.id as string | undefined) ?? null,
     })

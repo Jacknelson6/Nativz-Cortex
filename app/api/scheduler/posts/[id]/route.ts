@@ -85,7 +85,10 @@ const UpdatePostSchema = z.object({
  *
  * Update a scheduled post's fields, platform links, and/or media attachments.
  * When media is replaced, old media items are unmarked as used. Platform links
- * are replaced atomically (delete then insert) if platform_profile_ids is provided.
+ * are diffed against the existing legs when `platform_profile_ids` is provided:
+ * profiles that stay selected keep their per-leg state (status, external_post_id,
+ * failure_reason), newly added profiles get a fresh `pending` row, deselected
+ * profiles are removed. Already-published legs are never silently dropped.
  *
  * @auth Required (any authenticated user)
  * @param id - Scheduled post UUID
@@ -240,16 +243,66 @@ export async function PUT(
       }
     }
 
-    // Update platform links if provided
+    // Update platform links if provided.
+    //
+    // This is a per-leg toggle: each connected social profile that the
+    // user keeps selected stays as-is (preserving its `status`,
+    // `external_post_id`, `failure_reason` — i.e. whatever the
+    // publisher already wrote), each profile newly added gets a fresh
+    // `pending` row, each profile newly deselected gets removed.
+    //
+    // We deliberately AVOID the old "delete all + reinsert" path here.
+    // For a partially-published post, dropping the row would erase the
+    // success record on the legs that did go out — losing the
+    // `external_post_id` we use to render "View on platform" links and
+    // the publish results panel.
+    //
+    // Already-published legs are protected by an additional safety
+    // check: we never delete a leg whose status is anything other than
+    // pending/scheduled/failed. If the editor somehow lands here with a
+    // published leg deselected, we keep it — the editor's published
+    // lock + disabled save should already prevent this case.
     if (data.platform_profile_ids !== undefined) {
-      await adminClient.from('scheduled_post_platforms').delete().eq('post_id', id);
-      if (data.platform_profile_ids.length > 0) {
+      const desired = new Set(data.platform_profile_ids);
+
+      const { data: existingLegs } = await adminClient
+        .from('scheduled_post_platforms')
+        .select('id, social_profile_id, status')
+        .eq('post_id', id);
+      const existing = (existingLegs ?? []) as Array<{
+        id: string;
+        social_profile_id: string;
+        status: string;
+      }>;
+
+      const existingProfileIds = new Set(existing.map(l => l.social_profile_id));
+
+      const toDelete = existing.filter(
+        l =>
+          !desired.has(l.social_profile_id) &&
+          // Hard guard — never silently drop a leg the publisher has
+          // already touched. 'pending' / 'scheduled' / 'failed' are the
+          // safe-to-drop states; 'published' / 'publishing' /
+          // 'partially_failed' stay regardless of UI selection.
+          (l.status === 'pending' || l.status === 'scheduled' || l.status === 'failed'),
+      );
+      const toInsert = data.platform_profile_ids.filter(
+        pid => !existingProfileIds.has(pid),
+      );
+
+      if (toDelete.length > 0) {
+        await adminClient
+          .from('scheduled_post_platforms')
+          .delete()
+          .in('id', toDelete.map(l => l.id));
+      }
+      if (toInsert.length > 0) {
         await adminClient.from('scheduled_post_platforms').insert(
-          data.platform_profile_ids.map(profileId => ({
+          toInsert.map(profileId => ({
             post_id: id,
             social_profile_id: profileId,
             status: 'pending',
-          }))
+          })),
         );
       }
     }

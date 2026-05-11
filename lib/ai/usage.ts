@@ -1,4 +1,3 @@
-import { after } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 // ── Pricing per token ───────────────────────────────────────────────────────
@@ -99,9 +98,18 @@ export function calculateGroqAudioCost(durationSeconds: number): number {
  * `next/server`'s `after()` keeps the work alive past the response. Falls back
  * to fire-and-forget for CLI scripts and other non-request contexts where
  * `after()` is unavailable.
+ *
+ * `after` is required lazily so this module stays importable from boundaries
+ * that the client-side notification preview chain transitively reaches
+ * (`components/clients/client-notifications-grid.tsx` →
+ *  `lib/notifications/registry.ts` → `lib/email/resend.ts`). Webpack's
+ * server-only check fires on the static `import { after } from 'next/server'`
+ * statement even when the call site is unreachable from the client.
  */
 export function trackUsage(entry: UsageEntry): void {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { after } = require('next/server') as typeof import('next/server');
     after(() => logUsage(entry));
   } catch {
     void logUsage(entry).catch(() => {});

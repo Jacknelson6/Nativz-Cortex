@@ -7,8 +7,11 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
+  CalendarDays,
+  Check,
   CheckCheck,
   CheckCircle2,
   Copy,
@@ -61,11 +64,6 @@ import {
   subscribe as subscribeUploads,
   subscribeToCompletion,
 } from '@/lib/editing/upload-store';
-import {
-  type ContactRow,
-  getCachedContacts,
-  fetchContacts,
-} from '@/lib/content-tools/contacts-cache';
 
 /**
  * Detail panel for a single editing project. Drives:
@@ -87,10 +85,19 @@ const TYPE_OPTIONS: { value: EditingProjectType; label: string }[] = (
   Object.keys(EDITING_TYPE_LABEL) as EditingProjectType[]
 ).map((value) => ({ value, label: EDITING_TYPE_LABEL[value] }));
 
+interface ScheduledPostRow {
+  id: string;
+  title: string | null;
+  scheduled_at: string | null;
+  status: string | null;
+  caption: string | null;
+}
+
 interface DetailResponse {
   project: EditingProject;
   videos: EditingProjectVideo[];
   raw_videos?: unknown[];
+  scheduled_posts?: ScheduledPostRow[];
 }
 
 type SendVariant = 'delivery' | 'rereview';
@@ -115,6 +122,9 @@ interface ShareLinkRow {
 interface SendPreview {
   subject: string;
   message: string;
+  /** Rendered email HTML for the "Rendered preview" tab. */
+  html: string;
+  cta_label: string;
   recipients: { email: string; name: string | null }[];
   client_name: string;
   project_name: string;
@@ -122,6 +132,27 @@ interface SendPreview {
   kind: SendVariant;
   pending_count: number;
 }
+
+interface ContactRow {
+  id: string;
+  email: string;
+  name: string | null;
+  role: string | null;
+}
+
+/**
+ * Module-level caches for the editing-project modal. Stale-while-revalidate:
+ * a re-open hydrates from cache synchronously so the user sees full content
+ * on first paint, then the background fetch reconciles. Mirrors the
+ * CONTACTS_CACHE pattern that's already here.
+ *
+ * Without this, every modal open re-flashed empty fields → loading state →
+ * populated, even when re-opening the same project seconds later.
+ */
+const CONTACTS_CACHE = new Map<string, ContactRow[]>();
+const DETAIL_CACHE = new Map<string, DetailResponse>();
+const SHARE_CACHE = new Map<string, ShareLinkRow[]>();
+const EMAILS_CACHE = new Map<string, ArchivedEmail[]>();
 
 export function EditingProjectDetail({
   project,
@@ -132,6 +163,7 @@ export function EditingProjectDetail({
   onClose: () => void;
   onChanged: () => void;
 }) {
+  const router = useRouter();
   const open = !!project;
   const [data, setData] = useState<DetailResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -139,7 +171,7 @@ export function EditingProjectDetail({
   const [name, setName] = useState('');
   const [notes, setNotes] = useState('');
   const [driveUrl, setDriveUrl] = useState('');
-  const [type, setType] = useState<EditingProjectType>('organic_content');
+  const [type, setType] = useState<EditingProjectType>('editing');
   const [status, setStatus] = useState<EditingProjectStatus>('editing');
   const [dragActive, setDragActive] = useState(false);
   const [tab, setTab] = useState<DetailTab>('details');
@@ -166,6 +198,17 @@ export function EditingProjectDetail({
   const [messageDraft, setMessageDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [renderMode, setRenderMode] = useState<'edit' | 'preview'>('edit');
+  // Recipient selection. Lowercase emails; default = every eligible POC
+  // selected so legacy "send to everyone" behavior survives unless the
+  // admin deselects.
+  const [selectedRecipients, setSelectedRecipients] = useState<Set<string>>(
+    new Set(),
+  );
+  // Live-rendered HTML for the Rendered preview tab. Starts as the default
+  // body returned by GET; re-fetched (debounced) when subject/message edits
+  // diverge from the defaults so the iframe always matches what will actually
+  // be sent.
+  const [livePreviewHtml, setLivePreviewHtml] = useState<string | null>(null);
 
   // Recipients (brand POC roster) for the Recipients section.
   const [contacts, setContacts] = useState<ContactRow[] | null>(null);
@@ -211,13 +254,17 @@ export function EditingProjectDetail({
 
   const load = useCallback(async () => {
     if (!projectId) return;
-    setLoading(true);
+    // Cache hit → no spinner; cache miss → spinner so the empty state
+    // doesn't render as if there were no videos.
+    const cached = DETAIL_CACHE.get(projectId) ?? null;
+    if (!cached) setLoading(true);
     try {
       const res = await fetch(`/api/admin/editing/projects/${projectId}`, {
         cache: 'no-store',
       });
       if (!res.ok) throw new Error('Failed to load project');
       const body = (await res.json()) as DetailResponse;
+      DETAIL_CACHE.set(projectId, body);
       setData(body);
       setName(body.project.name);
       setNotes(body.project.notes ?? '');
@@ -233,7 +280,8 @@ export function EditingProjectDetail({
 
   const loadShareLinks = useCallback(async () => {
     if (!projectId) return;
-    setShareLoading(true);
+    const cached = SHARE_CACHE.get(projectId) ?? null;
+    if (!cached) setShareLoading(true);
     try {
       const res = await fetch(
         `/api/admin/editing/projects/${projectId}/share`,
@@ -241,42 +289,54 @@ export function EditingProjectDetail({
       );
       if (!res.ok) throw new Error('Failed to load share links');
       const body = (await res.json()) as { links: ShareLinkRow[] };
-      setShareLinks(body.links ?? []);
+      const next = body.links ?? [];
+      SHARE_CACHE.set(projectId, next);
+      setShareLinks(next);
     } catch {
-      setShareLinks([]);
+      setShareLinks((prev) => prev ?? []);
     } finally {
       setShareLoading(false);
     }
   }, [projectId]);
 
   useEffect(() => {
-    if (open && project) {
-      // Seed the editable fields from the row data we already have, so
-      // Status / Type / Strategist / Editor / Name / Notes / Drive URL
-      // render instantly when the modal opens. `load()` then fills in
-      // the things we don't have on the row (videos, comments, etc.)
-      // and refreshes the seeded fields with canonical values.
-      setName(project.name);
-      setNotes(project.notes ?? '');
-      setDriveUrl(project.drive_folder_url ?? '');
-      setType(project.project_type);
-      setStatus(project.status);
+    if (open) {
+      // Hydrate synchronously from cache + the parent-supplied `project`
+      // prop so the first paint already has name/status/notes/videos and
+      // share history. Background fetches reconcile any drift. If the
+      // new projectId has no cache entry, null out the previous payload
+      // so we don't briefly show the prior project's videos.
+      if (projectId) {
+        setData(DETAIL_CACHE.get(projectId) ?? null);
+        setShareLinks(SHARE_CACHE.get(projectId) ?? null);
+        setArchivedEmails(EMAILS_CACHE.get(projectId) ?? null);
+      }
+      // The `project` prop is the row that was clicked — it carries the
+      // same scalar fields as `data.project`, so prime the form state
+      // from it even before the GET resolves.
+      if (project) {
+        setName(project.name);
+        setNotes(project.notes ?? '');
+        setDriveUrl(project.drive_folder_url ?? '');
+        setType(project.project_type);
+        setStatus(project.status);
+      }
       void load();
       void loadShareLinks();
       setExpiresOverride(null);
       setRefreshedThisSession(false);
-    } else if (!open) {
-      setData(null);
+    } else {
+      // Keep cached `data` / `shareLinks` / `archivedEmails` in state so
+      // the next open of the same project is instant. Only reset bits
+      // that should be fresh per-open.
       setTab('details');
-      setArchivedEmails(null);
       setViewingEmail(null);
-      setShareLinks(null);
       setPreviewVariant(null);
       setPreview(null);
       setPreviewError(null);
       setCopied(false);
     }
-  }, [open, project, load, loadShareLinks]);
+  }, [open, projectId, project, load, loadShareLinks]);
 
   // Brand POC contacts. Cache hit shows instantly; revalidate in background.
   useEffect(() => {
@@ -284,14 +344,21 @@ export function EditingProjectDetail({
       setContacts(null);
       return;
     }
-    const cached = getCachedContacts(clientId);
+    const cached = CONTACTS_CACHE.get(clientId) ?? null;
     setContacts(cached);
     let cancelled = false;
     void (async () => {
       if (cached === null) setContactsLoading(true);
       try {
-        const next = await fetchContacts(clientId);
+        const res = await fetch(
+          `/api/calendar/review/contacts?clientId=${encodeURIComponent(clientId)}`,
+          { cache: 'no-store' },
+        );
+        if (!res.ok) throw new Error('failed');
+        const json = (await res.json()) as { contacts: ContactRow[] };
         if (cancelled) return;
+        const next = json.contacts ?? [];
+        CONTACTS_CACHE.set(clientId, next);
         setContacts(next);
       } catch {
         if (!cancelled && cached === null) setContacts([]);
@@ -306,7 +373,8 @@ export function EditingProjectDetail({
 
   const loadArchivedEmails = useCallback(async () => {
     if (!projectId) return;
-    setArchivedLoading(true);
+    const cached = EMAILS_CACHE.get(projectId) ?? null;
+    if (!cached) setArchivedLoading(true);
     try {
       const res = await fetch(
         `/api/admin/editing/projects/${projectId}/emails`,
@@ -314,9 +382,11 @@ export function EditingProjectDetail({
       );
       if (!res.ok) throw new Error('failed');
       const body = (await res.json()) as { emails: ArchivedEmail[] };
-      setArchivedEmails(body.emails ?? []);
+      const next = body.emails ?? [];
+      EMAILS_CACHE.set(projectId, next);
+      setArchivedEmails(next);
     } catch {
-      setArchivedEmails([]);
+      setArchivedEmails((prev) => prev ?? []);
     } finally {
       setArchivedLoading(false);
     }
@@ -347,6 +417,17 @@ export function EditingProjectDetail({
       if (!res.ok) {
         const err = (await res.json().catch(() => null)) as { detail?: string } | null;
         throw new Error(err?.detail ?? 'Save failed');
+      }
+      // Merge the saved fields into the local detail cache so a close +
+      // reopen doesn't flash the pre-edit values while revalidation runs.
+      if (projectId) {
+        const cached = DETAIL_CACHE.get(projectId);
+        if (cached) {
+          DETAIL_CACHE.set(projectId, {
+            ...cached,
+            project: { ...cached.project, ...body } as typeof cached.project,
+          });
+        }
       }
       toast.success('Saved');
       onChanged();
@@ -526,6 +607,10 @@ export function EditingProjectDetail({
       setPreview(dataPreview);
       setSubjectDraft(dataPreview.subject);
       setMessageDraft(dataPreview.message);
+      setLivePreviewHtml(dataPreview.html);
+      setSelectedRecipients(
+        new Set(dataPreview.recipients.map((r) => r.email.toLowerCase())),
+      );
     } catch (err) {
       setPreviewError(err instanceof Error ? err.message : 'Failed to load preview');
     } finally {
@@ -538,12 +623,63 @@ export function EditingProjectDetail({
     setPreviewVariant(null);
     setPreview(null);
     setPreviewError(null);
+    setLivePreviewHtml(null);
+    setSelectedRecipients(new Set());
   }
+
+  // Re-fetch rendered HTML (debounced) whenever the message body diverges
+  // from the loaded default so the iframe in the "Rendered preview" tab stays
+  // in sync with admin edits. Subject doesn't affect the body (it's the inbox
+  // envelope) so we don't refetch on subject typing. Mirrors the calendar
+  // share-link send flow.
+  useEffect(() => {
+    if (!projectId || !activeLink || !preview || !previewVariant) return;
+    const messageChanged = messageDraft.trim() !== preview.message.trim();
+    if (!messageChanged) {
+      setLivePreviewHtml(preview.html);
+      return;
+    }
+    const ctrl = new AbortController();
+    const t = window.setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ message: messageDraft });
+        const res = await fetch(
+          `/api/admin/editing/projects/${projectId}/share/${activeLink.id}/email?${params.toString()}`,
+          { cache: 'no-store', signal: ctrl.signal },
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as { html?: string };
+        if (data.html) setLivePreviewHtml(data.html);
+      } catch (err) {
+        if ((err as Error)?.name === 'AbortError') return;
+      }
+    }, 350);
+    return () => {
+      ctrl.abort();
+      window.clearTimeout(t);
+    };
+  }, [projectId, activeLink, preview, previewVariant, messageDraft]);
 
   async function confirmSend() {
     if (!projectId || !activeLink || !preview || !previewVariant || sending) return;
+    if (selectedRecipients.size === 0) {
+      toast.error('Select at least one recipient.');
+      return;
+    }
     setSending(true);
     try {
+      // Only send the recipient_emails field when the admin has narrowed the
+      // list. Sending all eligible matches the legacy default so we omit the
+      // field entirely in that case.
+      const allEmails = preview.recipients.map((r) => r.email.toLowerCase());
+      const allSelected =
+        selectedRecipients.size === allEmails.length &&
+        allEmails.every((e) => selectedRecipients.has(e));
+      const recipientEmails = allSelected
+        ? null
+        : preview.recipients
+            .filter((r) => selectedRecipients.has(r.email.toLowerCase()))
+            .map((r) => r.email);
       const res = await fetch(
         `/api/admin/editing/projects/${projectId}/share/${activeLink.id}/email`,
         {
@@ -556,6 +692,7 @@ export function EditingProjectDetail({
             ...(messageDraft.trim() !== preview.message.trim()
               ? { message: messageDraft.trim() }
               : {}),
+            ...(recipientEmails ? { recipient_emails: recipientEmails } : {}),
           }),
         },
       );
@@ -599,6 +736,16 @@ export function EditingProjectDetail({
     project.status === 'done' ||
     project.status === 'archived';
 
+  // Promoted to the content calendar: the project's videos have been
+  // minted as scheduled_posts. Swap the right-most CTA from "Send
+  // delivery" to "Open in calendar" so Jack lands on the calendar grid
+  // (where the now-draft posts live) instead of resending the review
+  // email. Reads the freshest copy from the detail GET first so a
+  // mid-session promote propagates without a parent refetch.
+  const promotedAt = data?.project.promoted_at ?? project.promoted_at;
+  const brandSlug = data?.project.client_slug ?? project.client_slug;
+  const scheduledPosts = data?.scheduled_posts ?? [];
+
   const footer = (
     <>
       <Button
@@ -639,17 +786,31 @@ export function EditingProjectDetail({
           {minting ? 'Creating...' : 'Create share link'}
         </Button>
       )}
-      {activeLink && !isApproved && (
+      {promotedAt ? (
         <Button
           type="button"
           size="sm"
-          onClick={() => openSendPreview(hasBeenSent ? 'rereview' : 'delivery')}
-          disabled={!!sendDisabledReason}
-          title={sendDisabledReason ?? undefined}
+          onClick={() =>
+            router.push(brandSlug ? `/calendar?brand=${brandSlug}` : '/calendar')
+          }
         >
-          {hasBeenSent ? <RefreshCcw size={13} /> : <Send size={13} />}
-          {hasBeenSent ? 'Send re-review' : 'Send delivery'}
+          <CalendarDays size={13} />
+          Open in calendar
         </Button>
+      ) : (
+        activeLink &&
+        !isApproved && (
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => openSendPreview(hasBeenSent ? 'rereview' : 'delivery')}
+            disabled={!!sendDisabledReason}
+            title={sendDisabledReason ?? undefined}
+          >
+            {hasBeenSent ? <RefreshCcw size={13} /> : <Send size={13} />}
+            {hasBeenSent ? 'Send re-review' : 'Send delivery'}
+          </Button>
+        )
       )}
     </>
   );
@@ -667,6 +828,17 @@ export function EditingProjectDetail({
         renderMode={renderMode}
         sending={sending}
         pendingCount={activeLink?.pending_revision_count ?? 0}
+        selectedRecipients={selectedRecipients}
+        livePreviewHtml={livePreviewHtml}
+        onToggleRecipient={(email) =>
+          setSelectedRecipients((prev) => {
+            const next = new Set(prev);
+            const key = email.toLowerCase();
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+          })
+        }
         onChangeSubject={setSubjectDraft}
         onChangeMessage={setMessageDraft}
         onChangeRenderMode={setRenderMode}
@@ -768,6 +940,41 @@ export function EditingProjectDetail({
         }
         footer={footer}
       >
+
+        {/* Scheduled dates. Surfaces once the project has been promoted to
+            the content calendar — lists the per-post drop dates so Jack can
+            confirm the spread at a glance without leaving the modal. The
+            link to /calendar lives in the footer; this is informational. */}
+        {promotedAt && scheduledPosts.length > 0 && (
+          <Section label={`Scheduled dates (${scheduledPosts.length})`}>
+            <ul className="divide-y divide-nativz-border overflow-hidden rounded-lg border border-nativz-border bg-surface">
+              {scheduledPosts.map((p) => (
+                <li
+                  key={p.id}
+                  className="flex items-center gap-3 px-3 py-2 text-[13px]"
+                >
+                  <CalendarDays
+                    size={13}
+                    className="shrink-0 text-text-muted"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-text-primary">
+                      {p.title?.trim() || 'Untitled post'}
+                    </p>
+                    {p.scheduled_at && (
+                      <p className="text-[11px] text-text-muted">
+                        {formatTimestamp(p.scheduled_at)}
+                      </p>
+                    )}
+                  </div>
+                  <span className="shrink-0 rounded-full border border-nativz-border bg-background px-2 py-0.5 text-[11px] text-text-muted">
+                    {p.status ?? 'draft'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
 
         {/* Share link. Single primary affordance: copy + open + refresh.
             Refresh extends `expires_at` 30 days forward so the link stays
@@ -1147,6 +1354,9 @@ function SendPreviewDialog({
   renderMode,
   sending,
   pendingCount,
+  selectedRecipients,
+  livePreviewHtml,
+  onToggleRecipient,
   onChangeSubject,
   onChangeMessage,
   onChangeRenderMode,
@@ -1163,6 +1373,9 @@ function SendPreviewDialog({
   renderMode: 'edit' | 'preview';
   sending: boolean;
   pendingCount: number;
+  selectedRecipients: Set<string>;
+  livePreviewHtml: string | null;
+  onToggleRecipient: (email: string) => void;
   onChangeSubject: (v: string) => void;
   onChangeMessage: (v: string) => void;
   onChangeRenderMode: (m: 'edit' | 'preview') => void;
@@ -1197,20 +1410,49 @@ function SendPreviewDialog({
         ) : preview ? (
           <>
             <div className="flex-1 space-y-4 overflow-y-auto p-6">
-              <Section label={`Recipients (${preview.recipients.length})`}>
+              <Section
+                label={`Recipients (${selectedRecipients.size}/${preview.recipients.length})`}
+              >
                 <div className="flex flex-wrap gap-1.5">
-                  {preview.recipients.map((r) => (
-                    <span
-                      key={r.email}
-                      className="inline-flex items-center gap-1 rounded-full border border-nativz-border bg-surface px-2.5 py-1 text-[11px] text-text-secondary"
-                      title={r.email}
-                    >
-                      <span className="font-medium text-text-primary">
-                        {r.name ?? r.email}
-                      </span>
-                      {r.name && <span className="text-text-muted">· {r.email}</span>}
-                    </span>
-                  ))}
+                  {preview.recipients.map((r) => {
+                    const key = r.email.toLowerCase();
+                    const checked = selectedRecipients.has(key);
+                    return (
+                      <button
+                        type="button"
+                        key={r.email}
+                        onClick={() => onToggleRecipient(r.email)}
+                        title={r.email}
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                          checked
+                            ? 'border-accent/40 bg-accent/10 text-text-primary'
+                            : 'border-nativz-border bg-surface text-text-muted hover:text-text-secondary'
+                        }`}
+                      >
+                        <span
+                          className={`flex h-3 w-3 items-center justify-center rounded-[3px] border ${
+                            checked
+                              ? 'border-accent bg-accent text-background'
+                              : 'border-nativz-border bg-background'
+                          }`}
+                        >
+                          {checked && <Check size={9} strokeWidth={3} />}
+                        </span>
+                        <span
+                          className={
+                            checked
+                              ? 'font-medium text-text-primary'
+                              : 'font-medium'
+                          }
+                        >
+                          {r.name ?? r.email}
+                        </span>
+                        {r.name && (
+                          <span className="text-text-muted">· {r.email}</span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </Section>
 
@@ -1262,9 +1504,18 @@ function SendPreviewDialog({
                 </>
               ) : (
                 <Section label="Rendered email">
-                  <p className="text-[11px] text-text-muted">
-                    The rendered email uses the default copy as a layout reference. Subject and message edits apply at send time.
-                  </p>
+                  {livePreviewHtml ? (
+                    <iframe
+                      title="Email preview"
+                      srcDoc={livePreviewHtml}
+                      sandbox=""
+                      className="h-[480px] w-full rounded-md border border-nativz-border bg-white"
+                    />
+                  ) : (
+                    <p className="text-[11px] text-text-muted">
+                      Rendering preview…
+                    </p>
+                  )}
                 </Section>
               )}
             </div>
@@ -1277,14 +1528,19 @@ function SendPreviewDialog({
                 type="button"
                 size="sm"
                 onClick={onSend}
-                disabled={sending || !subject.trim() || !message.trim()}
+                disabled={
+                  sending ||
+                  !subject.trim() ||
+                  !message.trim() ||
+                  selectedRecipients.size === 0
+                }
               >
                 <Send size={13} />
                 {sending
                   ? 'Sending…'
                   : variant === 'delivery'
-                    ? `Send delivery to ${preview.recipients.length} ${preview.recipients.length === 1 ? 'recipient' : 'recipients'}`
-                    : `Send re-review to ${preview.recipients.length} ${preview.recipients.length === 1 ? 'recipient' : 'recipients'}`}
+                    ? `Send delivery to ${selectedRecipients.size} ${selectedRecipients.size === 1 ? 'recipient' : 'recipients'}`
+                    : `Send re-review to ${selectedRecipients.size} ${selectedRecipients.size === 1 ? 'recipient' : 'recipients'}`}
               </Button>
             </div>
           </>

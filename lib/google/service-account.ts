@@ -2,7 +2,7 @@
  * Google Service Account authentication with domain-wide delegation.
  *
  * Used for any workspace API call that needs to act as a domain user without
- * per-user OAuth (Fyxer Gmail importer, calendar reads, etc).
+ * per-user OAuth (Drive readonly for content-calendar ingest, calendar reads, etc).
  *
  * Provide credentials in one of two ways:
  * - `GOOGLE_SERVICE_ACCOUNT_KEY` — base64-encoded JSON or raw JSON string (Vercel-friendly)
@@ -34,12 +34,7 @@ interface TokenCache {
   expiresAt: number;
 }
 
-const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 const DRIVE_READONLY_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
-
-const DEFAULT_GMAIL_IMPERSONATE =
-  process.env.GOOGLE_SERVICE_ACCOUNT_IMPERSONATE_EMAIL ??
-  'trevor@andersoncollaborative.com';
 
 export const ALLOWED_IMPERSONATE_DOMAINS = ['nativz.io', 'andersoncollaborative.com'] as const;
 
@@ -130,11 +125,6 @@ export async function getServiceAccountToken({
   });
 
   return data.access_token;
-}
-
-/** Gmail readonly token for the configured importer mailbox (Fyxer cron path). */
-export function getServiceAccountGmailToken(impersonate: string = DEFAULT_GMAIL_IMPERSONATE): Promise<string> {
-  return getServiceAccountToken({ scope: GMAIL_READONLY_SCOPE, impersonate });
 }
 
 /** Drive readonly token for a workspace user — used by the content-calendar

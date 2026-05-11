@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
+import Link from 'next/link';
 import { Sparkles, Loader2, Check, Globe, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -31,6 +32,23 @@ interface BrandProfile {
   target_audience: string | null;
   services: string[];
   topic_keywords: string[];
+  // NAT-67: free-text guidance that flows into caption-generation prompts.
+  // Distinct from the structured boilerplate (caption_cta + caption_hashtags
+  // below) which is appended verbatim to every generated caption. Both live
+  // here now so the strategist can configure the whole caption stack from
+  // one place; the /admin/calendar/library page still surfaces the verbatim
+  // pair for editors who want the at-a-glance preview view.
+  caption_notes: string | null;
+  hashtag_notes: string | null;
+  cta_notes: string | null;
+  // Verbatim caption boilerplate. Appended literally to every AI-generated
+  // caption for this brand. Hashtags are stored as an array; the leading '#'
+  // is optional — input handles normalization.
+  caption_cta: string | null;
+  caption_hashtags: string[];
+  // Monthly calendar cron — drives the 1st-of-month auto-generated calendar
+  // project for SMM clients. 0 disables auto-generation for this brand.
+  monthly_calendar_post_count: number;
 }
 
 const DEFAULT_PROFILE: BrandProfile = {
@@ -50,6 +68,12 @@ const DEFAULT_PROFILE: BrandProfile = {
   target_audience: null,
   services: [],
   topic_keywords: [],
+  caption_notes: null,
+  hashtag_notes: null,
+  cta_notes: null,
+  caption_cta: null,
+  caption_hashtags: [],
+  monthly_calendar_post_count: 0,
 };
 
 // Common content-generation languages. Admin can still free-type via
@@ -172,7 +196,9 @@ export function BrandEssenceSection({
       )}
       <ProductsCard profile={profile} patch={patch} />
       <AliasesCard profile={profile} patch={patch} />
+      <MonthlyOutputCard profile={profile} patch={patch} />
       <ContentGenerationCard profile={profile} patch={patch} />
+      <CaptionGuidanceCard profile={profile} patch={patch} />
       <DefaultLocationCard profile={profile} patch={patch} />
     </div>
   );
@@ -332,6 +358,150 @@ function ContentGenerationCard({
         onCommit={(next) => patch({ banned_phrases: next })}
         placeholder="e.g. game-changer"
       />
+    </section>
+  );
+}
+
+function CaptionGuidanceCard({
+  profile, patch,
+}: {
+  profile: BrandProfile;
+  patch: (fields: Partial<BrandProfile>) => Promise<void>;
+}) {
+  // Two-layer caption config:
+  //   1. Verbatim boilerplate (caption_cta + caption_hashtags) — appended
+  //      literally to every AI-generated caption for this brand.
+  //   2. Free-text notes (caption_notes / hashtag_notes / cta_notes) —
+  //      flow into the model prompt so it writes ON-brand before the
+  //      verbatim boilerplate gets tacked on.
+  // The /admin/calendar/library page mirrors the verbatim pair for editors
+  // who prefer that view; this card is the strategist's source of truth.
+  return (
+    <section className="rounded-xl border border-nativz-border bg-surface p-5 space-y-4">
+      <div>
+        <h3 className="text-sm font-semibold text-text-primary">Caption guidance</h3>
+        <p className="text-xs text-text-muted mt-1">
+          Two layers. The CTA + hashtags below are appended verbatim to every
+          AI-written caption. The notes underneath shape what the model
+          writes before that boilerplate. Also editable from the{' '}
+          <Link href="/admin/calendar/library" className="text-accent-text hover:underline">
+            caption library
+          </Link>
+          .
+        </p>
+      </div>
+
+      <TextareaFieldOnBlur
+        label="CTA (appended verbatim)"
+        placeholder="e.g. Book a free consult at nativz.io/book"
+        rows={2}
+        value={profile.caption_cta}
+        onCommit={(v) => patch({ caption_cta: v })}
+      />
+      <TagListField
+        label="Hashtags (appended verbatim)"
+        values={profile.caption_hashtags}
+        onCommit={(next) => patch({ caption_hashtags: next.map(normalizeHashtag) })}
+        placeholder="e.g. nativz"
+      />
+
+      <div className="pt-2 border-t border-nativz-border/60" />
+
+      <TextareaFieldOnBlur
+        label="Caption notes"
+        placeholder="Voice, structure, hook style, banned phrases. e.g. Open with a question. Never use 'game-changer.' Keep under 150 chars before the CTA."
+        rows={4}
+        value={profile.caption_notes}
+        onCommit={(v) => patch({ caption_notes: v })}
+      />
+      <TextareaFieldOnBlur
+        label="Hashtag notes"
+        placeholder="Branded tags, banned tags, regional/niche set, count preferences. e.g. Always use #BrandName + 2-3 city tags. Never #ad. Aim for 8-12 total."
+        rows={4}
+        value={profile.hashtag_notes}
+        onCommit={(v) => patch({ hashtag_notes: v })}
+      />
+      <TextareaFieldOnBlur
+        label="CTA notes"
+        placeholder="Default CTA copy, link destinations, A/B variants. e.g. Rotate between 'Shop the link' and 'Save your seat'. Always end with the booking URL."
+        rows={4}
+        value={profile.cta_notes}
+        onCommit={(v) => patch({ cta_notes: v })}
+      />
+    </section>
+  );
+}
+
+/**
+ * Strip a leading '#' from a hashtag and lowercase-trim it. The caption
+ * pipeline re-prefixes when rendering, so we store the bare token.
+ */
+function normalizeHashtag(raw: string): string {
+  const trimmed = raw.trim().replace(/^#+/, '');
+  return trimmed;
+}
+
+function MonthlyOutputCard({
+  profile, patch,
+}: {
+  profile: BrandProfile;
+  patch: (fields: Partial<BrandProfile>) => Promise<void>;
+}) {
+  // Number-only card. The monthly cron (TBD) reads this on the 1st of
+  // each month to spin up next month's calendar project with N empty post
+  // slots for every active SMM client. 0 = no auto-generation.
+  const [value, setValue] = useState<string>(String(profile.monthly_calendar_post_count ?? 0));
+  useEffect(() => {
+    setValue(String(profile.monthly_calendar_post_count ?? 0));
+  }, [profile.monthly_calendar_post_count]);
+
+  function commit() {
+    const parsed = Number.parseInt(value, 10);
+    if (Number.isNaN(parsed) || parsed < 0) {
+      setValue(String(profile.monthly_calendar_post_count ?? 0));
+      toast.error('Enter a non-negative whole number.');
+      return;
+    }
+    const clamped = Math.min(parsed, 1000);
+    if (clamped === profile.monthly_calendar_post_count) {
+      setValue(String(clamped));
+      return;
+    }
+    setValue(String(clamped));
+    void patch({ monthly_calendar_post_count: clamped });
+  }
+
+  return (
+    <section className="rounded-xl border border-nativz-border bg-surface p-5 space-y-3">
+      <div>
+        <h3 className="text-sm font-semibold text-text-primary">Monthly calendar output</h3>
+        <p className="text-xs text-text-muted mt-1">
+          On the 1st of every month, Cortex auto-generates next month&apos;s
+          calendar project for this brand with this many empty post slots.
+          Editors fill in the final videos; the videographer adds raw
+          footage and notes. Set to 0 to disable auto-generation.
+        </p>
+      </div>
+      <div className="flex items-center gap-3">
+        <Label>Posts per month</Label>
+        <input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={1000}
+          step={1}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              (e.currentTarget as HTMLInputElement).blur();
+            }
+          }}
+          className="w-24 rounded border border-nativz-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+        />
+      </div>
     </section>
   );
 }

@@ -14,7 +14,9 @@ import {
   getOnboardingById,
   listEmailLog,
   listTeamAssignments,
+  patchCompletionRequirements,
   setStatus,
+  setStepOverride,
 } from '@/lib/onboarding/api';
 
 export const runtime = 'nodejs';
@@ -47,6 +49,21 @@ export async function GET(
 const PatchSchema = z.object({
   status: z.enum(['in_progress', 'completed', 'paused', 'abandoned']).optional(),
   current_step: z.number().int().min(0).optional(),
+  step_override: z
+    .object({
+      screen_key: z.string().min(1),
+      checked: z.boolean(),
+    })
+    .optional(),
+  completion_requirements: z
+    .object({
+      video_count: z.number().int().nonnegative().nullable().optional(),
+      boosting_budget_cents: z.number().int().nonnegative().nullable().optional(),
+      paid_media_webhook_ack: z.boolean().optional(),
+      editing_webhook_ack: z.boolean().optional(),
+      notes: z.string().nullable().optional(),
+    })
+    .optional(),
 });
 
 export async function PATCH(
@@ -75,6 +92,17 @@ export async function PATCH(
     let row = await getOnboardingById(id);
     if (!row) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
+    if (parsed.data.step_override !== undefined) {
+      row = await setStepOverride(
+        id,
+        parsed.data.step_override.screen_key,
+        parsed.data.step_override.checked,
+        guard.ctx.user.id,
+      );
+    }
+    if (parsed.data.completion_requirements !== undefined) {
+      row = await patchCompletionRequirements(id, parsed.data.completion_requirements);
+    }
     if (parsed.data.current_step !== undefined) {
       row = await advanceStep(id, { to: parsed.data.current_step });
     }

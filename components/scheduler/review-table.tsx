@@ -39,7 +39,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { Trash2 } from 'lucide-react';
+import { CalendarPlus, Trash2 } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -146,15 +146,12 @@ const PROJECT_TYPE_OPTIONS: {
   value: ReviewProjectType;
   label: string;
 }[] = [
-  { value: 'organic_content', label: 'Organic Content' },
-  { value: 'social_ads', label: 'Social Ads' },
-  { value: 'ctv_ads', label: 'CTV Ads' },
-  { value: 'other', label: 'Other' },
+  { value: 'editing', label: 'Editing' },
+  { value: 'calendar', label: 'Calendar' },
 ];
 
 function projectTypeLabel(row: ReviewLinkRow): string {
   if (!row.project_type) return '—';
-  if (row.project_type === 'other') return row.project_type_other?.trim() || 'Other';
   return PROJECT_TYPE_OPTIONS.find((o) => o.value === row.project_type)?.label ?? '—';
 }
 
@@ -368,6 +365,12 @@ interface ReviewTableCardProps {
    */
   onArchiveLink?: (id: string) => void;
   /**
+   * Optional "Promote to calendar" handler for editing-project rows.
+   * Mints draft scheduled_posts from the project's latest videos so
+   * captions + schedule times can be filled in on /calendar.
+   */
+  onPromoteToCalendar?: (id: string) => void;
+  /**
    * Click handler for `kind: 'editing'` rows. Editing rows route here
    * so the parent can pop the editing-project detail dialog.
    */
@@ -403,6 +406,7 @@ export function ReviewTableCard({
   showBrand = false,
   onPatchLink,
   onArchiveLink,
+  onPromoteToCalendar,
   onOpenEditingProject,
   onOpenCalendarLink,
   title,
@@ -562,6 +566,11 @@ export function ReviewTableCard({
             showLastFollowup={showLastFollowup}
             onPatch={(patch) => onPatchLink(link.id, patch)}
             onArchive={onArchiveLink ? () => onArchiveLink(link.id) : undefined}
+            onPromoteToCalendar={
+              onPromoteToCalendar && link.kind === 'editing'
+                ? () => onPromoteToCalendar(link.id)
+                : undefined
+            }
             onOpenEditingProject={onOpenEditingProject}
             onOpenCalendarLink={onOpenCalendarLink}
           />
@@ -582,6 +591,11 @@ interface ReviewTableRowProps {
   onPatch: (patch: Partial<ReviewLinkRow>) => void;
   /** Right-click "Archive" handler. Hides the menu item when omitted. */
   onArchive?: () => void;
+  /**
+   * Right-click "Promote to calendar" handler. Only set for editing-
+   * project rows. Hides the menu item when omitted.
+   */
+  onPromoteToCalendar?: () => void;
   /** Editing-project click handler. Used when `link.kind === 'editing'`. */
   onOpenEditingProject?: (editingProjectId: string) => void;
   /**
@@ -603,6 +617,7 @@ function ReviewTableRow({
   showLastFollowup = true,
   onPatch,
   onArchive,
+  onPromoteToCalendar,
   onOpenEditingProject,
   onOpenCalendarLink,
 }: ReviewTableRowProps) {
@@ -652,8 +667,25 @@ function ReviewTableRow({
       )}
       {showStatus && (
         <TableCell className="whitespace-nowrap px-2.5 text-center">
-          <div className="flex justify-center">
+          <div className="flex flex-col items-center gap-0.5">
             <StatusPill link={link} />
+            {link.approved_at && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-[11px] tabular-nums text-text-muted">
+                    approved {formatShortDate(link.approved_at)}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="w-56">
+                  <div className="font-medium text-text-primary">
+                    Approved {formatShortDate(link.approved_at)}
+                  </div>
+                  <div className="mt-0.5 text-text-muted">
+                    Drives which half-month billing bucket this project lands in.
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            )}
           </div>
         </TableCell>
       )}
@@ -690,22 +722,30 @@ function ReviewTableRow({
     </TableRow>
   );
 
-  // Without an archive handler, render the row directly. Wrapping in
-  // ContextMenu adds a Radix portal per row, which is wasted work for
-  // surfaces that don't support archive (e.g. read-only viewer view).
-  if (!onArchive) return rowBody;
+  // Without any context-menu handlers, render the row directly. Wrapping
+  // in ContextMenu adds a Radix portal per row, which is wasted work for
+  // surfaces that don't need it (e.g. read-only viewer view).
+  if (!onArchive && !onPromoteToCalendar) return rowBody;
 
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{rowBody}</ContextMenuTrigger>
-      <ContextMenuContent className="w-44">
-        <ContextMenuItem
-          onSelect={onArchive}
-          className="text-status-danger focus:text-status-danger"
-        >
-          <Trash2 size={14} />
-          Archive
-        </ContextMenuItem>
+      <ContextMenuContent className="w-52">
+        {onPromoteToCalendar && (
+          <ContextMenuItem onSelect={onPromoteToCalendar}>
+            <CalendarPlus size={14} />
+            Promote to calendar
+          </ContextMenuItem>
+        )}
+        {onArchive && (
+          <ContextMenuItem
+            onSelect={onArchive}
+            className="text-status-danger focus:text-status-danger"
+          >
+            <Trash2 size={14} />
+            Archive
+          </ContextMenuItem>
+        )}
       </ContextMenuContent>
     </ContextMenu>
   );
@@ -850,16 +890,15 @@ function ProjectTypeCell({
   async function setType(value: ReviewProjectType | null) {
     onPatch({
       project_type: value,
-      // Clear the freeform other-label when switching away from "other".
-      project_type_other: value === 'other' ? link.project_type_other : null,
+      // Legacy column; never set under the binary enum. Always cleared.
+      project_type_other: null,
     });
     try {
       // Editing endpoint requires a non-null project_type (no "Clear
       // type" support). When clearing on an editing row, fall through
-      // to 'general' so the PATCH is accepted; the projected row will
-      // re-render as 'other' on next reload.
+      // to 'editing' so the PATCH is accepted.
       const payloadValue =
-        link.kind === 'editing' && value === null ? 'general' : value;
+        link.kind === 'editing' && value === null ? 'editing' : value;
       const res = await fetch(rowPatchUrl(link), {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
@@ -1408,7 +1447,7 @@ export function sortLinksBy(
  * Title Case here matches the agency's project-naming convention in
  * client-facing copy, even though the rest of the UI is sentence case.
  */
-function derivedName(start: string | null, end: string | null): string {
+export function derivedName(start: string | null, end: string | null): string {
   const ref = end ?? start;
   if (!ref) return 'Content Calendar';
   const d = new Date(ref);

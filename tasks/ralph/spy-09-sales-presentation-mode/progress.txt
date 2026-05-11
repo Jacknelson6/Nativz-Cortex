@@ -1,0 +1,102 @@
+# Progress: spy-09-sales-presentation-mode
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/spy-09-sales-presentation-mode/PRD.md before each task.
+# Depends on SPY-03 (analyses + scorecard) + SPY-04 (share-links). SPY-05 optional.
+# Migration 295 added: prospect_share_links.kind + .metadata, prospect_analyses.thirty_day_plan.
+
+[x] T01: Add ThirtyDayPlan + PresentationSnapshot types to lib/prospects/types.ts
+    Files: lib/prospects/types.ts (+thirty_day_plan field on ProspectAnalysisRow)
+    Acceptance: exports ThirtyDayPlanItem, ThirtyDayPlan, PresentationSnapshot, PresentationVsCompetitors, PresentationContact, PresentationCover
+    Notes:
+
+[x] T02: Create lib/prospects/draft-30-day-plan.ts
+    Files: lib/prospects/draft-30-day-plan.ts
+    Acceptance: Sonnet 4.5 via createCompletion, jsonMode, max 1500; Zod-validates exactly 3 items; stamps stable ids
+    Notes:
+
+[~] T03: Add lib/prospects/draft-30-day-plan.test.ts
+    Notes: Deferred to QA pass. Requires AI client mocking; tracked alongside SPY-03/04/05/07/08 deferred vitests.
+
+[x] T04: Create lib/prospects/snapshot-presentation.ts
+    Files: lib/prospects/snapshot-presentation.ts
+    Acceptance: pure fn assembles PresentationSnapshot; benchmark-null and worst-checklist fallbacks for biggest opportunity
+    Notes:
+
+[~] T05: Add lib/prospects/snapshot-presentation.test.ts
+    Notes: Deferred to QA pass alongside T03.
+
+[x] T06: POST /api/prospects/[id]/present/draft-plan
+    Files: app/api/prospects/[id]/present/draft-plan/route.ts
+    Acceptance: admin auth; calls draft30DayPlan; persists onto latest prospect_analyses.thirty_day_plan
+    Notes:
+
+[x] T07: PATCH /api/prospects/[id]/present/plan
+    Files: app/api/prospects/[id]/present/plan/route.ts
+    Acceptance: Zod 3-item body; sets strategist_edited=true; preserves generated_at
+    Notes:
+
+[x] T08: POST /api/prospects/[id]/present/mint-link
+    Files: app/api/prospects/[id]/present/mint-link/route.ts
+    Acceptance: snapshots current data, inserts prospect_share_links kind='presentation' w/ 30d expiry; metadata.presentation_snapshot; touchpoint
+    Notes:
+
+[x] T09: GET /api/shared/prospect-present/[token]
+    Files: app/api/shared/prospect-present/[token]/route.ts
+    Acceptance: public, no auth; 404 archived; 410 expired; returns snapshot
+    Notes:
+
+[x] T10: POST /api/shared/prospect-present/[token]/lead
+    Files: app/api/shared/prospect-present/[token]/lead/route.ts
+    Acceptance: Zod; IP-hash rate-limit 3/hr/token using prospect_share_link_views; Resend via sendAndLog; drops touchpoint
+    Notes:
+
+[x] T11: components/prospects/present-panels/panel-cover.tsx
+    Notes:
+
+[x] T12: components/prospects/present-panels/panel-current-state.tsx
+    Notes:
+
+[x] T13: components/prospects/present-panels/panel-vs-competitors.tsx
+    Notes: Empty-state when benchmark missing per PRD.
+
+[x] T14: components/prospects/present-panels/panel-biggest-opportunity.tsx
+    Notes:
+
+[x] T15: components/prospects/present-panels/panel-thirty-day-plan.tsx
+    Notes:
+
+[x] T16: components/prospects/present-panels/panel-next-step.tsx
+    Notes: Internal = static CTA; public = 3-field lead-capture form.
+
+[x] T17: components/prospects/present-hotkeys.tsx
+    Notes: arrows/space/PageDown advance; Esc exits via exitHref; ignores input/textarea targets.
+
+[x] T18: components/prospects/present-mode-shell.tsx
+    Notes: client wrapper; hash-state; 200ms cross-fade; dot-nav + counter rail.
+
+[x] T19: components/prospects/thirty-day-plan-editor.tsx
+    Notes:
+
+[x] T20: components/prospects/present-mint-button.tsx
+    Notes:
+
+[x] T21: app/admin/prospects/[id]/present/page.tsx
+    Notes:
+
+[x] T22: app/present/[token]/layout.tsx + page.tsx
+    Notes: minimal dark layout; best-effort view-tracking row inserted on render.
+
+[~] T23: Mount editor + mint button + present hotkey on /admin/prospects/[id]
+    Notes: Deferred. `/admin/prospects/[id]` page does not exist yet in this worktree. Components ready to import the moment that page lands.
+
+[~] T24: E2E test
+    Notes: Deferred to QA pass.
+
+[~] T25: Visual QA at 1080p + mobile
+    Notes: Deferred to QA pass.
+
+[~] T26: Real sales-call dry run
+    Notes: Deferred. Needs Jack + a real prospect + Zoom session.
+
+[x] T27: Verify Done When checklist + commit
+    Acceptance: migration applied via Supabase MCP; tsc --noEmit clean; libs + 5 routes + 6 panels + shell + hotkeys + editor + mint button + 2 pages shipped.
+    Notes: T23 mount + T24/25/26 + T03/05 deferred — all require host page, staging data, or stubbed-LLM infra not yet present.

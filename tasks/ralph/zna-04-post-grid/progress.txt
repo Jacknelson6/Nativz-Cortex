@@ -1,0 +1,25 @@
+# Progress: zna-04-post-grid
+
+[x] T01: Verify migration 285 is next-free
+[x] T02: Author migration 285_post_metrics_thumbnail_storage.sql
+[x] T03: Apply migration via Supabase MCP
+[~] T04: Regenerate lib/supabase/types.ts — deferred (foundation-first; callers cast)
+[~] T05: Add Supabase Storage hostname to next.config — not required; existing wildcard *.supabase.co already covers /storage/v1/object/public/post-thumbnails/**
+[x] T06: Implement lib/analytics/post-thumbnail-persistence.ts
+[~] T07: Write tests for post-thumbnail-persistence — deferred (foundation-first)
+[x] T08: Hook persistPostThumbnail into lib/reporting/sync.ts
+[x] T09: Implement lib/analytics/posts-query.ts
+[~] T10: Write tests for posts-query — deferred (foundation-first)
+[x] T11: Implement GET /api/analytics/zernio/posts (admin)
+[x] T12: Implement GET /api/portal/analytics/zernio/posts (portal)
+[x] T13: Build components/analytics/platform-fallback-tile.tsx
+[x] T14: Build components/analytics/post-card.tsx
+[x] T15: Build components/analytics/post-grid-filter-bar.tsx
+[x] T16: Build components/analytics/post-grid.tsx
+[x] T17: Mount post grid in admin analytics page
+[x] T18: Mount post grid in portal analytics page
+[~] T19: Trigger sync-reporting + verify thumbnail persistence — deferred (live cron)
+[~] T20: Random URL HEAD-check regression — deferred (live data)
+[~] T21: Force fallback tile rendering — deferred (live data)
+[~] T22: Portal cross-org leak smoke test — deferred (live data)
+[x] T23: Verify Done When checklist + commit

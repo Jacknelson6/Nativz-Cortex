@@ -2,11 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import {
-  buildChatCardMessage,
-  isGoogleChatWebhook,
-  postToGoogleChat,
-} from '@/lib/chat/post-to-google-chat';
+import { buildChatCard, isGoogleChatWebhook, postToGoogleChat } from '@/lib/chat/post-to-google-chat';
 
 const bodySchema = z.object({
   webhook_url: z
@@ -55,15 +51,24 @@ export async function POST(
       .single<{ name: string }>();
 
     try {
-      const brand = client?.name ?? 'this client';
+      const clientName = client?.name ?? 'this client';
       await postToGoogleChat(
         parsed.data.webhook_url,
-        buildChatCardMessage({
-          cardId: `chat-webhook-connected-${clientId}`,
-          title: `✅ Cortex connected for ${brand}`,
-          subtitle: 'Webhook saved',
-          paragraphs: [`${brand}'s notifications will post in this space.`],
-          fallback: `✅ Cortex connected: ${brand}'s notifications will post here.`,
+        buildChatCard({
+          cardId: `chat-webhook-test-${clientId}`,
+          headerTitle: '✅ Cortex connected',
+          headerSubtitle: clientName,
+          sections: [
+            {
+              widgets: [
+                {
+                  type: 'text',
+                  text: `Notifications for <b>${clientName}</b> will post in this space. You're all set.`,
+                },
+              ],
+            },
+          ],
+          fallbackText: `✅ Cortex connected: ${clientName}'s notifications will post here.`,
         }),
       );
     } catch (err) {

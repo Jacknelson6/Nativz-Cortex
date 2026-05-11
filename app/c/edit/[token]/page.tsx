@@ -17,8 +17,10 @@ import {
   MapPin,
   MessageSquare,
   Paperclip,
+  Pencil,
   Send,
   Trash2,
+  Type,
   Undo2,
   Upload,
   X,
@@ -28,6 +30,9 @@ import { Dialog } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import { thumbUrl } from '@/lib/calendar/thumb-url';
+import { ShareTour, ShareTourLaunchButton, EDIT_SHARE_BEATS } from '@/components/share/share-tour';
+
+const EDIT_TOUR_STORAGE_KEY = 'cortex.share.editTourSeen';
 
 // Load MuxPlayer client-only; the custom element registration explodes
 // during SSR.
@@ -85,6 +90,11 @@ interface SharedComment {
 interface SharedVideo {
   id: string;
   filename: string | null;
+  /**
+   * Optional viewer-facing display name. NULL falls back to the filename
+   * (sans extension). Editable inline from the public share link.
+   */
+  title: string | null;
   public_url: string | null;
   drive_file_id: string | null;
   mime_type: string | null;
@@ -124,8 +134,19 @@ interface SharedClient {
   agency: string | null;
 }
 
+interface SharedShareLink {
+  id: string;
+  /**
+   * Admin-set override for the public page header. NULL falls back to
+   * the derived "<client> - <project>" label. Editable inline by a
+   * signed-in admin; PATCH /api/editing/review/[id] persists it.
+   */
+  name: string | null;
+}
+
 interface SharedPayload {
   isEditor: boolean;
+  share_link: SharedShareLink;
   project: SharedProject;
   client: SharedClient;
   videos: SharedVideo[];
@@ -260,6 +281,21 @@ function SharedReviewView({
     }
   }, [storageKey]);
 
+  // Deep-link support: webhook chat pings include `#video-N` so the link
+  // jumps straight to the cut under discussion.
+  const videoCount = data.videos.length;
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const hash = window.location.hash;
+    if (!hash || !hash.startsWith('#video-')) return;
+    if (videoCount === 0) return;
+    const el = document.getElementById(hash.slice(1));
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [videoCount]);
+
   function saveName(value: string) {
     const trimmed = value.trim();
     if (!trimmed) {
@@ -317,6 +353,19 @@ function SharedReviewView({
                     ),
                   }
                 : v,
+            ),
+          }
+        : prev,
+    );
+  }
+
+  function updateVideoTitleLocal(videoId: string, title: string | null) {
+    setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            videos: prev.videos.map((v) =>
+              v.id === videoId ? { ...v, title } : v,
             ),
           }
         : prev,
@@ -506,27 +555,53 @@ function SharedReviewView({
 
   const clientName = data.client.name ?? 'Review';
   const projectName = data.project.name;
+  const headerFallback = `${clientName} ${DASH} ${projectName}`;
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-nativz-border bg-surface px-4 py-5 sm:px-6 sm:py-7">
-        <div className="mx-auto max-w-5xl">
+      <header className="border-b border-nativz-border bg-surface px-3 py-5 sm:px-6 sm:py-7">
+        <div className="mx-auto max-w-6xl">
           <div className="mb-4 flex items-center sm:mb-5">
             <ShareHeaderLogo />
           </div>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h1 className="font-display text-xl font-semibold tracking-tight text-text-primary sm:text-3xl">
-                {clientName} {DASH} {projectName}
-              </h1>
-              <p className="mt-2 text-sm text-text-secondary sm:text-base">
+          {/*
+            Header row uses flex-wrap only below `sm` so a long project
+            name on phones can break to a new line without colliding
+            with the action cluster, but on tablet/desktop the title
+            truncates instead of pushing the actions to a second row.
+            `min-w-0 flex-1` on the title column is the bit that lets
+            the inner truncate actually shrink under flex.
+          */}
+          <div className="flex flex-wrap items-center justify-between gap-3 sm:flex-nowrap">
+            <div className="min-w-0 flex-1">
+              {/*
+                Mirrors the SMM share page header. Admin can rename the
+                public review page inline; PATCH lands on the share link
+                row so it doesn't disturb the underlying project name.
+                Non-admin viewers see a static title.
+              */}
+              <ProjectNameHeader
+                name={data.share_link.name}
+                fallback={headerFallback}
+                isEditor={data.isEditor}
+                shareLinkId={data.share_link.id}
+                onRenamed={(next) =>
+                  setData((prev) =>
+                    prev ? { ...prev, share_link: { ...prev.share_link, name: next } } : prev,
+                  )
+                }
+              />
+              <p className="mt-2 truncate text-sm text-text-secondary sm:text-base">
                 {total} {total === 1 ? 'video' : 'videos'} to review
                 {data.project.shoot_date
                   ? ` · shot ${formatShoot(data.project.shoot_date)}`
                   : ''}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
+              {total > 0 && (
+                <ShareTourLaunchButton storageKey={EDIT_TOUR_STORAGE_KEY} />
+              )}
               {total > 0 && (
                 <button
                   type="button"
@@ -562,6 +637,7 @@ function SharedReviewView({
                     setApproveAllOpen(true);
                   }}
                   disabled={approvingAll}
+                  data-tour="approve-all"
                   className="inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-status-success px-3.5 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {approvingAll ? (
@@ -644,6 +720,7 @@ function SharedReviewView({
                 index={idx + 1}
                 video={v}
                 projectId={data.project.id}
+                projectType={data.project.project_type}
                 isEditor={data.isEditor}
                 token={token}
                 authorName={authorName}
@@ -652,6 +729,7 @@ function SharedReviewView({
                 onCommentUpdated={(c) => updateComment(v.id, c)}
                 onVideoReplaced={refetch}
                 onVideoDeleted={() => removeVideoLocal(v.id)}
+                onTitleUpdated={(title) => updateVideoTitleLocal(v.id, title)}
                 requireName={() => {
                   setPendingName(authorName);
                   setNameModalOpen(true);
@@ -661,6 +739,12 @@ function SharedReviewView({
           )}
         </div>
       </main>
+
+      <ShareTour
+        enabled={!nameModalOpen && data.videos.length > 0}
+        beats={EDIT_SHARE_BEATS}
+        storageKey={EDIT_TOUR_STORAGE_KEY}
+      />
 
       <Dialog
         open={nameModalOpen}
@@ -787,6 +871,7 @@ function VideoCard({
   index,
   video,
   projectId,
+  projectType,
   isEditor,
   token,
   authorName,
@@ -795,11 +880,13 @@ function VideoCard({
   onCommentUpdated,
   onVideoReplaced,
   onVideoDeleted,
+  onTitleUpdated,
   requireName,
 }: {
   index: number;
   video: SharedVideo;
   projectId: string;
+  projectType: string;
   isEditor: boolean;
   token: string;
   authorName: string;
@@ -808,10 +895,14 @@ function VideoCard({
   onCommentUpdated: (c: SharedComment) => void;
   onVideoReplaced: () => Promise<void>;
   onVideoDeleted: () => void;
+  onTitleUpdated: (title: string | null) => void;
   requireName: () => void;
 }) {
+  const filenameFallback = stripExt(video.filename);
   const displayLabel =
-    stripExt(video.filename) ?? `Video ${index}`;
+    (video.title && video.title.trim()) ||
+    filenameFallback ||
+    `Video ${index}`;
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [removingApproval, setRemovingApproval] = useState(false);
@@ -820,7 +911,6 @@ function VideoCard({
   );
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [composerExpanded, setComposerExpanded] = useState(false);
 
   const videoElRef = useRef<HTMLVideoElement | null>(null);
   const videoSectionRef = useRef<HTMLDivElement | null>(null);
@@ -925,6 +1015,44 @@ function VideoCard({
       return;
     }
 
+    // Optimistic flow mirrors the calendar share page: paint a temp
+    // comment so the approve / changes_requested chip flips state without
+    // waiting on the round trip. Swap for the real row on success; yank
+    // it on failure and surface the error so the user can retry.
+    const tempId = `temp-${
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2)
+    }`;
+    const trimmedAuthor = authorName.trim();
+    const resolvedContent =
+      commentText.trim() || (status === 'approved' ? 'Approved' : '');
+    const anchorSeconds = readCurrentAnchorSeconds();
+    const snapshotAttachments = pendingAttachments;
+    const tempComment: SharedComment = {
+      id: tempId,
+      video_id: video.id,
+      share_link_id: null,
+      author_name: trimmedAuthor,
+      author_user_id: null,
+      content: resolvedContent,
+      // Local intent; server may auto-upgrade changes_requested → approved
+      // and we reconcile when the real row lands.
+      status,
+      attachments: snapshotAttachments,
+      metadata: {},
+      timestamp_seconds: anchorSeconds,
+      created_at: new Date().toISOString(),
+    };
+
+    onCommentAdded(tempComment);
+    setCommentText('');
+    setPendingAttachments([]);
+    setPinEnabled(true);
+    const optimisticToastId = toast.success(
+      status === 'approved' ? 'Video approved' : 'Revision added',
+    );
+
     setSubmitting(true);
     try {
       const res = await fetch(`/api/editing/share/${token}/comment`, {
@@ -932,14 +1060,13 @@ function VideoCard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           videoId: video.id,
-          authorName: authorName.trim(),
-          content:
-            commentText.trim() || (status === 'approved' ? 'Approved' : ''),
+          authorName: trimmedAuthor,
+          content: resolvedContent,
           status,
-          attachments: pendingAttachments,
+          attachments: snapshotAttachments,
           // Server only honors this for `comment` / `changes_requested`;
           // approval rows strip it.
-          timestampSeconds: readCurrentAnchorSeconds(),
+          timestampSeconds: anchorSeconds,
         }),
       });
       const json = await res.json();
@@ -947,22 +1074,21 @@ function VideoCard({
         throw new Error(typeof json.error === 'string' ? json.error : 'Failed to submit');
       }
       const savedComment = json.comment as SharedComment;
+      onCommentRemoved(tempId);
       onCommentAdded(savedComment);
-      setCommentText('');
-      setPendingAttachments([]);
-      setPinEnabled(true);
-      setComposerExpanded(false);
       const wasAutoApproved =
         status !== 'approved' && savedComment.status === 'approved';
-      toast.success(
-        wasAutoApproved
-          ? 'Looked like an approval — marked approved'
-          : status === 'approved'
-            ? 'Video approved'
-            : 'Revision added',
-      );
+      if (wasAutoApproved) {
+        toast.success('Looked like an approval, marked approved', {
+          id: optimisticToastId,
+        });
+      }
     } catch (err) {
+      onCommentRemoved(tempId);
+      toast.dismiss(optimisticToastId);
       toast.error(err instanceof Error ? err.message : 'Failed to submit');
+      setCommentText(resolvedContent === 'Approved' ? '' : resolvedContent);
+      setPendingAttachments(snapshotAttachments);
     } finally {
       setSubmitting(false);
     }
@@ -1167,9 +1293,16 @@ function VideoCard({
         <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-muted">
           {isImage ? 'Image' : 'Video'} {index}
         </p>
-        <h3 className="break-words text-[15px] font-medium leading-snug text-text-primary">
-          {displayLabel}
-        </h3>
+        <ClipTitleEditor
+          token={token}
+          videoId={video.id}
+          title={video.title}
+          fallback={filenameFallback}
+          displayTitle={displayLabel}
+          onSaved={onTitleUpdated}
+          requireName={requireName}
+          hasName={!!authorName.trim()}
+        />
       </div>
     </div>
   );
@@ -1215,6 +1348,12 @@ function VideoCard({
           className="block h-full w-full bg-black"
           style={{
             ['--media-object-fit' as string]: 'contain',
+            // Mux Player controls inherit the active brand accent (Nativz
+            // cyan on cortex.nativz.io, AC teal on cortex.andersoncollab…)
+            // via the `--accent` token set by [data-brand-mode] in
+            // globals.css.
+            ['--media-accent-color' as string]: 'var(--accent)',
+            ['--media-primary-color' as string]: 'var(--accent)',
             aspectRatio: 'auto',
           }}
           onLoadedMetadata={() => setPlayerReady(true)}
@@ -1332,7 +1471,7 @@ function VideoCard({
             {video.comments.length}
           </span>
         </div>
-        <div className="space-y-2">
+        <div className="space-y-2 pr-1">
           {video.comments.map((c) => (
             <CommentRow
               key={c.id}
@@ -1350,124 +1489,98 @@ function VideoCard({
 
   const composerBlock = (
     <div className="border-t border-nativz-border bg-surface px-3 py-3 sm:px-4">
-      {composerExpanded && (
-        <div className="mb-3 rounded-lg border border-nativz-border bg-background/60 focus-within:border-accent/60 focus-within:ring-1 focus-within:ring-accent/40">
-          <textarea
-            ref={(el) => {
-              if (
-                el &&
-                composerExpanded &&
-                document.activeElement !== el &&
-                !commentText
-              ) {
-                el.focus();
-              }
-            }}
-            value={commentText}
-            onChange={(e) => setCommentText(e.target.value)}
-            placeholder="Notes on the video (cuts, music, hook, etc.)"
-            rows={3}
-            className="w-full resize-none rounded-t-lg bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
-            disabled={submitting}
-          />
+      <div className="mb-3 rounded-lg border border-nativz-border bg-background/60 focus-within:border-accent/60 focus-within:ring-1 focus-within:ring-accent/40">
+        <textarea
+          value={commentText}
+          onChange={(e) => setCommentText(e.target.value)}
+          placeholder="Notes on the video (cuts, music, hook, etc.)"
+          rows={3}
+          className="w-full resize-none rounded-t-lg bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+          disabled={submitting}
+        />
 
-          {pendingAttachments.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-3 pb-2">
-              {pendingAttachments.map((a) => (
-                <AttachmentChip
-                  key={a.url}
-                  attachment={a}
-                  onRemove={() => removeAttachment(a.url)}
-                />
-              ))}
-            </div>
-          )}
+        {pendingAttachments.length > 0 && (
+          <div className="flex flex-wrap gap-2 px-3 pb-2">
+            {pendingAttachments.map((a) => (
+              <AttachmentChip
+                key={a.url}
+                attachment={a}
+                onRemove={() => removeAttachment(a.url)}
+              />
+            ))}
+          </div>
+        )}
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept="image/*,video/*,application/pdf"
-            className="hidden"
-            onChange={(e) => uploadFiles(e.target.files)}
-          />
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*,video/*,application/pdf"
+          className="hidden"
+          onChange={(e) => uploadFiles(e.target.files)}
+        />
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-nativz-border/60 px-2 py-2">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={
-                submitting || uploading || pendingAttachments.length >= 10
-              }
-              className="inline-flex items-center gap-1.5 rounded-md bg-transparent px-2 py-1 text-xs font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
-            >
-              {uploading ? (
-                <Loader2 size={13} className="animate-spin" />
-              ) : (
-                <Paperclip size={13} />
-              )}
-              {uploading ? 'Uploading…' : 'Attach files'}
-            </button>
-            {playerReady &&
-              (pinEnabled ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-surface px-2.5 py-1 text-xs font-medium text-accent-text ring-1 ring-accent/40">
-                  <MapPin size={12} />
-                  At {formatSeconds(livePlayheadSeconds)}
-                  <button
-                    type="button"
-                    onClick={() => setPinEnabled(false)}
-                    className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-accent/20"
-                    aria-label="Don't reference a timestamp"
-                    title="Don't reference a timestamp"
-                  >
-                    <X size={11} />
-                  </button>
-                </span>
-              ) : (
+        <div className="flex flex-wrap items-center gap-2 border-t border-nativz-border/60 px-2 py-2">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={
+              submitting || uploading || pendingAttachments.length >= 10
+            }
+            className="inline-flex items-center gap-1.5 rounded-md bg-transparent px-2 py-1 text-xs font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+          >
+            {uploading ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <Paperclip size={13} />
+            )}
+            {uploading ? 'Uploading…' : 'Attach files'}
+          </button>
+          {playerReady &&
+            (pinEnabled ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-surface px-2.5 py-1 text-xs font-medium text-accent-text ring-1 ring-accent/40">
+                <MapPin size={12} />
+                At {formatSeconds(livePlayheadSeconds)}
                 <button
                   type="button"
-                  onClick={() => setPinEnabled(true)}
-                  disabled={submitting}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-transparent px-2 py-1 text-xs font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
-                  title="Reference current timestamp"
+                  onClick={() => setPinEnabled(false)}
+                  className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-accent/20"
+                  aria-label="Don't reference a timestamp"
+                  title="Don't reference a timestamp"
                 >
-                  <MapPin size={13} /> Reference timestamp
+                  <X size={11} />
                 </button>
-              ))}
-            <div className="ml-auto flex items-center gap-1">
+              </span>
+            ) : (
               <button
                 type="button"
-                onClick={() => {
-                  setComposerExpanded(false);
-                  setCommentText('');
-                  setPendingAttachments([]);
-                }}
-                disabled={submitting || uploading}
-                className="inline-flex items-center gap-1.5 rounded-md bg-transparent px-2 py-1 text-xs font-medium text-text-muted transition-all hover:bg-surface-hover hover:text-text-secondary disabled:opacity-50"
+                onClick={() => setPinEnabled(true)}
+                disabled={submitting}
+                className="inline-flex items-center gap-1.5 rounded-md bg-transparent px-2 py-1 text-xs font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+                title="Reference current timestamp"
               >
-                Cancel
+                <MapPin size={13} /> Reference timestamp
               </button>
-              <button
-                type="button"
-                onClick={() => submit('changes_requested')}
-                disabled={
-                  submitting ||
-                  uploading ||
-                  (!commentText.trim() && pendingAttachments.length === 0)
-                }
-                className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 disabled:hover:bg-accent"
-              >
-                {submitting ? (
-                  <Loader2 size={12} className="animate-spin" />
-                ) : (
-                  <Send size={12} />
-                )}
-                Send
-              </button>
-            </div>
-          </div>
+            ))}
+          <button
+            type="button"
+            onClick={() => submit('changes_requested')}
+            disabled={
+              submitting ||
+              uploading ||
+              (!commentText.trim() && pendingAttachments.length === 0)
+            }
+            className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 disabled:hover:bg-accent"
+          >
+            {submitting ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <Send size={12} />
+            )}
+            Send
+          </button>
         </div>
-      )}
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         {review === 'approved' && latestApprovedId ? (
@@ -1489,24 +1602,12 @@ function VideoCard({
             type="button"
             onClick={() => submit('approved')}
             disabled={submitting || uploading}
+            data-tour="approve"
             className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] bg-status-success px-4 py-2.5 text-sm font-medium text-white shadow-[var(--shadow-card)] transition-all hover:opacity-90 hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 sm:flex-none sm:py-2"
           >
             <CheckCircle size={14} /> Approve
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => setComposerExpanded((v) => !v)}
-          disabled={submitting || uploading}
-          aria-expanded={composerExpanded}
-          className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-50 sm:flex-none sm:py-2 ${
-            composerExpanded
-              ? 'border-accent/50 bg-accent-surface text-accent-text'
-              : 'border-nativz-border bg-transparent text-text-secondary hover:bg-surface-hover hover:text-text-primary'
-          }`}
-        >
-          <MessageSquare size={14} /> Request change
-        </button>
         {isEditor && (
           <button
             type="button"
@@ -1545,24 +1646,37 @@ function VideoCard({
     </div>
   );
 
-  const heightPx = 'md:h-[78vh]';
+  // Post-migration 302 project_type is binary (editing | calendar). Both
+  // default to 9:16; image deliverables get a 4:5 column. The media column
+  // drives its own height via `aspect-[...]`; the card hugs whichever side
+  // is taller (`md:items-stretch`) so the video frame stays flush with the
+  // card edges (no letterboxing) and the comment thread renders inline
+  // instead of inside a scroll well.
+  void projectType;
+  const videoColAspect = isImage ? 'aspect-[4/5]' : 'aspect-[9/16]';
+  // Width caps mirror the prior visual scale (~78vh tall x aspect-ratio).
+  // `md:self-start` keeps the media column at its intrinsic aspect-ratio
+  // height; the comments rail stretches to fill, kept off the bottom edge.
+  const videoColSizing = isImage
+    ? 'w-full md:w-[44vh] md:max-w-[480px] md:flex-shrink-0 md:self-start'
+    : 'w-full md:w-[44vh] md:max-w-[440px] md:flex-shrink-0 md:self-start';
   return (
     <article
-      className={`flex flex-col overflow-hidden rounded-xl border border-nativz-border bg-surface md:flex-row ${heightPx}`}
+      id={`video-${index}`}
+      className="flex flex-col overflow-hidden rounded-xl border border-nativz-border bg-surface md:flex-row md:items-stretch"
     >
       {revisionInput}
       <div
-        className={`aspect-[9/16] w-full md:h-full md:w-auto md:flex-shrink-0 ${
+        className={`${videoColAspect} ${videoColSizing} ${
           isImage ? 'bg-surface' : 'bg-black'
         }`}
       >
         {videoPanel}
       </div>
-      <div className="flex flex-1 flex-col md:h-full md:min-w-0">
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-3 sm:p-4">{headerBlock}</div>
-          {historyBlock}
-        </div>
+      <div className="flex flex-1 flex-col md:min-w-0">
+        <div className="p-3 sm:p-4">{headerBlock}</div>
+        {historyBlock}
+        <div className="flex-1" />
         {composerBlock}
       </div>
     </article>
@@ -1931,9 +2045,12 @@ function CommentAttachmentTile({ attachment }: { attachment: CommentAttachment }
       >
         <video
           src={attachment.url}
-          className="h-24 w-24 object-cover"
+          className="h-24 w-24 bg-black object-cover"
           muted
           playsInline
+          // preload=metadata pulls the first frame so the video tile shows
+          // a poster instead of a black square next to image tiles.
+          preload="metadata"
         />
       </a>
     );
@@ -1948,6 +2065,134 @@ function CommentAttachmentTile({ attachment }: { attachment: CommentAttachment }
       <FileIcon size={12} />
       <span className="max-w-[180px] truncate">{attachment.filename}</span>
     </a>
+  );
+}
+
+/**
+ * Inline-editable display name for a clip on the editing-project share
+ * link. Click to enter edit mode, Enter / Save commits, Esc reverts.
+ * Empty input clears the override and the viewer falls back to the
+ * uploaded filename. Mirrors the social-ad TitleEditor in /c/[token].
+ */
+function ClipTitleEditor({
+  token,
+  videoId,
+  title,
+  fallback,
+  displayTitle,
+  onSaved,
+  requireName,
+  hasName,
+}: {
+  token: string;
+  videoId: string;
+  title: string | null;
+  fallback: string | null;
+  displayTitle: string;
+  onSaved: (title: string | null) => void;
+  requireName: () => void;
+  hasName: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(title ?? fallback ?? '');
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (saving) return;
+    const next = draft.trim();
+    if (next === (title ?? fallback ?? '')) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/editing/share/${token}/title`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoId, title: next }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof json.error === 'string' ? json.error : 'Failed to save title');
+      }
+      onSaved((json.title as string | null) ?? null);
+      toast.success('Title saved');
+      setEditing(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save title');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-2">
+        <Type size={14} className="text-text-muted" />
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void save();
+            } else if (e.key === 'Escape') {
+              setDraft(title ?? fallback ?? '');
+              setEditing(false);
+            }
+          }}
+          autoFocus
+          disabled={saving}
+          maxLength={160}
+          placeholder={fallback ?? 'Clip title'}
+          className="flex-1 rounded-md border border-accent/40 bg-background/60 px-2 py-1 text-[15px] text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent"
+        />
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={saving}
+          className="inline-flex items-center gap-1 rounded-md bg-accent px-2 py-1 text-[11px] font-medium text-accent-contrast transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          {saving ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle size={11} />}
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setDraft(title ?? fallback ?? '');
+            setEditing(false);
+          }}
+          disabled={saving}
+          className="inline-flex items-center rounded-md border border-nativz-border bg-transparent px-2 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="group flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => {
+          if (!hasName) {
+            requireName();
+            return;
+          }
+          setDraft(title ?? fallback ?? '');
+          setEditing(true);
+        }}
+        title="Click to rename"
+        className="flex-1 truncate rounded-md border border-transparent bg-transparent px-1 py-0.5 text-left text-[15px] font-medium leading-snug text-text-primary transition-colors hover:border-nativz-border hover:bg-surface-hover"
+      >
+        {displayTitle}
+      </button>
+      <Pencil
+        size={11}
+        className="text-text-muted opacity-0 transition-opacity group-hover:opacity-100"
+      />
+    </div>
   );
 }
 
@@ -2081,3 +2326,127 @@ function friendlyError(code: string): string {
 // readable and let an audit grep for them.
 const DASH = '-';
 const APOS = "'";
+
+/**
+ * Editable share-link H1. Mirrors ProjectNameHeader on the SMM share
+ * page (app/c/[token]/page.tsx): admins see a hover-pencil that flips
+ * the title into an inline input; PATCH lands on the share link row
+ * (/api/editing/review/{shareLinkId}) so the underlying project name
+ * is untouched. Non-admins see a static title.
+ */
+function ProjectNameHeader({
+  name,
+  fallback,
+  isEditor,
+  shareLinkId,
+  onRenamed,
+}: {
+  name: string | null;
+  fallback: string;
+  isEditor: boolean;
+  shareLinkId: string;
+  onRenamed: (next: string | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(name ?? '');
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!editing) setDraft(name ?? '');
+  }, [name, editing]);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  const headingClass =
+    'font-display text-xl font-semibold tracking-tight text-text-primary sm:text-3xl';
+
+  if (!isEditor) {
+    // `block truncate` keeps the heading on a single line and ellipsises
+    // when the title is longer than the column. Without this, a long
+    // share-link name would force the row to grow and shove the action
+    // cluster onto a new line.
+    return (
+      <h1 className={`${headingClass} block w-full max-w-full truncate`}>
+        {name ?? fallback}
+      </h1>
+    );
+  }
+
+  async function save() {
+    const trimmed = draft.trim();
+    const next = trimmed.length > 0 ? trimmed : null;
+    setEditing(false);
+    if (next === (name ?? null)) return;
+    const prev = name ?? null;
+    onRenamed(next);
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/editing/review/${shareLinkId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: next }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? 'Rename failed');
+      }
+      toast.success('Project name updated');
+    } catch (err) {
+      onRenamed(prev);
+      toast.error(err instanceof Error ? err.message : 'Rename failed');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => void save()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            (e.target as HTMLInputElement).blur();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            setDraft(name ?? '');
+            setEditing(false);
+          }
+        }}
+        placeholder={fallback}
+        disabled={saving}
+        maxLength={120}
+        className={`${headingClass} w-full max-w-full rounded-md border border-nativz-border bg-transparent px-2 py-1 outline-none focus:border-accent`}
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setDraft(name ?? '');
+        setEditing(true);
+      }}
+      className="group flex w-full min-w-0 max-w-full items-center gap-2 rounded-md text-left transition-colors hover:text-text-primary"
+      title="Rename"
+    >
+      <span className={`${headingClass} block min-w-0 flex-1 truncate`}>
+        {name ?? fallback}
+      </span>
+      <Pencil
+        size={16}
+        className="shrink-0 text-text-tertiary opacity-0 transition-opacity group-hover:opacity-100"
+      />
+    </button>
+  );
+}

@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { Loader2, Bell } from 'lucide-react';
-import { Card } from '@/components/ui/card';
 import { AffiliateWeeklyDigestSettings } from '@/components/clients/affiliate-weekly-digest-settings';
 import { SocialWeeklyDigestSettings } from '@/components/clients/social-weekly-digest-settings';
+import { ClientNotificationsGrid } from '@/components/clients/client-notifications-grid';
 import { SettingsPageHeader } from '@/components/clients/settings/settings-primitives';
 
 type ClientPayload = {
@@ -79,8 +79,10 @@ export function ClientNotificationsSubpage({ slug }: { slug: string }) {
       <SettingsPageHeader
         icon={Bell}
         title="Notifications"
-        subtitle={`Email digests and reporting for ${client.name}. Additional channels can be added here later.`}
+        subtitle={`Per-channel alert toggles and reporting digests for ${client.name}.`}
       />
+
+      <ClientNotificationsGrid clientId={client.id} />
 
       <SocialWeeklyDigestSettings
         clientId={client.id}
@@ -107,12 +109,6 @@ export function ClientNotificationsSubpage({ slug }: { slug: string }) {
         onSaved={() => setReloadKey((k) => k + 1)}
       />
 
-      <Card className="border-dashed border-nativz-border bg-white/[0.02] p-5">
-        <p className="text-sm font-medium text-text-primary">More notifications</p>
-        <p className="text-xs text-text-muted mt-1">
-          Slack, additional report schedules, and other alerts will plug in here when you enable them.
-        </p>
-      </Card>
     </div>
   );
 }

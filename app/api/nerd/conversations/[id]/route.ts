@@ -20,7 +20,10 @@ export async function GET(
     // Verify ownership
     const { data: convo, error: convoError } = await admin
       .from('nerd_conversations')
-      .select('id, title, created_at, updated_at')
+      // VFF-10: format_video_id surfaces the pinned-format reference in
+      // Content Lab so the chat can show the strategist what reel the
+      // current thread is anchored on.
+      .select('id, title, created_at, updated_at, format_video_id')
       .eq('id', id)
       .eq('user_id', user.id)
       .single();

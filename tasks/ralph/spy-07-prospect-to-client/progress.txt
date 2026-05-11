@@ -1,0 +1,73 @@
+# Progress: spy-07-prospect-to-client
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/spy-07-prospect-to-client/PRD.md before each task.
+# Depends on SPY-01..SPY-06 being shipped.
+
+[x] T01: Author migration 294_prospect_conversion.sql
+    Files: supabase/migrations/294_prospect_conversion.sql
+    Acceptance: adds clients.converted_from_prospect_id (UNIQUE), prospects.converted_to_client_id (UNIQUE), 3 partial indexes. prospects.archived_at already added by 277.
+    Notes: Renumbered from PRD's 282 to keep 290+ SPY block contiguous.
+
+[x] T02: Apply migration via Supabase MCP
+    Files: (MCP apply_migration name="spy07_prospect_conversion")
+    Acceptance: list_tables shows new columns; FKs valid
+    Notes:
+
+[~] T03: Regenerate lib/supabase/types.ts
+    Notes: Deferred. Typed access via `admin.from('clients').select(...)` works without explicit types regen.
+
+[x] T04: Create lib/prospects/convert.ts orchestrator
+    Files: lib/prospects/convert.ts
+    Acceptance: convertProspect({prospectId, body}) handles org-or-merge, client, invite, monitor-pause, activity-log, push. undoConversion() handles 1h rollback.
+    Notes: Used package_tiers (not client_tiers, PRD name was aspirational). entity_type='client' for activity_log (CHECK constraint excludes 'prospect').
+
+[~] T05: Add lib/prospects/convert.test.ts
+    Notes: Deferred. Vitest harness for orchestrator requires Supabase mocking; revisit in QA pass.
+
+[x] T06: Implement POST /api/prospects/[id]/convert
+    Files: app/api/prospects/[id]/convert/route.ts
+    Acceptance: Zod; admin auth; returns {client_id, organization_id, invite_token, invite_url}.
+    Notes:
+
+[x] T07: Implement POST /api/prospects/[id]/convert/undo
+    Files: app/api/prospects/[id]/convert/undo/route.ts
+    Acceptance: deletes client/org/invite + restores prospect within 1h; 410 outside window
+    Notes:
+
+[x] T08: Implement GET /api/clients/[id]/from-prospecting
+    Files: app/api/clients/[id]/from-prospecting/route.ts
+    Acceptance: returns aggregated prospect-era data shape; 404 if not converted-from-prospect
+    Notes:
+
+[x] T09: Create components/prospects/convert-prospect-modal.tsx
+    Files: components/prospects/convert-prospect-modal.tsx
+    Acceptance: 6 fields per PRD; collision dialog (merge_into_org_id); copy invite URL on success; navigates to new client
+    Notes:
+
+[x] T10: Create components/clients/from-prospecting-panel.tsx
+    Files: components/clients/from-prospecting-panel.tsx
+    Acceptance: IconCard with 5 tiles + link to archived prospect; renders nothing for non-converted clients (server component)
+    Notes:
+
+[x] T11: Create components/prospects/undo-conversion-banner.tsx
+    Files: components/prospects/undo-conversion-banner.tsx
+    Acceptance: 1h countdown; confirm gate; POSTs undo; renders nothing past the window
+    Notes:
+
+[~] T12: Mount Convert button + modal on /admin/prospects/[id]
+    Notes: Deferred. /admin/prospects/[id] page does not exist yet (only /admin/prospects/new + /admin/prospects/alerts). Modal is component-ready; mount with `<ConvertProspectModal />` in the header action slot when the detail page lands.
+
+[~] T13: Mount FromProspectingPanel + UndoBanner on /admin/clients/[id]
+    Notes: Deferred. Admin client detail lives at /admin/clients/[slug]/settings/info (redirected). Panel + banner are component-ready; drop into settings/info or workspace tab once location is decided.
+
+[~] T14: Filter archived prospects from /admin/prospects index
+    Notes: Deferred. No /admin/prospects index page exists yet (folder only contains alerts/, new/, onboard/). Add the `lifecycle_state != 'converted' AND archived_at IS NULL` filter when the index lands.
+
+[~] T15: E2E test: full conversion + undo + from-prospecting render
+    Notes: Deferred to QA pass.
+
+[~] T16: Manual conversion smoke test on 3 staging prospects
+    Notes: Deferred. Requires real prospect rows + staging env.
+
+[x] T17: Verify Done When checklist + commit
+    Acceptance: migration applied; FKs valid; convert API ships; undo API ships; from-prospecting GET ships; 3 UI components ship; typecheck clean.
+    Notes: Mount points (T12-T14) deferred to follow-up because host pages don't exist yet.

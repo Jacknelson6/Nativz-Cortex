@@ -12,11 +12,12 @@ import {
   Link2,
   Trash2,
   ArrowRight,
-  AlertTriangle,
   Pause,
   Play,
+  Rocket,
 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
+import { StartOnboardingDialog } from '@/components/onboarding/start-onboarding-dialog';
 // (SpotlightCard — the cursor-following cyan radial hover glow — was removed
 // 2026-04-24: looked stuck-blue on AC paper and wasn't needed to signal
 // hoverability. The border + bg transitions on the card itself carry that load.)
@@ -45,8 +46,6 @@ interface ClientItem {
   groupId?: string | null;
   /** Derived server-side — true if the client has an active or paused onboarding tracker. */
   inOnboarding?: boolean;
-  /** Derived server-side. True when the client has no chat_webhook_url AND no agency-catchall covers them. */
-  missingWebhook?: boolean;
 }
 
 interface ClientGroup {
@@ -89,9 +88,27 @@ function colorStyles(key: string | undefined) {
   return GROUP_COLORS.find((c) => c.key === resolved) ?? GROUP_COLORS[GROUP_COLORS.length - 1];
 }
 
-function normalizeServices(raw: string[]): string[] {
+function normalizeServices(raw: string[] | null | undefined): string[] {
+  // Defensive: Postgres can hand back NULL for `services`, and an older
+  // ingestion path occasionally seeded the column as a JSON string. Both
+  // shapes used to crash the page with "n.filter is not a function" once
+  // the production bundle minified the iteration. Coerce to an array first
+  // so every downstream `.filter` / `.some` / `for..of` is safe.
+  const list: string[] = Array.isArray(raw)
+    ? raw
+    : typeof raw === 'string'
+      ? (() => {
+          try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return [];
+          }
+        })()
+      : [];
   const result = new Set<string>();
-  for (const s of raw) {
+  for (const s of list) {
+    if (typeof s !== 'string') continue;
     const lower = s.toLowerCase();
     if (STANDARD_SERVICES.includes(s as typeof STANDARD_SERVICES[number])) {
       result.add(s);
@@ -181,6 +198,7 @@ function ActionMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
+  const [startOnboardingOpen, setStartOnboardingOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [copying, setCopying] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -274,6 +292,18 @@ function ActionMenu({
               <ArrowRight size={13} className="text-text-muted" />
               <span className="flex-1">Move</span>
             </button>
+
+            {currentBucket === 'prospect' && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => { setOpen(false); setStartOnboardingOpen(true); }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-primary hover:bg-surface-hover transition-colors text-left"
+              >
+                <Rocket size={13} className="text-text-muted" />
+                <span className="flex-1">Start onboarding</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -405,6 +435,13 @@ function ActionMenu({
         </div>
       </Dialog>
 
+      <StartOnboardingDialog
+        open={startOnboardingOpen}
+        onClose={() => setStartOnboardingOpen(false)}
+        clientId={clientId}
+        clientName={clientName}
+      />
+
       <ConfirmDialog
         open={confirmDelete}
         title="Delete client"
@@ -418,24 +455,6 @@ function ActionMenu({
         onCancel={() => setConfirmDelete(false)}
       />
     </>
-  );
-}
-
-// ─── Webhook warning badge ─────────────────────────────────────────────────
-// Surfaces clients that have no Google Chat webhook configured AND aren't
-// covered by an agency-catchall webhook. These clients silently fall through
-// to OPS_CHAT_WEBHOOK_URL (or no chat ping at all), so past-due alerts,
-// approval pings, and creative comments don't reach a strategist's room.
-
-function WebhookWarning({ clientName }: { clientName: string }) {
-  return (
-    <span
-      className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-amber-500/10 text-amber-400 shrink-0"
-      title={`No Google Chat webhook configured for ${clientName}. Past-due alerts and approval pings will fall through to the OPS webhook (or be silent if unset). Configure on the client's Integrations settings.`}
-      aria-label="Missing Google Chat webhook"
-    >
-      <AlertTriangle size={11} />
-    </span>
   );
 }
 
@@ -542,7 +561,6 @@ function ClientCard({
               {formatRelativeTime(client.lastActivityAt)}
             </span>
           )}
-          {client.missingWebhook && <WebhookWarning clientName={client.name} />}
           <HealthBadge healthScore={client.healthScore} />
           {actionButtons}
         </div>
@@ -570,11 +588,6 @@ function ClientCard({
                 <p className="text-sm font-semibold text-text-primary truncate leading-tight" title={client.name}>{client.name}</p>
                 <p className="text-xs text-text-muted truncate mt-0.5">{client.industry || 'General'}</p>
               </div>
-              {client.missingWebhook && (
-                <div className="mt-0.5">
-                  <WebhookWarning clientName={client.name} />
-                </div>
-              )}
               <HealthBadge
                 healthScore={client.healthScore}
                 className="shrink-0 mt-0.5"

@@ -27,7 +27,7 @@ import type {
 } from './types';
 
 const ONBOARDING_COLUMNS =
-  'id, client_id, kind, platforms, current_step, share_token, step_state, status, started_at, completed_at, created_at, updated_at';
+  'id, client_id, kind, platforms, current_step, share_token, step_state, admin_step_overrides, completion_requirements, status, started_at, completed_at, created_at, updated_at';
 
 function dbOk<T>(data: T | null, error: { message?: string } | null, label: string): T {
   if (error) {
@@ -167,6 +167,57 @@ export async function advanceStep(
   return dbOk(data as OnboardingRow | null, error, 'advanceStep');
 }
 
+/**
+ * Set or clear an admin override for one screen. UI shows the screen as
+ * "done" if the client walked past it OR an admin manually ticked it.
+ */
+export async function setStepOverride(
+  id: string,
+  screenKey: string,
+  checked: boolean,
+  triggeredBy: string | null,
+): Promise<OnboardingRow> {
+  const current = await getOnboardingById(id);
+  if (!current) throw new Error('[onboarding/setStepOverride] row not found');
+
+  const next = { ...(current.admin_step_overrides ?? {}) };
+  if (checked) {
+    next[screenKey] = { checked: true, by: triggeredBy, at: new Date().toISOString() };
+  } else {
+    delete next[screenKey];
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from('onboardings')
+    .update({ admin_step_overrides: next })
+    .eq('id', id)
+    .select(ONBOARDING_COLUMNS)
+    .single();
+  return dbOk(data as OnboardingRow | null, error, 'setStepOverride');
+}
+
+/**
+ * Merge a partial completion_requirements patch.
+ */
+export async function patchCompletionRequirements(
+  id: string,
+  patch: Record<string, unknown>,
+): Promise<OnboardingRow> {
+  const current = await getOnboardingById(id);
+  if (!current) throw new Error('[onboarding/patchCompletionRequirements] row not found');
+
+  const merged = { ...(current.completion_requirements ?? {}), ...patch };
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from('onboardings')
+    .update({ completion_requirements: merged })
+    .eq('id', id)
+    .select(ONBOARDING_COLUMNS)
+    .single();
+  return dbOk(data as OnboardingRow | null, error, 'patchCompletionRequirements');
+}
+
 export async function setStatus(id: string, status: OnboardingStatus): Promise<OnboardingRow> {
   const admin = createAdminClient();
   const update: Record<string, unknown> = { status };
@@ -178,6 +229,60 @@ export async function setStatus(id: string, status: OnboardingStatus): Promise<O
     .select(ONBOARDING_COLUMNS)
     .single();
   return dbOk(data as OnboardingRow | null, error, 'setStatus');
+}
+
+/* ---------- brand_basics writeback to clients -------------------------- */
+
+/**
+ * Bidirectional sync: when the brand_basics screen submits, mirror the
+ * fields onto the `clients` row so the strategist sees the latest values
+ * in the admin dashboard. step_state still owns the audit trail; this
+ * helper just keeps the live `clients` columns in step.
+ *
+ * Field map (step_state → clients):
+ *   tagline         -> tagline
+ *   what_we_sell    -> products
+ *   audience        -> target_audience
+ *   voice           -> brand_voice
+ *   current_offers  -> current_offers
+ *   website_url     -> website_url
+ *   logo_url        -> logo_url
+ *
+ * Only writes fields that are non-empty strings. We never null out an
+ * existing clients-row value just because the client cleared a field
+ * mid-flow.
+ */
+export async function syncBrandBasicsToClient(opts: {
+  client_id: string;
+  basics: {
+    tagline?: string;
+    what_we_sell?: string;
+    audience?: string;
+    voice?: string;
+    current_offers?: string;
+    website_url?: string;
+    logo_url?: string;
+  };
+}): Promise<void> {
+  const update: Record<string, string> = {};
+  if (opts.basics.tagline?.trim()) update.tagline = opts.basics.tagline.trim();
+  if (opts.basics.what_we_sell?.trim()) update.products = opts.basics.what_we_sell.trim();
+  if (opts.basics.audience?.trim()) update.target_audience = opts.basics.audience.trim();
+  if (opts.basics.voice?.trim()) update.brand_voice = opts.basics.voice.trim();
+  if (opts.basics.current_offers?.trim()) update.current_offers = opts.basics.current_offers.trim();
+  if (opts.basics.website_url?.trim()) update.website_url = opts.basics.website_url.trim();
+  if (opts.basics.logo_url?.trim()) update.logo_url = opts.basics.logo_url.trim();
+
+  if (Object.keys(update).length === 0) return;
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from('clients')
+    .update(update)
+    .eq('id', opts.client_id);
+  if (error) {
+    console.warn('[onboarding/syncBrandBasics] writeback failed:', error.message);
+  }
 }
 
 /* ---------- social connection sync ------------------------------------- */

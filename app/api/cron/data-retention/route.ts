@@ -12,6 +12,7 @@ export const maxDuration = 60;
  * - Completed topic searches older than 2 years -> deleted
  * - Expired invite tokens -> deleted
  * - Read notifications older than 90 days -> deleted
+ * - Zernio webhook dedupe rows older than 30 days -> deleted
  *
  * @auth Bearer CRON_SECRET (mandatory)
  * @returns {{ message: string, deleted: Record<string, number> }}
@@ -83,11 +84,30 @@ async function handleGet(request: NextRequest) {
       console.error('[cron/data-retention] notifications cleanup error:', notifError);
     }
 
+    // 5. Zernio webhook dedupe rows older than 30 days. Per migration 249,
+    // Zernio's longest retry window is ~26h; 30 days is generous coverage
+    // for redelivery from the dead-letter queue while keeping the table
+    // bounded. Without this purge, the table grows unbounded ~1 row per
+    // webhook event over the lifetime of the app.
+    const thirtyDaysAgo = new Date(now);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const { data: webhookDedupeData, error: webhookDedupeError } = await adminClient
+      .from('zernio_webhook_events')
+      .delete()
+      .lt('received_at', thirtyDaysAgo.toISOString())
+      .select('event_id');
+
+    if (webhookDedupeError) {
+      console.error('[cron/data-retention] zernio_webhook_events cleanup error:', webhookDedupeError);
+    }
+
     const deleted = {
       activity_log: activityData?.length ?? 0,
       topic_searches: searchData?.length ?? 0,
       invite_tokens: tokenData?.length ?? 0,
       notifications: notifData?.length ?? 0,
+      zernio_webhook_events: webhookDedupeData?.length ?? 0,
     };
 
     const total = Object.values(deleted).reduce((sum, n) => sum + n, 0);

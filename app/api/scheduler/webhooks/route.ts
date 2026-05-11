@@ -6,6 +6,22 @@ import {
   syncPlatformRowsFromZernio,
   reconcileParentStatusFromSpp,
 } from '@/lib/posting/zernio-reconcile';
+import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
+import { buildChatCard, postToGoogleChatSafe, type ChatCardWidget } from '@/lib/chat/post-to-google-chat';
+import { autoBackfillNewPlatform } from '@/lib/scheduler/auto-backfill-platform';
+
+const PLATFORM_LABEL: Record<string, string> = {
+  tiktok: 'TikTok',
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+  youtube: 'YouTube',
+  linkedin: 'LinkedIn',
+  googlebusiness: 'Google Business',
+  pinterest: 'Pinterest',
+  x: 'X (Twitter)',
+  threads: 'Threads',
+  bluesky: 'Bluesky',
+};
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
@@ -98,7 +114,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
       }
     } else {
-      return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 500 });
+      // No secret configured: reject as unauthorized rather than 500.
+      // Returning 500 with a "secret not configured" body leaks the
+      // misconfiguration to anyone hitting the endpoint, and the auth
+      // dialog is the same regardless: callers without a valid signature
+      // should be told the request is unauthorized.
+      console.error('[zernio-webhook] ZERNIO_WEBHOOK_SECRET is not configured — rejecting request');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = JSON.parse(rawBody) as Record<string, unknown>;
@@ -182,9 +204,13 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        // Zernio's failure envelope includes both a human-readable `message`
+        // and a `platformError` blob with the raw platform response. Prefer
+        // the structured `platformError` when present (it's the most
+        // actionable string for ops), then fall back to message/reason.
         const failDetail =
-          pickStr(asRecord(data) ?? null, 'error', 'message', 'reason') ||
-          pickStr(postPayload, 'error', 'message', 'reason', 'failureReason', 'failure_reason') ||
+          pickStr(asRecord(data) ?? null, 'platformError', 'platform_error', 'error', 'message', 'reason') ||
+          pickStr(postPayload, 'platformError', 'platform_error', 'error', 'message', 'reason', 'failureReason', 'failure_reason') ||
           '';
 
         const { data: sched } = postId
@@ -255,9 +281,12 @@ export async function POST(request: NextRequest) {
       }
       case 'account.connected': {
         if (accountId) {
+          // Clear the disconnect alert stamp so a future disconnect can
+          // re-fire the notification — mirrors the publish-cron classifier
+          // pattern (alert once per incident, reset on reconnect).
           await adminClient
             .from('social_profiles')
-            .update({ is_active: true })
+            .update({ is_active: true, disconnect_alerted_at: null })
             .eq('late_account_id', accountId);
 
           // Mirror the connection into the client's active SMM onboarding so
@@ -265,7 +294,7 @@ export async function POST(request: NextRequest) {
           // client retapping the screen. No-op if there's no live onboarding.
           const { data: prof } = await adminClient
             .from('social_profiles')
-            .select('platform, username, client_id')
+            .select('id, platform, username, client_id, invite_chat_pinged_at, clients(name, agency, chat_webhook_url)')
             .eq('late_account_id', accountId)
             .maybeSingle();
           if (prof?.client_id && prof?.platform) {
@@ -280,25 +309,151 @@ export async function POST(request: NextRequest) {
             } catch (err) {
               console.error('[zernio-webhook] markPlatformConnection (connected) failed:', err);
             }
+
+            // Auto-backfill the new platform onto every not-yet-shipped
+            // scheduled/draft post so the client's calendar fans out
+            // automatically without anyone touching the UI. Posts that
+            // are already in Zernio's hands (`late_post_id` set) are
+            // skipped — those need cloning, which is destructive enough
+            // to leave to the manual Add platform dialog.
+            let autoBackfillCount = 0;
+            try {
+              const result = await autoBackfillNewPlatform({
+                admin: adminClient,
+                clientId: prof.client_id as string,
+                socialProfileId: prof.id as string,
+              });
+              autoBackfillCount = result.inserted;
+            } catch (err) {
+              console.error('[zernio-webhook] auto-backfill failed:', err);
+            }
+
+            // Ping the SMM team in the client's Google Chat space so they
+            // know the account is live and can fan existing posts onto it
+            // (calendar header → Add platform). Falls back to the agency
+            // miscellaneous-catchall webhook, then OPS_GOOGLE_CHAT_WEBHOOK.
+            //
+            // Dedup: invite-link OAuth path already fires its own chat
+            // ping via `handleInviteCompletion`, which stamps
+            // `invite_chat_pinged_at` on the profile. Skip if that stamp
+            // is within the last 5 min — the invite ping is the
+            // authoritative one for self-serve flows. In-app notification
+            // (below) still fires regardless so admins not in Chat see it.
+            const recentInvitePing =
+              prof.invite_chat_pinged_at &&
+              Date.now() - new Date(prof.invite_chat_pinged_at as string).getTime() < 5 * 60_000;
+            if (!recentInvitePing) {
+              try {
+                const client = prof.clients as { name?: string; agency?: string | null; chat_webhook_url?: string | null } | null;
+                const webhookUrl =
+                  (await resolveTeamChatWebhook(adminClient, {
+                    primaryUrl: client?.chat_webhook_url ?? null,
+                    agency: client?.agency ?? null,
+                  })) ?? process.env.OPS_GOOGLE_CHAT_WEBHOOK ?? null;
+
+                const platform = prof.platform as string;
+                const platformLabel = PLATFORM_LABEL[platform] ?? platform;
+                const username = (prof.username as string | null) ?? '';
+                const handle = username ? `@${username}` : 'their account';
+                const brand = client?.name ?? 'Unknown client';
+
+                const widgets: ChatCardWidget[] = [
+                  {
+                    type: 'text',
+                    text: `<b>${platformLabel}</b> just connected as <b>${handle}</b> via Zernio.`,
+                  },
+                ];
+                if (autoBackfillCount > 0) {
+                  widgets.push({
+                    type: 'kv',
+                    label: 'Auto-added to',
+                    value: `${autoBackfillCount} upcoming post${autoBackfillCount === 1 ? '' : 's'}`,
+                  });
+                }
+                widgets.push({
+                  type: 'text',
+                  text: '<i>Internal FYI, no email goes to the client. Open the scheduler and use <b>Add platform</b> to fan past posts onto the new account.</i>',
+                });
+
+                const backfillFallback =
+                  autoBackfillCount > 0
+                    ? ` Auto-added to ${autoBackfillCount} upcoming post${autoBackfillCount === 1 ? '' : 's'}.`
+                    : '';
+
+                postToGoogleChatSafe(
+                  webhookUrl,
+                  buildChatCard({
+                    cardId: `zernio-account-connected-${accountId}`,
+                    headerTitle: `🔌 ${platformLabel} connected`,
+                    headerSubtitle: brand,
+                    sections: [{ widgets }],
+                    fallbackText:
+                      `🔌 ${brand} — ${platformLabel} just connected as ${handle} via Zernio.${backfillFallback}`,
+                  }),
+                  `zernio-webhook:account.connected:${accountId}`,
+                );
+              } catch (err) {
+                console.error('[zernio-webhook] account.connected chat ping failed:', err);
+              }
+            }
           }
         }
-        break;
-      }
-      case 'account.disconnected': {
-        if (accountId) {
-          await adminClient
-            .from('social_profiles')
-            .update({ is_active: false })
-            .eq('late_account_id', accountId);
-        }
 
-        const { data: prof } = accountId
+        // In-app notification (separate from Chat) — uses the same fanout
+        // recipients as post.failed / account.disconnected so admins who
+        // don't live in Google Chat still see it.
+        const { data: profForNotif } = accountId
           ? await adminClient
               .from('social_profiles')
-              .select('platform, username, client_id, clients(name)')
+              .select('platform, username, clients(name)')
               .eq('late_account_id', accountId)
               .maybeSingle()
           : { data: null };
+        const clientNameForNotif =
+          (profForNotif?.clients as { name?: string } | null)?.name ?? 'Unknown client';
+        const platformForNotif =
+          (profForNotif?.platform as string) ||
+          pickStr(accountPayload, 'platform') ||
+          'social';
+        const usernameForNotif =
+          (profForNotif?.username as string) ||
+          pickStr(accountPayload, 'username', 'handle') ||
+          '';
+        await notifyZernioWebhookRecipients({
+          type: 'account_connected',
+          title: `Social account connected, ${clientNameForNotif}`,
+          body: `${platformForNotif}${usernameForNotif ? ` (@${usernameForNotif})` : ''} is live in Zernio. Open the scheduler → Add platform to fan existing posts onto it.`,
+          linkPath: '/admin/scheduler',
+        });
+        break;
+      }
+      case 'account.disconnected': {
+        // Pull current state BEFORE flipping is_active so we can dedupe the
+        // notification. `disconnect_alerted_at` mirrors the column used by
+        // the publish cron's per-leg classifier — once stamped, we skip the
+        // duplicate email until the account reconnects (which clears the
+        // stamp via the account.connected branch above).
+        const { data: prof } = accountId
+          ? await adminClient
+              .from('social_profiles')
+              .select('id, platform, username, client_id, disconnect_alerted_at, clients(name)')
+              .eq('late_account_id', accountId)
+              .maybeSingle()
+          : { data: null };
+
+        const alreadyAlerted = (prof?.disconnect_alerted_at as string | null) != null;
+
+        if (accountId) {
+          await adminClient
+            .from('social_profiles')
+            .update({
+              is_active: false,
+              disconnect_alerted_at: alreadyAlerted
+                ? (prof?.disconnect_alerted_at as string)
+                : new Date().toISOString(),
+            })
+            .eq('late_account_id', accountId);
+        }
 
         const clientName =
           (prof?.clients as { name?: string } | null)?.name ?? 'Unknown client';
@@ -327,12 +482,46 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        await notifyZernioWebhookRecipients({
-          type: 'account_disconnected',
-          title: `Social account disconnected, ${clientName}`,
-          body: `${platform}${username ? ` (@${username})` : ''} lost connection in Zernio. Reconnect in scheduler or Zernio dashboard.`,
-          linkPath: '/admin/scheduler',
-        });
+        if (!alreadyAlerted) {
+          await notifyZernioWebhookRecipients({
+            type: 'account_disconnected',
+            title: `Social account disconnected, ${clientName}`,
+            body: `${platform}${username ? ` (@${username})` : ''} lost connection in Zernio. Reconnect in scheduler or Zernio dashboard.`,
+            linkPath: '/admin/scheduler',
+          });
+        }
+        break;
+      }
+      case 'post.cancelled':
+      case 'post.canceled': {
+        // Zernio cancelled the post upstream (operator action in their
+        // dashboard, scheduler conflict, etc.). Mirror that into the local
+        // row so the calendar reflects reality instead of an indefinite
+        // `scheduled` state. Guard against downgrading an already-published
+        // post — out-of-order webhook delivery would otherwise race here.
+        if (postId) {
+          const { data: parent } = await adminClient
+            .from('scheduled_posts')
+            .select('status')
+            .eq('late_post_id', postId)
+            .maybeSingle();
+          const cur = (parent as { status?: string } | null)?.status;
+          if (cur && cur !== 'published' && cur !== 'partially_failed') {
+            await adminClient
+              .from('scheduled_posts')
+              .update({ status: 'cancelled' })
+              .eq('late_post_id', postId);
+          }
+        }
+        break;
+      }
+      case 'post.recycled': {
+        // Zernio's recycle feature creates a fresh post from an existing
+        // template. We don't model recycled posts as separate rows — the
+        // original `late_post_id` is what's stored. Log for visibility but
+        // don't mutate parent status; the per-leg events that follow
+        // (post.published / post.failed) will drive reconcile.
+        console.log(`Zernio webhook: post.recycled for ${postId}`);
         break;
       }
       default: {

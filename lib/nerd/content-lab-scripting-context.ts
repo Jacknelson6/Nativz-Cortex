@@ -327,3 +327,105 @@ export async function buildContentLabSystemAddendum(
  * `buildContentLabSystemAddendum()` — it composes the intro + body.
  */
 export const STRATEGY_LAB_ADDENDUM = `\n\n---\n\n# STRATEGY LAB MODE — Research-grounded scripting workbench\n\n${ADMIN_INTRO}\n${STRATEGY_LAB_ADDENDUM_BODY}`;
+
+// ---------------------------------------------------------------------------
+// VFF-10: format pin → scripting context.
+//
+// When a Content Lab conversation has a `format_video_id` pin, we append a
+// compact "Reference format:" block to the system prompt. Hard-capped at 800
+// chars per the PRD so it can never blow the 10k addendum budget; if the
+// payload runs long we truncate `why_it_works` first, then drop the
+// dimensions line.
+// ---------------------------------------------------------------------------
+
+const MAX_FORMAT_CONTEXT_CHARS = 800;
+
+export interface AppendFormatContextOpts {
+  format_video_id: string | null;
+}
+
+interface FormatPinRow {
+  engagement_hook_descriptor: string | null;
+  why_it_works: string | null;
+  retention_pattern: string | null;
+}
+
+interface FormatDimensionRow {
+  kind: 'hook_type' | 'structure' | 'archetype' | 'pacing';
+  display_name: string;
+}
+
+function truncate(s: string, max: number): string {
+  if (s.length <= max) return s;
+  return `${s.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+}
+
+export async function appendFormatContext(
+  admin: SupabaseClient,
+  opts: AppendFormatContextOpts,
+): Promise<string> {
+  if (!opts.format_video_id) return '';
+
+  try {
+    const { data: video } = await admin
+      .from('viral_videos')
+      .select('engagement_hook_descriptor, why_it_works, retention_pattern')
+      .eq('id', opts.format_video_id)
+      .maybeSingle();
+    if (!video) return '';
+    const v = video as FormatPinRow;
+
+    const { data: dimRows } = await admin
+      .from('viral_video_formats')
+      .select('format_id, viral_formats!inner(kind, display_name)')
+      .eq('video_id', opts.format_video_id);
+    const dims: Record<string, string> = {};
+    for (const row of (dimRows ?? []) as Array<{ viral_formats: FormatDimensionRow | FormatDimensionRow[] }>) {
+      const fmt = Array.isArray(row.viral_formats) ? row.viral_formats[0] : row.viral_formats;
+      if (fmt && !dims[fmt.kind]) dims[fmt.kind] = fmt.display_name;
+    }
+
+    const hookLabel = dims.hook_type ?? 'unspecified';
+    const display = dims.hook_type ?? v.engagement_hook_descriptor ?? 'Reference format';
+    const dimsLine = `Dimensions: ${dims.hook_type ?? '—'} | ${dims.structure ?? '—'} | ${dims.archetype ?? '—'} | ${dims.pacing ?? '—'}`;
+
+    // Compose, then trim aggressively to stay under MAX_FORMAT_CONTEXT_CHARS.
+    let descriptor = v.engagement_hook_descriptor?.trim() ?? '';
+    let whyItWorks = v.why_it_works?.trim() ?? '';
+    const retention = v.retention_pattern?.trim() ?? '';
+
+    const compose = (incDims: boolean): string => {
+      const lines = [
+        `Reference format: ${display} (${hookLabel}).`,
+        descriptor,
+        whyItWorks ? `Why it works: ${whyItWorks}` : '',
+        retention ? `Retention pattern: ${retention}` : '',
+        incDims ? dimsLine : '',
+      ].filter(Boolean);
+      return `\n\n---\n\n${lines.join('\n')}`;
+    };
+
+    let block = compose(true);
+    if (block.length > MAX_FORMAT_CONTEXT_CHARS) {
+      // Step 1: shrink why_it_works first.
+      const overrun = block.length - MAX_FORMAT_CONTEXT_CHARS;
+      whyItWorks = truncate(whyItWorks, Math.max(0, whyItWorks.length - overrun));
+      block = compose(true);
+    }
+    if (block.length > MAX_FORMAT_CONTEXT_CHARS) {
+      // Step 2: drop dimensions line.
+      block = compose(false);
+    }
+    if (block.length > MAX_FORMAT_CONTEXT_CHARS) {
+      // Step 3: hard truncate descriptor as last resort.
+      descriptor = truncate(descriptor, Math.max(0, descriptor.length - (block.length - MAX_FORMAT_CONTEXT_CHARS)));
+      block = compose(false);
+    }
+    return block.slice(0, MAX_FORMAT_CONTEXT_CHARS);
+  } catch (err) {
+    console.warn('[content-lab-scripting-context] format pin load failed:', err);
+    return '';
+  }
+}
+
+export const __TEST__ = { MAX_FORMAT_CONTEXT_CHARS, truncate };

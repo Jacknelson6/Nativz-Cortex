@@ -16,7 +16,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 // from color, not casing. Danger stays red.
 const variantStyles: Record<Variant, string> = {
   primary:
-    'bg-accent text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)]',
+    'bg-accent text-accent-contrast shadow-[var(--shadow-card)] hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)]',
   secondary: 'bg-surface-hover text-text-primary hover:bg-nativz-border',
   outline: 'border border-nativz-border text-text-secondary hover:bg-surface-hover',
   ghost: 'text-text-secondary hover:bg-surface-hover hover:text-text-primary',

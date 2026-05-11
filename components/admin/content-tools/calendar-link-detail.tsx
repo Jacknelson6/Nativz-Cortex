@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { toast } from 'sonner';
 import {
+  Check,
   CheckCheck,
   CheckCircle2,
   Copy,
@@ -298,6 +299,14 @@ export function CalendarLinkDetail({
   const [footerNoteDraft, setFooterNoteDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [ccSelf, setCcSelf] = useState(false);
+  // Recipient narrowing — Set of lowercased emails. Hydrated from
+  // `preview.recipients` on open so the default is "send to everyone".
+  // Admin can uncheck a name to drop them from this specific send; the
+  // POST body only forwards `recipient_emails` when the set has been
+  // narrowed below the full eligible list.
+  const [selectedRecipients, setSelectedRecipients] = useState<Set<string>>(
+    () => new Set(),
+  );
   // Live-rendered HTML reflecting the current drafts. Refetched (debounced)
   // from the GET endpoint whenever the admin tweaks any draft so the
   // preview iframe mirrors what the recipient will actually see — not just
@@ -879,6 +888,9 @@ export function CalendarLinkDetail({
       setCtaLabelDraft(data.cta_label ?? '');
       setFooterNoteDraft(data.footer_note ?? '');
       setLivePreviewHtml(data.html);
+      setSelectedRecipients(
+        new Set(data.recipients.map((r) => r.email.toLowerCase())),
+      );
     } catch (err) {
       setPreviewError(err instanceof Error ? err.message : 'Failed to load preview');
     } finally {
@@ -892,6 +904,7 @@ export function CalendarLinkDetail({
     setPreview(null);
     setPreviewError(null);
     setLivePreviewHtml(null);
+    setSelectedRecipients(new Set());
   }
 
   async function confirmSend() {
@@ -925,6 +938,17 @@ export function CalendarLinkDetail({
             ? { footer_note: footerNoteDraft }
             : {}),
           ...(ccSelf ? { cc_self: true } : {}),
+          // Only forward `recipient_emails` when the admin has actually
+          // narrowed the list below the full eligible set. Sending the
+          // full set as a filter is identical to omitting it but adds
+          // surface area, so default to "let the server decide".
+          ...(preview.recipients.length !== selectedRecipients.size
+            ? {
+                recipient_emails: preview.recipients
+                  .filter((r) => selectedRecipients.has(r.email.toLowerCase()))
+                  .map((r) => r.email),
+              }
+            : {}),
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -1062,6 +1086,7 @@ export function CalendarLinkDetail({
         renderMode={renderMode}
         sending={sending}
         ccSelf={ccSelf}
+        selectedRecipients={selectedRecipients}
         onChangeSubject={setSubjectDraft}
         onChangeMessage={setMessageDraft}
         onChangeEyebrow={setEyebrowDraft}
@@ -1070,6 +1095,15 @@ export function CalendarLinkDetail({
         onChangeFooterNote={setFooterNoteDraft}
         onChangeRenderMode={setRenderMode}
         onChangeCcSelf={setCcSelf}
+        onToggleRecipient={(email) => {
+          const key = email.toLowerCase();
+          setSelectedRecipients((prev) => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+          });
+        }}
         onClose={closeSendPreview}
         onSend={confirmSend}
       />
@@ -1104,10 +1138,24 @@ export function CalendarLinkDetail({
               status={unifiedStatusForShareLink({
                 status: link.status,
                 first_sent_at: link.first_sent_at,
+                pipeline_status: link.pipeline_status ?? null,
               })}
             />
             {(isExpired || isAbandoned) && (
               <StatusPill status={link.status} />
+            )}
+            {link.approved_at && (
+              <span
+                className="text-[11px] tabular-nums text-text-muted"
+                title={`Approved ${formatTimestamp(link.approved_at)}\nDrives which half-month billing bucket this project lands in.`}
+              >
+                approved{' '}
+                {new Date(link.approved_at).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}
+              </span>
             )}
           </>
         }
@@ -1137,6 +1185,30 @@ export function CalendarLinkDetail({
             endpoint={`/api/calendar/drops/${link.drop_id}/activity`}
             emptyMessage="No activity yet. Mint a share link or send a notification to get started."
             nounSingular="post"
+            onClickEmail={(emailId) => {
+              // History rows carry the share_link_emails.id. The archive
+              // panel below already loads emails for the CURRENT share
+              // link, so look there first. Re-minted drops can have
+              // history events from sibling share links; for those, we
+              // fall back to a per-id lookup so the replay still opens.
+              const match = archivedEmails?.find((e) => e.id === emailId);
+              if (match) {
+                setViewingEmail(match);
+                return;
+              }
+              void (async () => {
+                try {
+                  const res = await fetch(
+                    `/api/admin/share-link-emails/${emailId}`,
+                  );
+                  if (!res.ok) return;
+                  const body = (await res.json()) as { email: ArchivedEmail };
+                  setViewingEmail(body.email);
+                } catch (err) {
+                  console.warn('[calendar-link-detail] email lookup failed', err);
+                }
+              })();
+            }}
           />
         }
         media={
@@ -1457,6 +1529,7 @@ function SendPreviewDialog({
   renderMode,
   sending,
   ccSelf,
+  selectedRecipients,
   onChangeSubject,
   onChangeMessage,
   onChangeEyebrow,
@@ -1465,6 +1538,7 @@ function SendPreviewDialog({
   onChangeFooterNote,
   onChangeRenderMode,
   onChangeCcSelf,
+  onToggleRecipient,
   onClose,
   onSend,
 }: {
@@ -1484,6 +1558,7 @@ function SendPreviewDialog({
   renderMode: 'edit' | 'preview';
   sending: boolean;
   ccSelf: boolean;
+  selectedRecipients: Set<string>;
   onChangeSubject: (v: string) => void;
   onChangeMessage: (v: string) => void;
   onChangeEyebrow: (v: string) => void;
@@ -1492,6 +1567,7 @@ function SendPreviewDialog({
   onChangeFooterNote: (v: string) => void;
   onChangeRenderMode: (m: 'edit' | 'preview') => void;
   onChangeCcSelf: (v: boolean) => void;
+  onToggleRecipient: (email: string) => void;
   onClose: () => void;
   onSend: () => void;
 }) {
@@ -1524,23 +1600,50 @@ function SendPreviewDialog({
         ) : preview ? (
           <>
             <div className="flex-1 space-y-4 overflow-y-auto p-6">
-              {/* Recipients */}
-              <Section label={`Recipients (${preview.recipients.length})`}>
+              {/* Recipients — admin can uncheck names to drop them from
+                  this specific send. Default state hydrates "all selected"
+                  so leaving it alone matches the prior behaviour. */}
+              <Section
+                label={`Recipients (${selectedRecipients.size} of ${preview.recipients.length})`}
+              >
                 <div className="flex flex-wrap gap-1.5">
-                  {preview.recipients.map((r) => (
-                    <span
-                      key={r.email}
-                      className="inline-flex items-center gap-1 rounded-full border border-nativz-border bg-surface px-2.5 py-1 text-[11px] text-text-secondary"
-                      title={r.email}
-                    >
-                      <span className="font-medium text-text-primary">
-                        {r.name ?? r.email}
-                      </span>
-                      {r.name && (
-                        <span className="text-text-muted">· {r.email}</span>
-                      )}
-                    </span>
-                  ))}
+                  {preview.recipients.map((r) => {
+                    const key = r.email.toLowerCase();
+                    const checked = selectedRecipients.has(key);
+                    return (
+                      <button
+                        key={r.email}
+                        type="button"
+                        onClick={() => onToggleRecipient(r.email)}
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                          checked
+                            ? 'border-accent/40 bg-accent/10 text-text-primary'
+                            : 'border-nativz-border bg-surface text-text-muted hover:text-text-secondary'
+                        }`}
+                        title={r.email}
+                      >
+                        <span
+                          className={`flex h-3.5 w-3.5 items-center justify-center rounded-sm border ${
+                            checked
+                              ? 'border-accent bg-accent text-white'
+                              : 'border-nativz-border bg-background'
+                          }`}
+                        >
+                          {checked && <Check size={9} strokeWidth={3} />}
+                        </span>
+                        <span
+                          className={
+                            checked ? 'font-medium text-text-primary' : ''
+                          }
+                        >
+                          {r.name ?? r.email}
+                        </span>
+                        {r.name && (
+                          <span className="text-text-muted">· {r.email}</span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
                 <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-[11px] text-text-secondary">
                   <input
@@ -1686,14 +1789,19 @@ function SendPreviewDialog({
                 type="button"
                 size="sm"
                 onClick={onSend}
-                disabled={sending || !subject.trim() || !message.trim()}
+                disabled={
+                  sending ||
+                  !subject.trim() ||
+                  !message.trim() ||
+                  selectedRecipients.size === 0
+                }
               >
                 <Send size={13} />
                 {sending
                   ? 'Sending…'
                   : variant === 'initial'
-                    ? `Send to ${preview.recipients.length} ${preview.recipients.length === 1 ? 'recipient' : 'recipients'}`
-                    : `Resend to ${preview.recipients.length} ${preview.recipients.length === 1 ? 'recipient' : 'recipients'}`}
+                    ? `Send to ${selectedRecipients.size} ${selectedRecipients.size === 1 ? 'recipient' : 'recipients'}`
+                    : `Resend to ${selectedRecipients.size} ${selectedRecipients.size === 1 ? 'recipient' : 'recipients'}`}
               </Button>
             </div>
           </>

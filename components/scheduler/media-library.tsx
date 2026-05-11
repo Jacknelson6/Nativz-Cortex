@@ -101,9 +101,11 @@ export function MediaLibrary({
         }),
       });
       if (!urlRes.ok) throw new Error('Failed to get upload URL');
-      const { uploadUrl, publicUrl } = await urlRes.json();
+      const uploadResp = await urlRes.json() as
+        | { provider: 'mux'; uploadUrl: string; uploadId: string }
+        | { provider: 'zernio'; uploadUrl: string; publicUrl: string };
 
-      // Step 3: Upload effectiveFile (possibly cropped) directly to Zernio CDN
+      // Step 3: Upload directly to provider CDN (Mux for video, Zernio for image)
       const xhr = new XMLHttpRequest();
       xhr.upload.addEventListener('progress', (evt) => {
         if (evt.lengthComputable) {
@@ -117,34 +119,41 @@ export function MediaLibrary({
           else reject(new Error('Upload to CDN failed'));
         };
         xhr.onerror = () => reject(new Error('Upload failed'));
-        xhr.open('PUT', uploadUrl);
+        xhr.open('PUT', uploadResp.uploadUrl);
         xhr.setRequestHeader('Content-Type', effectiveFile.type);
         xhr.send(effectiveFile);
       });
 
       // Step 4: Thumbnail + (for video) backfill dims later. For images, the
-      // public URL itself IS the thumbnail.
+      // public URL itself IS the thumbnail. Mux video thumbnails are baked
+      // from a frame on the client; the static_renditions webhook eventually
+      // stamps the playback URL onto the row.
       let thumbnailUrl: string | null = null;
       if (effectiveFile.type.startsWith('image/')) {
-        thumbnailUrl = publicUrl;
+        thumbnailUrl = uploadResp.provider === 'zernio' ? uploadResp.publicUrl : null;
       } else if (effectiveFile.type.startsWith('video/')) {
         thumbnailUrl = await generateVideoThumbnail(effectiveFile);
       }
 
       // Step 5: Confirm upload in our DB
+      const confirmBody: Record<string, unknown> = {
+        action: 'confirm-upload',
+        client_id: clientId,
+        filename: effectiveFile.name,
+        file_size_bytes: effectiveFile.size,
+        mime_type: effectiveFile.type,
+        thumbnail_url: thumbnailUrl,
+        ...(dims ? { width: dims.width, height: dims.height } : {}),
+      };
+      if (uploadResp.provider === 'zernio') {
+        confirmBody.public_url = uploadResp.publicUrl;
+      } else {
+        confirmBody.mux_upload_id = uploadResp.uploadId;
+      }
       const confirmRes = await fetch('/api/scheduler/media', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'confirm-upload',
-          client_id: clientId,
-          filename: effectiveFile.name,
-          public_url: publicUrl,
-          file_size_bytes: effectiveFile.size,
-          mime_type: effectiveFile.type,
-          thumbnail_url: thumbnailUrl,
-          ...(dims ? { width: dims.width, height: dims.height } : {}),
-        }),
+        body: JSON.stringify(confirmBody),
       });
       if (!confirmRes.ok) throw new Error('Failed to save media record');
 

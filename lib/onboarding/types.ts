@@ -22,7 +22,25 @@ export type EmailLogKind =
   | 'lagging_nudge'
   | 'complete'
   | 'manual'
-  | 'team_assigned';
+  | 'team_assigned'
+  | 'ops_handoff'
+  | 'poc_invite';
+
+export interface AdminStepOverrideEntry {
+  checked: boolean;
+  by?: string | null;
+  at?: string | null;
+}
+
+export type AdminStepOverrides = Record<string, AdminStepOverrideEntry>;
+
+export interface CompletionRequirements {
+  video_count?: number | null;
+  boosting_budget_cents?: number | null;
+  paid_media_webhook_ack?: boolean;
+  editing_webhook_ack?: boolean;
+  notes?: string | null;
+}
 
 /** Row shape for `public.onboardings`. */
 export interface OnboardingRow {
@@ -33,6 +51,8 @@ export interface OnboardingRow {
   current_step: number;
   share_token: string;
   step_state: Record<string, unknown>;
+  admin_step_overrides: AdminStepOverrides;
+  completion_requirements: CompletionRequirements;
   status: OnboardingStatus;
   started_at: string;
   completed_at: string | null;
@@ -67,79 +87,72 @@ export interface EmailLogRow {
 
 /** Per-screen step_state shapes. The stepper UI reads/writes these. */
 
+/**
+ * Brand basics is the only screen that bidirectionally syncs to the
+ * `clients` row — these fields mirror columns on `clients` so the
+ * strategist sees the latest in both places. The submit handler
+ * persists to both step_state (for audit) and `clients` (for live data).
+ */
 export interface BrandBasicsState {
-  brand_name?: string;
   tagline?: string;
-  one_liner?: string;
-  audience_snapshot?: string;
+  what_we_sell?: string;
+  audience?: string;
+  voice?: string;
+  current_offers?: string;
   /** Captured by `triggered_by` field once a POC submits. */
   submitted_by_email?: string;
 }
 
+export interface SocialPlatformConnection {
+  /** Tri-state: client connected via OAuth, asked us to set it up, or skipped. */
+  status: 'pending' | 'connected' | 'manual' | 'skipped' | 'set_up_for_me';
+  handle?: string;
+  connected_at?: string;
+  zernio_account_id?: string;
+}
+
 export interface SocialHandlesState {
-  /** Per-platform connection map. Key = platform slug (tiktok, instagram, ...). */
-  connections?: Record<
-    string,
-    {
-      handle?: string;
-      connected_at?: string;
-      zernio_account_id?: string;
-      status: 'pending' | 'connected' | 'manual';
-    }
-  >;
+  /** Per-platform tri-state map. Key = platform slug or "meta_business_suite". */
+  connections?: Record<string, SocialPlatformConnection>;
+  /** Self-attested ack for the Meta Business Suite tile. */
+  meta_business_suite_acknowledged?: boolean;
 }
 
-export interface ContentPrefsState {
-  cadence?: 'daily' | '3x_week' | '2x_week' | 'weekly';
-  pillars?: string[];
-  dos?: string[];
-  donts?: string[];
+export interface PointOfContactEntry {
+  /** Mirrored from public.contacts row id when synced. Undefined for inline-added rows. */
+  contact_id?: string;
+  name: string;
+  email: string;
+  role?: string;
+  is_primary: boolean;
 }
 
-export interface AudienceToneState {
-  persona?: string;
-  tone_descriptors?: string[];
-  /** Free-form long-form context. */
+export interface PointsOfContactState {
+  contacts: PointOfContactEntry[];
+}
+
+/**
+ * Editing footage screen. Three optional URL buckets + free-text notes.
+ * URLs are stored one-per-line, trimmed, no validation server-side beyond
+ * length cap. The post-production team eyeballs the links.
+ */
+export interface FootageAndReferencesState {
+  raw_footage_urls?: string[];
+  reference_edit_urls?: string[];
+  previous_edit_urls?: string[];
   notes?: string;
-}
-
-export interface KickoffPickState {
-  picked_at?: string;
-  scheduling_event_id?: string;
-}
-
-export interface ProjectBriefState {
-  project_name?: string;
-  description?: string;
-  deliverables?: Array<{ kind: string; quantity?: number; notes?: string }>;
-  references?: string[];
-}
-
-export interface AssetLinkState {
-  /** Primary cloud-storage URL for raw footage. */
-  url?: string;
-  provider?: 'google_drive' | 'dropbox' | 'wetransfer' | 'frame_io' | 'other';
-  uploaded_by_email?: string;
-}
-
-export interface TurnaroundAckState {
-  acknowledged: boolean;
-  acknowledged_at?: string;
 }
 
 /** Full step_state union, kind-discriminated. */
 export interface SmmStepState {
   brand_basics?: BrandBasicsState;
   social_handles?: SocialHandlesState;
-  content_prefs?: ContentPrefsState;
-  audience_tone?: AudienceToneState;
-  kickoff_pick?: KickoffPickState;
+  points_of_contact?: PointsOfContactState;
 }
 
 export interface EditingStepState {
-  project_brief?: ProjectBriefState;
-  asset_link?: AssetLinkState;
-  turnaround_ack?: TurnaroundAckState;
+  brand_basics?: BrandBasicsState;
+  footage_and_references?: FootageAndReferencesState;
 }
 
 export type StepStateFor<K extends OnboardingKind> =

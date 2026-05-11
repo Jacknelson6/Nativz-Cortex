@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Users, BarChart3, Search,
-  Settings, ArrowRight, Clock, Mic2, Send,
+  Settings, ArrowRight, Clock, Send,
 } from 'lucide-react';
 
 interface CommandItem {
@@ -43,7 +43,6 @@ export function CommandPalette() {
     { id: 'dashboard', label: 'Dashboard', group: 'Navigation', icon: <LayoutDashboard className="w-4 h-4" />, action: () => navigate('/admin/dashboard'), keywords: 'home overview' },
     { id: 'post-scheduler', label: 'Post scheduler', group: 'Navigation', icon: <Send className="w-4 h-4" />, action: () => navigate('/admin/scheduler'), keywords: 'late publish social posts scheduling smm' },
     { id: 'clients', label: 'Clients', group: 'Navigation', icon: <Users className="w-4 h-4" />, action: () => navigate('/admin/clients'), keywords: 'accounts brands' },
-    { id: 'meetings', label: 'Meetings', group: 'Navigation', icon: <Mic2 className="w-4 h-4" />, action: () => navigate('/admin/meetings'), keywords: 'fyxer notes recurring adhoc prospects' },
     { id: 'research', label: 'Research', group: 'Navigation', icon: <Search className="w-4 h-4" />, action: () => navigate('/finder/new'), keywords: 'topic social listening ideas generate' },
     { id: 'research-history', label: 'Research history', group: 'Navigation', icon: <Clock className="w-4 h-4" />, action: () => navigate('/finder/new'), keywords: 'past searches' },
     { id: 'analytics', label: 'Analytics', group: 'Navigation', icon: <BarChart3 className="w-4 h-4" />, action: () => navigate('/admin/analytics'), keywords: 'metrics reports data' },

@@ -12,6 +12,8 @@ export const andersonTheme: AgencyTheme = {
   shortName: 'AC',
   domain: 'https://andersoncollaborative.com',
   supportEmail: 'hello@andersoncollaborative.com',
+  opsEmail: 'jack@andersoncollaborative.com',
+  metaBusinessId: '2281878692067524',
 
   colors: {
     primary: '#36D1C2',
