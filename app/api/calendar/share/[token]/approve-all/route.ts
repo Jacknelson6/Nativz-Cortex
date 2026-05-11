@@ -116,7 +116,92 @@ export async function POST(
     return NextResponse.json({ error: 'link expired' }, { status: 410 });
   }
 
-  const reviewLinkMap = link.post_review_link_map ?? {};
+  let reviewLinkMap = link.post_review_link_map ?? {};
+
+  // Backfill drift: a share link's `post_review_link_map` is built at share
+  // creation time, so any drop video added later (e.g. via the calendar
+  // upload flow that appends posts to an existing drop) ends up with a
+  // scheduled_post + content_drop_videos row but no entry in the map. The
+  // share page still tallies it in the "X / N" denominator, so approve-all
+  // can never close the gap and the calendar gets stuck at e.g. 9 / 10.
+  // Reconcile in-place: for any drop video whose post is missing from the
+  // map, mint a `post_review_links` row if one doesn't exist yet, then
+  // append the entry. Idempotent and cheap.
+  const { data: dropVideos } = await admin
+    .from('content_drop_videos')
+    .select('scheduled_post_id')
+    .eq('drop_id', link.drop_id);
+  const dropPostIds = new Set(
+    (dropVideos ?? [])
+      .map((r) => (r as { scheduled_post_id: string | null }).scheduled_post_id)
+      .filter((id): id is string => !!id),
+  );
+  const missingPostIds = Array.from(dropPostIds).filter(
+    (postId) => !(postId in reviewLinkMap),
+  );
+  if (missingPostIds.length > 0) {
+    // Only mint links for posts that still exist (skip orphaned drop_videos
+    // pointing to deleted scheduled_posts).
+    const { data: livePosts } = await admin
+      .from('scheduled_posts')
+      .select('id')
+      .in('id', missingPostIds);
+    const liveMissing = (livePosts ?? []).map((r) => (r as { id: string }).id);
+    if (liveMissing.length > 0) {
+      // Reuse any existing review_link for these posts, else mint a new one.
+      const { data: existingLinks } = await admin
+        .from('post_review_links')
+        .select('id, post_id')
+        .in('post_id', liveMissing);
+      const existingByPost = new Map<string, string>();
+      for (const row of existingLinks ?? []) {
+        const r = row as { id: string; post_id: string };
+        if (!existingByPost.has(r.post_id)) existingByPost.set(r.post_id, r.id);
+      }
+      const postsNeedingLink = liveMissing.filter((id) => !existingByPost.has(id));
+      if (postsNeedingLink.length > 0) {
+        const expires = new Date(
+          Date.now() + 90 * 24 * 60 * 60 * 1000,
+        ).toISOString();
+        const { data: newLinks, error: linkErr } = await admin
+          .from('post_review_links')
+          .insert(
+            postsNeedingLink.map((post_id) => ({ post_id, expires_at: expires })),
+          )
+          .select('id, post_id');
+        if (linkErr) {
+          console.error('approve-all: backfill link insert error:', linkErr);
+        } else {
+          for (const row of newLinks ?? []) {
+            const r = row as { id: string; post_id: string };
+            existingByPost.set(r.post_id, r.id);
+          }
+        }
+      }
+      const additions: Record<string, string> = {};
+      for (const postId of liveMissing) {
+        const lid = existingByPost.get(postId);
+        if (lid) additions[postId] = lid;
+      }
+      if (Object.keys(additions).length > 0) {
+        const merged = { ...reviewLinkMap, ...additions };
+        const { error: mapErr } = await admin
+          .from('content_drop_share_links')
+          .update({ post_review_link_map: merged })
+          .eq('id', link.id);
+        if (mapErr) {
+          console.error('approve-all: backfill map update error:', mapErr);
+        } else {
+          reviewLinkMap = merged;
+          console.warn(
+            `approve-all: backfilled ${Object.keys(additions).length} missing map ` +
+              `entr${Object.keys(additions).length === 1 ? 'y' : 'ies'} for share link ${link.id}`,
+          );
+        }
+      }
+    }
+  }
+
   const reviewLinkEntries = Object.entries(reviewLinkMap); // [postId, reviewLinkId][]
   if (reviewLinkEntries.length === 0) {
     return NextResponse.json({
