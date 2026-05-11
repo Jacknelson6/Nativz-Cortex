@@ -479,6 +479,22 @@ export async function GET(request: NextRequest) {
         })(),
       };
 
+      // Platform-specific metric blacklist. Zernio gives us numbers for these
+      // but they're misleading enough that Jack asked to hide them entirely:
+      //  - IG impressions: Meta deprecated the impressions field in 2024;
+      //    what Zernio returns now is post-only and dramatically undercounts
+      //    real reach.
+      //  - IG / FB engagement rate: per-post engagement_rate from Zernio is
+      //    calculated against followers, not account views, so it skews wildly
+      //    on accounts with high non-follower reach.
+      if (profile.platform === 'instagram') {
+        metrics.impressions = undefined;
+        metrics.engagementRate = undefined;
+      }
+      if (profile.platform === 'facebook') {
+        metrics.engagementRate = undefined;
+      }
+
       const totalWatchTimeSeconds = snaps.reduce(
         (sum, s) => sum + (s.watch_time_seconds ?? 0),
         0,
