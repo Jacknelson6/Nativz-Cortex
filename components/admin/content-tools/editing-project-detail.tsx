@@ -126,11 +126,18 @@ interface ContactRow {
 }
 
 /**
- * Module-level cache for brand POC contacts. Mirrors the calendar modal
- * cache so reopening the dialog for a recently-viewed brand renders the
- * recipient list instantly while we revalidate underneath.
+ * Module-level caches for the editing-project modal. Stale-while-revalidate:
+ * a re-open hydrates from cache synchronously so the user sees full content
+ * on first paint, then the background fetch reconciles. Mirrors the
+ * CONTACTS_CACHE pattern that's already here.
+ *
+ * Without this, every modal open re-flashed empty fields → loading state →
+ * populated, even when re-opening the same project seconds later.
  */
 const CONTACTS_CACHE = new Map<string, ContactRow[]>();
+const DETAIL_CACHE = new Map<string, DetailResponse>();
+const SHARE_CACHE = new Map<string, ShareLinkRow[]>();
+const EMAILS_CACHE = new Map<string, ArchivedEmail[]>();
 
 export function EditingProjectDetail({
   project,
@@ -220,13 +227,17 @@ export function EditingProjectDetail({
 
   const load = useCallback(async () => {
     if (!projectId) return;
-    setLoading(true);
+    // Cache hit → no spinner; cache miss → spinner so the empty state
+    // doesn't render as if there were no videos.
+    const cached = DETAIL_CACHE.get(projectId) ?? null;
+    if (!cached) setLoading(true);
     try {
       const res = await fetch(`/api/admin/editing/projects/${projectId}`, {
         cache: 'no-store',
       });
       if (!res.ok) throw new Error('Failed to load project');
       const body = (await res.json()) as DetailResponse;
+      DETAIL_CACHE.set(projectId, body);
       setData(body);
       setName(body.project.name);
       setNotes(body.project.notes ?? '');
@@ -242,7 +253,8 @@ export function EditingProjectDetail({
 
   const loadShareLinks = useCallback(async () => {
     if (!projectId) return;
-    setShareLoading(true);
+    const cached = SHARE_CACHE.get(projectId) ?? null;
+    if (!cached) setShareLoading(true);
     try {
       const res = await fetch(
         `/api/admin/editing/projects/${projectId}/share`,
@@ -250,9 +262,11 @@ export function EditingProjectDetail({
       );
       if (!res.ok) throw new Error('Failed to load share links');
       const body = (await res.json()) as { links: ShareLinkRow[] };
-      setShareLinks(body.links ?? []);
+      const next = body.links ?? [];
+      SHARE_CACHE.set(projectId, next);
+      setShareLinks(next);
     } catch {
-      setShareLinks([]);
+      setShareLinks((prev) => prev ?? []);
     } finally {
       setShareLoading(false);
     }
@@ -260,22 +274,42 @@ export function EditingProjectDetail({
 
   useEffect(() => {
     if (open) {
+      // Hydrate synchronously from cache + the parent-supplied `project`
+      // prop so the first paint already has name/status/notes/videos and
+      // share history. Background fetches reconcile any drift. If the
+      // new projectId has no cache entry, null out the previous payload
+      // so we don't briefly show the prior project's videos.
+      if (projectId) {
+        setData(DETAIL_CACHE.get(projectId) ?? null);
+        setShareLinks(SHARE_CACHE.get(projectId) ?? null);
+        setArchivedEmails(EMAILS_CACHE.get(projectId) ?? null);
+      }
+      // The `project` prop is the row that was clicked — it carries the
+      // same scalar fields as `data.project`, so prime the form state
+      // from it even before the GET resolves.
+      if (project) {
+        setName(project.name);
+        setNotes(project.notes ?? '');
+        setDriveUrl(project.drive_folder_url ?? '');
+        setType(project.project_type);
+        setStatus(project.status);
+      }
       void load();
       void loadShareLinks();
       setExpiresOverride(null);
       setRefreshedThisSession(false);
     } else {
-      setData(null);
+      // Keep cached `data` / `shareLinks` / `archivedEmails` in state so
+      // the next open of the same project is instant. Only reset bits
+      // that should be fresh per-open.
       setTab('details');
-      setArchivedEmails(null);
       setViewingEmail(null);
-      setShareLinks(null);
       setPreviewVariant(null);
       setPreview(null);
       setPreviewError(null);
       setCopied(false);
     }
-  }, [open, load, loadShareLinks]);
+  }, [open, projectId, project, load, loadShareLinks]);
 
   // Brand POC contacts. Cache hit shows instantly; revalidate in background.
   useEffect(() => {
@@ -312,7 +346,8 @@ export function EditingProjectDetail({
 
   const loadArchivedEmails = useCallback(async () => {
     if (!projectId) return;
-    setArchivedLoading(true);
+    const cached = EMAILS_CACHE.get(projectId) ?? null;
+    if (!cached) setArchivedLoading(true);
     try {
       const res = await fetch(
         `/api/admin/editing/projects/${projectId}/emails`,
@@ -320,9 +355,11 @@ export function EditingProjectDetail({
       );
       if (!res.ok) throw new Error('failed');
       const body = (await res.json()) as { emails: ArchivedEmail[] };
-      setArchivedEmails(body.emails ?? []);
+      const next = body.emails ?? [];
+      EMAILS_CACHE.set(projectId, next);
+      setArchivedEmails(next);
     } catch {
-      setArchivedEmails([]);
+      setArchivedEmails((prev) => prev ?? []);
     } finally {
       setArchivedLoading(false);
     }
@@ -353,6 +390,17 @@ export function EditingProjectDetail({
       if (!res.ok) {
         const err = (await res.json().catch(() => null)) as { detail?: string } | null;
         throw new Error(err?.detail ?? 'Save failed');
+      }
+      // Merge the saved fields into the local detail cache so a close +
+      // reopen doesn't flash the pre-edit values while revalidation runs.
+      if (projectId) {
+        const cached = DETAIL_CACHE.get(projectId);
+        if (cached) {
+          DETAIL_CACHE.set(projectId, {
+            ...cached,
+            project: { ...cached.project, ...body } as typeof cached.project,
+          });
+        }
       }
       toast.success('Saved');
       onChanged();

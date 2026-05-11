@@ -2099,9 +2099,12 @@ function CommentAttachmentTile({ attachment }: { attachment: CommentAttachment }
       >
         <video
           src={attachment.url}
-          className="h-24 w-24 object-cover"
+          className="h-24 w-24 bg-black object-cover"
           muted
           playsInline
+          // preload=metadata pulls the first frame so the video tile shows
+          // a poster instead of a black square next to image tiles.
+          preload="metadata"
         />
       </a>
     );
