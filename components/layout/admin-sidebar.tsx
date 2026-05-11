@@ -95,6 +95,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
+      { href: '/admin/analytics/zernio', label: 'Zernio Growth', icon: TrendingUp },
     ],
   },
   {

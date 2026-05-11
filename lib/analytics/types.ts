@@ -232,3 +232,36 @@ export interface PlatformSnapshotErrorRow {
   error_message: string | null;
   attempted_at: string;
 }
+
+// ============================================================
+// ZNA-02 — Growth chart timeseries types
+// ============================================================
+
+export type RangeKey = '7d' | '30d' | '90d' | 'all';
+
+export type TimeseriesSource = AnalyticsSource | 'mixed' | 'none';
+
+export interface TimeseriesPoint {
+  date: string; // YYYY-MM-DD
+  followers: number;
+  views_rolling_7d: number;
+  engagements_rolling_7d: number;
+}
+
+export interface TimeseriesResult {
+  range_start: string;
+  range_end: string;
+  source: TimeseriesSource;
+  points: TimeseriesPoint[];
+}
+
+export type DeltaMetric = 'followers' | 'views_rolling_7d' | 'engagements_rolling_7d';
+
+export interface DeltaResult {
+  metric: DeltaMetric;
+  current_mean: number;
+  prior_mean: number;
+  delta_pct: number | null;
+  suppressed: boolean;
+  suppressed_reason: 'sparse_prior_window' | null;
+}
