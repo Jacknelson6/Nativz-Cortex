@@ -8,11 +8,13 @@ import { IntegrationsTable } from '@/components/clients/settings/integrations-ta
 import { InfoCard } from '@/components/clients/settings/info-card';
 import { InfoIdentityCard } from '@/components/clients/settings/info-identity-card';
 import { InfoBrandVoiceCard } from '@/components/clients/settings/info-brand-voice-card';
-import { InfoBrandEssenceCard } from '@/components/clients/settings/info-brand-essence-card';
-import { InfoBrandStructureCard } from '@/components/clients/settings/info-brand-structure-card';
-import { InfoBrandContentPrefsCard } from '@/components/clients/settings/info-brand-content-prefs-card';
-import { InfoBrandLocationCard } from '@/components/clients/settings/info-brand-location-card';
-import { InfoBrandDnaSlim } from '@/components/clients/settings/info-brand-dna-slim';
+import { InfoBrandCaptionsCard } from '@/components/clients/settings/info-brand-captions-card';
+import {
+  InfoBrandDnaSlim,
+  type BrandDnaColor,
+  type BrandDnaLogo,
+  type BrandDnaFont,
+} from '@/components/clients/settings/info-brand-dna-slim';
 import { SettingsPageHeader } from '@/components/clients/settings/settings-primitives';
 
 export const dynamic = 'force-dynamic';
@@ -22,9 +24,9 @@ export const dynamic = 'force-dynamic';
  *
  * One scroll, no top dossier and no anchor subnav (Jack: identity already
  * lives in the first card; the subnav was visual noise on a short page).
- * Every section uses the same InfoCard chrome — Identity, Brand essence,
- * Brand voice, Brand structure, Content preferences, Default location,
- * Brand DNA, Contacts, Integrations.
+ * Every section uses the same InfoCard chrome — Identity, Brand voice,
+ * Captions (notes + verbatim CTA + hashtag wall), Brand DNA, Contacts,
+ * Integrations.
  */
 
 export default async function ClientSettingsInfoPage({
@@ -42,10 +44,7 @@ export default async function ClientSettingsInfoPage({
         'id', 'name', 'slug', 'logo_url', 'industry', 'website_url', 'agency',
         'brand_dna_status', 'uppromote_api_key',
         'brand_voice', 'target_audience', 'topic_keywords', 'description',
-        'tagline', 'value_proposition', 'mission_statement',
-        'products', 'brand_aliases',
-        'writing_style', 'banned_phrases', 'content_language',
-        'primary_country', 'primary_state', 'primary_city',
+        'caption_notes', 'caption_cta', 'caption_hashtags',
       ].join(','),
     )
     .eq('slug', slug)
@@ -63,25 +62,22 @@ export default async function ClientSettingsInfoPage({
       target_audience: string | null;
       topic_keywords: string[] | null;
       description: string | null;
-      tagline: string | null;
-      value_proposition: string | null;
-      mission_statement: string | null;
-      products: string[] | null;
-      brand_aliases: string[] | null;
-      writing_style: string | null;
-      banned_phrases: string[] | null;
-      content_language: string | null;
-      primary_country: string | null;
-      primary_state: string | null;
-      primary_city: string | null;
+      caption_notes: string | null;
+      caption_cta: string | null;
+      caption_hashtags: string[] | null;
     }>();
   if (!client) notFound();
 
-  type DnaRow = { updated_at: string } | null;
+  type DnaMetadata = {
+    colors?: BrandDnaColor[];
+    logos?: BrandDnaLogo[];
+    fonts?: BrandDnaFont[];
+  } | null;
+  type DnaRow = { updated_at: string; metadata: DnaMetadata } | null;
   const dnaRow = client.brand_dna_status && client.brand_dna_status !== 'none'
     ? await admin
       .from('client_knowledge_entries')
-      .select('updated_at')
+      .select('updated_at, metadata')
       .eq('client_id', client.id)
       .eq('type', 'brand_guideline')
       .is('metadata->superseded_by', null)
@@ -91,6 +87,10 @@ export default async function ClientSettingsInfoPage({
     : { data: null as DnaRow };
 
   const brandDnaUpdatedAt = dnaRow.data?.updated_at ?? null;
+  const dnaMetadata = dnaRow.data?.metadata ?? null;
+  const dnaColors: BrandDnaColor[] = Array.isArray(dnaMetadata?.colors) ? dnaMetadata!.colors! : [];
+  const dnaLogos: BrandDnaLogo[] = Array.isArray(dnaMetadata?.logos) ? dnaMetadata!.logos! : [];
+  const dnaFonts: BrandDnaFont[] = Array.isArray(dnaMetadata?.fonts) ? dnaMetadata!.fonts! : [];
   const brandProfileHref = `/brand-profile?client=${encodeURIComponent(client.slug ?? slug)}`;
 
   // Pre-fetch contacts + invites in parallel so the contacts card paints
@@ -184,15 +184,6 @@ export default async function ClientSettingsInfoPage({
         }}
       />
 
-      <InfoBrandEssenceCard
-        clientId={client.id}
-        initial={{
-          tagline: client.tagline,
-          value_proposition: client.value_proposition,
-          mission_statement: client.mission_statement,
-        }}
-      />
-
       <InfoBrandVoiceCard
         slug={slug}
         initial={{
@@ -205,28 +196,12 @@ export default async function ClientSettingsInfoPage({
         }}
       />
 
-      <InfoBrandStructureCard
-        clientId={client.id}
-        initialProducts={client.products ?? []}
-        initialAliases={client.brand_aliases ?? []}
-      />
-
-      <InfoBrandContentPrefsCard
-        clientId={client.id}
-        voiceLabel={client.brand_voice}
-        initial={{
-          writing_style: client.writing_style,
-          banned_phrases: client.banned_phrases ?? [],
-          content_language: client.content_language,
-        }}
-      />
-
-      <InfoBrandLocationCard
+      <InfoBrandCaptionsCard
         clientId={client.id}
         initial={{
-          primary_country: client.primary_country,
-          primary_state: client.primary_state,
-          primary_city: client.primary_city,
+          caption_notes: client.caption_notes,
+          caption_cta: client.caption_cta,
+          caption_hashtags: client.caption_hashtags ?? [],
         }}
       />
 
@@ -236,6 +211,9 @@ export default async function ClientSettingsInfoPage({
         brandDnaStatus={client.brand_dna_status ?? 'none'}
         brandDnaUpdatedAt={brandDnaUpdatedAt}
         brandProfileHref={brandProfileHref}
+        colors={dnaColors}
+        logos={dnaLogos}
+        fonts={dnaFonts}
       />
 
       <InfoCard icon={<Users size={16} />} title="Contacts">
