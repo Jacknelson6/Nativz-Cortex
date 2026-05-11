@@ -57,6 +57,10 @@ const patchSchema = z.object({
   caption_notes: z.string().trim().max(4000).nullable().optional(),
   hashtag_notes: z.string().trim().max(4000).nullable().optional(),
   cta_notes: z.string().trim().max(4000).nullable().optional(),
+
+  // Monthly calendar cron — number of post slots to pre-create on the
+  // 1st of each month for SMM clients. 0 = do not auto-generate.
+  monthly_calendar_post_count: z.number().int().min(0).max(1000).optional(),
 });
 
 async function requireAdmin() {
@@ -142,6 +146,8 @@ export async function GET(
           'caption_notes',
           'hashtag_notes',
           'cta_notes',
+          // Monthly calendar cron.
+          'monthly_calendar_post_count',
           // Metadata.
           'id',
           'created_at',
