@@ -1167,6 +1167,19 @@ export function CalendarLinkDetail({
             {(isExpired || isAbandoned) && (
               <StatusPill status={link.status} />
             )}
+            {link.approved_at && (
+              <span
+                className="text-[11px] tabular-nums text-text-muted"
+                title={`Approved ${formatTimestamp(link.approved_at)}\nDrives which half-month billing bucket this project lands in.`}
+              >
+                approved{' '}
+                {new Date(link.approved_at).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}
+              </span>
+            )}
           </>
         }
         tab={tab}
