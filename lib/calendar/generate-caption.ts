@@ -125,7 +125,7 @@ export async function generateDropCaptions(
   return { generated, failed };
 }
 
-interface GenerateOptions {
+export interface GenerateOptions {
   context: VideoContext;
   thumbnailUrl: string | null;
   client: ClientContext | null;
@@ -134,7 +134,10 @@ interface GenerateOptions {
   userEmail?: string;
 }
 
-async function generateOneCaption(
+export type CaptionClientContext = ClientContext;
+export type CaptionSavedExample = SavedCaption;
+
+export async function generateOneCaption(
   opts: GenerateOptions,
 ): Promise<{ caption: string; hashtags: string[] }> {
   const brandBlock = renderBrandBlock(opts.client);
@@ -272,6 +275,14 @@ function renderCtaBoilerplateBlock(client: ClientContext | null, language: strin
     );
   }
   return parts.length ? `\n\n${parts.join('\n\n')}` : '';
+}
+
+export function applyCaptionBoilerplate(
+  generated: { caption: string; hashtags: string[] },
+  client: ClientContext | null,
+  language: string,
+): { caption: string; hashtags: string[] } {
+  return applyBoilerplate(generated, client, language);
 }
 
 function applyBoilerplate(

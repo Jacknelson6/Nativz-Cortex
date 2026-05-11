@@ -17,6 +17,11 @@ import {
   Wand2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
+import {
+  ScheduleRangePicker,
+  type ScheduleRange,
+} from '@/components/ui/schedule-range-picker';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { SubNav } from '@/components/ui/sub-nav';
 import {
@@ -134,6 +139,23 @@ function downloadApprovedMonthCsv(
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Default window for the Promote-to-calendar dialog: tomorrow through
+ * +21 calendar days, which comfortably covers 15 weekdays (the typical
+ * editing project size) without forcing the admin to extend the range
+ * before submitting. Stored as `YYYY-MM-DD` strings to match the
+ * ScheduleRangePicker contract.
+ */
+function defaultPromoteRange(): ScheduleRange {
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const start = new Date();
+  start.setDate(start.getDate() + 1);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 21);
+  return { start: fmt(start), end: fmt(end) };
 }
 
 function monthKey(iso: string | null | undefined): string | null {
@@ -437,6 +459,16 @@ export function ContentToolsShell() {
   const [activeCalendarLink, setActiveCalendarLink] =
     useState<ReviewLinkRow | null>(null);
 
+  // Promote-to-calendar dialog state. Right-click → "Promote to
+  // calendar" opens this dialog, which collects a date range before
+  // POSTing to the promote endpoint. Stored separately from the
+  // editing-detail dialog so they don't fight over modal stacking.
+  const [promoteFor, setPromoteFor] = useState<
+    { projectId: string; brandSlug: string | null; projectName: string | null } | null
+  >(null);
+  const [promoteRange, setPromoteRange] = useState<ScheduleRange>(defaultPromoteRange);
+  const [promoting, setPromoting] = useState(false);
+
   // Default sort is "Date sent, newest first" - same intent as the
   // previous SortMenu's default - but the user can now click any
   // column header to re-sort the whole table.
@@ -667,21 +699,45 @@ export function ContentToolsShell() {
   }
 
   /**
-   * Promote an editing project to the content calendar. Creates one
-   * draft scheduled_post per latest video so the row appears on
-   * /calendar, where caption + scheduled time + platforms can be
-   * filled in. Editing rows only — `id` is `editing:<uuid>`.
+   * Open the Promote-to-calendar dialog for an editing row. The actual
+   * POST happens in `confirmPromote` after the admin picks a date
+   * range; this just stages the dialog. Editing rows only — `id` is
+   * `editing:<uuid>`.
    */
-  async function promoteToCalendar(id: string) {
+  function promoteToCalendar(id: string) {
     if (!id.startsWith('editing:')) return;
     const projectId = id.slice('editing:'.length);
     const project = editingProjects.find((p) => p.id === projectId);
-    const brandSlug = project?.client_slug ?? null;
+    setPromoteFor({
+      projectId,
+      brandSlug: project?.client_slug ?? null,
+      projectName: project?.name ?? null,
+    });
+    setPromoteRange(defaultPromoteRange());
+  }
+
+  /**
+   * Fire the promote endpoint with the chosen range. Closes the
+   * dialog on success and surfaces an "Open calendar" toast action so
+   * the admin can jump to the brand's calendar without hunting through
+   * the sidebar.
+   */
+  async function confirmPromote() {
+    if (!promoteFor || promoting) return;
+    setPromoting(true);
+    const { projectId, brandSlug } = promoteFor;
     const toastId = toast.loading('Promoting to calendar…');
     try {
       const res = await fetch(
         `/api/admin/editing/projects/${projectId}/promote-to-calendar`,
-        { method: 'POST' },
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            start_date: promoteRange.start,
+            end_date: promoteRange.end,
+          }),
+        },
       );
       const body = (await res.json().catch(() => ({}))) as {
         post_count?: number;
@@ -703,10 +759,14 @@ export function ContentToolsShell() {
             : undefined,
         },
       );
+      setPromoteFor(null);
+      void loadProjects(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Promote failed', {
         id: toastId,
       });
+    } finally {
+      setPromoting(false);
     }
   }
 
@@ -913,6 +973,56 @@ export function ContentToolsShell() {
             toast.success('Calendar added. Open it from the table once captions finish.');
           }}
         />
+        <Dialog
+          open={!!promoteFor}
+          onClose={() => {
+            if (!promoting) setPromoteFor(null);
+          }}
+          title="Promote to calendar"
+          maxWidth="md"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-text-secondary">
+              {promoteFor?.projectName
+                ? `Drop "${promoteFor.projectName}" onto the content calendar as draft posts, spread across weekdays in the window below.`
+                : 'Drop this project onto the content calendar as draft posts, spread across weekdays in the window below.'}
+            </p>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium uppercase tracking-wide text-text-muted">
+                Schedule window
+              </label>
+              <ScheduleRangePicker
+                value={promoteRange}
+                onChange={setPromoteRange}
+                disabled={promoting}
+              />
+            </div>
+            <p className="text-[11px] text-text-muted">
+              Posts go out at the brand&apos;s default posting time. AI
+              captions fill in within ~60s — you can edit them on the
+              calendar once they land.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setPromoteFor(null)}
+                disabled={promoting}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => void confirmPromote()}
+                disabled={promoting}
+              >
+                {promoting ? 'Promoting…' : 'Promote'}
+              </Button>
+            </div>
+          </div>
+        </Dialog>
         <CalendarLinkDetail
           link={activeCalendarLink}
           onClose={() => setActiveCalendarLink(null)}

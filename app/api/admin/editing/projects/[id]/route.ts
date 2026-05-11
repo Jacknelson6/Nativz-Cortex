@@ -95,31 +95,42 @@ export async function GET(
     strategist_name: r.strategist?.full_name ?? null,
   };
 
-  // Run the three child-row queries in parallel — independent reads
-  // that all feed the detail panel on the same render.
-  const [{ data: videos }, { data: rawVideos }, { data: reviewComments }] =
-    await Promise.all([
-      admin
-        .from('editing_project_videos')
-        .select('*')
-        .eq('project_id', id)
-        .order('position', { ascending: true })
-        .order('version', { ascending: false }),
-      admin
-        .from('editing_project_raw_videos')
-        .select('*')
-        .eq('project_id', id)
-        .order('created_at', { ascending: false }),
-      // Walk newest-first so the first row we see for a given video_id
-      // wins. We strip 'comment'/'video_revised' since those don't
-      // change a cut's review state, and we treat resolved
-      // changes_requested rows as no-ops.
-      admin
-        .from('editing_project_review_comments')
-        .select('video_id, status, metadata, created_at')
-        .eq('project_id', id)
-        .order('created_at', { ascending: false }),
-    ]);
+  // Run the child-row queries in parallel — independent reads that all
+  // feed the detail panel on the same render. `scheduled_posts` is
+  // pulled in too so the "Scheduled dates" section after a Promote-to-
+  // calendar can render without a second round-trip.
+  const [
+    { data: videos },
+    { data: rawVideos },
+    { data: reviewComments },
+    { data: scheduledPosts },
+  ] = await Promise.all([
+    admin
+      .from('editing_project_videos')
+      .select('*')
+      .eq('project_id', id)
+      .order('position', { ascending: true })
+      .order('version', { ascending: false }),
+    admin
+      .from('editing_project_raw_videos')
+      .select('*')
+      .eq('project_id', id)
+      .order('created_at', { ascending: false }),
+    // Walk newest-first so the first row we see for a given video_id
+    // wins. We strip 'comment'/'video_revised' since those don't
+    // change a cut's review state, and we treat resolved
+    // changes_requested rows as no-ops.
+    admin
+      .from('editing_project_review_comments')
+      .select('video_id, status, metadata, created_at')
+      .eq('project_id', id)
+      .order('created_at', { ascending: false }),
+    admin
+      .from('scheduled_posts')
+      .select('id, title, scheduled_at, status, caption')
+      .eq('editing_project_id', id)
+      .order('scheduled_at', { ascending: true }),
+  ]);
 
   // Derive a per-video review status: 'approved' | 'changes_requested' | null.
   // Walk newest -> oldest, keep the first non-resolved review row per
@@ -151,6 +162,7 @@ export async function GET(
     project,
     videos: videosWithStatus,
     raw_videos: rawVideos ?? [],
+    scheduled_posts: scheduledPosts ?? [],
   });
 }
 

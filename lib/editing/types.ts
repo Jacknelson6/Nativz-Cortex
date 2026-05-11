@@ -123,6 +123,13 @@ export interface EditingProject {
   approved_at: string | null;
   scheduled_at: string | null;
   archived_at: string | null;
+  /**
+   * Set by the Promote-to-calendar action when this project's videos
+   * have been minted as draft `scheduled_posts` on the content
+   * calendar. Drives the detail-modal footer swap (Send delivery →
+   * Open in calendar) and surfaces the scheduled-dates list.
+   */
+  promoted_at: string | null;
   video_count: number;
   /** Count of raw clips uploaded via editing_project_raw_videos. */
   raw_video_count: number;

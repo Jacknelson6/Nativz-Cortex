@@ -7,8 +7,10 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
+  CalendarDays,
   Check,
   CheckCheck,
   CheckCircle2,
@@ -83,10 +85,19 @@ const TYPE_OPTIONS: { value: EditingProjectType; label: string }[] = (
   Object.keys(EDITING_TYPE_LABEL) as EditingProjectType[]
 ).map((value) => ({ value, label: EDITING_TYPE_LABEL[value] }));
 
+interface ScheduledPostRow {
+  id: string;
+  title: string | null;
+  scheduled_at: string | null;
+  status: string | null;
+  caption: string | null;
+}
+
 interface DetailResponse {
   project: EditingProject;
   videos: EditingProjectVideo[];
   raw_videos?: unknown[];
+  scheduled_posts?: ScheduledPostRow[];
 }
 
 type SendVariant = 'delivery' | 'rereview';
@@ -152,6 +163,7 @@ export function EditingProjectDetail({
   onClose: () => void;
   onChanged: () => void;
 }) {
+  const router = useRouter();
   const open = !!project;
   const [data, setData] = useState<DetailResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -724,6 +736,16 @@ export function EditingProjectDetail({
     project.status === 'done' ||
     project.status === 'archived';
 
+  // Promoted to the content calendar: the project's videos have been
+  // minted as scheduled_posts. Swap the right-most CTA from "Send
+  // delivery" to "Open in calendar" so Jack lands on the calendar grid
+  // (where the now-draft posts live) instead of resending the review
+  // email. Reads the freshest copy from the detail GET first so a
+  // mid-session promote propagates without a parent refetch.
+  const promotedAt = data?.project.promoted_at ?? project.promoted_at;
+  const brandSlug = data?.project.client_slug ?? project.client_slug;
+  const scheduledPosts = data?.scheduled_posts ?? [];
+
   const footer = (
     <>
       <Button
@@ -764,17 +786,31 @@ export function EditingProjectDetail({
           {minting ? 'Creating...' : 'Create share link'}
         </Button>
       )}
-      {activeLink && !isApproved && (
+      {promotedAt ? (
         <Button
           type="button"
           size="sm"
-          onClick={() => openSendPreview(hasBeenSent ? 'rereview' : 'delivery')}
-          disabled={!!sendDisabledReason}
-          title={sendDisabledReason ?? undefined}
+          onClick={() =>
+            router.push(brandSlug ? `/calendar?brand=${brandSlug}` : '/calendar')
+          }
         >
-          {hasBeenSent ? <RefreshCcw size={13} /> : <Send size={13} />}
-          {hasBeenSent ? 'Send re-review' : 'Send delivery'}
+          <CalendarDays size={13} />
+          Open in calendar
         </Button>
+      ) : (
+        activeLink &&
+        !isApproved && (
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => openSendPreview(hasBeenSent ? 'rereview' : 'delivery')}
+            disabled={!!sendDisabledReason}
+            title={sendDisabledReason ?? undefined}
+          >
+            {hasBeenSent ? <RefreshCcw size={13} /> : <Send size={13} />}
+            {hasBeenSent ? 'Send re-review' : 'Send delivery'}
+          </Button>
+        )
       )}
     </>
   );
@@ -904,6 +940,41 @@ export function EditingProjectDetail({
         }
         footer={footer}
       >
+
+        {/* Scheduled dates. Surfaces once the project has been promoted to
+            the content calendar — lists the per-post drop dates so Jack can
+            confirm the spread at a glance without leaving the modal. The
+            link to /calendar lives in the footer; this is informational. */}
+        {promotedAt && scheduledPosts.length > 0 && (
+          <Section label={`Scheduled dates (${scheduledPosts.length})`}>
+            <ul className="divide-y divide-nativz-border overflow-hidden rounded-lg border border-nativz-border bg-surface">
+              {scheduledPosts.map((p) => (
+                <li
+                  key={p.id}
+                  className="flex items-center gap-3 px-3 py-2 text-[13px]"
+                >
+                  <CalendarDays
+                    size={13}
+                    className="shrink-0 text-text-muted"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-text-primary">
+                      {p.title?.trim() || 'Untitled post'}
+                    </p>
+                    {p.scheduled_at && (
+                      <p className="text-[11px] text-text-muted">
+                        {formatTimestamp(p.scheduled_at)}
+                      </p>
+                    )}
+                  </div>
+                  <span className="shrink-0 rounded-full border border-nativz-border bg-background px-2 py-0.5 text-[11px] text-text-muted">
+                    {p.status ?? 'draft'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
 
         {/* Share link. Single primary affordance: copy + open + refresh.
             Refresh extends `expires_at` 30 days forward so the link stays
