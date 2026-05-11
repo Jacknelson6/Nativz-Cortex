@@ -608,8 +608,12 @@ async function notifyAdminsOfComment(
     .map((p) => p.id);
   const postIndex = sortedPostIds.indexOf(comment.postId);
   const postAnchor = postIndex >= 0 ? `#post-${postIndex + 1}` : '';
-  const baseShareUrl = `${getCortexAppUrl(getBrandFromAgency(drop.clients?.agency ?? null))}/s/${shareToken}`;
+  const appBase = getCortexAppUrl(getBrandFromAgency(drop.clients?.agency ?? null));
+  const baseShareUrl = `${appBase}/s/${shareToken}`;
   const shareUrl = `${baseShareUrl}${postAnchor}`;
+  // Paid-media team gets the dedicated download grid instead of the full
+  // review page — they only need to grab the assets, not browse captions.
+  const downloadUrl = `${appBase}/c/${shareToken}/download`;
 
   // In-app: every admin user gets the bell ping. Was previously hard-coded
   // to jack@nativz.io, which meant no other editor on the team saw revision
@@ -725,7 +729,7 @@ async function notifyAdminsOfComment(
         clientId: drop.client_id,
         clientName,
         startDate: drop.start_date,
-        shareUrl: baseShareUrl,
+        shareUrl: downloadUrl,
       });
     } catch (err) {
       console.error('Paid-media team ping failed:', err);
@@ -773,11 +777,12 @@ async function pingPaidMediaTeam(
     return;
   }
 
-  // DB-driven path: include the Cortex share link so the ads team can
-  // pull thumbnails and final captions in one click.
+  // DB-driven path: drop the ads team straight onto the dedicated
+  // download grid (caller wires `args.shareUrl` to the /download URL) so
+  // they can pull every approved asset in one click.
   const text =
     `🎬 *${args.clientName}* — client approved all calendar posts; creatives are ready to run for paid media. ` +
-    `Share link for thumbnails + final captions:\n${args.shareUrl}`;
+    `Download all assets:\n${args.shareUrl}`;
   postToGoogleChatSafe(paidMedia.url, { text }, `paid-media-approved ${args.clientName}`);
 }
 

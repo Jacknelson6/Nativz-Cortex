@@ -388,7 +388,9 @@ async function fireAllApprovedNotifications(
     primaryUrl: drop.clients?.chat_webhook_url ?? null,
     agency: drop.clients?.agency ?? null,
   });
-  const shareUrl = `${getCortexAppUrl(getBrandFromAgency(drop.clients?.agency ?? null))}/s/${shareToken}`;
+  const appBase = getCortexAppUrl(getBrandFromAgency(drop.clients?.agency ?? null));
+  const shareUrl = `${appBase}/s/${shareToken}`;
+  const downloadUrl = `${appBase}/c/${shareToken}/download`;
 
   if (targetWebhookUrl) {
     const text =
@@ -419,10 +421,12 @@ async function fireAllApprovedNotifications(
     return;
   }
 
-  // DB-driven path: include the share link directly so the ads team can
-  // jump into Cortex without bouncing through Monday.
+  // DB-driven path: link the ads team straight to the dedicated download
+  // surface so they can grab every asset without scrolling the full review
+  // page or bouncing through Monday. Regular brand notifications still get
+  // the review URL above.
   const text =
     `🎬 *${clientName}* — client approved all calendar posts; creatives are ready to run for paid media. ` +
-    `Share link for thumbnails + final captions:\n${shareUrl}`;
+    `Download all assets:\n${downloadUrl}`;
   postToGoogleChatSafe(paidMedia.url, { text }, `paid-media-approved ${clientName}`);
 }

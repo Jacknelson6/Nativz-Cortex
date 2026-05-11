@@ -568,10 +568,13 @@ async function pingPaidMediaForEditingApproval(args: {
     process.env.NODE_ENV !== 'production'
       ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
       : getCortexAppUrl(brand);
-  const shareUrl = `${appUrl}/s/${args.token}`;
+  // Paid-media team jumps straight into the dedicated download grid — they
+  // only need the final cuts, not the comment thread or revision history.
+  const downloadUrl = `${appUrl}/c/edit/${args.token}/download`;
 
   const adsText =
-    `🎬 *${clientName}* — client approved every clip in this editing project; creatives are ready to run for paid media.\n${shareUrl}`;
+    `🎬 *${clientName}* — client approved every clip in this editing project; creatives are ready to run for paid media. ` +
+    `Download all assets:\n${downloadUrl}`;
   postToGoogleChatSafe(
     paidMedia.url,
     { text: adsText },
