@@ -126,6 +126,10 @@
     {
       "path": "/api/cron/reconcile-zernio",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/missing-platforms-watch",
+      "schedule": "0 14 * * *"
     }
   ]
 }
