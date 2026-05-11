@@ -5,19 +5,16 @@ import { toast } from 'sonner';
 import {
   Building2,
   CalendarRange,
-  Clock,
   FolderInput,
-  Image as ImageIcon,
   Loader2,
   Plus,
   Scissors,
   Search,
-  Video,
 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
+import { ScheduleRangePicker } from '@/components/ui/schedule-range-picker';
 import { ClientLogo } from '@/components/clients/client-logo';
 import {
   EDITING_TYPE_LABEL,
@@ -82,10 +79,15 @@ export function EditingNewProjectDialog({
     return last.toISOString().slice(0, 10);
   }, []);
   const [folderUrl, setFolderUrl] = useState('');
-  const [mediaType, setMediaType] = useState<'video' | 'image'>('video');
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(endOfStartMonth);
-  const [defaultTime, setDefaultTime] = useState('10:00');
+  // Media type and default post time are no longer user-editable here.
+  // - Type is inferred server-side per file once the upload swap lands;
+  //   until then, the Drive folder ingest defaults to video, which is
+  //   how 100% of recent ingests have been used.
+  // - Every scheduled post lands at 12:00 America/Chicago via
+  //   `lib/calendar/distribute-slots.ts`. The API field is retained for
+  //   schema compatibility but we hardcode the wall-clock value.
 
   useEffect(() => {
     if (!open) return;
@@ -112,10 +114,8 @@ export function EditingNewProjectDialog({
     setType('organic_content');
     setNotes('');
     setFolderUrl('');
-    setMediaType('video');
     setStartDate(today);
     setEndDate(endOfStartMonth);
-    setDefaultTime('10:00');
   }
 
   async function submit() {
@@ -161,10 +161,17 @@ export function EditingNewProjectDialog({
         body: JSON.stringify({
           clientId,
           driveFolderUrl: folderUrl.trim(),
-          mediaType,
+          // Default to video ingest. Image-folder ingestion shipped behind a
+          // flag and was never wired into this dialog; when direct uploads
+          // replace Drive, the server infers type per file from MIME and
+          // this field goes away.
+          mediaType: 'video',
           startDate,
           endDate,
-          defaultPostTime: defaultTime,
+          // Pinned to 12:00 America/Chicago. distribute-slots ignores this
+          // value and forces 12:00 Central regardless, so the field is here
+          // strictly to satisfy the existing Zod schema.
+          defaultPostTime: '12:00',
         }),
       });
       const data = (await res.json()) as { drop?: { id: string }; error?: string };
@@ -221,14 +228,10 @@ export function EditingNewProjectDialog({
           <CalendarFields
             folderUrl={folderUrl}
             setFolderUrl={setFolderUrl}
-            mediaType={mediaType}
-            setMediaType={setMediaType}
             startDate={startDate}
             setStartDate={setStartDate}
             endDate={endDate}
             setEndDate={setEndDate}
-            defaultTime={defaultTime}
-            setDefaultTime={setDefaultTime}
             submitting={submitting}
           />
         )}
@@ -363,67 +366,22 @@ function EditingFields({
 function CalendarFields({
   folderUrl,
   setFolderUrl,
-  mediaType,
-  setMediaType,
   startDate,
   setStartDate,
   endDate,
   setEndDate,
-  defaultTime,
-  setDefaultTime,
   submitting,
 }: {
   folderUrl: string;
   setFolderUrl: (v: string) => void;
-  mediaType: 'video' | 'image';
-  setMediaType: (v: 'video' | 'image') => void;
   startDate: string;
   setStartDate: (v: string) => void;
   endDate: string;
   setEndDate: (v: string) => void;
-  defaultTime: string;
-  setDefaultTime: (v: string) => void;
   submitting: boolean;
 }) {
   return (
     <>
-      <div className="space-y-1.5">
-        <label className="block text-sm font-medium text-text-secondary">Media type</label>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setMediaType('video')}
-            disabled={submitting}
-            className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
-              mediaType === 'video'
-                ? 'border-accent bg-accent/10 text-accent-text'
-                : 'border-nativz-border bg-surface text-text-secondary hover:text-text-primary'
-            }`}
-          >
-            <Video size={14} />
-            Videos
-          </button>
-          <button
-            type="button"
-            onClick={() => setMediaType('image')}
-            disabled={submitting}
-            className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
-              mediaType === 'image'
-                ? 'border-accent bg-accent/10 text-accent-text'
-                : 'border-nativz-border bg-surface text-text-secondary hover:text-text-primary'
-            }`}
-          >
-            <ImageIcon size={14} />
-            Images
-          </button>
-        </div>
-        <p className="text-xs text-text-muted">
-          {mediaType === 'video'
-            ? 'Each video becomes one post. We auto-caption from the transcript and brand voice.'
-            : 'Each image becomes one post. Group multiple images into a carousel on the review board.'}
-        </p>
-      </div>
-
       <div className="space-y-1.5">
         <label className="block text-sm font-medium text-text-secondary">
           Google Drive folder
@@ -439,41 +397,25 @@ function CalendarFields({
           />
         </div>
         <p className="text-xs text-text-muted">
-          The folder must be shared so your connected Google account can read it. We&rsquo;ll caption every {mediaType === 'video' ? 'video' : 'image'} in the folder and schedule them across the date range.
+          The folder must be shared so your connected Google account can read it. We&rsquo;ll caption every file in the folder and schedule them across the date range. Direct upload is coming soon.
         </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <Input
-          label="Start date"
-          type="date"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-          disabled={submitting}
-        />
-        <Input
-          label="End date"
-          type="date"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-          disabled={submitting}
-        />
       </div>
 
       <div className="space-y-1.5">
         <label className="block text-sm font-medium text-text-secondary">
-          Default post time (UTC)
+          Schedule window
         </label>
-        <div className="flex items-center gap-2 rounded-lg border border-nativz-border bg-surface px-3 py-2">
-          <Clock size={14} className="shrink-0 text-text-muted" />
-          <input
-            type="time"
-            value={defaultTime}
-            onChange={(e) => setDefaultTime(e.target.value)}
-            className="flex-1 bg-transparent text-sm text-text-primary focus:outline-none"
-            disabled={submitting}
-          />
-        </div>
+        <ScheduleRangePicker
+          value={{ start: startDate, end: endDate }}
+          onChange={(next) => {
+            setStartDate(next.start);
+            setEndDate(next.end);
+          }}
+          disabled={submitting}
+        />
+        <p className="text-xs text-text-muted">
+          Posts go out at 12:00 PM Central every day in this window.
+        </p>
       </div>
     </>
   );
