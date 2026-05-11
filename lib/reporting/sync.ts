@@ -1,8 +1,31 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getPostingService, ZernioPostingService } from '@/lib/posting';
+import { zernioErrSummary } from '@/lib/posting/zernio';
 import { persistPostThumbnail } from '@/lib/analytics/post-thumbnail-persistence';
 import type { DateRange } from '@/lib/types/reporting';
 import type { SocialPlatform } from '@/lib/posting/types';
+import type { AnalyticsPlatform } from '@/lib/analytics/types';
+
+// ZNA-01: source-attribution constants used on every Zernio-sourced upsert.
+// Bump SOURCE_VERSION when the adapter shape changes so downstream consumers
+// can detect "old vs new" rows without a migration.
+const ZERNIO_SOURCE = 'zernio' as const;
+const ZERNIO_SOURCE_VERSION = 'zernio-v2';
+
+// platform_snapshot_errors.platform CHECK list (migration 278). Writing a
+// row for any platform outside this set raises a constraint violation, so
+// we silently skip those (linkedin, googlebusiness) — the operator-facing
+// `result.errors` array still captures the failure.
+const SNAPSHOT_ERROR_PLATFORMS: ReadonlySet<SocialPlatform> = new Set([
+  'facebook',
+  'instagram',
+  'tiktok',
+  'youtube',
+]);
+
+function isSnapshotErrorPlatform(p: SocialPlatform): p is AnalyticsPlatform {
+  return SNAPSHOT_ERROR_PLATFORMS.has(p);
+}
 
 interface SyncResult {
   synced: boolean;
@@ -353,6 +376,7 @@ export async function syncSocialProfile(
         .map((d) => d.date)
         .sort((a, b) => b.localeCompare(a))[0];
 
+      const capturedAt = new Date().toISOString();
       const rows = dailyMetrics.map((day) => {
         const isWindowEnd = day.date === endOfWindowDate;
         const totals = isWindowEnd ? accountTotals : null;
@@ -361,6 +385,13 @@ export async function syncSocialProfile(
           client_id: clientId,
           platform,
           snapshot_date: day.date,
+          // ZNA-01: stamp source/version/captured_at on every Zernio row so
+          // downstream consumers can tell "this came from Zernio v2" vs the
+          // scrape fallback. captured_at is per-batch (not per-row) because
+          // the dailyMetrics window arrives in a single API call.
+          source: ZERNIO_SOURCE,
+          source_version: ZERNIO_SOURCE_VERSION,
+          captured_at: capturedAt,
           followers_count: followerForDay(day.date),
           followers_change: followerForDay(day.date) - followerForPrevDay(day.date),
           views_count: day.views,
@@ -411,6 +442,9 @@ export async function syncSocialProfile(
           client_id: clientId,
           platform,
           snapshot_date: today,
+          source: ZERNIO_SOURCE,
+          source_version: ZERNIO_SOURCE_VERSION,
+          captured_at: new Date().toISOString(),
           followers_count: followerStats.followers,
           followers_change: followerStats.followerChange,
           follower_growth_percent: followerStats.growthPercent,
@@ -460,6 +494,11 @@ export async function syncSocialProfile(
           avg_view_duration_seconds: yt?.avgViewDur ?? 0,
           subscribers_gained: yt?.subsG ?? 0,
           subscribers_lost: yt?.subsL ?? 0,
+          // ZNA-01: source attribution for per-post rows. post_metrics
+          // gets the same source/version stamp as platform_snapshots so
+          // mixed-source environments can be filtered cleanly.
+          source: ZERNIO_SOURCE,
+          source_version: ZERNIO_SOURCE_VERSION,
           fetched_at: new Date().toISOString(),
         };
       });
@@ -541,8 +580,36 @@ export async function syncSocialProfile(
 
     result.platforms.push(platform);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    result.errors.push(`Failed to sync insights for ${platform}: ${message}`);
+    // Surface the structured Zernio envelope (status / type / code) when
+    // available — `zernioErrSummary` falls back to a plain message for
+    // non-Zernio errors. The structured form lets ops grep error_code in
+    // platform_snapshot_errors instead of regex-matching the message.
+    const { msg, status, type, code } = zernioErrSummary(err);
+    const composed = code
+      ? `${msg} (${code}${type ? `/${type}` : ''}${status ? `, http ${status}` : ''})`
+      : msg;
+    result.errors.push(`Failed to sync insights for ${platform}: ${composed}`);
+
+    // Persist a row in platform_snapshot_errors so the failure is
+    // observable beyond a single sync run's `result.errors` array. The
+    // table's CHECK constraint only allows IG/FB/TT/YT — guard so a
+    // LinkedIn / Google Business failure doesn't raise its own error.
+    if (isSnapshotErrorPlatform(platform)) {
+      try {
+        await adminClient.from('platform_snapshot_errors').insert({
+          client_id: clientId,
+          social_profile_id: profile.id,
+          platform,
+          attempted_source: ZERNIO_SOURCE,
+          error_code: code ?? null,
+          error_message: composed.slice(0, 2000),
+        });
+      } catch (writeErr) {
+        // Don't tear the cron down because the error log itself failed.
+        // The operator-facing `result.errors` already captured the original.
+        console.error('[reporting/sync] platform_snapshot_errors write failed:', writeErr);
+      }
+    }
   }
 }
 
