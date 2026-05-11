@@ -22,7 +22,6 @@ export const ADMIN_PROTECTED_ROUTES: string[] = [
   '/admin/analytics/social',
   '/admin/analytics/affiliates',
   '/admin/pipeline',
-  '/admin/meetings',
   '/brain',
   '/admin/nerd',
   '/admin/nerd/api',

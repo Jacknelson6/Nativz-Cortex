@@ -2,7 +2,7 @@
 
 > **For AI agents:** This document describes every API endpoint that exists on disk. Auto-generated from `app/api/**/route.ts` by `scripts/generate-api-docs.ts` — do not edit by hand. Re-run the script after adding/removing routes or tweaking a JSDoc block.
 
-**644 endpoints across 31 sections.**
+**736 endpoints across 32 sections.**
 
 ## Authentication
 
@@ -600,6 +600,8 @@ Single-template fetch. Useful when the gallery polling loop wants to refresh jus
 
 Re-runs the vision pass on a template that previously hit extraction_status='failed'. Flips the row back to 'pending' and fires the worker via after() so the response returns instantly and the gallery's polling loop picks it up. Same pattern as the upload route's tail end, just without the file write.
 
+### `GET /api/clients/:id/analytics/source`
+
 ### `GET /api/clients/:id/analytics/summary`
 
 Rollup for the client Overview page. One call; tiles render in parallel with no further round-trips. Sections: - social connected platforms + posts/30d - affiliate 30d revenue/referrals (if UpPromote connected) - benchmarking followers + delta + competitor count - paidMedia null until backend lands - pipeline ideas awaiting / scheduled in 14d / days since last post - activity last 5 events (ideas, posts, searches) Auth: admin sees all; viewer must have user_client_access for the client.
@@ -951,6 +953,8 @@ contactId - Contact UUID
 
 ### `GET /api/clients/:id/contracts/:contractId/signed-url`
 
+### `GET /api/clients/:id/from-prospecting`
+
 ### `GET /api/clients/:id/knowledge`
 
 List knowledge base entries for a client, optionally filtered by type.
@@ -1230,6 +1234,10 @@ id - Client UUID (client must have website_url set)
 ### `GET /api/clients/:id/monthly-gift-ads/settings`
 
 ### `PATCH /api/clients/:id/monthly-gift-ads/settings`
+
+### `GET /api/clients/:id/notification-settings`
+
+### `PATCH /api/clients/:id/notification-settings`
 
 ### `GET /api/clients/:id/pillars`
 
@@ -2348,7 +2356,7 @@ Returns the share-link inventory powering the new "Review" subpage. One row per 
 
 ### `PATCH /api/calendar/share/:token/comment`
 
-Detect natural-language approval inside a "comment" / "changes_requested" payload. Some clients submit the revision form with text like "approved" or "love this, change nothing" — the smart move is to treat those as an approval rather than a vague request for changes. Heuristic: 1. Trimmed message must be ≤80 chars (long, nuanced messages are not blanket approvals). 2. Must match an approval phrase. 3. Must not contain a hedging conjunction ("but", "however", …) that signals a follow-up request. Conservative on purpose. Better to miss a fuzzy approval than to publish a post the client wanted to tweak. / function looksLikeApproval(content: string): boolean { const trimmed = content.trim(); if (!trimmed || trimmed.length > 80) return false; const APPROVAL_RE = /\b(approved?|approving|lgtm|sgtm|ship ?it|good to go|all good|love (this|it|them)|nothing to change|change nothing|no (changes?|edits|notes|revisions?)|leave (as is|it)|perfect|looks (good|great|amazing|perfect|fantastic)|sounds (good|great)|green ?light)\b/i; if (!APPROVAL_RE.test(trimmed)) return false; if (/\b(but|except|however|though|other than|aside from)\b/i.test(trimmed)) return false; return true; } const TITLE_BY_STATUS: Record<'approved' | 'changes_requested' | 'comment', (a: string, c: string) => string> = { approved: (a, c) => `${a} approved a post in ${c}`, changes_requested: (a, c) => `${a} requested changes in ${c}`, comment: (a, c) => `${a} left a comment on ${c}`, }; export async function POST( req: Request, ctx: { params: Promise<{ token: string }> }, ) { const { token } = await ctx.params; const body = await req.json().catch(() => null); const parsed = BodySchema.safeParse(body); if (!parsed.success) { return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 }); } const admin = createAdminClient(); const { data: link } = await admin .from('content_drop_share_links') .select('id, drop_id, post_review_link_map, expires_at') .eq('token', token) .single<{ id: string; drop_id: string; post_review_link_map: Record<string, string>; expires_at: string }>(); if (!link) return NextResponse.json({ error: 'not found' }, { status: 404 }); if (new Date(link.expires_at) < new Date()) { return NextResponse.json({ error: 'link expired' }, { status: 410 }); } const reviewLinkMap = link.post_review_link_map ?? {}; const reviewLinkId = reviewLinkMap[parsed.data.postId]; if (!reviewLinkId) { return NextResponse.json({ error: 'post is not part of this share link' }, { status: 400 }); } // Smart approval: if the user submitted via "Add revision" (or as a plain // comment) but the body reads like an approval, upgrade the status. We // attach a metadata flag so the audit trail still shows it was inferred, // not a button-press, and the public UI can surface that nuance. const submittedStatus = parsed.data.status; const trimmedContent = parsed.data.content.trim(); const inferredApproval = submittedStatus !== 'approved' && looksLikeApproval(trimmedContent); const finalStatus: 'approved' | 'changes_requested' | 'comment' = inferredApproval ? 'approved' : submittedStatus; const insertMetadata: Record<string, unknown> = inferredApproval ? { auto_approved: true, original_status: submittedStatus } : {}; // Only honor a timestamp on plain comments and change requests — anchoring // an "approved" stamp to a specific moment doesn't carry meaning. const timestampSeconds = finalStatus === 'comment' || finalStatus === 'changes_requested' ? parsed.data.timestampSeconds ?? null : null; // Phase D soft-block (scope_exhausted 402 + PreApprovalModal) was removed. // Clients should never see a "you're out of edited videos" pop-up. Approvals // always write through; over-scope accounting stays an internal concern. const { data, error } = await admin .from('post_review_comments') .insert({ review_link_id: reviewLinkId, author_name: parsed.data.authorName.trim(), content: trimmedContent, status: finalStatus, attachments: parsed.data.attachments ?? [], metadata: insertMetadata, timestamp_seconds: timestampSeconds, }) .select('id, review_link_id, author_name, content, status, created_at, attachments, metadata, timestamp_seconds') .single(); if (error || !data) { return NextResponse.json({ error: error?.message ?? 'failed' }, { status: 500 }); } // Run notifications + Monday sync + Zernio publish AFTER the response. // `after()` keeps the function alive past the response on Vercel, so // multi-step work (Monday writeback, Zernio publish) doesn't get cut off // mid-flight. Bare fire-and-forget would race against serverless shutdown — // that's how the Monday sync was silently dropping while chat 🎉 messages // still landed. after(async () => { try { await notifyAdminsOfComment(admin, link.id, link.drop_id, token, reviewLinkMap, { postId: parsed.data.postId, authorName: parsed.data.authorName.trim(), content: trimmedContent, status: finalStatus, attachments: parsed.data.attachments ?? [], }); } catch (err) { console.error('Comment notification failed:', err); } // Recompute drop-level approval state and push to Monday. State-derived // (not event-driven), so a single approval that doesn't yet make // everything approved still leaves Monday at "Waiting on approval", and // the next event re-syncs. try { await syncMondayApprovalForDrop(admin, link.drop_id); } catch (err) { console.error('Monday calendar approval sync failed:', err); } if (finalStatus === 'approved') { // publishScheduledPost is idempotent (returns alreadyPublished=true if // already scheduled), so re-approval / multiple approvers won't double-post. try { await publishScheduledPost(admin, parsed.data.postId); } catch (err) { console.error(`Approval → Zernio publish failed for post ${parsed.data.postId}:`, err); } // Approval-as-consumption: 1 credit per approved video. State-based // dedup in consume_credit makes re-approval (delete+approve) safe. await consumeForApproval(admin, { scheduledPostId: parsed.data.postId, shareLinkId: link.id, reviewerName: parsed.data.authorName.trim(), reviewLinkId, }); } else if (finalStatus === 'changes_requested') { // Silent-overcharge fix: if this post was already approved earlier // and the reviewer is now requesting changes, refund the prior // consume. refund_credit is a no-op if there's nothing to refund, // but we guard with hasPriorApproval to avoid an extra round-trip // on the common (no-prior-approval) path. const prior = await hasPriorApproval(admin, reviewLinkId); if (prior) { await refundForUnapproval(admin, { scheduledPostId: parsed.data.postId, reason: 'changes_requested after prior approval', }); } } }); return NextResponse.json({ comment: data }); } export async function DELETE( req: Request, ctx: { params: Promise<{ token: string }> }, ) { const { token } = await ctx.params; const body = await req.json().catch(() => null); const parsed = DeleteSchema.safeParse(body); if (!parsed.success) { return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 }); } const admin = createAdminClient(); const { data: link } = await admin .from('content_drop_share_links') .select('id, drop_id, post_review_link_map, expires_at') .eq('token', token) .single<{ id: string; drop_id: string; post_review_link_map: Record<string, string>; expires_at: string }>(); if (!link) return NextResponse.json({ error: 'not found' }, { status: 404 }); if (new Date(link.expires_at) < new Date()) { return NextResponse.json({ error: 'link expired' }, { status: 410 }); } const { data: comment } = await admin .from('post_review_comments') .select('id, review_link_id, status') .eq('id', parsed.data.commentId) .single<{ id: string; review_link_id: string; status: string }>(); if (!comment) return NextResponse.json({ error: 'not found' }, { status: 404 }); const allowedReviewIds = new Set(Object.values(link.post_review_link_map ?? {})); if (!allowedReviewIds.has(comment.review_link_id)) { return NextResponse.json({ error: 'comment is not part of this share link' }, { status: 400 }); } const { error: delErr } = await admin .from('post_review_comments') .delete() .eq('id', comment.id); if (delErr) { return NextResponse.json({ error: delErr.message }, { status: 500 }); } // Only approval deletions affect the Monday-side state ("Client approved" → // "Waiting on approval"). Other history rows (caption_edit, tag_edit, // schedule_change, video_revised, plain comments) are pure audit trail — // skip the sync to avoid a needless Monday round-trip. if (comment.status === 'approved') { // Clear the all-approved dedup stamp so a future re-approval can fire the // celebration ping again. Only clear when this calendar was previously // fully approved (otherwise the stamp is already null). await admin .from('content_drop_share_links') .update({ all_approved_notified_at: null }) .eq('id', link.id); // Reverse the post_id → review_link_id map to find the post tied to // this deleted approval. Needed for the credit refund (resolveChargeUnit // takes a scheduled_post_id). const reviewLinkMap = link.post_review_link_map ?? {}; const reversedPostId = Object.entries(reviewLinkMap).find( ([, reviewId]) => reviewId === comment.review_link_id, )?.[0]; after(async () => { try { await syncMondayApprovalForDrop(admin, link.drop_id); } catch (err) { console.error('Monday calendar approval sync failed (delete):', err); } // Approval revoked → refund the consume row. State-based dedup // makes this a no-op if the consume was already refunded (e.g. by // an earlier changes_requested-after-approval). Skips silently if // we somehow can't reverse-map the post id. if (reversedPostId) { await refundForUnapproval(admin, { scheduledPostId: reversedPostId, reason: 'approval comment deleted', }); } }); } return NextResponse.json({ ok: true, commentId: comment.id }); } /** Toggle the "resolved" flag on a `changes_requested` history row. Editors use this to mark a revision request as handled — the icon flips from a warning to a green check and the label changes to "Revised". Stored as a metadata flag rather than a status change so the comment still threads correctly with other change-request rows in the audit trail.
+Detect natural-language approval inside a "comment" / "changes_requested" payload. Some clients submit the revision form with text like "approved" or "love this, change nothing" — the smart move is to treat those as an approval rather than a vague request for changes. Heuristic: 1. Trimmed message must be ≤80 chars (long, nuanced messages are not blanket approvals). 2. Must match an approval phrase. 3. Must not contain a hedging conjunction ("but", "however", …) that signals a follow-up request. Conservative on purpose. Better to miss a fuzzy approval than to publish a post the client wanted to tweak. / function looksLikeApproval(content: string): boolean { const trimmed = content.trim(); if (!trimmed || trimmed.length > 80) return false; const APPROVAL_RE = /\b(approved?|approving|lgtm|sgtm|ship ?it|good to go|all good|love (this|it|them)|nothing to change|change nothing|no (changes?|edits|notes|revisions?)|leave (as is|it)|perfect|looks (good|great|amazing|perfect|fantastic)|sounds (good|great)|green ?light)\b/i; if (!APPROVAL_RE.test(trimmed)) return false; if (/\b(but|except|however|though|other than|aside from)\b/i.test(trimmed)) return false; return true; } const TITLE_BY_STATUS: Record<'approved' | 'changes_requested' | 'comment', (a: string, c: string) => string> = { approved: (a, c) => `${a} approved a post in ${c}`, changes_requested: (a, c) => `${a} requested changes in ${c}`, comment: (a, c) => `${a} left a comment on ${c}`, }; export async function POST( req: Request, ctx: { params: Promise<{ token: string }> }, ) { const { token } = await ctx.params; const body = await req.json().catch(() => null); const parsed = BodySchema.safeParse(body); if (!parsed.success) { return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 }); } const admin = createAdminClient(); const { data: link } = await admin .from('content_drop_share_links') .select('id, drop_id, post_review_link_map, expires_at') .eq('token', token) .single<{ id: string; drop_id: string; post_review_link_map: Record<string, string>; expires_at: string }>(); if (!link) return NextResponse.json({ error: 'not found' }, { status: 404 }); if (new Date(link.expires_at) < new Date()) { return NextResponse.json({ error: 'link expired' }, { status: 410 }); } const reviewLinkMap = link.post_review_link_map ?? {}; const reviewLinkId = reviewLinkMap[parsed.data.postId]; if (!reviewLinkId) { return NextResponse.json({ error: 'post is not part of this share link' }, { status: 400 }); } // Smart approval: if the user submitted via "Add revision" (or as a plain // comment) but the body reads like an approval, upgrade the status. We // attach a metadata flag so the audit trail still shows it was inferred, // not a button-press, and the public UI can surface that nuance. const submittedStatus = parsed.data.status; const trimmedContent = parsed.data.content.trim(); const inferredApproval = submittedStatus !== 'approved' && looksLikeApproval(trimmedContent); const finalStatus: 'approved' | 'changes_requested' | 'comment' = inferredApproval ? 'approved' : submittedStatus; const insertMetadata: Record<string, unknown> = inferredApproval ? { auto_approved: true, original_status: submittedStatus } : {}; // Only honor a timestamp on plain comments and change requests — anchoring // an "approved" stamp to a specific moment doesn't carry meaning. const timestampSeconds = finalStatus === 'comment' || finalStatus === 'changes_requested' ? parsed.data.timestampSeconds ?? null : null; // Phase D soft-block (scope_exhausted 402 + PreApprovalModal) was removed. // Clients should never see a "you're out of edited videos" pop-up. Approvals // always write through; over-scope accounting stays an internal concern. const { data, error } = await admin .from('post_review_comments') .insert({ review_link_id: reviewLinkId, author_name: parsed.data.authorName.trim(), content: trimmedContent, status: finalStatus, attachments: parsed.data.attachments ?? [], metadata: insertMetadata, timestamp_seconds: timestampSeconds, }) .select('id, review_link_id, author_name, content, status, created_at, attachments, metadata, timestamp_seconds') .single(); if (error || !data) { return NextResponse.json({ error: error?.message ?? 'failed' }, { status: 500 }); } // Run notifications + Monday sync + Zernio publish AFTER the response. // `after()` keeps the function alive past the response on Vercel, so // multi-step work (Monday writeback, Zernio publish) doesn't get cut off // mid-flight. Bare fire-and-forget would race against serverless shutdown — // that's how the Monday sync was silently dropping while chat 🎉 messages // still landed. after(async () => { try { await notifyAdminsOfComment(admin, link.id, link.drop_id, token, reviewLinkMap, { postId: parsed.data.postId, authorName: parsed.data.authorName.trim(), content: trimmedContent, status: finalStatus, attachments: parsed.data.attachments ?? [], }); } catch (err) { console.error('Comment notification failed:', err); } // Recompute drop-level approval state and push to Monday. State-derived // (not event-driven), so a single approval that doesn't yet make // everything approved still leaves Monday at "Waiting on approval", and // the next event re-syncs. try { await syncMondayApprovalForDrop(admin, link.drop_id); } catch (err) { console.error('Monday calendar approval sync failed:', err); } if (finalStatus === 'approved') { // Past-due fixup: shift this draft to a gap in the current month if its // original scheduled_at has already passed. Mirrors the bulk-approve // path so single-comment approvals get the same protection. let pastDueResult: Awaited<ReturnType<typeof reschedulePastDueDrafts>> | null = null; try { pastDueResult = await reschedulePastDueDrafts(admin, [parsed.data.postId]); } catch (err) { console.error(`Past-due fixup failed for post ${parsed.data.postId}:`, err); } // publishScheduledPost is idempotent (returns alreadyPublished=true if // already scheduled), so re-approval / multiple approvers won't double-post. try { await publishScheduledPost(admin, parsed.data.postId); } catch (err) { console.error(`Approval → Zernio publish failed for post ${parsed.data.postId}:`, err); } // Jack-only ping if we shifted the post. Posted to the client's chat // webhook (or agency catchall / OPS fallback). Never goes to the client. if (pastDueResult && (pastDueResult.moves.length > 0 || pastDueResult.overflow.length > 0)) { try { await notifyPastDueFixup(admin, link.drop_id, pastDueResult); } catch (err) { console.error('Past-due fixup notification failed:', err); } } // Approval-as-consumption: 1 credit per approved video. State-based // dedup in consume_credit makes re-approval (delete+approve) safe. await consumeForApproval(admin, { scheduledPostId: parsed.data.postId, shareLinkId: link.id, reviewerName: parsed.data.authorName.trim(), reviewLinkId, }); } else if (finalStatus === 'changes_requested') { // Silent-overcharge fix: if this post was already approved earlier // and the reviewer is now requesting changes, refund the prior // consume. refund_credit is a no-op if there's nothing to refund, // but we guard with hasPriorApproval to avoid an extra round-trip // on the common (no-prior-approval) path. const prior = await hasPriorApproval(admin, reviewLinkId); if (prior) { await refundForUnapproval(admin, { scheduledPostId: parsed.data.postId, reason: 'changes_requested after prior approval', }); } } }); return NextResponse.json({ comment: data }); } export async function DELETE( req: Request, ctx: { params: Promise<{ token: string }> }, ) { const { token } = await ctx.params; const body = await req.json().catch(() => null); const parsed = DeleteSchema.safeParse(body); if (!parsed.success) { return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 }); } const admin = createAdminClient(); const { data: link } = await admin .from('content_drop_share_links') .select('id, drop_id, post_review_link_map, expires_at') .eq('token', token) .single<{ id: string; drop_id: string; post_review_link_map: Record<string, string>; expires_at: string }>(); if (!link) return NextResponse.json({ error: 'not found' }, { status: 404 }); if (new Date(link.expires_at) < new Date()) { return NextResponse.json({ error: 'link expired' }, { status: 410 }); } const { data: comment } = await admin .from('post_review_comments') .select('id, review_link_id, status') .eq('id', parsed.data.commentId) .single<{ id: string; review_link_id: string; status: string }>(); if (!comment) return NextResponse.json({ error: 'not found' }, { status: 404 }); const allowedReviewIds = new Set(Object.values(link.post_review_link_map ?? {})); if (!allowedReviewIds.has(comment.review_link_id)) { return NextResponse.json({ error: 'comment is not part of this share link' }, { status: 400 }); } const { error: delErr } = await admin .from('post_review_comments') .delete() .eq('id', comment.id); if (delErr) { return NextResponse.json({ error: delErr.message }, { status: 500 }); } // Only approval deletions affect the Monday-side state ("Client approved" → // "Waiting on approval"). Other history rows (caption_edit, tag_edit, // schedule_change, video_revised, plain comments) are pure audit trail — // skip the sync to avoid a needless Monday round-trip. if (comment.status === 'approved') { // Clear the all-approved dedup stamp so a future re-approval can fire the // celebration ping again. Only clear when this calendar was previously // fully approved (otherwise the stamp is already null). await admin .from('content_drop_share_links') .update({ all_approved_notified_at: null }) .eq('id', link.id); // Reverse the post_id → review_link_id map to find the post tied to // this deleted approval. Needed for the credit refund (resolveChargeUnit // takes a scheduled_post_id). const reviewLinkMap = link.post_review_link_map ?? {}; const reversedPostId = Object.entries(reviewLinkMap).find( ([, reviewId]) => reviewId === comment.review_link_id, )?.[0]; after(async () => { try { await syncMondayApprovalForDrop(admin, link.drop_id); } catch (err) { console.error('Monday calendar approval sync failed (delete):', err); } // Approval revoked → refund the consume row. State-based dedup // makes this a no-op if the consume was already refunded (e.g. by // an earlier changes_requested-after-approval). Skips silently if // we somehow can't reverse-map the post id. if (reversedPostId) { await refundForUnapproval(admin, { scheduledPostId: reversedPostId, reason: 'approval comment deleted', }); } }); } return NextResponse.json({ ok: true, commentId: comment.id }); } /** Toggle the "resolved" flag on a `changes_requested` history row. Editors use this to mark a revision request as handled — the icon flips from a warning to a green check and the label changes to "Revised". Stored as a metadata flag rather than a status change so the comment still threads correctly with other change-request rows in the audit trail.
 
 ### `POST /api/calendar/share/:token/comment`
 
@@ -2369,6 +2377,8 @@ Detect natural-language approval inside a "comment" / "changes_requested" payloa
 ### `POST /api/calendar/share/:token/mark-sent`
 
 ### `POST /api/calendar/share/:token/notify-revisions`
+
+### `POST /api/calendar/share/:token/replace-image/:postId`
 
 ### `DELETE /api/calendar/share/:token/revision/:postId`
 
@@ -3725,6 +3735,20 @@ _Social analytics, benchmarking, competitors, ecom tracking._
 
 ### `GET /api/analytics/meta`
 
+### `GET /api/analytics/zernio/posts`
+
+### `GET /api/analytics/zernio/pulse`
+
+### `POST /api/analytics/zernio/pulse/:id/dismiss`
+
+### `POST /api/analytics/zernio/pulse/:id/flag-wrong`
+
+### `POST /api/analytics/zernio/pulse/:id/lock`
+
+### `POST /api/analytics/zernio/pulse/regenerate`
+
+### `GET /api/analytics/zernio/timeseries`
+
 ### `GET /api/benchmarks`
 
 Phase 3 — powers the audit-derived benchmarking section on /admin/analytics. Returns every active `client_benchmarks` row for the client, each with the latest snapshot per (platform, username) and the full snapshot history (sorted asc) so the chart can plot a timeline. Auth: admin full access; portal viewers must have `user_client_access` for the requested client. RLS handles the viewer path when we use the server client; we double-check server-side for clear error codes.
@@ -4173,7 +4197,7 @@ id - Scheduled post UUID
 
 ### `PUT /api/scheduler/posts/:id`
 
-Resolve the client_id a scheduled post belongs to and assert that the given user is allowed to mutate it. Admins skip the access check; viewers must have a row in `user_client_access` for the owning brand. Returns `{ ok: true }` when the user is allowed, or a NextResponse with the appropriate 403/404 to bail out with. / async function assertPostAccess( postId: string, userId: string, ): Promise<{ ok: true } | { ok: false; response: NextResponse }> { const admin = createAdminClient(); const { data: post } = await admin .from('scheduled_posts') .select('client_id') .eq('id', postId) .maybeSingle(); if (!post) { return { ok: false, response: NextResponse.json({ error: 'Not found' }, { status: 404 }), }; } if (await isAdmin(userId)) return { ok: true }; const { data: access } = await admin .from('user_client_access') .select('client_id') .eq('user_id', userId) .eq('client_id', post.client_id) .maybeSingle(); if (!access) { return { ok: false, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }), }; } return { ok: true }; } const UpdatePostSchema = z.object({ caption: z.string().optional(), hashtags: z.array(z.string()).optional(), scheduled_at: z.string().nullable().optional(), status: z.enum(['draft', 'scheduled']).optional(), platform_profile_ids: z.array(z.string()).optional(), media_ids: z.array(z.string()).optional(), cover_image_url: z.string().nullable().optional(), tagged_people: z.array(z.string()).optional(), collaborator_handles: z.array(z.string()).optional(), // Per-platform overrides (migrations 218 + 255). All nullable so the UI // can clear an override (NULL → fall back to router default). youtube_title: z.string().nullable().optional(), youtube_description: z.string().nullable().optional(), youtube_tags: z.array(z.string()).nullable().optional(), youtube_privacy: z.enum(['public', 'unlisted', 'private']).nullable().optional(), youtube_made_for_kids: z.boolean().nullable().optional(), tiktok_allow_comment: z.boolean().nullable().optional(), tiktok_allow_duet: z.boolean().nullable().optional(), tiktok_allow_stitch: z.boolean().nullable().optional(), instagram_share_to_feed: z.boolean().nullable().optional(), instagram_content_type: z.enum(['feed', 'reels', 'story']).nullable().optional(), facebook_content_type: z.enum(['feed', 'reel', 'story']).nullable().optional(), facebook_page_id: z.string().nullable().optional(), linkedin_document_title: z.string().nullable().optional(), linkedin_organization_urn: z.string().nullable().optional(), linkedin_disable_link_preview: z.boolean().nullable().optional(), first_comment: z.string().nullable().optional(), }); /** PUT /api/scheduler/posts/[id] Update a scheduled post's fields, platform links, and/or media attachments. When media is replaced, old media items are unmarked as used. Platform links are replaced atomically (delete then insert) if platform_profile_ids is provided.
+Resolve the client_id a scheduled post belongs to and assert that the given user is allowed to mutate it. Admins skip the access check; viewers must have a row in `user_client_access` for the owning brand. Returns `{ ok: true }` when the user is allowed, or a NextResponse with the appropriate 403/404 to bail out with. / async function assertPostAccess( postId: string, userId: string, ): Promise<{ ok: true } | { ok: false; response: NextResponse }> { const admin = createAdminClient(); const { data: post } = await admin .from('scheduled_posts') .select('client_id') .eq('id', postId) .maybeSingle(); if (!post) { return { ok: false, response: NextResponse.json({ error: 'Not found' }, { status: 404 }), }; } if (await isAdmin(userId)) return { ok: true }; const { data: access } = await admin .from('user_client_access') .select('client_id') .eq('user_id', userId) .eq('client_id', post.client_id) .maybeSingle(); if (!access) { return { ok: false, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }), }; } return { ok: true }; } const UpdatePostSchema = z.object({ caption: z.string().optional(), hashtags: z.array(z.string()).optional(), scheduled_at: z.string().nullable().optional(), status: z.enum(['draft', 'scheduled']).optional(), platform_profile_ids: z.array(z.string()).optional(), media_ids: z.array(z.string()).optional(), cover_image_url: z.string().nullable().optional(), tagged_people: z.array(z.string()).optional(), collaborator_handles: z.array(z.string()).optional(), // Per-platform overrides (migrations 218 + 255). All nullable so the UI // can clear an override (NULL → fall back to router default). youtube_title: z.string().nullable().optional(), youtube_description: z.string().nullable().optional(), youtube_tags: z.array(z.string()).nullable().optional(), youtube_privacy: z.enum(['public', 'unlisted', 'private']).nullable().optional(), youtube_made_for_kids: z.boolean().nullable().optional(), tiktok_allow_comment: z.boolean().nullable().optional(), tiktok_allow_duet: z.boolean().nullable().optional(), tiktok_allow_stitch: z.boolean().nullable().optional(), instagram_share_to_feed: z.boolean().nullable().optional(), instagram_content_type: z.enum(['feed', 'reels', 'story']).nullable().optional(), facebook_content_type: z.enum(['feed', 'reel', 'story']).nullable().optional(), facebook_page_id: z.string().nullable().optional(), linkedin_document_title: z.string().nullable().optional(), linkedin_organization_urn: z.string().nullable().optional(), linkedin_disable_link_preview: z.boolean().nullable().optional(), first_comment: z.string().nullable().optional(), }); /** PUT /api/scheduler/posts/[id] Update a scheduled post's fields, platform links, and/or media attachments. When media is replaced, old media items are unmarked as used. Platform links are diffed against the existing legs when `platform_profile_ids` is provided: profiles that stay selected keep their per-leg state (status, external_post_id, failure_reason), newly added profiles get a fresh `pending` row, deselected profiles are removed. Already-published legs are never silently dropped.
 
 **Auth:** Required (any authenticated user)
 
@@ -4219,6 +4243,27 @@ id - Scheduled post UUID
 
 ```
 {{ post: ScheduledPost, message: string }}
+```
+
+### `POST /api/scheduler/posts/add-platforms`
+
+For posts that have already been submitted to Zernio (`late_post_id` set, status = published / partially_failed), we can't add a leg in place — the Zernio post is immutable on their end. Instead we clone the post with only the new legs attached. `clone_offset_minutes` controls how far in the future the clones are scheduled to start, so we don't fire 6 back-dated posts to IG simultaneously and trip rate-limit / spam detection. Clones are spaced this many minutes apart starting now + offset. / clone_offset_minutes: z.number().int().min(0).max(7 * 24 * 60).default(15), clone_spacing_minutes: z.number().int().min(0).max(60 * 24).default(60), }); type AddResult = | { post_id: string; mode: 'inplace'; added_profile_ids: string[]; skipped_profile_ids: string[] } | { post_id: string; mode: 'cloned'; new_post_id: string; scheduled_at: string; added_profile_ids: string[] } | { post_id: string; mode: 'skipped'; reason: string }; /** POST /api/scheduler/posts/add-platforms Add one or more social profiles to one or more existing scheduled posts. The right thing happens automatically depending on whether the post has already shipped: - **Not yet shipped** (no `late_post_id`, status in draft/scheduled/failed) → adds platform legs in place; cron picks them up on the next tick. - **Already shipped** (any leg has `external_post_id`, or post has `late_post_id`) → clones the post with only the new legs attached, schedules the clones at `now + clone_offset_minutes`, spaced `clone_spacing_minutes` apart so we don't dump them all at once. All inserts use ON CONFLICT DO NOTHING (via the unique index from migration 268) so retries are idempotent. Built for the "client just connected a new platform mid-month" case (e.g. Avondale connecting IG after the May calendar was already populated).
+
+**Auth:** Admin only — viewers can edit caption/timing on their own posts but
+
+**Body:**
+
+```
+post_ids - UUIDs of scheduled posts
+social_profile_ids - UUIDs of social profiles to add
+clone_offset_minutes - Minutes from now to schedule first clone (default 15)
+clone_spacing_minutes - Minutes between successive clones (default 60)
+```
+
+**Returns:**
+
+```
+{{ results: AddResult[] }}
 ```
 
 ### `POST /api/scheduler/posts/batch-publish`
@@ -4676,16 +4721,6 @@ _Google Calendar, Drive, Chat, and OAuth connections._
 ## Team & Meetings
 
 _Team members, workload, meetings._
-
-### `GET /api/meetings`
-
-### `POST /api/meetings`
-
-### `DELETE /api/meetings/:id`
-
-### `GET /api/meetings/:id`
-
-### `PATCH /api/meetings/:id`
 
 ### `GET /api/team`
 
@@ -5239,6 +5274,12 @@ scheduling_link - Scheduling link URL (or null to clear)
 
 _Client-portal-specific endpoints._
 
+### `GET /api/portal/analytics/zernio/posts`
+
+### `GET /api/portal/analytics/zernio/pulse`
+
+### `GET /api/portal/analytics/zernio/timeseries`
+
 ### `GET /api/portal/brand-dna`
 
 Return the active brand guideline for the authenticated portal user's active client. Respects the x-portal-active-client cookie for multi-brand support.
@@ -5268,6 +5309,8 @@ flagged_incorrect - Whether the section is flagged as incorrect
 ### `GET /api/portal/brands`
 
 ### `POST /api/portal/brands/switch`
+
+### `GET /api/portal/formats`
 
 ### `POST /api/portal/knowledge`
 
@@ -5345,6 +5388,8 @@ Super-admin-only. Runs `autoPopulateEditingForPeriod` against the given period. 
 
 ### `POST /api/admin/active-client`
 
+### `POST /api/admin/analytics/backfill`
+
 ### `GET /api/admin/banners`
 
 ### `POST /api/admin/banners`
@@ -5352,6 +5397,10 @@ Super-admin-only. Runs `autoPopulateEditingForPeriod` against the given period. 
 ### `DELETE /api/admin/banners/:id`
 
 ### `PATCH /api/admin/banners/:id`
+
+### `GET /api/admin/clients/:id/format-context`
+
+### `PATCH /api/admin/clients/:id/format-context`
 
 ### `POST /api/admin/connection-invites`
 
@@ -5453,6 +5502,46 @@ Unified send log across every email path in Cortex. Everything now lands in `ema
 
 GET /api/admin/errors — recent API errors (super_admin only)
 
+### `GET /api/admin/formats/:id`
+
+### `DELETE /api/admin/formats/:id/dismiss`
+
+### `POST /api/admin/formats/:id/dismiss`
+
+### `DELETE /api/admin/formats/:id/pin`
+
+### `POST /api/admin/formats/:id/pin`
+
+### `DELETE /api/admin/formats/:id/save`
+
+### `POST /api/admin/formats/:id/save`
+
+### `POST /api/admin/formats/:id/use-in-content-lab`
+
+### `POST /api/admin/formats/discover`
+
+### `GET /api/admin/formats/feed`
+
+### `GET /api/admin/formats/rejected`
+
+### `POST /api/admin/formats/rejected/:id/restore`
+
+### `GET /api/admin/formats/taxonomy`
+
+### `POST /api/admin/formats/taxonomy`
+
+### `PATCH /api/admin/formats/taxonomy/:id`
+
+### `GET /api/admin/formats/taxonomy/proposals`
+
+### `POST /api/admin/formats/taxonomy/proposals/:id/approve`
+
+### `POST /api/admin/formats/taxonomy/proposals/:id/merge`
+
+### `POST /api/admin/formats/taxonomy/proposals/:id/reject`
+
+### `DELETE /api/admin/nerd-conversations/:id/format-pin`
+
 ### `GET /api/admin/notifications/:key`
 
 ### `PATCH /api/admin/notifications/:key`
@@ -5507,6 +5596,8 @@ status - 'all' | 'failed' | 'partial' | 'success' (default 'all')
 ### `DELETE /api/admin/secrets/:key`
 
 ### `PUT /api/admin/secrets/:key`
+
+### `GET /api/admin/share-link-emails/:id`
 
 ### `GET /api/admin/topic-search-llm-cost`
 
@@ -5580,6 +5671,14 @@ password - Password for password-protected boards (or use x-share-password heade
 ### `GET /api/shared/nerd/:token`
 
 GET — fetch a shared conversation by public token (no auth required)
+
+### `GET /api/shared/prospect-present/:token`
+
+### `POST /api/shared/prospect-present/:token/lead`
+
+### `GET /api/shared/prospect/:token`
+
+### `POST /api/shared/prospect/:token/views`
 
 ### `GET /api/shared/search/:token`
 
@@ -6097,6 +6196,28 @@ role - Role/title, max 100 chars (optional)
 
 ---
 
+## Cron Jobs
+
+_Internal scheduled jobs for sync, publishing, monitoring._
+
+### `POST /api/cron/format-analyze`
+
+### `POST /api/cron/format-discovery`
+
+### `POST /api/cron/format-gate`
+
+### `GET /api/cron/prospect-digest-build`
+
+### `POST /api/cron/prospect-digest-build`
+
+### `GET /api/cron/prospect-monitor-daily`
+
+### `POST /api/cron/recompute-format-context`
+
+### `GET /api/cron/zernio-reconcile`
+
+---
+
 ## Other
 
 _Uncategorized routes._
@@ -6161,21 +6282,93 @@ Rename, recolor, or reorder a group.
 
 ### `POST /api/deliverables/overage-reviews`
 
+### `PATCH /api/editing/review/:id`
+
 ### `GET /api/editing/share/:token`
 
 ### `DELETE /api/editing/share/:token/comment`
 
 ### `PATCH /api/editing/share/:token/comment`
 
-Public comment endpoints for the editing-project review page. Mirrors `/api/calendar/share/[token]/comment` but is significantly smaller because editing projects have no Monday board / no Zernio publish flow / no per-client chat webhooks (yet). All we need is: - POST add a comment / approve / request-changes on a video (or the project as a whole if `videoId` is omitted). - DELETE remove a comment that this share link authored. - PATCH toggle `metadata.resolved` on a `changes_requested` row so the editor can mark a revision as handled. Auth model: anyone with the share token can post. We re-validate the token on every call (against `expires_at` + `archived_at`) so a stale client can't keep posting after revocation. / const AttachmentSchema = z.object({ url: z.string().url(), filename: z.string().min(1).max(200), mime_type: z.string().min(1).max(120), size_bytes: z.number().int().nonnegative(), }); const BodySchema = z .object({ // Optional. When omitted the comment is project-level (e.g. an // "approve all" stamp). Required when status === 'video_revised' // since that event always belongs to a specific clip. videoId: z.string().uuid().nullable().optional(), authorName: z.string().min(1).max(80), content: z.string().max(2000).default(''), // 'video_revised' is an audit-trail row written after an admin // replaces a clip via the public review page. We accept it from // the same endpoint instead of standing up a parallel "events" // route so the activity feed has one source. status: z.enum([ 'approved', 'changes_requested', 'comment', 'video_revised', ]), attachments: z.array(AttachmentSchema).max(10).optional(), // Frame-anchor in seconds (for change requests / plain comments). timestampSeconds: z.number().min(0).max(86400).nullable().optional(), }) .refine( (v) => v.status === 'approved' || v.status === 'video_revised' || v.content.trim().length > 0 || (v.attachments?.length ?? 0) > 0, { message: 'comment must have text or at least one attachment', path: ['content'], }, ) .refine((v) => v.status !== 'video_revised' || Boolean(v.videoId), { message: 'video_revised events must include a videoId', path: ['videoId'], }); const DeleteSchema = z.object({ commentId: z.string().uuid() }); const PatchSchema = z.object({ commentId: z.string().uuid(), resolved: z.boolean(), }); /** Smart approval detection — same heuristic as the calendar route. If a reviewer types "approved" or "perfect, no changes" but submits via the comment / change-request form, we infer an approval rather than making them re-click. Conservative on purpose; long, hedging text stays a comment. / function looksLikeApproval(content: string): boolean { const trimmed = content.trim(); if (!trimmed || trimmed.length > 80) return false; const APPROVAL_RE = /\b(approved?|approving|lgtm|sgtm|ship ?it|good to go|all good|love (this|it|them)|nothing to change|change nothing|no (changes?|edits|notes|revisions?)|leave (as is|it)|perfect|looks (good|great|amazing|perfect|fantastic)|sounds (good|great)|green ?light)\b/i; if (!APPROVAL_RE.test(trimmed)) return false; if (/\b(but|except|however|though|other than|aside from)\b/i.test(trimmed)) return false; return true; } const TITLE_BY_STATUS: Record< 'approved' | 'changes_requested' | 'comment', (author: string, clientName: string, articledNoun: string) => string > = { approved: (a, c, n) => `${a} approved ${n} on ${c}`, changes_requested: (a, c) => `${a} requested changes on ${c}`, comment: (a, c) => `${a} left a comment on ${c}`, }; interface ShareLinkRow { id: string; project_id: string; expires_at: string; archived_at: string | null; all_approved_notified_at: string | null; revisions_complete_notified_at: string | null; } async function loadShareLink( admin: ReturnType<typeof createAdminClient>, token: string, ): Promise< | { ok: true; link: ShareLinkRow } | { ok: false; error: string; status: number } > { const { data: link } = await admin .from('editing_project_share_links') .select( 'id, project_id, expires_at, archived_at, all_approved_notified_at, revisions_complete_notified_at', ) .eq('token', token) .maybeSingle<ShareLinkRow>(); if (!link) return { ok: false, error: 'not_found', status: 404 }; if (link.archived_at) return { ok: false, error: 'revoked', status: 410 }; if (new Date(link.expires_at).getTime() < Date.now()) { return { ok: false, error: 'expired', status: 410 }; } return { ok: true, link }; } interface ProjectChatContext { clientName: string; projectName: string; projectType: string | null; webhookUrl: string | null; shareUrl: string; } async function loadProjectChatContext( admin: ReturnType<typeof createAdminClient>, projectId: string, token: string, ): Promise<ProjectChatContext> { const { data: project } = await admin .from('editing_projects') .select('id, name, project_type, clients(name, agency, chat_webhook_url)') .eq('id', projectId) .maybeSingle<{ id: string; name: string; project_type: string | null; clients: { name: string | null; agency: string | null; chat_webhook_url: string | null; } | null; }>(); const clientName = project?.clients?.name ?? 'Client'; const projectName = project?.name ?? 'Project'; const projectType = project?.project_type ?? null; const brand = getBrandFromAgency(project?.clients?.agency ?? null); const appUrl = process.env.NODE_ENV !== 'production' ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001' : getCortexAppUrl(brand); // Per-client webhook first, agency catchall second, ops fallback last. // Mirrors the calendar comment route so editing reviews land in the same // space the rest of the client's notifications go to. const teamWebhook = await resolveTeamChatWebhook(admin, { primaryUrl: project?.clients?.chat_webhook_url ?? null, agency: project?.clients?.agency ?? null, }); const webhookUrl = teamWebhook ?? process.env.OPS_CHAT_WEBHOOK_URL ?? null; return { clientName, projectName, projectType, webhookUrl, shareUrl: `${appUrl}/s/${token}`, }; } async function checkAllVideosApproved( admin: ReturnType<typeof createAdminClient>, projectId: string, ): Promise<boolean> { const { data: videos } = await admin .from('editing_project_videos') .select('id') .eq('project_id', projectId) .returns<Array<{ id: string }>>(); const videoIds = (videos ?? []).map((v) => v.id); if (videoIds.length === 0) return false; const { data: approvals } = await admin .from('editing_project_review_comments') .select('video_id') .in('video_id', videoIds) .eq('status', 'approved') .returns<Array<{ video_id: string | null }>>(); const approvedSet = new Set( (approvals ?? []) .map((a) => a.video_id) .filter((id): id is string => !!id), ); return videoIds.every((id) => approvedSet.has(id)); } export async function POST( req: Request, ctx: { params: Promise<{ token: string }> }, ) { const { token } = await ctx.params; const body = await req.json().catch(() => null); const parsed = BodySchema.safeParse(body); if (!parsed.success) { return NextResponse.json( { error: parsed.error.flatten() }, { status: 400 }, ); } const admin = createAdminClient(); const linkResult = await loadShareLink(admin, token); if (!linkResult.ok) { return NextResponse.json( { error: linkResult.error }, { status: linkResult.status }, ); } const link = linkResult.link; // If a video id is supplied, make sure it actually belongs to this // project — otherwise a malicious client could pin comments onto // someone else's videos by guessing UUIDs. if (parsed.data.videoId) { const { data: video } = await admin .from('editing_project_videos') .select('id') .eq('id', parsed.data.videoId) .eq('project_id', link.project_id) .maybeSingle<{ id: string }>(); if (!video) { return NextResponse.json( { error: 'video_not_in_project' }, { status: 400 }, ); } } // Smart approval upgrade: same rule as calendar. We tag the metadata // so the audit trail surfaces "auto approved from text" later. The // upgrade only fires on reviewer-typed statuses; system-generated // `video_revised` events never get auto-approved. const submittedStatus = parsed.data.status; const trimmedContent = parsed.data.content.trim(); const inferredApproval = submittedStatus !== 'approved' && submittedStatus !== 'video_revised' && looksLikeApproval(trimmedContent); const finalStatus: | 'approved' | 'changes_requested' | 'comment' | 'video_revised' = inferredApproval ? 'approved' : submittedStatus; const insertMetadata: Record<string, unknown> = inferredApproval ? { auto_approved: true, original_status: submittedStatus } : {}; // Only honour timestamps on plain comments + change requests. const timestampSeconds = finalStatus === 'comment' || finalStatus === 'changes_requested' ? parsed.data.timestampSeconds ?? null : null; const { data: inserted, error } = await admin .from('editing_project_review_comments') .insert({ project_id: link.project_id, video_id: parsed.data.videoId ?? null, share_link_id: link.id, author_name: parsed.data.authorName.trim(), content: trimmedContent, status: finalStatus, attachments: parsed.data.attachments ?? [], metadata: insertMetadata, timestamp_seconds: timestampSeconds, }) .select( 'id, video_id, share_link_id, author_name, author_user_id, content, status, attachments, metadata, timestamp_seconds, created_at', ) .single(); if (error || !inserted) { return NextResponse.json( { error: error?.message ?? 'failed' }, { status: 500 }, ); } // For approved-status events, claim the right to post the celebration // ping atomically. Two concurrent approvers (or a single double-click) // would otherwise both pass a non-atomic "is everyone approved?" SELECT // and post twice. Only the request that flips all_approved_notified_at // NULL → timestamp wins. The DELETE handler clears the stamp when an // approval is removed, so re-approval can fire again. let allApprovedClaim: 'won' | 'lost' | 'not-yet' = 'not-yet'; if (finalStatus === 'approved') { const everyoneApproved = await checkAllVideosApproved( admin, link.project_id, ); if (everyoneApproved) { const nowIso = new Date().toISOString(); const { data: claimed } = await admin .from('editing_project_share_links') .update({ all_approved_notified_at: nowIso }) .eq('id', link.id) .is('all_approved_notified_at', null) .select('id') .maybeSingle(); allApprovedClaim = claimed ? 'won' : 'lost'; // Roll the project itself up to 'approved' so the review board pill, // unified status helper, and any "queue" filter all see the project // as done. Only the claim winner runs this so a double-click can't // re-stamp approved_at. We also stay idempotent: if the project was // already approved (legacy data, manual flip), the WHERE clause // prevents re-stamping approved_at to a later time. if (allApprovedClaim === 'won') { await admin .from('editing_projects') .update({ status: 'approved', approved_at: nowIso }) .eq('id', link.project_id) .neq('status', 'approved'); } } } // Notify Jack (admin) so they can pull up the project. Mirrors the // calendar share notification pattern, minus the Monday + Zernio // legs that don't apply here. We skip notifications for the // synthesised `video_revised` audit row — that event is always // authored by an admin who's already on the page. if (finalStatus !== 'video_revised') { after(async () => { try { await notifyAdminsOfComment(admin, link.project_id, { authorName: parsed.data.authorName.trim(), content: trimmedContent, status: finalStatus, attachments: parsed.data.attachments ?? [], }); } catch (err) { console.error('Editing comment notification failed:', err); } try { await postEditingChatForComment({ admin, link, token, finalStatus, authorName: parsed.data.authorName.trim(), content: trimmedContent, attachments: parsed.data.attachments ?? [], allApprovedClaim, }); } catch (err) { console.error('Editing comment chat ping failed:', err); } }); } return NextResponse.json({ comment: inserted }); } async function postEditingChatForComment(args: { admin: ReturnType<typeof createAdminClient>; link: ShareLinkRow; token: string; finalStatus: 'approved' | 'changes_requested' | 'comment' | 'video_revised'; authorName: string; content: string; attachments: Array<{ url: string; filename: string; mime_type: string; size_bytes: number; }>; allApprovedClaim: 'won' | 'lost' | 'not-yet'; }) { const { webhookUrl, clientName, projectName, projectType, shareUrl } = await loadProjectChatContext(args.admin, args.link.project_id, args.token); if (!webhookUrl) return; if ( args.finalStatus === 'comment' || args.finalStatus === 'changes_requested' || args.finalStatus === 'approved' ) { const setting = await getNotificationSetting('editing_comment_chat'); if (!setting.enabled) return; const verb = args.finalStatus === 'changes_requested' ? 'requested changes' : args.finalStatus === 'approved' ? 'approved' : 'commented'; const trimmed = args.content.trim(); const quotedBlock = trimmed ? '\n' + trimmed .split('\n') .map((line) => `> ${line}`) .join('\n') : ''; const attachmentBlock = args.attachments.length > 0 ? '\n\n' + args.attachments.map((a) => `📎 ${a.filename}\n${a.url}`).join('\n\n') : ''; const text = `*${args.authorName}* ${verb} on ${clientName} · ${projectName}:${quotedBlock}${attachmentBlock}\n\n${shareUrl}`; postToGoogleChatSafe( webhookUrl, { text }, `editing-comment ${args.link.id}`, ); } if (args.allApprovedClaim === 'won') { const setting = await getNotificationSetting('editing_all_approved_chat'); if (!setting.enabled) return; const noun = nounForProjectType(projectType); const text = `🎉 All ${noun.plural} in ${clientName} · ${projectName} are approved.\n${shareUrl}`; postToGoogleChatSafe( webhookUrl, { text }, `editing-all-approved ${args.link.id}`, ); } } export async function DELETE( req: Request, ctx: { params: Promise<{ token: string }> }, ) { const { token } = await ctx.params; const body = await req.json().catch(() => null); const parsed = DeleteSchema.safeParse(body); if (!parsed.success) { return NextResponse.json( { error: parsed.error.flatten() }, { status: 400 }, ); } const admin = createAdminClient(); const linkResult = await loadShareLink(admin, token); if (!linkResult.ok) { return NextResponse.json( { error: linkResult.error }, { status: linkResult.status }, ); } const link = linkResult.link; const { data: comment } = await admin .from('editing_project_review_comments') .select('id, project_id, status') .eq('id', parsed.data.commentId) .maybeSingle<{ id: string; project_id: string; status: string }>(); if (!comment) { return NextResponse.json({ error: 'not_found' }, { status: 404 }); } if (comment.project_id !== link.project_id) { return NextResponse.json( { error: 'comment_not_in_project' }, { status: 400 }, ); } const { error: delErr } = await admin .from('editing_project_review_comments') .delete() .eq('id', comment.id); if (delErr) { return NextResponse.json({ error: delErr.message }, { status: 500 }); } // Approval revoked → clear the all-approved dedup stamp so a future // re-approval can fire the celebration ping again. Other status rows // (changes_requested, comment, video_revised) don't affect the stamp. if (comment.status === 'approved') { await admin .from('editing_project_share_links') .update({ all_approved_notified_at: null }) .eq('id', link.id); // The project may have been rolled up to 'approved' when this // comment landed. Revert it back to 'need_approval' so the review // board pill stays accurate. Skip if the project was manually moved // forward (revising/done/archived) — reverting those would unwind // legitimate state. await admin .from('editing_projects') .update({ status: 'need_approval', approved_at: null }) .eq('id', link.project_id) .eq('status', 'approved'); } return NextResponse.json({ ok: true, commentId: comment.id }); } /** Toggle `metadata.resolved` on a `changes_requested` row so editors can mark a revision as handled. Mirrors the calendar PATCH but skips the "all revisions complete" Google Chat ping (no per-client webhook configured for editing projects yet).
+Public comment endpoints for the editing-project review page. Mirrors `/api/calendar/share/[token]/comment` but is significantly smaller because editing projects have no Monday board / no Zernio publish flow / no per-client chat webhooks (yet). All we need is: - POST add a comment / approve / request-changes on a video (or the project as a whole if `videoId` is omitted). - DELETE remove a comment that this share link authored. - PATCH toggle `metadata.resolved` on a `changes_requested` row so the editor can mark a revision as handled. Auth model: anyone with the share token can post. We re-validate the token on every call (against `expires_at` + `archived_at`) so a stale client can't keep posting after revocation. / const AttachmentSchema = z.object({ url: z.string().url(), filename: z.string().min(1).max(200), mime_type: z.string().min(1).max(120), size_bytes: z.number().int().nonnegative(), }); const BodySchema = z .object({ // Optional. When omitted the comment is project-level (e.g. an // "approve all" stamp). Required when status === 'video_revised' // since that event always belongs to a specific clip. videoId: z.string().uuid().nullable().optional(), authorName: z.string().min(1).max(80), content: z.string().max(2000).default(''), // 'video_revised' is an audit-trail row written after an admin // replaces a clip via the public review page. We accept it from // the same endpoint instead of standing up a parallel "events" // route so the activity feed has one source. status: z.enum([ 'approved', 'changes_requested', 'comment', 'video_revised', ]), attachments: z.array(AttachmentSchema).max(10).optional(), // Frame-anchor in seconds (for change requests / plain comments). timestampSeconds: z.number().min(0).max(86400).nullable().optional(), }) .refine( (v) => v.status === 'approved' || v.status === 'video_revised' || v.content.trim().length > 0 || (v.attachments?.length ?? 0) > 0, { message: 'comment must have text or at least one attachment', path: ['content'], }, ) .refine((v) => v.status !== 'video_revised' || Boolean(v.videoId), { message: 'video_revised events must include a videoId', path: ['videoId'], }); const DeleteSchema = z.object({ commentId: z.string().uuid() }); const PatchSchema = z.object({ commentId: z.string().uuid(), resolved: z.boolean(), }); /** Smart approval detection — same heuristic as the calendar route. If a reviewer types "approved" or "perfect, no changes" but submits via the comment / change-request form, we infer an approval rather than making them re-click. Conservative on purpose; long, hedging text stays a comment. / function looksLikeApproval(content: string): boolean { const trimmed = content.trim(); if (!trimmed || trimmed.length > 80) return false; const APPROVAL_RE = /\b(approved?|approving|lgtm|sgtm|ship ?it|good to go|all good|love (this|it|them)|nothing to change|change nothing|no (changes?|edits|notes|revisions?)|leave (as is|it)|perfect|looks (good|great|amazing|perfect|fantastic)|sounds (good|great)|green ?light)\b/i; if (!APPROVAL_RE.test(trimmed)) return false; if (/\b(but|except|however|though|other than|aside from)\b/i.test(trimmed)) return false; return true; } const TITLE_BY_STATUS: Record< 'approved' | 'changes_requested' | 'comment', (author: string, clientName: string, articledNoun: string) => string > = { approved: (a, c, n) => `${a} approved ${n} on ${c}`, changes_requested: (a, c) => `${a} requested changes on ${c}`, comment: (a, c) => `${a} left a comment on ${c}`, }; interface ShareLinkRow { id: string; project_id: string; expires_at: string; archived_at: string | null; all_approved_notified_at: string | null; revisions_complete_notified_at: string | null; } async function loadShareLink( admin: ReturnType<typeof createAdminClient>, token: string, ): Promise< | { ok: true; link: ShareLinkRow } | { ok: false; error: string; status: number } > { const { data: link } = await admin .from('editing_project_share_links') .select( 'id, project_id, expires_at, archived_at, all_approved_notified_at, revisions_complete_notified_at', ) .eq('token', token) .maybeSingle<ShareLinkRow>(); if (!link) return { ok: false, error: 'not_found', status: 404 }; if (link.archived_at) return { ok: false, error: 'revoked', status: 410 }; if (new Date(link.expires_at).getTime() < Date.now()) { return { ok: false, error: 'expired', status: 410 }; } return { ok: true, link }; } interface ProjectChatContext { clientId: string | null; clientName: string; projectName: string; projectType: string | null; webhookUrl: string | null; shareUrl: string; } async function loadProjectChatContext( admin: ReturnType<typeof createAdminClient>, projectId: string, token: string, ): Promise<ProjectChatContext> { const { data: project } = await admin .from('editing_projects') .select('id, name, project_type, client_id, clients(name, agency, chat_webhook_url)') .eq('id', projectId) .maybeSingle<{ id: string; name: string; project_type: string | null; client_id: string | null; clients: { name: string | null; agency: string | null; chat_webhook_url: string | null; } | null; }>(); const clientId = project?.client_id ?? null; const clientName = project?.clients?.name ?? 'Client'; const projectName = project?.name ?? 'Project'; const projectType = project?.project_type ?? null; const brand = getBrandFromAgency(project?.clients?.agency ?? null); const appUrl = process.env.NODE_ENV !== 'production' ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001' : getCortexAppUrl(brand); // Per-client webhook first, agency misc-catchall second. Client-comment // notifications never fall back to OPS — that space is reserved for // system-level alerts. Brands without their own webhook AND no agency // catchall silently no-op. const webhookUrl = await resolveTeamChatWebhook(admin, { primaryUrl: project?.clients?.chat_webhook_url ?? null, agency: project?.clients?.agency ?? null, }); return { clientId, clientName, projectName, projectType, webhookUrl, shareUrl: `${appUrl}/s/${token}`, }; } async function checkAllVideosApproved( admin: ReturnType<typeof createAdminClient>, projectId: string, ): Promise<boolean> { const { data: videos } = await admin .from('editing_project_videos') .select('id') .eq('project_id', projectId) .returns<Array<{ id: string }>>(); const videoIds = (videos ?? []).map((v) => v.id); if (videoIds.length === 0) return false; const { data: approvals } = await admin .from('editing_project_review_comments') .select('video_id') .in('video_id', videoIds) .eq('status', 'approved') .returns<Array<{ video_id: string | null }>>(); const approvedSet = new Set( (approvals ?? []) .map((a) => a.video_id) .filter((id): id is string => !!id), ); return videoIds.every((id) => approvedSet.has(id)); } export async function POST( req: Request, ctx: { params: Promise<{ token: string }> }, ) { const { token } = await ctx.params; const body = await req.json().catch(() => null); const parsed = BodySchema.safeParse(body); if (!parsed.success) { return NextResponse.json( { error: parsed.error.flatten() }, { status: 400 }, ); } const admin = createAdminClient(); const linkResult = await loadShareLink(admin, token); if (!linkResult.ok) { return NextResponse.json( { error: linkResult.error }, { status: linkResult.status }, ); } const link = linkResult.link; // If a video id is supplied, make sure it actually belongs to this // project — otherwise a malicious client could pin comments onto // someone else's videos by guessing UUIDs. if (parsed.data.videoId) { const { data: video } = await admin .from('editing_project_videos') .select('id') .eq('id', parsed.data.videoId) .eq('project_id', link.project_id) .maybeSingle<{ id: string }>(); if (!video) { return NextResponse.json( { error: 'video_not_in_project' }, { status: 400 }, ); } } // Smart approval upgrade: same rule as calendar. We tag the metadata // so the audit trail surfaces "auto approved from text" later. The // upgrade only fires on reviewer-typed statuses; system-generated // `video_revised` events never get auto-approved. const submittedStatus = parsed.data.status; const trimmedContent = parsed.data.content.trim(); const inferredApproval = submittedStatus !== 'approved' && submittedStatus !== 'video_revised' && looksLikeApproval(trimmedContent); const finalStatus: | 'approved' | 'changes_requested' | 'comment' | 'video_revised' = inferredApproval ? 'approved' : submittedStatus; const insertMetadata: Record<string, unknown> = inferredApproval ? { auto_approved: true, original_status: submittedStatus } : {}; // Only honour timestamps on plain comments + change requests. const timestampSeconds = finalStatus === 'comment' || finalStatus === 'changes_requested' ? parsed.data.timestampSeconds ?? null : null; const { data: inserted, error } = await admin .from('editing_project_review_comments') .insert({ project_id: link.project_id, video_id: parsed.data.videoId ?? null, share_link_id: link.id, author_name: parsed.data.authorName.trim(), content: trimmedContent, status: finalStatus, attachments: parsed.data.attachments ?? [], metadata: insertMetadata, timestamp_seconds: timestampSeconds, }) .select( 'id, video_id, share_link_id, author_name, author_user_id, content, status, attachments, metadata, timestamp_seconds, created_at', ) .single(); if (error || !inserted) { return NextResponse.json( { error: error?.message ?? 'failed' }, { status: 500 }, ); } // For approved-status events, claim the right to post the celebration // ping atomically. Two concurrent approvers (or a single double-click) // would otherwise both pass a non-atomic "is everyone approved?" SELECT // and post twice. Only the request that flips all_approved_notified_at // NULL → timestamp wins. The DELETE handler clears the stamp when an // approval is removed, so re-approval can fire again. let allApprovedClaim: 'won' | 'lost' | 'not-yet' = 'not-yet'; if (finalStatus === 'approved') { const everyoneApproved = await checkAllVideosApproved( admin, link.project_id, ); if (everyoneApproved) { const nowIso = new Date().toISOString(); const { data: claimed } = await admin .from('editing_project_share_links') .update({ all_approved_notified_at: nowIso }) .eq('id', link.id) .is('all_approved_notified_at', null) .select('id') .maybeSingle(); allApprovedClaim = claimed ? 'won' : 'lost'; // Roll the project itself up to 'approved' so the review board pill, // unified status helper, and any "queue" filter all see the project // as done. Only the claim winner runs this so a double-click can't // re-stamp approved_at. We also stay idempotent: if the project was // already approved (legacy data, manual flip), the WHERE clause // prevents re-stamping approved_at to a later time. if (allApprovedClaim === 'won') { await admin .from('editing_projects') .update({ status: 'approved', approved_at: nowIso }) .eq('id', link.project_id) .neq('status', 'approved'); } } } // Notify Jack (admin) so they can pull up the project. Mirrors the // calendar share notification pattern, minus the Monday + Zernio // legs that don't apply here. We skip notifications for the // synthesised `video_revised` audit row — that event is always // authored by an admin who's already on the page. if (finalStatus !== 'video_revised') { after(async () => { try { await notifyAdminsOfComment(admin, link.project_id, { authorName: parsed.data.authorName.trim(), content: trimmedContent, status: finalStatus, attachments: parsed.data.attachments ?? [], }); } catch (err) { console.error('Editing comment notification failed:', err); } try { await postEditingChatForComment({ admin, link, token, finalStatus, authorName: parsed.data.authorName.trim(), content: trimmedContent, attachments: parsed.data.attachments ?? [], videoId: parsed.data.videoId ?? null, allApprovedClaim, }); } catch (err) { console.error('Editing comment chat ping failed:', err); } // NAT-66: paid-media ping fires INDEPENDENTLY of the strategy chat // path above. A brand can have a paid-media webhook set without // having a strategy webhook (or vice-versa), and the ads team alert // must NOT be silenced when `editing_all_approved_chat` is off — // that setting governs strategy-chat noise, not the ads handoff. // Gated solely by the all-approved claim winner so we don't double- // post on concurrent approvals. if (allApprovedClaim === 'won') { try { await pingPaidMediaForEditingApproval({ admin, projectId: link.project_id, linkId: link.id, token, }); } catch (err) { console.error('Editing paid-media ping failed:', err); } } }); } return NextResponse.json({ comment: inserted }); } async function postEditingChatForComment(args: { admin: ReturnType<typeof createAdminClient>; link: ShareLinkRow; token: string; finalStatus: 'approved' | 'changes_requested' | 'comment' | 'video_revised'; authorName: string; content: string; attachments: Array<{ url: string; filename: string; mime_type: string; size_bytes: number; }>; videoId: string | null; allApprovedClaim: 'won' | 'lost' | 'not-yet'; }) { const { clientId, webhookUrl, clientName, projectName, projectType, shareUrl } = await loadProjectChatContext(args.admin, args.link.project_id, args.token); if (!webhookUrl) return; // Resolve `#video-N` anchor for per-video comments so the chat link // jumps to the exact tile being discussed. Mirrors the public page's // dedup-by-position ordering: lowest position first, latest version // wins per slot. Project-level (no videoId) comments stay unanchored. let videoAnchor = ''; if (args.videoId) { const { data: rows } = await args.admin .from('editing_project_videos') .select('id, position, version, created_at') .eq('project_id', args.link.project_id) .order('position', { ascending: true }) .order('version', { ascending: false }); const seen = new Set<number>(); const orderedIds: string[] = []; for (const row of (rows ?? []) as Array<{ id: string; position: number | null; }>) { const pos = row.position ?? 0; if (seen.has(pos)) continue; seen.add(pos); orderedIds.push(row.id); } const idx = orderedIds.indexOf(args.videoId); if (idx >= 0) videoAnchor = `#video-${idx + 1}`; } const linkedShareUrl = `${shareUrl}${videoAnchor}`; // Per-event chat ping. Independent of the all-approved ping below — // disabling `editing_comment_chat` must NOT kill the celebration post. // (Used to early-return here, which silenced the all-approved block // whenever the per-comment toggle was off.) if ( args.finalStatus === 'comment' || args.finalStatus === 'changes_requested' || args.finalStatus === 'approved' ) { const commentSetting = await getClientNotificationSetting( 'editing_comment_chat', 'chat', clientId, ); if (commentSetting.enabled) { const verb = args.finalStatus === 'changes_requested' ? 'requested changes' : args.finalStatus === 'approved' ? 'approved' : 'commented'; const trimmed = args.content.trim(); const quotedBlock = trimmed ? '\n' + trimmed .split('\n') .map((line) => `> ${line}`) .join('\n') : ''; const attachmentBlock = args.attachments.length > 0 ? '\n\n' + args.attachments .map((a) => `📎 ${a.filename}\n${a.url}`) .join('\n\n') : ''; const text = `💬 *${args.authorName}* (client) ${verb} on *${clientName} · ${projectName}*${quotedBlock}${attachmentBlock}\n` + `Reply from the share link, the client doesn't get an email until you respond:\n${linkedShareUrl}`; postToGoogleChatSafe( webhookUrl, { text }, `editing-comment ${args.link.id}`, ); } } if (args.allApprovedClaim === 'won') { const setting = await getClientNotificationSetting( 'editing_all_approved_chat', 'chat', clientId, ); if (!setting.enabled) return; const noun = nounForProjectType(projectType); const text = `🎉 *${clientName} · ${projectName}* — client approved every ${noun.singular}. ` + `Project is marked done; no team action needed.\n${shareUrl}`; postToGoogleChatSafe( webhookUrl, { text }, `editing-all-approved ${args.link.id}`, ); } } /** NAT-66: paid-media (ads team) ping for the all-approved claim winner. Standalone from `postEditingChatForComment` on purpose — the strategy chat path can be silenced (no webhook, or `editing_all_approved_chat` disabled) without killing the ads handoff. Brands can configure paid-media + strategy chat independently. / async function pingPaidMediaForEditingApproval(args: { admin: ReturnType<typeof createAdminClient>; projectId: string; linkId: string; token: string; }) { const { data: project } = await args.admin .from('editing_projects') .select('client_id, clients(name, agency)') .eq('id', args.projectId) .maybeSingle<{ client_id: string | null; clients: { name: string | null; agency: string | null } | null; }>(); const clientName = project?.clients?.name ?? 'Client'; const paidMediaSetting = await getClientNotificationSetting( 'editing_paid_media_chat', 'chat', project?.client_id ?? null, ); if (!paidMediaSetting.enabled) return; const paidMedia = await resolvePaidMediaWebhook(args.admin, { clientId: project?.client_id ?? null, clientName, }); if (!paidMedia) return; const brand = getBrandFromAgency(project?.clients?.agency ?? null); const appUrl = process.env.NODE_ENV !== 'production' ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001' : getCortexAppUrl(brand); const shareUrl = `${appUrl}/s/${args.token}`; const adsText = `🎬 *${clientName}* — client approved every clip in this editing project; creatives are ready to run for paid media.\n${shareUrl}`; postToGoogleChatSafe( paidMedia.url, { text: adsText }, `paid-media-approved-editing ${args.linkId}`, ); } export async function DELETE( req: Request, ctx: { params: Promise<{ token: string }> }, ) { const { token } = await ctx.params; const body = await req.json().catch(() => null); const parsed = DeleteSchema.safeParse(body); if (!parsed.success) { return NextResponse.json( { error: parsed.error.flatten() }, { status: 400 }, ); } const admin = createAdminClient(); const linkResult = await loadShareLink(admin, token); if (!linkResult.ok) { return NextResponse.json( { error: linkResult.error }, { status: linkResult.status }, ); } const link = linkResult.link; const { data: comment } = await admin .from('editing_project_review_comments') .select('id, project_id, status') .eq('id', parsed.data.commentId) .maybeSingle<{ id: string; project_id: string; status: string }>(); if (!comment) { return NextResponse.json({ error: 'not_found' }, { status: 404 }); } if (comment.project_id !== link.project_id) { return NextResponse.json( { error: 'comment_not_in_project' }, { status: 400 }, ); } const { error: delErr } = await admin .from('editing_project_review_comments') .delete() .eq('id', comment.id); if (delErr) { return NextResponse.json({ error: delErr.message }, { status: 500 }); } // Approval revoked → clear the all-approved dedup stamp so a future // re-approval can fire the celebration ping again. Other status rows // (changes_requested, comment, video_revised) don't affect the stamp. if (comment.status === 'approved') { await admin .from('editing_project_share_links') .update({ all_approved_notified_at: null }) .eq('id', link.id); // The project may have been rolled up to 'approved' when this // comment landed. Revert it back to 'need_approval' so the review // board pill stays accurate. Skip if the project was manually moved // forward (revising/done/archived) — reverting those would unwind // legitimate state. await admin .from('editing_projects') .update({ status: 'need_approval', approved_at: null }) .eq('id', link.project_id) .eq('status', 'approved'); } return NextResponse.json({ ok: true, commentId: comment.id }); } /** Toggle `metadata.resolved` on a `changes_requested` row so editors can mark a revision as handled. Mirrors the calendar PATCH but skips the "all revisions complete" Google Chat ping (no per-client webhook configured for editing projects yet).
 
 ### `POST /api/editing/share/:token/comment`
+
+### `POST /api/editing/share/:token/title`
 
 ### `POST /api/editing/share/:token/upload`
 
 ### `POST /api/email/preview`
 
 ### `POST /api/mux/webhook`
+
+### `POST /api/p/digest-unsubscribe/:token`
+
+### `GET /api/prospects`
+
+### `GET /api/prospects/:id`
+
+### `PATCH /api/prospects/:id`
+
+### `GET /api/prospects/:id/analysis`
+
+### `PATCH /api/prospects/:id/analysis`
+
+### `POST /api/prospects/:id/analyze`
+
+### `GET /api/prospects/:id/benchmark`
+
+### `POST /api/prospects/:id/benchmark`
+
+### `POST /api/prospects/:id/benchmark/:benchmark_id/cancel`
+
+### `POST /api/prospects/:id/benchmark/discover`
+
+### `POST /api/prospects/:id/confirm-socials`
+
+### `POST /api/prospects/:id/convert`
+
+### `POST /api/prospects/:id/convert/undo`
+
+### `DELETE /api/prospects/:id/digest/subscribe`
+
+### `POST /api/prospects/:id/digest/subscribe`
+
+### `GET /api/prospects/:id/monitor`
+
+### `POST /api/prospects/:id/monitor`
+
+### `POST /api/prospects/:id/monitor/alerts/:alert_id/ack`
+
+### `POST /api/prospects/:id/monitor/run-now`
+
+### `POST /api/prospects/:id/present/draft-plan`
+
+### `POST /api/prospects/:id/present/mint-link`
+
+### `PATCH /api/prospects/:id/present/plan`
+
+### `GET /api/prospects/:id/scorecard`
+
+### `POST /api/prospects/:id/scorecard`
+
+### `POST /api/prospects/:id/scorecard/archive`
+
+### `POST /api/prospects/:id/touchpoints`
+
+### `GET /api/prospects/alerts`
+
+### `GET /api/prospects/digests`
+
+### `POST /api/prospects/digests/:draft_id/approve`
+
+### `GET /api/prospects/digests/:draft_id/preview`
+
+### `POST /api/prospects/digests/:draft_id/reject`
+
+### `POST /api/prospects/from-audit`
+
+### `POST /api/prospects/onboard`
 
 ### `POST /api/public/clients/:slug/connect/:platform`
 
@@ -6188,6 +6381,22 @@ Public comment endpoints for the editing-project review page. Mirrors `/api/cale
 ### `GET /api/public/onboarding/:token`
 
 ### `PATCH /api/public/onboarding/:token`
+
+### `POST /api/public/onboarding/:token/connect-invite`
+
+### `DELETE /api/public/onboarding/:token/contacts`
+
+### `GET /api/public/onboarding/:token/contacts`
+
+### `PATCH /api/public/onboarding/:token/contacts`
+
+### `POST /api/public/onboarding/:token/contacts`
+
+### `POST /api/public/onboarding/:token/invite-poc`
+
+### `POST /api/public/onboarding/:token/logo`
+
+### `POST /api/public/onboarding/:token/set-up-for-me`
 
 ### `POST /api/spying/baseline`
 

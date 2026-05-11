@@ -15,7 +15,6 @@ import { topicSignalTools } from './topic-signals';
 // Agency knowledge graph tools disabled — KG APIs are still being built,
 // and the RPCs error out in production. Re-enable once the graph is ready.
 // import { agencyKnowledgeTools } from './agency-knowledge';
-import { fyxerTools } from './fyxer';
 import { analysisTools } from './analyses';
 import { formatTools } from './formats';
 
@@ -35,7 +34,6 @@ export function registerAllTools() {
   registerTools(topicPlanTools);
   registerTools(topicSignalTools);
   // registerTools(agencyKnowledgeTools);  // disabled — KG not ready
-  registerTools(fyxerTools);
   // Progressive-context tools for Strategy Lab + per-analysis drawer.
   registerTools(analysisTools);
   // VFF-10: format taxonomy lookup for Content Lab + Nerd "in <X> format".
