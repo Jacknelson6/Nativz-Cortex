@@ -150,10 +150,55 @@ export async function POST(
     commentsByReviewLink.set(row.review_link_id, arr);
   }
 
+  // Filter out orphaned map entries before doing any work. Share-link
+  // `post_review_link_map` is a denormalized JSON column, so if a
+  // scheduled_post or its post_review_links row gets deleted out from
+  // under us (e.g. by the draft cleanup cron), the stale (postId,
+  // reviewLinkId) pair lingers here and breaks every future approve-all
+  // with an FK violation on the comment insert. Drop those entries and
+  // log a warning instead of failing the whole bulk action.
+  const postIds = reviewLinkEntries.map(([postId]) => postId);
+  const reviewLinkIdSet = new Set(reviewLinkEntries.map(([, id]) => id));
+  const [existingPostsRes, existingLinksRes] = await Promise.all([
+    admin.from('scheduled_posts').select('id').in('id', postIds),
+    admin.from('post_review_links').select('id').in('id', Array.from(reviewLinkIdSet)),
+  ]);
+  const livePostIds = new Set(
+    (existingPostsRes.data ?? []).map((r) => (r as { id: string }).id),
+  );
+  const liveLinkIds = new Set(
+    (existingLinksRes.data ?? []).map((r) => (r as { id: string }).id),
+  );
+  const orphanedEntries = reviewLinkEntries.filter(
+    ([postId, reviewLinkId]) =>
+      !livePostIds.has(postId) || !liveLinkIds.has(reviewLinkId),
+  );
+  if (orphanedEntries.length > 0) {
+    console.warn(
+      `approve-all: pruning ${orphanedEntries.length} orphaned map entr` +
+        `${orphanedEntries.length === 1 ? 'y' : 'ies'} from share link ${link.id}:`,
+      orphanedEntries,
+    );
+    let prunedMap = reviewLinkMap;
+    for (const [postId] of orphanedEntries) {
+      const { [postId]: _drop, ...rest } = prunedMap;
+      void _drop;
+      prunedMap = rest;
+    }
+    const { error: pruneErr } = await admin
+      .from('content_drop_share_links')
+      .update({ post_review_link_map: prunedMap })
+      .eq('id', link.id);
+    if (pruneErr) {
+      console.error('approve-all: failed to prune orphaned map entries:', pruneErr);
+    }
+  }
+
   // Targets: posts whose latest live status is NOT 'approved'. Mirrors
   // `app/c/[token]/page.tsx:284`: pending and revising both count.
   const targets: Array<{ postId: string; reviewLinkId: string }> = [];
   for (const [postId, reviewLinkId] of reviewLinkEntries) {
+    if (!livePostIds.has(postId) || !liveLinkIds.has(reviewLinkId)) continue;
     const status = latestLiveStatus(commentsByReviewLink.get(reviewLinkId) ?? []);
     if (status !== 'approved') {
       targets.push({ postId, reviewLinkId });
