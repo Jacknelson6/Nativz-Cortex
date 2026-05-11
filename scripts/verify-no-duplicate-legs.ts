@@ -24,7 +24,7 @@ async function main() {
   const admin = createAdminClient();
 
   // Look at every in-flight post for the three clients we touched.
-  const NAMES = ['National Lenders', 'EcoView', 'Owings Auto'];
+  const NAMES = ['National Lenders', 'EcoView', 'Owings Auto', 'Avondale Private Lending'];
   const { data: clients } = await admin
     .from('clients')
     .select('id, name')

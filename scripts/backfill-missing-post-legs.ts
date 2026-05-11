@@ -35,6 +35,12 @@ const TARGETS: Array<{ name: string; platforms: string[] }> = [
   // the dedup logic will skip them. The remaining 9 in-flight posts still
   // only target FB + LI; this pass adds the three missing platforms.
   { name: 'National Lenders', platforms: ['instagram', 'tiktok', 'youtube'] },
+  // Avondale: IG was historically broken (null late_account_id), zombie
+  // legs deleted via fix-avondale-state.ts. Now add a real IG leg to
+  // every in-flight post. NOT adding TikTok to 10 AM posts — that pattern
+  // is intentional FB-only at 10 AM, FB+TT at 5 PM. NOT adding YT — not
+  // actually connected on Zernio's side.
+  { name: 'Avondale Private Lending', platforms: ['instagram'] },
 ];
 
 type Plat = 'instagram' | 'tiktok' | 'youtube' | 'facebook' | 'linkedin' | 'googlebusiness';
