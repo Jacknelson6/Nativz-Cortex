@@ -735,9 +735,9 @@ function SharedDropView({
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-nativz-border bg-surface px-3 py-5 sm:px-6 sm:py-7">
+      <header className="border-b border-nativz-border bg-surface px-4 py-7 sm:px-8 sm:py-9">
         <div className="mx-auto max-w-6xl">
-          <div className="mb-4 flex items-center sm:mb-5">
+          <div className="mb-6 flex items-center sm:mb-7">
             <ShareHeaderLogo />
           </div>
           {/*
@@ -748,7 +748,7 @@ function SharedDropView({
             `min-w-0 flex-1` on the title column is the bit that lets
             the inner truncate actually shrink under flex.
           */}
-          <div className="flex flex-wrap items-center justify-between gap-3 sm:flex-nowrap">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-4 sm:flex-nowrap">
             <div className="min-w-0 flex-1">
               {/*
                 Mirrors the portal "Your reviews" project-name column.
@@ -868,7 +868,7 @@ function SharedDropView({
               </div>
             </div>
           </div>
-          <div className="mt-5 flex flex-wrap items-center gap-2 text-[13px] sm:text-sm">
+          <div className="mt-7 flex flex-wrap items-center gap-2 text-[13px] sm:text-sm">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-status-success/12 px-2.5 py-1 text-status-success">
               <CheckCircle size={14} /> {approvedCount} approved
             </span>
@@ -3246,9 +3246,13 @@ function PostCard({
   // comments rail. Image posts are 4:5 (letting card height drive width
   // makes the column ~62vh wide and squashes the comments column), so
   // cap to ~44vh so the right column keeps room.
+  // No background here — the inner MediaSurface paints its own black behind
+  // the player, and an extra `bg-black` on this wrapper was showing as a
+  // letterbox frame around the player whenever the column geometry didn't
+  // perfectly match the player's intrinsic aspect.
   const videoColSizing = isImagePost
-    ? 'w-full bg-black md:w-[44vh] md:max-w-[480px] md:flex-shrink-0 md:self-center'
-    : 'w-full bg-black md:h-full md:w-[44vh] md:max-w-[440px] md:flex-shrink-0';
+    ? 'w-full md:w-[44vh] md:max-w-[480px] md:flex-shrink-0 md:self-center'
+    : 'w-full md:h-full md:w-[44vh] md:max-w-[440px] md:flex-shrink-0';
   return (
     <article
       id={layoutMode === 'inline' ? `post-${index}` : undefined}
