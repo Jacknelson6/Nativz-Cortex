@@ -590,6 +590,36 @@ export async function syncSocialProfile(
           );
         }
       }
+
+      // Patch per-day gross follows / unfollows onto every existing row in
+      // the window. The fill-rows upsert above uses ignoreDuplicates so it
+      // doesn't clobber a row that already carries real post activity from a
+      // prior sync — but that also means previously-filled rows keep their
+      // stale (null) gross numbers. A targeted UPDATE touches only the three
+      // gross columns, leaving views_count / posts_count / etc. intact, so
+      // the windowed sum the read side computes lines up with Meta Business
+      // Suite for every day in the picker.
+      if (perDayAccountGains.size > 0) {
+        await Promise.all(
+          [...perDayAccountGains.entries()].map(async ([date, gains]) => {
+            const { error: patchError } = await adminClient
+              .from('platform_snapshots')
+              .update({
+                new_follows_count: gains.newFollows,
+                unfollows_count: gains.unfollows,
+                window_days: 1,
+              })
+              .eq('social_profile_id', profile.id)
+              .eq('snapshot_date', date);
+            if (patchError) {
+              console.warn(
+                `[sync-reporting] gross-follows patch for ${platform} ${date} failed:`,
+                patchError.message,
+              );
+            }
+          }),
+        );
+      }
     }
 
     if (dailyMetrics.length === 0 && followerStats.followers > 0) {
