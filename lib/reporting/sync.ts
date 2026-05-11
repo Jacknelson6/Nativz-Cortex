@@ -398,8 +398,14 @@ export async function syncSocialProfile(
           engagement_count: day.engagement,
           engagement_rate: day.engagementRate,
           posts_count: day.postsCount,
-          reach_count: igReachByDay.get(day.date) ?? day.reach,
-          impressions_count: day.impressions,
+          // TikTok doesn't expose impressions/reach via Zernio's daily-metrics
+          // endpoint — Zernio fills 0 for those keys. Writing 0 makes the
+          // chart read "TikTok had 0 reach today" instead of "TikTok doesn't
+          // report reach"; null forces the MetricCard / chart to render an
+          // honest empty state. Same treatment as account_reach_count above.
+          reach_count:
+            platform === 'tiktok' ? null : igReachByDay.get(day.date) ?? day.reach,
+          impressions_count: platform === 'tiktok' ? null : day.impressions,
           link_clicks_count: day.clicks,
           profile_visits_count: profileVisitsByDay.get(day.date) ?? 0,
           // Only YouTube exposes per-day watch time right now. Summed in seconds
@@ -488,8 +494,12 @@ export async function syncSocialProfile(
           comments_count: p.comments ?? 0,
           shares_count: p.shares ?? 0,
           saves_count: p.saves ?? 0,
-          reach_count: p.reach ?? 0,
-          impressions_count: p.impressions ?? 0,
+          // TikTok exposes neither reach nor impressions on the per-post
+          // endpoint; persisting 0 mis-reads as "zero distribution" in the
+          // post-detail UI. Force null so downstream rendering shows "not
+          // tracked" rather than a misleading zero.
+          reach_count: platform === 'tiktok' ? null : p.reach ?? 0,
+          impressions_count: platform === 'tiktok' ? null : p.impressions ?? 0,
           watch_time_seconds: yt?.watchSec ?? 0,
           avg_view_duration_seconds: yt?.avgViewDur ?? 0,
           subscribers_gained: yt?.subsG ?? 0,
