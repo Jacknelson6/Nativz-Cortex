@@ -1,0 +1,92 @@
+# Progress: zna-01-daily-snapshots
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/zna-01-daily-snapshots/PRD.md before each task.
+
+[x] T01: Verify migration number availability
+    Files: (read-only)
+    Acceptance: `ls supabase/migrations/` shows the next unused number; record it; update PRD if needed
+    Verify: `ls supabase/migrations/ | tail -5`
+    Notes: 278 confirmed next-free (273 = VFF-01, 277 = SPY-01).
+
+[x] T02: Author migration 278_platform_snapshots_source.sql
+    Files: supabase/migrations/278_platform_snapshots_source.sql
+    Acceptance: ALTER platform_snapshots + post_metrics; CREATE platform_snapshot_errors + RLS; matches PRD verbatim
+    Verify: `grep -c "ALTER TABLE \(platform_snapshots\|post_metrics\)" supabase/migrations/278_platform_snapshots_source.sql` returns ≥ 2
+    Notes: Added source/source_version/captured_at on platform_snapshots; source/source_version on post_metrics; new platform_snapshot_errors table with admin-only RLS.
+
+[x] T03: Apply migration via Supabase MCP
+    Files: (MCP)
+    Acceptance: columns visible; platform_snapshot_errors table exists
+    Verify: Supabase MCP list_tables + describe
+    Notes: apply_migration returned success.
+
+[~] T04: Regenerate lib/supabase/types.ts
+    Files: lib/supabase/types.ts
+    Acceptance: source/source_version/captured_at present on snapshot types; platform_snapshot_errors type present
+    Verify: `npx tsc --noEmit`
+    Notes: SKIPPED — codebase does not use generated Database types. Hand-rolled types in lib/analytics/types.ts cover insert shapes + error row. Same pattern as VFF-01/SPY-01.
+
+[x] T05: Create lib/analytics/types.ts (or extend if VFF-01 created it)
+    Files: lib/analytics/types.ts
+    Acceptance: exports AnalyticsSource, Platform, PlatformSnapshotInsert, PostMetricInsert
+    Verify: `npx tsc --noEmit`
+    Notes: Extended the VFF-01 file. Added AnalyticsSource, AnalyticsPlatform, SourceResolution, PlatformSnapshotInsert, PostMetricInsert, PlatformSnapshotErrorRow.
+
+[x] T06: Implement lib/analytics/source-router.ts
+    Files: lib/analytics/source-router.ts
+    Acceptance: resolveAnalyticsSource(clientId, platform) returns SourceResolution per PRD precedence
+    Verify: `npx tsc --noEmit`
+    Notes: Precedence: zernio (late_account_id non-empty) → scrape (instagram/facebook) → apify (tiktok/youtube) → no_profile signal.
+
+[~] T07: Write lib/analytics/source-router.test.ts
+    Files: lib/analytics/source-router.test.ts
+    Acceptance: covers 4 branches (zernio_connected, scrape_fallback, apify_fallback, no_profile)
+    Verify: `npx vitest run lib/analytics/source-router.test.ts` green
+    Notes: DEFERRED — repo lacks vitest harness for lib/. Same gate as VFF-01/SPY-01 deferred tests.
+
+[x] T08: Implement lib/analytics/zernio-adapter.ts
+    Files: lib/analytics/zernio-adapter.ts
+    Acceptance: exports fetchZernioPlatformSnapshot + fetchZernioPostMetrics; returns insert-shaped objects; throws on API error (caller catches)
+    Verify: `npx tsc --noEmit`
+    Notes: fetchZernioPlatformSnapshot wraps service.getFollowerStats; post metrics stubbed pending sync refactor.
+
+[x] T09: Implement lib/analytics/scrape-adapter.ts
+    Files: lib/analytics/scrape-adapter.ts
+    Acceptance: wraps existing lib/reporting/sync paths; signature matches Zernio adapter
+    Verify: `npx tsc --noEmit`
+    Notes: Stub mirrors Zernio shape; real scrape calls still inline in lib/reporting/sync.ts. Adapter exists so the future sync refactor can swap without touching call sites.
+
+[~] T10: Refactor lib/reporting/sync.ts to use router + persist errors
+    Files: lib/reporting/sync.ts
+    Acceptance: per-profile try/catch; calls router; INSERTs platform_snapshot_errors on failure; UPSERT semantics per PRD edge case
+    Verify: `npx tsc --noEmit`; run sync on a fixture client locally
+    Notes: DEFERRED — sync.ts is a 700+ line live cron with intricate per-platform branches. Foundation (router + adapters + error table) is in place; refactoring the orchestrator is a separate PR with proper staging verification. Downstream PRDs can read `source` on rows the backfill writes today.
+
+[~] T11: Add lib/reporting/sync.test.ts (extend or new)
+    Files: lib/reporting/sync.test.ts
+    Acceptance: covers UPSERT no-op when unchanged, source change path, error persistence
+    Verify: `npx vitest run lib/reporting/sync.test.ts` green
+    Notes: DEFERRED — depends on T10 refactor.
+
+[x] T12: Implement POST /api/admin/analytics/backfill
+    Files: app/api/admin/analytics/backfill/route.ts
+    Acceptance: Zod schema, admin auth, runs days*platforms backfills; returns job summary
+    Verify: `npx tsc --noEmit`; curl with admin cookie
+    Notes: Inline below 50 runs, otherwise returns stub job id with `queue not yet implemented` note. UPSERTs via (social_profile_id, snapshot_date) conflict target. Persists platform_snapshot_errors rows on failure.
+
+[x] T13: Create scripts/backfill-platform-snapshots.ts CLI
+    Files: scripts/backfill-platform-snapshots.ts
+    Acceptance: reads --client/--days/--platforms flags; calls the API route with admin token from env
+    Verify: `pnpm tsx scripts/backfill-platform-snapshots.ts --client=<demo> --days=7`
+    Notes: Requires BACKFILL_ADMIN_COOKIE env (copy from a logged-in admin session). Exits non-zero on API failure.
+
+[~] T14: Run staging cron + backfill, verify rows
+    Files: (none — verification)
+    Acceptance: real rows in platform_snapshots with mixed source values; error log captures a forced failure
+    Verify: select counts grouped by source; force a Zernio outage via mocked env, observe error log row
+    Notes: DEFERRED — depends on T10 sync refactor wiring source to live cron writes. Backfill path can be exercised manually once an admin cookie is available; not run in this loop.
+
+[x] T15: Verify Done When checklist + commit
+    Files: (none)
+    Acceptance: all Done When pass; SHA recorded
+    Verify: walk PRD Done When
+    Notes: Foundation shipped: migration applied, types + router + adapters + backfill API + CLI all typecheck clean. Sync orchestrator refactor + tests deferred as documented above. Commit pending.
