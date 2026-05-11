@@ -109,34 +109,36 @@ export async function resolvePostSignals(
   const cached = await readPostSignals({ supabase, postMetricIds: ids });
 
   const now = Date.now();
-  const enriched: PostCardWithSignal[] = [];
 
-  for (const post of posts) {
-    const existing = cached.get(post.id);
-    if (existing) {
-      const computedAtMs = new Date(existing.computed_at).getTime();
-      const stale = now - computedAtMs >= STALE_AFTER_MS;
-      enriched.push({ ...post, signal: rowToSignalBlock(existing) });
-      if (stale) {
-        // Fire-and-forget refresh; failure is logged but never thrown.
-        void computeAndPersist(supabase, post, organizationId).catch((err) => {
-          console.error('[zna-05] stale-refresh failed', {
-            post_id: post.id,
-            err: err instanceof Error ? err.message : String(err),
+  // Cache-miss writes are independent per post; run them in parallel so the
+  // first-render path doesn't serialize N baseline computations.
+  const enriched: PostCardWithSignal[] = await Promise.all(
+    posts.map(async (post): Promise<PostCardWithSignal> => {
+      const existing = cached.get(post.id);
+      if (existing) {
+        const computedAtMs = new Date(existing.computed_at).getTime();
+        const stale = now - computedAtMs >= STALE_AFTER_MS;
+        if (stale) {
+          // Fire-and-forget refresh; failure is logged but never thrown.
+          void computeAndPersist(supabase, post, organizationId).catch((err) => {
+            console.error('[zna-05] stale-refresh failed', {
+              post_id: post.id,
+              err: err instanceof Error ? err.message : String(err),
+            });
           });
-        });
+        }
+        return { ...post, signal: rowToSignalBlock(existing) };
       }
-    } else {
       try {
         const signal = await computeAndPersist(supabase, post, organizationId);
-        enriched.push({ ...post, signal });
+        return { ...post, signal };
       } catch (err) {
         console.error('[zna-05] sync compute failed', {
           post_id: post.id,
           err: err instanceof Error ? err.message : String(err),
         });
         // Fallback to a deterministic too_fresh card so the response shape stays whole.
-        enriched.push({
+        return {
           ...post,
           signal: {
             classification: 'too_fresh',
@@ -147,10 +149,10 @@ export async function resolvePostSignals(
             computed_at: new Date().toISOString(),
             reason: 'sparse_baseline',
           },
-        });
+        };
       }
-    }
-  }
+    }),
+  );
 
   if (signalFilter !== 'any') {
     return enriched.filter((c) => c.signal.classification === signalFilter);

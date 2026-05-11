@@ -56,14 +56,21 @@ interface PostRow {
 async function runWithCap<T, R>(
   items: T[],
   cap: number,
-  fn: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = [];
+  fn: (item: T) => Promise<R | undefined>,
+  onError: (item: T, err: unknown) => void,
+): Promise<Array<R | undefined>> {
+  const results: Array<R | undefined> = [];
   let i = 0;
   async function worker() {
     while (i < items.length) {
       const idx = i++;
-      results[idx] = await fn(items[idx]);
+      try {
+        results[idx] = await fn(items[idx]);
+      } catch (err) {
+        // One sampler unit blowing up shouldn't take down the whole batch.
+        onError(items[idx], err);
+        results[idx] = undefined;
+      }
     }
   }
   const workers = Array.from({ length: Math.min(cap, items.length) }, worker);
@@ -135,36 +142,68 @@ export async function runTrajectorySampler(
   let sampled = 0;
   let classified = 0;
 
-  await runWithCap(due, concurrencyCap, async (post) => {
+  // Pre-fetch latest view counts so we can skip duplicate-value samples
+  // (post_metrics refresh cadence doesn't always change between cron runs).
+  const lastViewsMap = new Map<string, number>();
+  if (due.length > 0) {
+    const dueIds = due.map((d) => d.id);
+    for (let off = 0; off < dueIds.length; off += 200) {
+      const batch = dueIds.slice(off, off + 200);
+      const { data: lvRows } = await supabase
+        .from('post_metric_timepoints')
+        .select('post_metric_id, views_count, captured_at')
+        .in('post_metric_id', batch)
+        .order('captured_at', { ascending: false });
+      for (const row of (lvRows ?? []) as Array<{
+        post_metric_id: string;
+        views_count: number | null;
+      }>) {
+        if (!lastViewsMap.has(row.post_metric_id)) {
+          lastViewsMap.set(row.post_metric_id, row.views_count ?? 0);
+        }
+      }
+    }
+  }
+
+  await runWithCap(
+    due,
+    concurrencyCap,
+    async (post) => {
     const ageHours = Math.max(
       0,
       Math.floor((now.getTime() - new Date(post.published_at).getTime()) / (60 * 60 * 1000)),
     );
-    const { error: insertErr } = await supabase
-      .from('post_metric_timepoints')
-      .insert({
-        post_metric_id: post.id,
-        client_id: post.client_id,
-        organization_id: post.organization_id,
-        platform: post.platform,
-        captured_at: now.toISOString(),
-        age_hours: ageHours,
-        views_count: post.views_count ?? 0,
-        likes_count: post.likes_count ?? 0,
-        comments_count: post.comments_count ?? 0,
-        shares_count: post.shares_count ?? 0,
-        saves_count: post.saves_count ?? 0,
-        source: 'zernio',
-      });
-    if (insertErr) {
-      // Unique-constraint dupes are expected when cron runs overlap; only
-      // record true failures.
-      if (!/duplicate/i.test(insertErr.message)) {
-        failures.push({ post_metric_id: post.id, reason: insertErr.message });
-        return;
+    const currentViews = post.views_count ?? 0;
+    const lastViews = lastViewsMap.get(post.id);
+    const viewsUnchanged = lastViews !== undefined && lastViews === currentViews;
+
+    if (!viewsUnchanged) {
+      const { error: insertErr } = await supabase
+        .from('post_metric_timepoints')
+        .insert({
+          post_metric_id: post.id,
+          client_id: post.client_id,
+          organization_id: post.organization_id,
+          platform: post.platform,
+          captured_at: now.toISOString(),
+          age_hours: ageHours,
+          views_count: currentViews,
+          likes_count: post.likes_count ?? 0,
+          comments_count: post.comments_count ?? 0,
+          shares_count: post.shares_count ?? 0,
+          saves_count: post.saves_count ?? 0,
+          source: 'zernio',
+        });
+      if (insertErr) {
+        // Unique-constraint dupes are expected when cron runs overlap; only
+        // record true failures.
+        if (!/duplicate/i.test(insertErr.message)) {
+          failures.push({ post_metric_id: post.id, reason: insertErr.message });
+          return;
+        }
+      } else {
+        sampled++;
       }
-    } else {
-      sampled++;
     }
 
     // Re-read last 14 days of timepoints to classify.
@@ -206,7 +245,14 @@ export async function runTrajectorySampler(
       return;
     }
     classified++;
-  });
+    },
+    (post, err) => {
+      failures.push({
+        post_metric_id: post.id,
+        reason: err instanceof Error ? err.message : String(err),
+      });
+    },
+  );
 
   let expiredDeleted = 0;
   try {

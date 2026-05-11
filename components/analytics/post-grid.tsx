@@ -90,19 +90,30 @@ export function PostGrid({
       setNextCursor(null);
       return;
     }
-    setLoading(true);
-    fetch(buildQuery(null), { cache: 'no-store' })
-      .then((res) => res.json())
-      .then((data: PostsResponseWithExtras) => {
+    const ac = new AbortController();
+    let cancelled = false;
+    async function run() {
+      setLoading(true);
+      try {
+        const res = await fetch(buildQuery(null), { cache: 'no-store', signal: ac.signal });
+        const data: PostsResponseWithExtras = await res.json();
+        if (cancelled) return;
         startTransition(() => {
           setPosts(data.posts ?? []);
           setNextCursor(data.next_cursor ?? null);
         });
-      })
-      .catch((err) => {
+      } catch (err) {
+        if (cancelled || (err instanceof DOMException && err.name === 'AbortError')) return;
         console.error('[zna-04] post grid refetch failed', err);
-      })
-      .finally(() => setLoading(false));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void run();
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterFingerprint, hasMounted]);
 

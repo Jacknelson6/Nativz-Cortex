@@ -48,8 +48,12 @@ export const PEAKED_AGE_DAYS_MAX = 7;
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
-function roundRatio(r: number): number {
-  if (!Number.isFinite(r)) return 999.999;
+function roundRatio(r: number): number | null {
+  // Non-finite ratios (Infinity when prior window had zero new views but the
+  // current window is non-zero) shouldn't poison downstream analytics with a
+  // sentinel like 999.999 - they're genuinely "no prior baseline." Persist
+  // null and let the UI treat that as "no ratio available."
+  if (!Number.isFinite(r)) return null;
   return Math.round(r * 1000) / 1000;
 }
 

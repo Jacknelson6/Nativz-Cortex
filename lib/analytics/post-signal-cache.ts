@@ -46,6 +46,10 @@ export async function readPostSignals(
     )
     .in('post_metric_id', args.postMetricIds);
   if (error) {
+    // Transient read failure: return empty so the caller treats every post as
+    // a cache miss and falls through to its own synth/recompute path. The
+    // resolver already has a fallback that yields a too_fresh block per post
+    // if the recompute also throws, so the grid still renders.
     console.warn('[zna-05] readPostSignals failed', { err: error.message });
     return new Map();
   }

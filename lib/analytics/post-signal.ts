@@ -81,13 +81,21 @@ export async function computeBrandPlatformBaseline(
   const sinceIso = new Date(
     now.getTime() - BASELINE_WINDOW_DAYS * 24 * 60 * 60 * 1000,
   ).toISOString();
+  // Exclude posts younger than 48h: they haven't finished climbing and
+  // their view counts deflate the brand baseline. The signal classifier
+  // already filters too_fresh on the read side - keep the baseline side
+  // consistent.
+  const upperBoundIso = new Date(
+    now.getTime() - TOO_FRESH_HOURS * 60 * 60 * 1000,
+  ).toISOString();
 
   let query = args.supabase
     .from('post_metrics')
     .select('id, views_count')
     .eq('client_id', args.clientId)
     .eq('platform', args.platform)
-    .gte('published_at', sinceIso);
+    .gte('published_at', sinceIso)
+    .lte('published_at', upperBoundIso);
 
   if (args.excludePostMetricId) {
     query = query.neq('id', args.excludePostMetricId);

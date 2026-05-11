@@ -3,9 +3,10 @@
  *
  * Reads cached rows from `post_metric_trajectories`. Posts younger than
  * 48h that have no cache row synthesise a `too_fresh` block inline.
- * Posts older than 48h with no cache row also get a synthesised
- * `too_fresh` block until the next cron run fills them in - prefer
- * fail-soft over blocking the grid render.
+ * Posts older than 48h with no cache row are returned WITHOUT a
+ * trajectory block - the card falls back to no pill/sparkline rather
+ * than mislabelling a mature post as "Too fresh." The next cron run
+ * fills the cache and subsequent loads classify correctly.
  *
  * Filtering by status is applied on the resolved set, not the
  * underlying posts query (cursor stays stable).
@@ -28,7 +29,9 @@ export interface PostCardTrajectory {
   computed_at: string;
 }
 
-export type PostCardWithTrajectory = PostCard & { trajectory: PostCardTrajectory };
+export type PostCardWithTrajectory = PostCard & { trajectory?: PostCardTrajectory };
+
+const TOO_FRESH_HOURS = 48;
 
 interface TrajectoryRow {
   post_metric_id: string;
@@ -107,23 +110,29 @@ export async function resolvePostTrajectories(
       };
     }
     const ageHours = ageHoursFromPublished(post.published_at, now);
-    const status: TrajectoryStatus = 'too_fresh';
-    return {
-      ...post,
-      trajectory: {
-        status,
-        status_label: labelFor(status, audience),
-        r24: null,
-        r72: null,
-        age_hours: ageHours,
-        sparkline_views: [],
-        computed_at: now.toISOString(),
-      },
-    };
+    if (ageHours < TOO_FRESH_HOURS) {
+      const status: TrajectoryStatus = 'too_fresh';
+      return {
+        ...post,
+        trajectory: {
+          status,
+          status_label: labelFor(status, audience),
+          r24: null,
+          r72: null,
+          age_hours: ageHours,
+          sparkline_views: [],
+          computed_at: now.toISOString(),
+        },
+      };
+    }
+    // >=48h without a cache row: cron hasn't filled it yet. Return the
+    // post unlabelled so the card hides the pill/sparkline rather than
+    // mislabelling it "Too fresh."
+    return post;
   });
 
   if (statusFilter !== 'any') {
-    return enriched.filter((c) => c.trajectory.status === statusFilter);
+    return enriched.filter((c) => c.trajectory?.status === statusFilter);
   }
   return enriched;
 }

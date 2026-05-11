@@ -1,7 +1,9 @@
 // ZNA-04: portal post-grid endpoint. Same shape as the admin route but
 // scoped via getPortalClient() and defended in depth with an organization_id
-// check (CLAUDE.md portal security hard rule). client_id query param is
-// ignored on purpose: portal users always operate on their resolved client.
+// check (CLAUDE.md portal security hard rule). If a client_id query param
+// is sent it must match the portal session's resolved client, otherwise
+// we reject - silently honoring a different client_id would mask a bug
+// (or a probe) where the caller thinks they're loading data for client B.
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -61,6 +63,14 @@ export async function GET(req: Request) {
       { error: 'Invalid query', issues: parsed.error.format() },
       { status: 400 },
     );
+  }
+
+  // Reject mismatched client_id rather than silently overriding it: a
+  // portal caller sending a different brand id is either a UI bug or a
+  // probe, neither of which should appear to succeed.
+  const requestedClientId = url.searchParams.get('client_id');
+  if (requestedClientId && requestedClientId !== portal.client.id) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const admin = createAdminClient();

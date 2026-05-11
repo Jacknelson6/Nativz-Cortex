@@ -217,16 +217,22 @@ export async function loadPostsForGrid(args: LoadPostsArgs): Promise<LoadPostsRe
     );
   }
 
+  // Cursor must reflect the DB-sort order so the next page query continues
+  // from where the SQL left off. For engagement_rate, the JS re-sort above
+  // reorders `cards` in-memory but the DB neighbourhood is still keyed by
+  // views_count + id, so we encode the cursor from `slice` (raw DB order),
+  // not `cards` (post-resort order). Otherwise the next page can skip or
+  // duplicate rows.
   let nextCursor: string | null = null;
-  if (hasMore && cards.length > 0) {
-    const last = cards[cards.length - 1];
+  if (hasMore && slice.length > 0) {
+    const last = slice[slice.length - 1];
     const v: number | string =
       sort === 'published_at'
         ? last.published_at
         : sort === 'views_count'
-          ? last.views_count
-          : // engagement_rate: cursor still uses views_count for DB pagination
-            last.views_count;
+          ? (last.views_count ?? 0)
+          : // engagement_rate: DB-paginates by views_count
+            (last.views_count ?? 0);
     nextCursor = encodeCursor({ v, id: last.id });
   }
 
