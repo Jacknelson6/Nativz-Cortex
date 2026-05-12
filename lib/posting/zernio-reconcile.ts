@@ -85,13 +85,24 @@ export async function syncPlatformRowsFromZernio(
   }
 }
 
+// How long after `scheduled_at` we keep waiting for a still-`pending` leg
+// before treating it as failed for parent-status rollup. Zernio's stuck-
+// platform case (e.g. an expired YouTube token blocking the YT leg while
+// IG/FB/LI already published) was leaving parents in `scheduled` forever
+// because the old rollup bailed on `anyPending`. Past this grace window
+// we collapse pending into failed for rollup purposes only — the SPP row
+// stays `pending` so it can still flip to `published` later if the token
+// gets reconnected.
+export const STALE_PENDING_GRACE_MINUTES = 60;
+
 /**
  * Derive parent post status from per-leg statuses after a sync.
  *
  *  - All legs published → `published`
  *  - Any failed + any published → `partially_failed`
  *  - All failed → `failed`
- *  - Any pending → leave parent alone (cron will resolve it)
+ *  - Pending legs: tolerated until `scheduled_at + STALE_PENDING_GRACE_MINUTES`.
+ *    Past that, pending counts as failed for rollup (SPP rows untouched).
  *
  * Never downgrades `published` to anything else.
  */
@@ -106,10 +117,12 @@ export async function reconcileParentStatusFromSpp(
     .maybeSingle();
   if (!parent) return;
 
+  const parentRow = parent as { id: string; status: string; scheduled_at: string | null };
+
   const { data: rows } = await adminClient
     .from('scheduled_post_platforms')
     .select('status')
-    .eq('post_id', (parent as { id: string }).id);
+    .eq('post_id', parentRow.id);
   const statuses = (rows ?? []).map((r) => (r as { status: string }).status);
   if (statuses.length === 0) return;
 
@@ -117,15 +130,22 @@ export async function reconcileParentStatusFromSpp(
   const anyPending = statuses.some((s) => s === 'pending');
   const anyFailed = statuses.some((s) => s === 'failed');
   const anyPublished = statuses.some((s) => s === 'published');
-  const currentStatus = (parent as { status: string }).status;
+  const currentStatus = parentRow.status;
 
   if (currentStatus === 'published' && !allPublished) return;
-  if (anyPending) return;
+
+  const stale = isPastPendingGrace(parentRow.scheduled_at);
+  if (anyPending && !stale) return;
+
+  // Past the grace window, treat any remaining pending leg as failed for
+  // rollup. This is what flips IG/FB/LI-published + YT-stuck-pending from
+  // `scheduled` → `partially_failed`.
+  const effectiveFailed = anyFailed || (anyPending && stale);
 
   let next: 'published' | 'partially_failed' | 'failed' | null = null;
   if (allPublished) next = 'published';
-  else if (anyFailed && anyPublished) next = 'partially_failed';
-  else if (anyFailed && !anyPublished) next = 'failed';
+  else if (effectiveFailed && anyPublished) next = 'partially_failed';
+  else if (effectiveFailed && !anyPublished) next = 'failed';
 
   if (!next || next === currentStatus) return;
 
@@ -136,9 +156,20 @@ export async function reconcileParentStatusFromSpp(
   if (next === 'published') {
     update.published_at = new Date().toISOString();
     update.failure_reason = null;
+  } else if (anyPending && stale) {
+    update.failure_reason =
+      `Stalled past ${STALE_PENDING_GRACE_MINUTES}m grace; ` +
+      `${statuses.filter((s) => s === 'pending').length} leg(s) still pending at Zernio`;
   }
   await adminClient
     .from('scheduled_posts')
     .update(update)
-    .eq('id', (parent as { id: string }).id);
+    .eq('id', parentRow.id);
+}
+
+export function isPastPendingGrace(scheduledAt: string | null): boolean {
+  if (!scheduledAt) return false;
+  const t = Date.parse(scheduledAt);
+  if (Number.isNaN(t)) return false;
+  return Date.now() - t > STALE_PENDING_GRACE_MINUTES * 60 * 1000;
 }

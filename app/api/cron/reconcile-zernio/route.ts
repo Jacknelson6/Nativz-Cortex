@@ -4,6 +4,7 @@ import { getPostingService } from '@/lib/posting';
 import {
   syncPlatformRowsFromZernio,
   reconcileParentStatusFromSpp,
+  isPastPendingGrace,
 } from '@/lib/posting/zernio-reconcile';
 import { notifyZernioWebhookRecipients } from '@/lib/social/zernio-webhook-notify';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
@@ -17,6 +18,7 @@ type ParentRow = {
   id: string;
   late_post_id: string;
   status: string;
+  scheduled_at: string | null;
   caption: string | null;
   client_id: string;
   clients: { name: string | null } | { name: string | null }[] | null;
@@ -59,7 +61,7 @@ async function handleGet(request: NextRequest) {
 
     const { data: candidates, error: queryErr } = await adminClient
       .from('scheduled_posts')
-      .select('id, late_post_id, status, caption, client_id, clients(name)')
+      .select('id, late_post_id, status, scheduled_at, caption, client_id, clients(name)')
       .not('late_post_id', 'is', null)
       .gte('updated_at', cutoff)
       .in('status', ['scheduled', 'publishing', 'partially_failed', 'failed', 'published'])
@@ -128,9 +130,18 @@ async function handleGet(request: NextRequest) {
           if (platform.status === 'published') zernioStatus = 'published';
           else if (platform.status === 'failed') zernioStatus = 'failed';
           else zernioStatus = 'pending';
-          // DB pending + Zernio still pending = no drift, post just hasn't
-          // run yet. Only treat pending → terminal as drift.
-          if (dbStatus === 'pending' && zernioStatus === 'pending') continue;
+          // DB pending + Zernio still pending = no drift IF we're still
+          // inside the grace window after `scheduled_at`. Past grace, the
+          // leg is stuck (e.g. expired YT token) — treat as drift so the
+          // reconciler can flip the parent into `partially_failed`/`failed`
+          // via the stale-pending rollup in `reconcileParentStatusFromSpp`.
+          if (dbStatus === 'pending' && zernioStatus === 'pending') {
+            if (isPastPendingGrace(post.scheduled_at)) {
+              hasDrift = true;
+              break;
+            }
+            continue;
+          }
           if (dbStatus === 'pending') {
             hasDrift = true;
             break;
