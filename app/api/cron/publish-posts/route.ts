@@ -596,9 +596,10 @@ async function handleGet(request: NextRequest) {
               status: 'published',
               published_at: new Date().toISOString(),
               failure_reason: null,
-              // Clear the dedup stamp so a future failure on this row can
-              // re-page (e.g. caption edit + republish).
+              // Clear the dedup stamps so a future failure / stuck on this
+              // row can re-page (e.g. caption edit + republish).
               failure_notification_sent_at: null,
+              stuck_publishing_alerted_at: null,
               updated_at: new Date().toISOString(),
             };
           } else if (anyFailed && !anyPending) {
@@ -1035,9 +1036,10 @@ async function handleGet(request: NextRequest) {
             late_post_id: result.externalPostId,
             published_at: new Date().toISOString(),
             failure_reason: null,
-            // Clear the dedup stamp so a future failure on this row can
-            // re-page.
+            // Clear the dedup stamps so a future failure / stuck on this
+            // row can re-page.
             failure_notification_sent_at: null,
+            stuck_publishing_alerted_at: null,
             updated_at: new Date().toISOString(),
           };
         } else if (anyFailed && retriesRemaining) {
@@ -1083,9 +1085,10 @@ async function handleGet(request: NextRequest) {
             late_post_id: result.externalPostId,
             published_at: new Date().toISOString(),
             failure_reason: null,
-            // Clear the dedup stamp so a future failure on this row can
-            // re-page.
+            // Clear the dedup stamps so a future failure / stuck on this
+            // row can re-page.
             failure_notification_sent_at: null,
+            stuck_publishing_alerted_at: null,
             updated_at: new Date().toISOString(),
           };
         }

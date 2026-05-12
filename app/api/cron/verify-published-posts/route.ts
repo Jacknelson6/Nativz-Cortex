@@ -52,6 +52,14 @@ export const maxDuration = 60;
  *  the steady-state pending pool is bounded; 200 leaves headroom for spikes. */
 const MAX_LEGS_PER_TICK = 200;
 
+/**
+ * A row stuck in `publishing` past `scheduled_at + STUCK_PUBLISHING_AGE_MIN`
+ * has had 7+ cron ticks to self-heal via the publish-posts CAS reclaim path
+ * (cron runs every 2 min). If it hasn't, the failure is deterministic (bad
+ * payload, Zernio outage). Page Jack once per stuck row.
+ */
+const STUCK_PUBLISHING_AGE_MIN = 15;
+
 /** After this many ambiguous probes, mark `unverifiable` and stop probing. */
 const MAX_VERIFICATION_ATTEMPTS = 6;
 
@@ -356,6 +364,8 @@ async function handleGet(request: NextRequest) {
     }
   }
 
+  const stuckAlerted = await scanAndAlertStuckPublishing(admin);
+
   return NextResponse.json({
     probed: legs.length,
     confirmed,
@@ -363,7 +373,149 @@ async function handleGet(request: NextRequest) {
     ambiguous,
     unverifiable,
     alerted_posts: alertedPosts,
+    stuck_publishing_alerted: stuckAlerted,
   });
+}
+
+/**
+ * Stuck-publishing scan: a row in `status='publishing'` whose `scheduled_at`
+ * is older than now() - 15min has missed multiple self-heal opportunities.
+ * publish-posts' CAS reclaim ordinarily picks it back up within ~2min;
+ * anything still 'publishing' after the grace window means a deterministic
+ * issue (Zernio outage, malformed payload). Page Jack via Chat once per
+ * incident; dedup via `stuck_publishing_alerted_at`. publish-posts clears
+ * the stamp on the next successful publish so a fresh stuck event can
+ * re-page.
+ */
+async function scanAndAlertStuckPublishing(
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<number> {
+  const cutoffIso = new Date(Date.now() - STUCK_PUBLISHING_AGE_MIN * 60 * 1000).toISOString();
+  const { data: stuck, error } = await admin
+    .from('scheduled_posts')
+    .select(
+      `id, caption, scheduled_at, late_post_id, retry_count,
+       clients!inner ( id, name, agency, chat_webhook_url )`,
+    )
+    .eq('status', 'publishing')
+    .lt('scheduled_at', cutoffIso)
+    .is('stuck_publishing_alerted_at', null)
+    .limit(50);
+
+  if (error) {
+    console.error('[verify-published-posts] stuck scan failed:', error.message);
+    return 0;
+  }
+
+  type StuckRow = {
+    id: string;
+    caption: string | null;
+    scheduled_at: string | null;
+    late_post_id: string | null;
+    retry_count: number | null;
+    clients:
+      | { id: string; name: string; agency: string | null; chat_webhook_url: string | null }
+      | { id: string; name: string; agency: string | null; chat_webhook_url: string | null }[]
+      | null;
+  };
+  const rows = (stuck ?? []) as unknown as StuckRow[];
+  if (rows.length === 0) return 0;
+
+  let alerted = 0;
+  for (const row of rows) {
+    const nowIso = new Date().toISOString();
+    // Stamp first via conditional update; if another worker beat us, skip.
+    const { data: stamped, error: stampErr } = await admin
+      .from('scheduled_posts')
+      .update({ stuck_publishing_alerted_at: nowIso })
+      .eq('id', row.id)
+      .is('stuck_publishing_alerted_at', null)
+      .select('id')
+      .maybeSingle();
+    if (stampErr || !stamped) continue;
+
+    try {
+      await sendStuckPublishingCard(admin, row);
+      alerted += 1;
+    } catch (err) {
+      console.error(
+        `[verify-published-posts] stuck-publishing alert failed for ${row.id}:`,
+        err,
+      );
+    }
+  }
+
+  return alerted;
+}
+
+async function sendStuckPublishingCard(
+  admin: ReturnType<typeof createAdminClient>,
+  row: {
+    id: string;
+    caption: string | null;
+    scheduled_at: string | null;
+    late_post_id: string | null;
+    retry_count: number | null;
+    clients:
+      | { id: string; name: string; agency: string | null; chat_webhook_url: string | null }
+      | { id: string; name: string; agency: string | null; chat_webhook_url: string | null }[]
+      | null;
+  },
+): Promise<void> {
+  const client = Array.isArray(row.clients) ? row.clients[0] : row.clients;
+  if (!client) return;
+
+  const webhook = await resolveTeamChatWebhook(admin, {
+    primaryUrl: client.chat_webhook_url,
+    agency: client.agency,
+  });
+  const finalWebhook = webhook ?? process.env.OPS_GOOGLE_CHAT_WEBHOOK ?? process.env.OPS_CHAT_WEBHOOK_URL ?? null;
+  if (!finalWebhook) return;
+
+  const baseUrl = getCortexAppUrl(((client.agency as AgencyBrand | null) ?? 'nativz') as AgencyBrand);
+  const calendarUrl = `${baseUrl}/admin/calendar?postId=${encodeURIComponent(row.id)}`;
+  const captionTrunc = row.caption
+    ? row.caption.length > 140
+      ? row.caption.slice(0, 140) + '…'
+      : row.caption
+    : '(no caption)';
+
+  const stuckSince = row.scheduled_at
+    ? `${Math.round((Date.now() - Date.parse(row.scheduled_at)) / 60000)} min`
+    : 'unknown';
+
+  const fallback = [
+    `⚠️ Post stuck in publishing: ${client.name}`,
+    captionTrunc,
+    '',
+    `Scheduled at: ${row.scheduled_at ?? 'unknown'} (${stuckSince} ago)`,
+    `late_post_id: ${row.late_post_id ?? 'null'}`,
+    `retry_count: ${row.retry_count ?? 0}`,
+    '',
+    `Open: ${calendarUrl}`,
+  ].join('\n');
+
+  postToGoogleChatSafe(
+    finalWebhook,
+    buildChatCardMessage({
+      cardId: `stuck-publishing-${row.id}`,
+      title: '⚠️ Post stuck in publishing',
+      subtitle: client.name,
+      paragraphs: [
+        { html: `<b>Caption:</b> ${captionTrunc}` },
+        {
+          html: `<b>Stuck since:</b> ${row.scheduled_at ?? 'unknown'} (${stuckSince} ago)<br><b>late_post_id:</b> ${row.late_post_id ?? 'null'}<br><b>retry_count:</b> ${row.retry_count ?? 0}`,
+        },
+        {
+          html:
+            '<i>The publish-posts cron flipped this row to publishing but never landed terminal status. Self-heal via CAS reclaim should have run by now; manual investigation needed.</i>',
+        },
+      ],
+      buttons: [{ text: 'Open in calendar', url: calendarUrl }],
+      fallback,
+    }),
+    `verify-published-posts:stuck:${row.id}`,
+  );
 }
 
 /**
@@ -484,6 +636,7 @@ export const GET = withCronTelemetry(
         ambiguous?: number;
         unverifiable?: number;
         alerted_posts?: number;
+        stuck_publishing_alerted?: number;
       };
       return {
         confirmed: b.confirmed,
@@ -491,6 +644,7 @@ export const GET = withCronTelemetry(
         ambiguous: b.ambiguous,
         unverifiable: b.unverifiable,
         alerted_posts: b.alerted_posts,
+        stuck_publishing_alerted: b.stuck_publishing_alerted,
       };
     },
   },
