@@ -68,6 +68,10 @@
       "schedule": "0 */6 * * *"
     },
     {
+      "path": "/api/cron/publish-health-digest",
+      "schedule": "0 12 * * *"
+    },
+    {
       "path": "/api/cron/check-velocity",
       "schedule": "0 * * * *"
     },

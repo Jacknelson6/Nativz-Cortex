@@ -2700,3 +2700,118 @@ export async function sendEditingCadenceFollowupEmail(opts: {
     },
   });
 }
+
+// ── Publish health morning digest (PUB-05) ─────────────────────────────────
+//
+// One email to Jack at 7am ET summarizing yesterday's publish pipeline.
+// Plain summary in the body, link out to the dashboard for detail. Always
+// nativz brand because this is internal ops, not a client-facing email.
+
+export interface PublishHealthDigestPayload {
+  status: 'all clean' | 'misses' | 'pipeline degraded';
+  /** Per-platform 24h success / fail counts. */
+  perPlatform: Array<{ platform: string; published: number; failed: number }>;
+  /** Number of legs failed in the last 24h. */
+  failedLegCount: number;
+  /** Up to three clients with the most failures in the last 7d. */
+  topFailingClients: Array<{ clientName: string; failureCount: number }>;
+  /** Platforms whose latest canary failed. */
+  canaryFailures: string[];
+  dashboardUrl: string;
+}
+
+export async function sendPublishHealthDigest(opts: {
+  to: string;
+  digest: PublishHealthDigestPayload;
+  /** Date string (Jack's TZ) to stamp the subject + idempotency key. */
+  date: string;
+}) {
+  const { digest, date } = opts;
+  const brand = getEmailBrand('nativz');
+
+  const platformLines = digest.perPlatform
+    .map(
+      (p) =>
+        `<tr>
+          <td style="padding:6px 12px;font-size:13px;color:${brand.textPrimary};text-transform:capitalize;">${escapeAlertHtml(p.platform)}</td>
+          <td style="padding:6px 12px;font-size:13px;color:${brand.textBody};text-align:right;">${p.published} ok</td>
+          <td style="padding:6px 12px;font-size:13px;color:${p.failed > 0 ? '#b42318' : brand.textMuted};text-align:right;">${p.failed} fail</td>
+        </tr>`,
+    )
+    .join('');
+
+  const topFailingLines =
+    digest.topFailingClients.length === 0
+      ? `<div style="font-size:13px;color:${brand.textMuted};">No client legs failed this week.</div>`
+      : `<ul style="margin:0;padding:0 0 0 18px;list-style:disc;">${digest.topFailingClients
+          .map(
+            (c) =>
+              `<li style="font-size:13px;color:${brand.textBody};margin:0 0 4px;">${escapeAlertHtml(c.clientName)} (${c.failureCount} fail${c.failureCount === 1 ? '' : 's'})</li>`,
+          )
+          .join('')}</ul>`;
+
+  const canaryLine =
+    digest.canaryFailures.length === 0
+      ? `<div style="font-size:13px;color:${brand.textMuted};">All canaries green.</div>`
+      : `<div style="font-size:13px;color:#b42318;">Canary failed on: ${escapeAlertHtml(digest.canaryFailures.join(', '))}</div>`;
+
+  const subject = `Cortex publish health: ${date}, ${digest.status}`;
+  const html = layout(
+    `
+    <p class="subtext" style="margin:0 0 22px;">
+      Last 24 hours of pipeline health. Full detail on the dashboard.
+    </p>
+
+    <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:${brand.textMuted};margin:0 0 10px;">
+      Per platform, last 24h
+    </div>
+    <table style="width:100%;border-collapse:collapse;margin:0 0 22px;background:${brand.panelBg};border:1px solid ${brand.border};border-radius:10px;overflow:hidden;">
+      ${platformLines}
+    </table>
+
+    <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:${brand.textMuted};margin:0 0 10px;">
+      Top failing clients, last 7d
+    </div>
+    <div style="margin:0 0 22px;padding:14px 16px;background:${brand.panelBg};border:1px solid ${brand.border};border-radius:10px;">
+      ${topFailingLines}
+    </div>
+
+    <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:${brand.textMuted};margin:0 0 10px;">
+      Synthetic canary
+    </div>
+    <div style="margin:0 0 22px;padding:14px 16px;background:${brand.panelBg};border:1px solid ${brand.border};border-radius:10px;">
+      ${canaryLine}
+    </div>
+
+    <div class="button-wrap" style="margin-top:6px;">
+      <a href="${opts.digest.dashboardUrl}" class="button">Open publish health &rarr;</a>
+    </div>
+    `,
+    'nativz',
+    {
+      eyebrow: `Publish Health, ${date}`,
+      heroTitle:
+        digest.status === 'all clean'
+          ? 'All systems healthy'
+          : digest.status === 'pipeline degraded'
+            ? 'Pipeline degraded'
+            : `${digest.failedLegCount} leg${digest.failedLegCount === 1 ? '' : 's'} failed`,
+    },
+  );
+
+  return sendAndLog({
+    category: 'system',
+    typeKey: 'publish_health_digest',
+    agency: 'nativz',
+    to: opts.to,
+    subject,
+    html,
+    metadata: {
+      date,
+      status: digest.status,
+      failedLegCount: digest.failedLegCount,
+      canaryFailures: digest.canaryFailures,
+      topFailingClients: digest.topFailingClients,
+    },
+  });
+}

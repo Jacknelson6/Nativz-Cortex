@@ -26,6 +26,7 @@ import {
   Telescope,
   Workflow,
   Sparkles,
+  HeartPulse,
 } from 'lucide-react';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
@@ -170,6 +171,7 @@ const NAV_SECTIONS: NavSection[] = [
           // strip; the new flow lives at /admin/onboarding.
           { href: '/admin/onboarding', label: 'Onboarding', icon: Workflow },
           { href: '/admin/users', label: 'Users', icon: Users },
+          { href: '/admin/ops/publish-health', label: 'Publish Health', icon: HeartPulse },
           { href: '/admin/accounting', label: 'Accounting', icon: Receipt, superAdminOnly: true },
           { href: '/admin/usage', label: 'Usage', icon: Gauge },
           { href: '/admin/settings', label: 'Settings', icon: SettingsIcon },
