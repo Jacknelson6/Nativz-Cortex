@@ -39,9 +39,10 @@ function isAdminOnlyPath(pathname: string): boolean {
 }
 
 export function AdminBrandPill() {
-  const { brand, availableBrands, setBrand, isPending } = useActiveBrand();
+  const { brand, availableBrands, setBrand, isPending, role } = useActiveBrand();
   const pathname = usePathname();
   const isMuted = isAdminOnlyPath(pathname);
+  const isViewer = role === 'viewer';
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -195,7 +196,11 @@ export function AdminBrandPill() {
           <div className="max-h-[320px] overflow-y-auto p-1">
             {filtered.length === 0 ? (
               <div className="px-2.5 py-4 text-center text-xs text-text-muted">
-                {query ? 'No brands match' : 'No brands available yet'}
+                {query
+                  ? 'No brands match'
+                  : isViewer
+                    ? 'No brands assigned yet. Ask your account manager to add one for you.'
+                    : 'No brands available yet'}
               </div>
             ) : (
               filtered.map((b) => {
@@ -231,25 +236,30 @@ export function AdminBrandPill() {
             )}
           </div>
 
-          {/* Footer — "All brands" link + Onboard CTA */}
-          <div className="border-t border-nativz-border p-1">
-            <Link
-              href="/admin/clients"
-              onClick={() => setOpen(false)}
-              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium text-text-secondary hover:bg-surface-hover hover:text-text-primary"
-            >
-              <FolderOpen size={14} className="shrink-0" />
-              <span className="flex-1">All brands</span>
-            </Link>
-            <Link
-              href="/admin/clients/onboard"
-              onClick={() => setOpen(false)}
-              className="mt-0.5 flex w-full items-center gap-2 rounded-lg bg-accent px-2.5 py-2 text-sm font-semibold text-white hover:bg-accent/90"
-            >
-              <Plus size={14} className="shrink-0" />
-              <span className="flex-1 text-left">Create brand</span>
-            </Link>
-          </div>
+          {/* Footer — admin-only. Both links target /admin/clients[/onboard],
+              which middleware bounces for viewers; rendering them at all just
+              creates a "click does nothing" dead-end (NAT bug surfaced
+              2026-05-12 when a client reported "Create brand does nothing"). */}
+          {!isViewer && (
+            <div className="border-t border-nativz-border p-1">
+              <Link
+                href="/admin/clients"
+                onClick={() => setOpen(false)}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+              >
+                <FolderOpen size={14} className="shrink-0" />
+                <span className="flex-1">All brands</span>
+              </Link>
+              <Link
+                href="/admin/clients/onboard"
+                onClick={() => setOpen(false)}
+                className="mt-0.5 flex w-full items-center gap-2 rounded-lg bg-accent px-2.5 py-2 text-sm font-semibold text-white hover:bg-accent/90"
+              >
+                <Plus size={14} className="shrink-0" />
+                <span className="flex-1 text-left">Create brand</span>
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </div>
