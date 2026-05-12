@@ -64,6 +64,10 @@
       "schedule": "*/10 * * * *"
     },
     {
+      "path": "/api/cron/synthetic-publish-canary",
+      "schedule": "0 */6 * * *"
+    },
+    {
       "path": "/api/cron/check-velocity",
       "schedule": "0 * * * *"
     },
