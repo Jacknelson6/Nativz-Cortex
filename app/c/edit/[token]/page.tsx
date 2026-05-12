@@ -14,6 +14,7 @@ import {
   FileVideo,
   Film,
   Loader2,
+  LogIn,
   MapPin,
   MessageSquare,
   Paperclip,
@@ -599,6 +600,29 @@ function SharedReviewView({
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              {/*
+                Editor-recovery pill. Hidden when the viewer is already a
+                signed-in admin (Replace/Remove affordances live on each
+                video row). When NULL, gives any Nativz teammate looking
+                at this share link a one-tap path back to their signed-in
+                editor state. Common case: the link was opened on a
+                brand-vanity subdomain (e.g. cortex.andersoncollaborative.com)
+                where the Nativz Supabase cookie isn't scoped, so isEditor
+                comes back false and the team member can't see Replace.
+                Round-trip to /login?next=<current path> mints the session
+                on this subdomain and returns them to the same review screen.
+              */}
+              {!data.isEditor && (
+                <a
+                  href={`/login?next=${encodeURIComponent(`/c/edit/${token}`)}`}
+                  className="inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3.5 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary"
+                  title="Sign in to replace or remove files"
+                >
+                  <LogIn size={14} />
+                  <span className="hidden sm:inline">Sign in to edit</span>
+                  <span className="sm:hidden">Sign in</span>
+                </a>
+              )}
               {total > 0 && (
                 <ShareTourLaunchButton storageKey={EDIT_TOUR_STORAGE_KEY} />
               )}
