@@ -88,10 +88,43 @@ async function handleGet(request: NextRequest) {
       try {
         // Probe Zernio first to detect drift before any writes. If Zernio
         // 404s on the late_post_id (post genuinely vanished), we can't
-        // reconcile — log + continue rather than letting the helper write
-        // empty state.
+        // reconcile, log + alert (when non-terminal) rather than letting
+        // the helper write empty state.
         const zernio = await service.getPostStatus(post.late_post_id).catch(() => null);
-        if (!zernio) continue;
+        if (!zernio) {
+          // Expected for terminal posts: Zernio prunes old terminal records.
+          // For non-terminal parents (still scheduled / publishing / partial),
+          // a 404 means the post genuinely vanished and we'd never publish.
+          // Page Jack once per incident; dedup via failure_notification_sent_at.
+          const isTerminal =
+            beforeStatus === 'published' ||
+            beforeStatus === 'failed' ||
+            beforeStatus === 'partially_failed' ||
+            beforeStatus === 'cancelled';
+          if (!isTerminal) {
+            const clientName =
+              (Array.isArray(post.clients) ? post.clients[0]?.name : post.clients?.name) ??
+              'Unknown client';
+            const captionPreview = (post.caption ?? '').slice(0, 120);
+            const { sent } = await notifyZernioPostFailureGuarded({
+              adminClient,
+              latePostId: post.late_post_id,
+              type: 'post_failed',
+              title: `Zernio lost a scheduled post, ${clientName}`,
+              body: [
+                captionPreview && `Caption: ${captionPreview}`,
+                `late_post_id: ${post.late_post_id}`,
+                `Cortex status: ${beforeStatus}`,
+                'Zernio returned 404 on getPostStatus. The post will never publish via this handle, manual investigation needed.',
+              ]
+                .filter(Boolean)
+                .join('\n'),
+              linkPath: '/admin/scheduler',
+            });
+            if (sent) notified++;
+          }
+          continue;
+        }
 
         // Cheap drift detector: compare DB spp statuses vs. Zernio's. If
         // they match, skip the writes entirely (saves a few queries on the
