@@ -33,7 +33,7 @@ export const maxDuration = 60;
  *
  * Routes to Google Chat via the same webhook ladder as
  * connection-expired-watch: client-specific webhook, agency
- * miscellaneous-catchall, then OPS_GOOGLE_CHAT_WEBHOOK fallback.
+ * miscellaneous-catchall, then OPS_CHAT_WEBHOOK_URL fallback.
  *
  * Auth: Bearer `CRON_SECRET` (Vercel cron header).
  */
@@ -175,7 +175,7 @@ async function handleGet(request: NextRequest) {
       primaryUrl: client.chat_webhook_url,
       agency: client.agency,
     });
-    const finalWebhook = webhook ?? process.env.OPS_GOOGLE_CHAT_WEBHOOK ?? null;
+    const finalWebhook = webhook ?? process.env.OPS_CHAT_WEBHOOK_URL ?? null;
     if (!finalWebhook) continue;
 
     const platformLines = missing

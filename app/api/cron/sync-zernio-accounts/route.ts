@@ -203,7 +203,7 @@ async function handleGet(request: NextRequest) {
       primaryUrl: meta.chat_webhook_url as string | null,
       agency: meta.agency as string | null,
     });
-    const finalWebhook = webhook ?? process.env.OPS_GOOGLE_CHAT_WEBHOOK ?? null;
+    const finalWebhook = webhook ?? process.env.OPS_CHAT_WEBHOOK_URL ?? null;
     if (!finalWebhook) continue;
 
     const lines = group

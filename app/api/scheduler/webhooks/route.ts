@@ -331,7 +331,7 @@ export async function POST(request: NextRequest) {
             // Ping the SMM team in the client's Google Chat space so they
             // know the account is live and can fan existing posts onto it
             // (calendar header → Add platform). Falls back to the agency
-            // miscellaneous-catchall webhook, then OPS_GOOGLE_CHAT_WEBHOOK.
+            // miscellaneous-catchall webhook, then OPS_CHAT_WEBHOOK_URL.
             //
             // Dedup: invite-link OAuth path already fires its own chat
             // ping via `handleInviteCompletion`, which stamps
@@ -349,7 +349,7 @@ export async function POST(request: NextRequest) {
                   (await resolveTeamChatWebhook(adminClient, {
                     primaryUrl: client?.chat_webhook_url ?? null,
                     agency: client?.agency ?? null,
-                  })) ?? process.env.OPS_GOOGLE_CHAT_WEBHOOK ?? null;
+                  })) ?? process.env.OPS_CHAT_WEBHOOK_URL ?? null;
 
                 const platform = prof.platform as string;
                 const platformLabel = PLATFORM_LABEL[platform] ?? platform;

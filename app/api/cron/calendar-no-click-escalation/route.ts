@@ -69,11 +69,11 @@ async function handleGet(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const opsWebhook = process.env.OPS_GOOGLE_CHAT_WEBHOOK?.trim() || null;
+  const opsWebhook = process.env.OPS_CHAT_WEBHOOK_URL?.trim() || null;
   if (!opsWebhook) {
     return NextResponse.json({
       ok: true,
-      skipped: 'OPS_GOOGLE_CHAT_WEBHOOK not configured',
+      skipped: 'OPS_CHAT_WEBHOOK_URL not configured',
       escalated: 0,
     });
   }

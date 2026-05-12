@@ -196,7 +196,7 @@ async function handleGet(request: NextRequest) {
       primaryUrl: client.chat_webhook_url,
       agency: client.agency,
     });
-    const finalWebhook = webhook ?? process.env.OPS_GOOGLE_CHAT_WEBHOOK ?? null;
+    const finalWebhook = webhook ?? process.env.OPS_CHAT_WEBHOOK_URL ?? null;
     if (!finalWebhook) continue;
 
     // Order by day, then platform for readability.

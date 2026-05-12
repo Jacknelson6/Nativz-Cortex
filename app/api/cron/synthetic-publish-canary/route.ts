@@ -361,13 +361,10 @@ async function handleGet(request: NextRequest) {
 
       const top = recent[0];
       const reason = top?.publish_error ?? 'Unknown failure.';
-      const opsWebhook =
-        process.env.OPS_GOOGLE_CHAT_WEBHOOK?.trim() ||
-        process.env.OPS_CHAT_WEBHOOK_URL?.trim() ||
-        null;
+      const opsWebhook = process.env.OPS_CHAT_WEBHOOK_URL?.trim() || null;
       if (!opsWebhook) {
         console.warn(
-          `[synthetic-canary] 2-strike fail on ${platform} but no OPS_GOOGLE_CHAT_WEBHOOK / OPS_CHAT_WEBHOOK_URL configured.`,
+          `[synthetic-canary] 2-strike fail on ${platform} but no OPS_CHAT_WEBHOOK_URL configured.`,
         );
         continue;
       }

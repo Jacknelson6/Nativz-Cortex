@@ -236,7 +236,7 @@ async function handleGet(request: NextRequest) {
     }
   }
 
-  const opsWebhook = process.env.OPS_GOOGLE_CHAT_WEBHOOK ?? null;
+  const opsWebhook = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
 
   const totalMissingLegs = totalCoreLegs - shippedCoreLegs;
   const missedClientCount = missesByClient.size;

@@ -410,7 +410,7 @@ async function sendPlatformRejectCard(
     primaryUrl: alert.chatWebhookUrl,
     agency: alert.agency,
   });
-  const finalWebhook = webhook ?? process.env.OPS_GOOGLE_CHAT_WEBHOOK ?? process.env.OPS_CHAT_WEBHOOK_URL ?? null;
+  const finalWebhook = webhook ?? process.env.OPS_CHAT_WEBHOOK_URL ?? null;
   if (!finalWebhook) return;
 
   const baseUrl = getCortexAppUrl(((alert.agency as AgencyBrand | null) ?? 'nativz') as AgencyBrand);

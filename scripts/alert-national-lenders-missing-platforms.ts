@@ -78,7 +78,7 @@ async function main() {
     primaryUrl: client.chat_webhook_url as string | null,
     agency: client.agency as string | null,
   });
-  const finalWebhook = webhook ?? process.env.OPS_GOOGLE_CHAT_WEBHOOK ?? null;
+  const finalWebhook = webhook ?? process.env.OPS_CHAT_WEBHOOK_URL ?? null;
   if (!finalWebhook) {
     throw new Error('No Google Chat webhook resolved for this client.');
   }

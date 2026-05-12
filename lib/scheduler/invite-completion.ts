@@ -126,7 +126,7 @@ export async function handleInviteCompletion(opts: {
     primaryUrl: (client.chat_webhook_url as string | null) ?? null,
     agency: (client.agency as string | null) ?? null,
   });
-  const webhook = resolved ?? process.env.OPS_GOOGLE_CHAT_WEBHOOK ?? null;
+  const webhook = resolved ?? process.env.OPS_CHAT_WEBHOOK_URL ?? null;
   postToGoogleChatSafe(
     webhook,
     buildChatCardMessage({

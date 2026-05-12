@@ -280,14 +280,14 @@ function DownloadView({ data }: { data: SharedPayload }) {
                         <ImageIcon size={28} />
                       </div>
                     )}
-                    <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center justify-end">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-black/70 px-2 py-1 text-[10px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/40">
+                      <span className="inline-flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-white shadow-lg ring-1 ring-black/20">
                         {singleDownloading === t.filename ? (
-                          <Loader2 size={10} className="animate-spin" />
+                          <Loader2 size={16} className="animate-spin" />
                         ) : (
-                          <Download size={10} />
+                          <Download size={16} />
                         )}
-                        {singleDownloading === t.filename ? 'Downloading' : 'Download'}
+                        {singleDownloading === t.filename ? 'Downloading…' : 'Download'}
                       </span>
                     </div>
                   </div>
