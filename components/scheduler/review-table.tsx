@@ -37,6 +37,7 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { CalendarPlus, Trash2 } from 'lucide-react';
@@ -727,23 +728,38 @@ function ReviewTableRow({
   // surfaces that don't need it (e.g. read-only viewer view).
   if (!onArchive && !onPromoteToCalendar) return rowBody;
 
+  // Matches the trend-finder row context menu surface so the two
+  // experiences feel uniform (history-feed.tsx `ctxMenuSurface` /
+  // `ctxMenuItem`).
+  const ctxMenuSurface =
+    'z-[200] min-w-[12rem] overflow-hidden rounded-lg border border-nativz-border bg-surface p-1 text-text-primary shadow-dropdown';
+  const ctxMenuItem =
+    'cursor-pointer rounded-md px-2 py-1.5 text-sm text-text-primary focus:bg-surface-hover focus:text-text-primary [&_svg]:text-text-muted';
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{rowBody}</ContextMenuTrigger>
-      <ContextMenuContent className="w-52">
+      <ContextMenuContent className={ctxMenuSurface}>
         {onPromoteToCalendar && (
-          <ContextMenuItem onSelect={onPromoteToCalendar}>
-            <CalendarPlus size={14} />
+          <ContextMenuItem className={ctxMenuItem} onSelect={onPromoteToCalendar}>
+            <CalendarPlus size={14} aria-hidden />
             Promote to calendar
           </ContextMenuItem>
         )}
+        {onArchive && onPromoteToCalendar && (
+          <ContextMenuSeparator className="bg-nativz-border" />
+        )}
         {onArchive && (
           <ContextMenuItem
-            onSelect={onArchive}
-            className="text-status-danger focus:text-status-danger"
+            variant="destructive"
+            className={ctxMenuItem}
+            onSelect={(e) => {
+              e.preventDefault();
+              onArchive();
+            }}
           >
-            <Trash2 size={14} />
-            Archive
+            <Trash2 size={14} aria-hidden />
+            Delete
           </ContextMenuItem>
         )}
       </ContextMenuContent>
