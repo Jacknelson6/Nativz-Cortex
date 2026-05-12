@@ -6,7 +6,7 @@ import {
   reconcileParentStatusFromSpp,
   isPastPendingGrace,
 } from '@/lib/posting/zernio-reconcile';
-import { notifyZernioWebhookRecipients } from '@/lib/social/zernio-webhook-notify';
+import { notifyZernioPostFailureGuarded } from '@/lib/social/zernio-webhook-notify';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 
 export const maxDuration = 300;
@@ -174,7 +174,6 @@ async function handleGet(request: NextRequest) {
           (afterStatus === 'failed' || afterStatus === 'partially_failed');
 
         if (transitionedToFail) {
-          notified++;
           const clientName =
             (Array.isArray(post.clients) ? post.clients[0]?.name : post.clients?.name) ??
             'Unknown client';
@@ -201,18 +200,21 @@ async function handleGet(request: NextRequest) {
             .filter(Boolean)
             .join('; ');
 
-          await notifyZernioWebhookRecipients({
+          const { sent } = await notifyZernioPostFailureGuarded({
+            adminClient,
+            latePostId: post.late_post_id,
             type: 'post_failed',
             title: `Scheduled post failed (drift detected), ${clientName}`,
             body: [
               captionPreview && `Caption: ${captionPreview}`,
               failDetail && `Detail: ${failDetail}`,
-              'Surfaced by daily reconciler — Zernio webhook may have been dropped.',
+              'Surfaced by daily reconciler, Zernio webhook may have been dropped.',
             ]
               .filter(Boolean)
               .join('\n'),
             linkPath: '/admin/scheduler',
           });
+          if (sent) notified++;
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

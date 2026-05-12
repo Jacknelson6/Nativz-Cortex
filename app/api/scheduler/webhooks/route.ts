@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { notifyZernioWebhookRecipients } from '@/lib/social/zernio-webhook-notify';
+import {
+  notifyZernioWebhookRecipients,
+  notifyZernioPostFailureGuarded,
+} from '@/lib/social/zernio-webhook-notify';
 import { markPlatformConnection } from '@/lib/onboarding/api';
 import {
   syncPlatformRowsFromZernio,
@@ -227,14 +230,18 @@ export async function POST(request: NextRequest) {
         const webhookCaption = pickStr(postPayload, 'content').slice(0, 120);
         const captionPreview = dbCaption || webhookCaption;
 
-        await notifyZernioWebhookRecipients({
-          type: 'post_failed',
-          title: `Scheduled post failed, ${clientName}`,
-          body: [captionPreview && `Caption: ${captionPreview}`, failDetail && `Detail: ${failDetail}`]
-            .filter(Boolean)
-            .join('\n'),
-          linkPath: '/admin/scheduler',
-        });
+        if (postId) {
+          await notifyZernioPostFailureGuarded({
+            adminClient,
+            latePostId: postId,
+            type: 'post_failed',
+            title: `Scheduled post failed, ${clientName}`,
+            body: [captionPreview && `Caption: ${captionPreview}`, failDetail && `Detail: ${failDetail}`]
+              .filter(Boolean)
+              .join('\n'),
+            linkPath: '/admin/scheduler',
+          });
+        }
         break;
       }
       case 'post.scheduled': {

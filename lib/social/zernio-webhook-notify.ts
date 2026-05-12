@@ -101,3 +101,70 @@ export async function notifyZernioWebhookRecipients(params: {
     ),
   );
 }
+
+/**
+ * Post-failure notify guarded by `scheduled_posts.failure_notification_sent_at`.
+ *
+ * Both the webhook handler (`post.failed` event) and the daily reconciler can
+ * detect the same failure within seconds of each other. Without a dedup
+ * sentinel, ops gets two emails for the same incident. We stamp the column
+ * atomically with the notify call; if it's already set we no-op.
+ *
+ * The stamp is cleared on the next successful publish (publish-posts cron
+ * resets `failure_notification_sent_at: null` when a row transitions back
+ * to `published`), so a caption-edit + republish that fails again will
+ * re-page.
+ */
+export async function notifyZernioPostFailureGuarded(params: {
+  adminClient: ReturnType<typeof createAdminClient>;
+  latePostId: string;
+  type: NotificationType;
+  title: string;
+  body?: string;
+  linkPath?: string;
+}): Promise<{ sent: boolean; reason?: string }> {
+  const { adminClient, latePostId } = params;
+
+  const { data: row } = await adminClient
+    .from('scheduled_posts')
+    .select('id, failure_notification_sent_at')
+    .eq('late_post_id', latePostId)
+    .maybeSingle();
+  const parent = row as { id: string; failure_notification_sent_at: string | null } | null;
+  if (!parent) {
+    return { sent: false, reason: 'no_parent_for_late_post_id' };
+  }
+  if (parent.failure_notification_sent_at) {
+    return { sent: false, reason: 'already_notified' };
+  }
+
+  // Stamp the dedup column first via conditional update so a parallel worker's
+  // dedup check sees us. If 0 rows match the `.is null` guard, another worker
+  // beat us — skip notify.
+  const stampedAt = new Date().toISOString();
+  const { data: stamped, error: stampErr } = await adminClient
+    .from('scheduled_posts')
+    .update({ failure_notification_sent_at: stampedAt })
+    .eq('id', parent.id)
+    .is('failure_notification_sent_at', null)
+    .select('id')
+    .maybeSingle();
+  if (stampErr) {
+    console.error(
+      `[zernio-notify-guarded] failed to stamp dedup column for ${parent.id}:`,
+      stampErr,
+    );
+    return { sent: false, reason: 'stamp_failed' };
+  }
+  if (!stamped) {
+    return { sent: false, reason: 'lost_dedup_race' };
+  }
+
+  await notifyZernioWebhookRecipients({
+    type: params.type,
+    title: params.title,
+    body: params.body,
+    linkPath: params.linkPath,
+  });
+  return { sent: true };
+}
