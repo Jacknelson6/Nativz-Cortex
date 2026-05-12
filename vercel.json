@@ -56,6 +56,10 @@
       "schedule": "*/2 * * * *"
     },
     {
+      "path": "/api/cron/core-four-audit",
+      "schedule": "0 6 * * *"
+    },
+    {
       "path": "/api/cron/check-velocity",
       "schedule": "0 * * * *"
     },

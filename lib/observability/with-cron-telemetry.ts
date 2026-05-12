@@ -11,6 +11,13 @@ interface CronTelemetryOptions {
    * `rows_processed` count. Called only on success (non-error); never throws.
    */
   extractRowsProcessed?: (body: unknown) => number | undefined;
+  /**
+   * Optional hook that inspects the NextResponse body to contribute extra
+   * key/value fields into the `metadata` JSONB column. Used by crons that
+   * need queryable idempotency keys (e.g. `audit_date`) without writing a
+   * separate marker row. Merged on top of the default `{ http_status }`.
+   */
+  extractMetadata?: (body: unknown) => Record<string, unknown> | undefined;
 }
 
 /**
@@ -30,12 +37,19 @@ export function withCronTelemetry(
       const status: 'ok' | 'partial' = response.status >= 400 ? 'partial' : 'ok';
 
       let rowsProcessed: number | undefined;
-      if (opts.extractRowsProcessed) {
+      let extraMetadata: Record<string, unknown> | undefined;
+      if (opts.extractRowsProcessed || opts.extractMetadata) {
         try {
           // Clone so we don't consume the response body downstream.
+          // One parse covers both extractors.
           const clone = response.clone();
           const body = await clone.json().catch(() => null);
-          rowsProcessed = opts.extractRowsProcessed(body);
+          if (opts.extractRowsProcessed) {
+            rowsProcessed = opts.extractRowsProcessed(body);
+          }
+          if (opts.extractMetadata) {
+            extraMetadata = opts.extractMetadata(body);
+          }
         } catch {
           /* ignore — telemetry is best-effort */
         }
@@ -46,7 +60,7 @@ export function withCronTelemetry(
         status,
         startedAt,
         rowsProcessed,
-        metadata: { http_status: response.status },
+        metadata: { http_status: response.status, ...(extraMetadata ?? {}) },
       });
 
       return response;
