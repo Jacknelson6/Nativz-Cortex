@@ -2,6 +2,33 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { getPostingService } from '@/lib/posting';
 
 /**
+ * Resolve a Zernio `late_post_id` to the Cortex parent row. After a retry
+ * rotation, the parent's `late_post_id` column holds the NEW id; webhooks
+ * for the OLD id direct-match nothing. Falls back to the
+ * `scheduled_post_late_ids` audit table so the event still routes home.
+ */
+async function findParentByLatePostId(
+  adminClient: SupabaseClient,
+  latePostId: string,
+): Promise<{ id: string } | null> {
+  const { data: direct } = await adminClient
+    .from('scheduled_posts')
+    .select('id')
+    .eq('late_post_id', latePostId)
+    .maybeSingle();
+  if (direct) return direct as { id: string };
+  const { data: history } = await adminClient
+    .from('scheduled_post_late_ids')
+    .select('post_id')
+    .eq('late_post_id', latePostId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const row = history as { post_id: string } | null;
+  return row ? { id: row.post_id } : null;
+}
+
+/**
  * Pull the per-platform breakdown from Zernio and write it into
  * `scheduled_post_platforms`. Idempotent and safe to re-run.
  *
@@ -19,11 +46,7 @@ export async function syncPlatformRowsFromZernio(
   adminClient: SupabaseClient,
   latePostId: string,
 ): Promise<void> {
-  const { data: parent } = await adminClient
-    .from('scheduled_posts')
-    .select('id')
-    .eq('late_post_id', latePostId)
-    .maybeSingle();
+  const parent = await findParentByLatePostId(adminClient, latePostId);
   if (!parent) {
     console.warn(`[zernio-reconcile] no scheduled_posts row for late_post_id=${latePostId}`);
     return;
@@ -33,7 +56,7 @@ export async function syncPlatformRowsFromZernio(
     .select(
       'id, social_profile_id, status, external_post_url, social_profiles:social_profile_id (late_account_id, platform)',
     )
-    .eq('post_id', (parent as { id: string }).id);
+    .eq('post_id', parent.id);
   if (!sppRows?.length) return;
 
   type Spp = {
@@ -110,10 +133,12 @@ export async function reconcileParentStatusFromSpp(
   adminClient: SupabaseClient,
   latePostId: string,
 ): Promise<void> {
+  const parentLookup = await findParentByLatePostId(adminClient, latePostId);
+  if (!parentLookup) return;
   const { data: parent } = await adminClient
     .from('scheduled_posts')
     .select('id, status, retry_count, scheduled_at')
-    .eq('late_post_id', latePostId)
+    .eq('id', parentLookup.id)
     .maybeSingle();
   if (!parent) return;
 

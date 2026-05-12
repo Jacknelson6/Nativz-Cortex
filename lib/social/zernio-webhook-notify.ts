@@ -130,7 +130,28 @@ export async function notifyZernioPostFailureGuarded(params: {
     .select('id, failure_notification_sent_at')
     .eq('late_post_id', latePostId)
     .maybeSingle();
-  const parent = row as { id: string; failure_notification_sent_at: string | null } | null;
+  let parent = row as { id: string; failure_notification_sent_at: string | null } | null;
+  if (!parent) {
+    // After a retry rotation, the parent's `late_post_id` holds the NEW id.
+    // Webhooks for the OLD id direct-match nothing. Fall back to the audit
+    // table so events for retired ids still notify.
+    const { data: history } = await adminClient
+      .from('scheduled_post_late_ids')
+      .select('post_id')
+      .eq('late_post_id', latePostId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const histRow = history as { post_id: string } | null;
+    if (histRow) {
+      const { data: viaHist } = await adminClient
+        .from('scheduled_posts')
+        .select('id, failure_notification_sent_at')
+        .eq('id', histRow.post_id)
+        .maybeSingle();
+      parent = viaHist as { id: string; failure_notification_sent_at: string | null } | null;
+    }
+  }
   if (!parent) {
     return { sent: false, reason: 'no_parent_for_late_post_id' };
   }

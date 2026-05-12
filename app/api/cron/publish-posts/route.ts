@@ -21,6 +21,7 @@ import {
   notifyConnectionExpired,
   type ConnectionExpiredCandidate,
 } from '@/lib/posting/notify-connection-expired';
+import { recordLatePostIdChange } from '@/lib/posting/late-post-id-history';
 
 const STALE_ALERT_PREFIX = 'Stale draft: scheduled time passed without approval';
 
@@ -524,6 +525,7 @@ async function handleGet(request: NextRequest) {
                 updated_at: new Date().toISOString(),
               })
               .eq('id', post.id);
+            await recordLatePostIdChange(adminClient, post.id, null);
             console.log(`[publish-cron] cleared stale late_post_id for ${post.id}`);
             continue;
           }
@@ -656,6 +658,11 @@ async function handleGet(request: NextRequest) {
             .from('scheduled_posts')
             .update(probeUpdate)
             .eq('id', post.id);
+
+          if (Object.prototype.hasOwnProperty.call(probeUpdate, 'late_post_id')) {
+            const next = (probeUpdate as { late_post_id?: string | null }).late_post_id ?? null;
+            await recordLatePostIdChange(adminClient, post.id, next);
+          }
 
           if (probeNewStatus === 'partially_failed' && !retriesRemaining && failedDetails.length > 0) {
             try {
@@ -1097,6 +1104,13 @@ async function handleGet(request: NextRequest) {
           .from('scheduled_posts')
           .update(updatePayload)
           .eq('id', post.id);
+
+        // Audit-log this late_post_id assignment so post-rotation webhooks
+        // still resolve to the right parent and forensics can replay attempts.
+        if (Object.prototype.hasOwnProperty.call(updatePayload, 'late_post_id')) {
+          const next = (updatePayload as { late_post_id?: string | null }).late_post_id ?? null;
+          await recordLatePostIdChange(adminClient, post.id, next);
+        }
 
         // PARTIAL-FAILURE NOTIFICATION
         //
