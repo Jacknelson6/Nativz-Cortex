@@ -284,9 +284,22 @@ function DownloadView({ data }: { data: SharedDrop }) {
                         className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
                         loading="lazy"
                       />
+                    ) : !t.isImage ? (
+                      // No static thumbnail (Supabase-stored MP4s without a
+                      // Mux playback ID or a cover image). The <video> tag
+                      // with preload="metadata" gets the browser to fetch
+                      // the first few KB and paint a keyframe as the poster,
+                      // which beats a blank placeholder for any common MP4.
+                      <video
+                        src={`${t.url}#t=0.5`}
+                        muted
+                        playsInline
+                        preload="metadata"
+                        className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+                      />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center text-text-muted/40">
-                        {t.isImage ? <ImageIcon size={28} /> : <FileVideo size={28} />}
+                        <ImageIcon size={28} />
                       </div>
                     )}
                     <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center justify-end">
