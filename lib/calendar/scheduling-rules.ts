@@ -75,7 +75,7 @@ const CHICAGO_TZ = 'America/Chicago';
  * Extract the Central-time wall-clock Y/M/D for a given UTC instant.
  * Uses Intl.DateTimeFormat so CST/CDT is handled automatically.
  */
-function centralDateParts(iso: string): {
+export function centralDateParts(iso: string): {
   year: number;
   month: number;
   day: number;
