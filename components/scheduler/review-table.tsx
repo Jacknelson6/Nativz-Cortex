@@ -177,6 +177,7 @@ export type SortField =
   | 'brand'
   | 'name'
   | 'date_sent'
+  | 'approved_date'
   | 'status'
   | 'project_type'
   | 'creatives'
@@ -350,6 +351,7 @@ function TabStrip({
  */
 export type ReviewHideableColumn =
   | 'date_sent'
+  | 'approved_date'
   | 'status'
   | 'project_type'
   | 'creatives'
@@ -417,6 +419,7 @@ export function ReviewTableCard({
 }: ReviewTableCardProps) {
   const hidden = new Set<ReviewHideableColumn>(hideColumns ?? []);
   const showDateSent = !hidden.has('date_sent');
+  const showApprovedDate = !hidden.has('approved_date');
   const showStatus = !hidden.has('status');
   const showProjectType = !hidden.has('project_type');
   const showCreatives = !hidden.has('creatives');
@@ -427,6 +430,7 @@ export function ReviewTableCard({
     (showBrand ? 1 : 0) +
     1 /* name */ +
     (showDateSent ? 1 : 0) +
+    (showApprovedDate ? 1 : 0) +
     (showStatus ? 1 : 0) +
     (showProjectType ? 1 : 0) +
     (showCreatives ? 1 : 0) +
@@ -503,6 +507,18 @@ export function ReviewTableCard({
               </SortableHeader>
             </TableHead>
           )}
+          {showApprovedDate && (
+            <TableHead className="whitespace-nowrap px-2.5 text-center">
+              <SortableHeader
+                field="approved_date"
+                sort={sort}
+                align="center"
+                onSortChange={sortable ? () => handleSort('approved_date') : undefined}
+              >
+                Approved
+              </SortableHeader>
+            </TableHead>
+          )}
           {showStatus && (
             <TableHead className="whitespace-nowrap px-2.5 text-center">
               <SortableHeader
@@ -561,6 +577,7 @@ export function ReviewTableCard({
             link={link}
             showBrand={showBrand}
             showDateSent={showDateSent}
+            showApprovedDate={showApprovedDate}
             showStatus={showStatus}
             showProjectType={showProjectType}
             showCreatives={showCreatives}
@@ -585,6 +602,7 @@ interface ReviewTableRowProps {
   link: ReviewLinkRow;
   showBrand?: boolean;
   showDateSent?: boolean;
+  showApprovedDate?: boolean;
   showStatus?: boolean;
   showProjectType?: boolean;
   showCreatives?: boolean;
@@ -612,6 +630,7 @@ function ReviewTableRow({
   link,
   showBrand = false,
   showDateSent = true,
+  showApprovedDate = false,
   showStatus = true,
   showProjectType = true,
   showCreatives = true,
@@ -666,28 +685,32 @@ function ReviewTableRow({
           </span>
         </TableCell>
       )}
+      {showApprovedDate && (
+        <TableCell className="whitespace-nowrap px-2.5 text-center">
+          {link.approved_at ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="text-sm tabular-nums text-text-secondary">
+                  {formatShortDate(link.approved_at)}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="w-56">
+                <div className="font-medium text-text-primary">
+                  Approved {formatShortDate(link.approved_at)}
+                </div>
+                <div className="mt-0.5 text-text-muted">
+                  Drives which half-month billing bucket this project lands in.
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <span className="text-sm text-text-muted">-</span>
+          )}
+        </TableCell>
+      )}
       {showStatus && (
         <TableCell className="whitespace-nowrap px-2.5 text-center">
-          <div className="flex flex-col items-center gap-0.5">
-            <StatusPill link={link} />
-            {link.approved_at && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="text-[11px] tabular-nums text-text-muted">
-                    approved {formatShortDate(link.approved_at)}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="w-56">
-                  <div className="font-medium text-text-primary">
-                    Approved {formatShortDate(link.approved_at)}
-                  </div>
-                  <div className="mt-0.5 text-text-muted">
-                    Drives which half-month billing bucket this project lands in.
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            )}
-          </div>
+          <StatusPill link={link} />
         </TableCell>
       )}
       {showProjectType && (
@@ -1405,6 +1428,13 @@ export function sortLinksBy(
     const bBlank = !b.first_sent_at;
     if (aBlank !== bBlank) return aBlank ? 1 : -1;
   }
+  if (state.field === 'approved_date') {
+    // Mirrors date_sent: unapproved rows sink so the hyphen placeholder
+    // doesn't clump at the top under ascending sort.
+    const aBlank = !a.approved_at;
+    const bBlank = !b.approved_at;
+    if (aBlank !== bBlank) return aBlank ? 1 : -1;
+  }
 
   const cmp = (() => {
     switch (state.field) {
@@ -1421,6 +1451,13 @@ export function sortLinksBy(
       case 'date_sent': {
         const aT = new Date(a.first_sent_at ?? a.created_at ?? a.drop_start ?? 0).getTime();
         const bT = new Date(b.first_sent_at ?? b.created_at ?? b.drop_start ?? 0).getTime();
+        return aT - bT;
+      }
+      case 'approved_date': {
+        // Unapproved rows sink under ascending sort the same way Date sent
+        // handles never-sent rows above. The cell renders a hyphen for null.
+        const aT = a.approved_at ? new Date(a.approved_at).getTime() : 0;
+        const bT = b.approved_at ? new Date(b.approved_at).getTime() : 0;
         return aT - bT;
       }
       case 'status':

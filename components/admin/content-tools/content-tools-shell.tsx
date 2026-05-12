@@ -999,7 +999,15 @@ export function ContentToolsShell() {
                   onPromoteToCalendar={promoteToCalendar}
                   sort={sort}
                   onSortChange={setSort}
-                  hideColumns={PROJECT_TAB_HIDE[activeProjectTab]}
+                  hideColumns={
+                    // The Approved date column is opt-in: only the
+                    // Approval group-by view surfaces it as a dedicated
+                    // column. In Default grouping it's redundant noise
+                    // (date sent is the primary signal) so we hide it.
+                    groupBy === 'approval'
+                      ? PROJECT_TAB_HIDE[activeProjectTab]
+                      : [...PROJECT_TAB_HIDE[activeProjectTab], 'approved_date']
+                  }
                   onOpenEditingProject={(id) => setActiveEditingId(id)}
                   onOpenCalendarLink={(link) => setActiveCalendarLink(link)}
                 />
