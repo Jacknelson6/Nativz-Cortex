@@ -125,6 +125,14 @@ export async function verifyAndReconcilePost(
         external_post_id: z.externalPostId ?? row.external_post_id,
         external_post_url: z.externalPostUrl ?? null,
         failure_reason: null,
+        // PUB-02: timeout-rescued legs are real publishes — stamp
+        // published_at + reset verification state so the verify cron
+        // round-trips them too.
+        published_at: new Date().toISOString(),
+        verification_status: 'pending',
+        verification_attempts: 0,
+        verification_detail: null,
+        last_verified_at: null,
       })
       .eq('id', row.id);
     reconciled++;

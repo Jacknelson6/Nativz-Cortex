@@ -541,14 +541,26 @@ async function handleGet(request: NextRequest) {
                 : z.status === 'failed'
                   ? 'failed'
                   : 'pending';
+            const sppUpdate: Record<string, unknown> = {
+              status: sppStatus,
+              external_post_id: z.externalPostId ?? null,
+              external_post_url: z.externalPostUrl ?? null,
+              failure_reason: z.status === 'failed' ? z.error ?? null : null,
+            };
+            // PUB-02: stamp published_at on the first transition to
+            // 'published' so the verify cron can scope its window.
+            if (sppStatus === 'published') {
+              sppUpdate.published_at = new Date().toISOString();
+              // A fresh publish resets any prior 'unverifiable' / 'pending'
+              // state so the verify pass treats this like a brand-new leg.
+              sppUpdate.verification_status = 'pending';
+              sppUpdate.verification_attempts = 0;
+              sppUpdate.verification_detail = null;
+              sppUpdate.last_verified_at = null;
+            }
             await adminClient
               .from('scheduled_post_platforms')
-              .update({
-                status: sppStatus,
-                external_post_id: z.externalPostId ?? null,
-                external_post_url: z.externalPostUrl ?? null,
-                failure_reason: z.status === 'failed' ? z.error ?? null : null,
-              })
+              .update(sppUpdate)
               .eq('id', (spp as Record<string, unknown>).id);
 
             if (z.status === 'failed') {
@@ -917,14 +929,26 @@ async function handleGet(request: NextRequest) {
                 : platformResult.status === 'failed'
                   ? 'failed'
                   : 'pending';
+            const sppUpdate: Record<string, unknown> = {
+              status: sppStatus,
+              external_post_id: platformResult.externalPostId ?? null,
+              external_post_url: platformResult.externalPostUrl ?? null,
+              failure_reason: platformResult.status === 'failed' ? platformResult.error ?? null : null,
+            };
+            // PUB-02: stamp published_at on the first transition to
+            // 'published' so the verify cron can scope its window. Reset
+            // any prior verification state so a re-publish gets a fresh
+            // round-trip check.
+            if (sppStatus === 'published') {
+              sppUpdate.published_at = new Date().toISOString();
+              sppUpdate.verification_status = 'pending';
+              sppUpdate.verification_attempts = 0;
+              sppUpdate.verification_detail = null;
+              sppUpdate.last_verified_at = null;
+            }
             await adminClient
               .from('scheduled_post_platforms')
-              .update({
-                status: sppStatus,
-                external_post_id: platformResult.externalPostId ?? null,
-                external_post_url: platformResult.externalPostUrl ?? null,
-                failure_reason: platformResult.status === 'failed' ? platformResult.error ?? null : null,
-              })
+              .update(sppUpdate)
               .eq('id', (spp as Record<string, unknown>).id);
           }
 
