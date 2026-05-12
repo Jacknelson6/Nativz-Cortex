@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { SectionHeader } from '@/components/admin/section-tabs';
 import { fetchPublishHealthSnapshot } from '@/lib/ops/publish-health';
+import { fetchRecentSlo } from '@/lib/ops/publish-slo';
 import { PublishHealthDashboard } from '@/components/admin/ops/publish-health-dashboard';
 
 export const dynamic = 'force-dynamic';
@@ -23,12 +24,15 @@ export default async function PublishHealthOpsPage() {
   if (!user) redirect('/login');
 
   const admin = createAdminClient();
-  const snapshot = await fetchPublishHealthSnapshot(admin);
+  const [snapshot, sloRows] = await Promise.all([
+    fetchPublishHealthSnapshot(admin),
+    fetchRecentSlo(admin, 30),
+  ]);
 
   return (
     <div className="cortex-page-gutter max-w-7xl mx-auto space-y-8 py-6">
       <SectionHeader title="Publish health" />
-      <PublishHealthDashboard initialSnapshot={snapshot} />
+      <PublishHealthDashboard initialSnapshot={snapshot} sloRows={sloRows} />
     </div>
   );
 }

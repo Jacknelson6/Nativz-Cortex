@@ -24,9 +24,12 @@ import {
   CORE_PLATFORMS,
   type PublishHealthSnapshot,
 } from '@/lib/ops/publish-health';
+import type { PublishSloDailyRow } from '@/lib/ops/publish-slo';
+import { PublishSloCard } from '@/components/admin/ops/publish-slo-card';
 
 interface Props {
   initialSnapshot: PublishHealthSnapshot;
+  sloRows: PublishSloDailyRow[];
 }
 
 /**
@@ -35,7 +38,7 @@ interface Props {
  * failing clients, canary trend strip, recent failures table) on top of
  * the snapshot the server fetched.
  */
-export function PublishHealthDashboard({ initialSnapshot }: Props) {
+export function PublishHealthDashboard({ initialSnapshot, sloRows }: Props) {
   const [range, setRange] = useState<'7d' | '30d'>('7d');
   const snapshot = initialSnapshot;
 
@@ -92,6 +95,8 @@ export function PublishHealthDashboard({ initialSnapshot }: Props) {
           {' CT'}
         </div>
       </div>
+
+      <PublishSloCard rows={sloRows} />
 
       {/* Widget 1: per-platform success rate, stacked bars */}
       <IconCard

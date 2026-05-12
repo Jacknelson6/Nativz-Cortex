@@ -72,6 +72,10 @@
       "schedule": "0 12 * * *"
     },
     {
+      "path": "/api/cron/publish-slo-rollup",
+      "schedule": "0 7 * * *"
+    },
+    {
       "path": "/api/cron/check-velocity",
       "schedule": "0 * * * *"
     },
