@@ -14,32 +14,27 @@ export const maxDuration = 60;
 /**
  * GET /api/cron/connection-expired-watch
  *
- * Two-phase token-health watcher. Probes Zernio's `/accounts/{id}/health`
+ * Post-expiry token-health watcher. Probes Zernio's `/accounts/{id}/health`
  * for every social_profiles row with a Zernio account id and persists
  * `token_status` + `token_expires_at` so the Connections matrix reflects
  * reality.
  *
- * Fires Google Chat alerts on two transitions:
+ * Fires a Google Chat alert only when a token is *actually* expired
+ * (`expired` or `needs_refresh`) AND a confirming re-probe a few seconds
+ * later still reports bad status. The two-shot confirm exists because
+ * Zernio auto-refreshes tokens on demand for many platforms (notably
+ * Facebook Pages / IG via Pages), so a single probe right at the
+ * `tokenExpiresAt` boundary can return `expired` for a token that gets
+ * silently refreshed milliseconds later. Pre-expiry warnings were
+ * removed entirely for the same reason: a "expires in ~0h" notification
+ * is almost always a false alarm for an account whose token will renew
+ * before the next post even runs.
  *
- *   A. EXPIRED: token just went bad (expired / needs_refresh) and we
- *      haven't pinged about it yet (`disconnect_alerted_at IS NULL`).
- *      Stamp `disconnect_alerted_at` and fire a "🔌 expired" card.
- *
- *   B. PRE-EXPIRY (3-day window): token still `valid` but expires
- *      within the next 72 hours and `pre_expiry_alerted_at IS NULL`.
- *      Stamp `pre_expiry_alerted_at` and fire a "⏰ expiring soon" card
- *      so the team has time to send the reconnect invite before the
- *      token actually breaks.
- *
- * Both alerts ship as Google Chat `cardsV2` payloads with an "Open
- * reconnect form" button that deep-links to the Connections tab with
+ * Alerts ship as Google Chat `cardsV2` payloads with an "Open reconnect
+ * form" button that deep-links to the Connections tab with
  * `?clientId=...&platforms=...` URL params, so clicking it pops the
- * Invite Builder modal pre-filtered to the expiring platforms with
+ * Invite Builder modal pre-filtered to the affected platforms with
  * zero matrix navigation.
- *
- * Side effect: `pre_expiry_alerted_at` is cleared whenever the token
- * gets refreshed to a new expiry > 7 days out, so the next expiry
- * cycle's 3-day alert fires again for the same profile.
  *
  * No client-facing email goes out from this cron. Reconnect emails are
  * hand-sent from the Connections matrix via the modal the button opens.
@@ -66,8 +61,14 @@ const OWNER_LABEL: Record<string, string> = {
   unknown: 'ownership unknown',
 };
 
-const PRE_EXPIRY_WINDOW_MS = 3 * 24 * 60 * 60 * 1000; // 72h
-const PRE_EXPIRY_CLEAR_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000; // refresh detector
+/**
+ * Delay before the confirming re-probe of a token that came back bad on
+ * the first call. Zernio's auto-refresh path can take a couple seconds
+ * to swap a Facebook/IG token in-place when called near the expiry
+ * boundary, so we give it a small grace window before deciding the
+ * token is truly dead and pinging Jack.
+ */
+const REPROBE_DELAY_MS = 4000;
 
 function deriveStatus(health: {
   tokenValid: boolean;
@@ -90,29 +91,15 @@ function isBadStatus(status: string): boolean {
 }
 
 interface AlertCandidate {
-  kind: 'expired' | 'pre_expiry';
   profileId: string;
   clientId: string;
   platform: string;
   accountOwner: string;
   username: string | null;
-  /** Only set for kind='pre_expiry'; informs "expires in X days/hours" copy. */
-  expiresAt: string | null;
 }
 
-function hoursUntil(iso: string | null): number | null {
-  if (!iso) return null;
-  const ms = new Date(iso).getTime() - Date.now();
-  if (Number.isNaN(ms)) return null;
-  return Math.max(0, Math.round(ms / (60 * 60 * 1000)));
-}
-
-function describeExpiry(iso: string | null): string {
-  const hrs = hoursUntil(iso);
-  if (hrs == null) return 'soon';
-  if (hrs < 24) return `in ~${hrs}h`;
-  const days = Math.round(hrs / 24);
-  return `in ~${days}d`;
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function handleGet(request: NextRequest) {
@@ -127,7 +114,7 @@ async function handleGet(request: NextRequest) {
   const { data: probeRows, error: probeErr } = await admin
     .from('social_profiles')
     .select(
-      'id, client_id, platform, late_account_id, account_owner, username, disconnect_alerted_at, pre_expiry_alerted_at, is_active',
+      'id, client_id, platform, late_account_id, account_owner, username, disconnect_alerted_at, is_active',
     )
     .not('late_account_id', 'is', null);
 
@@ -141,8 +128,17 @@ async function handleGet(request: NextRequest) {
   const service = new ZernioPostingService();
   let probed = 0;
   let probeSkipped = 0;
-  let preExpiryCleared = 0;
+  let alertedCleared = 0;
+  let reprobeRescued = 0;
   const alertCandidates: AlertCandidate[] = [];
+
+  // First pass: probe everything, persist `token_status` + `token_expires_at`,
+  // and short-list anything that looks bad for a confirming re-probe below.
+  type PendingReprobe = {
+    accountId: string;
+    row: (typeof probeRows extends Array<infer T> ? T : never);
+  };
+  const pendingReprobes: PendingReprobe[] = [];
 
   await Promise.all(
     (probeRows ?? []).map(async (r) => {
@@ -158,46 +154,19 @@ async function handleGet(request: NextRequest) {
       }
       const status = deriveStatus(health);
       const wasExpiredAlerted = r.disconnect_alerted_at != null;
-      const wasPreAlerted = r.pre_expiry_alerted_at != null;
       const wasInactive = r.is_active === false;
       const nowBad = isBadStatus(status);
-
-      const expiresAtMs = health.tokenExpiresAt
-        ? new Date(health.tokenExpiresAt).getTime()
-        : null;
-      const msUntilExpiry = expiresAtMs != null ? expiresAtMs - Date.now() : null;
-      const inPreExpiryWindow =
-        status === 'valid' &&
-        msUntilExpiry != null &&
-        msUntilExpiry > 0 &&
-        msUntilExpiry <= PRE_EXPIRY_WINDOW_MS;
-
-      const shouldFlagExpired = nowBad && !wasExpiredAlerted && !wasInactive;
-      const shouldFlagPreExpiry =
-        inPreExpiryWindow && !wasPreAlerted && !wasInactive;
-
-      // Clear the pre-expiry sentinel when the token has been refreshed
-      // far enough into the future to start the cycle fresh. The 7-day
-      // threshold avoids flapping if Zernio returns expiry timestamps
-      // that wobble by a few hours across probes.
-      const shouldClearPreExpiry =
-        wasPreAlerted &&
-        status === 'valid' &&
-        msUntilExpiry != null &&
-        msUntilExpiry > PRE_EXPIRY_CLEAR_THRESHOLD_MS;
 
       const update: Record<string, unknown> = {
         token_expires_at: health.tokenExpiresAt,
         token_status: status,
       };
-      if (shouldFlagExpired) {
-        update.disconnect_alerted_at = new Date().toISOString();
-      }
-      if (shouldFlagPreExpiry) {
-        update.pre_expiry_alerted_at = new Date().toISOString();
-      }
-      if (shouldClearPreExpiry) {
-        update.pre_expiry_alerted_at = null;
+
+      // Token came back healthy after a prior expiry alert -> clear the
+      // sentinel so the next real expiry can fire a fresh notification.
+      if (!nowBad && wasExpiredAlerted) {
+        update.disconnect_alerted_at = null;
+        alertedCleared += 1;
       }
 
       const { error: updateErr } = await admin
@@ -209,32 +178,73 @@ async function handleGet(request: NextRequest) {
         return;
       }
       probed += 1;
-      if (shouldClearPreExpiry) preExpiryCleared += 1;
 
-      const base = {
-        profileId: r.id as string,
-        clientId: r.client_id as string,
-        platform: r.platform as string,
-        accountOwner: (r.account_owner as string | null) ?? 'unknown',
-        username: (r.username as string | null) ?? null,
-      };
-      if (shouldFlagExpired) {
-        alertCandidates.push({ ...base, kind: 'expired', expiresAt: null });
-      } else if (shouldFlagPreExpiry) {
-        alertCandidates.push({
-          ...base,
-          kind: 'pre_expiry',
-          expiresAt: health.tokenExpiresAt,
-        });
+      // Queue a confirming re-probe only when the first probe reports
+      // bad AND we haven't already pinged for this expiry cycle. This
+      // is the "double-check Zernio" guard: a single bad read right at
+      // the expiry boundary can be a token that Zernio's about to auto-
+      // refresh, so we wait a few seconds and ask again before alerting.
+      if (nowBad && !wasExpiredAlerted && !wasInactive) {
+        pendingReprobes.push({ accountId, row: r });
       }
     }),
   );
+
+  if (pendingReprobes.length > 0) {
+    await sleep(REPROBE_DELAY_MS);
+
+    await Promise.all(
+      pendingReprobes.map(async ({ accountId, row }) => {
+        const health = await service.getAccountHealth(accountId);
+        if (!health) {
+          // Zernio went sideways on the confirm probe; don't alert on
+          // a transient API blip, just wait for the next cron tick.
+          reprobeRescued += 1;
+          return;
+        }
+        const status = deriveStatus(health);
+        if (!isBadStatus(status)) {
+          // Token refreshed itself between probes. Persist the good
+          // status and skip the alert entirely.
+          await admin
+            .from('social_profiles')
+            .update({
+              token_expires_at: health.tokenExpiresAt,
+              token_status: status,
+            })
+            .eq('id', row.id);
+          reprobeRescued += 1;
+          return;
+        }
+
+        // Still bad on the second look -> mark + queue the alert.
+        await admin
+          .from('social_profiles')
+          .update({
+            token_expires_at: health.tokenExpiresAt,
+            token_status: status,
+            disconnect_alerted_at: new Date().toISOString(),
+          })
+          .eq('id', row.id);
+
+        alertCandidates.push({
+          profileId: row.id as string,
+          clientId: row.client_id as string,
+          platform: row.platform as string,
+          accountOwner: (row.account_owner as string | null) ?? 'unknown',
+          username: (row.username as string | null) ?? null,
+        });
+      }),
+    );
+  }
 
   if (alertCandidates.length === 0) {
     return NextResponse.json({
       probed,
       probeSkipped,
-      preExpiryCleared,
+      alertedCleared,
+      reprobed: pendingReprobes.length,
+      reprobeRescued,
       alerted: 0,
     });
   }
@@ -259,16 +269,14 @@ async function handleGet(request: NextRequest) {
     ]),
   );
 
-  // Group by (clientId, kind) so a single client with both an expired
-  // and a pre-expiry leg gets two separate cards, each card's button
-  // deep-links to a different platform set, and the title copy differs.
-  const groupKey = (c: AlertCandidate) => `${c.clientId}:${c.kind}`;
+  // One card per client: all freshly-confirmed-bad platforms for a
+  // single brand collapse into a single chat ping with one deep-link
+  // pre-filtering the Connections matrix to all of them.
   const groups = new Map<string, AlertCandidate[]>();
   for (const cand of alertCandidates) {
-    const k = groupKey(cand);
-    const list = groups.get(k) ?? [];
+    const list = groups.get(cand.clientId) ?? [];
     list.push(cand);
-    groups.set(k, list);
+    groups.set(cand.clientId, list);
   }
 
   let alerted = 0;
@@ -295,11 +303,7 @@ async function handleGet(request: NextRequest) {
       .map((g) => {
         const label = PLATFORM_LABEL[g.platform] ?? g.platform;
         const handle = g.username ? ` (@${g.username})` : '';
-        const when =
-          g.kind === 'pre_expiry'
-            ? `, expires ${describeExpiry(g.expiresAt)}`
-            : '';
-        return `• ${label}${handle}${when}`;
+        return `• ${label}${handle}`;
       })
       .join('\n');
 
@@ -310,11 +314,8 @@ async function handleGet(request: NextRequest) {
           ? 'Hand-send a reconnect invite from the Connections matrix.'
           : 'Triage ownership in the Connections matrix, then act.';
 
-    const isPreExpiry = sample.kind === 'pre_expiry';
-    const titleEmoji = isPreExpiry ? '⏰' : '🔌';
-    const titleVerb = isPreExpiry
-      ? 'social authorization expires soon'
-      : 'social authorization expired';
+    const titleEmoji = '🔌';
+    const titleVerb = 'social authorization expired';
     const headerTitle = `${titleEmoji} ${client.name}`;
     const headerSubtitle = titleVerb;
 
@@ -333,9 +334,7 @@ async function handleGet(request: NextRequest) {
       `&clientId=${encodeURIComponent(sample.clientId)}` +
       `&platforms=${encodeURIComponent(platformsParam)}`;
 
-    const buttonText = isPreExpiry
-      ? 'Send reconnect invite now'
-      : 'Open reconnect form';
+    const buttonText = 'Open reconnect form';
 
     const fallbackText = [
       `${titleEmoji} *${client.name}* ${titleVerb}`,
@@ -350,7 +349,7 @@ async function handleGet(request: NextRequest) {
     postToGoogleChatSafe(
       finalWebhook,
       buildChatCardMessage({
-        cardId: `conn-expiry-${sample.clientId}-${sample.kind}`,
+        cardId: `conn-expiry-${sample.clientId}`,
         title: headerTitle,
         subtitle: headerSubtitle,
         paragraphs: [
@@ -360,7 +359,7 @@ async function handleGet(request: NextRequest) {
         buttons: [{ text: buttonText, url: deepLink }],
         fallback: fallbackText,
       }),
-      `connection-expired-watch:${sample.clientId}:${sample.kind}`,
+      `connection-expired-watch:${sample.clientId}`,
     );
     alerted += group.length;
   }
@@ -368,7 +367,9 @@ async function handleGet(request: NextRequest) {
   return NextResponse.json({
     probed,
     probeSkipped,
-    preExpiryCleared,
+    alertedCleared,
+    reprobed: pendingReprobes.length,
+    reprobeRescued,
     alerted,
     groupsAlerted: groups.size,
   });
