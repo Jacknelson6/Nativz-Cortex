@@ -87,7 +87,7 @@ async function handleGet(request: NextRequest) {
   const { data: probeRows, error: probeErr } = await admin
     .from('social_profiles')
     .select(
-      'id, client_id, platform, late_account_id, account_owner, username, disconnect_alerted_at, is_active',
+      'id, client_id, platform, late_account_id, account_owner, username, disconnect_alerted_at, disconnect_healthy_since, is_active',
     )
     .not('late_account_id', 'is', null);
 
@@ -129,17 +129,36 @@ async function handleGet(request: NextRequest) {
       const wasExpiredAlerted = r.disconnect_alerted_at != null;
       const wasInactive = r.is_active === false;
       const nowBad = isBadStatus(status);
+      const healthySince = (r.disconnect_healthy_since as string | null) ?? null;
 
       const update: Record<string, unknown> = {
         token_expires_at: health.tokenExpiresAt,
         token_status: status,
       };
 
-      // Token came back healthy after a prior expiry alert -> clear the
-      // sentinel so the next real expiry can fire a fresh notification.
-      if (!nowBad && wasExpiredAlerted) {
-        update.disconnect_alerted_at = null;
-        alertedCleared += 1;
+      // Anti-flap: Zernio occasionally reports `tokenValid=true` for a
+      // single probe even while the account is durably bad, and vice
+      // versa. We require sustained-healthy (>24h since the first
+      // healthy probe after the alert) before clearing the sentinel.
+      // Without this, a brief good read here clears the stamp and the
+      // every-2-min publish-posts cron promptly re-pings on the next
+      // bad read, which is the noise pattern Jack saw (10:12pm, 1:38am,
+      // 7am on the same dead account).
+      if (nowBad && healthySince) {
+        // Token went bad again; reset the recovery streak.
+        update.disconnect_healthy_since = null;
+      } else if (!nowBad && wasExpiredAlerted) {
+        if (!healthySince) {
+          update.disconnect_healthy_since = new Date().toISOString();
+        } else {
+          const sustainedMs =
+            Date.now() - new Date(healthySince).getTime();
+          if (sustainedMs > 24 * 60 * 60 * 1000) {
+            update.disconnect_alerted_at = null;
+            update.disconnect_healthy_since = null;
+            alertedCleared += 1;
+          }
+        }
       }
 
       const { error: updateErr } = await admin

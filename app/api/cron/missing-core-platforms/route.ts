@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
-import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import {
+  buildChatCardMessage,
+  postToGoogleChatSafe,
+} from '@/lib/chat/post-to-google-chat';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
+import type { AgencyBrand } from '@/lib/agency/detect';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -177,17 +182,44 @@ async function handleGet(request: NextRequest) {
       .map((p) => `• ${PLATFORM_LABEL[p]}`)
       .join('\n');
 
-    const text = [
-      `📵 *Internal alert:* *${client.name}* is missing core platform connections`,
+    const baseUrl = getCortexAppUrl(
+      ((client.agency as AgencyBrand | null) ?? 'nativz') as AgencyBrand,
+    );
+    const platformsParam = missing.join(',');
+    const deepLink =
+      `${baseUrl}/admin/content-tools` +
+      `?tab=connections` +
+      `&clientId=${encodeURIComponent(client.id)}` +
+      `&platforms=${encodeURIComponent(platformsParam)}`;
+
+    const fallbackText = [
+      `📵 Internal alert: ${client.name} is missing core platform connections`,
       platformLines,
       ``,
       `Cortex is actively scheduling posts for this client but these platforms have no connected account, so nothing is going out there. ` +
-        `Client has NOT been emailed about this, action required: send a reconnect invite from the Connections matrix.`,
+        `Client has NOT been emailed about this. Action required: send a reconnect invite from the Connections matrix.`,
+      ``,
+      `Open reconnect form: ${deepLink}`,
     ].join('\n');
 
     postToGoogleChatSafe(
       finalWebhook,
-      { text },
+      buildChatCardMessage({
+        cardId: `missing-core-platforms-${client.id}`,
+        title: `📵 ${client.name}`,
+        subtitle: 'Missing core platform connections',
+        paragraphs: [
+          platformLines,
+          {
+            html:
+              `Cortex is actively scheduling posts for this client but these platforms have <b>no connected account</b>, ` +
+              `so nothing is going out there. Client has NOT been emailed about this.<br><br>` +
+              `<b>Action required:</b> send a reconnect invite from the Connections matrix.`,
+          },
+        ],
+        buttons: [{ text: 'Open reconnect form', url: deepLink }],
+        fallback: fallbackText,
+      }),
       `missing-core-platforms:${client.id}`,
     );
 
