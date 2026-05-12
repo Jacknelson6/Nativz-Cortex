@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createOpenRouterRichCompletion } from '@/lib/ai/openrouter-rich';
+import { normalizeHashtagList } from './normalize-hashtag';
 
 const GENERATION_CONCURRENCY = 2;
 const MAX_VISION_IMAGES = 6;
@@ -209,10 +210,9 @@ function parseCaptionJson(raw: string): { caption: string; hashtags: string[] } 
   const obj = json as { caption?: unknown; hashtags?: unknown };
   if (typeof obj.caption !== 'string') throw new Error('Caption response missing "caption" string');
   const tags = Array.isArray(obj.hashtags)
-    ? obj.hashtags
-        .filter((t): t is string => typeof t === 'string')
-        .map((t) => t.replace(/^#/, '').trim())
-        .filter(Boolean)
+    ? normalizeHashtagList(
+        obj.hashtags.filter((t): t is string => typeof t === 'string'),
+      )
     : [];
   return { caption: obj.caption.trim(), hashtags: tags };
 }
@@ -280,22 +280,14 @@ function applyBoilerplate(
   client: ClientContext | null,
 ): { caption: string; hashtags: string[] } {
   const cta = client?.caption_cta?.trim() || null;
-  const boilerplateTags = (client?.caption_hashtags ?? [])
-    .map((t) => t.replace(/^#/, '').trim().toLowerCase())
-    .filter(Boolean);
+  const boilerplateTags = client?.caption_hashtags ?? [];
 
   const caption = cta
     ? `${generated.caption.trim()}\n\n${cta}`
     : generated.caption.trim();
 
-  const seen = new Set<string>();
-  const merged: string[] = [];
-  for (const tag of [...boilerplateTags, ...generated.hashtags]) {
-    const key = tag.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push(tag);
-  }
-
-  return { caption, hashtags: merged };
+  return {
+    caption,
+    hashtags: normalizeHashtagList([...boilerplateTags, ...generated.hashtags]),
+  };
 }
