@@ -212,10 +212,12 @@ export function buildChatCard(input: ChatCardInput): ChatMessage {
     },
   };
 
-  return {
-    ...(input.fallbackText ? { text: input.fallbackText } : {}),
-    cardsV2: [card],
-  };
+  // Card V2 only — no `text` sibling. Google Chat renders a payload with
+  // both `text` and `cardsV2` as two separate message bubbles, which is
+  // why the team kept seeing a plain-text duplicate above each card.
+  // `fallbackText` is accepted on the input for backwards compatibility
+  // but is intentionally dropped from the wire payload.
+  return { cardsV2: [card] };
 }
 
 // ---------------------------------------------------------------------------

@@ -587,7 +587,7 @@ async function fireAllApprovedNotifications(
     const widgets: ChatCardWidget[] = [
       {
         type: 'text',
-        text: 'Client approved all calendar posts. Creatives are ready to run for paid media.',
+        text: 'Client approved every post on this calendar. Creatives are cleared to run as Meta ads.',
       },
     ];
     if (folder) {
@@ -602,10 +602,9 @@ async function fireAllApprovedNotifications(
       paidMedia.url,
       buildChatCard({
         cardId: `paid-media-legacy-approve-all-${dropId}`,
-        headerTitle: '🎬 Approved calendar ready for paid media',
+        headerTitle: '🎬 Approved for Meta ads',
         headerSubtitle: clientName,
         sections: [{ widgets }],
-        fallbackText: `🎬 ${clientName} — approved calendar ready for paid media. ${folder ?? ''}`.trim(),
       }),
       `paid-media-approved ${clientName}`,
     );
@@ -616,20 +615,19 @@ async function fireAllApprovedNotifications(
     paidMedia.url,
     buildChatCard({
       cardId: `paid-media-db-approve-all-${dropId}`,
-      headerTitle: '🎬 Approved calendar ready for paid media',
+      headerTitle: '🎬 Approved for Meta ads',
       headerSubtitle: clientName,
       sections: [
         {
           widgets: [
             {
               type: 'text',
-              text: 'Client approved all calendar posts. Creatives are ready to run for paid media.',
+              text: 'Client approved every post on this calendar. Creatives are cleared to run as Meta ads.',
             },
             { type: 'button', text: 'Download all assets', url: downloadUrl, filled: true },
           ],
         },
       ],
-      fallbackText: `🎬 ${clientName} — approved calendar ready for paid media. ${downloadUrl}`,
     }),
     `paid-media-approved ${clientName}`,
   );

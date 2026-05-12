@@ -834,7 +834,7 @@ async function pingPaidMediaTeam(
     const widgets: ChatCardWidget[] = [
       {
         type: 'text',
-        text: 'Client approved all calendar posts. Creatives are ready to run for paid media.',
+        text: 'Client approved every post on this calendar. Creatives are cleared to run as Meta ads.',
       },
     ];
     if (folder) {
@@ -849,10 +849,9 @@ async function pingPaidMediaTeam(
       paidMedia.url,
       buildChatCard({
         cardId: `paid-media-legacy-${args.clientName}-${args.startDate}`,
-        headerTitle: '🎬 Approved calendar ready for paid media',
+        headerTitle: '🎬 Approved for Meta ads',
         headerSubtitle: args.clientName,
         sections: [{ widgets }],
-        fallbackText: `🎬 ${args.clientName} — approved calendar ready for paid media. ${folder ?? ''}`.trim(),
       }),
       `paid-media-approved ${args.clientName}`,
     );
@@ -866,20 +865,19 @@ async function pingPaidMediaTeam(
     paidMedia.url,
     buildChatCard({
       cardId: `paid-media-db-${args.clientName}-${args.startDate}`,
-      headerTitle: '🎬 Approved calendar ready for paid media',
+      headerTitle: '🎬 Approved for Meta ads',
       headerSubtitle: args.clientName,
       sections: [
         {
           widgets: [
             {
               type: 'text',
-              text: 'Client approved all calendar posts. Creatives are ready to run for paid media.',
+              text: 'Client approved every post on this calendar. Creatives are cleared to run as Meta ads.',
             },
             { type: 'button', text: 'Download all assets', url: args.shareUrl, filled: true },
           ],
         },
       ],
-      fallbackText: `🎬 ${args.clientName} — approved calendar ready for paid media. ${args.shareUrl}`,
     }),
     `paid-media-approved ${args.clientName}`,
   );

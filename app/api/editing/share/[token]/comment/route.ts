@@ -630,14 +630,14 @@ async function pingPaidMediaForEditingApproval(args: {
     paidMedia.url,
     buildChatCard({
       cardId: `paid-media-editing-${args.linkId}`,
-      headerTitle: '🎬 Approved cuts ready for paid media',
+      headerTitle: '🎬 Approved for Meta ads',
       headerSubtitle: clientName,
       sections: [
         {
           widgets: [
             {
               type: 'text',
-              text: 'Client approved every clip in this editing project. Final cuts are ready to run.',
+              text: 'Client approved every clip in this editing project. Final cuts are cleared to run as Meta ads.',
             },
             {
               type: 'button',
@@ -648,7 +648,6 @@ async function pingPaidMediaForEditingApproval(args: {
           ],
         },
       ],
-      fallbackText: `🎬 ${clientName} — approved cuts ready. ${downloadUrl}`,
     }),
     `paid-media-approved-editing ${args.linkId}`,
   );
