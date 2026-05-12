@@ -66,7 +66,6 @@ export async function GET(req: Request) {
        editor:team_members!editing_projects_editor_id_fkey(email, full_name),
        videographer:team_members!editing_projects_videographer_id_fkey(email, full_name),
        strategist:team_members!editing_projects_strategist_id_fkey(email, full_name),
-       videos:editing_project_videos(count),
        raw_videos:editing_project_raw_videos(count)`,
     )
     .order('updated_at', { ascending: false });
@@ -177,12 +176,21 @@ export async function GET(req: Request) {
     string,
     { approved: number; changes: number; pending: number; total: number }
   >();
+  // Deduped slot map per project (latest version per position), shared
+  // between the reviewCounts walk and the `video_count` rollup so both
+  // surfaces the same "5 deliverables" answer when a v1 has been
+  // replaced by v2.
+  const projectToVideos = new Map<string, string[]>();
   if (projectIds.length) {
     const [{ data: videoRows }, { data: commentRows }] = await Promise.all([
       admin
         .from('editing_project_videos')
-        .select('id, project_id')
-        .in('project_id', projectIds),
+        .select('id, project_id, position, version')
+        .in('project_id', projectIds)
+        // Order so the first row we see per (project, position) is the
+        // latest revision. Mirrors the detail route's dedup.
+        .order('position', { ascending: true })
+        .order('version', { ascending: false }),
       admin
         .from('editing_project_review_comments')
         .select('video_id, status, metadata, created_at')
@@ -191,8 +199,20 @@ export async function GET(req: Request) {
         .order('created_at', { ascending: true }),
     ]);
     const videoToProject = new Map<string, string>();
-    const projectToVideos = new Map<string, string[]>();
-    for (const v of (videoRows ?? []) as Array<{ id: string; project_id: string }>) {
+    // Track which (project, position) slots we've already taken so older
+    // revisions don't inflate the deliverable count. When a strategist
+    // replaces v1 with v2, the row count goes to 2 but the deliverable
+    // count should stay at 1 (the v2 cut is the only one awaiting review).
+    const seenSlots = new Set<string>();
+    for (const v of (videoRows ?? []) as Array<{
+      id: string;
+      project_id: string;
+      position: number | null;
+      version: number | null;
+    }>) {
+      const slotKey = `${v.project_id}:${v.position ?? 0}`;
+      if (seenSlots.has(slotKey)) continue;
+      seenSlots.add(slotKey);
       videoToProject.set(v.id, v.project_id);
       const arr = projectToVideos.get(v.project_id) ?? [];
       arr.push(v.id);
@@ -240,6 +260,16 @@ export async function GET(req: Request) {
     }
   }
 
+  // Deduped slot count per project, used as the canonical `video_count`
+  // surfaced to the UI. The raw `editing_project_videos(count)` aggregate
+  // would double-count replacement revisions (v1 + v2 = 2 rows for one
+  // deliverable slot) — the unified review table and admin board both
+  // want the slot count, not the row count.
+  const dedupedVideoCount = new Map<string, number>();
+  for (const [pid, vids] of projectToVideos.entries()) {
+    dedupedVideoCount.set(pid, vids.length);
+  }
+
   const projects: EditingProject[] = (data ?? []).map((row: any) => ({
     id: row.id,
     client_id: row.client_id,
@@ -271,7 +301,10 @@ export async function GET(req: Request) {
     scheduled_at: row.scheduled_at,
     archived_at: row.archived_at,
     promoted_at: row.promoted_at ?? null,
-    video_count: Array.isArray(row.videos) ? row.videos[0]?.count ?? 0 : 0,
+    // Deduped slot count, not the raw row count. See dedup walk above —
+    // when a v1 cut gets replaced by v2, both rows live in the table but
+    // the deliverable count should stay at 1.
+    video_count: dedupedVideoCount.get(row.id) ?? 0,
     raw_video_count: Array.isArray(row.raw_videos) ? row.raw_videos[0]?.count ?? 0 : 0,
     first_sent_at: sendStats.get(row.id)?.first_sent_at ?? null,
     last_sent_at: sendStats.get(row.id)?.last_sent_at ?? null,
@@ -281,8 +314,7 @@ export async function GET(req: Request) {
     approved_count: reviewCounts.get(row.id)?.approved ?? 0,
     changes_count: reviewCounts.get(row.id)?.changes ?? 0,
     pending_count:
-      reviewCounts.get(row.id)?.pending
-        ?? (Array.isArray(row.videos) ? row.videos[0]?.count ?? 0 : 0),
+      reviewCounts.get(row.id)?.pending ?? (dedupedVideoCount.get(row.id) ?? 0),
   }));
 
   return NextResponse.json({ projects });

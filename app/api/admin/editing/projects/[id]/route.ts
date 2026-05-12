@@ -153,7 +153,22 @@ export async function GET(
     reviewByVideo.set(c.video_id, c.status);
   }
 
-  const videosWithStatus = (videos ?? []).map((v) => ({
+  // Dedup by `position` slot, keeping only the latest revision (the
+  // query above orders position ASC, version DESC, so the first row we
+  // see per position is the freshest cut). Older versions stay in the
+  // DB for history but should not inflate the dialog's deliverable
+  // count — when a strategist replaces a v1 cut with v2, the
+  // deliverable count should stay at N, not jump to 2N. Mirrors the
+  // dedup in `/api/editing/share/[token]/route.ts`.
+  const seenPositions = new Set<number>();
+  const latestVideos = (videos ?? []).flatMap((v) => {
+    const pos = (v.position as number | null) ?? 0;
+    if (seenPositions.has(pos)) return [];
+    seenPositions.add(pos);
+    return [v];
+  });
+
+  const videosWithStatus = latestVideos.map((v) => ({
     ...v,
     review_status: reviewByVideo.get(v.id as string) ?? null,
   }));
