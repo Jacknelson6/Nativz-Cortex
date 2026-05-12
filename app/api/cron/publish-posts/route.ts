@@ -16,6 +16,11 @@ import {
   isZernioGlobalAuthError,
   markProfileDisconnectedFromLegFailure,
 } from '@/lib/posting/zernio-account-errors';
+import { checkLegReadinessBatch } from '@/lib/posting/check-publish-readiness';
+import {
+  notifyConnectionExpired,
+  type ConnectionExpiredCandidate,
+} from '@/lib/posting/notify-connection-expired';
 
 const STALE_ALERT_PREFIX = 'Stale draft: scheduled time passed without approval';
 
@@ -72,7 +77,9 @@ async function handleGet(request: NextRequest) {
             access_token_ref,
             late_account_id,
             is_active,
-            token_status
+            token_status,
+            account_owner,
+            disconnect_alerted_at
           )
         ),
         scheduled_post_media (
@@ -101,6 +108,14 @@ async function handleGet(request: NextRequest) {
     let publishedCount = 0;
     let failedCount = 0;
     let staleAlertedCount = 0;
+
+    // PUB-01: collected across every post in this cron run. After the
+    // loop, we fire one chat card per affected client summarizing every
+    // leg whose token came back dead at publish time. The per-leg
+    // `social_profiles.disconnect_alerted_at` stamp set inside the loop
+    // dedups against the daily watcher so the same incident never
+    // double-pings.
+    const tokenDeadCandidates: ConnectionExpiredCandidate[] = [];
 
     // Note: don't early-return on empty pendingPosts — we still need to
     // run the stale-draft scan below.
@@ -288,6 +303,111 @@ async function handleGet(request: NextRequest) {
           unconnectedFailures.push({ platform: platformName, username, reason });
         }
 
+        // PUB-01: live token readiness probe.
+        //
+        // The cheap pre-flight above trusts `social_profiles.token_status`,
+        // which is refreshed once every 6h by `connection-expired-watch`.
+        // A token that died between the last watcher run and now will sail
+        // through with `token_status = 'valid'`, hit Zernio at publishPost
+        // time, fail per-leg, and burn the full retry cycle before the team
+        // gets a chat ping. We ask Zernio's `/accounts/{id}/health` directly
+        // for every still-eligible leg right before publish so a dead token
+        // becomes an immediate `failed` leg with `token_dead_at_publish` as
+        // the reason — no retry queue, no 1.5h-late notification.
+        //
+        // Cache (90s) lives in `check-publish-readiness.ts` so all legs
+        // across all posts in this cron tick reuse the answer per account.
+        const probeCandidates: Array<{
+          sppId: string;
+          lateAccountId: string;
+          profileId: string;
+          platform: string;
+          username: string | null;
+          clientId: string;
+          accountOwner: string;
+          disconnectAlertedAt: string | null;
+        }> = [];
+        for (const spp of (post.scheduled_post_platforms ?? []) as Record<string, unknown>[]) {
+          const sppStatus = (spp.status as string | null) ?? 'pending';
+          if (sppStatus !== 'pending' && sppStatus !== 'failed') continue;
+          const profile = spp.social_profiles as Record<string, unknown> | null;
+          const lateAccountId = (profile?.late_account_id ?? null) as string | null;
+          const isActive = (profile?.is_active as boolean | null) ?? true;
+          const tokenStatus = (profile?.token_status as string | null) ?? null;
+          // Skip legs the cheap pre-flight already eliminated — they're
+          // already stamped `failed` in DB and we don't want to waste a
+          // Zernio round-trip confirming what we already know.
+          if (!lateAccountId) continue;
+          if (!isActive) continue;
+          if (tokenStatus === 'expired' || tokenStatus === 'needs_refresh') continue;
+          probeCandidates.push({
+            sppId: spp.id as string,
+            lateAccountId,
+            profileId: spp.social_profile_id as string,
+            platform: (profile?.platform as string | null) ?? 'unknown',
+            username: (profile?.username as string | null) ?? null,
+            clientId: post.client_id as string,
+            accountOwner: (profile?.account_owner as string | null) ?? 'unknown',
+            disconnectAlertedAt:
+              (profile?.disconnect_alerted_at as string | null) ?? null,
+          });
+        }
+
+        const liveBadLateAccountIds = new Set<string>();
+        if (probeCandidates.length > 0) {
+          const readinessMap = await checkLegReadinessBatch(
+            probeCandidates.map((c) => c.lateAccountId),
+          );
+          for (const cand of probeCandidates) {
+            const readiness = readinessMap.get(cand.lateAccountId);
+            if (!readiness || readiness.ready) continue;
+            // Transient probe failure: don't fail the leg, let publishPost
+            // take its normal path. Only durable token-bad answers
+            // short-circuit here.
+            if (readiness.reason === 'probe_failed') continue;
+
+            liveBadLateAccountIds.add(cand.lateAccountId);
+            const reason = `${cand.platform}: ${readiness.detail ?? 'token dead at publish'}`;
+
+            await adminClient
+              .from('scheduled_post_platforms')
+              .update({ status: 'failed', failure_reason: reason })
+              .eq('id', cand.sppId);
+            unconnectedFailures.push({
+              platform: cand.platform,
+              username: cand.username,
+              reason,
+            });
+
+            // Stamp the profile so the daily watcher dedups against this
+            // incident. Only stamp `disconnect_alerted_at` if currently
+            // NULL — if it's set, the watcher (or a prior cron tick)
+            // already pinged for this expiry cycle.
+            const profileUpdate: Record<string, unknown> = {
+              token_status: 'expired',
+              token_expires_at: readiness.health?.tokenExpiresAt ?? null,
+            };
+            const shouldPing = cand.disconnectAlertedAt == null;
+            if (shouldPing) {
+              profileUpdate.disconnect_alerted_at = new Date().toISOString();
+            }
+            await adminClient
+              .from('social_profiles')
+              .update(profileUpdate)
+              .eq('id', cand.profileId);
+
+            if (shouldPing) {
+              tokenDeadCandidates.push({
+                profileId: cand.profileId,
+                clientId: cand.clientId,
+                platform: cand.platform,
+                accountOwner: cand.accountOwner,
+                username: cand.username,
+              });
+            }
+          }
+        }
+
         const platformProfiles: PlatformProfile[] = (
           post.scheduled_post_platforms ?? []
         )
@@ -307,6 +427,12 @@ async function handleGet(request: NextRequest) {
             if (!lateAccountId) return null;
             if (!isActive) return null;
             if (tokenStatus === 'expired' || tokenStatus === 'needs_refresh') return null;
+            // PUB-01: drop legs whose live probe came back dead in this
+            // tick. The in-memory `tokenStatus` from the original DB read
+            // may still say 'valid' even though Zernio's authoritative
+            // health endpoint just said otherwise, so we have to consult
+            // the live-bad set explicitly.
+            if (liveBadLateAccountIds.has(lateAccountId)) return null;
             return {
               profileId: spp.social_profile_id as string,
               lateAccountId,
@@ -1030,6 +1156,28 @@ async function handleGet(request: NextRequest) {
       }
     }
 
+    // PUB-01: one chat card per affected client for every leg whose
+    // token came back dead at publish time during this cron run. The
+    // `disconnect_alerted_at` stamp inside the loop already dedups
+    // against the daily watcher, so this fires at most once per client
+    // per expiry incident.
+    let tokenDeadAlerted = 0;
+    if (tokenDeadCandidates.length > 0) {
+      try {
+        const { alerted } = await notifyConnectionExpired(
+          adminClient,
+          tokenDeadCandidates,
+          'publish-posts:token-dead-at-publish',
+        );
+        tokenDeadAlerted = alerted;
+      } catch (notifyErr) {
+        console.error(
+          '[publish-cron] token-dead-at-publish notify failed:',
+          notifyErr,
+        );
+      }
+    }
+
     // APPROVED-DRAFT RECOVERY SWEEP
     //
     // The share-link comment route calls `publishScheduledPost` inline when
@@ -1415,6 +1563,8 @@ async function handleGet(request: NextRequest) {
       recovery_failed: recoveryFailedCount,
       reconciled: reconciledCount,
       stale_alerted: staleAlertedCount,
+      token_dead_at_publish: tokenDeadCandidates.length,
+      token_dead_alerted: tokenDeadAlerted,
     });
   } catch (error) {
     console.error('POST /api/cron/publish-posts error:', error);

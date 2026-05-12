@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ZernioPostingService } from '@/lib/posting';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
-import { buildChatCardMessage, postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
-import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
-import { getCortexAppUrl } from '@/lib/agency/cortex-url';
-import type { AgencyBrand } from '@/lib/agency/detect';
+import {
+  notifyConnectionExpired,
+  type ConnectionExpiredCandidate,
+} from '@/lib/posting/notify-connection-expired';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -42,25 +42,6 @@ export const maxDuration = 60;
  * Auth: Bearer `CRON_SECRET` (Vercel cron header).
  */
 
-const PLATFORM_LABEL: Record<string, string> = {
-  tiktok: 'TikTok',
-  instagram: 'Instagram',
-  facebook: 'Facebook',
-  youtube: 'YouTube',
-  linkedin: 'LinkedIn',
-  googlebusiness: 'Google Business',
-  pinterest: 'Pinterest',
-  x: 'X (Twitter)',
-  threads: 'Threads',
-  bluesky: 'Bluesky',
-};
-
-const OWNER_LABEL: Record<string, string> = {
-  agency: 'agency-owned (we created it)',
-  client: 'client-owned',
-  unknown: 'ownership unknown',
-};
-
 /**
  * Delay before the confirming re-probe of a token that came back bad on
  * the first call. Zernio's auto-refresh path can take a couple seconds
@@ -88,14 +69,6 @@ function deriveStatus(health: {
 
 function isBadStatus(status: string): boolean {
   return status === 'expired' || status === 'needs_refresh';
-}
-
-interface AlertCandidate {
-  profileId: string;
-  clientId: string;
-  platform: string;
-  accountOwner: string;
-  username: string | null;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -130,7 +103,7 @@ async function handleGet(request: NextRequest) {
   let probeSkipped = 0;
   let alertedCleared = 0;
   let reprobeRescued = 0;
-  const alertCandidates: AlertCandidate[] = [];
+  const alertCandidates: ConnectionExpiredCandidate[] = [];
 
   // First pass: probe everything, persist `token_status` + `token_expires_at`,
   // and short-list anything that looks bad for a confirming re-probe below.
@@ -238,131 +211,11 @@ async function handleGet(request: NextRequest) {
     );
   }
 
-  if (alertCandidates.length === 0) {
-    return NextResponse.json({
-      probed,
-      probeSkipped,
-      alertedCleared,
-      reprobed: pendingReprobes.length,
-      reprobeRescued,
-      alerted: 0,
-    });
-  }
-
-  const clientIds = Array.from(new Set(alertCandidates.map((c) => c.clientId)));
-  const { data: clients } = await admin
-    .from('clients')
-    .select('id, name, agency, chat_webhook_url')
-    .in('id', clientIds);
-
-  const clientById = new Map<
-    string,
-    { name: string; agency: string | null; chat_webhook_url: string | null }
-  >(
-    (clients ?? []).map((c) => [
-      c.id as string,
-      {
-        name: c.name as string,
-        agency: (c.agency as string | null) ?? null,
-        chat_webhook_url: (c.chat_webhook_url as string | null) ?? null,
-      },
-    ]),
+  const { alerted, groupsAlerted } = await notifyConnectionExpired(
+    admin,
+    alertCandidates,
+    'connection-expired-watch',
   );
-
-  // One card per client: all freshly-confirmed-bad platforms for a
-  // single brand collapse into a single chat ping with one deep-link
-  // pre-filtering the Connections matrix to all of them.
-  const groups = new Map<string, AlertCandidate[]>();
-  for (const cand of alertCandidates) {
-    const list = groups.get(cand.clientId) ?? [];
-    list.push(cand);
-    groups.set(cand.clientId, list);
-  }
-
-  let alerted = 0;
-  for (const [, group] of groups) {
-    const sample = group[0];
-    if (!sample) continue;
-    const client = clientById.get(sample.clientId);
-    if (!client) continue;
-
-    const webhook = await resolveTeamChatWebhook(admin, {
-      primaryUrl: client.chat_webhook_url,
-      agency: client.agency,
-    });
-    const finalWebhook = webhook ?? process.env.OPS_GOOGLE_CHAT_WEBHOOK ?? null;
-    if (!finalWebhook) continue;
-
-    const ownership = sample.accountOwner;
-    const allSameOwner = group.every((g) => g.accountOwner === ownership);
-    const ownerLine = allSameOwner
-      ? OWNER_LABEL[ownership] ?? OWNER_LABEL.unknown
-      : 'mixed ownership, check matrix';
-
-    const platformLines = group
-      .map((g) => {
-        const label = PLATFORM_LABEL[g.platform] ?? g.platform;
-        const handle = g.username ? ` (@${g.username})` : '';
-        return `• ${label}${handle}`;
-      })
-      .join('\n');
-
-    const fixHint =
-      ownership === 'agency'
-        ? 'Refresh internally, do not email the client.'
-        : ownership === 'client'
-          ? 'Hand-send a reconnect invite from the Connections matrix.'
-          : 'Triage ownership in the Connections matrix, then act.';
-
-    const titleEmoji = '🔌';
-    const titleVerb = 'social authorization expired';
-    const headerTitle = `${titleEmoji} ${client.name}`;
-    const headerSubtitle = titleVerb;
-
-    // Deep-link to the Connections tab with the brand pre-selected and
-    // the affected platforms pre-checked, so one click pops the Invite
-    // Builder modal ready to send. Team chat is always Nativz-themed.
-    const baseUrl = getCortexAppUrl(
-      ((client.agency as AgencyBrand | null) ?? 'nativz') as AgencyBrand,
-    );
-    const platformsParam = Array.from(
-      new Set(group.map((g) => g.platform)),
-    ).join(',');
-    const deepLink =
-      `${baseUrl}/admin/content-tools` +
-      `?tab=connections` +
-      `&clientId=${encodeURIComponent(sample.clientId)}` +
-      `&platforms=${encodeURIComponent(platformsParam)}`;
-
-    const buttonText = 'Open reconnect form';
-
-    const fallbackText = [
-      `${titleEmoji} *${client.name}* ${titleVerb}`,
-      platformLines,
-      ``,
-      `Owner: ${ownerLine}`,
-      fixHint,
-      ``,
-      `${buttonText}: ${deepLink}`,
-    ].join('\n');
-
-    postToGoogleChatSafe(
-      finalWebhook,
-      buildChatCardMessage({
-        cardId: `conn-expiry-${sample.clientId}`,
-        title: headerTitle,
-        subtitle: headerSubtitle,
-        paragraphs: [
-          platformLines,
-          { html: `<b>Owner:</b> ${ownerLine}<br>${fixHint}` },
-        ],
-        buttons: [{ text: buttonText, url: deepLink }],
-        fallback: fallbackText,
-      }),
-      `connection-expired-watch:${sample.clientId}`,
-    );
-    alerted += group.length;
-  }
 
   return NextResponse.json({
     probed,
@@ -371,7 +224,7 @@ async function handleGet(request: NextRequest) {
     reprobed: pendingReprobes.length,
     reprobeRescued,
     alerted,
-    groupsAlerted: groups.size,
+    groupsAlerted,
   });
 }
 
