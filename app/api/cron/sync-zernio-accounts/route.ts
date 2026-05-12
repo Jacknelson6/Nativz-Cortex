@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { ZernioPostingService } from '@/lib/posting';
 import type { SocialPlatform } from '@/lib/posting/types';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
-import { postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
+import { buildChatCardMessage, postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 
 export const runtime = 'nodejs';
@@ -213,16 +213,25 @@ async function handleGet(request: NextRequest) {
         return `• ${label}${handle}`;
       })
       .join('\n');
-    const text = [
-      `🔄 *Internal:* Cortex picked up new social accounts on *${meta.name}* from Zernio`,
+    const detail =
+      `These accounts were connected on Zernio's side but missing from Cortex. ` +
+      `Cron backfilled them automatically; future posts will include them on the cadence. ` +
+      `Client was NOT emailed, this is a behind-the-scenes sync. No team action needed unless an account looks wrong.`;
+    const fallback = [
+      `🔄 Internal: Cortex picked up new social accounts on ${meta.name} from Zernio`,
       lines,
       ``,
-      `These accounts were connected on Zernio's side but missing from Cortex. Cron backfilled them automatically; future posts will include them on the cadence. ` +
-        `Client was NOT emailed, this is a behind-the-scenes sync. No team action needed unless an account looks wrong.`,
+      detail,
     ].join('\n');
     postToGoogleChatSafe(
       finalWebhook,
-      { text },
+      buildChatCardMessage({
+        cardId: `sync-zernio-accounts-${clientId}-${group.map((g) => g.platform).sort().join('-')}`,
+        title: `🔄 Cortex picked up new social accounts`,
+        subtitle: meta.name,
+        paragraphs: [lines, detail],
+        fallback,
+      }),
       `sync-zernio-accounts:${clientId}`,
     );
     pinged += 1;
