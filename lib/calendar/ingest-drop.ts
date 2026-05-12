@@ -63,8 +63,15 @@ export async function ingestDrop(
         videoId: row.id,
         buffer: frame,
       });
-    } catch {
-      // Thumbnail failure is non-fatal — admin UI will fall back to video poster.
+    } catch (err) {
+      // Thumbnail failure is non-fatal — admin UI will fall back to video
+      // poster, and `scripts/backfill-cover-images.ts` can rescue later.
+      // We log loudly because a silent swallow was the root cause of the
+      // College Hunks share-page placeholder-icon bug: 15 videos went out
+      // with no thumbnail and we had no breadcrumb until the team noticed.
+      console.error(
+        `[ingest-drop] thumbnail extraction failed (drive) for video ${row.id}: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
     await admin
       .from('content_drop_videos')
@@ -100,9 +107,13 @@ export async function ingestDrop(
           buffer: frame,
         });
       }
-    } catch {
+    } catch (err) {
       // Same as Drive path — thumbnail is best-effort. The admin UI will
-      // fall back to the <video> element's first-frame poster.
+      // fall back to the <video> element's first-frame poster, and
+      // `scripts/backfill-cover-images.ts` can rescue later.
+      console.error(
+        `[ingest-drop] thumbnail extraction failed (direct) for video ${row.id}: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
     await admin
       .from('content_drop_videos')
