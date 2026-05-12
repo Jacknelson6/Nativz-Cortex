@@ -263,6 +263,18 @@ export async function POST(request: NextRequest) {
               .from('scheduled_posts')
               .update({ status: 'scheduled' })
               .eq('late_post_id', postId);
+            // Mirror what post.published and post.failed do: pull per-leg
+            // state from Zernio so the spp rows reflect Zernio's truth
+            // (without this, legs sit stale until another event arrives).
+            try {
+              await syncPlatformRowsFromZernio(adminClient, postId);
+              await reconcileParentStatusFromSpp(adminClient, postId);
+            } catch (syncErr) {
+              console.error(
+                `[zernio-webhook] post.scheduled sync/reconcile failed for ${postId}:`,
+                syncErr,
+              );
+            }
           }
         }
         break;
