@@ -67,8 +67,34 @@ function deriveStatus(health: {
   return 'valid';
 }
 
-function isBadStatus(status: string): boolean {
-  return status === 'expired' || status === 'needs_refresh';
+/**
+ * True when both Zernio truth-signals agree the account is unusable. We
+ * require BOTH `tokenValid=false` (token layer) AND Zernio's top-level
+ * `status !== 'active'` (account layer, mirrors the Zernio dashboard
+ * pill) before treating an account as alertably bad.
+ *
+ * Why both: Zernio auto-refreshes tokens for FB/IG/etc., and the
+ * `/accounts/{id}/health` endpoint can return `tokenStatus.valid=false`
+ * during the brief window between expiry and the next post call. The
+ * top-level `status` field doesn't flap; it only flips off `active` when
+ * Zernio considers the account genuinely disconnected from the user's
+ * perspective. Requiring both signals to agree eliminates the false
+ * "expired" pings Jack saw on accounts that the Zernio UI still showed
+ * as connected.
+ *
+ * Falsy `status` (older Zernio API responses, or the catch-all 'unknown'
+ * fallback we set in `getAccountHealth`) lets the token signal stand
+ * alone for back-compat.
+ */
+function isAlertablyBad(
+  derivedStatus: string,
+  zernioAccountStatus: string,
+): boolean {
+  const tokenBad =
+    derivedStatus === 'expired' || derivedStatus === 'needs_refresh';
+  if (!tokenBad) return false;
+  if (zernioAccountStatus === 'active') return false;
+  return true;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -126,9 +152,10 @@ async function handleGet(request: NextRequest) {
         return;
       }
       const status = deriveStatus(health);
+      const zernioAccountStatus = health.status;
       const wasExpiredAlerted = r.disconnect_alerted_at != null;
       const wasInactive = r.is_active === false;
-      const nowBad = isBadStatus(status);
+      const nowBad = isAlertablyBad(status, zernioAccountStatus);
       const healthySince = (r.disconnect_healthy_since as string | null) ?? null;
 
       const update: Record<string, unknown> = {
@@ -195,9 +222,12 @@ async function handleGet(request: NextRequest) {
           return;
         }
         const status = deriveStatus(health);
-        if (!isBadStatus(status)) {
-          // Token refreshed itself between probes. Persist the good
-          // status and skip the alert entirely.
+        if (!isAlertablyBad(status, health.status)) {
+          // Token refreshed itself between probes, OR Zernio's top-level
+          // account status still says `active` (which means the Zernio
+          // UI considers this account connected even though the token
+          // layer flapped). Either way, persist the latest status and
+          // skip the alert.
           await admin
             .from('social_profiles')
             .update({

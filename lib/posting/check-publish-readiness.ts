@@ -91,6 +91,17 @@ function evaluate(health: HealthSnapshot | null): PublishReadiness {
       health: null,
     };
   }
+  // Zernio source-of-truth short-circuit: the top-level `status` field
+  // mirrors what the Zernio dashboard shows ("active" vs disconnected).
+  // It doesn't flap during the auto-refresh window for FB/IG/etc, while
+  // `tokenValid` can briefly read false right at the expiry boundary
+  // for a token Zernio is about to swap in-place. If Zernio considers
+  // the account active from the user's perspective, trust it and let
+  // the publish go through; the per-leg post call itself will surface
+  // a real auth error if one materializes.
+  if (health.status === 'active') {
+    return { ready: true, health };
+  }
   if (!health.tokenValid) {
     return {
       ready: false,
