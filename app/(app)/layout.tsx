@@ -8,7 +8,6 @@ export const dynamic = 'force-dynamic';
 
 import { AdminSidebar } from '@/components/layout/admin-sidebar';
 import { AdminTopBar } from '@/components/layout/admin-top-bar';
-import { MobileBottomNav } from '@/components/layout/mobile-bottom-nav';
 import { SidebarProvider, SidebarInset } from '@/components/layout/sidebar';
 import { EasterEgg } from '@/components/easter-egg';
 import { CommandPalette } from '@/components/shared/command-palette';
@@ -147,13 +146,7 @@ export default async function AppLayout({
             <SidebarInset>
               <BannerStrip />
               <PageTransition>{children}</PageTransition>
-              {/* Spacer so the last bit of page content never sits under the
-                  mobile bottom nav. Only takes up space below `md` — desktop
-                  layout is untouched. The nav itself is fixed-positioned, so
-                  the spacer needs to be a real flow element. */}
-              <div className="md:hidden h-16 shrink-0" aria-hidden />
             </SidebarInset>
-            <MobileBottomNav />
           </SidebarProvider>
         </ActiveBrandProvider>
       </BackgroundSearchProvider>
