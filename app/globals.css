@@ -1112,3 +1112,21 @@ a.bg-accent,
 .bg-platform-youtube {
   background: var(--platform-youtube-mark);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Mobile keyboard scroll-margin.
+   When iOS focuses an input or textarea, the page scrolls so
+   the field clears the on-screen keyboard. Margin reserves
+   space for the sticky top bar (56px) above and a buffer
+   below for any sticky footer CTA. Desktop ignores this CSS
+   in practice because the visual viewport doesn't shrink.
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width: 1023px) {
+  input,
+  textarea,
+  select,
+  [contenteditable="true"] {
+    scroll-margin-top: 72px;
+    scroll-margin-bottom: 96px;
+  }
+}

@@ -203,17 +203,27 @@ export function Sidebar({ children, className = '', ...props }: SidebarProps) {
         {children}
       </aside>
 
-      {/* Mobile overlay */}
+      {/* Mobile overlay — only renders on screens where the desktop rail is
+       *  hidden (`md:hidden`). The aside is fixed-positioned, full-height,
+       *  with safe-area inset bottom so the last nav item never sits under
+       *  the iOS home indicator when the drawer is open. */}
       <div className="md:hidden">
         {openMobile && (
           <>
             <div
               className="fixed inset-0 z-40 bg-black/60 animate-[sidebarOverlayIn_200ms_ease-out_forwards]"
               onClick={() => setOpenMobile(false)}
+              aria-hidden
             />
             <aside
+              role="dialog"
+              aria-modal="true"
+              aria-label="Navigation"
               className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r shadow-elevated animate-[slideInLeft_200ms_cubic-bezier(0.16,1,0.3,1)_forwards] ${shell}`}
-              style={{ width: SIDEBAR_WIDTH_MOBILE }}
+              style={{
+                width: SIDEBAR_WIDTH_MOBILE,
+                paddingBottom: 'env(safe-area-inset-bottom)',
+              }}
             >
               {children}
             </aside>
