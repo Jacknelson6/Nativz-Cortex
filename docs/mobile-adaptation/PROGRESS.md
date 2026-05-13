@@ -40,7 +40,7 @@ Append a line per surface as it ships. Loop reads this to know what's done.
 - [x] `/spying` + audits + self-audit + versus + watch — pages already use `cortex-page-gutter`, `grid-cols-1 md:grid-cols-N` patterns and `flex-wrap` headers. SpyStatStrip uses `grid-cols-2 md:grid-cols-4`. VersusBoard stacks 1-up on mobile. No code changes needed.
 - [x] `/notes` + `/[id]` — list uses `grid-cols-1 md:grid-cols-2 xl:grid-cols-3` already (single column on mobile); detail is a ReactFlow moodboard canvas that handles its own touch+pinch viewport. PRD's "markdown editor" framing was incorrect — actual surface is the visual canvas. No code changes needed.
 - [x] `/ads` workspace — height calc fixed for bottom nav, padding tightened on header/gallery/library — `0a82bfef`. `/ads/batches/[batchId]` inherits the same workspace primitives.
-- [!] `/deliverables` — BLOCKED. Jack has uncommitted WIP on `app/(app)/deliverables/page.tsx` (rewriting from /credits). Mobile adaptation paused until that lands so we don't entangle changes. Revisit after his WIP merges.
+- [x] `/deliverables` — Jack's /credits rewrite committed at `b91776bc`. Page uses `cortex-page-gutter`; sub-components (ProductionHero/PipelineView/TierCard/AdminShell) all use `grid-cols-1 sm:grid-cols-2 lg:grid-cols-N`. Already mobile-ready, no further code changes needed.
 
 ### Admin (priority 3)
 - [x] `/admin/dashboard` — already uses `grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_minmax(220px,1.25fr)]`, ⌘K hint is `hidden sm:inline-flex`, cortex-page-gutter handles padding. No code changes needed.
