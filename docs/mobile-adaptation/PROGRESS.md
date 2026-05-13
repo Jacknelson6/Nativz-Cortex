@@ -23,11 +23,11 @@ Append a line per surface as it ships. Loop reads this to know what's done.
 - [x] `components/layout/mobile-bottom-nav.tsx` (new) — 5-tab bottom nav (4 surfaces + More) — `8742bd7d`
 - [x] `app/(app)/layout.tsx` — wire mobile chrome (nav + spacer) — `8742bd7d`
 - [x] Safe-area inset bottom (`env(safe-area-inset-bottom)`) — done in bottom nav
+- [x] `components/layout/admin-top-bar.tsx` — mobile compact (gap/padding/logo shrink, brand pill cap) — `25baa380`
+- [x] Viewport meta — `viewport-fit=cover` exported in `app/layout.tsx` — `1f96340d`
 - [ ] `components/layout/admin-sidebar.tsx` — drawer already wired via SidebarProvider; verify drawer height + scroll on mobile
-- [ ] `components/layout/admin-top-bar.tsx` — mobile compact form (collapse search/help, smaller height)
 - [ ] `components/layout/admin-brand-pill.tsx` — mobile compact trigger (truncated label, popover height)
 - [ ] iOS keyboard: scroll-into-view on active input
-- [ ] Verify viewport meta in root layout
 
 ### Brand-scoped (priority 2)
 - [ ] `/calendar` + `/[id]` + `/review`
