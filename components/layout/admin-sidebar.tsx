@@ -238,6 +238,10 @@ const ADMIN_ONLY_HREFS = new Set([
   // — RLS scopes them to the viewer's user_client_access.
   '/ads',
   '/spying',
+  // Deliverables ledger is internal accounting only — the client-facing
+  // surface is the share link. Admins keep the brand-root view; viewers
+  // never see it (server also `notFound()`s them defensively).
+  '/deliverables',
   // Settings is reachable from the avatar popover — it doesn't need its
   // own nav row on the portal. Keeping it on the admin side where the gear
   // is the primary entry point to the agency settings secondary rail.

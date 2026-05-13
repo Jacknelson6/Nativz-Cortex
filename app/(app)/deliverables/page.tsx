@@ -1,51 +1,35 @@
-import { redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { Boxes } from 'lucide-react';
 import { getActiveBrand } from '@/lib/active-brand';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getDeliverableBalances } from '@/lib/deliverables/get-balances';
-import { getRecentDeliverableActivity } from '@/lib/deliverables/get-recent-activity';
 import { getDeliverablePipeline } from '@/lib/deliverables/get-pipeline';
 import { inferScopeTier } from '@/lib/deliverables/scope';
 import { getActiveTier } from '@/lib/deliverables/get-active-tier';
-import { listConfiguredAddons } from '@/lib/deliverables/addon-skus';
 import { ProductionHero } from '@/components/deliverables/production-hero';
 import { ScopePanel } from '@/components/deliverables/scope-panel';
 import { TierCard } from '@/components/deliverables/tier-card';
 import { PipelineView } from '@/components/deliverables/pipeline-view';
-import { RecentActivity } from '@/components/deliverables/recent-activity';
-import { AddOnSection } from '@/components/deliverables/add-on-section';
 import { AdminShell } from '@/components/deliverables/admin-shell';
 import type { CreditTransactionRow } from '@/lib/credits/types';
 
 export const dynamic = 'force-dynamic';
 
 const TX_LIMIT = 50;
-const ACTIVITY_LIMIT = 30;
 
 /**
- * Brand-root /deliverables page (replaces /credits).
+ * Brand-root /deliverables — admin-only.
  *
- * The single URL serves both audiences with a shared hero + scope panel,
- * then branches:
- *
- *   - admin  → ProductionHero + ScopePanel + AdminShell (per-type tabs,
- *              allowance + manual grant + pause/resume + ledger).
- *   - viewer → ProductionHero + ScopePanel + RecentActivity + AddOnSection.
- *
- * Data fetching: balances, transactions, recent-activity entries, and the
- * client row (for agency lookup) all run in one Promise.all so the page
- * stays single-roundtrip.
- *
- * Copy on this page is the canonical client-facing surface for the
- * directional pivot — every string a client reads either lives here or
- * routes through `lib/deliverables/copy.ts`.
+ * The deliverables ledger is internal accounting; the client-facing surface
+ * is the share link. Viewers hit notFound(); admins keep the full
+ * ProductionHero + ScopePanel + Pipeline + AdminShell view.
  */
 export default async function DeliverablesPage() {
   const active = await getActiveBrand().catch(() => null);
 
-  if (!active?.brand) {
+  if (!active?.isAdmin) notFound();
+
+  if (!active.brand) {
     return (
       <div className="cortex-page-gutter mx-auto max-w-6xl space-y-6">
         <header>
@@ -61,30 +45,11 @@ export default async function DeliverablesPage() {
     );
   }
 
-  // Defence in depth: re-verify access for viewers (cookie tampering can't
-  // widen scope this way). Admins are pre-authorized in `getActiveBrand`.
-  if (!active.isAdmin) {
-    const supabase = await createServerSupabaseClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) redirect('/login');
-    const adminCheck = createAdminClient();
-    const { data: access } = await adminCheck
-      .from('user_client_access')
-      .select('client_id')
-      .eq('user_id', user.id)
-      .eq('client_id', active.brand.id)
-      .maybeSingle();
-    if (!access) redirect('/');
-  }
-
   const admin = createAdminClient();
   const clientId = active.brand.id;
 
-  const [balances, activity, pipeline, txResult, clientResult, activeTier] = await Promise.all([
+  const [balances, pipeline, txResult, activeTier] = await Promise.all([
     getDeliverableBalances(admin, clientId),
-    getRecentDeliverableActivity(admin, clientId, { limit: ACTIVITY_LIMIT }),
     getDeliverablePipeline(admin, clientId),
     admin
       .from('credit_transactions')
@@ -95,16 +60,11 @@ export default async function DeliverablesPage() {
       .order('created_at', { ascending: false })
       .limit(TX_LIMIT)
       .returns<CreditTransactionRow[]>(),
-    admin.from('clients').select('agency').eq('id', clientId).maybeSingle<{
-      agency: string | null;
-    }>(),
     getActiveTier(admin, clientId),
   ]);
 
   const txRows = txResult.data ?? [];
   const tier = inferScopeTier(balances);
-  const agency = getBrandFromAgency(clientResult.data?.agency ?? null);
-  const addons = listConfiguredAddons(agency);
 
   if (activeTier.mixedTiers) {
     console.warn(
@@ -112,8 +72,6 @@ export default async function DeliverablesPage() {
     );
   }
 
-  // Hydrate the editor index for pipeline cards in a single round-trip so
-  // attribution avatars render without a client-side fetch.
   const editorIds = Array.from(
     new Set(
       pipeline.cards
@@ -140,20 +98,13 @@ export default async function DeliverablesPage() {
     <div className="cortex-page-gutter mx-auto max-w-6xl space-y-6">
       <header className="space-y-2">
         <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-text/80">
-          {active.isAdmin ? 'Cortex · admin · deliverables' : 'Cortex · deliverables'}
+          Cortex · admin · deliverables
         </p>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <h1 className="text-2xl font-semibold text-text-primary">
             {active.brand.name} deliverables
           </h1>
         </div>
-        {!active.isAdmin ? (
-          <p className="max-w-prose text-sm text-text-secondary">
-            This is your monthly production scope. Each approved post draws from the matching
-            type, edited videos, UGC, or graphics, until the next reset. If you need more before
-            then, grab an add-on below.
-          </p>
-        ) : null}
       </header>
 
       <ProductionHero
@@ -171,24 +122,13 @@ export default async function DeliverablesPage() {
 
       <PipelineView snapshot={pipeline} editorIndex={editorIndex} />
 
-      {active.isAdmin ? (
-        <AdminShell
-          clientId={clientId}
-          balances={balances}
-          transactions={txRows}
-          activeTierDisplayName={activeTier.tier?.displayName ?? null}
-          hasMixedTiers={activeTier.mixedTiers}
-        />
-      ) : (
-        <>
-          <RecentActivity entries={activity} brandName={active.brand.name} />
-          <AddOnSection
-            clientId={clientId}
-            brandName={active.brand.name}
-            addons={addons}
-          />
-        </>
-      )}
+      <AdminShell
+        clientId={clientId}
+        balances={balances}
+        transactions={txRows}
+        activeTierDisplayName={activeTier.tier?.displayName ?? null}
+        hasMixedTiers={activeTier.mixedTiers}
+      />
     </div>
   );
 }
