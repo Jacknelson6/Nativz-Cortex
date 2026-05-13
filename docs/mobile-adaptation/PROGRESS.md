@@ -48,7 +48,7 @@ Append a line per surface as it ships. Loop reads this to know what's done.
 - [x] `/admin/clients` (roster) — ClientSearchGrid uses `grid-cols-1 sm:grid-cols-2 xl:grid-cols-3`. Mobile single column. No code changes needed.
 - [x] `/admin/clients/[slug]` + workspace + 10-tab settings — `client-admin-shell.tsx` already has parallel rendering: `lg:hidden overflow-x-auto` mobile tab strip + `hidden lg:flex` desktop rail. Content area `px-5 lg:px-8`. Already mobile-aware.
 - [x] `/admin/clients/onboard` wizard — `cortex-page-gutter max-w-3xl mx-auto`. Each step is a vertical form widget which already stacks single-column on mobile.
-- [!] `/admin/content-tools` — BLOCKED. `components/admin/content-tools/content-tools-shell.tsx` has Jack's uncommitted WIP. Revisit after his changes land.
+- [x] `/admin/content-tools` — stash-pop conflict discarded (stash was stale, referenced deleted `monthly-target-pills` module). Shell uses `cortex-page-gutter`, flex-wrap header, shared SubNav for tabs, ReviewTableCard via the shared Table primitive (overflow-x-auto baked in). Mobile-ready without further code changes.
 - [x] `/admin/onboarding` + `/[id]` — list parallel-rendered: desktop 5-column grid + mobile vertical flex stack per card. Detail page already uses `cortex-page-gutter max-w-5xl mx-auto space-y-6`. `c9f7d164`
 - [x] `/admin/ops/publish-health` — `grid-cols-2 md:grid-cols-4` KPI strip + `overflow-x-auto` failure table. Already mobile-aware.
 - [x] `/admin/users` — cortex-page-gutter wrapper, `grid-cols-1 sm:grid-cols-2` for forms. No code changes needed.
