@@ -146,7 +146,7 @@ export function AdminResultsClient({
       <ScrollProgress />
       {/* Header */}
       <div className="sticky top-0 z-10 border-b border-nativz-border bg-surface/80 backdrop-blur-sm">
-        <div className="flex flex-col gap-3 px-6 py-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <div className="flex flex-col gap-3 px-6 py-2.5 max-md:px-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <div className="flex min-w-0 flex-1 items-start gap-3">
             <Link
               href="/finder/new"
@@ -242,7 +242,7 @@ export function AdminResultsClient({
       </div>
 
       {/* Content */}
-      <div className="w-full px-6 py-8 space-y-6 sm:space-y-8">
+      <div className="w-full px-6 py-8 space-y-6 max-md:px-4 max-md:py-5 sm:space-y-8">
         {search.summary ? (
           <div className="rounded-xl border border-nativz-border bg-surface p-5 sm:p-6">
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-10 lg:items-start">
