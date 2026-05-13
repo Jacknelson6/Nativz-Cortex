@@ -82,11 +82,11 @@ export function AdGeneratorWorkspace({
   const brandDisplayName = clientName.trim() || 'this brand';
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col">
+    <div className="flex h-[calc(100vh-4rem)] max-md:h-[calc(100dvh-4rem-3.5rem-env(safe-area-inset-bottom))] flex-col">
       {/* Brand strip — replaces the hero. Logo + name on the left, DNA dot in
           the middle, library/patterns triggers on the right. Slim and quiet
           so the masonry below carries the visual weight. */}
-      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-nativz-border/60 px-6 py-3">
+      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-nativz-border/60 px-6 py-3 max-md:px-4 max-md:py-2">
         <div className="flex min-w-0 items-center gap-3">
           {clientLogoUrl ? (
             <Image
@@ -130,7 +130,7 @@ export function AdGeneratorWorkspace({
 
       {/* Gallery — scrollable middle region. Carries the masonry of approved/
           pending/rejected concepts plus the filter strip and share dialog. */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6 max-md:px-4 max-md:py-4">
         <AdConceptGallery
           clientId={clientId}
           concepts={concepts}
@@ -315,7 +315,7 @@ function Drawer({
             <X size={16} />
           </button>
         </header>
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6 max-md:px-4 max-md:py-4">
           {children}
         </div>
       </aside>
