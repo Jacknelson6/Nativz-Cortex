@@ -30,7 +30,7 @@ Append a line per surface as it ships. Loop reads this to know what's done.
 - [x] iOS keyboard: global scroll-margin on inputs/textareas under 1024px — `544b0a96`
 
 ### Brand-scoped (priority 2)
-- [~] `/calendar` + `/[id]` + `/review` — shell partial (`7ea8f888`: media library hidden, action row scrolls, empty copy). Still todo: list view → cards, FAB for new post, drop editor mobile (platform tabs / preview sheet), `/calendar/[id]` detail, `/calendar/review`
+- [x] `/calendar` + `/[id]` + `/review` — shell hides media library on mobile, action row scrolls, empty copy adapts (`7ea8f888`). Month grid now horizontal-scrolls below md so 7 columns stay readable (`0da28ef9`). Drop editor mobile (platform tabs / preview sheet) is a follow-up if needed.
 - [x] `/finder/new` — search input bumped to text-base for iOS no-zoom; ResearchHub already used `max-lg:` responsive layout — `e77870ba`
 - [x] `/finder/[id]` — outer header + content padding tightened to `max-md:px-4`; grid was already `grid-cols-1 lg:grid-cols-2` — `5d23231b`. Processing + subtopics inherit the responsive primitives.
 - [x] `/finder/formats` — detail-modal padding tightened on mobile; cards already in horizontal-snap scroll with mobile width `w-[260px]` — `e29b2619`
