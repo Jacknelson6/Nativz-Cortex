@@ -3,6 +3,7 @@ import { downloadDriveVideo } from './drive-folder';
 import { uploadVideoBytes, uploadThumbnail } from './storage-upload';
 import { extractFirstFrame } from './thumbnail';
 import { compressVideoIfOversize } from './compress-video';
+import { kickMuxIngestForContentDropVideo } from '@/lib/mux/ingest-from-url';
 
 const CONCURRENCY = 3;
 
@@ -83,6 +84,14 @@ export async function ingestDrop(
         size_bytes: c.finalSize,
       })
       .eq('id', row.id);
+    // Fire-and-forget Mux URL-pull. Supabase Storage URL is public and stable,
+    // so Mux can ingest from it. The webhook will stamp mux_playback_id when
+    // packaging finishes. We don't block the analysis pipeline on it — the
+    // share-page MuxPlayer falls back to `src` mode if the asset isn't ready.
+    await kickMuxIngestForContentDropVideo(admin, {
+      videoId: row.id,
+      sourceUrl: videoUrl,
+    });
   }
 
   async function ingestDirectUploadRow(row: IngestRow) {
@@ -123,6 +132,12 @@ export async function ingestDrop(
         thumbnail_url: thumbUrl,
       })
       .eq('id', row.id);
+    // Fire-and-forget Mux URL-pull on the Supabase Storage URL the user
+    // already uploaded to. Webhook fills in mux_playback_id when ready.
+    await kickMuxIngestForContentDropVideo(admin, {
+      videoId: row.id,
+      sourceUrl: row.video_url,
+    });
   }
 
   async function worker(items: IngestRow[]) {

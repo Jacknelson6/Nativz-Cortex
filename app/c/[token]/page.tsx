@@ -1386,7 +1386,6 @@ function formatDropDateRange(start: string, end: string): string {
 
 function VideoSurface({
   post,
-  controls = true,
   autoPlay = false,
   className,
   aspectClass = 'aspect-[9/16]',
@@ -1394,7 +1393,6 @@ function VideoSurface({
   onPlayerReady,
 }: {
   post: VideoSurfacePost;
-  controls?: boolean;
   autoPlay?: boolean | 'muted' | 'any';
   className?: string;
   // Tailwind aspect class used by the placeholder/overlay branches. Defaults
@@ -1530,18 +1528,22 @@ function VideoSurface({
     );
   }
   if (post.video_url) {
+    // Legacy (pre-Mux) videos render through MuxPlayer with `src` so the
+    // share-page chrome stays consistent (branded scrub bar, accent color,
+    // unified error handling). MuxPlayer falls back to HTMLMediaElement
+    // playback when given a plain URL — no HLS / static rendition required.
     return (
-      <video
+      <MuxPlayer
         ref={attachPlayer as never}
-        key={`legacy-${retryKey}`}
+        key={`legacy-${post.video_url}-${retryKey}`}
         src={post.video_url}
-        controls={controls}
-        playsInline
-        preload="auto"
-        autoPlay={autoPlay === true || autoPlay === 'any' || autoPlay === 'muted'}
-        muted={autoPlay === 'muted'}
+        streamType="on-demand"
+        autoPlay={autoPlay}
+        accentColor="var(--accent)"
         poster={post.cover_image_url ?? undefined}
+        style={{ aspectRatio: aspectRatioStyle, maxHeight: 'inherit', width: '100%' }}
         className={className}
+        metadata={{ player_name: 'cortex-share-legacy' }}
         onError={() => setErrored(true)}
       />
     );
@@ -1661,7 +1663,6 @@ function MediaSurface({
   className,
   aspectClass,
   aspectRatioStyle,
-  controls,
   autoPlay,
   onPlayerReady,
 }: {
@@ -1669,7 +1670,6 @@ function MediaSurface({
   className?: string;
   aspectClass?: string;
   aspectRatioStyle?: string;
-  controls?: boolean;
   autoPlay?: boolean | 'muted' | 'any';
   onPlayerReady?: (handle: PlayerHandle | null) => void;
 }) {
@@ -1685,7 +1685,6 @@ function MediaSurface({
       className={className}
       aspectClass={aspectClass}
       aspectRatioStyle={aspectRatioStyle}
-      controls={controls}
       autoPlay={autoPlay}
       onPlayerReady={onPlayerReady}
     />

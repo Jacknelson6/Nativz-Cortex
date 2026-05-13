@@ -1383,13 +1383,23 @@ function VideoCard({
           onLoadedMetadata={() => setPlayerReady(true)}
         />
       ) : video.public_url ? (
-        <video
-          ref={videoElRef}
+        // Legacy (pre-Mux) videos render through MuxPlayer with `src` so the
+        // editing-share chrome stays consistent with Mux-backed rows. Mux
+        // Player falls back to HTMLMediaElement playback when given a plain
+        // URL, no HLS manifest required.
+        <MuxPlayer
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ref={videoElRef as any}
           src={video.public_url}
-          controls
+          streamType="on-demand"
           playsInline
-          preload="metadata"
-          className="block h-full w-full bg-black object-contain"
+          className="block h-full w-full bg-black"
+          style={{
+            ['--media-object-fit' as string]: 'contain',
+            ['--media-accent-color' as string]: 'var(--accent)',
+            ['--media-primary-color' as string]: 'var(--accent)',
+            aspectRatio: 'auto',
+          }}
           onLoadedMetadata={() => setPlayerReady(true)}
         />
       ) : muxProcessing ? (
