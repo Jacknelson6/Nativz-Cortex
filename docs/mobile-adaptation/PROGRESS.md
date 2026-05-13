@@ -36,7 +36,7 @@ Append a line per surface as it ships. Loop reads this to know what's done.
 - [x] `/finder/formats` — detail-modal padding tightened on mobile; cards already in horizontal-snap scroll with mobile width `w-[260px]` — `e29b2619`
 - [~] `/lab` — workspace height calc fixed so composer clears bottom nav + safe area on mobile (`7aa51e34`). Chat header/composer/messages already had `md:` responsive padding. Outstanding: conversation history rail mobile drawer (rail is `hidden lg:flex`; needs Sheet wrapper for mobile entry).
 - [x] `/brand-profile` — section padding tightened to `max-md:p-4` (was `p-6`); empty state copy already mobile-friendly — `aac5b0e7`
-- [ ] `/review`
+- [x] `/review` — empty-state copy mobile-aware; Table primitive already has `overflow-x-auto` so the data table scrolls horizontally on phone — `f562d19e`. Full card-list refactor is a follow-up if needed.
 - [ ] `/spying` + audits + self-audit + versus + watch
 - [ ] `/notes` + `/[id]`
 - [ ] `/ads` + `/batches/[batchId]`
