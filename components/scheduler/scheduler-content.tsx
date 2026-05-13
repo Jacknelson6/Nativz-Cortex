@@ -361,12 +361,15 @@ function SchedulerInner({
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-nativz-border bg-surface">
-        <div className="flex items-center gap-3">
-          <h1 className="ui-section-title">Availability</h1>
+      {/* Header — desktop is a single row with title left + actions right.
+       *  Mobile (max-md) lets the actions row scroll horizontally so every
+       *  button stays reachable without a wrap that doubles the header
+       *  height inside the constrained h-[calc(100vh-3.5rem)] frame. */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-nativz-border bg-surface max-md:px-3 max-md:py-2 max-md:gap-2">
+        <div className="flex items-center gap-3 shrink-0">
+          <h1 className="ui-section-title max-md:text-base">Availability</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 max-md:overflow-x-auto max-md:flex-nowrap max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden">
           <div className="flex rounded-lg bg-background p-0.5">
             {(['month', 'week', 'list'] as CalendarViewMode[]).map((mode) => (
               <button
@@ -460,10 +463,13 @@ function SchedulerInner({
       {/* Body */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left sidebar: media library + client selector — admin only.
-            Viewers don't upload or manage source media; they only see the
-            scheduled posts the team has captioned for them. */}
+         *  Viewers don't upload or manage source media; they only see the
+         *  scheduled posts the team has captioned for them.
+         *  Hidden on mobile (max-md) — the library is a desktop-density
+         *  surface (drag-drop from library to calendar cell). Mobile users
+         *  drop posts from the calendar's own +New action instead. */}
         {isAdmin && (
-          <div className="flex flex-col w-72 border-r border-nativz-border bg-surface">
+          <div className="flex flex-col w-72 border-r border-nativz-border bg-surface max-md:hidden">
             {selectedClientId ? (
               <MediaLibrary
                 clientId={selectedClientId}
