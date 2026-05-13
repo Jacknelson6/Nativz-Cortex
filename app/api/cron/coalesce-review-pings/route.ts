@@ -45,6 +45,21 @@ export const maxDuration = 60;
 
 const QUIET_WINDOW_MS = 20 * 60 * 1000;
 
+/**
+ * Stale comments older than this are excluded from new chat pings. The
+ * insert paths leave `chat_notified_at = NULL` on every comment; if the
+ * notification was previously skipped (no webhook, setting disabled,
+ * client deleted, etc.) the row sits NULL forever and would otherwise
+ * resurrect into a fresh batch the moment the skip condition flips. This
+ * cap stops "all comments since the dawn of time" cards (the bug Jack
+ * flagged on 2026-05-13 — a single card listed 5 weeks-old comments).
+ */
+const STALE_CUTOFF_HOURS = 6;
+
+function staleCutoffIso(): string {
+  return new Date(Date.now() - STALE_CUTOFF_HOURS * 60 * 60 * 1000).toISOString();
+}
+
 type CalendarPending = {
   id: string;
   review_link_id: string;
@@ -92,6 +107,7 @@ async function handleCalendar(admin: ReturnType<typeof createAdminClient>): Prom
   cardsFired: number;
   commentsBatched: number;
 }> {
+  const cutoff = staleCutoffIso();
   const { data: pending } = await admin
     .from('post_review_comments')
     .select(
@@ -99,7 +115,22 @@ async function handleCalendar(admin: ReturnType<typeof createAdminClient>): Prom
     )
     .is('chat_notified_at', null)
     .in('status', ['comment', 'changes_requested'])
+    .gte('created_at', cutoff)
     .order('created_at', { ascending: true });
+
+  // Backstop sweep: stamp any pre-cutoff rows so they can never bundle
+  // into a future ping. Without this, comments left while the webhook
+  // was unconfigured (or the setting was off) would resurrect the
+  // moment that config flipped.
+  const { error: sweepErr } = await admin
+    .from('post_review_comments')
+    .update({ chat_notified_at: new Date().toISOString() })
+    .is('chat_notified_at', null)
+    .in('status', ['comment', 'changes_requested'])
+    .lt('created_at', cutoff);
+  if (sweepErr) {
+    console.error('coalesce-review-pings: calendar stale-sweep failed', sweepErr);
+  }
 
   const rows = (pending ?? []) as unknown as CalendarPending[];
   if (rows.length === 0) return { cardsFired: 0, commentsBatched: 0 };
@@ -313,6 +344,7 @@ async function handleEditing(admin: ReturnType<typeof createAdminClient>): Promi
   cardsFired: number;
   commentsBatched: number;
 }> {
+  const cutoff = staleCutoffIso();
   const { data: pending } = await admin
     .from('editing_project_review_comments')
     .select(
@@ -320,7 +352,19 @@ async function handleEditing(admin: ReturnType<typeof createAdminClient>): Promi
     )
     .is('chat_notified_at', null)
     .in('status', ['comment', 'changes_requested'])
+    .gte('created_at', cutoff)
     .order('created_at', { ascending: true });
+
+  // Backstop sweep — see calendar handler comment.
+  const { error: sweepErr } = await admin
+    .from('editing_project_review_comments')
+    .update({ chat_notified_at: new Date().toISOString() })
+    .is('chat_notified_at', null)
+    .in('status', ['comment', 'changes_requested'])
+    .lt('created_at', cutoff);
+  if (sweepErr) {
+    console.error('coalesce-review-pings: editing stale-sweep failed', sweepErr);
+  }
 
   const rows = (pending ?? []) as unknown as EditingPending[];
   if (rows.length === 0) return { cardsFired: 0, commentsBatched: 0 };
