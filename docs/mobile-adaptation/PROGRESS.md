@@ -13,17 +13,21 @@ Append a line per surface as it ships. Loop reads this to know what's done.
 
 ### Iteration 1 — bootstrap (2026-05-13)
 - [x] PRD set written (42 PRDs in `docs/mobile-adaptation/prds/**`) — committed `11e7b932`
-- [~] Global shell: bottom tab bar + drawer + top bar collapse (starting now)
+
+### Iteration 2 — mobile bottom-nav (2026-05-13)
+- [x] Mobile bottom-nav + `(app)` layout integration — `8742bd7d`
 
 ## Per-surface checklist
 
 ### Foundation (must finish before priorities 2-5)
-- [ ] `components/layout/admin-sidebar.tsx` — hide at `max-lg:`, render as drawer
-- [ ] `components/layout/mobile-bottom-nav.tsx` (new) — 5-tab bottom nav
-- [ ] `components/layout/admin-top-bar.tsx` — mobile compact form
-- [ ] `components/layout/admin-brand-pill.tsx` — mobile compact trigger
-- [ ] `app/(app)/layout.tsx` — wire mobile chrome
-- [ ] Safe-area insets, iOS keyboard, viewport meta
+- [x] `components/layout/mobile-bottom-nav.tsx` (new) — 5-tab bottom nav (4 surfaces + More) — `8742bd7d`
+- [x] `app/(app)/layout.tsx` — wire mobile chrome (nav + spacer) — `8742bd7d`
+- [x] Safe-area inset bottom (`env(safe-area-inset-bottom)`) — done in bottom nav
+- [ ] `components/layout/admin-sidebar.tsx` — drawer already wired via SidebarProvider; verify drawer height + scroll on mobile
+- [ ] `components/layout/admin-top-bar.tsx` — mobile compact form (collapse search/help, smaller height)
+- [ ] `components/layout/admin-brand-pill.tsx` — mobile compact trigger (truncated label, popover height)
+- [ ] iOS keyboard: scroll-into-view on active input
+- [ ] Verify viewport meta in root layout
 
 ### Brand-scoped (priority 2)
 - [ ] `/calendar` + `/[id]` + `/review`
