@@ -38,7 +38,7 @@ Append a line per surface as it ships. Loop reads this to know what's done.
 - [x] `/brand-profile` — section padding tightened to `max-md:p-4` (was `p-6`); empty state copy already mobile-friendly — `aac5b0e7`
 - [x] `/review` — empty-state copy mobile-aware; Table primitive already has `overflow-x-auto` so the data table scrolls horizontally on phone — `f562d19e`. Full card-list refactor is a follow-up if needed.
 - [x] `/spying` + audits + self-audit + versus + watch — pages already use `cortex-page-gutter`, `grid-cols-1 md:grid-cols-N` patterns and `flex-wrap` headers. SpyStatStrip uses `grid-cols-2 md:grid-cols-4`. VersusBoard stacks 1-up on mobile. No code changes needed.
-- [ ] `/notes` + `/[id]`
+- [x] `/notes` + `/[id]` — list uses `grid-cols-1 md:grid-cols-2 xl:grid-cols-3` already (single column on mobile); detail is a ReactFlow moodboard canvas that handles its own touch+pinch viewport. PRD's "markdown editor" framing was incorrect — actual surface is the visual canvas. No code changes needed.
 - [ ] `/ads` + `/batches/[batchId]`
 - [ ] `/deliverables`
 
