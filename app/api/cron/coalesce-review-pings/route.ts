@@ -58,7 +58,6 @@ type CalendarPending = {
     scheduled_posts: {
       id: string;
       scheduled_at: string | null;
-      drop_id: string;
     } | null;
   } | null;
 };
@@ -96,7 +95,7 @@ async function handleCalendar(admin: ReturnType<typeof createAdminClient>): Prom
   const { data: pending } = await admin
     .from('post_review_comments')
     .select(
-      'id, review_link_id, author_name, content, status, attachments, created_at, post_review_links!inner(post_id, scheduled_posts!inner(id, scheduled_at, drop_id))',
+      'id, review_link_id, author_name, content, status, attachments, created_at, post_review_links!inner(post_id, scheduled_posts!inner(id, scheduled_at))',
     )
     .is('chat_notified_at', null)
     .in('status', ['comment', 'changes_requested'])
@@ -105,33 +104,110 @@ async function handleCalendar(admin: ReturnType<typeof createAdminClient>): Prom
   const rows = (pending ?? []) as unknown as CalendarPending[];
   if (rows.length === 0) return { cardsFired: 0, commentsBatched: 0 };
 
-  // Group by drop_id (effectively one share link per drop on the public
-  // surface). Skip rows whose chain is missing — shouldn't happen with
-  // `!inner` joins, but defensive against schema drift.
-  const byDrop = new Map<string, CalendarPending[]>();
+  // Reverse-lookup review_link_id → share_link via post_review_link_map.
+  // scheduled_posts has no drop_id; the share link's JSONB map is the only
+  // place that connects a review-link to its drop. We fetch every active
+  // share link whose map contains at least one of the pending comments'
+  // review_link_ids, then bucket comments by share_link_id.
+  const pendingReviewLinkIds = Array.from(new Set(rows.map((r) => r.review_link_id)));
+  const { data: shareLinks } = await admin
+    .from('content_drop_share_links')
+    .select('id, drop_id, token, name, post_review_link_map, created_at')
+    .or(
+      pendingReviewLinkIds
+        .map((id) => `post_review_link_map.cs.{"_":"${id}"}`)
+        .join(','),
+    );
+  // The `or().cs` JSONB-contains query above tries every review_link_id but
+  // Supabase rejects unrecognized keys; fall back to fetching all recent
+  // links and filtering in-memory if the targeted query returned nothing
+  // useful (defensive — JSONB key-contains has been finicky).
+  let candidateLinks = shareLinks ?? [];
+  if (candidateLinks.length === 0) {
+    const { data: fallback } = await admin
+      .from('content_drop_share_links')
+      .select('id, drop_id, token, name, post_review_link_map, created_at')
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(500);
+    candidateLinks = fallback ?? [];
+  }
+
+  // Build review_link_id → share_link (prefer newest if multiple match).
+  const linkByReviewId = new Map<
+    string,
+    {
+      id: string;
+      drop_id: string;
+      token: string;
+      name: string | null;
+      created_at: string | null;
+    }
+  >();
+  for (const link of candidateLinks as Array<{
+    id: string;
+    drop_id: string;
+    token: string;
+    name: string | null;
+    post_review_link_map: Record<string, string> | null;
+    created_at: string | null;
+  }>) {
+    const map = link.post_review_link_map ?? {};
+    for (const reviewLinkId of Object.values(map)) {
+      const existing = linkByReviewId.get(reviewLinkId);
+      const newer =
+        !existing ||
+        (link.created_at &&
+          existing.created_at &&
+          new Date(link.created_at).getTime() >
+            new Date(existing.created_at).getTime());
+      if (newer) {
+        linkByReviewId.set(reviewLinkId, {
+          id: link.id,
+          drop_id: link.drop_id,
+          token: link.token,
+          name: link.name,
+          created_at: link.created_at,
+        });
+      }
+    }
+  }
+
+  // Group comments by share_link_id.
+  const byShareLink = new Map<
+    string,
+    {
+      shareLink: {
+        id: string;
+        drop_id: string;
+        token: string;
+        name: string | null;
+      };
+      comments: CalendarPending[];
+    }
+  >();
   for (const r of rows) {
-    const dropId = r.post_review_links?.scheduled_posts?.drop_id;
-    if (!dropId) continue;
-    const list = byDrop.get(dropId) ?? [];
-    list.push(r);
-    byDrop.set(dropId, list);
+    const link = linkByReviewId.get(r.review_link_id);
+    if (!link) continue;
+    const entry = byShareLink.get(link.id) ?? { shareLink: link, comments: [] };
+    entry.comments.push(r);
+    byShareLink.set(link.id, entry);
   }
 
   const now = Date.now();
   let cardsFired = 0;
   let commentsBatched = 0;
 
-  for (const [dropId, group] of byDrop) {
+  for (const [, { shareLink, comments: group }] of byShareLink) {
     const earliest = new Date(group[0].created_at).getTime();
     if (now - earliest < QUIET_WINDOW_MS) continue; // not yet 20 min old
 
-    // Resolve drop + client + share link.
     const { data: drop } = await admin
       .from('content_drops')
       .select(
         'id, client_id, start_date, clients(name, agency, chat_webhook_url)',
       )
-      .eq('id', dropId)
+      .eq('id', shareLink.drop_id)
       .single<{
         id: string;
         client_id: string;
@@ -143,19 +219,6 @@ async function handleCalendar(admin: ReturnType<typeof createAdminClient>): Prom
         } | null;
       }>();
     if (!drop) continue;
-
-    // Pick the most recent active share link for this drop. We don't
-    // store share_link_id on the comment row, so we match by drop_id and
-    // prefer the freshest token — that's the one the client is actually
-    // using.
-    const { data: shareLinks } = await admin
-      .from('content_drop_share_links')
-      .select('id, token, name, expires_at, created_at')
-      .eq('drop_id', dropId)
-      .order('created_at', { ascending: false })
-      .limit(1);
-    const shareLink = shareLinks?.[0];
-    if (!shareLink) continue;
 
     const clientName = drop.clients?.name ?? 'Client';
     const webhookUrl = await resolveTeamChatWebhook(admin, {
@@ -219,13 +282,13 @@ async function handleCalendar(admin: ReturnType<typeof createAdminClient>): Prom
     postToGoogleChatSafe(
       webhookUrl,
       buildChatCard({
-        cardId: `calendar-comment-batch-${dropId}-${earliest}`,
+        cardId: `calendar-comment-batch-${shareLink.id}-${earliest}`,
         headerTitle,
         headerSubtitle,
         sections: [{ widgets }],
         fallbackText: fallback,
       }),
-      `coalesce-review-pings:calendar:${dropId}`,
+      `coalesce-review-pings:calendar:${shareLink.id}`,
     );
 
     // Stamp dedup AFTER firing. If the stamp write fails we'd rather
