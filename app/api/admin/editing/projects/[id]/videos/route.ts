@@ -71,6 +71,7 @@ export async function POST(
 
   let version = 1;
   let position = parsed.data.position;
+  let isRevision = false;
   if (parsed.data.replace_video_id) {
     const { data: prev } = await admin
       .from('editing_project_videos')
@@ -80,6 +81,7 @@ export async function POST(
     if (prev) {
       version = prev.version + 1;
       position = prev.position;
+      isRevision = true;
     }
   } else {
     // Bulk uploads from the editing dialog all post `position: 0` because
@@ -157,6 +159,14 @@ export async function POST(
       .update({ updated_at: new Date().toISOString() })
       .eq('id', projectId);
 
+    if (isRevision) {
+      await recordVideoRevisedAuditRow(admin, {
+        projectId,
+        videoId: row.id,
+        editorUserId: user.id,
+      });
+    }
+
     return NextResponse.json({
       kind: 'image',
       video_id: row.id,
@@ -217,10 +227,80 @@ export async function POST(
     .update({ updated_at: new Date().toISOString() })
     .eq('id', projectId);
 
+  if (isRevision) {
+    await recordVideoRevisedAuditRow(admin, {
+      projectId,
+      videoId: row.id,
+      editorUserId: user.id,
+    });
+  }
+
   return NextResponse.json({
     kind: 'video',
     video_id: row.id,
     upload_id: upload.id,
     upload_url: upload.url,
   });
+}
+
+/**
+ * Record a `video_revised` audit-trail row on the project's most recent
+ * unarchived share link. The row sits with `chat_notified_at = NULL` so
+ * the `/api/cron/coalesce-review-pings` cron picks it up and bundles a
+ * "📬 N revised cuts on <client>" Google Chat ping per share link after
+ * the 20-min quiet window. Mirrors the calendar `/notify-revisions` team
+ * ping, but driven passively off uploads instead of an explicit editor
+ * "Notify client" button (editing share links don't have a batch email
+ * flow; the share link itself is the surface).
+ *
+ * Best-effort: any failure is logged but doesn't break the upload. The
+ * upload row is the source of truth; the audit row is an FYI breadcrumb.
+ */
+async function recordVideoRevisedAuditRow(
+  admin: ReturnType<typeof createAdminClient>,
+  args: { projectId: string; videoId: string; editorUserId: string },
+): Promise<void> {
+  try {
+    const { data: shareLink } = await admin
+      .from('editing_project_share_links')
+      .select('id')
+      .eq('project_id', args.projectId)
+      .is('archived_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle<{ id: string }>();
+    if (!shareLink) return; // no link == no audience for the FYI
+
+    const { data: editor } = await admin
+      .from('users')
+      .select('full_name, email')
+      .eq('id', args.editorUserId)
+      .maybeSingle<{ full_name: string | null; email: string | null }>();
+    const editorName =
+      editor?.full_name?.trim() ||
+      editor?.email?.split('@')[0] ||
+      'Editor';
+
+    const { error: insertErr } = await admin
+      .from('editing_project_review_comments')
+      .insert({
+        project_id: args.projectId,
+        video_id: args.videoId,
+        share_link_id: shareLink.id,
+        author_user_id: args.editorUserId,
+        author_name: editorName,
+        content: 'Re-uploaded a revised cut',
+        status: 'video_revised',
+        attachments: [],
+      });
+    if (insertErr) {
+      console.error('[editing-videos] video_revised audit insert failed', {
+        projectId: args.projectId,
+        videoId: args.videoId,
+        error: insertErr,
+      });
+    }
+  } catch (err) {
+    console.error('[editing-videos] video_revised audit threw', err);
+  }
 }

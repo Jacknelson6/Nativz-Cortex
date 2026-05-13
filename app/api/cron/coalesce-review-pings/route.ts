@@ -28,7 +28,10 @@ export const maxDuration = 60;
  * Flow:
  *   1. Insert leaves `chat_notified_at` NULL on each comment.
  *   2. This cron (every 5 min) groups un-notified `comment` /
- *      `changes_requested` rows per share-link.
+ *      `changes_requested` rows per share-link. On the editing side it
+ *      also batches `approved` (client rapid-fire approvals) and
+ *      `video_revised` (editor re-upload audit rows from
+ *      `/api/admin/editing/projects/:id/videos`).
  *   3. For each group, fire one card listing every comment in the batch
  *      **only after** the earliest pending comment is ≥20 min old. That
  *      gives the client time to finish their pass; subsequent notes in
@@ -83,7 +86,7 @@ type EditingPending = {
   project_id: string;
   author_name: string;
   content: string;
-  status: 'comment' | 'changes_requested' | 'approved';
+  status: 'comment' | 'changes_requested' | 'approved' | 'video_revised';
   attachments: Array<{ url: string; filename: string }> | null;
   video_id: string | null;
   created_at: string;
@@ -100,13 +103,15 @@ function previewLine(c: {
       ? 'requested changes'
       : c.status === 'approved'
         ? 'approved'
-        : 'commented';
+        : c.status === 'video_revised'
+          ? 're-uploaded a revised cut'
+          : 'commented';
   const trimmed = c.content.trim();
   const attachmentCount = (c.attachments ?? []).length;
   const fallback =
     attachmentCount > 0
       ? `(${attachmentCount} attachment${attachmentCount === 1 ? '' : 's'})`
-      : c.status === 'approved'
+      : c.status === 'approved' || c.status === 'video_revised'
         ? '(no notes)'
         : '(no message)';
   const body = trimmed
@@ -364,7 +369,19 @@ async function handleEditing(admin: ReturnType<typeof createAdminClient>): Promi
   // NULL exactly like comments + change requests, and this cron coalesces
   // the lot. The 🎉 all-approved single-shot still fires from the comment
   // route the moment the project hits 100% approved.
-  const PENDING_STATUSES = ['comment', 'changes_requested', 'approved'];
+  //
+  // `video_revised` joined the bundler on the same day. The admin videos
+  // POST writes a `video_revised` audit row whenever the editor uploads
+  // a `replace_video_id` retry, and this cron batches them into a 📬
+  // "N revised cuts on <client>" team ping. Mirrors the calendar
+  // /notify-revisions chat card without needing an explicit "Notify"
+  // button: editing share links don't have a batch email flow.
+  const PENDING_STATUSES = [
+    'comment',
+    'changes_requested',
+    'approved',
+    'video_revised',
+  ];
   const { data: pending } = await admin
     .from('editing_project_review_comments')
     .select(
@@ -522,25 +539,36 @@ async function handleEditing(admin: ReturnType<typeof createAdminClient>): Promi
         text: perGroup.map((c) => previewLine(c)).join('<br>'),
       });
     }
-    // Pure-approval batches get the ✅ icon + "approval" wording so they
-    // read like the old single-shot card, just collapsed. Mixed batches
-    // (any non-approval rows present) stay on ✏️ "update" so the team
-    // doesn't miss a change request hiding inside an approval run. The
-    // CTA copy follows the same rule — pure approvals don't need
-    // "Open & reply" prompting.
+    // Header + CTA pick a flavour based on batch composition:
+    //   pure approvals       → ✅ "N approvals", "Open share link"
+    //   pure revised cuts    → 📬 "N revised cuts sent", "Spot-check share link"
+    //   anything else (mixed,
+    //   change requests,
+    //   plain comments)      → ✏️ "N updates", "Open & reply"
+    // Mixed batches stay on ✏️ on purpose: we don't want a change request
+    // hidden inside an approval/revision run to read like a celebration.
     const approvalsOnly = group.every((c) => c.status === 'approved');
+    const revisionsOnly = group.every((c) => c.status === 'video_revised');
+    let headerEmoji = '✏️';
+    let headerNoun = `update${group.length === 1 ? '' : 's'}`;
+    let ctaText = 'Open & reply';
+    if (approvalsOnly) {
+      headerEmoji = '✅';
+      headerNoun = `approval${group.length === 1 ? '' : 's'}`;
+      ctaText = 'Open share link';
+    } else if (revisionsOnly) {
+      headerEmoji = '📬';
+      headerNoun = `revised cut${group.length === 1 ? '' : 's'} sent`;
+      ctaText = 'Spot-check share link';
+    }
     widgets.push({
       type: 'button',
-      text: approvalsOnly ? 'Open share link' : 'Open & reply',
+      text: ctaText,
       url: shareUrl,
       filled: true,
     });
 
     const totalNotes = group.length;
-    const headerEmoji = approvalsOnly ? '✅' : '✏️';
-    const headerNoun = approvalsOnly
-      ? `approval${totalNotes === 1 ? '' : 's'}`
-      : `update${totalNotes === 1 ? '' : 's'}`;
     const headerTitle = `${headerEmoji} ${totalNotes} ${headerNoun} on ${clientName}`;
     const headerSubtitle = projectName;
     const fallback = [
