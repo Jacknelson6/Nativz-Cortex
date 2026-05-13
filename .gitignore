@@ -106,3 +106,4 @@ tmp/
 
 # SWC build artifacts
 .swc/
+.claude/ralph-loop.local.md
