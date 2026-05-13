@@ -47,9 +47,9 @@ Append a line per surface as it ships. Loop reads this to know what's done.
 - [x] `/admin/analytics` + sub-tabs — header is `flex flex-col sm:flex-row sm:items-center sm:justify-between`, tab strip is a flex row that stays in viewport at 375 (3-4 items), uses cortex-page-gutter. No code changes needed.
 - [x] `/admin/clients` (roster) — ClientSearchGrid uses `grid-cols-1 sm:grid-cols-2 xl:grid-cols-3`. Mobile single column. No code changes needed.
 - [x] `/admin/clients/[slug]` + workspace + 10-tab settings — `client-admin-shell.tsx` already has parallel rendering: `lg:hidden overflow-x-auto` mobile tab strip + `hidden lg:flex` desktop rail. Content area `px-5 lg:px-8`. Already mobile-aware.
-- [ ] `/admin/clients/onboard` wizard
-- [ ] `/admin/content-tools`
-- [ ] `/admin/onboarding` + `/[id]`
+- [x] `/admin/clients/onboard` wizard — `cortex-page-gutter max-w-3xl mx-auto`. Each step is a vertical form widget which already stacks single-column on mobile.
+- [!] `/admin/content-tools` — BLOCKED. `components/admin/content-tools/content-tools-shell.tsx` has Jack's uncommitted WIP. Revisit after his changes land.
+- [x] `/admin/onboarding` + `/[id]` — list parallel-rendered: desktop 5-column grid + mobile vertical flex stack per card. Detail page already uses `cortex-page-gutter max-w-5xl mx-auto space-y-6`. `c9f7d164`
 - [ ] `/admin/ops/publish-health`
 - [ ] `/admin/users`
 - [ ] `/admin/team`
