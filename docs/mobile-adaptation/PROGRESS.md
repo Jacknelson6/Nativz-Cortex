@@ -25,9 +25,9 @@ Append a line per surface as it ships. Loop reads this to know what's done.
 - [x] Safe-area inset bottom (`env(safe-area-inset-bottom)`) — done in bottom nav
 - [x] `components/layout/admin-top-bar.tsx` — mobile compact (gap/padding/logo shrink, brand pill cap) — `25baa380`
 - [x] Viewport meta — `viewport-fit=cover` exported in `app/layout.tsx` — `1f96340d`
-- [ ] `components/layout/admin-sidebar.tsx` — drawer already wired via SidebarProvider; verify drawer height + scroll on mobile
-- [ ] `components/layout/admin-brand-pill.tsx` — mobile compact trigger (truncated label, popover height)
-- [ ] iOS keyboard: scroll-into-view on active input
+- [x] `components/layout/sidebar.tsx` mobile drawer — safe-area pad + a11y dialog role — `544b0a96`
+- [x] `components/layout/admin-brand-pill.tsx` — trigger already capped by top-bar `max-md:max-w-[160px]`; popover `min-w-[280px]` fits 375+ viewport
+- [x] iOS keyboard: global scroll-margin on inputs/textareas under 1024px — `544b0a96`
 
 ### Brand-scoped (priority 2)
 - [ ] `/calendar` + `/[id]` + `/review`
