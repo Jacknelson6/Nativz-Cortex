@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Jost, Poppins, Rubik, Sora, Roboto } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { Analytics } from '@vercel/analytics/next';
@@ -60,6 +60,16 @@ const roboto = Roboto({
   subsets: ['latin'],
   display: 'swap',
 });
+
+// Viewport — explicit so `env(safe-area-inset-*)` resolves on iOS notch /
+// home-indicator devices (the mobile bottom nav and any sticky CTA above
+// the home indicator depends on viewport-fit=cover). Pinch-zoom left
+// unrestricted so users with low vision keep the affordance.
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+};
 
 // Dynamic metadata — title and favicon switch based on domain.
 // Mirrors RootLayout's hostname fallback because `generateMetadata` runs on
