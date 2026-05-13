@@ -30,7 +30,8 @@ Append a line per surface as it ships. Loop reads this to know what's done.
 - [x] iOS keyboard: global scroll-margin on inputs/textareas under 1024px — `544b0a96`
 
 ### Brand-scoped (priority 2)
-- [ ] `/calendar` + `/[id]` + `/review`
+- [~] `/calendar` + `/[id]` + `/review` — shell partial (`7ea8f888`: media library hidden, action row scrolls, empty copy). Still todo: list view → cards, FAB for new post, drop editor mobile (platform tabs / preview sheet), `/calendar/[id]` detail, `/calendar/review`
+- [ ] `/finder/new`
 - [ ] `/finder/new`
 - [ ] `/finder/[id]` + processing + subtopics
 - [ ] `/finder/formats`
