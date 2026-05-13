@@ -184,6 +184,14 @@ async function resolveInstagram(handle: string): Promise<string | null> {
           'x-ig-app-id': '936619743392459',
           'User-Agent': USER_AGENT,
           'Accept-Language': 'en-US,en;q=0.9',
+          // IG enforces Sec-Fetch + Origin/Referer to gate non-browser
+          // callers. With these the same anonymous endpoint that the
+          // web app uses returns 200.
+          'Sec-Fetch-Site': 'same-origin',
+          'Sec-Fetch-Mode': 'cors',
+          'Sec-Fetch-Dest': 'empty',
+          'Origin': 'https://www.instagram.com',
+          'Referer': 'https://www.instagram.com/',
         },
       },
     );
