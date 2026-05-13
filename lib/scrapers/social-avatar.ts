@@ -151,26 +151,66 @@ async function isUsableImage(url: string, minBytes = MIN_AVATAR_BYTES): Promise<
 // returns either a usable image URL or null. Failure is silent.
 // ──────────────────────────────────────────────────────────────────────────
 
-async function resolveInstagram(handle: string): Promise<string | null> {
-  const cleaned = handle.replace(/^@/, '').replace(/\/$/, '');
-  if (!cleaned) return null;
-  const html = await fetchProfileHtml(`https://www.instagram.com/${cleaned}/`);
+async function resolveFromOgImage(profileUrl: string): Promise<string | null> {
+  const html = await fetchProfileHtml(profileUrl);
   if (!html) return null;
   const image = extractOgImage(html);
   if (!image) return null;
-  if (!(await isUsableImage(image))) return null;
+  if (!(await isUsableImage(image, 256))) return null;
   return image;
 }
 
-async function resolveFacebook(handle: string): Promise<string | null> {
-  const cleaned = handle.replace(/\/$/, '');
+/**
+ * Instagram's public web profile info endpoint. Returns JSON with
+ * `data.user.profile_pic_url_hd`. Public, no auth, no cookies required,
+ * but does need the `x-ig-app-id` header to look like a web client.
+ *
+ * Note: the returned profile_pic CDN URL is signed and expires (~hours to
+ * days). For a long-lived stored avatar, the consumer should re-resolve
+ * periodically. For this app, the manual "Refresh logo" button serves
+ * that purpose.
+ */
+async function resolveInstagram(handle: string): Promise<string | null> {
+  const cleaned = handle.replace(/^@/, '').replace(/\/$/, '');
   if (!cleaned) return null;
-  const html = await fetchProfileHtml(`https://www.facebook.com/${cleaned}/`);
-  if (!html) return null;
-  const image = extractOgImage(html);
-  if (!image) return null;
-  if (!(await isUsableImage(image))) return null;
-  return image;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(
+      `https://i.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(cleaned)}`,
+      {
+        signal: controller.signal,
+        headers: {
+          'x-ig-app-id': '936619743392459',
+          'User-Agent': USER_AGENT,
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+      },
+    );
+    if (res.ok) {
+      const json = (await res.json()) as { data?: { user?: { profile_pic_url_hd?: string; profile_pic_url?: string } } };
+      const pic = json?.data?.user?.profile_pic_url_hd ?? json?.data?.user?.profile_pic_url;
+      if (pic && (await isUsableImage(pic, 256))) return pic;
+    }
+  } catch {
+    // fall through to og:image
+  } finally {
+    clearTimeout(timer);
+  }
+  return resolveFromOgImage(`https://www.instagram.com/${cleaned}/`);
+}
+
+/**
+ * Facebook's Graph API picture endpoint. 302-redirects to the actual CDN
+ * image for any public page. Stable URL that we can persist directly —
+ * the browser will follow the redirect on render.
+ */
+async function resolveFacebook(handle: string): Promise<string | null> {
+  const cleaned = handle.replace(/^@/, '').replace(/\/$/, '');
+  if (!cleaned) return null;
+  const graphUrl = `https://graph.facebook.com/${encodeURIComponent(cleaned)}/picture?type=large`;
+  if (await isUsableImage(graphUrl, 256)) return graphUrl;
+  return resolveFromOgImage(`https://www.facebook.com/${cleaned}/`);
 }
 
 async function resolveYouTube(handleOrUrl: string): Promise<string | null> {
@@ -184,35 +224,20 @@ async function resolveYouTube(handleOrUrl: string): Promise<string | null> {
   } else {
     target = `https://www.youtube.com/@${handleOrUrl}`;
   }
-  const html = await fetchProfileHtml(target);
-  if (!html) return null;
-  const image = extractOgImage(html);
-  if (!image) return null;
-  if (!(await isUsableImage(image))) return null;
-  return image;
+  return resolveFromOgImage(target);
 }
 
 async function resolveTikTok(handle: string): Promise<string | null> {
   const cleaned = handle.replace(/^@/, '').replace(/\/$/, '');
   if (!cleaned) return null;
-  const html = await fetchProfileHtml(`https://www.tiktok.com/@${cleaned}`);
-  if (!html) return null;
-  const image = extractOgImage(html);
-  if (!image) return null;
-  if (!(await isUsableImage(image))) return null;
-  return image;
+  return resolveFromOgImage(`https://www.tiktok.com/@${cleaned}`);
 }
 
 async function resolveLinkedIn(handleOrUrl: string): Promise<string | null> {
   const target = handleOrUrl.startsWith('http')
     ? handleOrUrl
     : `https://www.linkedin.com/company/${handleOrUrl.replace(/^\/+|\/+$/g, '')}`;
-  const html = await fetchProfileHtml(target);
-  if (!html) return null;
-  const image = extractOgImage(html);
-  if (!image) return null;
-  if (!(await isUsableImage(image))) return null;
-  return image;
+  return resolveFromOgImage(target);
 }
 
 /**
