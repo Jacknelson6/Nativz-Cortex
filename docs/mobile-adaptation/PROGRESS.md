@@ -33,7 +33,7 @@ Append a line per surface as it ships. Loop reads this to know what's done.
 - [~] `/calendar` + `/[id]` + `/review` — shell partial (`7ea8f888`: media library hidden, action row scrolls, empty copy). Still todo: list view → cards, FAB for new post, drop editor mobile (platform tabs / preview sheet), `/calendar/[id]` detail, `/calendar/review`
 - [x] `/finder/new` — search input bumped to text-base for iOS no-zoom; ResearchHub already used `max-lg:` responsive layout — `e77870ba`
 - [x] `/finder/[id]` — outer header + content padding tightened to `max-md:px-4`; grid was already `grid-cols-1 lg:grid-cols-2` — `5d23231b`. Processing + subtopics inherit the responsive primitives.
-- [ ] `/finder/formats`
+- [x] `/finder/formats` — detail-modal padding tightened on mobile; cards already in horizontal-snap scroll with mobile width `w-[260px]` — `e29b2619`
 - [ ] `/lab`
 - [ ] `/brand-profile`
 - [ ] `/review`
