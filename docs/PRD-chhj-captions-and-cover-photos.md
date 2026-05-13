@@ -13,7 +13,7 @@ Five tasks total. Self-referential loop: each item ends with a `next:` pointer.
 
 ---
 
-## Item 1 - Audit CHHJ revisions (done)
+## Item 1 - Audit CHHJ revisions (done, b71c94e5)
 
 15 caption_edit rows on 2026-05-12 (`post_review_comments` where `status='caption_edit'`, joined through `post_review_links` to scheduled_posts for CHHJ). All edits by "Alex" between 13:39 and 14:13.
 
@@ -38,7 +38,7 @@ next: Item 2 (write the style fingerprint into CHHJ's brand profile).
 
 ---
 
-## Item 2 - Persist CHHJ guidance to brand profile
+## Item 2 - Persist CHHJ guidance to brand profile (done, b71c94e5)
 
 `clients` already has the three text columns we need (NAT-67 migration):
 
@@ -61,7 +61,7 @@ next: Item 3 (cover photo API route).
 
 ---
 
-## Item 3 - Cover photo API route
+## Item 3 - Cover photo API route (done, b71c94e5)
 
 Zernio already supports custom cover images for video posts: `lib/posting/zernio.ts:494` reads `input.coverImageUrl` and stamps it on the video media item as `thumbnail`. The publish pipeline reads `scheduled_posts.cover_image_url` and passes it through (`lib/calendar/schedule-drop.ts:579`).
 
@@ -82,7 +82,7 @@ next: Item 4 (cover photo UI on share link).
 
 ---
 
-## Item 4 - Cover photo UI on share link
+## Item 4 - Cover photo UI on share link (done, f56dcb55)
 
 In `app/c/[token]/page.tsx`, the `SharedPost` already carries `cover_image_url`. Add an "Edit cover" affordance to each video tile in the share-link reviewer view:
 
@@ -101,21 +101,46 @@ next: Item 5 (end-to-end Zernio verification).
 
 ---
 
-## Item 5 - Verify Zernio publish payload uses cover
+## Item 5 - Verify Zernio publish payload uses cover (static-verified)
 
-Smoke test the publish path end-to-end:
+**Static code audit (done):** traced the cover from DB to outbound Zernio body.
 
-1. Pick one CHHJ scheduled post that hasn't published yet (status='scheduled', scheduled_at in the future).
-2. Upload a custom cover via the new UI as that post's reviewer.
-3. SELECT `cover_image_url` from `scheduled_posts` to confirm DB write.
-4. Trigger the publish manually (or wait for the 2-min cron - faster to script: `node scripts/publish-one.ts <id>` if it exists, otherwise call the Zernio service in a one-off node REPL).
-5. Inspect the outbound Zernio payload (the service logs the request body when `LOG_ZERNIO_PAYLOAD=1` is set, per `lib/posting/zernio.ts`).
-6. Confirm: video media item has `thumbnail` = uploaded cover URL on Instagram + Facebook + LinkedIn legs. TikTok ignores custom thumbnails per Zernio's API (`lib/posting/zernio.ts:733-736`) - that's expected, not a bug.
-7. If the post publishes, confirm the cover is visible on Instagram/Facebook/LinkedIn before the video plays.
+| Step | Where | What |
+|------|-------|------|
+| 1 | `scheduled_posts.cover_image_url` | API route writes the uploaded URL here (Item 3) |
+| 2 | `lib/calendar/schedule-drop.ts:579` | `coverImageUrl: post.cover_image_url ?? undefined` passed into `publishPost` |
+| 3 | `lib/calendar/resolve-media.ts` | Video posts emit `{ videoUrl }` (not `mediaItems`) |
+| 4 | `lib/posting/zernio.ts:492-496` | `videoUrl` branch in `buildMediaContext` runs `v.thumbnail = input.coverImageUrl` and pushes `{type:'video', url, thumbnail}` into `ctx.items` |
+| 5 | `lib/posting/zernio.ts:721-725` | `body.mediaItems = ctx.items` — the thumbnail survives into the outbound body |
+| 6 | `lib/posting/zernio.ts:733-739` | TikTok body-level cover deliberately skipped (sending `video_cover_image_url` crashed Zernio's ffmpeg historically, Joseph Pytcher Weston Funding post stuck for hours) |
+| 7 | Per-leg builders | `buildInstagramEntry` / `buildFacebookEntry` / `buildLinkedInEntry` mutate only `baseEntry.platformSpecificData`; body-level `mediaItems` are untouched so the thumbnail reaches IG/FB/LinkedIn |
 
-Done = all 5 items shipped + verified, brand profile updated for CHHJ, share-link reviewers can set per-post covers, Zernio honors them where the platform allows.
+**Conclusion:** wiring is correct. For any video post in `scheduled_posts` with `cover_image_url` set, the outbound Zernio body carries `mediaItems[0].thumbnail = <cover URL>` and IG/FB/LinkedIn legs honor it.
 
-next: nothing - all items complete.
+**Live smoke test (Jack to drive — needs the real share-link UI):**
+
+1. Find a CHHJ scheduled post in the future:
+   ```sql
+   select id, title, scheduled_at, cover_image_url from scheduled_posts
+   where client_id='85d52b89-8d70-4a6e-8188-f7f0384a31bc'
+     and status='scheduled'
+     and scheduled_at > now()
+     and post_type='video'
+   order by scheduled_at asc limit 5;
+   ```
+2. Open the matching `/c/<token>` share link, click "Edit cover" on that video tile, upload a JPG/PNG.
+3. Verify the DB row updated: `select cover_image_url from scheduled_posts where id='<post>'`.
+4. Set `LOG_ZERNIO_PAYLOAD=1` on the Vercel env (or the local box if testing dev), redeploy.
+5. Either wait for the 2-min publish cron at `scheduled_at`, or fire a one-off using the pattern in `scripts/force-publish-skibell-mothers-day.ts` (clone, set `POST_ID`, `npx tsx ...`).
+6. Tail the publish logs. Expect a `mediaItems` log entry whose first element looks like:
+   ```json
+   {"type":"video","url":"<videoUrl>","thumbnail":"<your-cover-url>"}
+   ```
+7. On Instagram + Facebook + LinkedIn, confirm the static cover renders before the video plays. On TikTok, expect TikTok's first-frame default (intentional, see step 6 of the audit table).
+
+Done when steps 1-7 above pass on a real CHHJ post.
+
+next: nothing - all items shipped, static audit clears wiring, live smoke test handed to Jack.
 
 ---
 
