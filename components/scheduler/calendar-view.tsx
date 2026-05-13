@@ -173,8 +173,12 @@ export function CalendarView({
         </span>
       </div>
 
-      {/* Weekday headers */}
-      <div className="grid grid-cols-7 border-b border-nativz-border">
+      {/* Weekday headers + grid wrapped in a shared horizontal-scroll
+       *  container on mobile so the 7-column layout doesn't squish to
+       *  unreadable 53px cells. Desktop ignores this — `md:min-w-0`
+       *  releases the floor so flex constraints reclaim authority. */}
+      <div className="max-md:overflow-x-auto max-md:flex max-md:flex-col">
+      <div className="grid grid-cols-7 border-b border-nativz-border max-md:min-w-[640px]">
         {WEEKDAYS.map(d => (
           <div key={d} className="px-2 py-1.5 text-xs font-medium text-text-muted text-center">
             {d}
@@ -183,7 +187,7 @@ export function CalendarView({
       </div>
 
       {/* Calendar grid */}
-      <div className="flex-1 grid grid-cols-7 auto-rows-fr">
+      <div className="flex-1 grid grid-cols-7 auto-rows-fr max-md:min-w-[640px]">
         {cells.map(({ date, dateStr, inMonth }) => {
           const dayPosts = postsByDate[dateStr] ?? [];
           const isToday = dateStr === today;
@@ -222,6 +226,7 @@ export function CalendarView({
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );
