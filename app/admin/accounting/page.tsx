@@ -130,7 +130,7 @@ async function PeriodsTab({ adminClient }: { adminClient: ReturnType<typeof crea
       title="Periods"
       description="Recent 24 bi-monthly periods. Click a row to open entries, lock, or mark paid."
     >
-      <div className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
+      <div className="rounded-xl border border-nativz-border bg-surface overflow-hidden max-md:overflow-x-auto">
         <table className="w-full text-base">
           <thead className="bg-background/50 text-text-secondary">
             <tr>
@@ -296,7 +296,7 @@ async function ApprovedCreativesTab({
       title={`Approved this period · ${period.label}`}
       description={`${liveConsumes.length} approved creative${liveConsumes.length === 1 ? '' : 's'} ready to import into accounting. Net of refunds and revoked approvals.`}
     >
-      <div className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
+      <div className="rounded-xl border border-nativz-border bg-surface overflow-hidden max-md:overflow-x-auto">
         <table className="w-full text-base">
           <thead className="bg-background/50 text-text-secondary">
             <tr>
