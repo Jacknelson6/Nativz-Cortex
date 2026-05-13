@@ -26,7 +26,12 @@ export default async function ReviewPage() {
         <div className="rounded-xl border border-nativz-border bg-surface p-12 text-center">
           <CalendarDays className="mx-auto mb-3 h-8 w-8 text-text-tertiary" />
           <p className="text-sm text-text-secondary">
-            Pick a brand from the top bar to see content reviews.
+            <span className="hidden md:inline">
+              Pick a brand from the top bar to see content reviews.
+            </span>
+            <span className="md:hidden">
+              Pick a brand from the top of the screen to see content reviews.
+            </span>
           </p>
         </div>
       </div>
