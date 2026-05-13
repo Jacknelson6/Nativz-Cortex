@@ -34,7 +34,7 @@ Append a line per surface as it ships. Loop reads this to know what's done.
 - [x] `/finder/new` — search input bumped to text-base for iOS no-zoom; ResearchHub already used `max-lg:` responsive layout — `e77870ba`
 - [x] `/finder/[id]` — outer header + content padding tightened to `max-md:px-4`; grid was already `grid-cols-1 lg:grid-cols-2` — `5d23231b`. Processing + subtopics inherit the responsive primitives.
 - [x] `/finder/formats` — detail-modal padding tightened on mobile; cards already in horizontal-snap scroll with mobile width `w-[260px]` — `e29b2619`
-- [ ] `/lab`
+- [~] `/lab` — workspace height calc fixed so composer clears bottom nav + safe area on mobile (`7aa51e34`). Chat header/composer/messages already had `md:` responsive padding. Outstanding: conversation history rail mobile drawer (rail is `hidden lg:flex`; needs Sheet wrapper for mobile entry).
 - [ ] `/brand-profile`
 - [ ] `/review`
 - [ ] `/spying` + audits + self-audit + versus + watch
