@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { OutlierCreatorsTable } from '@/components/research/outlier-creators-table';
 import { HashtagCloud } from '@/components/research/hashtag-cloud';
 import { HookPatterns } from '@/components/research/hook-patterns';
-import { ViewsOverTime } from '@/components/charts/views-over-time';
+import { ViewsOverTime, ViewsOverTimeSkeleton } from '@/components/charts/views-over-time';
 import { WebContextSection } from '@/components/results/web-context-section';
 import type { TopicSearchVideoRow, TopicSearchHookRow } from '@/lib/scrapers/types';
 
@@ -73,14 +73,13 @@ export function ScrapedVideosSection({
   if (scrapedVideoCount === 0 && videos.length === 0) return null;
 
   if (loading) {
+    // Only Views over time renders unconditionally when scrape data exists —
+    // the other sections (outlier creators, hook patterns, hashtag cloud)
+    // each return null on empty data, so skeletons for them would tease
+    // sections that may never appear.
     return (
-      <div className="rounded-xl border border-nativz-border bg-surface p-6 space-y-3">
-        <div className="h-4 w-40 animate-pulse rounded bg-surface-hover" />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="aspect-[9/16] max-h-48 animate-pulse rounded-xl bg-surface-hover" />
-          ))}
-        </div>
+      <div className="space-y-6">
+        <ViewsOverTimeSkeleton />
       </div>
     );
   }

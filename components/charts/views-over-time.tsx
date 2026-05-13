@@ -116,3 +116,47 @@ export function ViewsOverTime({ videos }: ViewsOverTimeProps) {
     </Card>
   );
 }
+
+/**
+ * Loading skeleton that mirrors the real `<ViewsOverTime />` card —
+ * same wrapper padding, header row, y-axis column width (48px to match
+ * the chart's `YAxis width={48}`), and 200px chart area.
+ */
+export function ViewsOverTimeSkeleton() {
+  return (
+    <Card>
+      <div className="flex items-center gap-2 mb-4">
+        <div className="h-[18px] w-[18px] animate-pulse rounded bg-surface-hover" />
+        <div className="h-5 w-32 animate-pulse rounded bg-surface-hover" />
+      </div>
+      <div className="flex h-[200px] gap-2">
+        <div className="flex w-12 flex-col justify-between py-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-2.5 w-7 animate-pulse rounded bg-surface-hover" />
+          ))}
+        </div>
+        <div className="relative flex-1 overflow-hidden rounded-md">
+          <div className="absolute inset-0 animate-pulse bg-gradient-to-b from-surface-hover to-transparent opacity-60" />
+          <div className="absolute inset-x-0 bottom-6 flex items-end gap-1 px-1">
+            {Array.from({ length: 24 }).map((_, i) => {
+              // Static peaks/troughs so the bar shape reads as a sparkline
+              const heights = [18, 22, 30, 24, 40, 55, 38, 28, 36, 60, 48, 32, 42, 70, 58, 44, 52, 80, 68, 50, 46, 38, 30, 22];
+              return (
+                <div
+                  key={i}
+                  className="flex-1 animate-pulse rounded-sm bg-surface-hover"
+                  style={{ height: `${heights[i]}%` }}
+                />
+              );
+            })}
+          </div>
+          <div className="absolute inset-x-0 bottom-0 flex justify-between px-1">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-2.5 w-8 animate-pulse rounded bg-surface-hover" />
+            ))}
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
