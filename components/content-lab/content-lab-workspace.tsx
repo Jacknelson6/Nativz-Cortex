@@ -116,7 +116,11 @@ export function ContentLabWorkspace({
   }, [storageKey, mostRecentCompletedSearch, topicSearches, initialAttachedSearchId]);
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col">
+    // Desktop: 100vh minus the 64px top bar.
+    // Mobile (max-md): also subtract the 56px fixed bottom nav and the iOS
+    // safe-area inset so the chat composer never sits under the bottom rail.
+    // Uses dvh on mobile for proper Safari URL-bar accounting.
+    <div className="flex h-[calc(100vh-4rem)] max-md:h-[calc(100dvh-4rem-3.5rem-env(safe-area-inset-bottom))] flex-col">
       <ContentLabNerdChat
         clientId={clientId}
         clientName={clientName}
