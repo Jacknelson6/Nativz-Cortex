@@ -45,7 +45,11 @@ async function handleGet(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const [cadenceSetting, autoApproveSetting] = await Promise.all([
+  // `calendar_auto_approve` setting is preserved as a kill-switch for the
+  // T+216h escalation step. The behavior changed 2026-05-13: instead of
+  // auto-approving pending posts, we ping OPS to do a manual followup.
+  // Unapproved posts MUST NEVER publish.
+  const [cadenceSetting, escalationSetting] = await Promise.all([
     getNotificationSetting('calendar_followup_cadence'),
     getNotificationSetting('calendar_auto_approve'),
   ]);
@@ -111,7 +115,7 @@ async function handleGet(request: NextRequest) {
   }
 
   const now = Date.now();
-  const counts = { stage1: 0, stage2: 0, stage3: 0, autoApproved: 0, skipped: 0 };
+  const counts = { stage1: 0, stage2: 0, stage3: 0, manualFollowupPinged: 0, skipped: 0 };
 
   for (const link of shareLinks ?? []) {
     const client = link.content_drops?.clients;
@@ -162,17 +166,20 @@ async function handleGet(request: NextRequest) {
     const shareUrl = `${appUrl}/s/${link.token}`;
     const pocFirstNames = recipients.map((c) => firstName(c.name));
 
-    // Auto-approve sweep at T+216h. Fires once per link and stamps
-    // auto_approved_at so we never re-enter for this link.
-    if (ageHours >= 216 && autoApproveSetting.enabled) {
-      const autoApproved = await autoApprovePending(admin, {
+    // T+216h escalation: ladder is exhausted. Used to auto-approve, but
+    // unapproved posts must never publish (CLAUDE.md hard invariant).
+    // We now ping OPS once with a manual-followup card and stamp
+    // `auto_approved_at` as the dedup marker (column kept for backcompat —
+    // semantics is "escalation exhausted, ops notified").
+    if (ageHours >= 216 && escalationSetting.enabled) {
+      const pinged = await escalateToManualFollowup(admin, {
         link,
         client,
         shareUrl,
         pending,
         total,
       });
-      if (autoApproved) counts.autoApproved += 1;
+      if (pinged) counts.manualFollowupPinged += 1;
       else counts.skipped += 1;
       continue;
     }
@@ -242,24 +249,12 @@ async function handleGet(request: NextRequest) {
         })
         .eq('id', link.id);
 
-      // Ops chat ping so the team can track follow-up volume.
-      const opsWebhook = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
+      // "Stage sent" chat card removed 2026-05-13 — Jack killed the
+      // per-send ops ping. We still emit an in-app Cortex notification
+      // (scoped to members assigned to this client + owners), and a
+      // manual-followup OPS chat card fires once when the escalation
+      // ladder taps out below.
       const stageLabel = stage === 3 ? 'Final call' : `Follow-up ${stage}`;
-      postToGoogleChatSafe(
-        opsWebhook,
-        buildChatCardMessage({
-          cardId: `cadence-ops-${link.id}-${stage}`,
-          title: `📣 ${stageLabel} sent`,
-          subtitle: client.name,
-          paragraphs: [`${pending} of ${total} posts still pending review.`],
-          buttons: [{ text: 'Open share link', url: shareUrl }],
-          fallback: `📣 ${stageLabel} sent to *${client.name}*, ${pending}/${total} posts still pending. ${shareUrl}`,
-        }),
-        `cadence_ops:${link.id}:${stage}`,
-      );
-
-      // In-app Cortex notification for the team. notifyAdmins scopes to
-      // members assigned to this client + owners.
       await notifyAdmins({
         type: 'followup_sent',
         clientId: client.id,
@@ -379,14 +374,13 @@ async function countPendingPosts(
 }
 
 /**
- * Auto-approve every still-pending post on the link by minting a synthetic
- * review link + an approved review comment authored by Cortex, then
- * flipping `draft` posts to `scheduled` so the publish cron can ship
- * them. Mirrors `force-approve` but in bulk and without an admin user.
- *
- * Returns true if at least one post got auto-approved.
+ * Escalation ladder is exhausted (T+216h, no activity, three nudges sent).
+ * Pings OPS chat once with a "manual followup needed" card and stamps the
+ * share link so we never re-enter for it. Posts stay in their current
+ * status — auto-approve was killed 2026-05-13 because the hard rule is
+ * "unapproved drop posts MUST NEVER publish."
  */
-async function autoApprovePending(
+async function escalateToManualFollowup(
   admin: ReturnType<typeof createAdminClient>,
   args: {
     link: {
@@ -401,145 +395,50 @@ async function autoApprovePending(
     total: number;
   },
 ): Promise<boolean> {
-  const { link, client } = args;
+  const { link, client, shareUrl, pending, total } = args;
 
-  // Re-derive which post ids are still pending (defensive: between
-  // cadence checks and now an admin could have force-approved one).
+  // Re-derive pending count (defensive: between checks an admin could
+  // have force-approved or change-requested).
   const { pending: stillPending } = await countPendingPosts(
     admin,
     link.included_post_ids,
   );
-  if (stillPending === 0) {
-    // Nothing to do, but stamp so we don't re-enter.
-    await admin
-      .from('content_drop_share_links')
-      .update({ auto_approved_at: new Date().toISOString() })
-      .eq('id', link.id);
-    return false;
-  }
-
-  // Walk each post and mint approval rows for the ones still pending.
-  type LatestRow = {
-    status: 'approved' | 'changes_requested';
-    created_at: string;
-    post_review_links:
-      | { post_id: string; revisions_completed_at: string | null }
-      | { post_id: string; revisions_completed_at: string | null }[]
-      | null;
-  };
-  const { data: latestRows } = await admin
-    .from('post_review_comments')
-    .select('status, created_at, post_review_links!inner(post_id, revisions_completed_at)')
-    .in('status', ['approved', 'changes_requested'])
-    .in('post_review_links.post_id', link.included_post_ids)
-    .order('created_at', { ascending: false })
-    .returns<LatestRow[]>();
-
-  const latestByPost = new Map<string, LatestRow>();
-  for (const row of latestRows ?? []) {
-    const join = Array.isArray(row.post_review_links)
-      ? row.post_review_links[0] ?? null
-      : row.post_review_links;
-    if (!join) continue;
-    if (latestByPost.has(join.post_id)) continue;
-    latestByPost.set(join.post_id, row);
-  }
-
-  const pendingPostIds: string[] = [];
-  for (const postId of link.included_post_ids) {
-    const latest = latestByPost.get(postId);
-    if (!latest) {
-      pendingPostIds.push(postId);
-      continue;
-    }
-    if (latest.status === 'approved') continue;
-    const join = Array.isArray(latest.post_review_links)
-      ? latest.post_review_links[0] ?? null
-      : latest.post_review_links;
-    const completedAt = join?.revisions_completed_at ?? null;
-    if (!completedAt || new Date(latest.created_at) > new Date(completedAt)) {
-      // Ball is in our court, don't auto-approve over the top of an
-      // unhandled change request.
-      continue;
-    }
-    pendingPostIds.push(postId);
-  }
-
-  if (pendingPostIds.length === 0) {
-    await admin
-      .from('content_drop_share_links')
-      .update({ auto_approved_at: new Date().toISOString() })
-      .eq('id', link.id);
-    return false;
-  }
-
-  const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
-  const linkInserts = pendingPostIds.map((postId) => ({
-    post_id: postId,
-    expires_at: expiresAt,
-  }));
-  const { data: mintedLinks } = await admin
-    .from('post_review_links')
-    .insert(linkInserts)
-    .select('id, post_id')
-    .returns<Array<{ id: string; post_id: string }>>();
-
-  if (!mintedLinks || mintedLinks.length === 0) {
-    console.error('calendar-reminders: auto-approve failed to mint review links');
-    return false;
-  }
-
-  const noteDate = new Date().toISOString().slice(0, 10);
-  const commentInserts = mintedLinks.map((m) => ({
-    review_link_id: m.id,
-    author_name: 'Cortex auto-approve',
-    content: `Auto-approved on ${noteDate} after no client activity for 9 days.`,
-    status: 'approved' as const,
-  }));
-  await admin.from('post_review_comments').insert(commentInserts);
-
-  await admin
-    .from('scheduled_posts')
-    .update({
-      status: 'scheduled',
-      failure_reason: null,
-      retry_count: 0,
-      updated_at: new Date().toISOString(),
-    })
-    .in('id', pendingPostIds)
-    .eq('status', 'draft');
-
-  // Stamp the link + claim the all-approved chat right atomically.
   const stampIso = new Date().toISOString();
   await admin
     .from('content_drop_share_links')
-    .update({
-      auto_approved_at: stampIso,
-      last_followup_at: stampIso,
-    })
+    .update({ auto_approved_at: stampIso, last_followup_at: stampIso })
     .eq('id', link.id);
+
+  if (stillPending === 0) return false;
 
   const opsWebhook = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
   postToGoogleChatSafe(
     opsWebhook,
     buildChatCardMessage({
-      cardId: `cadence-auto-approve-${link.id}`,
-      title: `✅ Auto-approved ${pendingPostIds.length} posts`,
+      cardId: `cadence-manual-followup-${link.id}`,
+      title: `📞 Manual followup needed`,
       subtitle: client.name,
-      paragraphs: ['No client activity for 9 days. Posts will publish on their scheduled times.'],
-      buttons: [{ text: 'Open share link', url: args.shareUrl }],
-      fallback: `✅ Auto-approved *${pendingPostIds.length}* posts on *${client.name}*'s calendar, no client activity for 9 days. ${args.shareUrl}`,
+      paragraphs: [
+        `${stillPending} of ${total} posts still pending review after 9 days, three automated nudges sent.`,
+        `Posts will NOT publish until ${client.name} approves. Reach out directly.`,
+      ],
+      buttons: [{ text: 'Open share link', url: shareUrl }],
+      fallback: `📞 Manual followup needed on *${client.name}*, ${stillPending}/${total} posts still pending after 9 days + 3 nudges. ${shareUrl}`,
     }),
-    `cadence_ops_auto_approve:${link.id}`,
+    `cadence_manual_followup:${link.id}`,
   );
 
   await notifyAdmins({
     type: 'followup_sent',
     clientId: client.id,
-    title: `Auto-approved ${pendingPostIds.length} posts on ${client.name}`,
-    body: `No client activity for 9 days. Posts will publish on their scheduled times.`,
+    title: `Manual followup needed on ${client.name}`,
+    body: `${stillPending} of ${total} posts still pending after 3 automated nudges. Posts will not publish until approved.`,
     linkPath: `/admin/calendar/${link.drop_id}`,
   });
+
+  // Suppress unused-var warning for `pending` (kept in args for parity
+  // with autoApprovePending's signature and any future call sites).
+  void pending;
 
   return true;
 }

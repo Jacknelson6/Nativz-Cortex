@@ -16,9 +16,14 @@ export const maxDuration = 60;
  * GET /api/cron/synthetic-publish-canary
  *
  * Synthetic publish smoke test (PUB-04). Posts a Cortex-owned canary
- * post on each of the four core platforms every 6h, then re-probes
- * Zernio 30 min later to confirm the platform actually accepted the
- * post. Fires a chat alert on two consecutive failures per platform.
+ * post on each of the four core platforms once a day (1:00 PM UTC,
+ * 8:00 AM CT), then re-probes Zernio 30 min later to confirm the
+ * platform actually accepted the post. Fires a chat alert on two
+ * consecutive failures per platform.
+ *
+ * Cadence reduced from every-6h to daily 2026-05-13: chat-noise diet,
+ * one publish/verify pair per day is enough signal for "publish path
+ * still works" without flooding ops on legit short outages.
  *
  * The canary is the same code path real client posts use (Zernio
  * publishPost), so it catches:
@@ -43,7 +48,7 @@ export const maxDuration = 60;
  *     `{ "facebook": "<late_account_id>", "instagram": "...", ... }`
  *     Only platforms present in the map are canary-checked.
  *
- * Auth: Bearer `CRON_SECRET`. Schedule: `0 (slash)6 * * *` (every 6h).
+ * Auth: Bearer `CRON_SECRET`. Schedule: `0 13 * * *` (daily, 8 AM CT).
  */
 
 const CORE_PLATFORMS: SocialPlatform[] = ['facebook', 'instagram', 'tiktok', 'youtube'];

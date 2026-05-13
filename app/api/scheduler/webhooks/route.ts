@@ -313,7 +313,7 @@ export async function POST(request: NextRequest) {
           // client retapping the screen. No-op if there's no live onboarding.
           const { data: prof } = await adminClient
             .from('social_profiles')
-            .select('id, platform, username, client_id, invite_chat_pinged_at, clients(name, agency, chat_webhook_url)')
+            .select('id, platform, username, client_id, invite_chat_pinged_at, clients(name, agency, chat_webhook_url, fully_onboarded_at)')
             .eq('late_account_id', accountId)
             .maybeSingle();
           if (prof?.client_id && prof?.platform) {
@@ -363,12 +363,12 @@ export async function POST(request: NextRequest) {
               Date.now() - new Date(prof.invite_chat_pinged_at as string).getTime() < 5 * 60_000;
             if (!recentInvitePing) {
               try {
-                const client = prof.clients as { name?: string; agency?: string | null; chat_webhook_url?: string | null } | null;
-                const webhookUrl =
-                  (await resolveTeamChatWebhook(adminClient, {
-                    primaryUrl: client?.chat_webhook_url ?? null,
-                    agency: client?.agency ?? null,
-                  })) ?? process.env.OPS_CHAT_WEBHOOK_URL ?? null;
+                const client = prof.clients as { name?: string; agency?: string | null; chat_webhook_url?: string | null; fully_onboarded_at?: string | null } | null;
+                // OPS-only routing (2026-05-13). The per-account
+                // "connected" card is an internal FYI; client chat space
+                // gets a separate "Client fully onboarded" card below
+                // once all four core platforms are live.
+                const webhookUrl = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
 
                 const platform = prof.platform as string;
                 const platformLabel = PLATFORM_LABEL[platform] ?? platform;
@@ -414,6 +414,120 @@ export async function POST(request: NextRequest) {
               } catch (err) {
                 console.error('[zernio-webhook] account.connected chat ping failed:', err);
               }
+            }
+
+            // ── "Client fully onboarded" detection ────────────────────
+            // The connection that just landed may have completed the
+            // core-four set for this client (FB + IG + TT + YT all
+            // active). If so, fire a one-time milestone card to OPS +
+            // the client's chat space. Dedup via clients.fully_onboarded_at:
+            // once stamped, we never re-fire even if the client later
+            // disconnects + reconnects a platform.
+            try {
+              const client = prof.clients as {
+                name?: string;
+                agency?: string | null;
+                chat_webhook_url?: string | null;
+                fully_onboarded_at?: string | null;
+              } | null;
+
+              const alreadyFullyOnboarded = client?.fully_onboarded_at != null;
+              if (!alreadyFullyOnboarded) {
+                const CORE_PLATFORMS = ['facebook', 'instagram', 'tiktok', 'youtube'] as const;
+                const { data: activeProfiles } = await adminClient
+                  .from('social_profiles')
+                  .select('platform, username')
+                  .eq('client_id', prof.client_id as string)
+                  .eq('is_active', true);
+
+                const corePlatformsConnected = new Set<string>();
+                const handleByPlatform = new Map<string, string>();
+                for (const row of activeProfiles ?? []) {
+                  const platform = (row.platform as string) ?? '';
+                  if ((CORE_PLATFORMS as readonly string[]).includes(platform)) {
+                    corePlatformsConnected.add(platform);
+                    const username = (row.username as string | null) ?? null;
+                    if (username && !handleByPlatform.has(platform)) {
+                      handleByPlatform.set(platform, username);
+                    }
+                  }
+                }
+
+                const isFullyOnboardedNow = CORE_PLATFORMS.every((p) =>
+                  corePlatformsConnected.has(p),
+                );
+
+                if (isFullyOnboardedNow) {
+                  const stampIso = new Date().toISOString();
+                  // CAS-style stamp: only update where the column is
+                  // still null so two concurrent webhook deliveries can't
+                  // race and double-fire the card.
+                  const { data: stamped } = await adminClient
+                    .from('clients')
+                    .update({ fully_onboarded_at: stampIso })
+                    .eq('id', prof.client_id as string)
+                    .is('fully_onboarded_at', null)
+                    .select('id');
+
+                  if (stamped && stamped.length > 0) {
+                    const brand = client?.name ?? 'Unknown client';
+                    const platformLines = CORE_PLATFORMS.map((p) => {
+                      const label = PLATFORM_LABEL[p] ?? p;
+                      const handle = handleByPlatform.get(p);
+                      return handle ? `• ${label} (@${handle})` : `• ${label}`;
+                    }).join('<br>');
+                    const fallbackLines = CORE_PLATFORMS.map((p) => {
+                      const label = PLATFORM_LABEL[p] ?? p;
+                      const handle = handleByPlatform.get(p);
+                      return handle ? `• ${label} (@${handle})` : `• ${label}`;
+                    }).join('\n');
+
+                    const cardPayload = buildChatCard({
+                      cardId: `client-fully-onboarded-${prof.client_id as string}`,
+                      headerTitle: `🎉 ${brand} fully onboarded`,
+                      headerSubtitle: 'All four core platforms connected',
+                      sections: [
+                        {
+                          widgets: [
+                            { type: 'text', text: platformLines },
+                            {
+                              type: 'text',
+                              text:
+                                '<i>The calendar can now publish on every core platform. Time to populate the first month of posts.</i>',
+                            },
+                          ],
+                        },
+                      ],
+                      fallbackText: `🎉 ${brand} fully onboarded, all four core platforms connected:\n${fallbackLines}`,
+                    });
+
+                    // OPS first.
+                    postToGoogleChatSafe(
+                      process.env.OPS_CHAT_WEBHOOK_URL ?? null,
+                      cardPayload,
+                      `zernio-webhook:fully-onboarded:ops:${prof.client_id as string}`,
+                    );
+                    // Then client's chat space, if they have one
+                    // configured (resolveTeamChatWebhook falls back to
+                    // the agency-team-misc webhook). Client chat is the
+                    // only side that pings client-facing channels — OPS
+                    // already got its card above.
+                    const clientWebhook = await resolveTeamChatWebhook(adminClient, {
+                      primaryUrl: client?.chat_webhook_url ?? null,
+                      agency: client?.agency ?? null,
+                    });
+                    if (clientWebhook && clientWebhook !== process.env.OPS_CHAT_WEBHOOK_URL) {
+                      postToGoogleChatSafe(
+                        clientWebhook,
+                        cardPayload,
+                        `zernio-webhook:fully-onboarded:client:${prof.client_id as string}`,
+                      );
+                    }
+                  }
+                }
+              }
+            } catch (err) {
+              console.error('[zernio-webhook] fully-onboarded detection failed:', err);
             }
           }
         }

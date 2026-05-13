@@ -2,13 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 import { getPostingService } from '@/lib/posting';
-import {
-  buildChatCardMessage,
-  postToGoogleChatSafe,
-} from '@/lib/chat/post-to-google-chat';
-import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
-import { getCortexAppUrl } from '@/lib/agency/cortex-url';
-import type { AgencyBrand } from '@/lib/agency/detect';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -40,10 +33,12 @@ export const maxDuration = 60;
  * dashboard will surface the count as ambiguity to investigate. A
  * platform reject is terminal: we stamp once and never re-probe.
  *
- * Chat alert: one card per affected post (multiple rejected legs on the
- * same post are collapsed). Fires to the per-client webhook with the ops
- * fallback. The card has a "Retry on Cortex" button deep-linking to the
- * calendar so Jack can manually re-fire the failed leg.
+ * Chat alerts: removed 2026-05-13. Both the "❌ Post rejected by
+ * platform" and "⚠️ Post stuck in publishing" cards used to fire from
+ * this cron; they've been absorbed into the post-health cron, which
+ * scans the same conditions and emits a single consolidated failure
+ * card with dedup. This cron now only maintains DB state:
+ * `verification_status` + `failure_reason` per leg.
  *
  * Auth: Bearer `CRON_SECRET` (Vercel cron header).
  */
@@ -51,14 +46,6 @@ export const maxDuration = 60;
 /** Max legs to claim per cron tick. With 4 core legs * ~200 active posts/day,
  *  the steady-state pending pool is bounded; 200 leaves headroom for spikes. */
 const MAX_LEGS_PER_TICK = 200;
-
-/**
- * A row stuck in `publishing` past `scheduled_at + STUCK_PUBLISHING_AGE_MIN`
- * has had 7+ cron ticks to self-heal via the publish-posts CAS reclaim path
- * (cron runs every 2 min). If it hasn't, the failure is deterministic (bad
- * payload, Zernio outage). Page Jack once per stuck row.
- */
-const STUCK_PUBLISHING_AGE_MIN = 15;
 
 /** After this many ambiguous probes, mark `unverifiable` and stop probing. */
 const MAX_VERIFICATION_ATTEMPTS = 6;
@@ -84,27 +71,7 @@ interface PendingLeg {
     client_id: string | null;
     caption: string | null;
     late_post_id: string | null;
-    clients: {
-      id: string;
-      name: string;
-      agency: string | null;
-      chat_webhook_url: string | null;
-    } | null;
   } | null;
-}
-
-interface RejectAlert {
-  postId: string;
-  clientId: string;
-  clientName: string;
-  agency: string | null;
-  chatWebhookUrl: string | null;
-  caption: string | null;
-  legs: Array<{
-    platform: string;
-    username: string | null;
-    reason: string;
-  }>;
 }
 
 async function handleGet(request: NextRequest) {
@@ -136,8 +103,7 @@ async function handleGet(request: NextRequest) {
       verification_attempts,
       social_profiles!inner ( platform, username, late_account_id ),
       scheduled_posts!inner (
-        id, client_id, caption, late_post_id,
-        clients!inner ( id, name, agency, chat_webhook_url )
+        id, client_id, caption, late_post_id
       )
     `,
     )
@@ -163,7 +129,6 @@ async function handleGet(request: NextRequest) {
       rejected: 0,
       ambiguous: 0,
       unverifiable: 0,
-      alerted_posts: 0,
     });
   }
 
@@ -182,13 +147,11 @@ async function handleGet(request: NextRequest) {
   let rejected = 0;
   let ambiguous = 0;
   let unverifiable = 0;
-  const rejectAlerts = new Map<string, RejectAlert>();
 
   await Promise.all(
     Array.from(byPost.entries()).map(async ([postId, postLegs]) => {
       const post = postLegs[0]?.scheduled_posts;
       const latePostId = post?.late_post_id ?? null;
-      const client = post?.clients ?? null;
       const nowIso = new Date().toISOString();
 
       // No Zernio handle -> can't verify. Treat as ambiguous attempt.
@@ -288,33 +251,10 @@ async function handleGet(request: NextRequest) {
             })
             .eq('id', leg.id);
           rejected += 1;
-
-          if (client && post) {
-            const existing = rejectAlerts.get(postId);
-            if (existing) {
-              existing.legs.push({
-                platform: leg.social_profiles?.platform ?? 'unknown',
-                username: leg.social_profiles?.username ?? null,
-                reason,
-              });
-            } else {
-              rejectAlerts.set(postId, {
-                postId,
-                clientId: client.id,
-                clientName: client.name,
-                agency: client.agency,
-                chatWebhookUrl: client.chat_webhook_url,
-                caption: post.caption,
-                legs: [
-                  {
-                    platform: leg.social_profiles?.platform ?? 'unknown',
-                    username: leg.social_profiles?.username ?? null,
-                    reason,
-                  },
-                ],
-              });
-            }
-          }
+          // Chat alert removed 2026-05-13. post-health reads
+          // verification_status='platform_reject' + failure_reason to
+          // emit a single consolidated card.
+          void postId;
           continue;
         }
 
@@ -348,175 +288,15 @@ async function handleGet(request: NextRequest) {
     }),
   );
 
-  // Fire alerts after the per-leg writes settle. One card per affected
-  // post (legs collapsed). Fire-and-forget, chat failure must not block
-  // the verify pass.
-  let alertedPosts = 0;
-  for (const alert of rejectAlerts.values()) {
-    try {
-      await sendPlatformRejectCard(admin, alert);
-      alertedPosts += 1;
-    } catch (err) {
-      console.error(
-        `[verify-published-posts] alert send failed for post ${alert.postId}:`,
-        err,
-      );
-    }
-  }
-
-  const stuckAlerted = await scanAndAlertStuckPublishing(admin);
-
   return NextResponse.json({
     probed: legs.length,
     confirmed,
     rejected,
     ambiguous,
     unverifiable,
-    alerted_posts: alertedPosts,
-    stuck_publishing_alerted: stuckAlerted,
   });
 }
 
-/**
- * Stuck-publishing scan: a row in `status='publishing'` whose `scheduled_at`
- * is older than now() - 15min has missed multiple self-heal opportunities.
- * publish-posts' CAS reclaim ordinarily picks it back up within ~2min;
- * anything still 'publishing' after the grace window means a deterministic
- * issue (Zernio outage, malformed payload). Page Jack via Chat once per
- * incident; dedup via `stuck_publishing_alerted_at`. publish-posts clears
- * the stamp on the next successful publish so a fresh stuck event can
- * re-page.
- */
-async function scanAndAlertStuckPublishing(
-  admin: ReturnType<typeof createAdminClient>,
-): Promise<number> {
-  const cutoffIso = new Date(Date.now() - STUCK_PUBLISHING_AGE_MIN * 60 * 1000).toISOString();
-  const { data: stuck, error } = await admin
-    .from('scheduled_posts')
-    .select(
-      `id, caption, scheduled_at, late_post_id, retry_count,
-       clients!inner ( id, name, agency, chat_webhook_url )`,
-    )
-    .eq('status', 'publishing')
-    .lt('scheduled_at', cutoffIso)
-    .is('stuck_publishing_alerted_at', null)
-    .limit(50);
-
-  if (error) {
-    console.error('[verify-published-posts] stuck scan failed:', error.message);
-    return 0;
-  }
-
-  type StuckRow = {
-    id: string;
-    caption: string | null;
-    scheduled_at: string | null;
-    late_post_id: string | null;
-    retry_count: number | null;
-    clients:
-      | { id: string; name: string; agency: string | null; chat_webhook_url: string | null }
-      | { id: string; name: string; agency: string | null; chat_webhook_url: string | null }[]
-      | null;
-  };
-  const rows = (stuck ?? []) as unknown as StuckRow[];
-  if (rows.length === 0) return 0;
-
-  let alerted = 0;
-  for (const row of rows) {
-    const nowIso = new Date().toISOString();
-    // Stamp first via conditional update; if another worker beat us, skip.
-    const { data: stamped, error: stampErr } = await admin
-      .from('scheduled_posts')
-      .update({ stuck_publishing_alerted_at: nowIso })
-      .eq('id', row.id)
-      .is('stuck_publishing_alerted_at', null)
-      .select('id')
-      .maybeSingle();
-    if (stampErr || !stamped) continue;
-
-    try {
-      await sendStuckPublishingCard(admin, row);
-      alerted += 1;
-    } catch (err) {
-      console.error(
-        `[verify-published-posts] stuck-publishing alert failed for ${row.id}:`,
-        err,
-      );
-    }
-  }
-
-  return alerted;
-}
-
-async function sendStuckPublishingCard(
-  admin: ReturnType<typeof createAdminClient>,
-  row: {
-    id: string;
-    caption: string | null;
-    scheduled_at: string | null;
-    late_post_id: string | null;
-    retry_count: number | null;
-    clients:
-      | { id: string; name: string; agency: string | null; chat_webhook_url: string | null }
-      | { id: string; name: string; agency: string | null; chat_webhook_url: string | null }[]
-      | null;
-  },
-): Promise<void> {
-  const client = Array.isArray(row.clients) ? row.clients[0] : row.clients;
-  if (!client) return;
-
-  const webhook = await resolveTeamChatWebhook(admin, {
-    primaryUrl: client.chat_webhook_url,
-    agency: client.agency,
-  });
-  const finalWebhook = webhook ?? process.env.OPS_GOOGLE_CHAT_WEBHOOK ?? process.env.OPS_CHAT_WEBHOOK_URL ?? null;
-  if (!finalWebhook) return;
-
-  const baseUrl = getCortexAppUrl(((client.agency as AgencyBrand | null) ?? 'nativz') as AgencyBrand);
-  const calendarUrl = `${baseUrl}/admin/calendar?postId=${encodeURIComponent(row.id)}`;
-  const captionTrunc = row.caption
-    ? row.caption.length > 140
-      ? row.caption.slice(0, 140) + '…'
-      : row.caption
-    : '(no caption)';
-
-  const stuckSince = row.scheduled_at
-    ? `${Math.round((Date.now() - Date.parse(row.scheduled_at)) / 60000)} min`
-    : 'unknown';
-
-  const fallback = [
-    `⚠️ Post stuck in publishing: ${client.name}`,
-    captionTrunc,
-    '',
-    `Scheduled at: ${row.scheduled_at ?? 'unknown'} (${stuckSince} ago)`,
-    `late_post_id: ${row.late_post_id ?? 'null'}`,
-    `retry_count: ${row.retry_count ?? 0}`,
-    '',
-    `Open: ${calendarUrl}`,
-  ].join('\n');
-
-  postToGoogleChatSafe(
-    finalWebhook,
-    buildChatCardMessage({
-      cardId: `stuck-publishing-${row.id}`,
-      title: '⚠️ Post stuck in publishing',
-      subtitle: client.name,
-      paragraphs: [
-        { html: `<b>Caption:</b> ${captionTrunc}` },
-        {
-          html: `<b>Stuck since:</b> ${row.scheduled_at ?? 'unknown'} (${stuckSince} ago)<br><b>late_post_id:</b> ${row.late_post_id ?? 'null'}<br><b>retry_count:</b> ${row.retry_count ?? 0}`,
-        },
-        {
-          html:
-            '<i>The publish-posts cron flipped this row to publishing but never landed terminal status. Self-heal via CAS reclaim should have run by now; manual investigation needed.</i>',
-        },
-      ],
-      buttons: [{ text: 'Open in calendar', url: calendarUrl }],
-      fallback,
-    }),
-    `verify-published-posts:stuck:${row.id}`,
-  );
-}
 
 /**
  * Stamp every leg in the batch as an ambiguous attempt (bump counter,
@@ -546,79 +326,6 @@ async function markAmbiguousBatch(
   );
 }
 
-/**
- * One chat card per post with platform-reject legs. The card has a
- * "Open in calendar" button deep-linked to the post so Jack can manually
- * re-fire the rejected leg. The leg's top-level status stays 'published'
- * because Zernio briefly accepted it, re-publishing via the cron's
- * retry path would orphan whatever Zernio's stored copy still thinks is
- * live. Manual action only.
- */
-async function sendPlatformRejectCard(
-  admin: ReturnType<typeof createAdminClient>,
-  alert: RejectAlert,
-): Promise<void> {
-  const webhook = await resolveTeamChatWebhook(admin, {
-    primaryUrl: alert.chatWebhookUrl,
-    agency: alert.agency,
-  });
-  const finalWebhook = webhook ?? process.env.OPS_CHAT_WEBHOOK_URL ?? null;
-  if (!finalWebhook) return;
-
-  const baseUrl = getCortexAppUrl(((alert.agency as AgencyBrand | null) ?? 'nativz') as AgencyBrand);
-  const calendarUrl = `${baseUrl}/admin/calendar?postId=${encodeURIComponent(alert.postId)}`;
-
-  const captionTrunc = alert.caption
-    ? alert.caption.length > 140
-      ? alert.caption.slice(0, 140) + '…'
-      : alert.caption
-    : '(no caption)';
-
-  const legLines = alert.legs
-    .map((l) => {
-      const handle = l.username ? ` (@${l.username})` : '';
-      const reason = l.reason.length > 200 ? l.reason.slice(0, 200) + '…' : l.reason;
-      return `• ${l.platform}${handle}: ${reason}`;
-    })
-    .join('\n');
-
-  const fallback = [
-    `❌ Post rejected by platform: ${alert.clientName}`,
-    captionTrunc,
-    '',
-    legLines,
-    '',
-    `Open: ${calendarUrl}`,
-  ].join('\n');
-
-  postToGoogleChatSafe(
-    finalWebhook,
-    buildChatCardMessage({
-      cardId: `verify-reject-${alert.postId}`,
-      title: `❌ Post rejected by platform`,
-      subtitle: alert.clientName,
-      paragraphs: [
-        { html: `<b>Caption:</b> ${captionTrunc}` },
-        {
-          html: `<b>Rejected legs:</b><br>${alert.legs
-            .map((l) => {
-              const handle = l.username ? ` (@${l.username})` : '';
-              const reason = l.reason.length > 200 ? l.reason.slice(0, 200) + '…' : l.reason;
-              return `• ${l.platform}${handle}: ${reason}`;
-            })
-            .join('<br>')}`,
-        },
-        {
-          html:
-            '<i>Zernio first reported success, then the platform rejected after publish. The leg status stays "published" on Cortex (re-firing risks a duplicate). Use the calendar to manually re-publish the rejected leg.</i>',
-        },
-      ],
-      buttons: [{ text: 'Open in calendar', url: calendarUrl }],
-      fallback,
-    }),
-    `verify-published-posts:${alert.postId}`,
-  );
-}
 
 export const GET = withCronTelemetry(
   {
@@ -635,16 +342,12 @@ export const GET = withCronTelemetry(
         rejected?: number;
         ambiguous?: number;
         unverifiable?: number;
-        alerted_posts?: number;
-        stuck_publishing_alerted?: number;
       };
       return {
         confirmed: b.confirmed,
         rejected: b.rejected,
         ambiguous: b.ambiguous,
         unverifiable: b.unverifiable,
-        alerted_posts: b.alerted_posts,
-        stuck_publishing_alerted: b.stuck_publishing_alerted,
       };
     },
   },

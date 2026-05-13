@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 import { buildChatCardMessage, postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
-import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 import { centralDateParts } from '@/lib/calendar/scheduling-rules';
 import type { AgencyBrand } from '@/lib/agency/detect';
@@ -158,23 +157,23 @@ async function handleGet(request: NextRequest) {
     return NextResponse.json({ scanned: data?.length ?? 0, collisions: 0, alerted: 0 });
   }
 
-  // Resolve client metadata in one pass for webhook + name + agency.
+  // Resolve client metadata in one pass for name + agency. Routing is
+  // OPS-only (2026-05-13) — collisions never reach a client chat space.
   const clientIds = Array.from(new Set(collisions.map((c) => c.clientId)));
   const { data: clients } = await admin
     .from('clients')
-    .select('id, name, agency, chat_webhook_url')
+    .select('id, name, agency')
     .in('id', clientIds);
 
   const clientById = new Map<
     string,
-    { name: string; agency: string | null; chat_webhook_url: string | null }
+    { name: string; agency: string | null }
   >(
     (clients ?? []).map((c) => [
       c.id as string,
       {
         name: c.name as string,
         agency: (c.agency as string | null) ?? null,
-        chat_webhook_url: (c.chat_webhook_url as string | null) ?? null,
       },
     ]),
   );
@@ -192,11 +191,8 @@ async function handleGet(request: NextRequest) {
     const client = clientById.get(clientId);
     if (!client) continue;
 
-    const webhook = await resolveTeamChatWebhook(admin, {
-      primaryUrl: client.chat_webhook_url,
-      agency: client.agency,
-    });
-    const finalWebhook = webhook ?? process.env.OPS_CHAT_WEBHOOK_URL ?? null;
+    // OPS only — collisions are an internal triage signal.
+    const finalWebhook = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
     if (!finalWebhook) continue;
 
     // Order by day, then platform for readability.

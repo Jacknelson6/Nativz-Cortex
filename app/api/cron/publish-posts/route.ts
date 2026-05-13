@@ -602,6 +602,7 @@ async function handleGet(request: NextRequest) {
               // row can re-page (e.g. caption edit + republish).
               failure_notification_sent_at: null,
               stuck_publishing_alerted_at: null,
+              health_alerted_at: null,
               updated_at: new Date().toISOString(),
             };
           } else if (anyFailed && !anyPending) {
@@ -1686,6 +1687,15 @@ async function sendFailureNotification(
     );
   }
 
+  // Dedup with post-health: publish-posts already paged ops here, so
+  // stamp the parent row to keep the 12:45pm / 2pm post-health sweep
+  // from re-alerting the same incident. Cleared automatically on the
+  // next successful retry (publish-posts resets it to null on success).
+  await adminClient
+    .from('scheduled_posts')
+    .update({ health_alerted_at: new Date().toISOString() })
+    .eq('id', postId);
+
   console.log(`[PUBLISH FAILURE] postId=${postId} clientId=${clientId} reason=${post.failure_reason}`);
 }
 
@@ -1763,6 +1773,16 @@ async function sendPartialFailureNotification(
       `publish-partial ${postId}`,
     );
   }
+
+  // Dedup with post-health: same reasoning as sendFailureNotification.
+  // partial_failed is terminal for the publish cron (it never retries
+  // partials), so the only way the row's status changes is via manual
+  // re-publish, which is what the chat button kicks off. The stamp
+  // keeps post-health quiet about the same row.
+  await adminClient
+    .from('scheduled_posts')
+    .update({ health_alerted_at: new Date().toISOString() })
+    .eq('id', postId);
 
   console.log(
     `[PUBLISH PARTIAL] postId=${postId} clientId=${clientId} failed=${failures.length}`,

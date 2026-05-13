@@ -30,10 +30,12 @@ export const maxDuration = 60;
  *   T+72h  → followup 1   ("just wanted to follow up")
  *   T+120h → followup 2   ("just in case you missed this")
  *   T+168h → followup 3   ("last check before we mark this approved")
- *   T+216h → auto-approve every still-pending cut on the link
+ *   T+216h → ping OPS with a "manual followup needed" card (once)
  *
- * Each send drops an in-app Cortex notification + an ops Google Chat
- * ping so the team can track follow-up volume.
+ * Auto-approve was killed 2026-05-13 — we don't synthesise approvals
+ * anymore. Each send drops an in-app Cortex notification. The per-stage
+ * ops chat ping is gone; OPS only hears about projects when the
+ * escalation ladder exhausts.
  *
  * @auth Bearer CRON_SECRET (Vercel cron)
  */
@@ -44,7 +46,10 @@ async function handleGet(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const [cadenceSetting, autoApproveSetting] = await Promise.all([
+  // `editing_auto_approve` setting is preserved as a kill-switch for the
+  // T+216h escalation step. Auto-approve behavior was killed 2026-05-13;
+  // the step now pings OPS with a manual-followup card instead.
+  const [cadenceSetting, escalationSetting] = await Promise.all([
     getNotificationSetting('editing_followup_cadence'),
     getNotificationSetting('editing_auto_approve'),
   ]);
@@ -116,7 +121,7 @@ async function handleGet(request: NextRequest) {
   }
 
   const now = Date.now();
-  const counts = { stage1: 0, stage2: 0, stage3: 0, autoApproved: 0, skipped: 0 };
+  const counts = { stage1: 0, stage2: 0, stage3: 0, manualFollowupPinged: 0, skipped: 0 };
 
   for (const link of shareLinks ?? []) {
     const project = link.editing_projects;
@@ -165,15 +170,20 @@ async function handleGet(request: NextRequest) {
     const pocFirstNames = recipients.map((c) => firstName(c.name));
     const noun = nounForProjectType(project.project_type);
 
-    // Auto-approve sweep at T+216h. Fires once per link.
-    if (ageHours >= 216 && autoApproveSetting.enabled) {
-      const autoApproved = await autoApprovePending(admin, {
+    // T+216h escalation: ladder is exhausted. Used to auto-approve every
+    // pending cut; now pings OPS with a manual-followup card. Posts/cuts
+    // stay in their current status — we don't synthesise approvals
+    // anymore.
+    if (ageHours >= 216 && escalationSetting.enabled) {
+      const pinged = await escalateToManualFollowup(admin, {
         link,
         project: { id: project.id, name: projectName, noun },
         client,
         shareUrl,
+        pending,
+        total,
       });
-      if (autoApproved) counts.autoApproved += 1;
+      if (pinged) counts.manualFollowupPinged += 1;
       else counts.skipped += 1;
       continue;
     }
@@ -246,21 +256,10 @@ async function handleGet(request: NextRequest) {
         })
         .eq('id', link.id);
 
-      const opsWebhook = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
+      // "Stage sent" chat card removed 2026-05-13. In-app Cortex
+      // notification still fires (next call); ops only hears about
+      // editing projects via the manual-followup card at T+216h.
       const stageLabel = stage === 3 ? 'Final call' : `Follow-up ${stage}`;
-      postToGoogleChatSafe(
-        opsWebhook,
-        buildChatCardMessage({
-          cardId: `editing-cadence-ops-${link.id}-${stage}`,
-          title: `📣 ${stageLabel} sent`,
-          subtitle: `${client.name} · ${projectName}`,
-          paragraphs: [`${pending} of ${total} ${noun.plural} still pending review.`],
-          buttons: [{ text: 'Open review', url: shareUrl }],
-          fallback: `📣 ${stageLabel} sent to *${client.name}* on *${projectName}*, ${pending}/${total} ${noun.plural} still pending. ${shareUrl}`,
-        }),
-        `editing_cadence_ops:${link.id}:${stage}`,
-      );
-
       await notifyAdmins({
         type: 'followup_sent',
         clientId: client.id,
@@ -345,12 +344,13 @@ async function countPendingVideos(
 }
 
 /**
- * Auto-approve every still-pending video by inserting one approved
- * review comment per video, authored by Cortex. Stamps `auto_approved_at`
- * + `all_approved_notified_at` so the celebration ping is suppressed
- * (we already post a dedicated auto-approve message).
+ * Escalation ladder is exhausted (T+216h, no activity, three nudges
+ * sent). Pings OPS chat once with a "manual followup needed" card and
+ * stamps `auto_approved_at` so we never re-enter for this link. We
+ * don't synthesise approvals anymore — the cuts stay in their current
+ * status and an operator handles the followup directly.
  */
-async function autoApprovePending(
+async function escalateToManualFollowup(
   admin: ReturnType<typeof createAdminClient>,
   args: {
     link: {
@@ -365,91 +365,50 @@ async function autoApprovePending(
     };
     client: { id: string; name: string };
     shareUrl: string;
+    pending: number;
+    total: number;
   },
 ): Promise<boolean> {
-  const { link, project, client } = args;
+  const { link, project, client, shareUrl, pending, total } = args;
   const { noun } = project;
 
-  const { data: videos } = await admin
-    .from('editing_project_videos')
-    .select('id')
-    .eq('project_id', project.id)
-    .returns<Array<{ id: string }>>();
-  const videoIds = (videos ?? []).map((v) => v.id);
-
-  if (videoIds.length === 0) {
-    await admin
-      .from('editing_project_share_links')
-      .update({ auto_approved_at: new Date().toISOString() })
-      .eq('id', link.id);
-    return false;
-  }
-
-  const { data: approvals } = await admin
-    .from('editing_project_review_comments')
-    .select('video_id')
-    .in('video_id', videoIds)
-    .eq('status', 'approved')
-    .returns<Array<{ video_id: string | null }>>();
-  const approvedSet = new Set(
-    (approvals ?? [])
-      .map((a) => a.video_id)
-      .filter((id): id is string => !!id),
-  );
-  const pendingVideoIds = videoIds.filter((id) => !approvedSet.has(id));
-
-  if (pendingVideoIds.length === 0) {
-    await admin
-      .from('editing_project_share_links')
-      .update({ auto_approved_at: new Date().toISOString() })
-      .eq('id', link.id);
-    return false;
-  }
-
-  const noteDate = new Date().toISOString().slice(0, 10);
-  const commentInserts = pendingVideoIds.map((videoId) => ({
-    project_id: project.id,
-    video_id: videoId,
-    share_link_id: link.id,
-    author_name: 'Cortex auto-approve',
-    content: `Auto-approved on ${noteDate} after no client activity for 9 days.`,
-    status: 'approved' as const,
-  }));
-  await admin.from('editing_project_review_comments').insert(commentInserts);
+  // Re-derive pending count defensively in case state changed.
+  const { pending: stillPending } = await countPendingVideos(admin, project.id);
 
   const stampIso = new Date().toISOString();
   await admin
     .from('editing_project_share_links')
-    .update({
-      auto_approved_at: stampIso,
-      // Suppress the "all approved" celebration ping, we post our own
-      // auto-approve message below.
-      all_approved_notified_at: link.all_approved_notified_at ?? stampIso,
-    })
+    .update({ auto_approved_at: stampIso, last_followup_at: stampIso })
     .eq('id', link.id);
+
+  if (stillPending === 0) return false;
 
   const opsWebhook = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
   postToGoogleChatSafe(
     opsWebhook,
     buildChatCardMessage({
-      cardId: `editing-auto-approve-${link.id}`,
-      title: `✅ Auto-approved ${pendingVideoIds.length} ${noun.plural}`,
+      cardId: `editing-manual-followup-${link.id}`,
+      title: `📞 Manual followup needed`,
       subtitle: `${client.name} · ${project.name}`,
-      paragraphs: ['No client activity for 9 days. Project is ready to ship.'],
-      buttons: [{ text: 'Open review', url: args.shareUrl }],
-      fallback: `✅ Auto-approved *${pendingVideoIds.length}* ${noun.plural} on *${client.name} · ${project.name}*, no client activity for 9 days. ${args.shareUrl}`,
+      paragraphs: [
+        `${stillPending} of ${total} ${noun.plural} still pending review after 9 days, three automated nudges sent.`,
+        `Project will NOT be marked approved until ${client.name} signs off. Reach out directly.`,
+      ],
+      buttons: [{ text: 'Open review', url: shareUrl }],
+      fallback: `📞 Manual followup needed on *${client.name} · ${project.name}*, ${stillPending}/${total} ${noun.plural} still pending after 9 days + 3 nudges. ${shareUrl}`,
     }),
-    `editing_cadence_ops_auto_approve:${link.id}`,
+    `editing_cadence_manual_followup:${link.id}`,
   );
 
   await notifyAdmins({
     type: 'followup_sent',
     clientId: client.id,
-    title: `Auto-approved ${pendingVideoIds.length} ${noun.plural} on ${project.name}`,
-    body: `No client activity for 9 days. Project is ready to ship.`,
+    title: `Manual followup needed on ${project.name}`,
+    body: `${stillPending} of ${total} ${noun.plural} still pending after 3 automated nudges. Project will not be marked approved until signed off.`,
     linkPath: `/admin/editing/projects/${project.id}`,
   });
 
+  void pending;
   return true;
 }
 

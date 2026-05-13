@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { buildChatCardMessage, postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
-import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 import type { AgencyBrand } from '@/lib/agency/detect';
 
@@ -21,13 +20,21 @@ import type { AgencyBrand } from '@/lib/agency/detect';
  * form" button that deep-links to the Connections matrix pre-filtered to
  * the affected platforms — one click pops the Invite Builder modal.
  *
+ * Routing (2026-05-13): OPS only. The per-client `chat_webhook_url` and
+ * agency-team-webhook fallback were stripped — connection-expired is an
+ * internal triage signal (someone has to refresh a token or hand-send a
+ * reconnect invite), it should never reach a client chat space. We send
+ * a single card per client straight to `OPS_CHAT_WEBHOOK_URL`.
+ *
  * Idempotency: the caller is responsible for stamping
  * `social_profiles.disconnect_alerted_at` before invoking this, so a
  * second tick with the same dead token doesn't re-ping. We *do not*
  * mutate the DB here; this is pure send-side. That keeps each call site
  * in charge of its own dedup window (the watcher resets the stamp when
  * a token returns to healthy; the publisher relies on the watcher to do
- * the reset).
+ * the reset). The watcher also requires a confirming re-probe before
+ * stamping (REPROBE_DELAY_MS), so a single bad read at the expiry
+ * boundary doesn't fan out — agreement between two probes does.
  */
 
 const PLATFORM_LABEL: Record<string, string> = {
@@ -90,19 +97,18 @@ export async function notifyConnectionExpired(
   const clientIds = Array.from(new Set(candidates.map((c) => c.clientId)));
   const { data: clients } = await admin
     .from('clients')
-    .select('id, name, agency, chat_webhook_url')
+    .select('id, name, agency')
     .in('id', clientIds);
 
   const clientById = new Map<
     string,
-    { name: string; agency: string | null; chat_webhook_url: string | null }
+    { name: string; agency: string | null }
   >(
     (clients ?? []).map((c) => [
       c.id as string,
       {
         name: c.name as string,
         agency: (c.agency as string | null) ?? null,
-        chat_webhook_url: (c.chat_webhook_url as string | null) ?? null,
       },
     ]),
   );
@@ -121,11 +127,8 @@ export async function notifyConnectionExpired(
     const client = clientById.get(sample.clientId);
     if (!client) continue;
 
-    const webhook = await resolveTeamChatWebhook(admin, {
-      primaryUrl: client.chat_webhook_url,
-      agency: client.agency,
-    });
-    const finalWebhook = webhook ?? process.env.OPS_CHAT_WEBHOOK_URL ?? null;
+    // OPS only — connection-expired never reaches a client chat space.
+    const finalWebhook = process.env.OPS_CHAT_WEBHOOK_URL ?? null;
     if (!finalWebhook) continue;
 
     const ownership = sample.accountOwner;

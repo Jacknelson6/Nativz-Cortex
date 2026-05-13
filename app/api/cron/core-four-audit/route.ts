@@ -31,6 +31,12 @@ export const maxDuration = 60;
  * chat ping, he never knew. This cron is the daily backstop that catches
  * everything else falling through.
  *
+ * Cadence (2026-05-13): silent if green. The ✅ "all clean" heartbeat
+ * card was killed — Jack only wants a card when at least one core
+ * platform missed for at least one client. cron_runs telemetry still
+ * captures successful runs so liveness can be eyeballed via the nerd
+ * dashboard; chat stays quiet on quiet days.
+ *
  * Window: previous UTC midnight to midnight (so 6am UTC = 1-2am ET runs
  * right after the day rolls over, gives Jack a digest in his morning).
  *
@@ -243,26 +249,11 @@ async function handleGet(request: NextRequest) {
   const totalClientsInWindow = new Set(posts.map((p) => p.client?.id).filter(Boolean))
     .size;
 
-  // Always fire a card — a clean ✅ heartbeat is the proof that the cron
-  // itself is alive on quiet days. Without it, "no card today" is
-  // ambiguous (did everything ship, or did the cron crash?).
-  if (opsWebhook) {
-    if (totalMissingLegs === 0) {
-      const cleanBody = totalCoreLegs === 0
-        ? `No core-four legs were scheduled for ${auditDate} (UTC). Pipeline idle.`
-        : `${shippedCoreLegs} of ${totalCoreLegs} core-four legs shipped clean across ${totalClientsInWindow} clients.`;
-
-      postToGoogleChatSafe(
-        opsWebhook,
-        buildChatCardMessage({
-          cardId: `core-four-audit-${auditDate}`,
-          title: `✅ Core four delivery: ${auditDate}`,
-          subtitle: totalCoreLegs === 0 ? 'pipeline idle' : 'all clean',
-          paragraphs: [cleanBody],
-        }),
-        `core-four-audit:${auditDate}:clean`,
-      );
-    } else {
+  // Silent on green. Only fire a card when at least one core platform
+  // missed for at least one client. Liveness on quiet days lives in
+  // cron_runs telemetry, not chat.
+  if (opsWebhook && totalMissingLegs > 0) {
+    {
       const missLines: string[] = [];
       for (const entry of missesByClient.values()) {
         const platforms = Array.from(entry.byPlatform.keys()).sort();
@@ -311,7 +302,7 @@ async function handleGet(request: NextRequest) {
     missed_clients: missedClientCount,
     clients_in_window: totalClientsInWindow,
     non_core_legs: totalNonCoreLegs,
-    chat_card_fired: opsWebhook != null,
+    chat_card_fired: opsWebhook != null && totalMissingLegs > 0,
   });
 }
 

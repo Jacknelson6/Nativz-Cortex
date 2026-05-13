@@ -22,7 +22,6 @@ import {
 import { sendOnboardingTeamAssignedEmail } from '@/lib/onboarding/email';
 import type { TeamRole } from '@/lib/onboarding/types';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { buildChatCard, postToGoogleChat, isGoogleChatWebhook } from '@/lib/chat/post-to-google-chat';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -95,22 +94,15 @@ export async function POST(
       is_primary: parsed.data.is_primary,
     });
 
-    // Fire-and-forget notifications: load the teammate row + client chat
-    // webhook in parallel, then send email + Google Chat ping. Failures
-    // are logged but never roll back the assignment.
+    // Fire-and-forget email: load the teammate row, send the assignment
+    // email. The Google Chat "👥 Team assignment" card was killed
+    // 2026-05-13 — assignments don't ping chat anymore.
     const admin = createAdminClient();
-    const [{ data: member }, { data: clientRow }] = await Promise.all([
-      admin
-        .from('team_members')
-        .select('id, name, email')
-        .eq('id', parsed.data.team_member_id)
-        .single<{ id: string; name: string | null; email: string | null }>(),
-      admin
-        .from('clients')
-        .select('chat_webhook_url, name')
-        .eq('id', row.client_id)
-        .single<{ chat_webhook_url: string | null; name: string }>(),
-    ]);
+    const { data: member } = await admin
+      .from('team_members')
+      .select('id, name, email')
+      .eq('id', parsed.data.team_member_id)
+      .single<{ id: string; name: string | null; email: string | null }>();
 
     const roleLabel: Record<TeamRole, string> = {
       account_manager: 'Account manager',
@@ -143,40 +135,6 @@ export async function POST(
         });
       } catch (notifyErr) {
         console.warn('[onboarding/team] assign email failed:', notifyErr);
-      }
-    }
-
-    if (clientRow?.chat_webhook_url && isGoogleChatWebhook(clientRow.chat_webhook_url)) {
-      try {
-        const memberLabel = member?.name ?? member?.email ?? 'A teammate';
-        const roleText = roleLabel[parsed.data.role];
-        await postToGoogleChat(
-          clientRow.chat_webhook_url,
-          buildChatCard({
-            cardId: `team-assigned-${row.id}-${parsed.data.team_member_id}-${parsed.data.role}`,
-            headerTitle: '👥 Team assignment',
-            headerSubtitle: clientRow.name,
-            sections: [
-              {
-                widgets: [
-                  {
-                    type: 'kv',
-                    label: 'Role',
-                    value: roleText,
-                  },
-                  {
-                    type: 'kv',
-                    label: 'Assignee',
-                    value: memberLabel,
-                  },
-                ],
-              },
-            ],
-            fallbackText: `${memberLabel} assigned as ${roleText} on ${clientRow.name}.`,
-          }),
-        );
-      } catch (chatErr) {
-        console.warn('[onboarding/team] chat ping failed:', chatErr);
       }
     }
 

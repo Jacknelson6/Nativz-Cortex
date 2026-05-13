@@ -3,8 +3,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { ZernioPostingService } from '@/lib/posting';
 import type { SocialPlatform } from '@/lib/posting/types';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
-import { buildChatCardMessage, postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
-import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -32,28 +30,15 @@ export const maxDuration = 60;
  * delete-on-absence policy would create flapping. Instead, the existing
  * `connection-expired-watch` cron handles the explicit-expired path.
  *
- * Emits a Google Chat ping per client when we inserted at least one new
- * profile, so the team sees a "wait, we picked up new accounts for X"
- * line in chat instead of a silent backfill.
+ * No chat ping here — the "new account picked up" card was killed
+ * 2026-05-13. Fully-onboarded notification lives in the scheduler
+ * webhook (fires once when the final core platform connects).
  *
  * Runs hourly so a client connecting an account through Zernio's flow
  * gets picked up in <60min even if the OAuth callback drops.
  *
  * Auth: Bearer `CRON_SECRET` (Vercel cron header).
  */
-
-const PLATFORM_LABEL: Record<string, string> = {
-  facebook: 'Facebook',
-  instagram: 'Instagram',
-  tiktok: 'TikTok',
-  youtube: 'YouTube',
-  linkedin: 'LinkedIn',
-  googlebusiness: 'Google Business',
-  pinterest: 'Pinterest',
-  x: 'X (Twitter)',
-  threads: 'Threads',
-  bluesky: 'Bluesky',
-};
 
 interface InsertCandidate {
   clientId: string;
@@ -76,7 +61,7 @@ async function handleGet(request: NextRequest) {
   // updated client when there's a tie (most likely the active one).
   const { data: clientRows, error: clientsErr } = await admin
     .from('clients')
-    .select('id, name, agency, chat_webhook_url, late_profile_id, updated_at')
+    .select('id, late_profile_id, updated_at')
     .not('late_profile_id', 'is', null);
   if (clientsErr) {
     return NextResponse.json(
@@ -85,26 +70,13 @@ async function handleGet(request: NextRequest) {
     );
   }
   const clients = clientRows ?? [];
-  const profileToClient = new Map<
-    string,
-    {
-      clientId: string;
-      name: string;
-      agency: string | null;
-      chatWebhookUrl: string | null;
-    }
-  >();
+  const profileToClient = new Map<string, { clientId: string }>();
   for (const c of [...clients].sort((a, b) =>
     (b.updated_at as string).localeCompare(a.updated_at as string),
   )) {
     const pid = c.late_profile_id as string;
     if (profileToClient.has(pid)) continue;
-    profileToClient.set(pid, {
-      clientId: c.id as string,
-      name: c.name as string,
-      agency: (c.agency as string | null) ?? null,
-      chatWebhookUrl: (c.chat_webhook_url as string | null) ?? null,
-    });
+    profileToClient.set(pid, { clientId: c.id as string });
   }
 
   // Pull every connected account from Zernio. The dataset is small enough
@@ -187,55 +159,11 @@ async function handleGet(request: NextRequest) {
     );
   }
 
-  // Group by client for one Google Chat ping per client.
-  const byClient = new Map<string, InsertCandidate[]>();
-  for (const c of candidates) {
-    const list = byClient.get(c.clientId) ?? [];
-    list.push(c);
-    byClient.set(c.clientId, list);
-  }
-
-  let pinged = 0;
-  for (const [clientId, group] of byClient) {
-    const meta = clients.find((c) => c.id === clientId);
-    if (!meta) continue;
-    const webhook = await resolveTeamChatWebhook(admin, {
-      primaryUrl: meta.chat_webhook_url as string | null,
-      agency: meta.agency as string | null,
-    });
-    const finalWebhook = webhook ?? process.env.OPS_CHAT_WEBHOOK_URL ?? null;
-    if (!finalWebhook) continue;
-
-    const lines = group
-      .map((g) => {
-        const label = PLATFORM_LABEL[g.platform] ?? g.platform;
-        const handle = g.username ? ` (@${g.username})` : '';
-        return `• ${label}${handle}`;
-      })
-      .join('\n');
-    const detail =
-      `These accounts were connected on Zernio's side but missing from Cortex. ` +
-      `Cron backfilled them automatically; future posts will include them on the cadence. ` +
-      `Client was NOT emailed, this is a behind-the-scenes sync. No team action needed unless an account looks wrong.`;
-    const fallback = [
-      `🔄 Internal: Cortex picked up new social accounts on ${meta.name} from Zernio`,
-      lines,
-      ``,
-      detail,
-    ].join('\n');
-    postToGoogleChatSafe(
-      finalWebhook,
-      buildChatCardMessage({
-        cardId: `sync-zernio-accounts-${clientId}-${group.map((g) => g.platform).sort().join('-')}`,
-        title: `🔄 Cortex picked up new social accounts`,
-        subtitle: meta.name,
-        paragraphs: [lines, detail],
-        fallback,
-      }),
-      `sync-zernio-accounts:${clientId}`,
-    );
-    pinged += 1;
-  }
+  // Chat ping for newly-picked-up accounts removed 2026-05-13 — Jack
+  // killed the "🔄 Cortex picked up new social accounts" card. The sync
+  // still runs; we just no longer notify chat. The "Client fully
+  // onboarded" detection lives in app/api/scheduler/webhooks/route.ts
+  // and fires once when the final core platform connects.
 
   return NextResponse.json({
     scanned,
@@ -243,7 +171,6 @@ async function handleGet(request: NextRequest) {
     skippedUnmatched,
     skippedExisting,
     inserted: candidates.length,
-    clientsPinged: pinged,
   });
 }
 
