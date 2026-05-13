@@ -46,8 +46,11 @@ export function AdminTopBar({
     //     content below overfills
     // Any one of these should be enough, but we want three belts on
     // this particular pair of pants.
-    <header className="flex h-14 min-h-14 shrink-0 items-center gap-3 border-b border-nativz-border bg-surface px-3">
-      {/* Product logo — agency-aware so Anderson deployments pick up AC mark. */}
+    <header className="flex h-14 min-h-14 shrink-0 items-center gap-3 border-b border-nativz-border bg-surface px-3 max-md:gap-2 max-md:px-2">
+      {/* Product logo — agency-aware so Anderson deployments pick up AC mark.
+       *  On mobile (max-md), the logo shrinks to h-6 to give the brand pill
+       *  more room within the 56px-tall bar without changing the desktop
+       *  size at md+. */}
       <div className="flex h-9 shrink-0 items-center">
         {mode === 'nativz' ? (
           <Image
@@ -55,7 +58,7 @@ export function AdminTopBar({
             alt="Nativz"
             width={120}
             height={32}
-            className="h-7 w-auto"
+            className="h-7 w-auto max-md:h-6"
             priority
           />
         ) : (
@@ -64,7 +67,7 @@ export function AdminTopBar({
           <img
             src="/anderson-logo-dark.svg"
             alt="Anderson Collaborative"
-            className="h-7 w-auto"
+            className="h-7 w-auto max-md:h-6"
             loading="eager"
             fetchPriority="high"
             decoding="async"
@@ -72,8 +75,10 @@ export function AdminTopBar({
         )}
       </div>
 
-      {/* Brand pill — fixed max width so the bar doesn't overflow on long brand names */}
-      <div className="min-w-0 max-w-xs">
+      {/* Brand pill — fixed max width so the bar doesn't overflow on long
+       *  brand names. Tighter cap on mobile so the right-side actions
+       *  (notif bell + avatar) always fit at 375px. */}
+      <div className="min-w-0 max-w-xs max-md:max-w-[160px]">
         <AdminBrandPill />
       </div>
 
