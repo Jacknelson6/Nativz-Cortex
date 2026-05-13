@@ -9,6 +9,8 @@ import {
   Trash2,
   MessageSquare,
   Check,
+  History,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils/cn';
@@ -50,6 +52,9 @@ export function ContentLabConversationHistoryRail({
   refreshToken,
 }: ContentLabConversationHistoryRailProps) {
   const [open, setOpen] = useRailOpen();
+  // Mobile drawer is a separate state from the desktop expand/collapse —
+  // they live at different breakpoints. The drawer only renders below lg.
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [conversations, setConversations] = useState<NerdConversation[]>([]);
   const [loading, setLoading] = useState(false);
   const firstLoadRef = useRef(true);
@@ -106,6 +111,123 @@ export function ContentLabConversationHistoryRail({
 
   const groups = groupByDate(conversations);
 
+  // Shared body — used by the desktop sidebar's "open" state AND the mobile
+  // bottom-sheet drawer below. `onCloseTrigger` is the click handler for the
+  // close X (PanelLeftClose on desktop; the literal X on mobile).
+  const renderBody = (onCloseTrigger: () => void, useCloseIcon: 'panel' | 'x') => (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      {/* Header */}
+      <div className="flex shrink-0 items-center justify-between border-b border-nativz-border/50 px-3 py-3">
+        <span className="text-sm font-semibold text-text-primary">History</span>
+        <button
+          type="button"
+          onClick={onCloseTrigger}
+          className="cursor-pointer text-text-muted transition-colors hover:text-text-secondary"
+          title="Close"
+        >
+          {useCloseIcon === 'x' ? <X size={16} /> : <PanelLeftClose size={15} />}
+        </button>
+      </div>
+
+      {/* New chat button */}
+      <div className="shrink-0 px-3 py-2">
+        <button
+          type="button"
+          onClick={() => { onNewChat(); setMobileOpen(false); }}
+          className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-nativz-border/60 bg-surface-hover/30 px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:border-nativz-border hover:bg-surface-hover hover:text-text-primary"
+        >
+          <Plus size={14} aria-hidden />
+          New chat
+        </button>
+      </div>
+
+      {/* Scrolling body */}
+      <div className="flex-1 overflow-y-auto px-2 pb-3">
+        {loading && conversations.length === 0 ? (
+          <div className="space-y-1.5 px-2 py-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-14 animate-pulse rounded-lg bg-surface-hover/50" />
+            ))}
+          </div>
+        ) : conversations.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+            <MessageSquare size={20} className="text-text-muted/30" />
+            <p className="text-sm text-text-muted">No chats yet</p>
+            <p className="text-[11px] text-text-muted">
+              Start chatting to create your first one.
+            </p>
+          </div>
+        ) : (
+          groups.map((group) => (
+            <div key={group.label} className="mt-3 first:mt-1">
+              <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+                {group.label}
+              </p>
+              <div className="space-y-0.5">
+                {group.items.map((c) => {
+                  const isActive = c.id === activeConversationId;
+                  const displayTitle =
+                    c.title && c.title !== 'New conversation' ? c.title : 'Untitled thread';
+                  return (
+                    <div
+                      key={c.id}
+                      className={cn(
+                        'group relative rounded-lg transition-colors',
+                        isActive ? 'bg-surface-hover' : 'hover:bg-surface-hover/60',
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!isActive) onSelect(c.id);
+                          setMobileOpen(false);
+                        }}
+                        className="flex w-full cursor-pointer items-start gap-2 px-2.5 py-2 pr-8 text-left"
+                      >
+                        <div className="mt-0.5 shrink-0">
+                          {isActive ? (
+                            <Check size={12} className="text-text-primary" />
+                          ) : (
+                            <MessageSquare size={12} className="text-text-muted/40" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p
+                            className={cn(
+                              'truncate text-[13px] leading-snug',
+                              isActive
+                                ? 'font-medium text-text-primary'
+                                : 'text-text-secondary',
+                            )}
+                          >
+                            {displayTitle}
+                          </p>
+                          <div className="mt-0.5 flex items-center gap-0.5 text-[10px] text-text-muted/50">
+                            <Clock size={8} />
+                            {formatRelativeTime(c.updated_at)}
+                          </div>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDelete(c.id, e)}
+                        aria-label={`Delete ${displayTitle}`}
+                        title={`Delete ${displayTitle}`}
+                        className="absolute right-1.5 top-1.5 flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-text-muted/50 opacity-100 lg:opacity-0 transition-opacity hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
+                      >
+                        <Trash2 size={10} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <>
       <div
@@ -132,118 +254,45 @@ export function ContentLabConversationHistoryRail({
             </span>
           </div>
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            {/* Header — mirrors Topic Search rail exactly */}
-            <div className="flex shrink-0 items-center justify-between border-b border-nativz-border/50 px-3 py-3">
-              <span className="text-sm font-semibold text-text-primary">History</span>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="cursor-pointer text-text-muted transition-colors hover:text-text-secondary"
-                title="Close sidebar"
-              >
-                <PanelLeftClose size={15} />
-              </button>
-            </div>
-
-            {/* New chat button */}
-            <div className="shrink-0 px-3 py-2">
-              <button
-                type="button"
-                onClick={onNewChat}
-                className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-nativz-border/60 bg-surface-hover/30 px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:border-nativz-border hover:bg-surface-hover hover:text-text-primary"
-              >
-                <Plus size={14} aria-hidden />
-                New chat
-              </button>
-            </div>
-
-            {/* Scrolling body — conversations then artifacts */}
-            <div className="flex-1 overflow-y-auto px-2 pb-3">
-              {loading && conversations.length === 0 ? (
-                <div className="space-y-1.5 px-2 py-3">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="h-14 animate-pulse rounded-lg bg-surface-hover/50" />
-                  ))}
-                </div>
-              ) : conversations.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
-                  <MessageSquare size={20} className="text-text-muted/30" />
-                  <p className="text-sm text-text-muted">No chats yet</p>
-                  <p className="text-[11px] text-text-muted">
-                    Start chatting to create your first one.
-                  </p>
-                </div>
-              ) : (
-                groups.map((group) => (
-                  <div key={group.label} className="mt-3 first:mt-1">
-                    <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-                      {group.label}
-                    </p>
-                    <div className="space-y-0.5">
-                      {group.items.map((c) => {
-                        const isActive = c.id === activeConversationId;
-                        const displayTitle =
-                          c.title && c.title !== 'New conversation' ? c.title : 'Untitled thread';
-                        return (
-                          <div
-                            key={c.id}
-                            className={cn(
-                              'group relative rounded-lg transition-colors',
-                              isActive ? 'bg-surface-hover' : 'hover:bg-surface-hover/60',
-                            )}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (!isActive) onSelect(c.id);
-                              }}
-                              className="flex w-full cursor-pointer items-start gap-2 px-2.5 py-2 pr-8 text-left"
-                            >
-                              <div className="mt-0.5 shrink-0">
-                                {isActive ? (
-                                  <Check size={12} className="text-text-primary" />
-                                ) : (
-                                  <MessageSquare size={12} className="text-text-muted/40" />
-                                )}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p
-                                  className={cn(
-                                    'truncate text-[13px] leading-snug',
-                                    isActive
-                                      ? 'font-medium text-text-primary'
-                                      : 'text-text-secondary',
-                                  )}
-                                >
-                                  {displayTitle}
-                                </p>
-                                <div className="mt-0.5 flex items-center gap-0.5 text-[10px] text-text-muted/50">
-                                  <Clock size={8} />
-                                  {formatRelativeTime(c.updated_at)}
-                                </div>
-                              </div>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => handleDelete(c.id, e)}
-                              aria-label={`Delete ${displayTitle}`}
-                              title={`Delete ${displayTitle}`}
-                              className="absolute right-1.5 top-1.5 flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-text-muted/50 opacity-0 transition-opacity hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
-                            >
-                              <Trash2 size={10} />
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+          renderBody(() => setOpen(false), 'panel')
         )}
       </div>
+
+      {/* Mobile-only: floating trigger button + slide-in drawer.
+       *  Below `lg` the desktop rail is `hidden` (see wrapper above), so this
+       *  block is the only way mobile users can switch conversations. Trigger
+       *  lives at the top-left edge under the top bar; drawer slides in from
+       *  the left with a tap-to-dismiss backdrop. Pulls the same shared
+       *  `renderBody` so we don't drift between desktop and mobile content. */}
+      {!mobileOpen && (
+        <button
+          type="button"
+          onClick={() => setMobileOpen(true)}
+          aria-label="Open conversation history"
+          className="lg:hidden fixed left-2 top-[68px] z-30 flex h-9 items-center gap-1.5 rounded-full border border-nativz-border bg-surface/95 px-3 text-[12px] font-medium text-text-secondary shadow-elevated backdrop-blur"
+        >
+          <History size={14} />
+          History
+        </button>
+      )}
+      {mobileOpen && (
+        <div className="lg:hidden">
+          <div
+            className="fixed inset-0 z-40 bg-black/60 animate-[sidebarOverlayIn_200ms_ease-out_forwards]"
+            onClick={() => setMobileOpen(false)}
+            aria-hidden
+          />
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-label="Conversation history"
+            className="fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-nativz-border bg-surface shadow-elevated animate-[slideInLeft_200ms_cubic-bezier(0.16,1,0.3,1)_forwards]"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          >
+            {renderBody(() => setMobileOpen(false), 'x')}
+          </aside>
+        </div>
+      )}
     </>
   );
 }
