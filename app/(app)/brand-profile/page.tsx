@@ -88,7 +88,7 @@ export default async function BrandProfilePage() {
 
         {/* Social presence — admin gets URL inputs; viewer sees static
             link rows for any linked accounts. */}
-        <section className="rounded-xl border border-nativz-border bg-surface p-6">
+        <section className="rounded-xl border border-nativz-border bg-surface p-6 max-md:p-4">
           <header className="flex items-start gap-3">
             <div className="shrink-0 flex h-9 w-9 items-center justify-center rounded-lg bg-accent-text/10 text-accent-text">
               <Megaphone size={16} />
@@ -102,7 +102,7 @@ export default async function BrandProfilePage() {
 
         {/* Brand DNA — admin gets per-section pencils + Generate
             wizard; viewer sees the same bento with no edit handles. */}
-        <section className="rounded-xl border border-nativz-border bg-surface p-6">
+        <section className="rounded-xl border border-nativz-border bg-surface p-6 max-md:p-4">
           <header className="flex items-start gap-3 mb-5">
             <div className="shrink-0 flex h-9 w-9 items-center justify-center rounded-lg bg-accent-text/10 text-accent-text">
               <Sparkles size={16} />
