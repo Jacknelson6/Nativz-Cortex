@@ -11,10 +11,10 @@ import { scrapeSocialsFromWebsite } from '@/lib/scrapers/social-handles';
  * winning image to `clients.logo_url` + `clients.logo_source`.
  *
  * Handle sources, in priority order:
- *   1. `social_profiles` rows (set when admin connects via Zernio)
- *   2. The brand's `brand_profile.social_links` (manually entered on the
- *      Brand Profile page)
- *   3. A fresh scrape of the website HTML (mirrors analyze-url's logic)
+ *   1. `social_profiles` rows (set when admin connects via Zernio, or
+ *      seeded from the original website scrape during onboarding)
+ *   2. A fresh re-scrape of the website HTML (mirrors analyze-url's logic) —
+ *      catches brands whose social_profiles rows are missing usernames
  *
  * Falls through to favicon when none of the above yield a usable image.
  *
@@ -45,7 +45,7 @@ export async function POST(
 
     const { data: client, error: clientErr } = await adminClient
       .from('clients')
-      .select('id, website_url, brand_profile')
+      .select('id, website_url')
       .eq('id', id)
       .single();
     if (clientErr || !client) {
@@ -71,15 +71,7 @@ export async function POST(
       }
     }
 
-    // Step 2: handles stored on the brand profile.
-    const brandSocials = (client.brand_profile as { social_links?: Record<string, string> } | null)?.social_links ?? {};
-    for (const platform of Object.keys(handles)) {
-      if (!handles[platform] && brandSocials[platform]) {
-        handles[platform] = brandSocials[platform];
-      }
-    }
-
-    // Step 3: if still empty, re-scrape the website HTML for handles.
+    // Step 2: if still empty, re-scrape the website HTML for handles.
     const hasAnyHandle = Object.values(handles).some(Boolean);
     if (!hasAnyHandle && client.website_url) {
       const scraped = await scrapeSocialsFromWebsite(client.website_url);
