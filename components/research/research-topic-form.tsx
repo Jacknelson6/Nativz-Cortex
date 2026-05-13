@@ -212,7 +212,7 @@ export function ResearchTopicForm({
               value={topicQuery}
               onChange={(e) => setTopicQuery(e.target.value)}
               placeholder="Search a topic or brand name"
-              className="w-full min-h-[3.25rem] border-0 bg-transparent px-4 pt-4 pb-2 text-sm font-normal leading-relaxed text-foreground placeholder:text-text-muted/80 focus:outline-none md:min-h-[3.5rem] md:px-5 md:pt-5 md:text-base"
+              className="w-full min-h-[3.25rem] border-0 bg-transparent px-4 pt-4 pb-2 text-base font-normal leading-relaxed text-foreground placeholder:text-text-muted/80 focus:outline-none md:min-h-[3.5rem] md:px-5 md:pt-5 md:text-base"
               autoComplete="off"
               autoFocus={Boolean(initialQuery)}
               onKeyDown={(e) => {
