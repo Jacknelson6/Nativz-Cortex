@@ -200,7 +200,7 @@ function FormatDetailModal({
     >
       {format && (
         <div className="flex flex-col">
-          <div className="flex items-start justify-between gap-4 p-6 border-b border-nativz-border">
+          <div className="flex items-start justify-between gap-4 p-6 max-md:p-4 border-b border-nativz-border">
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 text-text-muted text-xs uppercase tracking-wide mb-1">
                 <Sparkles size={12} className="accent-text" />
@@ -222,7 +222,7 @@ function FormatDetailModal({
               <X size={16} />
             </button>
           </div>
-          <div className="p-6 space-y-5">
+          <div className="p-6 space-y-5 max-md:p-4 max-md:space-y-4">
             <Meta format={format} />
             <Section heading="Example">
               <p className="text-sm text-text-primary leading-relaxed">
