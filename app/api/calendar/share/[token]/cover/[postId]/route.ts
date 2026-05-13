@@ -105,7 +105,12 @@ export async function POST(
 
   // The post needs to be a video for a custom cover to make sense — image
   // posts already use their asset as the visible media. Guard against the
-  // UI accidentally pointing at an image carousel.
+  // UI accidentally pointing at an image carousel. The canonical "is this
+  // an image post?" check (mirroring lib/calendar/resolve-media.ts) is
+  // `post_type in ('image','carousel')` — every other value (`video`,
+  // `reel`, NULL) flows through the videoUrl branch in buildMediaContext
+  // and accepts a thumbnail. Earlier this only allowed literal 'video',
+  // which 400'd for 335/370 of our video rows (almost all are `reel`).
   const { data: post } = await admin
     .from('scheduled_posts')
     .select('id, post_type, cover_image_url, client_id')
@@ -114,7 +119,7 @@ export async function POST(
   if (!post) {
     return NextResponse.json({ error: 'post not found' }, { status: 404 });
   }
-  if (post.post_type && post.post_type !== 'video') {
+  if (post.post_type === 'image' || post.post_type === 'carousel') {
     return NextResponse.json(
       { error: 'cover photo is only supported for video posts' },
       { status: 400 },
