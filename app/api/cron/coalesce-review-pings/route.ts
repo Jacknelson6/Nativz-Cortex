@@ -429,18 +429,85 @@ async function handleEditing(admin: ReturnType<typeof createAdminClient>): Promi
     const appBase = getCortexAppUrl(getBrandFromAgency(project.clients?.agency ?? null));
     const shareUrl = `${appBase}/s/${linkRow.token}`;
 
-    const widgets: ChatCardWidget[] = [
-      {
+    // Match the calendar bundler shape: bucket comments by video so each
+    // card section reads "Cut N · <title>" with that cut's notes under it.
+    // Comments with no video_id (project-level notes) collapse into a
+    // single "Project notes" section at the top.
+    const videoIds = Array.from(
+      new Set(group.map((c) => c.video_id).filter((v): v is string => !!v)),
+    );
+    const videoMetaById = new Map<
+      string,
+      { position: number | null; title: string | null; filename: string | null }
+    >();
+    if (videoIds.length > 0) {
+      const { data: videoRows } = await admin
+        .from('editing_project_videos')
+        .select('id, position, title, filename')
+        .in('id', videoIds);
+      for (const v of (videoRows ?? []) as Array<{
+        id: string;
+        position: number | null;
+        title: string | null;
+        filename: string | null;
+      }>) {
+        videoMetaById.set(v.id, {
+          position: v.position,
+          title: v.title,
+          filename: v.filename,
+        });
+      }
+    }
+
+    // Group by video_id, preserving "project-level" bucket for null video_id.
+    const PROJECT_LEVEL = '__project__';
+    const byVideo = new Map<string, EditingPending[]>();
+    for (const c of group) {
+      const key = c.video_id ?? PROJECT_LEVEL;
+      const list = byVideo.get(key) ?? [];
+      list.push(c);
+      byVideo.set(key, list);
+    }
+
+    // Stable order: project-level first, then videos by position ascending
+    // (matching how clients see the cuts on the share-link page).
+    const orderedKeys = Array.from(byVideo.keys()).sort((a, b) => {
+      if (a === PROJECT_LEVEL) return -1;
+      if (b === PROJECT_LEVEL) return 1;
+      const pa = videoMetaById.get(a)?.position ?? Number.MAX_SAFE_INTEGER;
+      const pb = videoMetaById.get(b)?.position ?? Number.MAX_SAFE_INTEGER;
+      return pa - pb;
+    });
+
+    function cutLabel(videoId: string): string {
+      const meta = videoMetaById.get(videoId);
+      const title = meta?.title?.trim() || meta?.filename?.trim() || 'Cut';
+      const position = meta?.position;
+      return position != null ? `Cut ${position + 1} · ${title}` : title;
+    }
+
+    const widgets: ChatCardWidget[] = [];
+    let isFirstSection = true;
+    for (const key of orderedKeys) {
+      const perGroup = byVideo.get(key) ?? [];
+      if (!isFirstSection) widgets.push({ type: 'divider' });
+      isFirstSection = false;
+      if (key === PROJECT_LEVEL) {
+        widgets.push({ type: 'kv', label: 'Note on', value: 'Project' });
+      } else {
+        widgets.push({ type: 'kv', label: 'Cut', value: cutLabel(key) });
+      }
+      widgets.push({
         type: 'text',
-        text: group.map((c) => previewLine(c)).join('<br>'),
-      },
-      {
-        type: 'button',
-        text: 'Open & reply',
-        url: shareUrl,
-        filled: true,
-      },
-    ];
+        text: perGroup.map((c) => previewLine(c)).join('<br>'),
+      });
+    }
+    widgets.push({
+      type: 'button',
+      text: 'Open & reply',
+      url: shareUrl,
+      filled: true,
+    });
 
     const totalNotes = group.length;
     const headerTitle = `✏️ ${totalNotes} new note${totalNotes === 1 ? '' : 's'} on ${clientName}`;
