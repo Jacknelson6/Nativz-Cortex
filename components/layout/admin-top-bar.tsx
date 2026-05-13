@@ -1,9 +1,11 @@
 'use client';
 
 import Image from 'next/image';
+import { Menu } from 'lucide-react';
 import { AdminBrandPill } from '@/components/layout/admin-brand-pill';
 import { NotificationBell } from '@/components/layout/notification-bell';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
+import { useSidebar } from '@/components/layout/sidebar';
 import { AdminTopBarAccount } from '@/components/layout/admin-top-bar-account';
 
 /**
@@ -34,6 +36,7 @@ export function AdminTopBar({
   logoutRedirect: string;
 }) {
   const { mode } = useBrandMode();
+  const { setOpenMobile, openMobile } = useSidebar();
 
   return (
     // NAT-57 bug hunt (2026-04-21): Jack hit an intermittent where the
@@ -47,6 +50,19 @@ export function AdminTopBar({
     // Any one of these should be enough, but we want three belts on
     // this particular pair of pants.
     <header className="flex h-14 min-h-14 shrink-0 items-center gap-3 border-b border-nativz-border bg-surface px-3 max-md:gap-2 max-md:px-2">
+      {/* Mobile hamburger — opens the sidebar drawer. Universal convention
+       *  (top-left, before the logo). Hidden at md+ where the rail is
+       *  always visible, so the desktop bar is unchanged. */}
+      <button
+        type="button"
+        onClick={() => setOpenMobile(!openMobile)}
+        aria-label="Open menu"
+        aria-expanded={openMobile}
+        className="md:hidden flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-text-muted hover:bg-surface-hover hover:text-text-primary transition-colors"
+      >
+        <Menu size={20} />
+      </button>
+
       {/* Product logo — agency-aware so Anderson deployments pick up AC mark.
        *  On mobile (max-md), the logo shrinks to h-6 to give the brand pill
        *  more room within the 56px-tall bar without changing the desktop
