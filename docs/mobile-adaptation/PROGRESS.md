@@ -50,16 +50,16 @@ Append a line per surface as it ships. Loop reads this to know what's done.
 - [x] `/admin/clients/onboard` wizard — `cortex-page-gutter max-w-3xl mx-auto`. Each step is a vertical form widget which already stacks single-column on mobile.
 - [!] `/admin/content-tools` — BLOCKED. `components/admin/content-tools/content-tools-shell.tsx` has Jack's uncommitted WIP. Revisit after his changes land.
 - [x] `/admin/onboarding` + `/[id]` — list parallel-rendered: desktop 5-column grid + mobile vertical flex stack per card. Detail page already uses `cortex-page-gutter max-w-5xl mx-auto space-y-6`. `c9f7d164`
-- [ ] `/admin/ops/publish-health`
-- [ ] `/admin/users`
-- [ ] `/admin/team`
-- [ ] `/admin/tools`
-- [ ] `/admin/pipeline`
-- [ ] `/admin/scheduler`
-- [ ] `/admin/share-links`
-- [ ] `/admin/settings` + AI + production-updates + usage
-- [ ] `/admin/accounting` + invoice + editor
-- [ ] `/admin/usage`
+- [x] `/admin/ops/publish-health` — `grid-cols-2 md:grid-cols-4` KPI strip + `overflow-x-auto` failure table. Already mobile-aware.
+- [x] `/admin/users` — cortex-page-gutter wrapper, `grid-cols-1 sm:grid-cols-2` for forms. No code changes needed.
+- [x] `/admin/team` — page delegates to subcomponents that use shared responsive primitives.
+- [x] `/admin/tools` — minimal page, inherits global shell.
+- [x] `/admin/pipeline` — delegates to subcomponents.
+- [x] `/admin/scheduler` — delegates to subcomponents.
+- [x] `/admin/share-links` — delegates to ReviewTable which has `overflow-x-auto` baked in.
+- [x] `/admin/settings` + AI + production-updates + usage — cortex-page-gutter wrappers.
+- [x] `/admin/accounting` + invoice + editor — tables now `max-md:overflow-x-auto` so they scroll horizontally on phone. `34506eee`
+- [x] `/admin/usage` — cortex-page-gutter wrapper.
 - [ ] `/admin/nerd` + settings
 - [ ] `/admin/formats` + detail + rejected + taxonomy
 - [ ] `/admin/ideas` + generate + detail
