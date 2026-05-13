@@ -118,7 +118,7 @@ function extractOgImage(html: string): string | null {
  * Verify an image URL returns a real image (not a redirect to a login wall,
  * not the platform's "default anonymous avatar", not a sub-KB 1x1 tracking gif).
  */
-async function isUsableImage(url: string): Promise<boolean> {
+async function isUsableImage(url: string, minBytes = MIN_AVATAR_BYTES): Promise<boolean> {
   if (!url || !url.startsWith('http')) return false;
   if (DEFAULT_AVATAR_SIGNATURES.some((re) => re.test(url))) return false;
 
@@ -126,16 +126,19 @@ async function isUsableImage(url: string): Promise<boolean> {
   if (!res || !res.ok) return false;
 
   const contentType = res.headers.get('content-type') ?? '';
-  if (!contentType.startsWith('image/')) return false;
+  // Some CDNs serve favicons as application/octet-stream or image/vnd.microsoft.icon
+  if (!contentType.startsWith('image/') && !contentType.includes('icon') && !contentType.includes('octet-stream')) {
+    return false;
+  }
 
   const contentLength = Number(res.headers.get('content-length') ?? '0');
-  if (contentLength > 0 && contentLength < MIN_AVATAR_BYTES) return false;
+  if (contentLength > 0 && contentLength < minBytes) return false;
 
   // If content-length is missing, do a partial read to confirm bytes exist.
   if (contentLength === 0) {
     try {
       const buf = await res.arrayBuffer();
-      if (buf.byteLength < MIN_AVATAR_BYTES) return false;
+      if (buf.byteLength < minBytes) return false;
     } catch {
       return false;
     }
@@ -236,11 +239,15 @@ export async function resolveFavicon(websiteUrl: string): Promise<string | null>
   let html = '';
   if (res?.ok) html = await res.text();
 
+  // Favicons are often legitimately small (200-800 bytes). Relax the byte
+  // floor for this leg so we don't reject a real brand mark for being tiny.
+  const FAVICON_MIN_BYTES = 200;
+
   // Apple touch icon — typically 180x180+, ideal for circular avatars.
   const apple = html.match(/<link[^>]+rel=["']apple-touch-icon[^"']*["'][^>]+href=["']([^"']+)["']/i);
   if (apple?.[1]) {
     const candidate = makeAbsolute(apple[1]);
-    if (await isUsableImage(candidate)) return candidate;
+    if (await isUsableImage(candidate, FAVICON_MIN_BYTES)) return candidate;
   }
 
   // Largest <link rel="icon" sizes="...">. We don't parse sizes properly;
@@ -261,11 +268,11 @@ export async function resolveFavicon(websiteUrl: string): Promise<string | null>
       bestIcon = makeAbsolute(hrefMatch[1]);
     }
   }
-  if (bestIcon && (await isUsableImage(bestIcon))) return bestIcon;
+  if (bestIcon && (await isUsableImage(bestIcon, FAVICON_MIN_BYTES))) return bestIcon;
 
   // Last-ditch: /favicon.ico at the origin.
   const fallback = `${base.origin}/favicon.ico`;
-  if (await isUsableImage(fallback)) return fallback;
+  if (await isUsableImage(fallback, FAVICON_MIN_BYTES)) return fallback;
 
   return null;
 }

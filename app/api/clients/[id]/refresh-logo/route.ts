@@ -2,16 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { resolveBrandAvatar } from '@/lib/scrapers/social-avatar';
+import { scrapeSocialsFromWebsite } from '@/lib/scrapers/social-handles';
 
 /**
  * POST /api/clients/[id]/refresh-logo
  *
  * Re-run the social-avatar resolver for an existing client and persist the
- * winning image to `clients.logo_url` + `clients.logo_source`. Pulls handles
- * from `social_profiles` first; falls back to whatever was discovered on the
- * website during the original analyze-url scrape (we don't re-scrape the
- * website here — the website URL alone is enough since `resolveFavicon` is
- * the last leg of the chain).
+ * winning image to `clients.logo_url` + `clients.logo_source`.
+ *
+ * Handle sources, in priority order:
+ *   1. `social_profiles` rows (set when admin connects via Zernio)
+ *   2. The brand's `brand_profile.social_links` (manually entered on the
+ *      Brand Profile page)
+ *   3. A fresh scrape of the website HTML (mirrors analyze-url's logic)
+ *
+ * Falls through to favicon when none of the above yield a usable image.
  *
  * @auth Required (admin)
  * @returns { logo_url, logo_source } on success, 404 when nothing usable.
@@ -40,38 +45,68 @@ export async function POST(
 
     const { data: client, error: clientErr } = await adminClient
       .from('clients')
-      .select('id, website_url')
+      .select('id, website_url, brand_profile')
       .eq('id', id)
       .single();
     if (clientErr || !client) {
       return NextResponse.json({ error: 'Client not found' }, { status: 404 });
     }
 
-    // Pull connected handles (one row per platform when admin has authed via
-    // Zernio). `username` is the visible handle on each platform.
+    // Step 1: connected Zernio handles (one row per platform).
     const { data: profiles } = await adminClient
       .from('social_profiles')
       .select('platform, username')
       .eq('client_id', id);
 
-    const handles: Record<string, string | undefined> = {};
+    const handles: Record<string, string | null> = {
+      instagram: null,
+      facebook: null,
+      youtube: null,
+      tiktok: null,
+      linkedin: null,
+    };
     for (const p of profiles ?? []) {
-      if (p?.platform && p?.username) handles[p.platform] = p.username;
+      if (p?.platform && p?.username && p.platform in handles) {
+        handles[p.platform] = p.username;
+      }
+    }
+
+    // Step 2: handles stored on the brand profile.
+    const brandSocials = (client.brand_profile as { social_links?: Record<string, string> } | null)?.social_links ?? {};
+    for (const platform of Object.keys(handles)) {
+      if (!handles[platform] && brandSocials[platform]) {
+        handles[platform] = brandSocials[platform];
+      }
+    }
+
+    // Step 3: if still empty, re-scrape the website HTML for handles.
+    const hasAnyHandle = Object.values(handles).some(Boolean);
+    if (!hasAnyHandle && client.website_url) {
+      const scraped = await scrapeSocialsFromWebsite(client.website_url);
+      handles.instagram ??= scraped.instagram;
+      handles.facebook ??= scraped.facebook;
+      handles.youtube ??= scraped.youtube;
+      handles.tiktok ??= scraped.tiktok;
+      handles.linkedin ??= scraped.linkedin;
     }
 
     const resolved = await resolveBrandAvatar({
       website: client.website_url,
-      socials: {
-        instagram: handles.instagram ?? null,
-        facebook: handles.facebook ?? null,
-        youtube: handles.youtube ?? null,
-        tiktok: handles.tiktok ?? null,
-      },
+      socials: handles,
     });
 
     if (!resolved.url) {
+      const tried: string[] = [];
+      for (const [platform, handle] of Object.entries(handles)) {
+        if (handle) tried.push(platform);
+      }
+      if (client.website_url) tried.push('favicon');
       return NextResponse.json(
-        { error: 'Could not resolve a usable avatar for this client.' },
+        {
+          error: tried.length
+            ? `No usable avatar from ${tried.join(', ')}. Try connecting a social account or adding a logo manually.`
+            : 'No social handles or website URL on file. Add a website or social handles first.',
+        },
         { status: 404 }
       );
     }
