@@ -161,7 +161,7 @@ export function GeneralSettingsForm({ slug, embedded }: { slug: string; embedded
             type="button"
             onClick={() => setEditingLogo(!editingLogo)}
             disabled={!editing}
-            className="group relative shrink-0 rounded-2xl transition-all enabled:hover:ring-2 enabled:hover:ring-accent/40 enabled:cursor-pointer disabled:cursor-default focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="group relative shrink-0 rounded-full transition-all enabled:hover:ring-2 enabled:hover:ring-accent/40 enabled:cursor-pointer disabled:cursor-default focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <ClientLogo
               src={logoUrl}
@@ -170,7 +170,7 @@ export function GeneralSettingsForm({ slug, embedded }: { slug: string; embedded
               size="lg"
             />
             {editing && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl">
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
                 <Pencil size={14} className="text-white" />
               </div>
             )}

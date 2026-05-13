@@ -82,7 +82,6 @@ export function ClientPortfolioSelector({
                 src={client.logo_url}
                 name={client.name}
                 size="lg"
-                className="rounded-lg"
               />
               <div className="w-full">
                 <p className="text-sm font-medium text-text-primary truncate">{client.name}</p>

@@ -4,65 +4,45 @@ import { useState } from 'react';
 import { Building2 } from 'lucide-react';
 
 /**
- * Universal client logo component — Instagram-style circular avatar.
+ * Universal client logo — perfect circle, real image only.
  *
- * - Always a perfect circle that the logo fills edge-to-edge (object-cover)
- * - Subtle backing for transparent logos so the circle is visible
- * - Falls back to a colored initials disc when no image
- * - Consistent sizing via `size` prop: 'sm' (32px), 'md' (40px), 'lg' (56px)
+ * Per PRD B (client avatar overhaul): no colored letter-disc fallback, no
+ * rounded-square wrappers. The resolver upstream guarantees `src` is either
+ * a real social profile picture, a favicon, or NULL. When NULL or the image
+ * fails to load, we render a neutral Building2 icon on bg-surface-muted so
+ * the circle is still visible without faking a brand presence.
  */
 
 interface ClientLogoProps {
   src?: string | null;
   name: string;
-  abbreviation?: string | null;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
-  /** When true, the chip border + dark fill behind a logo image is dropped so
-   *  the logo floats directly on its parent surface. Initials fallback still
-   *  gets its color tile (otherwise letters disappear). */
+  /** When true, drop the subtle border + dark fill behind the logo so it
+   *  floats directly on its parent surface. The neutral placeholder still
+   *  keeps its tile (otherwise the icon would disappear). */
   noBacking?: boolean;
+  /** Legacy prop kept for type compatibility with existing call sites.
+   *  The colored letter-disc fallback was removed in PRD B; this value
+   *  is intentionally ignored. */
+  abbreviation?: string | null;
 }
 
-const SIZE_CLASSES = {
-  sm: 'h-8 w-8 text-[10px]',
-  md: 'h-10 w-10 text-xs',
-  lg: 'h-14 w-14 text-sm',
-  xl: 'h-24 w-24 text-xl',
+const SIZE_CLASSES: Record<NonNullable<ClientLogoProps['size']>, string> = {
+  sm: 'h-8 w-8',
+  md: 'h-10 w-10',
+  lg: 'h-14 w-14',
+  xl: 'h-24 w-24',
 };
 
-const ICON_SIZES = { sm: 14, md: 18, lg: 24, xl: 40 };
+const ICON_SIZES: Record<NonNullable<ClientLogoProps['size']>, number> = {
+  sm: 14,
+  md: 18,
+  lg: 24,
+  xl: 40,
+};
 
-function getInitials(name: string, abbreviation?: string | null): string {
-  if (abbreviation) return abbreviation.slice(0, 3);
-  return name
-    .split(/[\s&]+/)
-    .map((w) => w[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
-}
-
-// Generate a deterministic muted color from name for fallback backgrounds
-function getColor(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const colors = [
-    'bg-blue-500/15 text-blue-400',
-    'bg-accent2-surface text-accent2-text',
-    'bg-emerald-500/15 text-emerald-400',
-    'bg-amber-500/15 text-amber-400',
-    'bg-rose-500/15 text-rose-400',
-    'bg-cyan-500/15 text-cyan-400',
-    'bg-indigo-500/15 text-indigo-400',
-    'bg-orange-500/15 text-orange-400',
-  ];
-  return colors[Math.abs(hash) % colors.length];
-}
-
-export function ClientLogo({ src, name, abbreviation, size = 'md', className = '', noBacking = false }: ClientLogoProps) {
+export function ClientLogo({ src, name, size = 'md', className = '', noBacking = false }: ClientLogoProps) {
   const [failed, setFailed] = useState(false);
   const sizeClass = SIZE_CLASSES[size];
   const backing = noBacking ? '' : 'border border-white/[0.08] bg-white/[0.04]';
@@ -72,26 +52,25 @@ export function ClientLogo({ src, name, abbreviation, size = 'md', className = '
       <div
         className={`shrink-0 overflow-hidden rounded-full flex items-center justify-center ${backing} ${sizeClass} ${className}`}
       >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={src}
           alt={name}
           className="h-full w-full object-cover"
           onError={() => setFailed(true)}
           loading="lazy"
+          decoding="async"
         />
       </div>
     );
   }
 
-  // Fallback: initials or icon
-  const initials = getInitials(name, abbreviation);
-  const color = getColor(name);
-
   return (
     <div
-      className={`shrink-0 rounded-full flex items-center justify-center font-bold ${sizeClass} ${color} ${className}`}
+      className={`shrink-0 rounded-full flex items-center justify-center bg-white/[0.04] border border-white/[0.08] text-text-muted ${sizeClass} ${className}`}
+      aria-label={name}
     >
-      {initials || <Building2 size={ICON_SIZES[size]} />}
+      <Building2 size={ICON_SIZES[size]} />
     </div>
   );
 }

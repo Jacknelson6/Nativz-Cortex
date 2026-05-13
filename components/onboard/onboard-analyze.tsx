@@ -227,7 +227,7 @@ export function OnboardAnalyze({ name, websiteUrl, onNext, onBack }: OnboardAnal
                 <img
                   src={formData.logo_url}
                   alt={`${name} logo`}
-                  className="h-16 w-16 rounded-2xl object-cover border border-nativz-border shadow-card"
+                  className="h-16 w-16 rounded-full object-cover border border-white/[0.08] bg-white/[0.04] shadow-card"
                 />
                 <div className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <Check size={12} className="text-accent" />

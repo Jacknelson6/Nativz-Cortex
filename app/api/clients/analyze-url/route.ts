@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
+import { resolveBrandAvatar, type AvatarSource } from '@/lib/scrapers/social-avatar';
 
 const analyzeSchema = z.object({
   url: z.string().url('A valid URL is required'),
@@ -103,55 +104,6 @@ export async function POST(request: NextRequest) {
       clearTimeout(timeout);
     }
 
-    // Try to extract a real logo from the HTML
-    let logoUrl: string | null = null;
-    try {
-      const baseUrl = new URL(url);
-
-      function makeAbsolute(found: string): string {
-        if (found.startsWith('//')) return `${baseUrl.protocol}${found}`;
-        if (found.startsWith('/')) return `${baseUrl.origin}${found}`;
-        if (!found.startsWith('http')) return `${baseUrl.origin}/${found}`;
-        return found;
-      }
-
-      // Priority list of logo sources from HTML
-      const patterns: Array<{ regex: RegExp; group: number }> = [
-        // Apple touch icon (high-res square logo — best for profile pics)
-        { regex: /<link[^>]+rel=["']apple-touch-icon["'][^>]+href=["']([^"']+)["']/i, group: 1 },
-        // Open Graph image (usually a good brand image)
-        { regex: /<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i, group: 1 },
-        { regex: /<meta\s+content=["']([^"']+)["']\s+property=["']og:image["']/i, group: 1 },
-        // Twitter card image
-        { regex: /<meta\s+(?:name|property)=["']twitter:image["']\s+content=["']([^"']+)["']/i, group: 1 },
-        { regex: /<meta\s+content=["']([^"']+)["']\s+(?:name|property)=["']twitter:image["']/i, group: 1 },
-        // Shortcut icon / favicon from HTML
-        { regex: /<link[^>]+rel=["'](?:shortcut )?icon["'][^>]+href=["']([^"']+)["']/i, group: 1 },
-      ];
-
-      for (const { regex, group } of patterns) {
-        const match = html.match(regex);
-        if (match?.[group]) {
-          logoUrl = makeAbsolute(match[group]);
-          break;
-        }
-      }
-
-      // Fallback: try Clearbit logo API (returns proper company logos)
-      if (!logoUrl) {
-        const clearbitUrl = `https://logo.clearbit.com/${baseUrl.hostname}`;
-        try {
-          const check = await fetch(clearbitUrl, { method: 'HEAD' });
-          if (check.ok) logoUrl = clearbitUrl;
-        } catch { /* ignore */ }
-      }
-
-      // Final fallback: Google's favicon service
-      if (!logoUrl) {
-        logoUrl = `https://www.google.com/s2/favicons?domain=${baseUrl.hostname}&sz=128`;
-      }
-    } catch { /* ignore */ }
-
     // NAT-57 follow-up: extract social handles from the website HTML so
     // onboarding can pre-fill the four social-profile slots. We look for
     // <a href="…">-style links to the four platforms Zernio supports
@@ -166,6 +118,23 @@ export async function POST(request: NextRequest) {
       facebook: extractHandle(html, /facebook\.com\/([A-Za-z0-9.]+)(?:\/|$|["?#])/gi, ['sharer', 'dialog', 'tr', 'plugins', 'pages']),
       youtube: extractHandle(html, /youtube\.com\/(?:@([A-Za-z0-9._-]+)|c\/([A-Za-z0-9._-]+)|channel\/([A-Za-z0-9._-]+)|user\/([A-Za-z0-9._-]+))(?:\/|$|["?#])/gi, []),
     };
+
+    const linkedin = extractHandle(html, /linkedin\.com\/(?:company|in)\/([A-Za-z0-9._-]+)(?:\/|$|["?#])/gi, []);
+
+    // PRD A: walk Instagram -> Facebook -> YouTube -> TikTok -> LinkedIn -> favicon
+    // for the actual brand mark. No Google globe, no Clearbit guess.
+    const resolved = await resolveBrandAvatar({
+      website: url,
+      socials: {
+        instagram: socials.instagram,
+        facebook: socials.facebook,
+        youtube: socials.youtube,
+        tiktok: socials.tiktok,
+        linkedin,
+      },
+    });
+    const logoUrl: string | null = resolved.url;
+    const logoSource: AvatarSource | null = resolved.source;
 
     // Strip HTML to plain text (first ~5000 chars)
     const text = html
@@ -233,7 +202,7 @@ Guidelines:
       content_language?: string;
     }>(aiResult.text);
 
-    return NextResponse.json({ ...result, logo_url: logoUrl, socials });
+    return NextResponse.json({ ...result, logo_url: logoUrl, logo_source: logoSource, socials });
   } catch (error) {
     console.error('POST /api/clients/analyze-url error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

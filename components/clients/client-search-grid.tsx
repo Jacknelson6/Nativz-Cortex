@@ -15,6 +15,7 @@ import {
   Pause,
   Play,
   Rocket,
+  RefreshCw,
 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { StartOnboardingDialog } from '@/components/onboarding/start-onboarding-dialog';
@@ -196,12 +197,14 @@ function ActionMenu({
   onTogglePause: (next: boolean) => void;
   onDeleted: (dbId: string) => void;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [startOnboardingOpen, setStartOnboardingOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [copying, setCopying] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [refreshingLogo, setRefreshingLogo] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -241,6 +244,26 @@ function ActionMenu({
       toast.error(`Failed to copy invite link: ${(err as Error).message}`);
     } finally {
       setCopying(false);
+      setOpen(false);
+    }
+  }
+
+  async function handleRefreshLogo() {
+    if (refreshingLogo) return;
+    setRefreshingLogo(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/refresh-logo`, { method: 'POST' });
+      const data = (await res.json().catch(() => ({}))) as { logo_url?: string; logo_source?: string; error?: string };
+      if (!res.ok || !data.logo_url) {
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
+      toast.success(`Logo updated from ${data.logo_source ?? 'website'}`);
+      // Forces ClientLogo to re-fetch the new URL on next render.
+      router.refresh();
+    } catch (err) {
+      toast.error(`Could not refresh logo: ${(err as Error).message}`);
+    } finally {
+      setRefreshingLogo(false);
       setOpen(false);
     }
   }
@@ -314,6 +337,17 @@ function ActionMenu({
             >
               <Link2 size={13} className="text-text-muted" />
               <span className="flex-1">{copying ? 'Copying…' : 'Copy invite link'}</span>
+            </button>
+
+            <button
+              type="button"
+              role="menuitem"
+              disabled={refreshingLogo}
+              onClick={() => void handleRefreshLogo()}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-text-primary hover:bg-surface-hover transition-colors text-left disabled:opacity-60"
+            >
+              <RefreshCw size={13} className={`text-text-muted ${refreshingLogo ? 'animate-spin' : ''}`} />
+              <span className="flex-1">{refreshingLogo ? 'Refreshing…' : 'Refresh logo'}</span>
             </button>
 
             <button

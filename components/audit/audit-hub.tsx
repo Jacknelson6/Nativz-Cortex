@@ -130,7 +130,7 @@ export function AuditHub({
                         src={selectedClient.logo_url}
                         name={selectedClient.name}
                         size="sm"
-                        className="h-7 w-7 shrink-0 !rounded-md"
+                        className="h-7 w-7 shrink-0"
                       />
                       <span className="truncate">{selectedClient.name}</span>
                     </div>

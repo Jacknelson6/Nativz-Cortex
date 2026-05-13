@@ -157,16 +157,16 @@ function HeaderCard({
 
       <div className="flex items-start gap-4">
         {profile.logo_url ? (
-          <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-background shrink-0">
+          <div className="relative w-16 h-16 rounded-full overflow-hidden border border-white/[0.08] bg-white/[0.04] shrink-0">
             <Image
               src={profile.logo_url}
               alt={`${profile.name ?? 'Brand'} logo`}
               fill
-              className="object-contain"
+              className="object-cover"
             />
           </div>
         ) : (
-          <div className="w-16 h-16 rounded-lg bg-background/50 flex items-center justify-center shrink-0">
+          <div className="w-16 h-16 rounded-full border border-white/[0.08] bg-white/[0.04] flex items-center justify-center shrink-0">
             <Building size={24} className="text-text-muted" />
           </div>
         )}

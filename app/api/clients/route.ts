@@ -13,6 +13,7 @@ const createClientSchema = z.object({
   brand_voice: z.string().nullable().optional(),
   topic_keywords: z.array(z.string()).optional(),
   logo_url: z.string().url().nullable().optional(),
+  logo_source: z.enum(['instagram', 'facebook', 'youtube', 'tiktok', 'linkedin', 'favicon', 'manual_upload']).nullable().optional(),
   website_url: z.string().url().nullable().optional(),
   onboarded_via: z.enum(['manual', 'brand_dna']).optional(),
 });
@@ -138,6 +139,7 @@ export async function POST(request: NextRequest) {
         organization_id: parsed.data.organization_id || userData.organization_id,
         feature_flags: { can_search: true, can_view_reports: true },
         ...(onboarded_via ? { onboarded_via } : {}),
+        ...(clientFields.logo_url ? { logo_resolved_at: new Date().toISOString() } : {}),
       })
       .select()
       .single();

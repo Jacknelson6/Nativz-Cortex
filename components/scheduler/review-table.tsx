@@ -40,7 +40,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { CalendarPlus, Trash2 } from 'lucide-react';
+import { Building2, CalendarPlus, Trash2 } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -1316,7 +1316,6 @@ function BrandLabel({
   name: string | null;
   logoUrl: string | null;
 }) {
-  const initial = name?.charAt(0).toUpperCase() ?? '?';
   return (
     <span className="inline-flex items-center gap-2">
       {logoUrl ? (
@@ -1325,17 +1324,17 @@ function BrandLabel({
           alt=""
           width={16}
           height={16}
-          className="shrink-0 rounded object-cover"
+          className="shrink-0 rounded-full border border-white/[0.08] object-cover"
           style={{ width: 16, height: 16 }}
           unoptimized
         />
       ) : (
         <span
-          className="inline-flex shrink-0 items-center justify-center rounded bg-accent-surface text-[9px] font-semibold leading-none text-accent-text"
+          className="inline-flex shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] text-text-muted"
           style={{ width: 16, height: 16 }}
           aria-hidden
         >
-          {initial}
+          <Building2 size={10} />
         </span>
       )}
       <span className="text-sm text-text-secondary">{name ?? '—'}</span>

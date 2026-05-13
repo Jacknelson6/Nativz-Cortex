@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { Building2, Check, ChevronsUpDown } from 'lucide-react';
 
 interface Brand {
   id: string;
@@ -142,13 +142,27 @@ export function BrandSwitcher({ activeBrandId, brands, collapsed = false }: Bran
 }
 
 function BrandIcon({ brand, size }: { brand: Brand; size: number }) {
-  const initial = brand.name.charAt(0).toUpperCase();
+  const common = 'shrink-0 rounded-full overflow-hidden border border-white/[0.08]';
+  if (brand.logo_url) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={brand.logo_url}
+        alt={brand.name}
+        className={`${common} object-cover`}
+        style={{ width: size, height: size }}
+        loading="lazy"
+        decoding="async"
+      />
+    );
+  }
   return (
     <div
-      className="flex items-center justify-center rounded-md bg-accent-surface shrink-0"
-      style={{ width: size, height: size, fontSize: size * 0.5 }}
+      className={`${common} flex items-center justify-center bg-white/[0.04] text-text-muted`}
+      style={{ width: size, height: size }}
+      aria-label={brand.name}
     >
-      <span className="font-semibold text-accent-text leading-none">{initial}</span>
+      <Building2 size={Math.round(size * 0.55)} />
     </div>
   );
 }

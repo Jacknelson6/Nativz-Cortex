@@ -212,7 +212,7 @@ export function TrackCompetitorButton({
                         src={c.logo_url ?? c.avatarUrl ?? null}
                         name={c.name}
                         size="sm"
-                        className="h-7 w-7 shrink-0 rounded-md"
+                        className="h-7 w-7 shrink-0"
                       />
                       <span className="min-w-0 flex-1 truncate text-text-primary">{c.name}</span>
                       {isDefault && (

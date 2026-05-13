@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { Check, ChevronsUpDown, FolderOpen, Plus, Search } from 'lucide-react';
+import { Building2, Check, ChevronsUpDown, FolderOpen, Plus, Search } from 'lucide-react';
 import { useActiveBrand } from '@/lib/admin/active-client-context';
 import type { AdminBrand } from '@/lib/active-brand';
 
@@ -267,6 +267,12 @@ export function AdminBrandPill() {
 }
 
 function BrandIcon({ brand, size }: { brand: AdminBrand | null; size: number }) {
+  // Inline circular avatar that doesn't pull in the full ClientLogo size
+  // matrix — brand pill needs odd pixel sizes (20px collapsed, 24px expanded)
+  // that don't map cleanly to ClientLogo's sm/md/lg/xl. Same neutral
+  // placeholder logic as ClientLogo: real image OR Building2 on bg-surface,
+  // never a letter disc, never a square.
+  const common = 'shrink-0 rounded-full overflow-hidden border border-white/[0.08]';
   if (brand?.logo_url) {
     return (
       <Image
@@ -274,19 +280,19 @@ function BrandIcon({ brand, size }: { brand: AdminBrand | null; size: number }) 
         alt={brand.name}
         width={size}
         height={size}
-        className="shrink-0 rounded-md object-cover"
+        className={`${common} object-cover`}
         style={{ width: size, height: size }}
       />
     );
   }
 
-  const initial = brand?.name.charAt(0).toUpperCase() ?? '?';
   return (
     <div
-      className="flex shrink-0 items-center justify-center rounded-md bg-accent-surface"
-      style={{ width: size, height: size, fontSize: size * 0.5 }}
+      className={`${common} flex items-center justify-center bg-white/[0.04] text-text-muted`}
+      style={{ width: size, height: size }}
+      aria-label={brand?.name ?? 'Brand'}
     >
-      <span className="font-semibold leading-none text-accent-text">{initial}</span>
+      <Building2 size={Math.round(size * 0.55)} />
     </div>
   );
 }

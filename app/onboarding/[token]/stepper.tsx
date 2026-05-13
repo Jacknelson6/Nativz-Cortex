@@ -293,7 +293,7 @@ function BrandLogo({
           alt={clientName}
           width={36}
           height={36}
-          className="rounded-md object-contain"
+          className="rounded-full border border-white/[0.08] bg-white/[0.04] object-cover"
         />
         <span className="text-base font-medium text-text-primary">{clientName}</span>
       </div>
