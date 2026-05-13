@@ -72,7 +72,9 @@ export default async function AdminOnboardingPage() {
         />
       ) : (
         <div className="rounded-2xl border border-nativz-border bg-surface overflow-hidden">
-          <div className="grid grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,1fr)_5.5rem] items-center gap-4 px-4 py-3 text-[11px] uppercase tracking-wide text-text-secondary border-b border-nativz-border">
+          {/* Desktop header row — hidden on mobile where each card stacks
+              its own fields with inline labels. */}
+          <div className="hidden md:grid grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,1fr)_5.5rem] items-center gap-4 px-4 py-3 text-[11px] uppercase tracking-wide text-text-secondary border-b border-nativz-border">
             <div>Client</div>
             <div>Kind</div>
             <div>Progress</div>
@@ -88,7 +90,7 @@ export default async function AdminOnboardingPage() {
               <Link
                 key={row.id}
                 href={`/admin/onboarding/${row.id}`}
-                className="grid grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,1fr)_5.5rem] items-center gap-4 px-4 py-3 border-b border-nativz-border last:border-b-0 hover:bg-surface-hover transition-colors"
+                className="grid grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,1fr)_5.5rem] items-center gap-4 px-4 py-3 border-b border-nativz-border last:border-b-0 hover:bg-surface-hover transition-colors max-md:flex max-md:flex-col max-md:items-start max-md:gap-2"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <ClientLogo src={logoUrl} name={clientName} size="sm" className="shrink-0" />
