@@ -3291,11 +3291,7 @@ function PostCard({
   // (Approve / Request change) to the bottom of the card. With no fixed
   // height the inner flex-1 has nothing to grow into and the composer
   // floats up next to the caption.
-  const heightPx = isImagePost
-    ? 'md:h-[60vh]'
-    : layoutMode === 'modal'
-      ? 'md:h-[88vh]'
-      : 'md:h-[78vh]';
+  const heightPx = isImagePost ? 'md:h-[60vh]' : 'md:h-[78vh]';
   const articleChrome =
     layoutMode === 'modal'
       ? `flex flex-col overflow-hidden bg-surface md:flex-row ${heightPx}`
@@ -3313,7 +3309,7 @@ function PostCard({
   // column geometry didn't perfectly match the player's intrinsic aspect.
   // (2) No `md:h-full` on video — the column hugs its 9:16 aspect-ratio so
   // the player fills it edge-to-edge. With `h-full` the col stretched to
-  // the card's fixed 78/88vh height while the Mux player stayed pinned at
+  // the card's fixed 78vh height while the Mux player stayed pinned at
   // its 9:16 aspect, leaving an empty strip under the player. `self-start`
   // keeps the right (comments) column free to take the full card height.
   const videoColSizing = isImagePost
