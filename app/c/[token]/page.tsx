@@ -11,8 +11,8 @@ import {
 } from 'react';
 import {
   AlertCircle, AlertTriangle, AtSign, BellRing, CalendarDays, CheckCircle, Clock,
-  Download, File as FileIcon, Film, List, Loader2, LogIn, MapPin, MessageSquare,
-  Paperclip, Pencil, Play, Plus, RefreshCw, Send, Tag, Trash2, Type, Undo2,
+  Download, File as FileIcon, Film, ImageUp, List, Loader2, LogIn, MapPin, MessageSquare,
+  Paperclip, Pencil, Play, Plus, RefreshCw, RotateCcw, Send, Tag, Trash2, Type, Undo2,
   Upload, Users, VideoOff, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -48,7 +48,8 @@ type SharedCommentStatus =
   | 'caption_edit'
   | 'tag_edit'
   | 'schedule_change'
-  | 'video_revised';
+  | 'video_revised'
+  | 'cover_edit';
 
 interface SharedComment {
   id: string;
@@ -645,6 +646,35 @@ function SharedDropView({
     );
   }
 
+  // Cover-photo set/clear: video posts only. The new url goes into
+  // cover_image_url so the publish pipeline (lib/calendar/schedule-drop.ts ->
+  // lib/posting/zernio.ts) picks it up as the IG/FB/LinkedIn thumbnail on
+  // its next run. We also splice in the post_review_comments row the API
+  // returned so the activity rail shows "Updated the cover photo" without
+  // a refetch.
+  function updatePostCover(
+    postId: string,
+    nextCoverUrl: string | null,
+    comment: SharedComment | null,
+  ) {
+    setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            posts: prev.posts.map((p) =>
+              p.id === postId
+                ? {
+                    ...p,
+                    cover_image_url: nextCoverUrl,
+                    comments: comment ? [...p.comments, comment] : p.comments,
+                  }
+                : p,
+            ),
+          }
+        : prev,
+    );
+  }
+
   function clearRevisionPending() {
     setData((prev) =>
       prev
@@ -929,6 +959,7 @@ function SharedDropView({
                 onScheduleUpdated={(at, c) => updatePostScheduledAt(post.id, at, c)}
                 onRevisionUploaded={(rev) => updatePostRevision(post.id, rev)}
                 onAssetReplaced={(next) => updatePostImageAsset(post.id, next)}
+                onCoverUpdated={(nextCover, c) => updatePostCover(post.id, nextCover, c)}
                 onRemoveFromCalendar={() => removePostFromCalendar(post.id)}
                 onTitleUpdated={(title) => updatePostTitle(post.id, title)}
                 requireName={() => {
@@ -1044,6 +1075,7 @@ function SharedDropView({
         onScheduleUpdated={updatePostScheduledAt}
         onRevisionUploaded={updatePostRevision}
         onAssetReplaced={updatePostImageAsset}
+        onCoverUpdated={updatePostCover}
         onRemoveFromCalendar={removePostFromCalendar}
         onTitleUpdated={updatePostTitle}
         onClose={() => setDetailPostId(null)}
@@ -1676,6 +1708,7 @@ function PostDetailModal({
   onScheduleUpdated,
   onRevisionUploaded,
   onAssetReplaced,
+  onCoverUpdated,
   onRemoveFromCalendar,
   onTitleUpdated,
   onClose,
@@ -1710,6 +1743,7 @@ function PostDetailModal({
     },
   ) => void;
   onAssetReplaced: (postId: string, next: { url: string; mime_type: string | null }) => void;
+  onCoverUpdated: (postId: string, nextCover: string | null, c: SharedComment | null) => void;
   onRemoveFromCalendar: (postId: string) => void;
   onTitleUpdated: (postId: string, title: string | null) => void;
   onClose: () => void;
@@ -1736,6 +1770,7 @@ function PostDetailModal({
         onScheduleUpdated={(at, c) => onScheduleUpdated(post.id, at, c)}
         onRevisionUploaded={(rev) => onRevisionUploaded(post.id, rev)}
         onAssetReplaced={(next) => onAssetReplaced(post.id, next)}
+        onCoverUpdated={(nextCover, c) => onCoverUpdated(post.id, nextCover, c)}
         onRemoveFromCalendar={() => {
           onRemoveFromCalendar(post.id);
           onClose();
@@ -2119,6 +2154,7 @@ function PostCard({
   onScheduleUpdated,
   onRevisionUploaded,
   onAssetReplaced,
+  onCoverUpdated,
   onRemoveFromCalendar,
   onTitleUpdated,
   requireName,
@@ -2155,6 +2191,14 @@ function PostCard({
    * image posts only (carousels reject server-side).
    */
   onAssetReplaced: (next: { url: string; mime_type: string | null }) => void;
+  /**
+   * Cover-photo set/clear callback. Video posts only — image posts have no
+   * separate cover. `nextCover` is the new URL (POST) or null (DELETE).
+   * The activity-rail comment row is `null` if the server's best-effort
+   * activity insert failed; the cover update itself is still authoritative
+   * because the API already wrote `scheduled_posts.cover_image_url`.
+   */
+  onCoverUpdated: (nextCover: string | null, c: SharedComment | null) => void;
   onRemoveFromCalendar: () => void;
   onTitleUpdated: (title: string | null) => void;
   requireName: () => void;
@@ -2205,6 +2249,14 @@ function PostCard({
   // bypass Vercel and the request can run for many minutes on a big file.
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const revisionInputRef = useRef<HTMLInputElement>(null);
+  // Cover-photo upload state. Separate hidden input + ref from revisionInputRef
+  // so the accept filter ("image/*") and progress copy stay independent of the
+  // Replace-video / Replace-image upload that lives on the same card. Video
+  // posts only — the button is hidden for image posts (their visible asset is
+  // already the cover).
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [clearingCover, setClearingCover] = useState(false);
   // Per-post Download state. The bulk "Download all" lives at the page
   // header for grabbing every asset in one zip; this overlay button is for
   // pulling a single post (e.g. when the reviewer just wants this one
@@ -2674,6 +2726,79 @@ function PostCard({
     }
   }
 
+  // Cover-photo upload. Video posts only. Posts multipart to the new
+  // cover route, which writes scheduled_posts.cover_image_url + an
+  // activity entry. We surface the returned comment to the parent so the
+  // history rail re-renders without a refetch. Author name is required
+  // (mirrors caption / replace-image flows) so the rail can attribute
+  // the change.
+  async function uploadCoverFile(file: File) {
+    if (!authorName.trim()) {
+      requireName();
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      toast.error('Choose an image (jpg, png, or webp)');
+      return;
+    }
+    setUploadingCover(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('authorName', authorName.trim());
+      const res = await fetch(
+        `/api/calendar/share/${token}/cover/${post.id}`,
+        { method: 'POST', body: fd },
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(
+          typeof json?.error === 'string' ? json.error : `Upload failed (${res.status})`,
+        );
+      }
+      const nextCover = typeof json?.cover_image_url === 'string' ? json.cover_image_url : null;
+      if (!nextCover) throw new Error('Server did not return the new cover URL');
+      onCoverUpdated(nextCover, (json?.comment as SharedComment | null) ?? null);
+      toast.success('Cover photo updated');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Cover upload failed');
+    } finally {
+      setUploadingCover(false);
+      if (coverInputRef.current) coverInputRef.current.value = '';
+    }
+  }
+
+  // Cover-photo clear. The DELETE route requires the author name as a
+  // query string (the body is empty per HTTP semantics) so the activity
+  // rail still gets attribution. On success Zernio falls back to the
+  // auto-first-frame thumbnail at publish time.
+  async function clearCover() {
+    if (!authorName.trim()) {
+      requireName();
+      return;
+    }
+    if (!post.cover_image_url) return;
+    setClearingCover(true);
+    try {
+      const res = await fetch(
+        `/api/calendar/share/${token}/cover/${post.id}?authorName=${encodeURIComponent(authorName.trim())}`,
+        { method: 'DELETE' },
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(
+          typeof json?.error === 'string' ? json.error : `Reset failed (${res.status})`,
+        );
+      }
+      onCoverUpdated(null, (json?.comment as SharedComment | null) ?? null);
+      toast.success('Cover photo reset');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Reset failed');
+    } finally {
+      setClearingCover(false);
+    }
+  }
+
   // Per-post download. Reuses the same target builder the bulk zip uses so
   // the filenames stay consistent: a video post yields one mp4 named after
   // the post; a single-image post yields one image; a carousel yields a
@@ -2985,6 +3110,23 @@ function PostCard({
     />
   ) : null;
 
+  // Cover-photo hidden input — video posts only, separate from
+  // revisionInput so the accept filter stays "image/*" without colliding
+  // with the Replace-video flow's "video/*" filter on the same card.
+  const coverInput = !isImagePost ? (
+    <input
+      ref={coverInputRef}
+      type="file"
+      accept="image/jpeg,image/png,image/webp"
+      className="hidden"
+      onChange={(e) => {
+        const f = e.target.files?.[0];
+        if (!f) return;
+        uploadCoverFile(f);
+      }}
+    />
+  ) : null;
+
   const historyBlock =
     post.comments.length > 0 ? (
       // mt-2 puts a small breathing room between the caption and the
@@ -3238,6 +3380,51 @@ function PostCard({
             </span>
           </button>
         )}
+        {/* Cover photo: video posts only. Visible to both reviewers and
+            editors (per Item 4 of the PRD — covers are a brand-side
+            decision, not a strategist-only one). Image posts already use
+            their asset as the visible thumbnail, so no cover affordance. */}
+        {!isImagePost && (
+          <button
+            type="button"
+            onClick={() => {
+              if (!authorName.trim()) {
+                requireName();
+                return;
+              }
+              coverInputRef.current?.click();
+            }}
+            disabled={uploadingCover || clearingCover || submitting || uploading}
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-transparent bg-transparent px-3 py-2 text-xs font-medium text-text-muted transition-all hover:border-nativz-border hover:bg-surface-hover hover:text-text-primary disabled:opacity-50 sm:h-9 sm:w-9 sm:px-0 sm:py-0"
+            title={post.cover_image_url ? 'Replace the cover photo' : 'Choose a cover photo'}
+            aria-label={post.cover_image_url ? 'Replace the cover photo' : 'Choose a cover photo'}
+          >
+            {uploadingCover ? <Loader2 size={13} className="animate-spin" /> : <ImageUp size={13} />}
+            <span className="sm:hidden">
+              {uploadingCover
+                ? 'Uploading…'
+                : post.cover_image_url
+                  ? 'Edit cover'
+                  : 'Set cover'}
+            </span>
+          </button>
+        )}
+        {/* Reset cover only when a custom cover has been set. Falls back
+            to the auto-first-frame thumbnail Mux + the ingest pipeline
+            stamped at upload time. */}
+        {!isImagePost && post.cover_image_url && (
+          <button
+            type="button"
+            onClick={() => void clearCover()}
+            disabled={uploadingCover || clearingCover || submitting || uploading}
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-[var(--nz-btn-radius)] border border-transparent bg-transparent px-3 py-2 text-xs font-medium text-text-muted transition-all hover:border-nativz-border hover:bg-surface-hover hover:text-text-primary disabled:opacity-50 sm:h-9 sm:w-9 sm:px-0 sm:py-0"
+            title="Reset to the default cover"
+            aria-label="Reset to the default cover"
+          >
+            {clearingCover ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
+            <span className="sm:hidden">{clearingCover ? 'Resetting…' : 'Reset cover'}</span>
+          </button>
+        )}
         {/* Editor-only remove. Icon-only on sm+ to avoid competing with
             the two primary CTAs visually; full-width labelled button
             below them on mobile so the destructive action stays
@@ -3321,6 +3508,7 @@ function PostCard({
       className={articleChrome}
     >
       {revisionInput}
+      {coverInput}
       <div className={`${videoColAspect} ${videoColSizing}`}>
         {videoPanel}
       </div>
@@ -3535,7 +3723,10 @@ function CommentRow({
       ? 'text-status-success'
       : comment.status === 'changes_requested'
         ? 'text-status-warning'
-        : comment.status === 'caption_edit' || comment.status === 'tag_edit' || comment.status === 'video_revised'
+        : comment.status === 'caption_edit' ||
+            comment.status === 'tag_edit' ||
+            comment.status === 'video_revised' ||
+            comment.status === 'cover_edit'
           ? 'text-accent-text'
           : comment.status === 'schedule_change'
             ? 'text-accent-text'
@@ -3554,7 +3745,9 @@ function CommentRow({
               ? Clock
               : comment.status === 'video_revised'
                 ? Film
-                : MessageSquare;
+                : comment.status === 'cover_edit'
+                  ? ImageUp
+                  : MessageSquare;
   const time = new Date(comment.created_at).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -3601,6 +3794,33 @@ function CommentRow({
           <span className="font-medium text-text-primary">{comment.author_name}</span>
           <span className="text-text-muted">{comment.content || activityVerb(comment.status)} · {time}</span>
           {headerDeleteButton}
+        </div>
+      </div>
+    );
+  }
+
+  if (comment.status === 'cover_edit') {
+    // Cover edit row — shows the before/after thumbnails inline so the
+    // rail reads as a true diff (matches the caption_edit "before / now"
+    // pattern). `caption_before` carries the previous cover URL and
+    // `caption_after` carries the new one; either side may be null when
+    // the cover was just reset to default.
+    const before = comment.caption_before;
+    const after = comment.caption_after;
+    return (
+      <div className="group rounded-lg border border-accent/25 bg-accent/5 px-3 py-2">
+        <div className="mb-2 flex items-center gap-2 text-[13px]">
+          <Icon size={12} className={tone} />
+          <span className="font-medium text-text-primary">{comment.author_name}</span>
+          <span className="text-text-muted">
+            {after ? 'updated the cover photo' : 'reset the cover photo'} · {time}
+          </span>
+          {headerDeleteButton}
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <CoverDiffThumb label="Before" src={before} />
+          <span className="text-text-muted" aria-hidden="true">→</span>
+          <CoverDiffThumb label={after ? 'After' : 'Default'} src={after} />
         </div>
       </div>
     );
@@ -3688,9 +3908,39 @@ function activityVerb(status: SharedCommentStatus): string {
       return 'changed the schedule';
     case 'video_revised':
       return 're-uploaded the video';
+    case 'cover_edit':
+      return 'updated the cover photo';
     default:
       return '';
   }
+}
+
+/**
+ * Inline before/after thumbnail for the cover_edit history row. Null src
+ * (e.g. there was no custom cover before, or the cover was just reset)
+ * renders a dashed placeholder labeled "Default" so the rail still shows
+ * a comparable footprint on both sides.
+ */
+function CoverDiffThumb({ label, src }: { label: string; src: string | null }) {
+  return (
+    <figure className="flex flex-col items-center gap-1">
+      <div className="relative h-16 w-12 overflow-hidden rounded border border-nativz-border bg-background/40">
+        {src ? (
+          // Plain img — these are reviewer-uploaded JPEG/PNG/WebPs in
+          // scheduler-media. Next/Image would force a remotePatterns
+          // entry per share link; not worth the complexity for a 12x16
+          // history thumb.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={src} alt={label} className="absolute inset-0 h-full w-full object-cover" />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center text-[10px] text-text-muted">
+            None
+          </div>
+        )}
+      </div>
+      <figcaption className="text-[10px] uppercase tracking-[0.08em] text-text-muted">{label}</figcaption>
+    </figure>
+  );
 }
 
 function SchedulePill({
