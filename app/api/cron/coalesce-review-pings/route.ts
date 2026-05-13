@@ -83,7 +83,7 @@ type EditingPending = {
   project_id: string;
   author_name: string;
   content: string;
-  status: 'comment' | 'changes_requested';
+  status: 'comment' | 'changes_requested' | 'approved';
   attachments: Array<{ url: string; filename: string }> | null;
   video_id: string | null;
   created_at: string;
@@ -95,11 +95,23 @@ function previewLine(c: {
   content: string;
   attachments: Array<{ url: string; filename: string }> | null;
 }): string {
-  const verb = c.status === 'changes_requested' ? 'requested changes' : 'commented';
+  const verb =
+    c.status === 'changes_requested'
+      ? 'requested changes'
+      : c.status === 'approved'
+        ? 'approved'
+        : 'commented';
   const trimmed = c.content.trim();
+  const attachmentCount = (c.attachments ?? []).length;
+  const fallback =
+    attachmentCount > 0
+      ? `(${attachmentCount} attachment${attachmentCount === 1 ? '' : 's'})`
+      : c.status === 'approved'
+        ? '(no notes)'
+        : '(no message)';
   const body = trimmed
     ? `"${trimmed.length > 200 ? trimmed.slice(0, 200) + '…' : trimmed}"`
-    : `(${(c.attachments ?? []).length} attachment${(c.attachments ?? []).length === 1 ? '' : 's'})`;
+    : fallback;
   return `• ${c.author_name} ${verb}: ${body}`;
 }
 
@@ -345,13 +357,21 @@ async function handleEditing(admin: ReturnType<typeof createAdminClient>): Promi
   commentsBatched: number;
 }> {
   const cutoff = staleCutoffIso();
+  // `approved` joined this bundler on 2026-05-13. A client rapid-fire
+  // approving five cuts in a row used to fire five separate "✅ approved"
+  // cards back-to-back (Camila on Bit Bunker · May Ad Creatives). The
+  // editing comment route now leaves approval rows with chat_notified_at
+  // NULL exactly like comments + change requests, and this cron coalesces
+  // the lot. The 🎉 all-approved single-shot still fires from the comment
+  // route the moment the project hits 100% approved.
+  const PENDING_STATUSES = ['comment', 'changes_requested', 'approved'];
   const { data: pending } = await admin
     .from('editing_project_review_comments')
     .select(
       'id, share_link_id, project_id, author_name, content, status, attachments, video_id, created_at',
     )
     .is('chat_notified_at', null)
-    .in('status', ['comment', 'changes_requested'])
+    .in('status', PENDING_STATUSES)
     .gte('created_at', cutoff)
     .order('created_at', { ascending: true });
 
@@ -360,7 +380,7 @@ async function handleEditing(admin: ReturnType<typeof createAdminClient>): Promi
     .from('editing_project_review_comments')
     .update({ chat_notified_at: new Date().toISOString() })
     .is('chat_notified_at', null)
-    .in('status', ['comment', 'changes_requested'])
+    .in('status', PENDING_STATUSES)
     .lt('created_at', cutoff);
   if (sweepErr) {
     console.error('coalesce-review-pings: editing stale-sweep failed', sweepErr);
@@ -502,15 +522,26 @@ async function handleEditing(admin: ReturnType<typeof createAdminClient>): Promi
         text: perGroup.map((c) => previewLine(c)).join('<br>'),
       });
     }
+    // Pure-approval batches get the ✅ icon + "approval" wording so they
+    // read like the old single-shot card, just collapsed. Mixed batches
+    // (any non-approval rows present) stay on ✏️ "update" so the team
+    // doesn't miss a change request hiding inside an approval run. The
+    // CTA copy follows the same rule — pure approvals don't need
+    // "Open & reply" prompting.
+    const approvalsOnly = group.every((c) => c.status === 'approved');
     widgets.push({
       type: 'button',
-      text: 'Open & reply',
+      text: approvalsOnly ? 'Open share link' : 'Open & reply',
       url: shareUrl,
       filled: true,
     });
 
     const totalNotes = group.length;
-    const headerTitle = `✏️ ${totalNotes} new note${totalNotes === 1 ? '' : 's'} on ${clientName}`;
+    const headerEmoji = approvalsOnly ? '✅' : '✏️';
+    const headerNoun = approvalsOnly
+      ? `approval${totalNotes === 1 ? '' : 's'}`
+      : `update${totalNotes === 1 ? '' : 's'}`;
+    const headerTitle = `${headerEmoji} ${totalNotes} ${headerNoun} on ${clientName}`;
     const headerSubtitle = projectName;
     const fallback = [
       `${headerTitle} (${headerSubtitle})`,

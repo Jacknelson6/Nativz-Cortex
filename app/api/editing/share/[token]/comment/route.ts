@@ -5,7 +5,6 @@ import { createNotification } from '@/lib/notifications/create';
 import {
   buildChatCard,
   postToGoogleChatSafe,
-  type ChatCardWidget,
 } from '@/lib/chat/post-to-google-chat';
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { resolvePaidMediaWebhook } from '@/lib/chat/resolve-paid-media-webhook';
@@ -381,11 +380,6 @@ export async function POST(
           admin,
           link,
           token,
-          finalStatus,
-          authorName: parsed.data.authorName.trim(),
-          content: trimmedContent,
-          attachments: parsed.data.attachments ?? [],
-          videoId: parsed.data.videoId ?? null,
           allApprovedClaim,
         });
       } catch (err) {
@@ -417,153 +411,85 @@ export async function POST(
   return NextResponse.json({ comment: inserted });
 }
 
+/**
+ * Single-shot 🎉 card for the all-approved claim winner.
+ *
+ * Per-event chat cards (`approved`, `comment`, `changes_requested`) are
+ * routed through `/api/cron/coalesce-review-pings`: the comment row is
+ * inserted with `chat_notified_at = NULL` and the bundler picks it up 20
+ * minutes after the earliest pending entry. Stops the "client clicks
+ * Approve on five cuts = five back-to-back ✅ cards" pattern Jack flagged
+ * on 2026-05-13 (Camila on Bit Bunker · May Ad Creatives).
+ *
+ * The celebration card here intentionally stays synchronous: it only
+ * fires once per project, the moment the last approval lands, so it's
+ * never spammy and earlier-cut approvals would feel stale by 20 minutes
+ * later anyway. To avoid a duplicate batched "N approvals" card landing
+ * after the 🎉, we stamp `chat_notified_at` on every still-pending
+ * approval row for this share link before posting.
+ */
 async function postEditingChatForComment(args: {
   admin: ReturnType<typeof createAdminClient>;
   link: ShareLinkRow;
   token: string;
-  finalStatus: 'approved' | 'changes_requested' | 'comment' | 'video_revised';
-  authorName: string;
-  content: string;
-  attachments: Array<{
-    url: string;
-    filename: string;
-    mime_type: string;
-    size_bytes: number;
-  }>;
-  videoId: string | null;
   allApprovedClaim: 'won' | 'lost' | 'not-yet';
 }) {
+  if (args.allApprovedClaim !== 'won') return;
+
+  // Stamp pending approval rows so the bundler cron skips them. Pending
+  // `comment` / `changes_requested` rows (rare, but possible if the
+  // client mixed a note into the approval run) deliberately stay NULL
+  // so they still bundle on their own.
+  const { error: stampErr } = await args.admin
+    .from('editing_project_review_comments')
+    .update({ chat_notified_at: new Date().toISOString() })
+    .eq('share_link_id', args.link.id)
+    .eq('status', 'approved')
+    .is('chat_notified_at', null);
+  if (stampErr) {
+    console.error(
+      'editing-comment: stamping pending approvals after all-approved failed',
+      stampErr,
+    );
+  }
+
   const { clientId, webhookUrl, clientName, projectName, projectType, shareUrl } =
     await loadProjectChatContext(args.admin, args.link.project_id, args.token);
   if (!webhookUrl) return;
 
-  // Resolve `#video-N` anchor for per-video comments so the chat link
-  // jumps to the exact tile being discussed. Mirrors the public page's
-  // dedup-by-position ordering: lowest position first, latest version
-  // wins per slot. Project-level (no videoId) comments stay unanchored.
-  let videoAnchor = '';
-  if (args.videoId) {
-    const { data: rows } = await args.admin
-      .from('editing_project_videos')
-      .select('id, position, version, created_at')
-      .eq('project_id', args.link.project_id)
-      .order('position', { ascending: true })
-      .order('version', { ascending: false });
-    const seen = new Set<number>();
-    const orderedIds: string[] = [];
-    for (const row of (rows ?? []) as Array<{
-      id: string;
-      position: number | null;
-    }>) {
-      const pos = row.position ?? 0;
-      if (seen.has(pos)) continue;
-      seen.add(pos);
-      orderedIds.push(row.id);
-    }
-    const idx = orderedIds.indexOf(args.videoId);
-    if (idx >= 0) videoAnchor = `#video-${idx + 1}`;
-  }
-  const linkedShareUrl = `${shareUrl}${videoAnchor}`;
-
-  // Per-event chat ping for `approved`: fire immediately (single-shot
-  // approval event, never spammy). `comment` and `changes_requested` are
-  // deferred — the row's `chat_notified_at` stays NULL and
-  // `/api/cron/coalesce-review-pings` batches every pending revision per
-  // share-link into a single card once activity has settled for 20 min.
-  // Stops the "five quick revision notes = five back-to-back chat cards"
-  // spam.
-  //
-  // Independent of the all-approved ping below — disabling
-  // `editing_comment_chat` must NOT kill the celebration post.
-  if (args.finalStatus === 'approved') {
-    const commentSetting = await getClientNotificationSetting(
-      'editing_comment_chat',
-      'chat',
-      clientId,
-    );
-    if (commentSetting.enabled) {
-      const trimmed = args.content.trim();
-      const widgets: ChatCardWidget[] = [];
-      if (trimmed) {
-        widgets.push({ type: 'quote', text: trimmed });
-      } else {
-        widgets.push({ type: 'text', text: '<i>Approved with no notes.</i>' });
-      }
-      if (args.attachments.length > 0) {
-        widgets.push({
-          type: 'kv',
-          label: `Attachments (${args.attachments.length})`,
-          value: args.attachments.map((a) => a.filename).join(', '),
-        });
-        widgets.push({
-          type: 'buttons',
-          buttons: args.attachments.slice(0, 4).map((a) => ({
-            text: a.filename.length > 32 ? `${a.filename.slice(0, 30)}…` : a.filename,
-            url: a.url,
-          })),
-        });
-      }
-      widgets.push({
-        type: 'button',
-        text: 'Open share link',
-        url: linkedShareUrl,
-        filled: true,
-      });
-
-      const fallback =
-        `✅ ${args.authorName} (client) approved on ${clientName} · ${projectName}` +
-        (trimmed ? `\n"${trimmed}"` : '') +
-        `\n${linkedShareUrl}`;
-
-      postToGoogleChatSafe(
-        webhookUrl,
-        buildChatCard({
-          cardId: `editing-comment-${args.link.id}-${Date.now()}`,
-          headerTitle: `✅ ${args.authorName} approved`,
-          headerSubtitle: `${clientName} · ${projectName}`,
-          sections: [{ widgets }],
-          fallbackText: fallback,
-        }),
-        `editing-comment ${args.link.id}`,
-      );
-    }
-  }
-
-  if (args.allApprovedClaim === 'won') {
-    const setting = await getClientNotificationSetting(
-      'editing_all_approved_chat',
-      'chat',
-      clientId,
-    );
-    if (!setting.enabled) return;
-    const noun = nounForProjectType(projectType);
-    postToGoogleChatSafe(
-      webhookUrl,
-      buildChatCard({
-        cardId: `editing-all-approved-${args.link.id}`,
-        headerTitle: `🎉 Every ${noun.singular} approved`,
-        headerSubtitle: `${clientName} · ${projectName}`,
-        sections: [
-          {
-            widgets: [
-              {
-                type: 'text',
-                text: `Client approved every ${noun.singular} in this project. It's marked done — no team action needed.`,
-              },
-              {
-                type: 'button',
-                text: 'Open project',
-                url: shareUrl,
-                filled: true,
-              },
-            ],
-          },
-        ],
-        fallbackText: `🎉 ${clientName} · ${projectName} — client approved every ${noun.singular}. ${shareUrl}`,
-      }),
-      `editing-all-approved ${args.link.id}`,
-    );
-  }
+  const setting = await getClientNotificationSetting(
+    'editing_all_approved_chat',
+    'chat',
+    clientId,
+  );
+  if (!setting.enabled) return;
+  const noun = nounForProjectType(projectType);
+  postToGoogleChatSafe(
+    webhookUrl,
+    buildChatCard({
+      cardId: `editing-all-approved-${args.link.id}`,
+      headerTitle: `🎉 Every ${noun.singular} approved`,
+      headerSubtitle: `${clientName} · ${projectName}`,
+      sections: [
+        {
+          widgets: [
+            {
+              type: 'text',
+              text: `Client approved every ${noun.singular} in this project. It's marked done — no team action needed.`,
+            },
+            {
+              type: 'button',
+              text: 'Open project',
+              url: shareUrl,
+              filled: true,
+            },
+          ],
+        },
+      ],
+      fallbackText: `🎉 ${clientName} · ${projectName} — client approved every ${noun.singular}. ${shareUrl}`,
+    }),
+    `editing-all-approved ${args.link.id}`,
+  );
 }
 
 /**
