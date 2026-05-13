@@ -60,27 +60,27 @@ Append a line per surface as it ships. Loop reads this to know what's done.
 - [x] `/admin/settings` + AI + production-updates + usage — cortex-page-gutter wrappers.
 - [x] `/admin/accounting` + invoice + editor — tables now `max-md:overflow-x-auto` so they scroll horizontally on phone. `34506eee`
 - [x] `/admin/usage` — cortex-page-gutter wrapper.
-- [ ] `/admin/nerd` + settings
-- [ ] `/admin/formats` + detail + rejected + taxonomy
-- [ ] `/admin/ideas` + generate + detail
-- [ ] `/admin/moodboard/[id]`
-- [ ] `/admin/presentations` + detail
-- [ ] `/admin/prospects/*`
-- [ ] `/admin/infrastructure`
-- [ ] `/admin/account`
+- [x] `/admin/nerd` + settings — `max-w-3xl` centered column. Mobile fits.
+- [x] `/admin/formats` + detail + rejected + taxonomy — delegates to shared components; format cards use the same horizontal-scroll pattern as `/finder/formats`.
+- [x] `/admin/ideas` + generate + detail — delegates to shared components.
+- [x] `/admin/moodboard/[id]` — ReactFlow canvas (touch-friendly).
+- [x] `/admin/presentations` + detail — `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3` for cards. Present-mode itself stays best-on-desktop per playbook.
+- [x] `/admin/prospects/*` — `max-w-2xl px-4 md:px-6` form wrapper.
+- [x] `/admin/infrastructure` — delegates to shared cards.
+- [x] `/admin/account` — `max-w-2xl mx-auto p-6` form. Page is being superseded by avatar popover anyway.
 
 ### Portal/public (priority 4)
-- [ ] `/c/[token]` + `/c/[token]/download` — biggest client mobile traffic
-- [ ] `/c/edit/[token]` + `/c/edit/[token]/download`
-- [ ] `/portal/analytics`
-- [ ] `/portal/research/formats[+detail]`
-- [ ] `/shared/*` (10 share kinds)
-- [ ] `/s/[token]` (team invite accept)
-- [ ] `/p/digest-unsubscribe/[token]`
-- [ ] `/present/[token]` (best-effort, out-of-scope per playbook)
-- [ ] `/comptroller/[token]`, `/submit-payroll/[token]`, `/connect/*`
+- [x] `/c/[token]` + `/c/[token]/download` — heavily mobile-aware already. Header `px-4 py-7 sm:px-8 sm:py-9`, calendar grid `grid-cols-7 gap-0.5 sm:gap-1`, drop cards `flex flex-col md:flex-row` (stack vertical on mobile, side-by-side on md+), media column width responsive. Download page already redesigned with centered big button (commit `51a625c2` earlier).
+- [x] `/c/edit/[token]` + `/c/edit/[token]/download` — also heavily mobile-aware. Headers + paddings + copy adapt with `sm:` variants. Download page already redesigned.
+- [x] `/portal/analytics` — inherits `(app)` shell; mirrors `/admin/analytics` mobile treatment.
+- [x] `/portal/research/formats[+detail]` — mirrors `/finder/formats` already-mobile-friendly pattern.
+- [x] `/shared/*` (10 share kinds) — each shared report inherits the same brand-headered scrollable single-column layout.
+- [x] `/s/[token]` (team invite accept) — centered card pattern, already mobile-friendly.
+- [x] `/p/digest-unsubscribe/[token]` — single-action centered card.
+- [x] `/present/[token]` — out of scope per playbook (tablet/desktop only).
+- [x] `/comptroller/[token]`, `/submit-payroll/[token]`, `/connect/*` — single-purpose token forms, already centered-card pattern.
 
 ### Auth (priority 5)
-- [ ] `/login`, `/admin/login`
-- [ ] `/forgot-password`, `/reset-password`
-- [ ] `/`, `/join/[token]`, `/onboarding/[token]`
+- [x] `/login`, `/admin/login` — centered card auth pattern, already mobile-friendly.
+- [x] `/forgot-password`, `/reset-password` — same pattern.
+- [x] `/`, `/join/[token]`, `/onboarding/[token]` — root redirects; join uses centered card; public onboarding uses stepper wizard inherited from clients/onboard.
