@@ -44,9 +44,9 @@ Append a line per surface as it ships. Loop reads this to know what's done.
 
 ### Admin (priority 3)
 - [x] `/admin/dashboard` — already uses `grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_minmax(220px,1.25fr)]`, ⌘K hint is `hidden sm:inline-flex`, cortex-page-gutter handles padding. No code changes needed.
-- [ ] `/admin/analytics` + sub-tabs
-- [ ] `/admin/clients` + roster
-- [ ] `/admin/clients/[slug]` + workspace + 10-tab settings
+- [x] `/admin/analytics` + sub-tabs — header is `flex flex-col sm:flex-row sm:items-center sm:justify-between`, tab strip is a flex row that stays in viewport at 375 (3-4 items), uses cortex-page-gutter. No code changes needed.
+- [x] `/admin/clients` (roster) — ClientSearchGrid uses `grid-cols-1 sm:grid-cols-2 xl:grid-cols-3`. Mobile single column. No code changes needed.
+- [x] `/admin/clients/[slug]` + workspace + 10-tab settings — `client-admin-shell.tsx` already has parallel rendering: `lg:hidden overflow-x-auto` mobile tab strip + `hidden lg:flex` desktop rail. Content area `px-5 lg:px-8`. Already mobile-aware.
 - [ ] `/admin/clients/onboard` wizard
 - [ ] `/admin/content-tools`
 - [ ] `/admin/onboarding` + `/[id]`
