@@ -199,7 +199,7 @@ function DownloadView({ data }: { data: SharedPayload }) {
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-6 py-4">
           <ShareHeaderLogo />
           <div className="flex items-center gap-2 text-xs text-text-muted">
-            <CheckCircle size={14} className="text-emerald-400" />
+            <CheckCircle size={14} className="text-accent-text" />
             Approved
           </div>
         </div>
@@ -281,7 +281,7 @@ function DownloadView({ data }: { data: SharedPayload }) {
                       </div>
                     )}
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/40">
-                      <span className="inline-flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-white shadow-lg ring-1 ring-black/20">
+                      <span className="inline-flex items-center gap-2 rounded-full bg-accent-text px-5 py-2.5 text-sm font-semibold text-white shadow-lg ring-1 ring-black/20">
                         {singleDownloading === t.filename ? (
                           <Loader2 size={16} className="animate-spin" />
                         ) : (
