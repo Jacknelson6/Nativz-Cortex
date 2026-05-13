@@ -12,7 +12,6 @@ import {
 import { resolveTeamChatWebhook } from '@/lib/chat/resolve-team-webhook';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
-import { formatPostTimeForChat } from '@/lib/chat/format-post-time';
 import { isMondayConfigured } from '@/lib/monday/client';
 import {
   findContentCalendarItem,
@@ -562,7 +561,7 @@ async function notifyAdminsOfComment(
   // title surfaced on the celebration ping ("All N posts from Acme's
   // April Refresh project are approved!").
   const reviewLinkPostIds = Object.keys(reviewLinkMap);
-  const [dropRes, postRes, linkRes, allPostsRes] = await Promise.all([
+  const [dropRes, linkRes, allPostsRes] = await Promise.all([
     admin
       .from('content_drops')
       .select('id, client_id, start_date, clients(name, agency, chat_webhook_url)')
@@ -573,11 +572,6 @@ async function notifyAdminsOfComment(
         start_date: string;
         clients: { name: string; agency: string | null; chat_webhook_url: string | null } | null;
       }>(),
-    admin
-      .from('scheduled_posts')
-      .select('scheduled_at')
-      .eq('id', comment.postId)
-      .maybeSingle<{ scheduled_at: string | null }>(),
     admin
       .from('content_drop_share_links')
       .select('name')
@@ -599,8 +593,6 @@ async function notifyAdminsOfComment(
     primaryUrl: drop.clients?.chat_webhook_url ?? null,
     agency: drop.clients?.agency ?? null,
   });
-  const postScheduledAt = postRes.data?.scheduled_at ?? null;
-  const postTimeLine = postScheduledAt ? formatPostTimeForChat(postScheduledAt) : null;
   const title = TITLE_BY_STATUS[comment.status](comment.authorName, clientName);
   // Truncate only the in-app notification body — chat gets full content.
   // Attachment-only comments have no text, so fall back to a file summary.
@@ -682,72 +674,16 @@ async function notifyAdminsOfComment(
   // Client-comment notifications never fall back to OPS — that space is
   // reserved for system-level alerts (cron failures, post-health). Brands
   // without a per-client webhook AND no agency catchall silently no-op.
-  // - comment / changes_requested → post immediately with full content + attachments
-  // - approved → post 🎉 once every post in this share link is approved
+  //
+  // - comment / changes_requested → DEFERRED. `chat_notified_at` stays NULL
+  //   on the row; `/api/cron/coalesce-review-pings` batches every pending
+  //   revision per share-link into a single card once activity has settled
+  //   for 20 min. Stops the "five quick revision notes = five back-to-back
+  //   chat cards" spam that the old fire-on-insert path produced.
+  // - approved → post 🎉 once every post in this share link is approved.
   const targetWebhookUrl = chatWebhookUrl;
   if (targetWebhookUrl) {
-    if (comment.status === 'comment' || comment.status === 'changes_requested') {
-      const commentSetting = await getClientNotificationSetting(
-        'calendar_comment_chat',
-        'chat',
-        drop.client_id,
-      );
-      if (commentSetting.enabled) {
-        const verb = comment.status === 'changes_requested' ? 'requested changes' : 'commented';
-        const emoji = comment.status === 'changes_requested' ? '✏️' : '💬';
-        const trimmed = comment.content.trim();
-        const widgets: ChatCardWidget[] = [];
-        if (postTimeLine) {
-          widgets.push({ type: 'kv', label: 'Post scheduled for', value: postTimeLine });
-        }
-        if (trimmed) {
-          widgets.push({ type: 'quote', text: trimmed });
-        }
-        if (comment.attachments.length > 0) {
-          widgets.push({
-            type: 'kv',
-            label: `Attachments (${comment.attachments.length})`,
-            value: comment.attachments.map((a) => a.filename).join(', '),
-          });
-          widgets.push({
-            type: 'buttons',
-            buttons: comment.attachments.slice(0, 4).map((a) => ({
-              text: a.filename.length > 32 ? `${a.filename.slice(0, 30)}…` : a.filename,
-              url: a.url,
-            })),
-          });
-        }
-        widgets.push({ type: 'divider' });
-        widgets.push({
-          type: 'text',
-          text: '<i>The client only gets an email once you reply from the share link.</i>',
-        });
-        widgets.push({
-          type: 'button',
-          text: comment.status === 'changes_requested' ? 'Open & reply' : 'Open share link',
-          url: shareUrl,
-          filled: true,
-        });
-
-        const fallback =
-          `${emoji} ${comment.authorName} (client) ${verb} on ${clientName}` +
-          (postTimeLine ? `\nPost scheduled for ${postTimeLine}` : '') +
-          (trimmed ? `\n"${trimmed}"` : '') +
-          `\n${shareUrl}`;
-
-        postToGoogleChatSafe(
-          targetWebhookUrl,
-          buildChatCard({
-            cardId: `calendar-comment-${comment.postId}-${Date.now()}`,
-            headerTitle: `${emoji} ${comment.authorName} ${verb}`,
-            headerSubtitle: clientName,
-            sections: [{ widgets }],
-            fallbackText: fallback,
-          }),
-          `comment ${dropId}`,
-        );
-      }
-    } else if (allApprovedClaim === 'won') {
+    if (allApprovedClaim === 'won') {
       const approvedSetting = await getClientNotificationSetting(
         'calendar_all_approved_chat',
         'chat',

@@ -465,38 +465,28 @@ async function postEditingChatForComment(args: {
   }
   const linkedShareUrl = `${shareUrl}${videoAnchor}`;
 
-  // Per-event chat ping. Independent of the all-approved ping below —
-  // disabling `editing_comment_chat` must NOT kill the celebration post.
-  // (Used to early-return here, which silenced the all-approved block
-  // whenever the per-comment toggle was off.)
-  if (
-    args.finalStatus === 'comment' ||
-    args.finalStatus === 'changes_requested' ||
-    args.finalStatus === 'approved'
-  ) {
+  // Per-event chat ping for `approved`: fire immediately (single-shot
+  // approval event, never spammy). `comment` and `changes_requested` are
+  // deferred — the row's `chat_notified_at` stays NULL and
+  // `/api/cron/coalesce-review-pings` batches every pending revision per
+  // share-link into a single card once activity has settled for 20 min.
+  // Stops the "five quick revision notes = five back-to-back chat cards"
+  // spam.
+  //
+  // Independent of the all-approved ping below — disabling
+  // `editing_comment_chat` must NOT kill the celebration post.
+  if (args.finalStatus === 'approved') {
     const commentSetting = await getClientNotificationSetting(
       'editing_comment_chat',
       'chat',
       clientId,
     );
     if (commentSetting.enabled) {
-      const verb =
-        args.finalStatus === 'changes_requested'
-          ? 'requested changes'
-          : args.finalStatus === 'approved'
-            ? 'approved'
-            : 'commented';
-      const emoji =
-        args.finalStatus === 'changes_requested'
-          ? '✏️'
-          : args.finalStatus === 'approved'
-            ? '✅'
-            : '💬';
       const trimmed = args.content.trim();
       const widgets: ChatCardWidget[] = [];
       if (trimmed) {
         widgets.push({ type: 'quote', text: trimmed });
-      } else if (args.finalStatus === 'approved') {
+      } else {
         widgets.push({ type: 'text', text: '<i>Approved with no notes.</i>' });
       }
       if (args.attachments.length > 0) {
@@ -513,20 +503,15 @@ async function postEditingChatForComment(args: {
           })),
         });
       }
-      widgets.push({ type: 'divider' });
-      widgets.push({
-        type: 'text',
-        text: '<i>The client only gets an email once you reply from the share link.</i>',
-      });
       widgets.push({
         type: 'button',
-        text: args.finalStatus === 'changes_requested' ? 'Open & reply' : 'Open share link',
+        text: 'Open share link',
         url: linkedShareUrl,
         filled: true,
       });
 
       const fallback =
-        `${emoji} ${args.authorName} (client) ${verb} on ${clientName} · ${projectName}` +
+        `✅ ${args.authorName} (client) approved on ${clientName} · ${projectName}` +
         (trimmed ? `\n"${trimmed}"` : '') +
         `\n${linkedShareUrl}`;
 
@@ -534,7 +519,7 @@ async function postEditingChatForComment(args: {
         webhookUrl,
         buildChatCard({
           cardId: `editing-comment-${args.link.id}-${Date.now()}`,
-          headerTitle: `${emoji} ${args.authorName} ${verb}`,
+          headerTitle: `✅ ${args.authorName} approved`,
           headerSubtitle: `${clientName} · ${projectName}`,
           sections: [{ widgets }],
           fallbackText: fallback,
