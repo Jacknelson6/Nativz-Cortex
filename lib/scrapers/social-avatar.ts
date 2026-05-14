@@ -199,9 +199,13 @@ async function resolveInstagram(handle: string): Promise<string | null> {
       const json = (await res.json()) as { data?: { user?: { profile_pic_url_hd?: string; profile_pic_url?: string } } };
       const pic = json?.data?.user?.profile_pic_url_hd ?? json?.data?.user?.profile_pic_url;
       if (pic && (await isUsableImage(pic, 256))) return pic;
+      console.warn(`[social-avatar] IG ${cleaned}: 200 ok but no usable pic url (pic=${pic?.slice(0, 80) ?? 'null'})`);
+    } else {
+      const body = await res.text();
+      console.warn(`[social-avatar] IG ${cleaned}: status=${res.status} body=${body.slice(0, 200)}`);
     }
-  } catch {
-    // fall through to og:image
+  } catch (err) {
+    console.warn(`[social-avatar] IG ${cleaned}: fetch threw`, err instanceof Error ? err.message : err);
   } finally {
     clearTimeout(timer);
   }
