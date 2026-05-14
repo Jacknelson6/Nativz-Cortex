@@ -147,9 +147,10 @@ export async function buildDraft(
     return { ok: false, draftId: null, skipped: 'prospect_missing', error: null };
   }
 
-  // Resolve sales rep + their email.
-  let salesRepName = 'Nativz team';
+  // Resolve sales rep + their email. Agency is inferred from the resolved
+  // rep email's domain so AC-tenant prospects never get a "Nativz team" label.
   let salesRepEmail = process.env.PROSPECT_DIGEST_FROM ?? 'digests@nativz.io';
+  let resolvedRepName: string | null = null;
   if (prospect.owner_user_id) {
     const { data: rep } = await admin
       .from('users')
@@ -157,11 +158,13 @@ export async function buildDraft(
       .eq('id', prospect.owner_user_id)
       .maybeSingle();
     if (rep) {
-      salesRepName = rep.full_name ?? salesRepName;
+      resolvedRepName = rep.full_name ?? null;
       const resolved = pickContactEmail(rep, salesRepEmail);
       if (resolved) salesRepEmail = resolved;
     }
   }
+  const isAC = salesRepEmail.toLowerCase().includes('andersoncollaborative');
+  const salesRepName = resolvedRepName ?? (isAC ? 'Anderson Collaborative team' : 'Nativz team');
 
   // Recipient email: prospects don't carry a dedicated email column today,
   // so we look at touchpoints for a captured lead email (presentation lead

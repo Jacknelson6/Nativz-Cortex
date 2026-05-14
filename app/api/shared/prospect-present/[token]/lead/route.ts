@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendAndLog } from '@/lib/email/resend';
 import type { PresentationSnapshot } from '@/lib/prospects/types';
+import { getBrandFromRequest } from '@/lib/agency/brand-from-request';
 
 export const dynamic = 'force-dynamic';
 
@@ -88,8 +89,10 @@ export async function POST(
 
     const metadata = (link.metadata ?? {}) as { presentation_snapshot?: PresentationSnapshot };
     const snapshot = metadata.presentation_snapshot ?? null;
-    const repEmail = snapshot?.contact?.sales_rep_email ?? 'hello@nativz.io';
-    const repName = snapshot?.contact?.sales_rep_name ?? 'Nativz team';
+    const { brand: agency } = getBrandFromRequest(request);
+    const isAC = agency === 'anderson';
+    const repEmail = snapshot?.contact?.sales_rep_email ?? (isAC ? 'hello@andersoncollaborative.com' : 'hello@nativz.io');
+    const repName = snapshot?.contact?.sales_rep_name ?? (isAC ? 'Anderson Collaborative team' : 'Nativz team');
     const brandName = snapshot?.cover?.brand_name ?? 'a prospect';
 
     const subject = `New lead from presentation: ${parsed.data.name} (${brandName})`;
@@ -109,7 +112,7 @@ export async function POST(
     await sendAndLog({
       category: 'system',
       typeKey: 'prospect_present_lead',
-      agency: 'nativz',
+      agency,
       to: repEmail,
       subject,
       html,

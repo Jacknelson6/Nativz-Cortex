@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/shared/empty-state';
+import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import { toast } from 'sonner';
 
 interface TeamMember {
@@ -33,6 +34,8 @@ interface ClientTeamCardProps {
 }
 
 export function ClientTeamCard({ clientId, clientName }: ClientTeamCardProps) {
+  const { mode } = useBrandMode();
+  const teamLabel = mode === 'anderson' ? 'Anderson Collaborative team' : 'Nativz team';
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [allTeamMembers, setAllTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,7 +115,7 @@ export function ClientTeamCard({ clientId, clientName }: ClientTeamCardProps) {
     <>
       <Card>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-text-primary">Nativz team</h2>
+          <h2 className="text-base font-semibold text-text-primary">{teamLabel}</h2>
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
             <Plus size={14} />
             Add

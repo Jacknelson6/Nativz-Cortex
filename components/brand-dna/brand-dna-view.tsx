@@ -8,6 +8,7 @@ import { BrandDNACards } from './brand-dna-cards';
 import { OnboardWizard } from './onboard-wizard';
 import { BrandDNAProgress } from './brand-dna-progress';
 import { BrandDNASectionEditor } from './brand-dna-section-editor';
+import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import type { BrandGuidelineMetadata } from '@/lib/knowledge/types';
 
 interface BrandDNAViewProps {
@@ -38,6 +39,8 @@ export function BrandDNAView({
   editable = true,
 }: BrandDNAViewProps) {
   const router = useRouter();
+  const { mode } = useBrandMode();
+  const teamLabel = mode === 'anderson' ? 'Your Anderson Collaborative team' : 'Your Nativz team';
   const [generateOpen, setGenerateOpen] = useState(false);
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [localMetadata, setLocalMetadata] = useState<BrandGuidelineMetadata | null>(
@@ -114,7 +117,7 @@ export function BrandDNAView({
             </>
           ) : (
             <p className="text-sm text-text-muted max-w-md">
-              Your Nativz team will distill this from the brand&apos;s website
+              {teamLabel} will distill this from the brand&apos;s website
               and publish it here once it&apos;s ready.
             </p>
           )}

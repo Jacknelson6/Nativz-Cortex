@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useBrandMode } from '@/components/layout/brand-mode-provider';
 
 const KONAMI = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a'];
 const COLORS = ['var(--accent)', 'var(--accent2)', '#10B981', '#F59E0B', '#EF4444', '#EC4899'];
@@ -8,6 +9,8 @@ const COLORS = ['var(--accent)', 'var(--accent2)', '#10B981', '#F59E0B', '#EF444
 export function EasterEgg() {
   const index = useRef(0);
   const [triggered, setTriggered] = useState(false);
+  const { mode } = useBrandMode();
+  const teamLabel = mode === 'anderson' ? 'the Anderson Collaborative team' : 'the Nativz team';
 
   // Pre-compute random values so render is pure
   const particles = useMemo(
@@ -62,7 +65,7 @@ export function EasterEgg() {
           You found it!
         </p>
         <p className="text-sm text-text-muted">
-          Built with love by the Nativz team
+          Built with love by {teamLabel}
         </p>
         <div className="mt-3 text-xs text-accent-text font-mono">
           &uarr; &uarr; &darr; &darr; &larr; &rarr; &larr; &rarr; B A

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Toggle } from '@/components/ui/toggle';
+import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import {
   ADMIN_WORKSPACE_TOGGLE_KEYS,
   ADMIN_WORKSPACE_TOGGLE_META,
@@ -38,6 +39,8 @@ export function ClientAccessServicesPanel({ slug }: { slug: string }) {
   const [services, setServices] = useState<string[]>([]);
   const [modules, setModules] = useState<Record<AdminWorkspaceToggleKey, boolean> | null>(null);
   const [flags, setFlags] = useState<FeatureFlags>(PORTAL_FEATURE_FLAG_DEFAULTS);
+  const { mode } = useBrandMode();
+  const agencyTeamLabel = mode === 'anderson' ? 'Anderson Collaborative team' : 'Nativz team';
   const [saving, setSaving] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -134,7 +137,7 @@ export function ClientAccessServicesPanel({ slug }: { slug: string }) {
         <h2 className="text-base font-semibold text-text-primary">Access & services</h2>
       </div>
       <p className="text-sm text-text-muted mb-6">
-        Contracted services, then a single place to control Nativz team workspace areas and client portal capabilities
+        Contracted services, then a single place to control {agencyTeamLabel} workspace areas and client portal capabilities
         (including REST API keys).
       </p>
 
@@ -179,7 +182,7 @@ export function ClientAccessServicesPanel({ slug }: { slug: string }) {
           </p>
 
           <p className="text-xs font-semibold uppercase tracking-wide text-text-muted pt-2">
-            Nativz team — admin workspace
+            {agencyTeamLabel} — admin workspace
           </p>
           <div className="space-y-4">
             {ADMIN_WORKSPACE_TOGGLE_KEYS.map((key) => {

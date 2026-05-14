@@ -105,7 +105,7 @@ export async function POST(
       to: member.email,
       memberName: member.full_name,
       inviteUrl,
-      invitedBy: inviter?.full_name ?? 'The Nativz team',
+      invitedBy: inviter?.full_name ?? (agency === 'anderson' ? 'The Anderson Collaborative team' : 'The Nativz team'),
       agency,
     }).catch((err) => console.error('Team invite email failed:', err));
 

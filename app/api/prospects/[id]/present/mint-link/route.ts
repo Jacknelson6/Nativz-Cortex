@@ -13,6 +13,7 @@ import { getLatestAnalysis } from '@/lib/prospects/analysis-queries';
 import { computeScorecard } from '@/lib/prospects/checklist';
 import { getLatestBenchmark } from '@/lib/prospects/benchmark-orchestrator';
 import { buildPresentationSnapshot } from '@/lib/prospects/snapshot-presentation';
+import { getBrandFromRequest } from '@/lib/agency/brand-from-request';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -89,10 +90,15 @@ export async function POST(
     const scorecard = computeScorecard(analysis);
     const benchmark = await getLatestBenchmark(id);
 
+    const { brand } = getBrandFromRequest(request);
+    const isAC = brand === 'anderson';
+    const fallbackTeam = isAC ? 'Anderson Collaborative team' : 'Nativz team';
+    const fallbackEmail = isAC ? 'hello@andersoncollaborative.com' : 'hello@nativz.io';
+
     // Owner contact: prospect.owner_user_id falls through to the minting
     // admin so unowned prospects still produce a usable contact panel.
-    let contactName = auth.fullName ?? 'Nativz team';
-    let contactEmail = auth.email ?? 'hello@nativz.io';
+    let contactName = auth.fullName ?? fallbackTeam;
+    let contactEmail = auth.email ?? fallbackEmail;
     if (prospect.owner_user_id) {
       const { data: owner } = await admin
         .from('users')

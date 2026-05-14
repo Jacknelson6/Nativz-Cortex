@@ -4,6 +4,7 @@
 // to clear empty states when prerequisites aren't met yet.
 
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getLatestAnalysis } from '@/lib/prospects/analysis-queries';
@@ -11,6 +12,7 @@ import { computeScorecard } from '@/lib/prospects/checklist';
 import { getLatestBenchmark } from '@/lib/prospects/benchmark-orchestrator';
 import { buildPresentationSnapshot } from '@/lib/prospects/snapshot-presentation';
 import { PresentModeShell } from '@/components/prospects/present-mode-shell';
+import { detectAgencyFromHostname } from '@/lib/agency/detect';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,9 +64,15 @@ export default async function AdminPresentPage({ params }: PageProps) {
   const scorecard = computeScorecard(analysis);
   const benchmark = await getLatestBenchmark(id);
 
+  const h = await headers();
+  const agency = detectAgencyFromHostname(h.get('x-agency') ?? h.get('host') ?? '');
+  const isAC = agency === 'anderson';
+  const fallbackTeam = isAC ? 'Anderson Collaborative team' : 'Nativz team';
+  const fallbackEmail = isAC ? 'hello@andersoncollaborative.com' : 'hello@nativz.io';
+
   // Resolve contact: prospect owner > current user.
-  let contactName = me.full_name ?? 'Nativz team';
-  let contactEmail = me.email ?? user.email ?? 'hello@nativz.io';
+  let contactName = me.full_name ?? fallbackTeam;
+  let contactEmail = me.email ?? user.email ?? fallbackEmail;
   if (prospect.owner_user_id) {
     const { data: owner } = await admin
       .from('users')
