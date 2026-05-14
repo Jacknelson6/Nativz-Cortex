@@ -3,8 +3,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 /**
  * Brand Profile skeleton — mirrors the unified /brand-profile tree
  * (admin + viewer share the same shape). Header card (logo / name /
- * description / facts) + essence card + social-presence card + DNA
- * bento.
+ * description / facts) + essence card + social-presence card.
  */
 export default function BrandProfileLoading() {
   return (
@@ -71,20 +70,6 @@ export default function BrandProfileLoading() {
         </div>
       </SectionSkeleton>
 
-      {/* Brand DNA bento — 3-col on lg */}
-      <SectionSkeleton titleWidth="w-20">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="rounded-xl border border-nativz-border bg-surface/20 p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <Skeleton className="h-4 w-4" />
-                <Skeleton className="h-3 w-20" />
-              </div>
-              <Skeleton className="h-28 w-full rounded-lg" />
-            </div>
-          ))}
-        </div>
-      </SectionSkeleton>
     </div>
   );
 }
