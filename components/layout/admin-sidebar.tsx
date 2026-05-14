@@ -227,6 +227,13 @@ const ADMIN_ONLY_HREFS = new Set([
   '/admin/presentations',
   '/admin/analyze-social',
   '/admin/usage',
+  // Temporarily hidden from viewers (2026-05-14): Analytics + Content
+  // (Calendar/Review) parents and the Viral Formats child of Trend Finder.
+  // Reinstate by removing these entries when those surfaces are
+  // viewer-ready.
+  '/admin/analytics',
+  '/calendar',
+  '/finder/formats',
   // Cross-brand content tooling is operator-only; viewers see only
   // their own brand's links via the unified-shell `/review` route.
   '/admin/content-tools',
@@ -252,9 +259,7 @@ const ADMIN_ONLY_HREFS = new Set([
 ]);
 
 /** Items shown but grayed out with "Coming soon" tooltip for viewers */
-const COMING_SOON_HREFS = new Set([
-  '/admin/analytics',
-]);
+const COMING_SOON_HREFS = new Set<string>([]);
 
 /**
  * One-off href rewrites for portal viewers. Phase 1 of the brand-root
