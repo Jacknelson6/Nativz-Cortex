@@ -220,9 +220,9 @@ export function EditingProjectDetail({
   const [viewingEmail, setViewingEmail] = useState<ArchivedEmail | null>(null);
 
   const { confirm: confirmArchive, dialog: archiveDialog } = useConfirm({
-    title: 'Archive this project?',
-    description: 'You can restore it later.',
-    confirmLabel: 'Archive',
+    title: 'Delete this project?',
+    description: 'It will be hidden from content tools. You can restore it later from the database.',
+    confirmLabel: 'Delete',
     variant: 'danger',
   });
   const { confirm: confirmDeleteVideo, dialog: deleteVideoDialog } = useConfirm({
@@ -446,12 +446,12 @@ export function EditingProjectDetail({
       const res = await fetch(`/api/admin/editing/projects/${projectId}`, {
         method: 'DELETE',
       });
-      if (!res.ok) throw new Error('Archive failed');
-      toast.success('Archived');
+      if (!res.ok) throw new Error('Delete failed');
+      toast.success('Project deleted');
       onChanged();
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Archive failed');
+      toast.error(err instanceof Error ? err.message : 'Delete failed');
     }
   }
 

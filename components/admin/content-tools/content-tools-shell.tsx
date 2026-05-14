@@ -735,10 +735,15 @@ export function ContentToolsShell() {
   }
 
   /**
-   * Archive a project (soft-delete). Calendar links flip
-   * `archived_at` via PATCH; editing projects DELETE through the
+   * Delete a project (soft-delete under the hood). Calendar links
+   * flip `archived_at` via PATCH; editing projects DELETE through the
    * editing API (which sets `status='archived'`). Both branches strip
    * the row optimistically and roll back on failure.
+   *
+   * Function + prop names still say "archive" because the underlying
+   * DB columns are `archived_at` / `status='archived'`; user-facing
+   * copy says "Delete" because that's the mental model (the row is
+   * gone from the list, restoration is a DB-side action).
    */
   async function archiveLink(id: string) {
     if (id.startsWith('editing:')) {
@@ -749,11 +754,11 @@ export function ContentToolsShell() {
         const res = await fetch(`/api/admin/editing/projects/${projectId}`, {
           method: 'DELETE',
         });
-        if (!res.ok) throw new Error('Archive failed');
-        toast.success('Project archived');
+        if (!res.ok) throw new Error('Delete failed');
+        toast.success('Project deleted');
       } catch (err) {
         setEditingProjects(snapshot);
-        toast.error(err instanceof Error ? err.message : 'Archive failed');
+        toast.error(err instanceof Error ? err.message : 'Delete failed');
       }
       return;
     }
@@ -765,11 +770,11 @@ export function ContentToolsShell() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ archived: true }),
       });
-      if (!res.ok) throw new Error('Archive failed');
-      toast.success('Project archived');
+      if (!res.ok) throw new Error('Delete failed');
+      toast.success('Project deleted');
     } catch (err) {
       setLinks(snapshot);
-      toast.error(err instanceof Error ? err.message : 'Archive failed');
+      toast.error(err instanceof Error ? err.message : 'Delete failed');
     }
   }
 
