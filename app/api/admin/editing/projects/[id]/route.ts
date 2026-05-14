@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/auth/permissions';
-import { deleteEditingObject } from '@/lib/editing/storage';
+import { teardownEditingProjectMedia } from '@/lib/editing/teardown-media';
 import type { EditingProjectStatus } from '@/lib/editing/types';
 
 export const dynamic = 'force-dynamic';
@@ -11,8 +11,14 @@ export const dynamic = 'force-dynamic';
 /**
  * GET    /api/admin/editing/projects/:id   one project + its videos
  * PATCH  /api/admin/editing/projects/:id   rename, retype, change status, set role assignments
- * DELETE /api/admin/editing/projects/:id   archive (soft delete) - flips status=archived,
- *                                          stamps archived_at, leaves rows + storage intact
+ * DELETE /api/admin/editing/projects/:id   soft delete: flips status='archived',
+ *                                          stamps archived_at, and tears down Mux
+ *                                          assets + Supabase Storage objects for
+ *                                          every video on the project. The row +
+ *                                          child rows stay so the editor's consume
+ *                                          history (credit_transactions) still
+ *                                          resolves; only the heavy bytes go.
+ *                                          ?hard=1 also drops the row + cascades.
  */
 
 const PatchBody = z
@@ -234,6 +240,16 @@ export async function DELETE(
   const hard = url.searchParams.get('hard') === '1';
 
   const admin = createAdminClient();
+
+  // Tear down Mux assets + Supabase Storage objects for every video on
+  // the project. Both delete paths (soft + hard) get this so the heavy
+  // bytes go either way. Best-effort: helper logs per-asset failures
+  // and returns counts; the row flip / row drop runs regardless.
+  const teardown = await teardownEditingProjectMedia(admin, id).catch((err) => {
+    console.error(`[editing-delete] teardown threw for project ${id}:`, err);
+    return { muxDeleted: 0, storageDeleted: 0, muxFailed: 0 };
+  });
+
   if (!hard) {
     const { error } = await admin
       .from('editing_projects')
@@ -242,26 +258,14 @@ export async function DELETE(
     if (error) {
       return NextResponse.json({ error: 'archive_failed', detail: error.message }, { status: 500 });
     }
-    return NextResponse.json({ ok: true, mode: 'archived' });
+    return NextResponse.json({ ok: true, mode: 'archived', teardown });
   }
 
-  // Hard delete: also try to clean up storage objects so the bucket
-  // doesn't accumulate orphan files. Best-effort - if any individual
-  // remove fails, the row delete still proceeds (cascade clears child
-  // rows) and the file becomes orphan storage instead of an orphan row.
-  const { data: videos } = await admin
-    .from('editing_project_videos')
-    .select('storage_path')
-    .eq('project_id', id);
-  for (const v of videos ?? []) {
-    if (v.storage_path) {
-      await deleteEditingObject(admin, v.storage_path).catch(() => {});
-    }
-  }
-
+  // Hard delete: also drop the row + cascade child rows. teardownEditingProjectMedia
+  // above already cleared storage + Mux, so this is the final tombstone step.
   const { error } = await admin.from('editing_projects').delete().eq('id', id);
   if (error) {
     return NextResponse.json({ error: 'delete_failed', detail: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, mode: 'hard_deleted' });
+  return NextResponse.json({ ok: true, mode: 'hard_deleted', teardown });
 }

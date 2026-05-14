@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/auth/permissions';
 import { deleteEditingObject } from '@/lib/editing/storage';
+import { getMux } from '@/lib/mux/client';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,14 +81,27 @@ export async function DELETE(
   const admin = createAdminClient();
   const { data: row } = await admin
     .from('editing_project_videos')
-    .select('storage_path')
+    .select('storage_path, mux_asset_id')
     .eq('id', videoId)
     .eq('project_id', projectId)
-    .maybeSingle();
+    .maybeSingle<{ storage_path: string | null; mux_asset_id: string | null }>();
   if (!row) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
   if (row.storage_path && row.storage_path !== 'pending') {
     await deleteEditingObject(admin, row.storage_path).catch(() => {});
+  }
+  // Mux unhook so deleting a single clip doesn't leave a billable
+  // asset behind on Mux. Best-effort: a missing/already-deleted asset
+  // 404s harmlessly. We still drop the row regardless.
+  if (row.mux_asset_id) {
+    try {
+      await getMux().video.assets.delete(row.mux_asset_id);
+    } catch (err) {
+      console.warn(
+        `[editing-video-delete] mux delete failed for ${row.mux_asset_id} (video ${videoId}):`,
+        err instanceof Error ? err.message : err,
+      );
+    }
   }
 
   const { error } = await admin
