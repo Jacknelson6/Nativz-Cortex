@@ -65,6 +65,10 @@ interface SharedComment {
   // Anchored timestamp inside the post's video (seconds, fractional). Null
   // for general comments. Click on the chip seeks the player.
   timestamp_seconds: number | null;
+  // NAT-73: when set, this row is a reply that should render under the
+  // parent comment instead of as a fresh thread. One level of nesting
+  // only; the API rejects replies-to-replies.
+  parent_comment_id: string | null;
 }
 
 interface SharedAsset {
@@ -2471,6 +2475,7 @@ function PostCard({
       caption_after: null,
       metadata: {},
       timestamp_seconds: anchorSeconds,
+      parent_comment_id: null,
     };
 
     onCommentAdded(tempComment);
@@ -3126,6 +3131,35 @@ function PostCard({
     />
   ) : null;
 
+  // NAT-73: split the flat comment list into parents + replies so the
+  // <CommentRow> can render replies inline under each top-level comment.
+  // Replies whose parent is not in this post (shouldn't happen, but defensive
+  // against drift between the parent_comment_id FK and the share-link's
+  // post_review_link_map) fall back to rendering as their own root row.
+  const repliesByParent: Record<string, SharedComment[]> = {};
+  const topLevelComments: SharedComment[] = [];
+  for (const c of post.comments) {
+    if (c.parent_comment_id) {
+      (repliesByParent[c.parent_comment_id] ||= []).push(c);
+    } else {
+      topLevelComments.push(c);
+    }
+  }
+  // Catch orphans (parent_comment_id set but parent missing from this post).
+  // We hoist them back to the top level so the row still renders rather than
+  // disappearing into the structured void.
+  const topLevelIds = new Set(topLevelComments.map((c) => c.id));
+  for (const c of post.comments) {
+    if (c.parent_comment_id && !topLevelIds.has(c.parent_comment_id)) {
+      topLevelComments.push(c);
+    }
+  }
+  // Preserve created_at ordering (the server already orders ascending) when
+  // we re-merge orphans.
+  topLevelComments.sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  );
+
   const historyBlock =
     post.comments.length > 0 ? (
       // mt-2 puts a small breathing room between the caption and the
@@ -3151,14 +3185,20 @@ function PostCard({
             header stays pinned, the composer stays in reach, and a long
             review thread scrolls inside its own region. */}
         <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
-          {post.comments.map((c) => (
+          {topLevelComments.map((c) => (
             <CommentRow
               key={c.id}
               comment={c}
+              replies={repliesByParent[c.id] ?? []}
+              postId={post.id}
               token={token}
               isEditor={isEditor}
+              authorName={authorName}
+              requireName={requireName}
               onDeleted={() => onCommentRemoved(c.id)}
               onUpdated={onCommentUpdated}
+              onReplyAdded={onCommentAdded}
+              onReplyRemoved={onCommentRemoved}
               onSeek={playerReady ? seekTo : undefined}
             />
           ))}
@@ -3529,22 +3569,102 @@ function PostCard({
 
 function CommentRow({
   comment,
+  replies = [],
+  postId,
   token,
   isEditor,
+  authorName,
+  requireName,
   onDeleted,
   onUpdated,
+  onReplyAdded,
+  onReplyRemoved,
   onSeek,
+  isReply = false,
 }: {
   comment: SharedComment;
+  // NAT-73: inline replies rendered indented under this row. Only the
+  // top-level rendering pass passes a non-empty array; the row itself
+  // renders each reply as another `<CommentRow>` with `isReply` set so the
+  // recursive call drops the Reply affordance and the further nesting.
+  replies?: SharedComment[];
+  postId?: string;
   token: string;
   isEditor: boolean;
+  authorName?: string;
+  // Called when the user clicks Reply without a name set — parent owns the
+  // name-capture flow (the existing "Your name" modal) and refocuses the
+  // composer once the user submits.
+  requireName?: () => void;
   onDeleted: () => void;
   onUpdated: (comment: SharedComment) => void;
+  // Append a freshly-posted reply into the parent's comment array. The
+  // parent's `appendComment(postId, comment)` already handles the local
+  // update; we just hand it the new row.
+  onReplyAdded?: (comment: SharedComment) => void;
+  onReplyRemoved?: (commentId: string) => void;
   // When provided, the timestamp pill becomes clickable and seeks the
   // shared player. Undefined for list-view rows where there's no inline
   // player to drive (the user opens the lightbox instead).
   onSeek?: (seconds: number) => void;
+  // Set on the recursive render of reply rows. Drops the Reply button (one
+  // level of nesting only) and tightens the chrome.
+  isReply?: boolean;
 }) {
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
+  const replyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Auto-focus the reply textarea the first frame it mounts. Doing it inside
+  // a useEffect (vs. autoFocus) so re-opens after a cancel also refocus.
+  useEffect(() => {
+    if (replyOpen && replyTextareaRef.current) {
+      replyTextareaRef.current.focus();
+    }
+  }, [replyOpen]);
+
+  // NAT-73: reply submitter. Skips the optimistic-temp dance the main
+  // composer does because replies are short, low-stakes, and the failure
+  // path is just "show the error toast" - the user can retype in two
+  // seconds. Keeps the surface area small.
+  async function submitReply() {
+    if (sendingReply) return;
+    const trimmed = replyText.trim();
+    if (!trimmed) return;
+    if (!authorName?.trim()) {
+      requireName?.();
+      return;
+    }
+    if (!postId || !onReplyAdded) return;
+    setSendingReply(true);
+    try {
+      const res = await fetch(`/api/calendar/share/${token}/comment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          postId,
+          authorName: authorName.trim(),
+          content: trimmed,
+          status: 'comment',
+          attachments: [],
+          timestampSeconds: null,
+          parentCommentId: comment.id,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(typeof json.error === 'string' ? json.error : 'Failed to send reply');
+      }
+      onReplyAdded(json.comment as SharedComment);
+      setReplyText('');
+      setReplyOpen(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send reply');
+    } finally {
+      setSendingReply(false);
+    }
+  }
   const [deleting, setDeleting] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -3869,33 +3989,132 @@ function CommentRow({
         {formatSeconds(comment.timestamp_seconds)}
       </button>
     ) : null;
+  // NAT-73: reply gate — only top-level `comment` rows get the affordance.
+  // Replies-to-replies are disallowed (one level of nesting), and approval /
+  // changes_requested rows aren't threadable surfaces (their "reply" is
+  // either the auto-close or a fresh top-level comment).
+  const canReply =
+    !isReply &&
+    comment.status === 'comment' &&
+    !!postId &&
+    !!onReplyAdded;
+
   return (
-    <div className={containerClass}>
-      <div className="mb-1 flex items-center gap-2 text-[13px]">
-        <Icon size={12} className={tone} />
-        <span className="font-medium text-text-primary">{comment.author_name}</span>
-        <span className="text-text-muted">· {trailingMeta}{time}</span>
-        {timestampPill}
-        {headerDeleteButton}
+    <>
+      <div className={containerClass}>
+        <div className="mb-1 flex items-center gap-2 text-[13px]">
+          <Icon size={12} className={tone} />
+          <span className="font-medium text-text-primary">{comment.author_name}</span>
+          <span className="text-text-muted">· {trailingMeta}{time}</span>
+          {timestampPill}
+          {headerDeleteButton}
+        </div>
+        {comment.content && (
+          <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-text-secondary">{comment.content}</p>
+        )}
+        {comment.attachments.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {comment.attachments.map((a) => (
+              <CommentAttachmentTile key={a.url} attachment={a} />
+            ))}
+          </div>
+        )}
+        {canReply && !replyOpen && (
+          <div className="mt-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                if (!authorName?.trim()) {
+                  requireName?.();
+                  return;
+                }
+                setReplyOpen(true);
+              }}
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
+            >
+              <MessageSquare size={11} />
+              Reply
+            </button>
+          </div>
+        )}
+        {canReply && replyOpen && (
+          // Inline composer — sits inside the parent row so it visually
+          // belongs to the comment it's responding to. Deliberately lighter
+          // chrome than the main composer at the bottom of the post (no
+          // attachments, no status picker) — replies are short follow-ups.
+          <div className="mt-2 rounded-md border border-nativz-border bg-background/40 p-2">
+            <textarea
+              ref={replyTextareaRef}
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                  e.preventDefault();
+                  void submitReply();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setReplyText('');
+                  setReplyOpen(false);
+                }
+              }}
+              placeholder={`Reply to ${comment.author_name}...`}
+              rows={2}
+              className="w-full resize-none rounded-sm border-0 bg-transparent text-[13px] leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-0"
+            />
+            <div className="mt-1.5 flex items-center justify-end gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setReplyText('');
+                  setReplyOpen(false);
+                }}
+                disabled={sendingReply}
+                className="rounded-md border border-nativz-border bg-transparent px-2 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitReply()}
+                disabled={sendingReply || !replyText.trim()}
+                className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1 text-[11px] font-medium text-accent-contrast transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {sendingReply ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />}
+                Reply
+              </button>
+            </div>
+          </div>
+        )}
+        {isChangesRequestedRow && (
+          // Footer keeps only Revised — the destructive Remove now lives as
+          // the hover-X in the header so this row matches every other one.
+          <div className="mt-2 flex items-center justify-end border-t border-nativz-border/60 pt-2">
+            {resolveButton}
+          </div>
+        )}
       </div>
-      {comment.content && (
-        <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-text-secondary">{comment.content}</p>
-      )}
-      {comment.attachments.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {comment.attachments.map((a) => (
-            <CommentAttachmentTile key={a.url} attachment={a} />
+      {replies.length > 0 && !isReply && (
+        // Indented thread under the parent. One level only — these child
+        // rows render with `isReply` so they drop their own Reply button.
+        <div className="ml-6 mt-2 space-y-2 border-l-2 border-nativz-border/60 pl-3">
+          {replies.map((r) => (
+            <CommentRow
+              key={r.id}
+              comment={r}
+              isReply
+              token={token}
+              isEditor={isEditor}
+              postId={postId}
+              authorName={authorName}
+              requireName={requireName}
+              onDeleted={() => onReplyRemoved?.(r.id)}
+              onUpdated={onUpdated}
+              onSeek={onSeek}
+            />
           ))}
         </div>
       )}
-      {isChangesRequestedRow && (
-        // Footer keeps only Revised — the destructive Remove now lives as
-        // the hover-X in the header so this row matches every other one.
-        <div className="mt-2 flex items-center justify-end border-t border-nativz-border/60 pt-2">
-          {resolveButton}
-        </div>
-      )}
-    </div>
+    </>
   );
 }
 

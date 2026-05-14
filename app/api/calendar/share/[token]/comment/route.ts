@@ -47,6 +47,10 @@ const BodySchema = z
     // Capped at 24h to keep the column NUMERIC(10,3) safe and stay within
     // sane short-form video bounds. Negative values rejected.
     timestampSeconds: z.number().min(0).max(86400).nullable().optional(),
+    // NAT-73: replies hang off a prior comment in the same review thread.
+    // Only top-level "comment" status rows can be replied to; the handler
+    // also rejects replies-to-replies to keep threads one level deep.
+    parentCommentId: z.string().uuid().nullable().optional(),
   })
   .refine(
     (v) => v.content.trim().length > 0 || (v.attachments?.length ?? 0) > 0,
@@ -93,6 +97,9 @@ const TITLE_BY_STATUS: Record<'approved' | 'changes_requested' | 'comment', (a: 
   changes_requested: (a, c) => `${a} requested changes in ${c}`,
   comment: (a, c) => `${a} left a comment on ${c}`,
 };
+
+const REPLY_TITLE = (author: string, client: string) =>
+  `${author} replied to a comment in ${client}`;
 
 export async function POST(
   req: Request,
@@ -144,6 +151,57 @@ export async function POST(
       ? parsed.data.timestampSeconds ?? null
       : null;
 
+  // NAT-73: validate the parent reference if present. Reply rows must
+  //   1. Live under the same review_link_id as this share-link post
+  //      (prevents threading a reply onto a different client's calendar
+  //      via a leaked id).
+  //   2. Be top-level themselves (no replies-to-replies — one level deep
+  //      keeps the UI tractable and dodges runaway nesting).
+  //   3. Carry "comment" status. Approvals / change-requests / caption
+  //      edits etc. are audit-trail rows, not conversation roots.
+  //   4. Themselves carry status "comment" — replies are conversation,
+  //      not approvals, so we always store them as plain comments
+  //      regardless of what the client submitted.
+  let parentCommentId: string | null = null;
+  if (parsed.data.parentCommentId) {
+    const { data: parent } = await admin
+      .from('post_review_comments')
+      .select('id, review_link_id, status, parent_comment_id')
+      .eq('id', parsed.data.parentCommentId)
+      .single<{
+        id: string;
+        review_link_id: string;
+        status: string;
+        parent_comment_id: string | null;
+      }>();
+    if (!parent || parent.review_link_id !== reviewLinkId) {
+      return NextResponse.json(
+        { error: 'parent comment not found on this post' },
+        { status: 400 },
+      );
+    }
+    if (parent.parent_comment_id) {
+      return NextResponse.json(
+        { error: 'replies cannot be nested further' },
+        { status: 400 },
+      );
+    }
+    if (parent.status !== 'comment') {
+      return NextResponse.json(
+        { error: 'only conversation comments accept replies' },
+        { status: 400 },
+      );
+    }
+    parentCommentId = parent.id;
+  }
+
+  // Force replies to "comment" status regardless of what the client sent.
+  // Threading an approval onto another comment doesn't carry meaning, and
+  // the auto-approval heuristic upstream would otherwise let "looks good"
+  // replies silently lock a post.
+  const persistedStatus: 'approved' | 'changes_requested' | 'comment' =
+    parentCommentId ? 'comment' : finalStatus;
+
   // Phase D soft-block (scope_exhausted 402 + PreApprovalModal) was removed.
   // Clients should never see a "you're out of edited videos" pop-up. Approvals
   // always write through; over-scope accounting stays an internal concern.
@@ -154,12 +212,13 @@ export async function POST(
       review_link_id: reviewLinkId,
       author_name: parsed.data.authorName.trim(),
       content: trimmedContent,
-      status: finalStatus,
+      status: persistedStatus,
       attachments: parsed.data.attachments ?? [],
       metadata: insertMetadata,
       timestamp_seconds: timestampSeconds,
+      parent_comment_id: parentCommentId,
     })
-    .select('id, review_link_id, author_name, content, status, created_at, attachments, metadata, timestamp_seconds')
+    .select('id, review_link_id, author_name, content, status, created_at, attachments, metadata, timestamp_seconds, parent_comment_id')
     .single();
   if (error || !data) {
     return NextResponse.json({ error: error?.message ?? 'failed' }, { status: 500 });
@@ -177,8 +236,9 @@ export async function POST(
         postId: parsed.data.postId,
         authorName: parsed.data.authorName.trim(),
         content: trimmedContent,
-        status: finalStatus,
+        status: persistedStatus,
         attachments: parsed.data.attachments ?? [],
+        isReply: parentCommentId !== null,
       });
     } catch (err) {
       console.error('Comment notification failed:', err);
@@ -194,7 +254,7 @@ export async function POST(
       console.error('Monday calendar approval sync failed:', err);
     }
 
-    if (finalStatus === 'approved') {
+    if (persistedStatus === 'approved') {
       // Past-due fixup: shift this draft to a gap in the current month if its
       // original scheduled_at has already passed. Mirrors the bulk-approve
       // path so single-comment approvals get the same protection.
@@ -231,7 +291,7 @@ export async function POST(
         reviewerName: parsed.data.authorName.trim(),
         reviewLinkId,
       });
-    } else if (finalStatus === 'changes_requested') {
+    } else if (persistedStatus === 'changes_requested') {
       // Silent-overcharge fix: if this post was already approved earlier
       // and the reviewer is now requesting changes, refund the prior
       // consume. refund_credit is a no-op if there's nothing to refund,
@@ -552,6 +612,7 @@ async function notifyAdminsOfComment(
     content: string;
     status: 'approved' | 'changes_requested' | 'comment';
     attachments: Array<{ url: string; filename: string; mime_type: string; size_bytes: number }>;
+    isReply?: boolean;
   },
 ) {
   // Fetch drop + the specific post + share-link name in parallel. The post's
@@ -593,7 +654,12 @@ async function notifyAdminsOfComment(
     primaryUrl: drop.clients?.chat_webhook_url ?? null,
     agency: drop.clients?.agency ?? null,
   });
-  const title = TITLE_BY_STATUS[comment.status](comment.authorName, clientName);
+  // Reply rows still trigger an in-app bell ping with the "X replied to a
+  // comment" title; the chat side flows through the deferred coalesce cron
+  // (status='comment') so we don't post per-event cards from here.
+  const title = comment.isReply
+    ? REPLY_TITLE(comment.authorName, clientName)
+    : TITLE_BY_STATUS[comment.status](comment.authorName, clientName);
   // Truncate only the in-app notification body — chat gets full content.
   // Attachment-only comments have no text, so fall back to a file summary.
   const preview = comment.content.trim()
