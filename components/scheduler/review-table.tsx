@@ -563,7 +563,7 @@ export function ReviewTableCard({
                 align="center"
                 onSortChange={sortable ? () => handleSort('last_followup') : undefined}
               >
-                Last followup
+                Last touch
               </SortableHeader>
             </TableHead>
           )}
@@ -1049,29 +1049,37 @@ function FollowupCell({
     );
   }
 
-  // Migration 200 backfilled `last_followup_at = created_at` for every
-  // pre-existing share link, so the timestamp alone can't distinguish
-  // "actually nudged N days ago" from "never followed up but was created
-  // N days ago." `followup_count` is the only field that increments on a
-  // real send (see /api/calendar/share/[token]/followup), so treat 0 as
-  // "no followup sent" regardless of what the timestamp says. When no
-  // real followup has happened we fall back to `first_sent_at` so the
-  // pill still shows concrete elapsed time ("Sent 3d ago") instead of
-  // a vague "New" badge — the staleness clock is the same either way.
+  // "Last touch" = most recent outbound correspondence on this share link.
+  // We take the newest of last_sent_at (resends), last_followup_at (nudges),
+  // and first_sent_at (original send) so a freshly-resent "ready for review"
+  // email bumps the column even when no followup has fired. Migration 200
+  // backfilled last_followup_at = created_at on legacy rows, so we still gate
+  // followup-specific copy on followup_count > 0 rather than the timestamp.
   const hasRealFollowup = (link.followup_count ?? 0) > 0;
-  const stamp = hasRealFollowup
-    ? link.last_followup_at
-    : link.first_sent_at;
+  const stamp = mostRecentIso([
+    link.last_sent_at,
+    hasRealFollowup ? link.last_followup_at : null,
+    link.first_sent_at,
+  ]);
   const days = stamp ? daysSince(stamp) : null;
   const tone = followupTone(days);
   const label = formatFollowupLabel(stamp);
 
-  const tooltipBody =
+  const elapsedPhrase =
     days === null
-      ? 'No followups sent yet.'
-      : hasRealFollowup
-        ? `${days === 0 ? 'Less than a day' : `${days} day${days === 1 ? '' : 's'}`} since the last nudge. ${link.followup_count} followup${link.followup_count === 1 ? '' : 's'} sent.`
-        : `Calendar sent ${days === 0 ? 'less than a day' : `${days} day${days === 1 ? '' : 's'}`} ago. No followups yet.`;
+      ? null
+      : days === 0
+        ? 'Less than a day'
+        : `${days} day${days === 1 ? '' : 's'}`;
+
+  const followupSuffix = hasRealFollowup
+    ? ` ${link.followup_count} followup${link.followup_count === 1 ? '' : 's'} sent.`
+    : '';
+
+  const tooltipBody =
+    elapsedPhrase === null
+      ? 'No correspondence sent yet.'
+      : `${elapsedPhrase} since the last email.${followupSuffix}`;
 
   // Read-only indicator. The actual followup-send action lives in the
   // detail dialog now, so the table row stays a glanceable summary
@@ -1087,7 +1095,7 @@ function FollowupCell({
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" className="w-56">
-        <div className="font-medium text-text-primary">Last followup</div>
+        <div className="font-medium text-text-primary">Last touch</div>
         <div className="mt-0.5 text-text-muted">{tooltipBody}</div>
       </TooltipContent>
     </Tooltip>
@@ -1099,6 +1107,20 @@ function FollowupCell({
 // /api/calendar/share/[token]/followup is still live for future
 // re-wiring from the detail dialog. See git history for the prior
 // implementation.
+
+/** Pick the newest non-null ISO timestamp from a list. Returns null when
+ *  every entry is null/invalid. Used to fold last_sent_at / last_followup_at
+ *  / first_sent_at into a single "last touch" stamp. */
+function mostRecentIso(stamps: (string | null | undefined)[]): string | null {
+  let best: { iso: string; t: number } | null = null;
+  for (const s of stamps) {
+    if (!s) continue;
+    const t = new Date(s).getTime();
+    if (Number.isNaN(t)) continue;
+    if (!best || t > best.t) best = { iso: s, t };
+  }
+  return best?.iso ?? null;
+}
 
 /** Whole-day delta between `iso` and now. Negatives clamp to 0 (clock
  *  skew or future timestamps shouldn't blow up the indicator). */
