@@ -104,7 +104,7 @@ export function NewNoteModal({
           />
         </div>
 
-        {!forcedClientId && (
+        {isAdmin && !forcedClientId && (
           <div>
             <label className="block text-xs font-medium uppercase tracking-wide text-text-muted mb-2">
               Who can see it
@@ -137,7 +137,7 @@ export function NewNoteModal({
           </div>
         )}
 
-        {!forcedClientId && scope === 'client' && (
+        {isAdmin && !forcedClientId && scope === 'client' && (
           <div>
             <label className="block text-xs font-medium uppercase tracking-wide text-text-muted mb-1.5">
               Client

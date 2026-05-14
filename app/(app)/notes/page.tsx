@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NotesDashboard } from '@/components/notes/notes-dashboard';
 import { getActiveBrand } from '@/lib/active-brand';
+import { getEffectiveAccessContext } from '@/lib/portal/effective-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,20 +30,24 @@ export default async function NotesDashboardPage() {
   // if the caller isn't admin we discard it. One extra query vs. an extra
   // serial round-trip — worth it for the perceived-perf win.
   const admin = createAdminClient();
-  const [userResult, active, { data: clientRows }] = await Promise.all([
+  const [userResult, active, { data: clientRows }, ctx] = await Promise.all([
     admin.from('users').select('role').eq('id', user.id).single(),
     getActiveBrand().catch(() => null),
     admin.from('clients').select('id, name, slug').order('name', { ascending: true }),
+    getEffectiveAccessContext(user, admin),
   ]);
   const isAdmin = userResult.data?.role === 'admin';
   // Portal viewers: pass their active brand as portalClientId so the
   // dashboard filters to that client AND the create-note modal hides the
-  // scope picker (auto-attaches the note to the client workspace). Admin
-  // pill state stays on adminScopedClientId so admin can still pick any
-  // scope on create. Without this, viewers saw the personal/team/client
-  // picker and could pick "personal" — defeating the shared-workspace UX.
+  // scope picker (auto-attaches the note to the client workspace). Fall
+  // back to the first client in their effective access if no brand is
+  // pinned — viewers should NEVER see the personal/team/client picker.
+  // Admin pill state stays on adminScopedClientId so admin can still pick
+  // any scope on create.
   const adminScopedClientId = isAdmin ? active?.brand?.id ?? null : null;
-  const portalClientId = !isAdmin ? active?.brand?.id ?? undefined : undefined;
+  const portalClientId = !isAdmin
+    ? active?.brand?.id ?? ctx.clientIds?.[0] ?? undefined
+    : undefined;
   const clients = isAdmin
     ? ((clientRows ?? []) as { id: string; name: string; slug: string }[])
     : [];
