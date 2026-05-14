@@ -1,11 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, Sparkles, Paperclip, X } from 'lucide-react';
 import { Conversation } from '@/components/ai/conversation';
 import { AssistantMessage, UserMessage, type ChatMessage } from '@/components/ai/message';
 import { ChatComposer, type ChatAttachment } from '@/components/ai/chat-composer';
 import { processAttachments } from '@/lib/chat/process-attachments';
+import { SlashCommandMenu, filterSlashCommands } from '@/components/nerd/slash-command-menu';
+import { useSlashCommands, expandSkillCommand } from '@/lib/nerd/use-slash-commands';
+import { getCommand } from '@/lib/nerd/slash-commands';
 import type { ClientOption } from '@/components/ui/client-picker';
 
 interface RoutableClient extends ClientOption {
@@ -74,6 +77,29 @@ export function ContentLabGeneralChat({ clients: _clients, initialScope = null }
   const abortRef = useRef<AbortController | null>(null);
   const pendingAttachmentsRef = useRef<ChatAttachment[]>([]);
 
+  // Slash command menu — same wiring as content-lab-nerd-chat. Without
+  // this the strategy lab general chat couldn't surface /generate, /ideas,
+  // /script, or any user-installed skill — typing "/" did nothing.
+  const [showSlashMenu, setShowSlashMenu] = useState(false);
+  const [slashQuery, setSlashQuery] = useState('');
+  const [slashActiveIndex, setSlashActiveIndex] = useState(0);
+  const [pendingGenerateArgs, setPendingGenerateArgs] = useState(false);
+  const { commands: unifiedCommands } = useSlashCommands();
+  const slashCommands = useMemo(
+    () =>
+      unifiedCommands.map((c) => ({
+        name: c.name,
+        description: c.description,
+        type: c.type,
+        example: c.example ?? undefined,
+      })),
+    [unifiedCommands],
+  );
+  const filteredSlashCommands = useMemo(
+    () => filterSlashCommands(slashQuery, slashCommands),
+    [slashQuery, slashCommands],
+  );
+
   const sessionHintRef = useRef<string | null>(
     'User is in the general Strategy Lab — no client is scoped. Reason across the whole agency portfolio. Reach for cross-client patterns, brand voice frameworks, and high-level positioning. Reference specific clients only when the user asks. Keep replies concise and tactical.',
   );
@@ -112,16 +138,140 @@ export function ContentLabGeneralChat({ clients: _clients, initialScope = null }
     return () => { cancelled = true; };
   }, []);
 
+  // Open the slash menu when the input starts with "/" and the user hasn't
+  // typed a space yet. Mirrors the admin/nerd + content-lab-nerd-chat logic.
+  useEffect(() => {
+    if (input.startsWith('/') && !input.includes(' ')) {
+      setSlashQuery(input.slice(1));
+      setShowSlashMenu(true);
+      setSlashActiveIndex(0);
+    } else {
+      setShowSlashMenu(false);
+    }
+  }, [input]);
+
+  useEffect(() => {
+    if (slashActiveIndex >= filteredSlashCommands.length) {
+      setSlashActiveIndex(Math.max(0, filteredSlashCommands.length - 1));
+    }
+  }, [filteredSlashCommands.length, slashActiveIndex]);
+
+  const handleSlashSelect = useCallback(
+    (cmd: { name: string; type: string }) => {
+      if (cmd.name === 'generate') {
+        setInput('/generate ');
+        setShowSlashMenu(false);
+        return;
+      }
+      const builtin = getCommand(cmd.name);
+      if (builtin) {
+        if (builtin.type === 'ai' && builtin.expandPrompt) {
+          setInput(builtin.expandPrompt(''));
+        }
+        setShowSlashMenu(false);
+        return;
+      }
+      const skillCmd = unifiedCommands.find(
+        (c) => c.source === 'skill' && c.name === cmd.name,
+      );
+      if (skillCmd) {
+        setInput(`/${skillCmd.name} `);
+        setShowSlashMenu(false);
+      }
+    },
+    [unifiedCommands],
+  );
+
+  const handleInputKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (!showSlashMenu || filteredSlashCommands.length === 0) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSlashActiveIndex((i) => (i + 1) % filteredSlashCommands.length);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSlashActiveIndex((i) =>
+          (i - 1 + filteredSlashCommands.length) % filteredSlashCommands.length,
+        );
+      } else if (e.key === 'Tab') {
+        const cmd = filteredSlashCommands[slashActiveIndex] ?? filteredSlashCommands[0];
+        if (cmd) {
+          e.preventDefault();
+          setInput(`/${cmd.name} `);
+          setShowSlashMenu(false);
+        }
+      } else if (e.key === 'Enter' && !e.shiftKey) {
+        const cmd = filteredSlashCommands[slashActiveIndex];
+        if (cmd) {
+          e.preventDefault();
+          handleSlashSelect(cmd);
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowSlashMenu(false);
+      }
+    },
+    [showSlashMenu, filteredSlashCommands, slashActiveIndex, handleSlashSelect],
+  );
+
   const handleSend = useCallback(
     async (text?: string) => {
-      const content = (text ?? input).trim();
-      if (!content || streaming) return;
+      const originalContent = (text ?? input).trim();
+      if (!originalContent || streaming) return;
+      let displayContent = originalContent;
+      let content = originalContent;
+
+      // Skill commands: expand "/slug args" to the skill's full template
+      // before sending, but keep the user's bubble showing the short form.
+      const skillMatch = originalContent.match(/^\/([a-z][a-z0-9-]{1,39})\b\s*(.*)$/i);
+      if (skillMatch) {
+        const [, slug, skillArgs] = skillMatch;
+        const skillCmd = unifiedCommands.find(
+          (c) => c.source === 'skill' && c.name.toLowerCase() === slug.toLowerCase(),
+        );
+        if (skillCmd) {
+          content = expandSkillCommand(skillCmd, skillArgs ?? '');
+        }
+      }
+
+      // Interactive /generate flow — bare "/generate" asks what + how many,
+      // "/generate 10 scripts" expands immediately.
+      const generateMatch = content.match(/^\/generate\s*(.*)$/i);
+      if (generateMatch && !pendingGenerateArgs) {
+        const args = generateMatch[1].trim();
+        if (!args) {
+          setInput('');
+          setPendingGenerateArgs(true);
+          const userMsg: ChatMessage = {
+            id: crypto.randomUUID(),
+            role: 'user',
+            content: displayContent,
+            createdAt: Date.now(),
+          };
+          const promptMsg: ChatMessage = {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content:
+              'What would you like me to generate? Try `20 video ideas`, `10 scripts`, or `15 topics`.',
+            createdAt: Date.now(),
+          };
+          setMessages((prev) => [...prev, userMsg, promptMsg]);
+          return;
+        }
+        const builtin = getCommand('generate');
+        if (builtin?.expandPrompt) content = builtin.expandPrompt(args);
+      }
+      if (pendingGenerateArgs) {
+        setPendingGenerateArgs(false);
+        const builtin = getCommand('generate');
+        if (builtin?.expandPrompt) content = builtin.expandPrompt(content);
+      }
 
       setInput('');
       const hint = sessionHintRef.current;
       sessionHintRef.current = null;
 
-      const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content, createdAt: Date.now() };
+      const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: displayContent, createdAt: Date.now() };
       const assistantMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
@@ -137,6 +287,11 @@ export function ContentLabGeneralChat({ clients: _clients, initialScope = null }
 
       try {
         const chatHistory = [...messages, userMsg].map((m) => ({ role: m.role, content: m.content }));
+        // Skill/slash commands keep the short bubble but send the expanded
+        // template to the model.
+        if (content !== displayContent && chatHistory.length > 0) {
+          chatHistory[chatHistory.length - 1] = { role: 'user', content };
+        }
         const rawAtts = pendingAttachmentsRef.current;
         pendingAttachmentsRef.current = [];
         const processed = rawAtts.length > 0 ? await processAttachments(rawAtts) : undefined;
@@ -231,7 +386,7 @@ export function ContentLabGeneralChat({ clients: _clients, initialScope = null }
         abortRef.current = null;
       }
     },
-    [input, streaming, messages, conversationId],
+    [input, streaming, messages, conversationId, attachedScope, pendingGenerateArgs, unifiedCommands],
   );
 
   function handleReset() {
@@ -372,7 +527,18 @@ export function ContentLabGeneralChat({ clients: _clients, initialScope = null }
                 ? 'Ask about the attached analysis…'
                 : 'Ask the Nerd anything — agency-wide…'
             }
-          />
+            blockEnterSubmit={showSlashMenu}
+            onKeyDown={handleInputKeyDown}
+          >
+            {showSlashMenu && (
+              <SlashCommandMenu
+                query={slashQuery}
+                commands={slashCommands}
+                onSelect={handleSlashSelect}
+                activeIndex={slashActiveIndex}
+              />
+            )}
+          </ChatComposer>
         </div>
       </div>
 

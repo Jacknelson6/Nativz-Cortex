@@ -35,7 +35,14 @@ export default async function NotesDashboardPage() {
     admin.from('clients').select('id, name, slug').order('name', { ascending: true }),
   ]);
   const isAdmin = userResult.data?.role === 'admin';
-  const adminScopedClientId = active?.brand?.id ?? null;
+  // Portal viewers: pass their active brand as portalClientId so the
+  // dashboard filters to that client AND the create-note modal hides the
+  // scope picker (auto-attaches the note to the client workspace). Admin
+  // pill state stays on adminScopedClientId so admin can still pick any
+  // scope on create. Without this, viewers saw the personal/team/client
+  // picker and could pick "personal" — defeating the shared-workspace UX.
+  const adminScopedClientId = isAdmin ? active?.brand?.id ?? null : null;
+  const portalClientId = !isAdmin ? active?.brand?.id ?? undefined : undefined;
   const clients = isAdmin
     ? ((clientRows ?? []) as { id: string; name: string; slug: string }[])
     : [];
@@ -45,6 +52,7 @@ export default async function NotesDashboardPage() {
       clients={clients}
       isAdmin={isAdmin}
       adminScopedClientId={adminScopedClientId}
+      portalClientId={portalClientId}
     />
   );
 }
