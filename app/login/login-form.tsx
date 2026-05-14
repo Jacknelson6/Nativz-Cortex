@@ -48,7 +48,15 @@ function LoginFormInner() {
 
       if (authError) {
         console.error('Login error:', authError);
-        setError(authError.message || 'Login failed — check browser console');
+        // Surface the password-rejection case specifically so the user knows
+        // to use "Forgot password?" rather than guessing. Anything else
+        // (rate limit, network) shows the raw Supabase message.
+        const isCredsError = /invalid login credentials/i.test(authError.message ?? '');
+        setError(
+          isCredsError
+            ? "Email or password didn't match. Use “Forgot password?” below to request a fresh reset link."
+            : authError.message || 'Login failed. Try again in a moment.',
+        );
         return;
       }
 

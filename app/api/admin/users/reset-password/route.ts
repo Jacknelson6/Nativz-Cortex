@@ -25,10 +25,11 @@ export async function POST(req: NextRequest) {
     process.env.NODE_ENV !== 'production'
       ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
       : getCortexAppUrl(brand);
+  const resetPage = `${appUrl}/reset-password`;
   const { data, error } = await admin.auth.admin.generateLink({
     type: 'recovery',
     email,
-    options: { redirectTo: `${appUrl}/reset-password` },
+    options: { redirectTo: resetPage },
   });
 
   if (error) {
@@ -36,16 +37,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // The admin generateLink returns the link directly — we can either
-  // send it via our own email system or return it for the super_admin to share
-  const resetLink = data?.properties?.action_link;
+  // IMPORTANT: do NOT return `action_link` here. It redirects through
+  // Supabase's `/auth/v1/verify`, which hands back a PKCE `?code=...` URL.
+  // The recipient's browser doesn't have the paired code_verifier cookie
+  // (the link was minted server-side), so the exchange fails silently and
+  // `/reset-password` hangs on "Validating your reset link…" forever.
+  // Mirror `/api/auth/forgot-password`: hand the raw `hashed_token` to our
+  // own reset page and let it call `verifyOtp` directly.
+  const hashedToken = data?.properties?.hashed_token;
+  if (!hashedToken) {
+    console.error('[admin reset-password] No hashed_token in response');
+    return NextResponse.json({ error: 'No reset token returned by Supabase' }, { status: 500 });
+  }
+  const resetLink = `${resetPage}?token_hash=${encodeURIComponent(hashedToken)}&type=recovery`;
 
   return NextResponse.json({
     success: true,
-    // Return the link so super_admin can share it directly
-    reset_link: resetLink ?? null,
-    message: resetLink
-      ? 'Reset link generated. Share with the user or they can use forgot password.'
-      : 'Reset email sent.',
+    // Working URL that lands the recipient on our reset page with the OTP
+    // hash ready to verify. Safe to paste into Slack / share with the user.
+    reset_link: resetLink,
+    message: 'Reset link generated. Share with the user or they can use forgot password.',
   });
 }
