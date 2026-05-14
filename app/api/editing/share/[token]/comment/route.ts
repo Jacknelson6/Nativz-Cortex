@@ -87,23 +87,10 @@ const PatchSchema = z.object({
   resolved: z.boolean(),
 });
 
-/**
- * Smart approval detection — same heuristic as the calendar route. If a
- * reviewer types "approved" or "perfect, no changes" but submits via
- * the comment / change-request form, we infer an approval rather than
- * making them re-click. Conservative on purpose; long, hedging text
- * stays a comment.
- */
-function looksLikeApproval(content: string): boolean {
-  const trimmed = content.trim();
-  if (!trimmed || trimmed.length > 80) return false;
-  const APPROVAL_RE =
-    /\b(approved?|approving|lgtm|sgtm|ship ?it|good to go|all good|love (this|it|them)|nothing to change|change nothing|no (changes?|edits|notes|revisions?)|leave (as is|it)|perfect|looks (good|great|amazing|perfect|fantastic)|sounds (good|great)|green ?light)\b/i;
-  if (!APPROVAL_RE.test(trimmed)) return false;
-  if (/\b(but|except|however|though|other than|aside from)\b/i.test(trimmed))
-    return false;
-  return true;
-}
+// Natural-language approval inference was removed 2026-05-14 across both
+// share-link comment routes. Reviewers must press the Approve button to
+// transition a video / project to `status='approved'`; phrases like
+// "looks great" left in a comment field stay as plain comments.
 
 const TITLE_BY_STATUS: Record<
   'approved' | 'changes_requested' | 'comment',
@@ -270,24 +257,17 @@ export async function POST(
     }
   }
 
-  // Smart approval upgrade: same rule as calendar. We tag the metadata
-  // so the audit trail surfaces "auto approved from text" later. The
-  // upgrade only fires on reviewer-typed statuses; system-generated
-  // `video_revised` events never get auto-approved.
+  // Status reflects exactly what the reviewer submitted. The Approve button
+  // is the only path to `status='approved'`; phrasing-based inference was
+  // removed 2026-05-14.
   const submittedStatus = parsed.data.status;
   const trimmedContent = parsed.data.content.trim();
-  const inferredApproval =
-    submittedStatus !== 'approved' &&
-    submittedStatus !== 'video_revised' &&
-    looksLikeApproval(trimmedContent);
   const finalStatus:
     | 'approved'
     | 'changes_requested'
     | 'comment'
-    | 'video_revised' = inferredApproval ? 'approved' : submittedStatus;
-  const insertMetadata: Record<string, unknown> = inferredApproval
-    ? { auto_approved: true, original_status: submittedStatus }
-    : {};
+    | 'video_revised' = submittedStatus;
+  const insertMetadata: Record<string, unknown> = {};
 
   // Only honour timestamps on plain comments + change requests.
   const timestampSeconds =

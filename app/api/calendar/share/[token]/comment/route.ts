@@ -66,31 +66,12 @@ const PatchSchema = z.object({
   resolved: z.boolean(),
 });
 
-/**
- * Detect natural-language approval inside a "comment" / "changes_requested"
- * payload. Some clients submit the revision form with text like "approved" or
- * "love this, change nothing" — the smart move is to treat those as an
- * approval rather than a vague request for changes.
- *
- * Heuristic:
- *   1. Trimmed message must be ≤80 chars (long, nuanced messages are not
- *      blanket approvals).
- *   2. Must match an approval phrase.
- *   3. Must not contain a hedging conjunction ("but", "however", …) that
- *      signals a follow-up request.
- *
- * Conservative on purpose. Better to miss a fuzzy approval than to publish a
- * post the client wanted to tweak.
- */
-function looksLikeApproval(content: string): boolean {
-  const trimmed = content.trim();
-  if (!trimmed || trimmed.length > 80) return false;
-  const APPROVAL_RE =
-    /\b(approved?|approving|lgtm|sgtm|ship ?it|good to go|all good|love (this|it|them)|nothing to change|change nothing|no (changes?|edits|notes|revisions?)|leave (as is|it)|perfect|looks (good|great|amazing|perfect|fantastic)|sounds (good|great)|green ?light)\b/i;
-  if (!APPROVAL_RE.test(trimmed)) return false;
-  if (/\b(but|except|however|though|other than|aside from)\b/i.test(trimmed)) return false;
-  return true;
-}
+// Natural-language approval inference was removed 2026-05-14. Even a
+// conservative heuristic ("lgtm", "looks great") was silently locking posts
+// the client didn't intend to approve, and "approved" semantics had to mean
+// the button was actually pressed. Status now reflects exactly what the
+// client submitted; the explicit Approve action is the only path to
+// `status='approved'`.
 
 const TITLE_BY_STATUS: Record<'approved' | 'changes_requested' | 'comment', (a: string, c: string) => string> = {
   approved: (a, c) => `${a} approved a post in ${c}`,
@@ -129,20 +110,13 @@ export async function POST(
     return NextResponse.json({ error: 'post is not part of this share link' }, { status: 400 });
   }
 
-  // Smart approval: if the user submitted via "Add revision" (or as a plain
-  // comment) but the body reads like an approval, upgrade the status. We
-  // attach a metadata flag so the audit trail still shows it was inferred,
-  // not a button-press, and the public UI can surface that nuance.
+  // Status reflects exactly what the client submitted. Approvals only happen
+  // via the explicit Approve button (which posts status='approved'); plain
+  // comments and change requests never auto-upgrade based on phrasing.
   const submittedStatus = parsed.data.status;
   const trimmedContent = parsed.data.content.trim();
-  const inferredApproval =
-    submittedStatus !== 'approved' && looksLikeApproval(trimmedContent);
-  const finalStatus: 'approved' | 'changes_requested' | 'comment' = inferredApproval
-    ? 'approved'
-    : submittedStatus;
-  const insertMetadata: Record<string, unknown> = inferredApproval
-    ? { auto_approved: true, original_status: submittedStatus }
-    : {};
+  const finalStatus: 'approved' | 'changes_requested' | 'comment' = submittedStatus;
+  const insertMetadata: Record<string, unknown> = {};
 
   // Only honor a timestamp on plain comments and change requests — anchoring
   // an "approved" stamp to a specific moment doesn't carry meaning.

@@ -2515,16 +2515,6 @@ function PostCard({
       // identity-by-id helpers stay simple — no need for an `upsertComment`.
       onCommentRemoved(tempId);
       onCommentAdded(savedComment);
-      // Server may auto-upgrade a "changes_requested" submission to "approved"
-      // when the body reads like an approval ("approved", "love this", etc.).
-      // Patch the toast we already showed so the user isn't confused when
-      // their "revision" turns into a green checkmark.
-      const wasAutoApproved = status !== 'approved' && savedComment.status === 'approved';
-      if (wasAutoApproved) {
-        toast.success('Looked like an approval — marked approved', {
-          id: optimisticToastId,
-        });
-      }
     } catch (err) {
       // Roll back: pull the temp row, dismiss the optimistic toast, and
       // surface the real error so the user can retry.
@@ -3675,12 +3665,9 @@ function CommentRow({
   const isResolved =
     comment.status === 'changes_requested' &&
     !!(comment.metadata && (comment.metadata as Record<string, unknown>).resolved);
-  // metadata.auto_approved is set by the server when a "love this, change
-  // nothing"-style comment was upgraded to an approval — used below to label
-  // the row "Auto-approved" rather than just "Approved".
-  const wasAutoApproved =
-    comment.status === 'approved' &&
-    !!(comment.metadata && (comment.metadata as Record<string, unknown>).auto_approved);
+  // Auto-approval inference was removed 2026-05-14. Old rows with
+  // `metadata.auto_approved` are still rendered as plain approvals; the
+  // flag no longer surfaces a separate label.
 
   async function toggleResolved() {
     if (resolving) return;
@@ -3955,12 +3942,7 @@ function CommentRow({
       : comment.status === 'changes_requested'
         ? 'group rounded-lg border border-status-warning/30 bg-status-warning/5 px-3 py-2'
         : 'group rounded-lg border border-nativz-border bg-surface px-3 py-2';
-  const trailingMeta =
-    comment.status === 'approved' && wasAutoApproved
-      ? 'auto-approved · '
-      : isResolved
-        ? 'marked revised · '
-        : '';
+  const trailingMeta = isResolved ? 'marked revised · ' : '';
   // changes_requested rows get a persistent footer with Mark revised + Remove
   // pinned to the bottom — editors don't have to hover to act on the row that
   // matters most. Other rows (comment / approved) keep the lighter

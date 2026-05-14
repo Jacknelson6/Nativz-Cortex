@@ -1100,13 +1100,6 @@ function VideoCard({
       const savedComment = json.comment as SharedComment;
       onCommentRemoved(tempId);
       onCommentAdded(savedComment);
-      const wasAutoApproved =
-        status !== 'approved' && savedComment.status === 'approved';
-      if (wasAutoApproved) {
-        toast.success('Looked like an approval, marked approved', {
-          id: optimisticToastId,
-        });
-      }
     } catch (err) {
       onCommentRemoved(tempId);
       toast.dismiss(optimisticToastId);
@@ -1740,9 +1733,8 @@ function CommentRow({
   const isResolved =
     comment.status === 'changes_requested' &&
     !!(comment.metadata && (comment.metadata as Record<string, unknown>).resolved);
-  const wasAutoApproved =
-    comment.status === 'approved' &&
-    !!(comment.metadata && (comment.metadata as Record<string, unknown>).auto_approved);
+  // Auto-approval inference was removed 2026-05-14. Old rows with
+  // `metadata.auto_approved` render as plain approvals.
 
   async function toggleResolved() {
     if (resolving) return;
@@ -1946,12 +1938,7 @@ function CommentRow({
     : comment.status === 'changes_requested'
       ? 'group rounded-lg border border-status-warning/30 bg-status-warning/5 px-3 py-2'
       : 'group rounded-lg border border-nativz-border bg-surface px-3 py-2';
-  const trailingMeta =
-    comment.status === 'approved' && wasAutoApproved
-      ? 'auto-approved · '
-      : isResolved
-        ? 'marked revised · '
-        : '';
+  const trailingMeta = isResolved ? 'marked revised · ' : '';
   const isChangesRequestedRow = comment.status === 'changes_requested';
   const timestampPill =
     comment.timestamp_seconds !== null &&

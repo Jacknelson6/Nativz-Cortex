@@ -70,6 +70,11 @@ type CalendarPending = {
   content: string;
   status: 'comment' | 'changes_requested';
   attachments: Array<{ url: string; filename: string }> | null;
+  // NAT-73: reply rows (parent_comment_id != null) are conversation, not
+  // revisions. We still batch them into the share-link card so the team
+  // sees the back-and-forth, but the verb / emoji / header copy must
+  // never treat them as change requests.
+  parent_comment_id: string | null;
   created_at: string;
   post_review_links: {
     post_id: string;
@@ -97,9 +102,15 @@ function previewLine(c: {
   status: string;
   content: string;
   attachments: Array<{ url: string; filename: string }> | null;
+  parent_comment_id?: string | null;
 }): string {
-  const verb =
-    c.status === 'changes_requested'
+  // Reply rows are always status='comment' (the API forces it), but we want
+  // the per-line verb to read "replied" so the team can tell the difference
+  // between a fresh comment and someone responding to an existing thread.
+  const isReply = !!c.parent_comment_id;
+  const verb = isReply
+    ? 'replied'
+    : c.status === 'changes_requested'
       ? 'requested changes'
       : c.status === 'approved'
         ? 'approved'
@@ -128,7 +139,7 @@ async function handleCalendar(admin: ReturnType<typeof createAdminClient>): Prom
   const { data: pending } = await admin
     .from('post_review_comments')
     .select(
-      'id, review_link_id, author_name, content, status, attachments, created_at, post_review_links!inner(post_id, scheduled_posts!inner(id, scheduled_at))',
+      'id, review_link_id, author_name, content, status, attachments, parent_comment_id, created_at, post_review_links!inner(post_id, scheduled_posts!inner(id, scheduled_at))',
     )
     .is('chat_notified_at', null)
     .in('status', ['comment', 'changes_requested'])
@@ -318,8 +329,23 @@ async function handleCalendar(admin: ReturnType<typeof createAdminClient>): Prom
       filled: true,
     });
 
+    // Header flavour mirrors the editing bundler: avoid the ✏️ "revision"
+    // shorthand when the batch is purely conversation. A change request
+    // anywhere in the group keeps the pencil so urgent items don't hide
+    // behind softer copy.
     const totalNotes = group.length;
-    const headerTitle = `✏️ ${totalNotes} new note${totalNotes === 1 ? '' : 's'} on ${clientName}`;
+    const hasChangeRequest = group.some((c) => c.status === 'changes_requested');
+    const allReplies = group.every((c) => !!c.parent_comment_id);
+    let headerEmoji = '✏️';
+    let headerNoun = `new note${totalNotes === 1 ? '' : 's'}`;
+    if (allReplies) {
+      headerEmoji = '↩️';
+      headerNoun = `repl${totalNotes === 1 ? 'y' : 'ies'}`;
+    } else if (!hasChangeRequest) {
+      headerEmoji = '💬';
+      headerNoun = `new comment${totalNotes === 1 ? '' : 's'}`;
+    }
+    const headerTitle = `${headerEmoji} ${totalNotes} ${headerNoun} on ${clientName}`;
     const headerSubtitle = shareLink.name?.trim() || 'Calendar share link';
     const fallback = [
       `${headerTitle} (${headerSubtitle})`,
