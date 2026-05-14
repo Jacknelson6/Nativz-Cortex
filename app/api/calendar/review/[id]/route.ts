@@ -9,10 +9,17 @@ export const dynamic = 'force-dynamic';
 /**
  * PATCH /api/calendar/review/[id]
  *
- * Edit per-share-link metadata exposed in the review surface — the
- * project name, project type, and abandoned flag. Admin-only on
- * purpose: viewers can read these fields but shouldn't be renaming
- * the agency's projects from the client portal.
+ * Edit per-share-link metadata exposed in the review surface: the
+ * project name, project type, abandoned flag, and archived flag.
+ * Admin-only on purpose: viewers can read these fields but shouldn't
+ * be renaming the agency's projects from the client portal.
+ *
+ * `abandoned` vs `archived` are deliberately separate columns:
+ *   - abandoned_at (migration 198): status flag, link still visible
+ *     in lists but marked "abandoned" so the team knows it's dead.
+ *   - archived_at (migration 202): soft-delete, hides the row from
+ *     the default content-tools list. The "Archive" button in the
+ *     content-tools shell writes this one.
  */
 
 const PatchSchema = z
@@ -21,10 +28,11 @@ const PatchSchema = z
     project_type: z.enum(['editing', 'calendar']).nullable().optional(),
     // project_type_other is a legacy column from when project_type=='other'
     // accepted a free-text label. Migration 302 collapsed the enum to
-    // editing/calendar, so new writes never set this — kept on the
+    // editing/calendar, so new writes never set this; kept on the
     // schema so the API still tolerates `null` from old clients.
     project_type_other: z.string().trim().max(60).nullable().optional(),
     abandoned: z.boolean().optional(),
+    archived: z.boolean().optional(),
   })
   .strict();
 
@@ -81,6 +89,9 @@ export async function PATCH(
   if ('abandoned' in data) {
     update.abandoned_at = data.abandoned ? new Date().toISOString() : null;
   }
+  if ('archived' in data) {
+    update.archived_at = data.archived ? new Date().toISOString() : null;
+  }
 
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: 'no fields to update' }, { status: 400 });
@@ -92,7 +103,7 @@ export async function PATCH(
     .update(update)
     .eq('id', id)
     .select(
-      'id, name, project_type, project_type_other, abandoned_at',
+      'id, name, project_type, project_type_other, abandoned_at, archived_at',
     )
     .single();
 
