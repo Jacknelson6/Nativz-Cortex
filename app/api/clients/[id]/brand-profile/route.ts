@@ -69,7 +69,11 @@ const patchSchema = z.object({
   default_editor_id: z.string().uuid().nullable().optional(),
 });
 
-async function requireAdmin() {
+/** Anyone (admin or scoped viewer) who has access to the client may patch
+ *  the brand profile. The brand-profile page is shared admin/viewer and
+ *  the inline editor is unlocked for both — scoping is enforced by the
+ *  effective-access context, not the role string. */
+async function authorizeForClient(clientId: string) {
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
@@ -78,12 +82,8 @@ async function requireAdmin() {
   if (error || !user) return null;
 
   const adminClient = createAdminClient();
-  const { data: userData } = await adminClient
-    .from('users')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-  if (!userData || userData.role !== 'admin') return null;
+  const ctx = await getEffectiveAccessContext(user, adminClient);
+  if (ctx.clientIds !== null && !ctx.clientIds.includes(clientId)) return null;
   return user;
 }
 
@@ -180,9 +180,10 @@ export async function GET(
  * PATCH /api/clients/[id]/brand-profile
  *
  * Update one or many brand-profile fields. Only fields included in the
- * body get updated — omit to leave untouched, pass null to clear.
+ * body get updated, omit to leave untouched, pass null to clear.
  *
- * @auth Admin only.
+ * @auth Admin or scoped viewer (viewer must have access to the client
+ *       via user_client_access / impersonation).
  */
 export async function PATCH(
   request: NextRequest,
@@ -190,7 +191,7 @@ export async function PATCH(
 ) {
   try {
     const { id: clientId } = await params;
-    const user = await requireAdmin();
+    const user = await authorizeForClient(clientId);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();

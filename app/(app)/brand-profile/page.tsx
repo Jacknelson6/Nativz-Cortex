@@ -68,8 +68,11 @@ export default async function BrandProfilePage() {
 
     return (
       <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-4">
-        {/* Header + essence — readOnly hides Edit / Save / Generate. */}
-        <BrandProfileInlineEditor profile={profile} readOnly={!isAdmin} />
+        {/* Header + essence are editable for both admin and portal
+            viewers (jack 2026-05-14): brand profile is the client's own
+            source of truth, so they should be able to update it from
+            their side. Scoping is enforced inside the PATCH route. */}
+        <BrandProfileInlineEditor profile={profile} />
 
         {/* Social presence — admin gets URL inputs; viewer sees static
             link rows for any linked accounts. */}

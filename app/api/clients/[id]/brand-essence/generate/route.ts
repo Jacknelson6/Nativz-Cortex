@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createCompletion } from '@/lib/ai/client';
 import { parseAIResponseJSON } from '@/lib/ai/parse';
+import { getEffectiveAccessContext } from '@/lib/portal/effective-access';
 
 export const maxDuration = 60;
 
@@ -23,16 +24,16 @@ export const maxDuration = 60;
 // which ones to keep / edit before hitting save in the UI.
 
 const BodySchema = z.object({
-  // Optionally skip specific fields if admin only wants to regenerate one.
+  // Description joined the list 2026-05-14 so the brand-profile page can
+  // auto-populate it when empty. Same prompt machinery, different field.
   fields: z
-    .array(z.enum(['tagline', 'value_proposition', 'mission_statement']))
+    .array(z.enum(['description', 'tagline', 'value_proposition', 'mission_statement']))
     .nonempty()
     .default(['tagline', 'value_proposition', 'mission_statement']),
 });
 
-const ADMIN_ROLES = ['admin', 'super_admin'];
-
-async function requireAdmin() {
+/** Admin or scoped viewer with access to the client. */
+async function authorizeForClient(clientId: string) {
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
@@ -41,12 +42,8 @@ async function requireAdmin() {
   if (error || !user) return null;
 
   const adminClient = createAdminClient();
-  const { data: userData } = await adminClient
-    .from('users')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-  if (!userData || !ADMIN_ROLES.includes(userData.role)) return null;
+  const ctx = await getEffectiveAccessContext(user, adminClient);
+  if (ctx.clientIds !== null && !ctx.clientIds.includes(clientId)) return null;
   return user;
 }
 
@@ -63,7 +60,7 @@ export async function POST(
 ) {
   try {
     const { id: clientId } = await params;
-    const user = await requireAdmin();
+    const user = await authorizeForClient(clientId);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json().catch(() => ({}));
@@ -131,6 +128,8 @@ export async function POST(
     // calls and produces more coherent output (the fields naturally
     // reinforce each other when written together).
     const fieldDescriptions: Record<string, string> = {
+      description:
+        '- "description": 2-4 sentences. A neutral, factual intro to the brand. What it does, who it serves, what category it sits in. Plain language, no marketing fluff.',
       tagline: '- "tagline": 3-8 words. Punchy, memorable. Think Nike\'s "Just Do It".',
       value_proposition:
         '- "value_proposition": 1-2 sentences. The specific outcome the brand delivers for its target audience. Concrete, not aspirational.',
@@ -163,6 +162,7 @@ Return ONLY valid JSON — no prose around it — with exactly the requested key
     });
 
     type Suggestion = {
+      description?: string;
       tagline?: string;
       value_proposition?: string;
       mission_statement?: string;

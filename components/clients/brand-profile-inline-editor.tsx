@@ -95,8 +95,9 @@ function HeaderCard({
 }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [autoDescPending, setAutoDescPending] = useState(false);
 
-  // Draft state mirrors the saved profile — only lives while editing.
+  // Draft state mirrors the saved profile, only lives while editing.
   const [draft, setDraft] = useState({
     website_url: profile.website_url ?? '',
     description: profile.description ?? '',
@@ -104,6 +105,51 @@ function HeaderCard({
     brand_voice: profile.brand_voice ?? '',
     target_audience: profile.target_audience ?? '',
   });
+
+  // Auto-generate description when it's missing. Fires once per profile
+  // load: if description is empty and we have any other brand context to
+  // hang an LLM call on, request a draft and save it directly. The user
+  // can still edit it after; this just makes sure the field is never an
+  // empty hole when they land on the page.
+  const triedAutoDesc =
+    profile.description !== null && profile.description !== undefined && profile.description.trim().length > 0;
+  useEffect(() => {
+    if (readOnly) return;
+    if (triedAutoDesc) return;
+    if (autoDescPending) return;
+    // Need something to base the description on, otherwise the API
+    // returns a 422 and we'd spin forever. industry alone is enough.
+    const hasContext = !!(
+      profile.industry ||
+      profile.brand_voice ||
+      profile.target_audience ||
+      profile.website_url
+    );
+    if (!hasContext) return;
+    let cancelled = false;
+    setAutoDescPending(true);
+    (async () => {
+      try {
+        const res = await fetch(`/api/clients/${profile.id}/brand-essence/generate`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ fields: ['description'] }),
+        });
+        if (cancelled || !res.ok) return;
+        const data = await res.json().catch(() => ({}));
+        const desc = data?.suggestions?.description;
+        if (typeof desc === 'string' && desc.trim().length > 0) {
+          await onSave({ description: desc.trim() });
+        }
+      } finally {
+        if (!cancelled) setAutoDescPending(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile.id, triedAutoDesc, readOnly]);
 
   // Keep the draft in sync if the profile updates from outside (e.g.
   // after a save succeeds and the parent re-renders).
@@ -212,6 +258,11 @@ function HeaderCard({
             ) : profile.description ? (
               <p className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap">
                 {profile.description}
+              </p>
+            ) : autoDescPending ? (
+              <p className="text-sm text-text-muted italic inline-flex items-center gap-1.5">
+                <Loader2 size={12} className="animate-spin" />
+                Drafting a description from the brand&apos;s details…
               </p>
             ) : (
               <ReadEmpty>No description yet</ReadEmpty>
