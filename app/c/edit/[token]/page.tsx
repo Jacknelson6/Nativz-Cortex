@@ -10,6 +10,8 @@ import {
   CheckCircle,
   Clock,
   Download,
+  Eye,
+  EyeOff,
   File as FileIcon,
   FileVideo,
   Film,
@@ -291,6 +293,11 @@ function SharedReviewView({
   const [approveAllOpen, setApproveAllOpen] = useState(false);
   const [approvingAll, setApprovingAll] = useState(false);
   const [downloadingAll, setDownloadingAll] = useState(false);
+  // PRD 06 §"View as client": admins flip this to preview the page
+  // without admin chrome (replace/remove/cover/mark-revised affordances).
+  // Local-only — does not change server-side identity.
+  const [viewAsClient, setViewAsClient] = useState(false);
+  const effectiveIsEditor = data.isEditor && !viewAsClient;
 
   // PRD 02 §"Server resolution". Probe identity first; auto-bound
   // sessions skip the gateway, gateway/guest paths fall back to the
@@ -738,6 +745,28 @@ function SharedReviewView({
                   <span className="sm:hidden">Sign in</span>
                 </a>
               )}
+              {data.isEditor && (
+                <button
+                  type="button"
+                  onClick={() => setViewAsClient((v) => !v)}
+                  className={`inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] border px-3.5 py-2 text-sm font-medium transition-all ${
+                    viewAsClient
+                      ? 'border-accent-text/50 bg-accent-surface/40 text-accent-text hover:bg-accent-surface/60'
+                      : 'border-nativz-border bg-transparent text-text-secondary hover:bg-surface-hover hover:text-text-primary'
+                  }`}
+                  title={
+                    viewAsClient
+                      ? 'Switch back to team view'
+                      : 'Preview the page as a brand reviewer would see it'
+                  }
+                  aria-pressed={viewAsClient}
+                >
+                  {viewAsClient ? <EyeOff size={14} /> : <Eye size={14} />}
+                  <span className="hidden sm:inline">
+                    {viewAsClient ? 'Team view' : 'View as client'}
+                  </span>
+                </button>
+              )}
               {total > 0 && (
                 <ShareTourLaunchButton storageKey={EDIT_TOUR_STORAGE_KEY} />
               )}
@@ -861,7 +890,7 @@ function SharedReviewView({
                 video={v}
                 projectId={data.project.id}
                 projectType={data.project.project_type}
-                isEditor={data.isEditor}
+                isEditor={effectiveIsEditor}
                 token={token}
                 authorName={authorName}
                 onCommentAdded={(c) => appendComment(v.id, c)}
