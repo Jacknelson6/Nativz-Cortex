@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { resolveCampaignRecipients, sendCampaign } from '@/lib/email/send-campaign';
 import { sendUserEmail } from '@/lib/email/send-user-email';
-import type { AgencyBrand } from '@/lib/agency/detect';
+import { getBrandFromAgency, type AgencyBrand } from '@/lib/agency/detect';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 
 export const maxDuration = 60;
@@ -175,11 +175,11 @@ async function drainSequences(
     }
 
     const clientRow = Array.isArray(contact.client) ? contact.client[0] : contact.client;
+    // Sequence-level agency override wins; otherwise route through the
+    // canonical resolver so a bad clients.agency value can't slip a
+    // Nativz-branded sequence step to an AC contact (Victory-class bug).
     const agency: AgencyBrand =
-      (sequence.agency as AgencyBrand | null) ??
-      (clientRow?.agency?.toLowerCase().includes('anderson') || clientRow?.agency?.toLowerCase() === 'ac'
-        ? 'anderson'
-        : 'nativz');
+      (sequence.agency as AgencyBrand | null) ?? getBrandFromAgency(clientRow?.agency ?? null);
 
     if (step.stop_on_reply) {
       // Check if any earlier message in this enrollment has a reply
