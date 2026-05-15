@@ -931,7 +931,7 @@ function SharedDropView({
               <CheckCircle size={14} /> {approvedCount} approved
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-status-warning/12 px-2.5 py-1 text-status-warning">
-              <AlertTriangle size={14} /> {changesCount} changes requested
+              <AlertTriangle size={14} /> {changesCount} {changesCount === 1 ? 'revision' : 'revisions'}
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-hover px-2.5 py-1 text-text-muted">
               <Clock size={14} /> link expires {expiresLabel}
@@ -2287,6 +2287,10 @@ function PostCard({
   // the card calm (most posts get one decision, not a long thread) and
   // matches the "talk only when you need to" Frame.io feel.
   const [composerExpanded, setComposerExpanded] = useState(false);
+  // PRD 01: composer defaults to plain feedback. Reviewer opts into "revision"
+  // explicitly when the note represents a change request — clears the legacy
+  // bug where every Send button submitted changes_requested.
+  const [markAsRevision, setMarkAsRevision] = useState(false);
   // Editor-only "remove from calendar" confirmation. We don't auto-fire the
   // delete on click — destructive enough to warrant a one-step "are you
   // sure?" so an accidental click can't pull a post the editor wanted to
@@ -2444,6 +2448,10 @@ function PostCard({
       toast.error('Please enter revision notes or attach a file');
       return;
     }
+    if (status === 'comment' && !commentText.trim() && pendingAttachments.length === 0) {
+      toast.error('Please enter a comment or attach a file');
+      return;
+    }
 
     // Optimistic flow: paint a temp comment into the parent immediately so
     // the approve / changes_requested chip flips state without waiting on
@@ -2485,10 +2493,15 @@ function PostCard({
     setPendingAttachments([]);
     setPinEnabled(true);
     setComposerExpanded(false);
+    setMarkAsRevision(false);
     // Optimistic toast. The server may auto-upgrade changes_requested →
     // approved; we patch the toast in the success branch if that happens.
     const optimisticToastId = toast.success(
-      status === 'approved' ? 'Post approved' : 'Revision added',
+      status === 'approved'
+        ? 'Post approved'
+        : status === 'changes_requested'
+          ? 'Revision added'
+          : 'Comment added',
     );
 
     setSubmitting(true);
@@ -2909,7 +2922,7 @@ function PostCard({
         )}
         {review === 'changes_requested' && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-status-warning/12 px-3 py-1.5 text-sm font-medium text-status-warning ring-1 ring-status-warning/30">
-            <AlertTriangle size={13} /> Changes requested
+            <AlertTriangle size={13} /> Revision requested
           </span>
         )}
         {review === null && (
@@ -3214,7 +3227,7 @@ function PostCard({
             }}
             value={commentText}
             onChange={(e) => setCommentText(e.target.value)}
-            placeholder="Notes on the video (cuts, music, hook, etc.)"
+            placeholder="Add a comment, or toggle Mark as revision to request changes…"
             rows={3}
             className="w-full resize-none rounded-t-lg bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
             disabled={submitting}
@@ -3283,12 +3296,30 @@ function PostCard({
               )
             )}
             <div className="ml-auto flex items-center gap-1">
+              {/* PRD 01: revision toggle. Default is plain feedback ("comment");
+                  flipping promotes the submit to changes_requested. */}
+              <button
+                type="button"
+                onClick={() => setMarkAsRevision((v) => !v)}
+                disabled={submitting || uploading}
+                aria-pressed={markAsRevision}
+                title={markAsRevision ? 'Sending as revision request' : 'Send as feedback only'}
+                className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-all disabled:opacity-50 ${
+                  markAsRevision
+                    ? 'bg-status-warning/15 text-status-warning ring-1 ring-status-warning/40'
+                    : 'bg-transparent text-text-secondary hover:bg-surface-hover hover:text-text-primary'
+                }`}
+              >
+                <AlertTriangle size={13} />
+                {markAsRevision ? 'Revision' : 'Mark as revision'}
+              </button>
               <button
                 type="button"
                 onClick={() => {
                   setComposerExpanded(false);
                   setCommentText('');
                   setPendingAttachments([]);
+                  setMarkAsRevision(false);
                 }}
                 disabled={submitting || uploading}
                 className="inline-flex items-center gap-1.5 rounded-md bg-transparent px-2 py-1 text-xs font-medium text-text-muted transition-all hover:bg-surface-hover hover:text-text-secondary disabled:opacity-50"
@@ -3297,7 +3328,7 @@ function PostCard({
               </button>
               <button
                 type="button"
-                onClick={() => submit('changes_requested')}
+                onClick={() => submit(markAsRevision ? 'changes_requested' : 'comment')}
                 disabled={submitting || uploading || (!commentText.trim() && pendingAttachments.length === 0)}
                 className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 disabled:hover:bg-accent"
               >
@@ -3351,7 +3382,7 @@ function PostCard({
               : 'border-nativz-border bg-transparent text-text-secondary hover:bg-surface-hover hover:text-text-primary'
           }`}
         >
-          <MessageSquare size={14} /> Request change
+          <MessageSquare size={14} /> Add comment
         </button>
         {/* Secondary cluster — Download (everyone), Replace (editor-only,
             single-asset posts), Remove (editor-only). On sm+ they collapse

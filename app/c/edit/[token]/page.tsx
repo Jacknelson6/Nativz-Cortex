@@ -702,7 +702,7 @@ function SharedReviewView({
               <CheckCircle size={14} /> {approvedCount} approved
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-status-warning/12 px-2.5 py-1 text-status-warning">
-              <AlertTriangle size={14} /> {changesCount} changes requested
+              <AlertTriangle size={14} /> {changesCount} {changesCount === 1 ? 'revision' : 'revisions'}
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-hover px-2.5 py-1 text-text-muted">
               <Clock size={14} /> link expires {expiresLabel}
@@ -941,6 +941,9 @@ function VideoCard({
   const [playerReady, setPlayerReady] = useState(false);
   const [livePlayheadSeconds, setLivePlayheadSeconds] = useState(0);
   const [pinEnabled, setPinEnabled] = useState(true);
+  // PRD 01: composer defaults to plain feedback. Reviewer opts into "revision"
+  // explicitly when the note represents a change request.
+  const [markAsRevision, setMarkAsRevision] = useState(false);
 
   const [uploadingRevision, setUploadingRevision] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -1038,6 +1041,14 @@ function VideoCard({
       toast.error('Please enter revision notes or attach a file');
       return;
     }
+    if (
+      status === 'comment' &&
+      !commentText.trim() &&
+      pendingAttachments.length === 0
+    ) {
+      toast.error('Please enter a comment or attach a file');
+      return;
+    }
 
     // Optimistic flow mirrors the calendar share page: paint a temp
     // comment so the approve / changes_requested chip flips state without
@@ -1073,8 +1084,13 @@ function VideoCard({
     setCommentText('');
     setPendingAttachments([]);
     setPinEnabled(true);
+    setMarkAsRevision(false);
     const optimisticToastId = toast.success(
-      status === 'approved' ? 'Video approved' : 'Revision added',
+      status === 'approved'
+        ? 'Video approved'
+        : status === 'changes_requested'
+          ? 'Revision added'
+          : 'Comment added',
     );
 
     setSubmitting(true);
@@ -1287,7 +1303,7 @@ function VideoCard({
         )}
         {review === 'changes_requested' && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-status-warning/12 px-3 py-1.5 text-sm font-medium text-status-warning ring-1 ring-status-warning/30">
-            <AlertTriangle size={13} /> Changes requested
+            <AlertTriangle size={13} /> Revision requested
           </span>
         )}
         {review === null && (
@@ -1520,7 +1536,7 @@ function VideoCard({
         <textarea
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
-          placeholder="Notes on the video (cuts, music, hook, etc.)"
+          placeholder="Add a comment, or toggle Mark as revision to request changes…"
           rows={3}
           className="w-full resize-none rounded-t-lg bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
           disabled={submitting}
@@ -1589,15 +1605,32 @@ function VideoCard({
                 <MapPin size={13} /> Reference timestamp
               </button>
             ))}
+          {/* PRD 01: revision toggle. Default is plain feedback; flip to
+              promote the submit to a revision request. */}
           <button
             type="button"
-            onClick={() => submit('changes_requested')}
+            onClick={() => setMarkAsRevision((v) => !v)}
+            disabled={submitting || uploading}
+            aria-pressed={markAsRevision}
+            title={markAsRevision ? 'Sending as revision request' : 'Send as feedback only'}
+            className={`ml-auto inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-all disabled:opacity-50 ${
+              markAsRevision
+                ? 'bg-status-warning/15 text-status-warning ring-1 ring-status-warning/40'
+                : 'bg-transparent text-text-secondary hover:bg-surface-hover hover:text-text-primary'
+            }`}
+          >
+            <AlertTriangle size={13} />
+            {markAsRevision ? 'Revision' : 'Mark as revision'}
+          </button>
+          <button
+            type="button"
+            onClick={() => submit(markAsRevision ? 'changes_requested' : 'comment')}
             disabled={
               submitting ||
               uploading ||
               (!commentText.trim() && pendingAttachments.length === 0)
             }
-            className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 disabled:hover:bg-accent"
+            className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 disabled:hover:bg-accent"
           >
             {submitting ? (
               <Loader2 size={12} className="animate-spin" />

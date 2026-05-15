@@ -275,6 +275,21 @@ export async function POST(
       ? parsed.data.timestampSeconds ?? null
       : null;
 
+  // PRD 01: kind separates author intent from lifecycle. status stays for v1
+  // read paths until PRD 09 cutover; kind is the new source of truth.
+  const insertKind:
+    | 'revision'
+    | 'feedback'
+    | 'approval'
+    | 'video_revised' =
+    finalStatus === 'changes_requested'
+      ? 'revision'
+      : finalStatus === 'approved'
+        ? 'approval'
+        : finalStatus === 'video_revised'
+          ? 'video_revised'
+          : 'feedback';
+
   const { data: inserted, error } = await admin
     .from('editing_project_review_comments')
     .insert({
@@ -284,12 +299,13 @@ export async function POST(
       author_name: parsed.data.authorName.trim(),
       content: trimmedContent,
       status: finalStatus,
+      kind: insertKind,
       attachments: parsed.data.attachments ?? [],
       metadata: insertMetadata,
       timestamp_seconds: timestampSeconds,
     })
     .select(
-      'id, video_id, share_link_id, author_name, author_user_id, content, status, attachments, metadata, timestamp_seconds, created_at',
+      'id, video_id, share_link_id, author_name, author_user_id, content, status, kind, attachments, metadata, timestamp_seconds, created_at',
     )
     .single();
   if (error || !inserted) {

@@ -180,6 +180,19 @@ export async function POST(
   // Clients should never see a "you're out of edited videos" pop-up. Approvals
   // always write through; over-scope accounting stays an internal concern.
 
+  // PRD 01: derive `kind` from status + reply state. Replies are always
+  // feedback (you reply to a revision, you don't open a new one). Top-level
+  // rows map status → kind one-to-one. PRD 05 will swap in admin_response
+  // when the author resolves to an authenticated admin.
+  const insertKind: 'revision' | 'feedback' | 'approval' =
+    parentCommentId !== null
+      ? 'feedback'
+      : persistedStatus === 'changes_requested'
+        ? 'revision'
+        : persistedStatus === 'approved'
+          ? 'approval'
+          : 'feedback';
+
   const { data, error } = await admin
     .from('post_review_comments')
     .insert({
@@ -187,12 +200,13 @@ export async function POST(
       author_name: parsed.data.authorName.trim(),
       content: trimmedContent,
       status: persistedStatus,
+      kind: insertKind,
       attachments: parsed.data.attachments ?? [],
       metadata: insertMetadata,
       timestamp_seconds: timestampSeconds,
       parent_comment_id: parentCommentId,
     })
-    .select('id, review_link_id, author_name, content, status, created_at, attachments, metadata, timestamp_seconds, parent_comment_id')
+    .select('id, review_link_id, author_name, content, status, kind, created_at, attachments, metadata, timestamp_seconds, parent_comment_id')
     .single();
   if (error || !data) {
     return NextResponse.json({ error: error?.message ?? 'failed' }, { status: 500 });
