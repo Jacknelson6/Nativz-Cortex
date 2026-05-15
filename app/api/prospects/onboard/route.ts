@@ -16,6 +16,13 @@ export const dynamic = 'force-dynamic';
 const RequestSchema = z.object({
   url: z.string().url().max(2048),
   brand_name_hint: z.string().min(1).max(200).optional(),
+  // Required: agency tag carried from the QuickOnboardForm UI. Persisted
+  // on the prospect row and forwarded into clients.agency on conversion.
+  // Hardened post-Victory incident where an untagged prospect converted
+  // into a client that silently defaulted to Nativz branding.
+  agency: z.enum(['Nativz', 'Anderson Collaborative'], {
+    message: 'agency must be "Nativz" or "Anderson Collaborative"',
+  }),
 });
 
 export async function POST(req: NextRequest) {
@@ -41,6 +48,7 @@ export async function POST(req: NextRequest) {
     url: parsed.data.url,
     createdBy: auth.userId,
     brandNameHint: parsed.data.brand_name_hint ?? null,
+    agency: parsed.data.agency,
   });
 
   if ('error' in result) {

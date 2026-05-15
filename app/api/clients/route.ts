@@ -8,6 +8,13 @@ const createClientSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   slug: z.string().min(1, 'Slug is required').regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with hyphens'),
   industry: z.string().min(1, 'Industry is required'),
+  // Required post-Victory incident. Every client must carry an explicit
+  // agency tag so downstream comms (emails, share links, PDFs) brand
+  // correctly. Silent null fallback to "Nativz" caused AC clients to be
+  // emailed Nativz materials. UI must submit one of these exact strings.
+  agency: z.enum(['Nativz', 'Anderson Collaborative'], {
+    message: 'agency must be "Nativz" or "Anderson Collaborative"',
+  }),
   organization_id: z.string().uuid().optional(),
   target_audience: z.string().nullable().optional(),
   brand_voice: z.string().nullable().optional(),

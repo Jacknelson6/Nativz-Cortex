@@ -33,6 +33,10 @@ export async function onboardFromUrl(opts: {
   url: string;
   createdBy: string;
   brandNameHint?: string | null;
+  /** Required agency tag — Nativz or Anderson Collaborative. Persisted on
+   *  the prospect row so conversion to client carries forward the right
+   *  brand. Post-Victory incident hardening. */
+  agency: 'Nativz' | 'Anderson Collaborative';
 }): Promise<OnboardOutcome | { error: OnboardError }> {
   const classification = classifyUrl(opts.url);
   if (!classification) {
@@ -88,6 +92,7 @@ export async function onboardFromUrl(opts: {
       source_ref_id: null,
       owner_user_id: opts.createdBy,
       created_by: opts.createdBy,
+      agency: opts.agency,
       // Detection failure is surfaced both in the API response and in
       // metadata so a later "resume detection" surface can see the gap.
       // Stashed under `notes` until we add a structured field — keeps

@@ -5,22 +5,32 @@ import { Globe, Sparkles } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { GlassButton } from '@/components/ui/glass-button';
+import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import type { OnboardFormData } from '@/lib/types/strategy';
 
 type LifecycleChoice = NonNullable<OnboardFormData['lifecycle_state']>;
+type AgencyChoice = 'nativz' | 'anderson';
 
 interface OnboardInputProps {
-  onNext: (data: Pick<OnboardFormData, 'name' | 'website_url' | 'lifecycle_state'>) => void;
+  onNext: (
+    data: Pick<OnboardFormData, 'name' | 'website_url' | 'lifecycle_state' | 'agency'>,
+  ) => void;
 }
 
 // Easter egg: the input label subtly pulses blue when a valid URL is detected
 export function OnboardInput({ onNext }: OnboardInputProps) {
+  const { mode: brandMode } = useBrandMode();
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [urlValid, setUrlValid] = useState(false);
   // Default to 'lead' (prospect) since most brands added here are inbound
   // sales prospects, not existing accounts.
   const [lifecycle, setLifecycle] = useState<LifecycleChoice>('lead');
+  // Default agency tracks the current brand mode of the dashboard (Nativz
+  // staff see "Nativz", AC staff see "Anderson"). Required field — every
+  // client must be tagged at creation so downstream comms (emails, PDFs,
+  // share links) brand correctly. Post-Victory incident hardening.
+  const [agency, setAgency] = useState<AgencyChoice>(brandMode);
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -42,7 +52,12 @@ export function OnboardInput({ onNext }: OnboardInputProps) {
 
   function submit() {
     const fullUrl = url.startsWith('http') ? url : `https://${url}`;
-    onNext({ name: name.trim(), website_url: fullUrl, lifecycle_state: lifecycle });
+    onNext({
+      name: name.trim(),
+      website_url: fullUrl,
+      lifecycle_state: lifecycle,
+      agency: agency === 'anderson' ? 'Anderson Collaborative' : 'Nativz',
+    });
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -80,8 +95,14 @@ export function OnboardInput({ onNext }: OnboardInputProps) {
               className="inline-flex w-full p-1 rounded-lg bg-white/5 border border-nativz-border"
             >
               <LifecycleOption
-                label="Existing client"
+                label="Active"
                 value="active"
+                current={lifecycle}
+                onSelect={setLifecycle}
+              />
+              <LifecycleOption
+                label="Onboarding"
+                value="onboarding"
                 current={lifecycle}
                 onSelect={setLifecycle}
               />
@@ -90,6 +111,35 @@ export function OnboardInput({ onNext }: OnboardInputProps) {
                 value="lead"
                 current={lifecycle}
                 onSelect={setLifecycle}
+              />
+            </div>
+            <p className="text-[10px] text-text-muted mt-1.5">
+              {lifecycle === 'lead'
+                ? "We'll send you to the prospect quick-add — paste a URL and we'll detect socials."
+                : lifecycle === 'onboarding'
+                  ? "Creates the brand + kicks off the onboarding flow (SMM by default)."
+                  : "Creates the brand and brings up the client page."}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs font-medium text-text-muted mb-2">Agency</p>
+            <div
+              role="radiogroup"
+              aria-label="Agency"
+              className="inline-flex w-full p-1 rounded-lg bg-white/5 border border-nativz-border"
+            >
+              <AgencyOption
+                label="Nativz"
+                value="nativz"
+                current={agency}
+                onSelect={setAgency}
+              />
+              <AgencyOption
+                label="Anderson"
+                value="anderson"
+                current={agency}
+                onSelect={setAgency}
               />
             </div>
           </div>
@@ -146,6 +196,35 @@ function LifecycleOption({
   value: LifecycleChoice;
   current: LifecycleChoice;
   onSelect: (v: LifecycleChoice) => void;
+}) {
+  const selected = current === value;
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={() => onSelect(value)}
+      className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+        selected
+          ? 'bg-accent/15 text-accent'
+          : 'text-text-muted hover:text-text-primary'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function AgencyOption({
+  label,
+  value,
+  current,
+  onSelect,
+}: {
+  label: string;
+  value: AgencyChoice;
+  current: AgencyChoice;
+  onSelect: (v: AgencyChoice) => void;
 }) {
   const selected = current === value;
   return (

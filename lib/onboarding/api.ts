@@ -164,7 +164,37 @@ export async function advanceStep(
     .eq('id', id)
     .select(ONBOARDING_COLUMNS)
     .single();
-  return dbOk(data as OnboardingRow | null, error, 'advanceStep');
+  const row = dbOk(data as OnboardingRow | null, error, 'advanceStep');
+  // Best-effort propagate to clients on the in_progress -> completed
+  // transition. Non-fatal — onboarding row is the source of truth; the
+  // clients.lifecycle_state mirror keeps the rest of the dashboard
+  // (pipeline filters, accounting, deliverables) in sync.
+  if (isDone && current.status !== 'completed') {
+    await markClientOnboardingComplete(row.client_id).catch((err) => {
+      console.error('[onboarding/advanceStep] client propagation failed (non-fatal):', err);
+    });
+  }
+  return row;
+}
+
+/**
+ * Flip `clients.lifecycle_state` to 'active' when an onboarding row
+ * completes. The onboarding row carries the in-flight state; once it
+ * lands at 'completed' the client itself should appear as a fully
+ * active brand on dashboard surfaces.
+ *
+ * Safe to call multiple times — the update is idempotent.
+ */
+export async function markClientOnboardingComplete(clientId: string): Promise<void> {
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from('clients')
+    .update({ lifecycle_state: 'active' })
+    .eq('id', clientId)
+    .neq('lifecycle_state', 'churned'); // don't resurrect churned brands
+  if (error) {
+    throw new Error(`markClientOnboardingComplete: ${error.message}`);
+  }
 }
 
 /**
@@ -220,6 +250,7 @@ export async function patchCompletionRequirements(
 
 export async function setStatus(id: string, status: OnboardingStatus): Promise<OnboardingRow> {
   const admin = createAdminClient();
+  const prev = await getOnboardingById(id);
   const update: Record<string, unknown> = { status };
   if (status === 'completed') update.completed_at = new Date().toISOString();
   const { data, error } = await admin
@@ -228,7 +259,15 @@ export async function setStatus(id: string, status: OnboardingStatus): Promise<O
     .eq('id', id)
     .select(ONBOARDING_COLUMNS)
     .single();
-  return dbOk(data as OnboardingRow | null, error, 'setStatus');
+  const row = dbOk(data as OnboardingRow | null, error, 'setStatus');
+  // Propagate completion to clients.lifecycle_state, but only on the
+  // transition (avoid resetting a manually-set value on no-op flips).
+  if (status === 'completed' && prev?.status !== 'completed') {
+    await markClientOnboardingComplete(row.client_id).catch((err) => {
+      console.error('[onboarding/setStatus] client propagation failed (non-fatal):', err);
+    });
+  }
+  return row;
 }
 
 /* ---------- brand_basics writeback to clients -------------------------- */

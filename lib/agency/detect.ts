@@ -31,13 +31,33 @@ export function detectAgencyFromHostname(hostname: string): AgencyBrand {
 
 /**
  * Detect brand from an agency string (e.g. `clients.agency` column).
- * Falls back to 'nativz' if null/empty. Pure function — safe on server.
+ *
+ * Hard requirement (post-Victory incident): a client's agency MUST be
+ * explicitly set at creation time. Silently defaulting to 'nativz' caused
+ * Anderson Collaborative clients to receive Nativz-branded emails. Callers
+ * that legitimately have no client context should pass an explicit agency
+ * from the request hostname (`detectAgencyFromHostname`) instead.
+ *
+ * Behavior:
+ *   - Known AC string → 'anderson'
+ *   - Known Nativz string → 'nativz'
+ *   - Null / empty / unknown → throws in dev, logs + returns 'nativz' in
+ *     production (kept as a soft fallback so a malformed row can't 500 a
+ *     whole request, but the log line is the alarm bell).
  */
 export function getBrandFromAgency(agency: string | null | undefined): AgencyBrand {
-  if (!agency) return 'nativz';
-  const lower = agency.toLowerCase();
-  if (lower.includes('anderson') || lower === 'ac') return 'anderson';
-  return 'nativz';
+  if (agency) {
+    const lower = agency.toLowerCase();
+    if (lower.includes('anderson') || lower === 'ac') return 'anderson';
+    if (lower.includes('nativz') || lower === 'nz') return 'nativz';
+  }
+  const reason = !agency ? 'null/empty agency' : `unknown agency value: ${agency}`;
+  const msg = `[agency] getBrandFromAgency called with ${reason}. Agency must be set at client creation.`;
+  if (process.env.NODE_ENV === 'production') {
+    console.error(msg);
+    return 'nativz';
+  }
+  throw new Error(msg);
 }
 
 /**
