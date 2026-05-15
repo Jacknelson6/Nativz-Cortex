@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { isAdmin } from '@/lib/auth/permissions';
 import { uploadImageAsset } from '@/lib/calendar/storage-upload';
+import { requireAdminOnShare } from '@/lib/share/admin-gate';
+import { logShareAdminAction } from '@/lib/share/audit';
 
 /**
  * POST /api/calendar/share/[token]/replace-image/[postId]
@@ -32,14 +32,12 @@ export async function POST(
 ) {
   const { token, postId } = await ctx.params;
 
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  if (!(await isAdmin(user.id))) {
-    return NextResponse.json({ error: 'admin only' }, { status: 403 });
-  }
+  // PRD 06 §"Server enforcement": any agency admin bound to this share
+  // link can replace content. The legacy isAdmin() check rejected admins
+  // from sibling agencies; the gate scopes admin-ness to *this* link.
+  const gate = await requireAdminOnShare(token);
+  if (!gate.ok) return gate.response;
+  const { context, identity } = gate;
 
   const admin = createAdminClient();
   const { data: link } = await admin
@@ -167,6 +165,16 @@ export async function POST(
       })
       .in('id', mediaIds);
   }
+
+  await logShareAdminAction({
+    shareLinkId: context.linkId,
+    shareLinkKind: 'calendar',
+    actorUserId: identity.userId,
+    action: 'content.replace',
+    targetKind: 'post',
+    targetId: postId,
+    payload: { new_url: newUrl, mime_type: mime, asset_id: target.id },
+  });
 
   return NextResponse.json({ url: newUrl, mime_type: mime });
 }

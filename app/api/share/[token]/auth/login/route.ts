@@ -4,6 +4,7 @@ import {
   getShareContextOrNull,
   resolveBoundIdentity,
 } from '@/lib/share/identity';
+import { logShareAdminAction } from '@/lib/share/audit';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
@@ -82,6 +83,15 @@ export async function POST(
     password: parsed.data.password,
   });
   if (signInError) {
+    await logShareAdminAction({
+      shareLinkId: context.linkId,
+      shareLinkKind: context.kind,
+      actorUserId: null,
+      action: 'auth.login.failed',
+      targetKind: 'auth',
+      targetId: null,
+      payload: { email: parsed.data.email.trim(), reason: 'invalid_credentials' },
+    });
     return NextResponse.json(
       { error: 'invalid_credentials' },
       { status: 401 },
@@ -95,11 +105,30 @@ export async function POST(
     // half-bound state where Cortex sees them as logged in but the share
     // page refuses to render their identity. PRD 04 §"Error handling".
     await supabase.auth.signOut();
+    await logShareAdminAction({
+      shareLinkId: context.linkId,
+      shareLinkKind: context.kind,
+      actorUserId: null,
+      action: 'auth.login.failed',
+      targetKind: 'auth',
+      targetId: null,
+      payload: { email: parsed.data.email.trim(), reason: 'wrong_agency' },
+    });
     return NextResponse.json(
       { error: 'wrong_agency' },
       { status: 403 },
     );
   }
+
+  await logShareAdminAction({
+    shareLinkId: context.linkId,
+    shareLinkKind: context.kind,
+    actorUserId: identity.userId,
+    action: 'auth.login',
+    targetKind: 'auth',
+    targetId: identity.userId,
+    payload: { role: identity.role, mode: 'password' },
+  });
 
   return NextResponse.json({
     ok: true,

@@ -47,6 +47,9 @@ interface CommentRow {
   author_role: 'admin' | 'viewer' | 'guest' | null;
   content: string;
   status: CommentStatus;
+  kind: string | null;
+  resolved_at: string | null;
+  parent_comment_id: string | null;
   attachments: CommentAttachment[] | null;
   metadata: Record<string, unknown> | null;
   timestamp_seconds: number | null;
@@ -122,12 +125,14 @@ export async function GET(
           'id, filename, title, public_url, drive_file_id, mime_type, duration_s, thumbnail_url, version, position, created_at, mux_upload_id, mux_asset_id, mux_playback_id, mux_status',
         )
         .eq('project_id', link.project_id)
+        // PRD 06: hide soft-deleted rows from the share-link surface.
+        .is('archived_at', null)
         .order('position', { ascending: true })
         .order('version', { ascending: false }),
       admin
         .from('editing_project_review_comments')
         .select(
-          'id, video_id, share_link_id, author_name, author_user_id, author_role, content, status, attachments, metadata, timestamp_seconds, created_at',
+          'id, video_id, share_link_id, author_name, author_user_id, author_role, content, status, kind, resolved_at, parent_comment_id, attachments, metadata, timestamp_seconds, created_at',
         )
         .eq('project_id', link.project_id)
         .order('created_at', { ascending: true }),

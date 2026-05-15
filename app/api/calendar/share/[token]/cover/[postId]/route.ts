@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { uploadImageAsset } from '@/lib/calendar/storage-upload';
+import { getShareContextOrNull, resolveBoundIdentity } from '@/lib/share/identity';
+import { logShareAdminAction } from '@/lib/share/audit';
 
 /**
  * POST   /api/calendar/share/[token]/cover/[postId]
@@ -187,6 +189,28 @@ export async function POST(
     console.error('[cover] activity insert failed; cover saved anyway', insErr);
   }
 
+  // PRD 06 audit. Cover changes are open to any share-link viewer, but
+  // when an authenticated admin does it we log the action so the unified
+  // review modal can render "admin replaced cover" alongside the client
+  // self-serve case.
+  void (async () => {
+    const ctxForAudit = await getShareContextOrNull(token);
+    if (!ctxForAudit) return;
+    const { identity } = await resolveBoundIdentity(ctxForAudit);
+    if (!identity || (identity.role !== 'admin' && identity.role !== 'super_admin')) {
+      return;
+    }
+    await logShareAdminAction({
+      shareLinkId: ctxForAudit.linkId,
+      shareLinkKind: 'calendar',
+      actorUserId: identity.userId,
+      action: 'cover.change',
+      targetKind: 'cover',
+      targetId: postId,
+      payload: { new_url: newUrl, previous_url: previousCover },
+    });
+  })();
+
   return NextResponse.json({
     cover_image_url: newUrl,
     comment: commentRow ?? null,
@@ -247,6 +271,24 @@ export async function DELETE(
       'id, review_link_id, author_name, content, status, created_at, attachments, caption_before, caption_after, metadata',
     )
     .single();
+
+  void (async () => {
+    const ctxForAudit = await getShareContextOrNull(token);
+    if (!ctxForAudit) return;
+    const { identity } = await resolveBoundIdentity(ctxForAudit);
+    if (!identity || (identity.role !== 'admin' && identity.role !== 'super_admin')) {
+      return;
+    }
+    await logShareAdminAction({
+      shareLinkId: ctxForAudit.linkId,
+      shareLinkKind: 'calendar',
+      actorUserId: identity.userId,
+      action: 'cover.reset',
+      targetKind: 'cover',
+      targetId: postId,
+      payload: { previous_url: post.cover_image_url },
+    });
+  })();
 
   return NextResponse.json({
     cover_image_url: null,
