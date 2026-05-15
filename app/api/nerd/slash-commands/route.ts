@@ -59,5 +59,12 @@ export async function GET() {
     promptTemplate: s.prompt_template ?? null,
   }));
 
-  return NextResponse.json({ commands: [...builtins, ...skillCommands] });
+  // Skill slugs override builtins of the same name — without this, a skill
+  // with command_slug='generate' would render twice in the slash menu (once
+  // as builtin, once as skill). Skill wins so user customisations take
+  // priority over the hardcoded defaults.
+  const skillSlugs = new Set(skillCommands.map((c) => c.name));
+  const filteredBuiltins = builtins.filter((b) => !skillSlugs.has(b.name));
+
+  return NextResponse.json({ commands: [...filteredBuiltins, ...skillCommands] });
 }

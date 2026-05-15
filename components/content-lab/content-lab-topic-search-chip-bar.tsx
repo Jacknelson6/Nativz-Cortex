@@ -21,6 +21,15 @@ interface ContentLabTopicSearchChipBarProps {
   attachedSearchIds: string[];
   onToggle: (searchId: string) => void;
   /**
+   * Search metadata captured at attach time by the parent — keyed by id.
+   * The chip bar falls back to this when its own fetch hasn't yet
+   * returned the row (e.g. a search completed after the bar mounted
+   * but before its next refetch). Without this, attaching from the
+   * dialog would silently drop the chip because the lookup against
+   * `clientSearches` would return undefined.
+   */
+  attachedSearchMeta?: Record<string, { query: string }>;
+  /**
    * Initial attached set from the Strategy Lab selection storage — on mount
    * we merge this into attachedSearchIds if the user hasn't manually picked
    * anything yet. Lets the Research page's "Bring to Strategy Lab" flow
@@ -54,6 +63,7 @@ export function ContentLabTopicSearchChipBar({
   autoAttachLatest = false,
   refreshToken,
   onSearchesLoaded,
+  attachedSearchMeta,
 }: ContentLabTopicSearchChipBarProps) {
   const [clientSearches, setClientSearches] = useState<TopicSearchItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -98,19 +108,28 @@ export function ContentLabTopicSearchChipBar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, refreshToken]);
 
-  const attachedSearches = useMemo(
+  // Resolve each attached id to a chip — prefer the freshly-loaded row
+  // from /api/nerd/searches, fall back to the parent-supplied meta map
+  // (captured at attach time), and finally to a placeholder so the chip
+  // always renders. Dropping a chip silently when the lookup misses was
+  // the actual "attach doesn't connect" bug.
+  const attachedChips = useMemo(
     () =>
-      attachedSearchIds
-        .map((id) => clientSearches.find((s) => s.id === id))
-        .filter((s): s is TopicSearchItem => !!s),
-    [attachedSearchIds, clientSearches],
+      attachedSearchIds.map((id) => {
+        const fetched = clientSearches.find((s) => s.id === id);
+        if (fetched) return { id, query: fetched.query };
+        const meta = attachedSearchMeta?.[id];
+        if (meta) return { id, query: meta.query };
+        return { id, query: 'Topic search' };
+      }),
+    [attachedSearchIds, clientSearches, attachedSearchMeta],
   );
 
-  if (attachedSearches.length === 0 && !loading) return null;
+  if (attachedChips.length === 0 && !loading) return null;
 
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-1.5 px-1 pb-2">
-      {attachedSearches.map((s) => (
+      {attachedChips.map((s) => (
         <span
           key={s.id}
           className="inline-flex max-w-[240px] items-center gap-1.5 rounded-full border border-nativz-border/60 bg-surface-hover/50 pl-2.5 pr-1 py-0.5 text-xs text-text-primary"

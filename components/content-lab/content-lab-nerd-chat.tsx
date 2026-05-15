@@ -150,6 +150,12 @@ export function ContentLabNerdChat({
   const [attachedSearchIds, setAttachedSearchIds] = useState<string[]>([]);
   const [clientSearches, setClientSearches] = useState<TopicSearchItem[]>([]);
   const [attachResearchOpen, setAttachResearchOpen] = useState(false);
+  // Captured at attach time so the chip renders even if the chip bar's
+  // own fetch hasn't returned that search yet (e.g. search completed
+  // after the bar mounted).
+  const [attachedSearchMeta, setAttachedSearchMeta] = useState<
+    Record<string, { query: string }>
+  >({});
 
   // Client logo URL so the empty state and export header can render the real
   // brand mark instead of initials. Pulls from /api/nerd/mentions (same
@@ -371,11 +377,22 @@ export function ContentLabNerdChat({
     [showSlashMenu, filteredSlashCommands, slashActiveIndex, handleSlashSelect],
   );
 
-  const toggleAttach = useCallback((searchId: string) => {
-    setAttachedSearchIds((prev) =>
-      prev.includes(searchId) ? prev.filter((id) => id !== searchId) : [...prev, searchId],
-    );
-  }, []);
+  const toggleAttach = useCallback(
+    (searchId: string, item?: { id: string; query: string }) => {
+      setAttachedSearchIds((prev) =>
+        prev.includes(searchId)
+          ? prev.filter((id) => id !== searchId)
+          : [...prev, searchId],
+      );
+      if (item) {
+        setAttachedSearchMeta((prev) => ({
+          ...prev,
+          [searchId]: { query: item.query },
+        }));
+      }
+    },
+    [],
+  );
 
   // Used by the PDF export button to look up attached search titles.
   const attachedSearches = useMemo(() => {
@@ -721,6 +738,7 @@ export function ContentLabNerdChat({
         onToggle={toggleAttach}
         pinnedTopicSearchIds={pinnedTopicSearchIds}
         onSearchesLoaded={setClientSearches}
+        attachedSearchMeta={attachedSearchMeta}
       />
       <ChatComposer
         variant="research"
