@@ -27,11 +27,15 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Dialog } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import { thumbUrl } from '@/lib/calendar/thumb-url';
 import { ShareTour, ShareTourLaunchButton, EDIT_SHARE_BEATS } from '@/components/share/share-tour';
+import {
+  ShareGatewayModal,
+  readGuestName,
+  clearGuestName,
+} from '@/components/share/gateway-modal';
 
 const EDIT_TOUR_STORAGE_KEY = 'cortex.share.editTourSeen';
 
@@ -171,9 +175,11 @@ export default function EditingProjectSharePage({
     try {
       const storedName =
         typeof window !== 'undefined'
-          ? window.localStorage
-              .getItem(`cortex_edit_share_name_${token}`)
-              ?.trim() ?? ''
+          ? (readGuestName(token) ||
+              window.localStorage
+                .getItem(`cortex_edit_share_name_${token}`)
+                ?.trim() ||
+              '')
           : '';
       const qs = storedName ? `?as=${encodeURIComponent(storedName)}` : '';
       const res = await fetch(`/api/editing/share/${token}${qs}`);
@@ -195,9 +201,11 @@ export default function EditingProjectSharePage({
       try {
         const storedName =
           typeof window !== 'undefined'
-            ? window.localStorage
-                .getItem(`cortex_edit_share_name_${token}`)
-                ?.trim() ?? ''
+            ? (readGuestName(token) ||
+                window.localStorage
+                  .getItem(`cortex_edit_share_name_${token}`)
+                  ?.trim() ||
+                '')
             : '';
         const qs = storedName ? `?as=${encodeURIComponent(storedName)}` : '';
         const res = await fetch(`/api/editing/share/${token}${qs}`);
@@ -264,23 +272,139 @@ function SharedReviewView({
   setData: (updater: (prev: SharedPayload | null) => SharedPayload | null) => void;
   refetch: () => Promise<void>;
 }) {
-  const storageKey = `cortex_edit_share_name_${token}`;
+  const legacyStorageKey = `cortex_edit_share_name_${token}`;
   const [authorName, setAuthorName] = useState('');
-  const [nameModalOpen, setNameModalOpen] = useState(false);
-  const [pendingName, setPendingName] = useState('');
+  const [gatewayOpen, setGatewayOpen] = useState(false);
+  const [gatewayInfo, setGatewayInfo] = useState<{
+    agencyMismatch: boolean;
+    agencyAvailable: boolean;
+  }>({ agencyMismatch: false, agencyAvailable: false });
+  const [boundIdentity, setBoundIdentity] = useState<{
+    displayName: string;
+    role: 'admin' | 'super_admin' | 'viewer';
+  } | null>(null);
   const [approveAllOpen, setApproveAllOpen] = useState(false);
   const [approvingAll, setApprovingAll] = useState(false);
   const [downloadingAll, setDownloadingAll] = useState(false);
 
+  // PRD 02 §"Server resolution". Probe identity first; auto-bound
+  // sessions skip the gateway, gateway/guest paths fall back to the
+  // legacy stored name if any. Mirrors the calendar share flow.
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const stored = window.localStorage.getItem(storageKey);
-    if (stored && stored.trim()) {
-      setAuthorName(stored.trim());
-    } else {
-      setNameModalOpen(true);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/share/${token}/identity`);
+        const json = (await res.json().catch(() => null)) as
+          | {
+              state: 'auto_bound' | 'gateway' | 'expired' | 'archived' | 'not_found';
+              identity?: { displayName: string; role: 'admin' | 'super_admin' | 'viewer' };
+              sessionPresent?: boolean;
+              agencyMismatch?: boolean;
+              agencyAvailable?: boolean;
+            }
+          | null;
+        if (cancelled || !json) return;
+
+        if (json.state === 'auto_bound' && json.identity) {
+          setAuthorName(json.identity.displayName);
+          setBoundIdentity({
+            displayName: json.identity.displayName,
+            role: json.identity.role,
+          });
+          setGatewayOpen(false);
+          return;
+        }
+
+        if (json.state === 'gateway') {
+          const guest =
+            readGuestName(token) ||
+            (typeof window !== 'undefined'
+              ? window.localStorage.getItem(legacyStorageKey)?.trim() ?? ''
+              : '');
+          if (guest) {
+            setAuthorName(guest);
+            setGatewayOpen(false);
+          } else {
+            setGatewayOpen(true);
+          }
+          setGatewayInfo({
+            agencyMismatch: !!json.agencyMismatch,
+            agencyAvailable: !!json.agencyAvailable,
+          });
+          return;
+        }
+      } catch {
+        if (typeof window !== 'undefined') {
+          const guest =
+            readGuestName(token) ||
+            window.localStorage.getItem(legacyStorageKey)?.trim() ||
+            '';
+          if (guest) {
+            setAuthorName(guest);
+            setGatewayOpen(false);
+          } else {
+            setGatewayOpen(true);
+          }
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, legacyStorageKey]);
+
+  async function reprobeIdentity() {
+    try {
+      const res = await fetch(`/api/share/${token}/identity`);
+      const json = (await res.json().catch(() => null)) as
+        | {
+            state: 'auto_bound' | 'gateway' | 'expired' | 'archived' | 'not_found';
+            identity?: { displayName: string; role: 'admin' | 'super_admin' | 'viewer' };
+            agencyMismatch?: boolean;
+            agencyAvailable?: boolean;
+          }
+        | null;
+      if (!json) return;
+      if (json.state === 'auto_bound' && json.identity) {
+        setAuthorName(json.identity.displayName);
+        setBoundIdentity({
+          displayName: json.identity.displayName,
+          role: json.identity.role,
+        });
+        return;
+      }
+      if (json.state === 'gateway') {
+        setBoundIdentity(null);
+        setGatewayInfo({
+          agencyMismatch: !!json.agencyMismatch,
+          agencyAvailable: !!json.agencyAvailable,
+        });
+      }
+    } catch {
+      /* non-fatal */
     }
-  }, [storageKey]);
+  }
+
+  async function handleSwitchIdentity() {
+    if (boundIdentity) {
+      try {
+        await fetch(`/api/share/${token}/auth/login`, { method: 'DELETE' });
+      } catch {
+        /* ignore */
+      }
+      setBoundIdentity(null);
+    }
+    clearGuestName(token);
+    try {
+      window.localStorage.removeItem(legacyStorageKey);
+    } catch {
+      /* ignore */
+    }
+    setAuthorName('');
+    await reprobeIdentity();
+    setGatewayOpen(true);
+  }
 
   // Deep-link support: webhook chat pings include `#video-N` so the link
   // jumps straight to the cut under discussion.
@@ -296,19 +420,6 @@ function SharedReviewView({
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   }, [videoCount]);
-
-  function saveName(value: string) {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      toast.error('Please enter your name');
-      return;
-    }
-    setAuthorName(trimmed);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(storageKey, trimmed);
-    }
-    setNameModalOpen(false);
-  }
 
   function appendComment(videoId: string, comment: SharedComment) {
     setData((prev) =>
@@ -386,8 +497,7 @@ function SharedReviewView({
   // ordering) sees inserts in order.
   async function approveAll() {
     if (!authorName.trim()) {
-      setPendingName(authorName);
-      setNameModalOpen(true);
+      setGatewayOpen(true);
       return;
     }
     const targets = data.videos.filter(
@@ -654,8 +764,7 @@ function SharedReviewView({
                   type="button"
                   onClick={() => {
                     if (!authorName.trim()) {
-                      setPendingName(authorName);
-                      setNameModalOpen(true);
+                      setGatewayOpen(true);
                       return;
                     }
                     setApproveAllOpen(true);
@@ -682,14 +791,16 @@ function SharedReviewView({
               {authorName && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setPendingName(authorName);
-                    setNameModalOpen(true);
-                  }}
+                  onClick={() => void handleSwitchIdentity()}
                   className="rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3.5 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary"
-                  title="Change name"
+                  title={boundIdentity ? 'Sign out and switch' : 'Change name'}
                 >
                   {authorName}
+                  {boundIdentity ? (
+                    <span className="ml-1.5 text-[10px] uppercase tracking-wider text-text-muted">
+                      {boundIdentity.role === 'viewer' ? 'client' : 'team'}
+                    </span>
+                  ) : null}
                 </button>
               )}
             </div>
@@ -754,10 +865,7 @@ function SharedReviewView({
                 onVideoReplaced={refetch}
                 onVideoDeleted={() => removeVideoLocal(v.id)}
                 onTitleUpdated={(title) => updateVideoTitleLocal(v.id, title)}
-                requireName={() => {
-                  setPendingName(authorName);
-                  setNameModalOpen(true);
-                }}
+                requireName={() => setGatewayOpen(true)}
               />
             ))
           )}
@@ -765,54 +873,32 @@ function SharedReviewView({
       </main>
 
       <ShareTour
-        enabled={!nameModalOpen && data.videos.length > 0}
+        enabled={!gatewayOpen && data.videos.length > 0}
         beats={EDIT_SHARE_BEATS}
         storageKey={EDIT_TOUR_STORAGE_KEY}
       />
 
-      <Dialog
-        open={nameModalOpen}
-        onClose={() => {
-          if (authorName.trim()) {
-            setNameModalOpen(false);
-          } else {
-            toast.error('Please enter your name to continue');
+      <ShareGatewayModal
+        open={gatewayOpen}
+        token={token}
+        agencyMismatch={gatewayInfo.agencyMismatch}
+        agencyAvailable={gatewayInfo.agencyAvailable}
+        defaultGuestName={authorName}
+        onLoggedIn={async () => {
+          await reprobeIdentity();
+          setGatewayOpen(false);
+          await refetch();
+        }}
+        onGuestNamed={(name) => {
+          setAuthorName(name);
+          try {
+            window.localStorage.setItem(legacyStorageKey, name);
+          } catch {
+            /* ignore */
           }
+          setGatewayOpen(false);
         }}
-        onCancel={(e) => {
-          if (!authorName.trim()) e.preventDefault();
-        }}
-        title=""
-        maxWidth="sm"
-      >
-        <div className="space-y-3">
-          <h2 className="font-display text-lg font-semibold tracking-tight text-text-primary">
-            Welcome
-          </h2>
-          <p className="text-sm text-text-secondary">
-            Tell us who{APOS}s reviewing so your feedback is attributed correctly.
-          </p>
-          <input
-            value={pendingName}
-            onChange={(e) => setPendingName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') saveName(pendingName);
-            }}
-            placeholder="Your name"
-            autoFocus
-            className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-base text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent sm:text-sm"
-          />
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => saveName(pendingName)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-contrast transition-opacity hover:opacity-90"
-            >
-              Continue
-            </button>
-          </div>
-        </div>
-      </Dialog>
+      />
 
       <ConfirmDialog
         open={approveAllOpen}

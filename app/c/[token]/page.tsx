@@ -23,6 +23,11 @@ import type { DeliverableBalance } from '@/lib/deliverables/get-balances';
 import type { AddonSku } from '@/lib/deliverables/addon-skus';
 import { thumbUrl } from '@/lib/calendar/thumb-url';
 import { ShareTour, ShareTourLaunchButton, CALENDAR_SHARE_BEATS } from '@/components/share/share-tour';
+import {
+  ShareGatewayModal,
+  readGuestName,
+  clearGuestName,
+} from '@/components/share/gateway-modal';
 
 const CALENDAR_TOUR_STORAGE_KEY = 'cortex.share.calendarTourSeen';
 import { mergeCaptionAndHashtags } from '@/lib/scheduler/caption-hashtags';
@@ -176,7 +181,8 @@ export default function PublicCalendarSharePage({
       try {
         const storedName =
           typeof window !== 'undefined'
-            ? window.localStorage.getItem(`cortex_share_name_${token}`)?.trim() ?? ''
+            ? (readGuestName(token) ||
+                (window.localStorage.getItem(`cortex_share_name_${token}`)?.trim() ?? ''))
             : '';
         const qs = storedName ? `?as=${encodeURIComponent(storedName)}` : '';
         const res = await fetch(`/api/calendar/share/${token}${qs}`);
@@ -234,10 +240,17 @@ function SharedDropView({
   token: string;
   setData: (updater: (prev: SharedDrop | null) => SharedDrop | null) => void;
 }) {
-  const storageKey = `cortex_share_name_${token}`;
+  const legacyStorageKey = `cortex_share_name_${token}`;
   const [authorName, setAuthorName] = useState('');
-  const [nameModalOpen, setNameModalOpen] = useState(false);
-  const [pendingName, setPendingName] = useState('');
+  const [gatewayOpen, setGatewayOpen] = useState(false);
+  const [gatewayInfo, setGatewayInfo] = useState<{
+    agencyMismatch: boolean;
+    agencyAvailable: boolean;
+  }>({ agencyMismatch: false, agencyAvailable: false });
+  const [boundIdentity, setBoundIdentity] = useState<{
+    displayName: string;
+    role: 'admin' | 'super_admin' | 'viewer';
+  } | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [detailPostId, setDetailPostId] = useState<string | null>(null);
   const [approveAllOpen, setApproveAllOpen] = useState(false);
@@ -245,27 +258,136 @@ function SharedDropView({
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [addVideoOpen, setAddVideoOpen] = useState(false);
 
+  // PRD 02 §"Server resolution" + PRD 03 §"Guest persistence". On mount,
+  // ask the server who's logged in. If the session auto-binds to the
+  // share link's agency we skip the modal entirely; otherwise fall back
+  // to the persisted guest name (new key first, legacy key second so
+  // returning visitors don't get prompted again).
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const stored = window.localStorage.getItem(storageKey);
-    if (stored && stored.trim()) {
-      setAuthorName(stored.trim());
-    } else {
-      setNameModalOpen(true);
-    }
-  }, [storageKey]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/share/${token}/identity`);
+        const json = (await res.json().catch(() => null)) as
+          | {
+              state: 'auto_bound' | 'gateway' | 'expired' | 'archived' | 'not_found';
+              identity?: { displayName: string; role: 'admin' | 'super_admin' | 'viewer' };
+              sessionPresent?: boolean;
+              agencyMismatch?: boolean;
+              agencyAvailable?: boolean;
+            }
+          | null;
+        if (cancelled || !json) return;
 
-  function saveName(value: string) {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      toast.error('Please enter your name');
-      return;
+        if (json.state === 'auto_bound' && json.identity) {
+          setAuthorName(json.identity.displayName);
+          setBoundIdentity({
+            displayName: json.identity.displayName,
+            role: json.identity.role,
+          });
+          setGatewayOpen(false);
+          return;
+        }
+
+        if (json.state === 'gateway') {
+          const guest =
+            readGuestName(token) ||
+            (typeof window !== 'undefined'
+              ? window.localStorage.getItem(legacyStorageKey)?.trim() ?? ''
+              : '');
+          if (guest) {
+            setAuthorName(guest);
+            setGatewayOpen(false);
+          } else {
+            setGatewayOpen(true);
+          }
+          setGatewayInfo({
+            agencyMismatch: !!json.agencyMismatch,
+            agencyAvailable: !!json.agencyAvailable,
+          });
+          return;
+        }
+      } catch {
+        // Identity probe failure is non-fatal; legacy guest name (if any)
+        // still works, and the share data fetch will surface terminal
+        // states. Fall through to the legacy guest-name read so we don't
+        // strand a returning visitor at a blank screen.
+        if (typeof window !== 'undefined') {
+          const guest =
+            readGuestName(token) ||
+            window.localStorage.getItem(legacyStorageKey)?.trim() ||
+            '';
+          if (guest) {
+            setAuthorName(guest);
+            setGatewayOpen(false);
+          } else {
+            setGatewayOpen(true);
+          }
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, legacyStorageKey]);
+
+  // Re-runs the identity probe after a successful login. Lifted out so
+  // the gateway's onLoggedIn can refresh the bound identity + role chip
+  // without duplicating the probe wiring.
+  async function reprobeIdentity() {
+    try {
+      const res = await fetch(`/api/share/${token}/identity`);
+      const json = (await res.json().catch(() => null)) as
+        | {
+            state: 'auto_bound' | 'gateway' | 'expired' | 'archived' | 'not_found';
+            identity?: { displayName: string; role: 'admin' | 'super_admin' | 'viewer' };
+            agencyMismatch?: boolean;
+            agencyAvailable?: boolean;
+          }
+        | null;
+      if (!json) return;
+      if (json.state === 'auto_bound' && json.identity) {
+        setAuthorName(json.identity.displayName);
+        setBoundIdentity({
+          displayName: json.identity.displayName,
+          role: json.identity.role,
+        });
+        return;
+      }
+      if (json.state === 'gateway') {
+        setBoundIdentity(null);
+        setGatewayInfo({
+          agencyMismatch: !!json.agencyMismatch,
+          agencyAvailable: !!json.agencyAvailable,
+        });
+      }
+    } catch {
+      /* probe failure is non-fatal */
     }
-    setAuthorName(trimmed);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(storageKey, trimmed);
+  }
+
+  // "Switch identity" affordance. Bound sessions sign out via DELETE so
+  // a stale Cortex cookie doesn't auto-re-bind on the next reload; guest
+  // sessions clear the persisted name so the modal starts fresh. Both
+  // paths land on the gateway's "choose" view.
+  async function handleSwitchIdentity() {
+    if (boundIdentity) {
+      try {
+        await fetch(`/api/share/${token}/auth/login`, { method: 'DELETE' });
+      } catch {
+        /* ignore — modal will still show */
+      }
+      setBoundIdentity(null);
     }
-    setNameModalOpen(false);
+    clearGuestName(token);
+    try {
+      window.localStorage.removeItem(legacyStorageKey);
+    } catch {
+      /* ignore */
+    }
+    setAuthorName('');
+    await reprobeIdentity();
+    setGatewayOpen(true);
   }
 
   // Show unscheduled posts at the top, then chronological by scheduled_at
@@ -333,8 +455,7 @@ function SharedDropView({
   // and the documented allApproved race only fires once at the end.
   async function approveAll() {
     if (!authorName.trim()) {
-      setPendingName(authorName);
-      setNameModalOpen(true);
+      setGatewayOpen(true);
       return;
     }
     const targets = data.posts.filter((p) => latestReview(p.comments) !== 'approved');
@@ -696,8 +817,10 @@ function SharedDropView({
     try {
       const storedName =
         typeof window !== 'undefined'
-          ? window.localStorage.getItem(storageKey)?.trim() ?? ''
-          : '';
+          ? (readGuestName(token) ||
+              window.localStorage.getItem(legacyStorageKey)?.trim() ||
+              authorName.trim())
+          : authorName.trim();
       const qs = storedName ? `?as=${encodeURIComponent(storedName)}` : '';
       const res = await fetch(`/api/calendar/share/${token}${qs}`);
       const json = await readJsonSafe(res);
@@ -863,8 +986,7 @@ function SharedDropView({
                   data-tour="cal-approve-all"
                   onClick={() => {
                     if (!authorName.trim()) {
-                      setPendingName(authorName);
-                      setNameModalOpen(true);
+                      setGatewayOpen(true);
                       return;
                     }
                     setApproveAllOpen(true);
@@ -888,14 +1010,16 @@ function SharedDropView({
               {authorName && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setPendingName(authorName);
-                    setNameModalOpen(true);
-                  }}
+                  onClick={() => void handleSwitchIdentity()}
                   className="rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3.5 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary"
-                  title="Change name"
+                  title={boundIdentity ? 'Sign out and switch' : 'Change name'}
                 >
                   {authorName}
+                  {boundIdentity ? (
+                    <span className="ml-1.5 text-[10px] uppercase tracking-wider text-text-muted">
+                      {boundIdentity.role === 'viewer' ? 'client' : 'team'}
+                    </span>
+                  ) : null}
                 </button>
               )}
               <div className="inline-flex overflow-hidden rounded-[var(--nz-btn-radius)] border border-nativz-border">
@@ -967,8 +1091,7 @@ function SharedDropView({
                 onRemoveFromCalendar={() => removePostFromCalendar(post.id)}
                 onTitleUpdated={(title) => updatePostTitle(post.id, title)}
                 requireName={() => {
-                  setPendingName(authorName);
-                  setNameModalOpen(true);
+                  setGatewayOpen(true);
                 }}
               />
             ))}
@@ -983,8 +1106,7 @@ function SharedDropView({
             onSelect={(p) => setDetailPostId(p.id)}
             onScheduleUpdated={updatePostScheduledAt}
             requireName={() => {
-              setPendingName(authorName);
-              setNameModalOpen(true);
+              setGatewayOpen(true);
             }}
           />
         )}
@@ -1021,47 +1143,32 @@ function SharedDropView({
         />
       )}
 
-      <Dialog
-        open={nameModalOpen}
-        onClose={() => {
-          if (authorName.trim()) {
-            setNameModalOpen(false);
-          } else {
-            toast.error('Please enter your name to continue');
+      <ShareGatewayModal
+        open={gatewayOpen}
+        token={token}
+        agencyMismatch={gatewayInfo.agencyMismatch}
+        agencyAvailable={gatewayInfo.agencyAvailable}
+        defaultGuestName={authorName}
+        onLoggedIn={async () => {
+          // Cookie is set; re-run identity probe so we pick up the
+          // bound display name + role and skip the modal going forward.
+          await reprobeIdentity();
+          setGatewayOpen(false);
+          await refetch();
+        }}
+        onGuestNamed={(name) => {
+          setAuthorName(name);
+          // PRD 03 §"Persistence": stash under the legacy key too so the
+          // outer ?as= read on a hard reload finds it without a second
+          // identity round-trip. Safe no-op if storage is blocked.
+          try {
+            window.localStorage.setItem(legacyStorageKey, name);
+          } catch {
+            /* ignore */
           }
+          setGatewayOpen(false);
         }}
-        onCancel={(e) => {
-          if (!authorName.trim()) e.preventDefault();
-        }}
-        title=""
-        maxWidth="sm"
-      >
-        <div className="space-y-3">
-          <h2 className="font-display text-lg font-semibold tracking-tight text-text-primary">Welcome</h2>
-          <p className="text-sm text-text-secondary">
-            Tell us who&apos;s reviewing so your feedback is attributed correctly.
-          </p>
-          <input
-            value={pendingName}
-            onChange={(e) => setPendingName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') saveName(pendingName);
-            }}
-            placeholder="Your name"
-            autoFocus
-            className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-base text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent sm:text-sm"
-          />
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => saveName(pendingName)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-contrast transition-opacity hover:opacity-90"
-            >
-              Continue
-            </button>
-          </div>
-        </div>
-      </Dialog>
+      />
 
       <PostDetailModal
         post={detailPostId ? sortedPosts.find((p) => p.id === detailPostId) ?? null : null}
@@ -1083,10 +1190,7 @@ function SharedDropView({
         onRemoveFromCalendar={removePostFromCalendar}
         onTitleUpdated={updatePostTitle}
         onClose={() => setDetailPostId(null)}
-        requireName={() => {
-          setPendingName(authorName);
-          setNameModalOpen(true);
-        }}
+        requireName={() => setGatewayOpen(true)}
       />
 
       {data.isEditor && (
@@ -1119,7 +1223,7 @@ function SharedDropView({
       />
 
       <ShareTour
-        enabled={!nameModalOpen && data.posts.length > 0}
+        enabled={!gatewayOpen && data.posts.length > 0}
         beats={CALENDAR_SHARE_BEATS}
         storageKey={CALENDAR_TOUR_STORAGE_KEY}
       />
