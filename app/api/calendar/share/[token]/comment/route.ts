@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getShareContextOrNull, resolveBoundIdentity } from '@/lib/share/identity';
 import { createNotification } from '@/lib/notifications/create';
+import { notifyViewersOfShareEvent } from '@/lib/share/notify-viewers';
 import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
 import { reschedulePastDueDrafts } from '@/lib/calendar/reschedule-past-due';
 import {
@@ -262,6 +263,37 @@ export async function POST(
       });
     } catch (err) {
       console.error('Comment notification failed:', err);
+    }
+
+    // PRD 08: admin-authored responses + state changes should also land in
+    // the viewer's portal bell. Skips when the comment is viewer/guest-
+    // authored (those flow admin-direction only).
+    if (authorRole === 'admin') {
+      try {
+        const { data: dropRow } = await admin
+          .from('content_drops')
+          .select('client_id, clients(name)')
+          .eq('id', link.drop_id)
+          .maybeSingle<{ client_id: string | null; clients: { name: string | null } | null }>();
+        const brandLabel = dropRow?.clients?.name ?? 'your calendar';
+        const titleByStatus: Record<typeof persistedStatus, string> = {
+          approved: `${parsed.data.authorName.trim()} approved a post on ${brandLabel}`,
+          changes_requested: `${parsed.data.authorName.trim()} flagged a revision on ${brandLabel}`,
+          comment: `${parsed.data.authorName.trim()} replied on ${brandLabel}`,
+        };
+        const preview = trimmedContent
+          ? trimmedContent.slice(0, 140) + (trimmedContent.length > 140 ? '…' : '')
+          : '';
+        await notifyViewersOfShareEvent({
+          clientId: dropRow?.client_id ?? null,
+          title: titleByStatus[persistedStatus],
+          body: preview,
+          linkPath: `/s/${token}`,
+          type: 'feedback_received',
+        });
+      } catch (err) {
+        console.error('Viewer notification (calendar) failed:', err);
+      }
     }
 
     // Recompute drop-level approval state and push to Monday. State-derived

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getShareContextOrNull, resolveBoundIdentity } from '@/lib/share/identity';
 import { createNotification } from '@/lib/notifications/create';
+import { notifyViewersOfShareEvent } from '@/lib/share/notify-viewers';
 import {
   buildChatCard,
   postToGoogleChatSafe,
@@ -404,6 +405,46 @@ export async function POST(
         });
       } catch (err) {
         console.error('Editing comment notification failed:', err);
+      }
+
+      // PRD 08: admin-authored responses land in the viewer's portal bell.
+      // Viewer/guest-authored rows already get the admin fan-out above and
+      // never page their own brand peers.
+      if (authorRole === 'admin') {
+        try {
+          const { data: project } = await admin
+            .from('editing_projects')
+            .select('client_id, name, clients(name)')
+            .eq('id', link.project_id)
+            .maybeSingle<{
+              client_id: string | null;
+              name: string | null;
+              clients: { name: string | null } | null;
+            }>();
+          const brandLabel =
+            project?.clients?.name ?? project?.name ?? 'your project';
+          const titleByStatus: Record<
+            'approved' | 'changes_requested' | 'comment',
+            string
+          > = {
+            approved: `${parsed.data.authorName.trim()} approved a clip on ${brandLabel}`,
+            changes_requested: `${parsed.data.authorName.trim()} flagged a revision on ${brandLabel}`,
+            comment: `${parsed.data.authorName.trim()} replied on ${brandLabel}`,
+          };
+          const previewStatus = finalStatus;
+          const preview = trimmedContent
+            ? trimmedContent.slice(0, 140) + (trimmedContent.length > 140 ? '…' : '')
+            : '';
+          await notifyViewersOfShareEvent({
+            clientId: project?.client_id ?? null,
+            title: titleByStatus[previewStatus],
+            body: preview,
+            linkPath: `/s/${token}`,
+            type: 'feedback_received',
+          });
+        } catch (err) {
+          console.error('Viewer notification (editing) failed:', err);
+        }
       }
 
       try {
@@ -891,16 +932,17 @@ async function notifyAdminsOfComment(
 
   const linkPath = `/admin/editing?project=${project.id}`;
 
-  // In-app: Jack only (matches calendar pattern). Future: route by
-  // project editor / strategist.
-  const { data: jack } = await admin
+  // PRD 08: fan out to every admin user (matches calendar parity). Was
+  // previously Jack-only — left other editors without an in-app ping
+  // unless they happened to be in the right Google Chat space.
+  const { data: adminUsers } = await admin
     .from('users')
     .select('id')
-    .eq('email', 'jack@nativz.io')
-    .maybeSingle<{ id: string }>();
-  if (jack?.id) {
+    .eq('role', 'admin')
+    .returns<Array<{ id: string }>>();
+  for (const adminUser of adminUsers ?? []) {
     createNotification({
-      recipientUserId: jack.id,
+      recipientUserId: adminUser.id,
       type: 'general',
       title,
       body: preview,
