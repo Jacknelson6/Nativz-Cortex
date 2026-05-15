@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendUserEmail } from '@/lib/email/send-user-email';
-import { detectAgencyFromHostname } from '@/lib/agency/detect';
+import { resolveAgencyForUser } from '@/lib/email/resolve-agency-for-user';
 import { withCronTelemetry } from '@/lib/observability/with-cron-telemetry';
 
 export const maxDuration = 60;
@@ -45,7 +45,7 @@ async function handleGet(request: NextRequest) {
     return NextResponse.json({ ok: true, processed: 0 });
   }
 
-  const agency = detectAgencyFromHostname(request.headers.get('host') ?? '');
+  const hostname = request.headers.get('host') ?? '';
   const results: { id: string; ok: boolean; error?: string }[] = [];
 
   for (const row of rows) {
@@ -64,6 +64,10 @@ async function handleGet(request: NextRequest) {
       results.push({ id: row.id, ok: false, error: 'recipient missing email' });
       continue;
     }
+
+    // Resolve agency per recipient — a scheduled batch can target users
+    // across both brands, so this can't be hoisted out of the loop.
+    const agency = await resolveAgencyForUser(admin, { userId: recipient.id, hostname });
 
     // Subject + body are frozen (merge-resolved at schedule time). We still pass
     // the merge context because sendUserEmail's signature requires it — but the

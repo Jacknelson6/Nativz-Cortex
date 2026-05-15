@@ -20,7 +20,12 @@ import {
  *
  *   2. getBrandFromAgency(agencyColumn)
  *      - 'anderson' for 'anderson' / 'AC' / strings containing 'anderson'
- *      - 'nativz' default for null, undefined, empty, or unknown
+ *      - 'nativz' for 'nativz' / 'NZ' / strings containing 'nativz'
+ *      - Post-Victory incident hardening: throws in non-prod for null /
+ *        undefined / empty / unknown values; logs and soft-falls to
+ *        'nativz' in prod so a single bad row can't 500 a request.
+ *        Migration 318 enforces NOT NULL + CHECK on clients.agency, so
+ *        the null/unknown paths are defense-in-depth only.
  *
  *   3. resolveAgencyForRequest(request)
  *      - Honours `?brand=` query in non-prod (anderson | nativz only)
@@ -67,18 +72,8 @@ describe('detectAgencyFromHostname', () => {
 });
 
 describe('getBrandFromAgency', () => {
-  it('returns "nativz" for null', () => {
-    expect(getBrandFromAgency(null)).toBe('nativz');
-  });
-
-  it('returns "nativz" for undefined', () => {
-    expect(getBrandFromAgency(undefined)).toBe('nativz');
-  });
-
-  it('returns "nativz" for empty string', () => {
-    expect(getBrandFromAgency('')).toBe('nativz');
-  });
-
+  // Happy paths: a real agency value comes off clients.agency, the
+  // function picks the right brand without complaint.
   it('returns "anderson" for the literal string "anderson"', () => {
     expect(getBrandFromAgency('anderson')).toBe('anderson');
   });
@@ -93,9 +88,61 @@ describe('getBrandFromAgency', () => {
     expect(getBrandFromAgency('Some Anderson Org')).toBe('anderson');
   });
 
-  it('returns "nativz" for unknown agency names', () => {
+  it('returns "nativz" for the literal string "nativz"', () => {
     expect(getBrandFromAgency('nativz')).toBe('nativz');
-    expect(getBrandFromAgency('mystery-shop')).toBe('nativz');
+  });
+
+  it('returns "nativz" for the legacy two-letter "NZ" code', () => {
+    expect(getBrandFromAgency('NZ')).toBe('nativz');
+    expect(getBrandFromAgency('nz')).toBe('nativz');
+  });
+
+  // Hard-fail paths: in non-prod (this test process) the function throws
+  // so a missing agency tag surfaces loudly. The error message names the
+  // function so log-grepping finds the violating call site.
+  describe('null / unknown — hard fail in non-prod', () => {
+    it('throws on null', () => {
+      expect(() => getBrandFromAgency(null)).toThrow(/getBrandFromAgency/);
+    });
+
+    it('throws on undefined', () => {
+      expect(() => getBrandFromAgency(undefined)).toThrow(/getBrandFromAgency/);
+    });
+
+    it('throws on empty string', () => {
+      expect(() => getBrandFromAgency('')).toThrow(/getBrandFromAgency/);
+    });
+
+    it('throws on unknown agency names', () => {
+      expect(() => getBrandFromAgency('mystery-shop')).toThrow(/unknown agency/);
+    });
+  });
+
+  // Production soft fallback: same call, but with NODE_ENV=production
+  // the function returns 'nativz' (with a console.error) so a single
+  // bad row can't bring down a request path.
+  describe('null / unknown — production soft fallback', () => {
+    beforeEach(() => {
+      vi.stubEnv('NODE_ENV', 'production');
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+    });
+    afterEach(() => {
+      vi.unstubAllEnvs();
+      vi.restoreAllMocks();
+    });
+
+    it('returns "nativz" on null', () => {
+      expect(getBrandFromAgency(null)).toBe('nativz');
+    });
+
+    it('returns "nativz" on unknown values', () => {
+      expect(getBrandFromAgency('mystery-shop')).toBe('nativz');
+    });
+
+    it('logs the bad value via console.error', () => {
+      getBrandFromAgency(null);
+      expect(console.error).toHaveBeenCalled();
+    });
   });
 });
 

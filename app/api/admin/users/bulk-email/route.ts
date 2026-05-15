@@ -4,7 +4,7 @@ import { requireAdmin } from '@/lib/api/require-admin';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendUserEmail } from '@/lib/email/send-user-email';
 import { resolveMergeContext } from '@/lib/email/resolve-merge-context';
-import { detectAgencyFromHostname } from '@/lib/agency/detect';
+import { resolveAgencyForUser } from '@/lib/email/resolve-agency-for-user';
 
 export const maxDuration = 60;
 
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No recipients found' }, { status: 404 });
   }
 
-  const agency = detectAgencyFromHostname(request.headers.get('host') ?? '');
+  const hostname = request.headers.get('host') ?? '';
   const sent: { user_id: string; resend_id: string }[] = [];
   const failed: { user_id: string; error: string }[] = [];
 
@@ -49,6 +49,9 @@ export async function POST(request: NextRequest) {
       email: auth.adminRow.email,
       full_name: auth.adminRow.full_name,
     });
+    // Per-recipient agency: each portal user could belong to a
+    // different client/agency, so we can't hoist this out of the loop.
+    const agency = await resolveAgencyForUser(admin, { userId: recipient.id, hostname });
     const send = await sendUserEmail({
       to: recipient.email,
       subject: parsed.data.subject,
