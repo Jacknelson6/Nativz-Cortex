@@ -199,17 +199,47 @@ async function resolveInstagram(handle: string): Promise<string | null> {
       const json = (await res.json()) as { data?: { user?: { profile_pic_url_hd?: string; profile_pic_url?: string } } };
       const pic = json?.data?.user?.profile_pic_url_hd ?? json?.data?.user?.profile_pic_url;
       if (pic && (await isUsableImage(pic, 256))) return pic;
-      console.warn(`[social-avatar] IG ${cleaned}: 200 ok but no usable pic url (pic=${pic?.slice(0, 80) ?? 'null'})`);
+      console.warn(`[social-avatar] IG ${cleaned}: web_profile_info 200 but no usable pic (pic=${pic?.slice(0, 80) ?? 'null'})`);
     } else {
-      const body = await res.text();
-      console.warn(`[social-avatar] IG ${cleaned}: status=${res.status} body=${body.slice(0, 200)}`);
+      console.warn(`[social-avatar] IG ${cleaned}: web_profile_info status=${res.status}`);
     }
   } catch (err) {
-    console.warn(`[social-avatar] IG ${cleaned}: fetch threw`, err instanceof Error ? err.message : err);
+    console.warn(`[social-avatar] IG ${cleaned}: web_profile_info threw`, err instanceof Error ? err.message : err);
   } finally {
     clearTimeout(timer);
   }
+
+  // Vercel datacenter IPs get blocked or rate-limited from `i.instagram.com`.
+  // The public embed widget (`/{handle}/embed/`) is served to any third-party
+  // origin without auth and contains the profile_pic_url in its inline JSON
+  // (doubly-escaped: `\"profile_pic_url\":\"https:\\/\\/...\"`). Works from
+  // server-side fetches with no special headers.
+  const embed = await resolveInstagramEmbed(cleaned);
+  if (embed) return embed;
+
   return resolveFromOgImage(`https://www.instagram.com/${cleaned}/`);
+}
+
+async function resolveInstagramEmbed(cleanedHandle: string): Promise<string | null> {
+  const res = await fetchWithTimeout(`https://www.instagram.com/${cleanedHandle}/embed/`, 5000);
+  if (!res?.ok) {
+    console.warn(`[social-avatar] IG ${cleanedHandle}: embed status=${res?.status ?? 'null'}`);
+    return null;
+  }
+  const html = await res.text();
+  // The embed JSON-encodes the URL twice: once as a JSON string inside an
+  // HTML <script> tag, so `/` is `\/` after unescaping.
+  const match = html.match(/\\"profile_pic_url\\":\\"([^"\\]+(?:\\.[^"\\]*)*)\\"/);
+  if (!match?.[1]) {
+    console.warn(`[social-avatar] IG ${cleanedHandle}: embed page had no profile_pic_url match`);
+    return null;
+  }
+  const decoded = match[1].replace(/\\u0026/g, '&').replace(/\\\//g, '/');
+  if (!(await isUsableImage(decoded, 256))) {
+    console.warn(`[social-avatar] IG ${cleanedHandle}: embed pic failed isUsableImage (${decoded.slice(0, 80)})`);
+    return null;
+  }
+  return decoded;
 }
 
 /**
