@@ -171,6 +171,12 @@ export interface TopicSearch {
   /** Deduped sources from tool calls */
   research_sources?: ResearchSourceRecord[] | null;
   pipeline_state?: Record<string, unknown> | null;
+  trends_data?: {
+    fetched_at: string;
+    geo: string;
+    timeframe: string;
+    points: Array<{ date: string; value: number; smoothed: number }>;
+  } | null;
 }
 
 // Content pillar for client strategy mode
