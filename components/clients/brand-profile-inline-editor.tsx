@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
-import Image from 'next/image';
-import { Building, Globe, Sparkles, Loader2, Pencil, Check, X } from 'lucide-react';
+import { Globe, Sparkles, Loader2, Pencil, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { ClientLogo } from '@/components/clients/client-logo';
 
 // NAT-57 follow-up — inline edit mode for /brand-profile.
 //
@@ -202,20 +202,12 @@ function HeaderCard({
       )}
 
       <div className="flex items-start gap-4">
-        {profile.logo_url ? (
-          <div className="relative w-16 h-16 rounded-full overflow-hidden border border-white/[0.08] bg-white/[0.04] shrink-0">
-            <Image
-              src={profile.logo_url}
-              alt={`${profile.name ?? 'Brand'} logo`}
-              fill
-              className="object-cover"
-            />
-          </div>
-        ) : (
-          <div className="w-16 h-16 rounded-full border border-white/[0.08] bg-white/[0.04] flex items-center justify-center shrink-0">
-            <Building size={24} className="text-text-muted" />
-          </div>
-        )}
+        <ClientLogo
+          src={profile.logo_url}
+          name={profile.name ?? 'Brand'}
+          size="lg"
+          className="!h-16 !w-16"
+        />
         <div className="flex-1 min-w-0 space-y-3">
           <h1 className="text-2xl font-semibold text-text-primary truncate pr-24">
             {profile.name ?? 'Brand profile'}

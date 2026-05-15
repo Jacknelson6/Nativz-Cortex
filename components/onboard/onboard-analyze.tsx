@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { GlassButton } from '@/components/ui/glass-button';
 import { Button } from '@/components/ui/button';
 import type { OnboardFormData, OnboardSocialSlot } from '@/lib/types/strategy';
+import { ClientLogo } from '@/components/clients/client-logo';
 
 // NAT-57 follow-up: during onboarding we now capture one social slot
 // per platform (Instagram / TikTok / Facebook / YouTube). Auto-
@@ -219,15 +220,16 @@ export function OnboardAnalyze({ name, websiteUrl, onNext, onBack }: OnboardAnal
 
       <Card className="max-w-lg mx-auto">
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Logo preview */}
+          {/* Logo preview — circular per PRD B; ClientLogo renders the
+              Building2 placeholder if the scraped logo_url 404s on hover. */}
           {formData.logo_url && (
             <div className="flex justify-center mb-2">
               <div className="relative group">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <ClientLogo
                   src={formData.logo_url}
-                  alt={`${name} logo`}
-                  className="h-16 w-16 rounded-full object-cover border border-white/[0.08] bg-white/[0.04] shadow-card"
+                  name={name}
+                  size="lg"
+                  className="!h-16 !w-16 shadow-card"
                 />
                 <div className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <Check size={12} className="text-accent" />
