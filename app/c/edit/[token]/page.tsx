@@ -36,6 +36,7 @@ import {
   readGuestName,
   clearGuestName,
 } from '@/components/share/gateway-modal';
+import { RoleChip } from '@/components/share/role-chip';
 
 const EDIT_TOUR_STORAGE_KEY = 'cortex.share.editTourSeen';
 
@@ -84,6 +85,10 @@ interface SharedComment {
   share_link_id: string | null;
   author_name: string;
   author_user_id: string | null;
+  // PRD 05: server-enforced role tag (admin | viewer | guest). Falls back
+  // to 'guest' for pre-migration rows so the chip never renders for
+  // historical comments that predate the role column.
+  author_role: 'admin' | 'viewer' | 'guest';
   content: string;
   status: SharedCommentStatus;
   attachments: CommentAttachment[];
@@ -1156,6 +1161,9 @@ function VideoCard({
       share_link_id: null,
       author_name: trimmedAuthor,
       author_user_id: null,
+      // PRD 05: server derives the real role from the session. Local row
+      // stays 'guest' so RoleChip renders nothing until the real row lands.
+      author_role: 'guest',
       content: resolvedContent,
       // Local intent; server may auto-upgrade changes_requested → approved
       // and we reconcile when the real row lands.
@@ -2043,6 +2051,7 @@ function CommentRow({
         <div className="flex items-center gap-2 text-[13px]">
           <Icon size={12} className={tone} />
           <span className="font-medium text-text-primary">{comment.author_name}</span>
+          <RoleChip role={comment.author_role} />
           <span className="text-text-muted">
             {comment.content || 're-uploaded the video'} · {time}
           </span>
@@ -2092,6 +2101,7 @@ function CommentRow({
       <div className="mb-1 flex items-center gap-2 text-[13px]">
         <Icon size={12} className={tone} />
         <span className="font-medium text-text-primary">{comment.author_name}</span>
+        <RoleChip role={comment.author_role} />
         <span className="text-text-muted">
           · {trailingMeta}
           {time}

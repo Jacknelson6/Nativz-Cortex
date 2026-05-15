@@ -115,6 +115,7 @@ interface CommentRow {
   id: string;
   review_link_id: string;
   author_name: string;
+  author_role: 'admin' | 'viewer' | 'guest' | null;
   content: string;
   status: CommentStatus;
   created_at: string;
@@ -360,7 +361,7 @@ async function handleShareGet(
   const { data: comments } = reviewLinkIds.length
     ? await admin
         .from('post_review_comments')
-        .select('id, review_link_id, author_name, content, status, created_at, attachments, caption_before, caption_after, metadata, timestamp_seconds, parent_comment_id')
+        .select('id, review_link_id, author_name, author_role, content, status, created_at, attachments, caption_before, caption_after, metadata, timestamp_seconds, parent_comment_id')
         .in('review_link_id', reviewLinkIds)
         .order('created_at', { ascending: true })
     : { data: [] as CommentRow[] };
@@ -492,6 +493,7 @@ async function handleShareGet(
           id: c.id,
           review_link_id: c.review_link_id,
           author_name: c.author_name,
+          author_role: c.author_role ?? 'guest',
           content: c.content,
           status: c.status,
           created_at: c.created_at,

@@ -1,6 +1,7 @@
 import { NextResponse, after } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getShareContextOrNull, resolveBoundIdentity } from '@/lib/share/identity';
 import { createNotification } from '@/lib/notifications/create';
 import {
   buildChatCard,
@@ -275,9 +276,34 @@ export async function POST(
       ? parsed.data.timestampSeconds ?? null
       : null;
 
-  // PRD 01: kind separates author intent from lifecycle. status stays for v1
-  // read paths until PRD 09 cutover; kind is the new source of truth.
-  const insertKind:
+  // PRD 05: derive `author_role` + `author_user_id` from the bound session
+  // (not the client). admins / super_admins → 'admin'; matching viewers →
+  // 'viewer'; everything else (no session, wrong agency, anonymous) →
+  // 'guest'. video_revised events stay admin-authored by construction.
+  const shareContext = await getShareContextOrNull(token);
+  let authorRole: 'admin' | 'viewer' | 'guest' = 'guest';
+  let authorUserId: string | null = null;
+  if (shareContext) {
+    const { identity } = await resolveBoundIdentity(shareContext);
+    if (identity) {
+      authorUserId = identity.userId;
+      authorRole =
+        identity.role === 'admin' || identity.role === 'super_admin'
+          ? 'admin'
+          : identity.role === 'viewer'
+            ? 'viewer'
+            : 'guest';
+    }
+  }
+
+  // PRD 01 + 05: kind separates author intent from lifecycle. status stays
+  // for v1 read paths until PRD 09 cutover; kind is the new source of truth.
+  // Admin-authored plain comments flip to `admin_response` so the thread
+  // renders them as team replies and downstream consumers can split admin
+  // vs client traffic cheaply. Approvals / revisions / video_revised keep
+  // their status-derived kind regardless of author — those are state
+  // transitions, not free-form messages.
+  const baseKind:
     | 'revision'
     | 'feedback'
     | 'approval'
@@ -289,6 +315,13 @@ export async function POST(
         : finalStatus === 'video_revised'
           ? 'video_revised'
           : 'feedback';
+  const insertKind:
+    | 'revision'
+    | 'feedback'
+    | 'approval'
+    | 'video_revised'
+    | 'admin_response' =
+    authorRole === 'admin' && baseKind === 'feedback' ? 'admin_response' : baseKind;
 
   const { data: inserted, error } = await admin
     .from('editing_project_review_comments')
@@ -297,6 +330,8 @@ export async function POST(
       video_id: parsed.data.videoId ?? null,
       share_link_id: link.id,
       author_name: parsed.data.authorName.trim(),
+      author_user_id: authorUserId,
+      author_role: authorRole,
       content: trimmedContent,
       status: finalStatus,
       kind: insertKind,
@@ -305,7 +340,7 @@ export async function POST(
       timestamp_seconds: timestampSeconds,
     })
     .select(
-      'id, video_id, share_link_id, author_name, author_user_id, content, status, kind, attachments, metadata, timestamp_seconds, created_at',
+      'id, video_id, share_link_id, author_name, author_user_id, author_role, content, status, kind, attachments, metadata, timestamp_seconds, created_at',
     )
     .single();
   if (error || !inserted) {

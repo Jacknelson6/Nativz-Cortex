@@ -1,6 +1,7 @@
 import { NextResponse, after } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getShareContextOrNull, resolveBoundIdentity } from '@/lib/share/identity';
 import { createNotification } from '@/lib/notifications/create';
 import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
 import { reschedulePastDueDrafts } from '@/lib/calendar/reschedule-past-due';
@@ -180,11 +181,38 @@ export async function POST(
   // Clients should never see a "you're out of edited videos" pop-up. Approvals
   // always write through; over-scope accounting stays an internal concern.
 
-  // PRD 01: derive `kind` from status + reply state. Replies are always
-  // feedback (you reply to a revision, you don't open a new one). Top-level
-  // rows map status → kind one-to-one. PRD 05 will swap in admin_response
-  // when the author resolves to an authenticated admin.
-  const insertKind: 'revision' | 'feedback' | 'approval' =
+  // PRD 05: derive `author_role` + `author_user_id` from the bound session
+  // (not from the client). The client cannot influence its own role tag.
+  //  - admin / super_admin → 'admin'
+  //  - viewer with matching org → 'viewer'
+  //  - everyone else (no session, wrong agency, anonymous) → 'guest'
+  //
+  // Wrong-agency sessions silently fall through to 'guest' on the comment
+  // surface; the gateway is where mismatches surface to the user. PRD 02.
+  const shareContext = await getShareContextOrNull(token);
+  let authorRole: 'admin' | 'viewer' | 'guest' = 'guest';
+  let authorUserId: string | null = null;
+  if (shareContext) {
+    const { identity } = await resolveBoundIdentity(shareContext);
+    if (identity) {
+      authorUserId = identity.userId;
+      authorRole =
+        identity.role === 'admin' || identity.role === 'super_admin'
+          ? 'admin'
+          : identity.role === 'viewer'
+            ? 'viewer'
+            : 'guest';
+    }
+  }
+
+  // PRD 01 + 05: top-level rows map status → kind one-to-one *unless* the
+  // author is an authenticated admin posting a plain comment, in which case
+  // kind flips to `admin_response` so the thread renders it as a team reply
+  // (and downstream consumers can split admin vs client traffic cheaply).
+  // Replies are always feedback / admin_response depending on author.
+  // Approval / revision rows keep their status-derived kind regardless of
+  // author — those are state transitions, not free-form messages.
+  const baseKind: 'revision' | 'feedback' | 'approval' =
     parentCommentId !== null
       ? 'feedback'
       : persistedStatus === 'changes_requested'
@@ -192,12 +220,16 @@ export async function POST(
         : persistedStatus === 'approved'
           ? 'approval'
           : 'feedback';
+  const insertKind: 'revision' | 'feedback' | 'approval' | 'admin_response' =
+    authorRole === 'admin' && baseKind === 'feedback' ? 'admin_response' : baseKind;
 
   const { data, error } = await admin
     .from('post_review_comments')
     .insert({
       review_link_id: reviewLinkId,
       author_name: parsed.data.authorName.trim(),
+      author_user_id: authorUserId,
+      author_role: authorRole,
       content: trimmedContent,
       status: persistedStatus,
       kind: insertKind,
@@ -206,7 +238,7 @@ export async function POST(
       timestamp_seconds: timestampSeconds,
       parent_comment_id: parentCommentId,
     })
-    .select('id, review_link_id, author_name, content, status, kind, created_at, attachments, metadata, timestamp_seconds, parent_comment_id')
+    .select('id, review_link_id, author_name, author_user_id, author_role, content, status, kind, created_at, attachments, metadata, timestamp_seconds, parent_comment_id')
     .single();
   if (error || !data) {
     return NextResponse.json({ error: error?.message ?? 'failed' }, { status: 500 });

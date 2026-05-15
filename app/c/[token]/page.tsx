@@ -28,6 +28,7 @@ import {
   readGuestName,
   clearGuestName,
 } from '@/components/share/gateway-modal';
+import { RoleChip } from '@/components/share/role-chip';
 
 const CALENDAR_TOUR_STORAGE_KEY = 'cortex.share.calendarTourSeen';
 import { mergeCaptionAndHashtags } from '@/lib/scheduler/caption-hashtags';
@@ -60,6 +61,9 @@ interface SharedComment {
   id: string;
   review_link_id: string;
   author_name: string;
+  // PRD 05: server-enforced role tag. Drives the team/client/guest chip on
+  // every comment row. Falls back to 'guest' for pre-migration rows.
+  author_role: 'admin' | 'viewer' | 'guest';
   content: string;
   status: SharedCommentStatus;
   created_at: string;
@@ -2576,6 +2580,11 @@ function PostCard({
       id: tempId,
       review_link_id: '',
       author_name: trimmedAuthor,
+      // Server resolves the real role from the session; optimistic row
+      // stays 'guest' so the chip doesn't pre-promote. RoleChip renders
+      // nothing for guest, so the only flicker is the chip popping in
+      // once the real row replaces the temp on success.
+      author_role: 'guest',
       content: resolvedContent,
       // Reflect the user's intent locally; the server may auto-upgrade
       // changes_requested → approved on its side, which we reconcile when
@@ -4002,6 +4011,7 @@ function CommentRow({
         <div className="mb-1 flex items-center gap-2 text-[13px]">
           <Icon size={12} className={tone} />
           <span className="font-medium text-text-primary">{comment.author_name}</span>
+          <RoleChip role={comment.author_role} />
           <span className="text-text-muted">edited the caption · {time}</span>
           {headerDeleteButton}
         </div>
@@ -4033,6 +4043,7 @@ function CommentRow({
         <div className="flex items-center gap-2 text-[13px]">
           <Icon size={12} className={tone} />
           <span className="font-medium text-text-primary">{comment.author_name}</span>
+          <RoleChip role={comment.author_role} />
           <span className="text-text-muted">{comment.content || activityVerb(comment.status)} · {time}</span>
           {headerDeleteButton}
         </div>
@@ -4053,6 +4064,7 @@ function CommentRow({
         <div className="mb-2 flex items-center gap-2 text-[13px]">
           <Icon size={12} className={tone} />
           <span className="font-medium text-text-primary">{comment.author_name}</span>
+          <RoleChip role={comment.author_role} />
           <span className="text-text-muted">
             {after ? 'updated the cover photo' : 'reset the cover photo'} · {time}
           </span>
@@ -4122,6 +4134,7 @@ function CommentRow({
         <div className="mb-1 flex items-center gap-2 text-[13px]">
           <Icon size={12} className={tone} />
           <span className="font-medium text-text-primary">{comment.author_name}</span>
+          <RoleChip role={comment.author_role} />
           <span className="text-text-muted">· {trailingMeta}{time}</span>
           {timestampPill}
           {headerDeleteButton}

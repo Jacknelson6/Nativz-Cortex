@@ -44,6 +44,7 @@ interface CommentRow {
   share_link_id: string | null;
   author_name: string;
   author_user_id: string | null;
+  author_role: 'admin' | 'viewer' | 'guest' | null;
   content: string;
   status: CommentStatus;
   attachments: CommentAttachment[] | null;
@@ -126,7 +127,7 @@ export async function GET(
       admin
         .from('editing_project_review_comments')
         .select(
-          'id, video_id, share_link_id, author_name, author_user_id, content, status, attachments, metadata, timestamp_seconds, created_at',
+          'id, video_id, share_link_id, author_name, author_user_id, author_role, content, status, attachments, metadata, timestamp_seconds, created_at',
         )
         .eq('project_id', link.project_id)
         .order('created_at', { ascending: true }),
