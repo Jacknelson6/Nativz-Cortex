@@ -161,7 +161,7 @@ export function ViewsOverTime({ searchId, shareToken, videos }: ViewsOverTimePro
                 className="h-2 w-2 rounded-full"
                 style={{ background: 'var(--accent)' }}
               />
-              Google Trends{stale ? ', cached' : ''}
+              Trend data{stale ? ', cached' : ''}
             </span>
           </div>
         )}
@@ -169,8 +169,8 @@ export function ViewsOverTime({ searchId, shareToken, videos }: ViewsOverTimePro
 
       {error ? (
         <EmptyTrendsState
-          headline="Couldn't load Google Trends for this query"
-          body="The Trends endpoint didn't return a usable response. We'll try again the next time this search is opened."
+          headline="Couldn't load trend data for this query"
+          body="The trend data source didn't return a usable response. We'll try again the next time this search is opened."
         />
       ) : chartData.length > 0 ? (
         <div className="animate-fade-in" style={{ color: 'var(--accent)' }}>
@@ -266,7 +266,7 @@ export function ViewsOverTime({ searchId, shareToken, videos }: ViewsOverTimePro
       ) : (
         <EmptyTrendsState
           headline="Not enough search volume to chart"
-          body="Google Trends only returns a signal for topics with broad public search interest. Try a more general query if you want a demand line here."
+          body="Trend data only surfaces for topics with broad public search interest. Try a more general query if you want a demand line here."
         />
       )}
     </Card>
