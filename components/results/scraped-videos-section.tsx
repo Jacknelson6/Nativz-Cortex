@@ -91,7 +91,7 @@ export function ScrapedVideosSection({
       <OutlierCreatorsTable videos={videos} />
       <HookPatterns hooks={hooks} />
       <HashtagCloud videos={videos} />
-      <ViewsOverTime searchId={searchId} shareToken={shareToken} />
+      <ViewsOverTime searchId={searchId} shareToken={shareToken} videos={videos} />
       {webContext && (
         <WebContextSection
           serpResults={webContext.serp_results ?? []}

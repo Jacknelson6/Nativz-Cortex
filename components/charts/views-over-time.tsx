@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Area,
+  Bar,
   ComposedChart,
   Line,
   ResponsiveContainer,
@@ -12,6 +13,8 @@ import {
 } from 'recharts';
 import { TrendingUp } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import { formatNumber } from '@/lib/utils/format';
+import type { TopicSearchVideoRow } from '@/lib/scrapers/types';
 
 interface TrendsPoint {
   date: string;
@@ -33,9 +36,31 @@ interface TrendsResponse {
 interface ViewsOverTimeProps {
   searchId: string;
   shareToken?: string;
+  /**
+   * Optional, when provided we layer a faint "supply" series (count of new
+   * videos uploaded per day) behind the Google Trends demand line.
+   */
+  videos?: TopicSearchVideoRow[];
 }
 
-export function ViewsOverTime({ searchId, shareToken }: ViewsOverTimeProps) {
+interface MergedPoint {
+  date: string;
+  interest: number | null;
+  videoCount: number | null;
+}
+
+function smoothCounts(counts: { date: string; count: number }[], window = 7) {
+  if (counts.length === 0) return counts.map((c) => ({ ...c, smoothed: 0 }));
+  return counts.map((c, i) => {
+    const start = Math.max(0, i - Math.floor(window / 2));
+    const end = Math.min(counts.length, i + Math.ceil(window / 2));
+    const slice = counts.slice(start, end);
+    const avg = slice.reduce((s, w) => s + w.count, 0) / slice.length;
+    return { ...c, smoothed: Math.round(avg * 10) / 10 };
+  });
+}
+
+export function ViewsOverTime({ searchId, shareToken, videos }: ViewsOverTimeProps) {
   const [points, setPoints] = useState<TrendsPoint[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +98,36 @@ export function ViewsOverTime({ searchId, shareToken }: ViewsOverTimeProps) {
     };
   }, [searchId, shareToken]);
 
-  const chartData = useMemo(() => points ?? [], [points]);
+  const videoSupplyByDate = useMemo(() => {
+    if (!videos || videos.length === 0) return new Map<string, number>();
+    const counts = new Map<string, number>();
+    for (const v of videos) {
+      if (!v.publish_date) continue;
+      const day = v.publish_date.slice(0, 10);
+      counts.set(day, (counts.get(day) ?? 0) + 1);
+    }
+    const sorted = Array.from(counts.entries())
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const smoothed = smoothCounts(sorted, 7);
+    return new Map(smoothed.map((p) => [p.date, p.smoothed]));
+  }, [videos]);
+
+  const chartData = useMemo<MergedPoint[]>(() => {
+    const trendsPoints = points ?? [];
+    if (trendsPoints.length === 0) return [];
+    return trendsPoints.map((p) => ({
+      date: p.date,
+      interest: p.smoothed,
+      videoCount: videoSupplyByDate.get(p.date) ?? null,
+    }));
+  }, [points, videoSupplyByDate]);
+
+  const hasSupply = videoSupplyByDate.size > 0;
+  const maxSupply = useMemo(() => {
+    if (!hasSupply) return 0;
+    return Math.max(...Array.from(videoSupplyByDate.values()));
+  }, [videoSupplyByDate, hasSupply]);
 
   if (loading) return <ViewsOverTimeSkeleton />;
 
@@ -92,9 +146,21 @@ export function ViewsOverTime({ searchId, shareToken }: ViewsOverTimeProps) {
             Search interest over time
           </h3>
         </div>
-        <span className="text-xs text-text-muted">
-          Google Trends, last 90 days{stale ? ', cached' : ''}
-        </span>
+        <div className="flex items-center gap-3 text-xs text-text-muted">
+          {hasSupply && (
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-text-muted/40" />
+              Videos per day
+            </span>
+          )}
+          <span className="flex items-center gap-1.5">
+            <span
+              className="h-2 w-2 rounded-full"
+              style={{ background: 'var(--accent)' }}
+            />
+            Google Trends{stale ? ', cached' : ''}
+          </span>
+        </div>
       </div>
 
       {error ? (
@@ -121,6 +187,7 @@ export function ViewsOverTime({ searchId, shareToken }: ViewsOverTimeProps) {
                 minTickGap={32}
               />
               <YAxis
+                yAxisId="interest"
                 tick={{ fill: '#64748b', fontSize: 11 }}
                 tickLine={false}
                 axisLine={false}
@@ -128,6 +195,20 @@ export function ViewsOverTime({ searchId, shareToken }: ViewsOverTimeProps) {
                 domain={[0, 100]}
                 tickFormatter={(v: number) => String(v)}
               />
+              {hasSupply && (
+                <YAxis
+                  yAxisId="supply"
+                  orientation="right"
+                  tick={{ fill: '#64748b', fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={36}
+                  domain={[0, Math.max(4, Math.ceil(maxSupply * 1.2))]}
+                  tickFormatter={(v: number) =>
+                    v >= 1000 ? `${(v / 1000).toFixed(0)}k` : formatNumber(v)
+                  }
+                />
+              )}
               <Tooltip
                 contentStyle={{
                   backgroundColor: '#1a1d2e',
@@ -138,26 +219,41 @@ export function ViewsOverTime({ searchId, shareToken }: ViewsOverTimeProps) {
                   color: '#f1f5f9',
                 }}
                 labelStyle={{ color: '#f1f5f9', fontWeight: 600, marginBottom: 4 }}
-                formatter={(value, name) => [
-                  `${Math.round(Number(value))}`,
-                  name === 'smoothed' ? 'Interest (smoothed)' : 'Interest',
-                ]}
+                formatter={(value, name) => {
+                  if (value === null || value === undefined) return ['—', name];
+                  if (name === 'interest') return [Math.round(Number(value)), 'Search interest'];
+                  if (name === 'videoCount') return [Math.round(Number(value) * 10) / 10, 'Videos per day'];
+                  return [String(value), name];
+                }}
               />
+              {hasSupply && (
+                <Bar
+                  yAxisId="supply"
+                  dataKey="videoCount"
+                  fill="#64748b"
+                  fillOpacity={0.18}
+                  name="videoCount"
+                  isAnimationActive={false}
+                />
+              )}
               <Area
+                yAxisId="interest"
                 type="monotone"
-                dataKey="smoothed"
+                dataKey="interest"
                 stroke="none"
                 fill="url(#trends-ot-gradient)"
                 tooltipType="none"
               />
               <Line
+                yAxisId="interest"
                 type="monotone"
-                dataKey="smoothed"
+                dataKey="interest"
                 stroke="currentColor"
                 strokeWidth={2.5}
                 dot={false}
                 activeDot={{ r: 5, fill: 'currentColor', stroke: '#1a1d2e', strokeWidth: 2 }}
-                name="smoothed"
+                name="interest"
+                connectNulls
               />
             </ComposedChart>
           </ResponsiveContainer>
@@ -183,7 +279,7 @@ export function ViewsOverTimeSkeleton() {
           <div className="h-[18px] w-[18px] animate-pulse rounded bg-surface-hover" />
           <div className="h-5 w-44 animate-pulse rounded bg-surface-hover" />
         </div>
-        <div className="h-3 w-32 animate-pulse rounded bg-surface-hover" />
+        <div className="h-3 w-40 animate-pulse rounded bg-surface-hover" />
       </div>
       <div className="flex h-[200px] gap-2">
         <div className="flex w-9 flex-col justify-between py-2">
