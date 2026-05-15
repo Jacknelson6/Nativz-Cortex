@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
  *
  * PRD 06: admin-only soft-delete from a share link's visible set.
  * The underlying `content_drops` row + `scheduled_posts` row stay
- * intact — we only mutate the link's `included_post_ids` array and
+ * intact, we only mutate the link's `included_post_ids` array and
  * scrub the matching key from `post_review_link_map`. Same post can
  * still appear on sibling share links untouched.
  *
@@ -66,7 +66,7 @@ export async function DELETE(
   // Standing invariant: an unapproved post that's still scheduled cannot
   // be allowed to publish. Pull its current state and clear scheduled_at
   // if it's both future-dated and not approved. We do NOT touch approved
-  // posts — those are still active on whatever other share links carry
+  // posts, those are still active on whatever other share links carry
   // them, and the operator's intent is "hide from this link," not "kill
   // the publish."
   const { data: post } = await admin

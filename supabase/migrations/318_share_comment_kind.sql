@@ -22,7 +22,7 @@ ALTER TABLE editing_project_review_comments
     CHECK (kind IN ('revision', 'feedback', 'admin_response', 'approval', 'video_revised'));
 
 -- Backfill from legacy `status`. Reply rows (parent_comment_id IS NOT NULL)
--- always read as feedback regardless of stored status — the calendar route
+-- always read as feedback regardless of stored status, the calendar route
 -- already forces status='comment' on replies, but the editing table doesn't
 -- have that guarantee historically so the reply check is explicit here.
 UPDATE post_review_comments

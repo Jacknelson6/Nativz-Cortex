@@ -32,15 +32,15 @@ This set of PRDs reframes share links as a real review surface:
 
 Build in order. Each PRD is shippable in isolation behind the `share_link_comments_v2` flag until PRD 09 flips it on.
 
-1. [prd-share-comments-01-comment-types.md](prd-share-comments-01-comment-types.md) — Rename request changes to comments. Add `kind` column. Backfill.
-2. [prd-share-comments-02-auth-gateway.md](prd-share-comments-02-auth-gateway.md) — Replace name prompt with login-or-guest modal.
-3. [prd-share-comments-03-guest-mode.md](prd-share-comments-03-guest-mode.md) — Guest display name capture and session persistence.
-4. [prd-share-comments-04-modal-login.md](prd-share-comments-04-modal-login.md) — In-page agency-scoped login modal.
-5. [prd-share-comments-05-identity-model.md](prd-share-comments-05-identity-model.md) — `author_role` on comments and server-side enforcement.
-6. [prd-share-comments-06-admin-controls.md](prd-share-comments-06-admin-controls.md) — Admin operator controls on the share page.
-7. [prd-share-comments-07-thread-parity.md](prd-share-comments-07-thread-parity.md) — Shared thread component across calendar and editing share pages.
-8. [prd-share-comments-08-notifications.md](prd-share-comments-08-notifications.md) — Single notification dispatcher with an event matrix.
-9. [prd-share-comments-09-rollout-qa.md](prd-share-comments-09-rollout-qa.md) — Feature flag, migrations, soak, full acceptance matrix.
+1. [prd-share-comments-01-comment-types.md](prd-share-comments-01-comment-types.md), Rename request changes to comments. Add `kind` column. Backfill.
+2. [prd-share-comments-02-auth-gateway.md](prd-share-comments-02-auth-gateway.md), Replace name prompt with login-or-guest modal.
+3. [prd-share-comments-03-guest-mode.md](prd-share-comments-03-guest-mode.md), Guest display name capture and session persistence.
+4. [prd-share-comments-04-modal-login.md](prd-share-comments-04-modal-login.md), In-page agency-scoped login modal.
+5. [prd-share-comments-05-identity-model.md](prd-share-comments-05-identity-model.md), `author_role` on comments and server-side enforcement.
+6. [prd-share-comments-06-admin-controls.md](prd-share-comments-06-admin-controls.md), Admin operator controls on the share page.
+7. [prd-share-comments-07-thread-parity.md](prd-share-comments-07-thread-parity.md), Shared thread component across calendar and editing share pages.
+8. [prd-share-comments-08-notifications.md](prd-share-comments-08-notifications.md), Single notification dispatcher with an event matrix.
+9. [prd-share-comments-09-rollout-qa.md](prd-share-comments-09-rollout-qa.md), Feature flag, migrations, soak, full acceptance matrix.
 
 ## Touchpoint inventory (current state)
 

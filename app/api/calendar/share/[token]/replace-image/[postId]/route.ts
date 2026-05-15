@@ -17,14 +17,14 @@ import { logShareAdminAction } from '@/lib/share/audit';
  *
  * Single-image posts only (the most common case from the calendar share
  * screen). Multi-asset carousels need a per-asset selector before we can
- * support them here — out of scope for the initial ship.
+ * support them here, out of scope for the initial ship.
  *
  * Request: multipart/form-data with a single `file` field (JPEG/PNG/WebP).
  * Response: 200 { url } on success.
  */
 
 const ALLOWED_IMAGE_PREFIXES = ['image/'];
-const MAX_BYTES = 25 * 1024 * 1024; // 25 MB — same cap as the comment-attachment uploader.
+const MAX_BYTES = 25 * 1024 * 1024; // 25 MB, same cap as the comment-attachment uploader.
 
 export async function POST(
   req: Request,
@@ -53,7 +53,7 @@ export async function POST(
     return NextResponse.json({ error: 'post is not part of this share link' }, { status: 400 });
   }
 
-  // Validate request body — multipart with a single image file.
+  // Validate request body, multipart with a single image file.
   const form = await req.formData().catch(() => null);
   const file = form?.get('file');
   if (!(file instanceof File)) {
@@ -68,7 +68,7 @@ export async function POST(
   }
 
   // Locate the drop_video + asset the share viewer is showing for this post.
-  // Single-image posts only — bail early on carousels so we don't silently
+  // Single-image posts only, bail early on carousels so we don't silently
   // overwrite the wrong frame. The viewer's UI hides Replace for carousels,
   // so this is just a defensive guard.
   const { data: video } = await admin
@@ -93,7 +93,7 @@ export async function POST(
   }
   if (assetRows.length > 1) {
     return NextResponse.json(
-      { error: 'carousel replace is not supported yet — replace individual frames in the editor' },
+      { error: 'carousel replace is not supported yet, replace individual frames in the editor' },
       { status: 400 },
     );
   }

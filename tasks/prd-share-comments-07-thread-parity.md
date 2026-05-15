@@ -64,7 +64,7 @@ If a thread exceeds 50 comments, show the latest 20 with "load earlier comments.
 
 ## Migration
 
-Add `deleted_at timestamptz null` to both comment tables. Hide rows with `deleted_at is not null` from the thread. Admins can see a "deleted" placeholder if useful, behind a toggle ("show deleted") — optional, do not block on this.
+Add `deleted_at timestamptz null` to both comment tables. Hide rows with `deleted_at is not null` from the thread. Admins can see a "deleted" placeholder if useful, behind a toggle ("show deleted"), optional, do not block on this.
 
 ## Acceptance
 

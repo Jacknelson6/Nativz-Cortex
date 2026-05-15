@@ -8,7 +8,7 @@
  *                       client)
  *  - viewer → "Client" (cool tint; an authenticated client-side user)
  *  - guest  → omitted  (no chip; guest comments already read as "someone
- *                       from the client side typed a name and posted" — a
+ *                       from the client side typed a name and posted", a
  *                       label here adds noise without adding signal)
  *
  * The chip is decorative, not interactive. Keep it small enough to nest in

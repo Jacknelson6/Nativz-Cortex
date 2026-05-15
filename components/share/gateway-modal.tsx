@@ -102,7 +102,7 @@ export function ShareGatewayModal({
               );
             } catch {
               // PRD 03 §"Edge cases": localStorage blocked falls back to
-              // in-memory only — no surfacing, the parent still gets the
+              // in-memory only, no surfacing, the parent still gets the
               // name and the session works for this tab.
             }
             onGuestNamed(name);

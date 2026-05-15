@@ -1,5 +1,5 @@
 -- ============================================================================
--- 321: Share-link comments v2 — per-organization feature flag (PRD 09)
+-- 321: Share-link comments v2, per-organization feature flag (PRD 09)
 --
 -- Adds `feature_flags jsonb` to organizations so the share-comments v2 stack
 -- (auth gateway, identity model, admin operator controls, dispatcher) has a

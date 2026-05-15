@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
  * uses this to populate both the inline slash menu (typing "/") and the
  * Commands catalog popover in the chat header.
  *
- * Skill-based commands expose minimal metadata — the full content + prompt
+ * Skill-based commands expose minimal metadata, the full content + prompt
  * template stays server-side and is applied when /<slug> is invoked through
  * the chat pipeline.
  */

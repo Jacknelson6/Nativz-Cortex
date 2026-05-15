@@ -174,7 +174,7 @@ async function loadProjectChatContext(
       ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
       : getCortexAppUrl(brand);
   // Per-client webhook first, agency misc-catchall second. Client-comment
-  // notifications never fall back to OPS — that space is reserved for
+  // notifications never fall back to OPS, that space is reserved for
   // system-level alerts. Brands without their own webhook AND no agency
   // catchall silently no-op.
   const webhookUrl = await resolveTeamChatWebhook(admin, {
@@ -242,7 +242,7 @@ export async function POST(
   const link = linkResult.link;
 
   // If a video id is supplied, make sure it actually belongs to this
-  // project — otherwise a malicious client could pin comments onto
+  // project, otherwise a malicious client could pin comments onto
   // someone else's videos by guessing UUIDs.
   if (parsed.data.videoId) {
     const { data: video } = await admin
@@ -302,7 +302,7 @@ export async function POST(
   // Admin-authored plain comments flip to `admin_response` so the thread
   // renders them as team replies and downstream consumers can split admin
   // vs client traffic cheaply. Approvals / revisions / video_revised keep
-  // their status-derived kind regardless of author — those are state
+  // their status-derived kind regardless of author, those are state
   // transitions, not free-form messages.
   const baseKind:
     | 'revision'
@@ -392,7 +392,7 @@ export async function POST(
   // Notify Jack (admin) so they can pull up the project. Mirrors the
   // calendar share notification pattern, minus the Monday + Zernio
   // legs that don't apply here. We skip notifications for the
-  // synthesised `video_revised` audit row — that event is always
+  // synthesised `video_revised` audit row, that event is always
   // authored by an admin who's already on the page.
   if (finalStatus !== 'video_revised') {
     after(async () => {
@@ -461,7 +461,7 @@ export async function POST(
       // NAT-66: paid-media ping fires INDEPENDENTLY of the strategy chat
       // path above. A brand can have a paid-media webhook set without
       // having a strategy webhook (or vice-versa), and the ads team alert
-      // must NOT be silenced when `editing_all_approved_chat` is off —
+      // must NOT be silenced when `editing_all_approved_chat` is off , 
       // that setting governs strategy-chat noise, not the ads handoff.
       // Gated solely by the all-approved claim winner so we don't double-
       // post on concurrent approvals.
@@ -547,7 +547,7 @@ async function postEditingChatForComment(args: {
           widgets: [
             {
               type: 'text',
-              text: `Client approved every ${noun.singular} in this project. It's marked done — no team action needed.`,
+              text: `Client approved every ${noun.singular} in this project. It's marked done, no team action needed.`,
             },
             {
               type: 'button',
@@ -558,7 +558,7 @@ async function postEditingChatForComment(args: {
           ],
         },
       ],
-      fallbackText: `🎉 ${clientName} · ${projectName} — client approved every ${noun.singular}. ${shareUrl}`,
+      fallbackText: `🎉 ${clientName} · ${projectName}, client approved every ${noun.singular}. ${shareUrl}`,
     }),
     `editing-all-approved ${args.link.id}`,
   );
@@ -567,7 +567,7 @@ async function postEditingChatForComment(args: {
 /**
  * NAT-66: paid-media (ads team) ping for the all-approved claim winner.
  *
- * Standalone from `postEditingChatForComment` on purpose — the strategy
+ * Standalone from `postEditingChatForComment` on purpose, the strategy
  * chat path can be silenced (no webhook, or `editing_all_approved_chat`
  * disabled) without killing the ads handoff. Brands can configure
  * paid-media + strategy chat independently.
@@ -605,7 +605,7 @@ async function pingPaidMediaForEditingApproval(args: {
     process.env.NODE_ENV !== 'production'
       ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
       : getCortexAppUrl(brand);
-  // Paid-media team jumps straight into the dedicated download grid — they
+  // Paid-media team jumps straight into the dedicated download grid, they
   // only need the final cuts, not the comment thread or revision history.
   const downloadUrl = `${appUrl}/c/edit/${args.token}/download`;
 
@@ -694,7 +694,7 @@ export async function DELETE(
     // The project may have been rolled up to 'approved' when this
     // comment landed. Revert it back to 'need_approval' so the review
     // board pill stays accurate. Skip if the project was manually moved
-    // forward (revising/done/archived) — reverting those would unwind
+    // forward (revising/done/archived), reverting those would unwind
     // legitimate state.
     await admin
       .from('editing_projects')
@@ -933,7 +933,7 @@ async function notifyAdminsOfComment(
   const linkPath = `/admin/editing?project=${project.id}`;
 
   // PRD 08: fan out to every admin user (matches calendar parity). Was
-  // previously Jack-only — left other editors without an in-app ping
+  // previously Jack-only, left other editors without an in-app ping
   // unless they happened to be in the right Google Chat space.
   const { data: adminUsers } = await admin
     .from('users')

@@ -41,11 +41,11 @@ const BodySchema = z
     authorName: z.string().min(1).max(80),
     // Content can be empty when the user is submitting attachment-only
     // feedback ("here's a reference image, no notes needed"). The refine
-    // below enforces that *something* is present — either text or files.
+    // below enforces that *something* is present, either text or files.
     content: z.string().max(2000).default(''),
     status: z.enum(['approved', 'changes_requested', 'comment']),
     attachments: z.array(AttachmentSchema).max(10).optional(),
-    // Optional anchor — when present, the player will seek here on click.
+    // Optional anchor, when present, the player will seek here on click.
     // Capped at 24h to keep the column NUMERIC(10,3) safe and stay within
     // sane short-form video bounds. Negative values rejected.
     timestampSeconds: z.number().min(0).max(86400).nullable().optional(),
@@ -120,7 +120,7 @@ export async function POST(
   const finalStatus: 'approved' | 'changes_requested' | 'comment' = submittedStatus;
   const insertMetadata: Record<string, unknown> = {};
 
-  // Only honor a timestamp on plain comments and change requests — anchoring
+  // Only honor a timestamp on plain comments and change requests, anchoring
   // an "approved" stamp to a specific moment doesn't carry meaning.
   const timestampSeconds =
     finalStatus === 'comment' || finalStatus === 'changes_requested'
@@ -131,11 +131,11 @@ export async function POST(
   //   1. Live under the same review_link_id as this share-link post
   //      (prevents threading a reply onto a different client's calendar
   //      via a leaked id).
-  //   2. Be top-level themselves (no replies-to-replies — one level deep
+  //   2. Be top-level themselves (no replies-to-replies, one level deep
   //      keeps the UI tractable and dodges runaway nesting).
   //   3. Carry "comment" status. Approvals / change-requests / caption
   //      edits etc. are audit-trail rows, not conversation roots.
-  //   4. Themselves carry status "comment" — replies are conversation,
+  //   4. Themselves carry status "comment", replies are conversation,
   //      not approvals, so we always store them as plain comments
   //      regardless of what the client submitted.
   let parentCommentId: string | null = null;
@@ -212,7 +212,7 @@ export async function POST(
   // (and downstream consumers can split admin vs client traffic cheaply).
   // Replies are always feedback / admin_response depending on author.
   // Approval / revision rows keep their status-derived kind regardless of
-  // author — those are state transitions, not free-form messages.
+  // author, those are state transitions, not free-form messages.
   const baseKind: 'revision' | 'feedback' | 'approval' =
     parentCommentId !== null
       ? 'feedback'
@@ -248,7 +248,7 @@ export async function POST(
   // Run notifications + Monday sync + Zernio publish AFTER the response.
   // `after()` keeps the function alive past the response on Vercel, so
   // multi-step work (Monday writeback, Zernio publish) doesn't get cut off
-  // mid-flight. Bare fire-and-forget would race against serverless shutdown —
+  // mid-flight. Bare fire-and-forget would race against serverless shutdown , 
   // that's how the Monday sync was silently dropping while chat 🎉 messages
   // still landed.
   after(async () => {
@@ -406,7 +406,7 @@ export async function DELETE(
 
   // Only approval deletions affect the Monday-side state ("Client approved" →
   // "Waiting on approval"). Other history rows (caption_edit, tag_edit,
-  // schedule_change, video_revised, plain comments) are pure audit trail —
+  // schedule_change, video_revised, plain comments) are pure audit trail , 
   // skip the sync to avoid a needless Monday round-trip.
   if (comment.status === 'approved') {
     // Clear the all-approved dedup stamp so a future re-approval can fire the
@@ -450,7 +450,7 @@ export async function DELETE(
 
 /**
  * Toggle the "resolved" flag on a `changes_requested` history row. Editors
- * use this to mark a revision request as handled — the icon flips from a
+ * use this to mark a revision request as handled, the icon flips from a
  * warning to a green check and the label changes to "Revised". Stored as a
  * metadata flag rather than a status change so the comment still threads
  * correctly with other change-request rows in the audit trail.
@@ -518,7 +518,7 @@ export async function PATCH(
 
   // After the toggle: figure out whether this transition completed the
   // revision pass for the entire share link. We only fire the "all
-  // revisions ready — please re-review" notification when the unresolved
+  // revisions ready, please re-review" notification when the unresolved
   // count goes from N>0 to 0, and we dedup via
   // `revisions_complete_notified_at` so toggling doesn't spam the client.
   // If the editor un-marks one (unresolved goes from 0 → 1), we clear the
@@ -548,14 +548,14 @@ export async function PATCH(
  * link's `post_review_link_map` and:
  *
  *   - If unresolved === 0 and the link wasn't already notified, posts the
- *     wrap-up chat ping ("All revisions complete on <client> — please
+ *     wrap-up chat ping ("All revisions complete on <client>, please
  *     re-review") to the client's Google Chat webhook and stamps
  *     `revisions_complete_notified_at` so we don't double-fire.
  *   - If unresolved > 0 and the link WAS previously notified, clears the
  *     stamp so the next completion fires again.
  *
  * Total >= 1 guard prevents firing on a share link that never had any
- * revision requests in the first place — we only want this for actually-
+ * revision requests in the first place, we only want this for actually-
  * worked-through revisions.
  */
 async function maybeFireRevisionsCompleteNotification(
@@ -577,7 +577,7 @@ async function maybeFireRevisionsCompleteNotification(
     .eq('status', 'changes_requested');
 
   const total = changeRows?.length ?? 0;
-  if (total === 0) return; // Never had revisions — nothing to wrap up.
+  if (total === 0) return; // Never had revisions, nothing to wrap up.
 
   const unresolved = (changeRows ?? []).filter((c) => {
     const m = (c.metadata ?? {}) as Record<string, unknown>;
@@ -585,7 +585,7 @@ async function maybeFireRevisionsCompleteNotification(
   }).length;
 
   if (unresolved > 0) {
-    // Editor un-marked something — reset dedup so a future completion fires.
+    // Editor un-marked something, reset dedup so a future completion fires.
     if (args.previouslyNotifiedAt) {
       await admin
         .from('content_drop_share_links')
@@ -595,7 +595,7 @@ async function maybeFireRevisionsCompleteNotification(
     return;
   }
 
-  // unresolved === 0 — but skip if we've already pinged for this link.
+  // unresolved === 0, but skip if we've already pinged for this link.
   if (args.previouslyNotifiedAt) return;
 
   // Look up the client + chat webhook so we can route the ping.
@@ -712,7 +712,7 @@ async function notifyAdminsOfComment(
   const title = comment.isReply
     ? REPLY_TITLE(comment.authorName, clientName)
     : TITLE_BY_STATUS[comment.status](comment.authorName, clientName);
-  // Truncate only the in-app notification body — chat gets full content.
+  // Truncate only the in-app notification body, chat gets full content.
   // Attachment-only comments have no text, so fall back to a file summary.
   const preview = comment.content.trim()
     ? comment.content.slice(0, 140) + (comment.content.length > 140 ? '…' : '')
@@ -741,12 +741,12 @@ async function notifyAdminsOfComment(
   const baseShareUrl = `${appBase}/s/${shareToken}`;
   const shareUrl = `${baseShareUrl}${postAnchor}`;
   // Paid-media team gets the dedicated download grid instead of the full
-  // review page — they only need to grab the assets, not browse captions.
+  // review page, they only need to grab the assets, not browse captions.
   const downloadUrl = `${appBase}/c/${shareToken}/download`;
 
   // In-app: every admin user gets the bell ping. Was previously hard-coded
   // to jack@nativz.io, which meant no other editor on the team saw revision
-  // requests / approvals show up in the app — they had to be in the right
+  // requests / approvals show up in the app, they had to be in the right
   // Google Chat space, and if the client had no chat_webhook_url they got
   // nothing at all. We pull `role='admin'` from `users` so the recipient
   // list grows automatically as new editors join the team.
@@ -789,7 +789,7 @@ async function notifyAdminsOfComment(
 
   // Google Chat: per-client space when set, otherwise the agency's
   // miscellaneous-catchall client (resolved inside `resolveTeamChatWebhook`).
-  // Client-comment notifications never fall back to OPS — that space is
+  // Client-comment notifications never fall back to OPS, that space is
   // reserved for system-level alerts (cron failures, post-health). Brands
   // without a per-client webhook AND no agency catchall silently no-op.
   //
@@ -829,7 +829,7 @@ async function notifyAdminsOfComment(
                 ],
               },
             ],
-            fallbackText: `🎉 ${subject} — client approved all ${reviewLinkIds.length} posts. ${shareUrl}`,
+            fallbackText: `🎉 ${subject}, client approved all ${reviewLinkIds.length} posts. ${shareUrl}`,
           }),
           `all-approved ${dropId}`,
         );
@@ -896,7 +896,7 @@ async function pingPaidMediaTeam(
     } else {
       widgets.push({
         type: 'text',
-        text: '<i>Edited videos folder link is not set in Monday — pull assets manually.</i>',
+        text: '<i>Edited videos folder link is not set in Monday, pull assets manually.</i>',
       });
     }
     postToGoogleChatSafe(
@@ -1023,7 +1023,7 @@ async function notifyPastDueFixup(
       headerSubtitle: clientName,
       sections: [{ widgets }],
       fallbackText:
-        `⏰ ${clientName} — auto-rescheduled ${result.moves.length} post(s).` +
+        `⏰ ${clientName}, auto-rescheduled ${result.moves.length} post(s).` +
         (result.overflow.length > 0 ? ` ${result.overflow.length} overflow.` : ''),
     }),
     `past-due-fixup ${dropId}`,

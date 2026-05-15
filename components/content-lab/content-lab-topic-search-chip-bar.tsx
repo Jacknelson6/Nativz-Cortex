@@ -21,7 +21,7 @@ interface ContentLabTopicSearchChipBarProps {
   attachedSearchIds: string[];
   onToggle: (searchId: string) => void;
   /**
-   * Initial attached set from the Strategy Lab selection storage — on mount
+   * Initial attached set from the Strategy Lab selection storage, on mount
    * we merge this into attachedSearchIds if the user hasn't manually picked
    * anything yet. Lets the Research page's "Bring to Strategy Lab" flow
    * pre-attach the pinned searches.
@@ -30,7 +30,7 @@ interface ContentLabTopicSearchChipBarProps {
   /**
    * When no pinned IDs are set on first load, auto-attach the latest
    * completed search. Default: off. Users disliked the chat landing with a
-   * research topic they didn't choose — pinning now has to be explicit.
+   * research topic they didn't choose, pinning now has to be explicit.
    */
   autoAttachLatest?: boolean;
   refreshToken?: number;
@@ -43,7 +43,7 @@ interface ContentLabTopicSearchChipBarProps {
 
 /**
  * Shows a chip for each attached topic search above the chat composer, with
- * an × to detach. Adding research lives in the composer's "+" button now —
+ * an × to detach. Adding research lives in the composer's "+" button now , 
  * this component renders nothing when nothing's attached.
  */
 export function ContentLabTopicSearchChipBar({

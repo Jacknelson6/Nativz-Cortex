@@ -17,7 +17,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
  *    link's client's `organization_id` (viewers are scoped to one
  *    client; agency string is set on the client row).
  *
- * On mismatch we DO NOT log the user out of Cortex globally — we just
+ * On mismatch we DO NOT log the user out of Cortex globally, we just
  * ignore their session for this share-link surface and render the
  * gateway with "wrong agency" copy. PRD 02 §"Server resolution".
  */

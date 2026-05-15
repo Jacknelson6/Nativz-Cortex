@@ -140,5 +140,5 @@ additive and v1 read paths still ignore the new columns.
 ## Out of scope
 
 - Audit-log dashboard view (follow-up).
-- Legacy `status` column drop — kept indefinitely until every read path
+- Legacy `status` column drop, kept indefinitely until every read path
   has moved to `kind`. Re-evaluate after one quiet quarter.

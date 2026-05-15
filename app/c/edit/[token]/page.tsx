@@ -300,7 +300,7 @@ function SharedReviewView({
   const [downloadingAll, setDownloadingAll] = useState(false);
   // PRD 06 §"View as client": admins flip this to preview the page
   // without admin chrome (replace/remove/cover/mark-revised affordances).
-  // Local-only — does not change server-side identity.
+  // Local-only, does not change server-side identity.
   const [viewAsClient, setViewAsClient] = useState(false);
   const effectiveIsEditor = data.isEditor && !viewAsClient;
 
@@ -987,7 +987,7 @@ function ShareHeaderLogo() {
 function latestReview(comments: SharedComment[]): ReviewStatus | null {
   // Walk newest → oldest and return the first "live" review signal. A
   // changes_requested row that's been marked Revised (metadata.resolved)
-  // is no longer live — we skip past it so the pill can fall through to
+  // is no longer live, we skip past it so the pill can fall through to
   // an earlier approval.
   for (let i = comments.length - 1; i >= 0; i--) {
     const c = comments[i];
@@ -1279,11 +1279,11 @@ function VideoCard({
     }
   }
 
-  // Editor-only "Replace" — three-step flow:
+  // Editor-only "Replace", three-step flow:
   //   1) POST /api/admin/editing/projects/:id/videos with replace_video_id
   //      → server mints a Mux direct upload + inserts a placeholder row.
   //   2) PUT file bytes straight to the Mux upload URL (no Content-Type
-  //      header — Mux infers it). The webhook flips mux_status to ready
+  //      header, Mux infers it). The webhook flips mux_status to ready
   //      once Mux finishes packaging.
   //   3) POST /api/editing/share/:token/comment with status='video_revised'
   //      so the activity feed reflects the new cut, then refetch the page.
@@ -1382,7 +1382,7 @@ function VideoCard({
           }),
         });
       } catch {
-        // Non-fatal — the upload itself succeeded.
+        // Non-fatal, the upload itself succeeded.
       }
 
       toast.success(incomingIsImage ? 'New image uploaded' : 'New cut uploaded');
@@ -2296,7 +2296,7 @@ function formatShoot(iso: string): string {
   });
 }
 
-// See app/c/[token]/page.tsx readJsonSafe — same defensive parse so empty
+// See app/c/[token]/page.tsx readJsonSafe, same defensive parse so empty
 // or non-JSON bodies don't surface as "Unexpected end of JSON input" to
 // editing-share visitors.
 async function readJsonSafe(

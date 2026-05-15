@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
  * PRD 06: admin-only soft-delete of an editing video tile from the
  * share-link visible set. Stamps `archived_at` + `archived_by` on the
  * row; the share GET filters on `archived_at IS NULL` after migration
- * 320 lands. Underlying Mux asset stays — we only hide the row.
+ * 320 lands. Underlying Mux asset stays, we only hide the row.
  */
 export async function DELETE(
   _req: Request,

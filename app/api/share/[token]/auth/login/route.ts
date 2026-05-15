@@ -101,17 +101,22 @@ export async function POST(
   // Cookie is now set. Re-run the agency check against the fresh session.
   const { identity } = await resolveBoundIdentity(context);
   if (!identity) {
-    // Wrong agency — sign back out so we don't strand the visitor in a
+    // Capture the resolved user ID before signOut clears the cookie, so the
+    // audit row stamps "user X tried to access agency Y's link" rather than
+    // a null actor (PRD 06 audit-trail contract).
+    const { data: authData } = await supabase.auth.getUser();
+    const rejectedUserId = authData.user?.id ?? null;
+    // Wrong agency, sign back out so we don't strand the visitor in a
     // half-bound state where Cortex sees them as logged in but the share
     // page refuses to render their identity. PRD 04 §"Error handling".
     await supabase.auth.signOut();
     await logShareAdminAction({
       shareLinkId: context.linkId,
       shareLinkKind: context.kind,
-      actorUserId: null,
+      actorUserId: rejectedUserId,
       action: 'auth.login.failed',
       targetKind: 'auth',
-      targetId: null,
+      targetId: rejectedUserId,
       payload: { email: parsed.data.email.trim(), reason: 'wrong_agency' },
     });
     return NextResponse.json(

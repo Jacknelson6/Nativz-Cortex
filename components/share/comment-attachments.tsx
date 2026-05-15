@@ -4,14 +4,14 @@ import { File as FileIcon, X } from 'lucide-react';
  * PRD 07 §"Shared thread parity". Two small primitives the calendar
  * and editing share pages both use to render comment attachments:
  *
- *  - `AttachmentChip` — composer-side tile shown while a draft is
+ *  - `AttachmentChip`, composer-side tile shown while a draft is
  *    being authored. Has an inline remove button.
- *  - `CommentAttachmentTile` — read-only thumb shown on a posted
+ *  - `CommentAttachmentTile`, read-only thumb shown on a posted
  *    comment row. Click opens the file in a new tab.
  *
  * Kept here (not in `lib/share/...`) because they render JSX. The
  * pages previously had near-identical copies that diverged slowly
- * over time — this file makes the chrome canonical.
+ * over time, this file makes the chrome canonical.
  */
 
 export interface CommentAttachment {

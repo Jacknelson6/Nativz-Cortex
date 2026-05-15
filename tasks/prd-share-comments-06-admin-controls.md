@@ -22,8 +22,8 @@ Both share pages. Reuses existing admin endpoints under the hood; wraps them in 
 2. **Change cover photo** (calendar only, since editing has no cover concept)
    - Reuses `POST /api/calendar/share/[token]/cover/[postId]`.
 3. **Delete post or video**
-   - Calendar: `DELETE /api/calendar/share/[token]/post/[postId]` — soft delete via `archived_at`. Removes from the share link's visible set; does not remove from the underlying drop.
-   - Editing: `DELETE /api/editing/share/[token]/video/[videoId]` — soft delete via `archived_at`. Same semantics.
+   - Calendar: `DELETE /api/calendar/share/[token]/post/[postId]`, soft delete via `archived_at`. Removes from the share link's visible set; does not remove from the underlying drop.
+   - Editing: `DELETE /api/editing/share/[token]/video/[videoId]`, soft delete via `archived_at`. Same semantics.
    - Confirmation modal required: "this hides it from the client. Continue?"
    - Hard rule: if the post is unapproved and has a scheduled publish time in the future, deletion also clears the schedule so it cannot auto-publish. This is the standing "unapproved drop posts must never publish" invariant.
 4. **Mark as revised (per-revision)**

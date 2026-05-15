@@ -4,7 +4,7 @@ import type { ShareLinkKind } from '@/lib/share/identity';
 /**
  * PRD 06 audit logger. Writes one row to `share_link_admin_actions`
  * for every admin write that hits a share-scoped endpoint. Fire-and-
- * forget by design — the unified review modal reads this trail later,
+ * forget by design, the unified review modal reads this trail later,
  * but the action itself should not roll back if the log write fails.
  *
  * Known `action` keys:

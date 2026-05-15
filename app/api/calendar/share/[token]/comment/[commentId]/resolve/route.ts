@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
  *
  * PRD 06 §"Mark as revised". Admin closes a single revision row. We:
  *   1. Stamp `resolved_at = now()` on the targeted revision (and only
- *      that row — there is no bulk close-the-whole-post action).
+ *      that row, there is no bulk close-the-whole-post action).
  *   2. Insert a reply row with kind='video_revised' and the optional
  *      note as the body. Empty note still writes the reply so the
  *      audit trail stays consistent.

@@ -208,7 +208,7 @@ async function handleShareGet(
 
   // Pull-mode self-heal: any video row mid-Mux-pipeline gets reconciled
   // against the Mux API before we build the response. This makes the share
-  // page independent of webhook delivery — if the webhook landed, the
+  // page independent of webhook delivery, if the webhook landed, the
   // status is already 'ready' and reconcile is a no-op; if it didn't land
   // (misconfigured, dropped, race), we converge to truth here. Auto-poll
   // on the client side then picks up the new state within ~5s. The
@@ -216,9 +216,9 @@ async function handleShareGet(
   // the up-to-date status without a second DB round-trip.
   const videoRows = (videos ?? []) as DropVideoRow[];
   // Reconcile any row mid-pipeline. Two ingest paths land here:
-  //   - URL-pull (lib/calendar/schedule-drop.ts) — stamps mux_asset_id at
+  //   - URL-pull (lib/calendar/schedule-drop.ts), stamps mux_asset_id at
   //     create time, no upload id.
-  //   - Direct-upload (mux-finalize) — stamps mux_upload_id, asset id arrives
+  //   - Direct-upload (mux-finalize), stamps mux_upload_id, asset id arrives
   //     via webhook.
   // The reconciler accepts either id, so we sweep on (upload_id OR asset_id).
   const inFlight = videoRows.filter(
@@ -270,7 +270,7 @@ async function handleShareGet(
   //   2. Supabase's image-transform endpoint stops 400'ing on the original
   //      28MB PNGs (the size limit only bites originals, not the cropped
   //      JPEGs).
-  // Aligned by sort_order ↔ position — both 0-indexed against the same
+  // Aligned by sort_order ↔ position, both 0-indexed against the same
   // logical asset list.
   const [{ data: assetRows }, { data: schedulerMediaRows }] = await Promise.all([
     imageVideoIds.length
@@ -333,8 +333,8 @@ async function handleShareGet(
   }
 
   // Phase D added per-client deliverable balances + agency add-on context to
-  // the share payload. Both are enrichments — the BalancePill and pre-approval
-  // modal degrade gracefully without them — so a deliverable_types fetch
+  // the share payload. Both are enrichments, the BalancePill and pre-approval
+  // modal degrade gracefully without them, so a deliverable_types fetch
   // failure or stale balances row should never blank out the entire share
   // page (which is what was happening when this route 500'd with an empty
   // body). Settle the balance fetch independently and fall back to an empty
@@ -379,7 +379,7 @@ async function handleShareGet(
     (commentsByPost[postId] ||= []).push(c);
   }
 
-  // Log the open — both the rolling pointer and an immutable history row.
+  // Log the open, both the rolling pointer and an immutable history row.
   // Fire-and-forget; failures here must not block the viewer's response.
   void admin
     .from('content_drop_share_links')
@@ -398,7 +398,7 @@ async function handleShareGet(
   // `after()` block ever gets cut short (Vercel function timeout, Monday
   // API hiccup, etc.) the column drifts out of sync. Re-running the
   // computed-state push on each share-link view makes the sync self-healing
-  // — every reviewer or editor who opens the link drags Monday back into
+  //, every reviewer or editor who opens the link drags Monday back into
   // truth. Idempotent (setting a column to its current label is a no-op),
   // so the cost is bounded to one Monday call per page view at worst.
   after(async () => {
@@ -419,7 +419,7 @@ async function handleShareGet(
      * PATCHes /api/calendar/review/{shareLinkId} (the same endpoint the
      * portal "Your reviews" table uses), so both surfaces stay in lockstep
      * without duplicating endpoints. The id itself is no more sensitive
-     * than the token already in the URL — the PATCH route enforces admin.
+     * than the token already in the URL, the PATCH route enforces admin.
      */
     shareLinkId: link.id,
     // Editable share-link name (the same field the portal "Your reviews"
@@ -435,7 +435,7 @@ async function handleShareGet(
     // itself when no rows are present.
     balances,
     // `addons` + `supportEmail` are no longer rendered on the share page
-    // (the over-scope PreApprovalModal was removed — clients should never
+    // (the over-scope PreApprovalModal was removed, clients should never
     // see internal capacity limits). Kept on the response for now to stay
     // backwards-compatible with any cached client bundles in flight.
     addons,
