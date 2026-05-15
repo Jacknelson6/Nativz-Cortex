@@ -29,6 +29,11 @@ import {
   clearGuestName,
 } from '@/components/share/gateway-modal';
 import { RoleChip } from '@/components/share/role-chip';
+import {
+  AttachmentChip,
+  CommentAttachmentTile,
+} from '@/components/share/comment-attachments';
+import { resolveCommentStyle } from '@/lib/share/comment-style';
 
 const CALENDAR_TOUR_STORAGE_KEY = 'cortex.share.calendarTourSeen';
 import { mergeCaptionAndHashtags } from '@/lib/scheduler/caption-hashtags';
@@ -3993,37 +3998,7 @@ function CommentRow({
     </button>
   );
 
-  const tone = isResolved
-    ? 'text-status-success'
-    : comment.status === 'approved'
-      ? 'text-status-success'
-      : comment.status === 'changes_requested'
-        ? 'text-status-warning'
-        : comment.status === 'caption_edit' ||
-            comment.status === 'tag_edit' ||
-            comment.status === 'video_revised' ||
-            comment.status === 'cover_edit'
-          ? 'text-accent-text'
-          : comment.status === 'schedule_change'
-            ? 'text-accent-text'
-            : 'text-text-secondary';
-  const Icon = isResolved
-    ? CheckCircle
-    : comment.status === 'approved'
-      ? CheckCircle
-      : comment.status === 'changes_requested'
-        ? AlertTriangle
-        : comment.status === 'caption_edit'
-          ? Type
-          : comment.status === 'tag_edit'
-            ? AtSign
-            : comment.status === 'schedule_change'
-              ? Clock
-              : comment.status === 'video_revised'
-                ? Film
-                : comment.status === 'cover_edit'
-                  ? ImageUp
-                  : MessageSquare;
+  const { tone, Icon } = resolveCommentStyle(comment.status, { resolved: isResolved });
   const time = new Date(comment.created_at).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -5836,72 +5811,3 @@ function buildScheduledAtForDate(
   return `${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(target.getDate())}T${pad(hours)}:${pad(minutes)}`;
 }
 
-function AttachmentChip({
-  attachment,
-  onRemove,
-}: {
-  attachment: CommentAttachment;
-  onRemove: () => void;
-}) {
-  const isImage = attachment.mime_type.startsWith('image/');
-  return (
-    <div className="group relative flex items-center gap-2 rounded-lg border border-nativz-border bg-background/40 py-1 pl-1 pr-7 text-xs text-text-secondary">
-      {isImage ? (
-        <img src={attachment.url} alt="" className="h-8 w-8 rounded object-cover" />
-      ) : (
-        <div className="flex h-8 w-8 items-center justify-center rounded bg-surface-hover">
-          <FileIcon size={14} className="text-text-muted" />
-        </div>
-      )}
-      <span className="max-w-[160px] truncate">{attachment.filename}</span>
-      <button
-        type="button"
-        onClick={onRemove}
-        className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary"
-        aria-label={`Remove ${attachment.filename}`}
-      >
-        <X size={12} />
-      </button>
-    </div>
-  );
-}
-
-function CommentAttachmentTile({ attachment }: { attachment: CommentAttachment }) {
-  const isImage = attachment.mime_type.startsWith('image/');
-  const isVideo = attachment.mime_type.startsWith('video/');
-  if (isImage) {
-    return (
-      <a
-        href={attachment.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block overflow-hidden rounded-md border border-nativz-border bg-background/40"
-      >
-        <img src={attachment.url} alt={attachment.filename} className="h-24 w-24 object-cover" />
-      </a>
-    );
-  }
-  if (isVideo) {
-    return (
-      <a
-        href={attachment.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block overflow-hidden rounded-md border border-nativz-border bg-background/40"
-      >
-        <video src={attachment.url} className="h-24 w-24 object-cover" muted playsInline />
-      </a>
-    );
-  }
-  return (
-    <a
-      href={attachment.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-1.5 rounded-md border border-nativz-border bg-background/40 px-2 py-1.5 text-xs text-accent-text transition-colors hover:bg-surface-hover"
-    >
-      <FileIcon size={12} />
-      <span className="max-w-[180px] truncate">{attachment.filename}</span>
-    </a>
-  );
-}
