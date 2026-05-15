@@ -54,7 +54,9 @@ interface CalendarRow {
   id: string;
   expires_at: string | null;
   archived_at: string | null;
-  content_drop_id: string;
+  drop_id: string;
+  client_id: string | null;
+  clients: { organization_id: string | null; agency: string | null } | null;
 }
 
 interface EditingRow {
@@ -72,10 +74,12 @@ async function resolveContext(token: string): Promise<
 
   // Fan out across both surfaces in parallel. Tokens are unique per table
   // and indexed; the parallel SELECTs cost ~2x one round trip total.
+  // Calendar share links carry client_id directly + agency via a single
+  // join; editing share links go through editing_projects to reach client.
   const [calendarRes, editingRes] = await Promise.all([
     admin
       .from('content_drop_share_links')
-      .select('id, expires_at, archived_at, content_drop_id')
+      .select('id, expires_at, archived_at, drop_id, client_id, clients(organization_id, agency)')
       .eq('token', token)
       .maybeSingle<CalendarRow>(),
     admin
@@ -85,28 +89,27 @@ async function resolveContext(token: string): Promise<
       .maybeSingle<EditingRow>(),
   ]);
 
+  if (calendarRes.error) {
+    console.warn('[share-identity] calendar lookup error', calendarRes.error);
+  }
+  if (editingRes.error) {
+    console.warn('[share-identity] editing lookup error', editingRes.error);
+  }
+
   if (calendarRes.data) {
     const link = calendarRes.data;
     if (link.archived_at) return { ok: false, state: 'archived' };
     if (link.expires_at && new Date(link.expires_at).getTime() < Date.now()) {
       return { ok: false, state: 'expired' };
     }
-    const { data: drop } = await admin
-      .from('content_drops')
-      .select('client_id, clients(organization_id, agency)')
-      .eq('id', link.content_drop_id)
-      .maybeSingle<{
-        client_id: string;
-        clients: { organization_id: string | null; agency: string | null } | null;
-      }>();
     return {
       ok: true,
       context: {
         kind: 'calendar',
         linkId: link.id,
-        clientId: drop?.client_id ?? '',
-        agency: drop?.clients?.agency ?? null,
-        organizationId: drop?.clients?.organization_id ?? null,
+        clientId: link.client_id ?? '',
+        agency: link.clients?.agency ?? null,
+        organizationId: link.clients?.organization_id ?? null,
         expiresAt: link.expires_at,
         archivedAt: link.archived_at,
       },
@@ -119,7 +122,7 @@ async function resolveContext(token: string): Promise<
     if (link.expires_at && new Date(link.expires_at).getTime() < Date.now()) {
       return { ok: false, state: 'expired' };
     }
-    const { data: project } = await admin
+    const { data: project, error: projectErr } = await admin
       .from('editing_projects')
       .select('client_id, clients(organization_id, agency)')
       .eq('id', link.project_id)
@@ -127,6 +130,9 @@ async function resolveContext(token: string): Promise<
         client_id: string | null;
         clients: { organization_id: string | null; agency: string | null } | null;
       }>();
+    if (projectErr) {
+      console.warn('[share-identity] editing project lookup error', projectErr);
+    }
     return {
       ok: true,
       context: {
