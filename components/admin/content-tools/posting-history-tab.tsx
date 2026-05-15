@@ -135,7 +135,7 @@ export function PostingHistoryTab() {
         </div>
       ) : rows.length === 0 ? (
         <div className="rounded-xl border border-nativz-border bg-surface py-16 text-center text-sm text-text-muted">
-          No posts in this view yet. Once approved drops publish, they'll log here.
+          No posts in this view yet. Once approved drops publish, they&apos;ll log here.
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-nativz-border bg-surface">
