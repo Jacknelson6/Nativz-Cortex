@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { TrendingUp } from 'lucide-react';
+import { TrendingUp, SearchX } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { formatNumber } from '@/lib/utils/format';
 import type { TopicSearchVideoRow } from '@/lib/scrapers/types';
@@ -137,6 +137,8 @@ export function ViewsOverTime({ searchId, shareToken, videos }: ViewsOverTimePro
     return `${parts[1]}/${parts[2]}`;
   };
 
+  const hasChart = !error && chartData.length > 0;
+
   return (
     <Card>
       <div className="mb-4 flex items-center justify-between gap-2">
@@ -146,27 +148,30 @@ export function ViewsOverTime({ searchId, shareToken, videos }: ViewsOverTimePro
             Search interest over time
           </h3>
         </div>
-        <div className="flex items-center gap-3 text-xs text-text-muted">
-          {hasSupply && (
+        {hasChart && (
+          <div className="flex items-center gap-3 text-xs text-text-muted">
+            {hasSupply && (
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-text-muted/40" />
+                Videos per day
+              </span>
+            )}
             <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-text-muted/40" />
-              Videos per day
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ background: 'var(--accent)' }}
+              />
+              Google Trends{stale ? ', cached' : ''}
             </span>
-          )}
-          <span className="flex items-center gap-1.5">
-            <span
-              className="h-2 w-2 rounded-full"
-              style={{ background: 'var(--accent)' }}
-            />
-            Google Trends{stale ? ', cached' : ''}
-          </span>
-        </div>
+          </div>
+        )}
       </div>
 
       {error ? (
-        <div className="flex h-[200px] items-center justify-center text-sm text-text-muted">
-          Couldn&apos;t load Google Trends data for this query.
-        </div>
+        <EmptyTrendsState
+          headline="Couldn't load Google Trends for this query"
+          body="The Trends endpoint didn't return a usable response. We'll try again the next time this search is opened."
+        />
       ) : chartData.length > 0 ? (
         <div className="animate-fade-in" style={{ color: 'var(--accent)' }}>
           <ResponsiveContainer width="100%" height={200}>
@@ -259,11 +264,24 @@ export function ViewsOverTime({ searchId, shareToken, videos }: ViewsOverTimePro
           </ResponsiveContainer>
         </div>
       ) : (
-        <div className="flex h-[200px] items-center justify-center text-sm text-text-muted">
-          No Google Trends data for this query.
-        </div>
+        <EmptyTrendsState
+          headline="Not enough search volume to chart"
+          body="Google Trends only returns a signal for topics with broad public search interest. Try a more general query if you want a demand line here."
+        />
       )}
     </Card>
+  );
+}
+
+function EmptyTrendsState({ headline, body }: { headline: string; body: string }) {
+  return (
+    <div className="flex h-[200px] flex-col items-center justify-center gap-2 px-6 text-center">
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-hover">
+        <SearchX size={18} className="text-text-muted" />
+      </div>
+      <p className="text-sm font-medium text-text-primary">{headline}</p>
+      <p className="max-w-sm text-xs leading-relaxed text-text-muted">{body}</p>
+    </div>
   );
 }
 
