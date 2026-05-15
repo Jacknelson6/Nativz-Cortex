@@ -27,7 +27,10 @@ interface NerdConversation {
 }
 
 interface ContentLabConversationHistoryRailProps {
-  clientId: string;
+  /** When null, the rail loads the "general" Strategy Lab history (untagged
+   *  conversations not scoped to a drawer chat) — used by the no-brand path
+   *  at /lab. When a UUID, loads only conversations tagged to that client. */
+  clientId: string | null;
   activeConversationId: string | null;
   /** Called when the user picks a conversation from the list. Parent hydrates
    *  messages and updates the localStorage pointer. */
@@ -60,11 +63,13 @@ export function ContentLabConversationHistoryRail({
   const firstLoadRef = useRef(true);
 
   const load = useCallback(async () => {
-    if (!clientId) return;
     if (firstLoadRef.current) setLoading(true);
     firstLoadRef.current = false;
     try {
-      const res = await fetch(`/api/nerd/conversations?clientId=${clientId}`);
+      const url = clientId
+        ? `/api/nerd/conversations?clientId=${clientId}`
+        : `/api/nerd/conversations?scope=general`;
+      const res = await fetch(url);
       if (!res.ok) {
         setConversations([]);
         return;

@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
     }
 
     const clientId = request.nextUrl.searchParams.get('clientId');
+    const scope = request.nextUrl.searchParams.get('scope');
     const admin = createAdminClient();
 
     // Always request client_id in the select so the UI can tell tagged
@@ -37,16 +38,22 @@ export async function GET(request: NextRequest) {
       client_id: string | null;
     }> | null = null;
 
-    const filtered = admin
+    let filtered = admin
       .from('nerd_conversations')
       .select('id, title, created_at, updated_at, client_id')
       .eq('user_id', user.id)
       .order('updated_at', { ascending: false })
       .limit(50);
 
-    const firstAttempt = clientId
-      ? await filtered.eq('client_id', clientId)
-      : await filtered;
+    if (clientId) {
+      filtered = filtered.eq('client_id', clientId);
+    } else if (scope === 'general') {
+      // General Strategy Lab — only conversations not tagged to a brand
+      // AND not scoped to a drawer chat (topic_search / audit / etc.).
+      filtered = filtered.is('client_id', null).is('scope_type', null);
+    }
+
+    const firstAttempt = await filtered;
 
     if (firstAttempt.error) {
       // Retry without client_id — handles the brief pre-migration window.

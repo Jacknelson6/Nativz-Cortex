@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, Sparkles, Paperclip, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { Conversation } from '@/components/ai/conversation';
 import { AssistantMessage, UserMessage, type ChatMessage } from '@/components/ai/message';
 import { ChatComposer, type ChatAttachment } from '@/components/ai/chat-composer';
@@ -9,6 +10,8 @@ import { processAttachments } from '@/lib/chat/process-attachments';
 import { SlashCommandMenu, filterSlashCommands } from '@/components/nerd/slash-command-menu';
 import { useSlashCommands, expandSkillCommand } from '@/lib/nerd/use-slash-commands';
 import { getCommand } from '@/lib/nerd/slash-commands';
+import { ContentLabConversationHistoryRail } from './content-lab-conversation-history-rail';
+import { ContentLabAttachResearchDialog } from './content-lab-attach-research-dialog';
 import type { ClientOption } from '@/components/ui/client-picker';
 
 interface RoutableClient extends ClientOption {
@@ -74,6 +77,8 @@ export function ContentLabGeneralChat({ clients: _clients, initialScope = null }
   const [attachedScope, setAttachedScope] = useState<AttachedScope[]>(
     initialScope ? [initialScope] : [],
   );
+  const [attachResearchOpen, setAttachResearchOpen] = useState(false);
+  const [conversationsRefreshToken, setConversationsRefreshToken] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const pendingAttachmentsRef = useRef<ChatAttachment[]>([]);
 
@@ -218,7 +223,7 @@ export function ContentLabGeneralChat({ clients: _clients, initialScope = null }
     async (text?: string) => {
       const originalContent = (text ?? input).trim();
       if (!originalContent || streaming) return;
-      let displayContent = originalContent;
+      const displayContent = originalContent;
       let content = originalContent;
 
       // Skill commands: expand "/slug args" to the skill's full template
@@ -313,6 +318,16 @@ export function ContentLabGeneralChat({ clients: _clients, initialScope = null }
               attachedScope.length > 0
                 ? attachedScope.map((s) => ({ type: s.type, id: s.id }))
                 : undefined,
+            // Mirror the branded chat: also pass topic-search ids via
+            // `searchContext` so the Nerd gets full grounding blocks (not just
+            // the compact attached-analyses index that scopeContext provides).
+            searchContext: (() => {
+              const ids = attachedScope
+                .filter((s) => s.type === 'topic_search')
+                .map((s) => s.id)
+                .slice(0, 5);
+              return ids.length > 0 ? ids : undefined;
+            })(),
           }),
           signal: controller.signal,
         });
@@ -366,6 +381,7 @@ export function ContentLabGeneralChat({ clients: _clients, initialScope = null }
               } else if (chunk.type === 'conversation' && typeof chunk.conversationId === 'string') {
                 setConversationId(chunk.conversationId);
                 writeGeneralContentLabConversationId(chunk.conversationId);
+                setConversationsRefreshToken((t) => t + 1);
               }
             } catch {
               accText += line;
@@ -393,17 +409,85 @@ export function ContentLabGeneralChat({ clients: _clients, initialScope = null }
     if (streaming) abortRef.current?.abort();
     setMessages([]);
     setConversationId(null);
+    setAttachedScope(initialScope ? [initialScope] : []);
     clearGeneralContentLabConversationId();
     sessionHintRef.current =
       'User is in the general Strategy Lab — no client is scoped. Reason across the whole agency portfolio.';
   }
+
+  const handleToggleAttach = useCallback(
+    (
+      searchId: string,
+      item?: { query?: string; clients?: { name: string | null } | null },
+    ) => {
+      setAttachedScope((prev) => {
+        const exists = prev.find((s) => s.type === 'topic_search' && s.id === searchId);
+        if (exists) {
+          return prev.filter((s) => !(s.type === 'topic_search' && s.id === searchId));
+        }
+        const brand = item?.clients?.name;
+        const label = item?.query
+          ? brand
+            ? `${item.query} · ${brand}`
+            : item.query
+          : 'Topic search';
+        return [...prev, { type: 'topic_search', id: searchId, label }];
+      });
+    },
+    [],
+  );
+
+  const attachedSearchIds = useMemo(
+    () =>
+      attachedScope.filter((s) => s.type === 'topic_search').map((s) => s.id),
+    [attachedScope],
+  );
+
+  const handleSelectConversation = useCallback(
+    async (id: string) => {
+      if (id === conversationId || streaming) return;
+      setLoadingConversation(true);
+      try {
+        const res = await fetch(`/api/nerd/conversations/${id}`);
+        if (!res.ok) throw new Error('Failed');
+        const data = (await res.json()) as {
+          id: string;
+          messages: Array<{ id: string; role: string; content: string; tool_results: unknown }>;
+        };
+        const loaded: ChatMessage[] = (data.messages ?? []).map((m) => ({
+          id: m.id,
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+          toolResults: (m.tool_results as ChatMessage['toolResults']) ?? undefined,
+        }));
+        setMessages(loaded);
+        setConversationId(data.id);
+        setAttachedScope([]);
+        writeGeneralContentLabConversationId(data.id);
+        sessionHintRef.current = null;
+      } catch {
+        toast.error('Could not load that conversation');
+      } finally {
+        setLoadingConversation(false);
+      }
+    },
+    [conversationId, streaming],
+  );
 
   // Note: "Pick a client" button removed — the top-bar brand pill handles
   // session-level brand selection now. Picking a brand there auto-redirects
   // into /lab/[clientId] via the index route's cookie check.
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-nativz-border/60 bg-background/40">
+    <div className="flex h-full min-h-0 flex-1 overflow-hidden bg-background">
+      <ContentLabConversationHistoryRail
+        clientId={null}
+        activeConversationId={conversationId}
+        onSelect={(id) => void handleSelectConversation(id)}
+        onNewChat={handleReset}
+        refreshToken={conversationsRefreshToken}
+      />
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-nativz-border/60 bg-background/40">
       {/* Header — title pill + Pick a client */}
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-nativz-border/40 px-4 py-3 md:px-6">
         <div className="flex items-center gap-2 text-sm text-text-muted">
@@ -529,6 +613,7 @@ export function ContentLabGeneralChat({ clients: _clients, initialScope = null }
             }
             blockEnterSubmit={showSlashMenu}
             onKeyDown={handleInputKeyDown}
+            onAttachResearch={() => setAttachResearchOpen(true)}
           >
             {showSlashMenu && (
               <SlashCommandMenu
@@ -542,6 +627,16 @@ export function ContentLabGeneralChat({ clients: _clients, initialScope = null }
         </div>
       </div>
 
+      </div>
+      <ContentLabAttachResearchDialog
+        open={attachResearchOpen}
+        onClose={() => setAttachResearchOpen(false)}
+        clientId={null}
+        clientName=""
+        clientSlug=""
+        attachedSearchIds={attachedSearchIds}
+        onToggle={handleToggleAttach}
+      />
     </div>
   );
 }

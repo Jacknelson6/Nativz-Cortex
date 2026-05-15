@@ -18,16 +18,23 @@ interface TopicSearchItem {
   platforms: string[] | null;
   volume: string | null;
   metrics: { trending_topics_count?: number; topic_score?: number } | null;
+  client_id?: string | null;
+  clients?: { name: string | null } | null;
 }
 
 interface AttachResearchDialogProps {
   open: boolean;
   onClose: () => void;
-  clientId: string;
+  /** When null, the dialog loads recent searches across every brand the
+   *  caller can see (used by the general /lab path). When a UUID, scopes
+   *  to that brand. */
+  clientId: string | null;
   clientName: string;
   clientSlug: string;
   attachedSearchIds: string[];
-  onToggle: (searchId: string) => void;
+  /** Branded chat passes just the id; general chat captures the second arg
+   *  to remember a chip label without re-fetching. */
+  onToggle: (searchId: string, item?: TopicSearchItem) => void;
 }
 
 /**
@@ -50,12 +57,15 @@ export function ContentLabAttachResearchDialog({
   const [filter, setFilter] = useState('');
 
   useEffect(() => {
-    if (!open || !clientId) return;
+    if (!open) return;
     let cancelled = false;
     async function loadSearches() {
       setLoading(true);
       try {
-        const r = await fetch(`/api/nerd/searches?clientId=${clientId}`);
+        const url = clientId
+          ? `/api/nerd/searches?clientId=${clientId}`
+          : `/api/nerd/searches`;
+        const r = await fetch(url);
         const data = await r.json();
         if (!cancelled) setSearches((data.searches ?? []) as TopicSearchItem[]);
       } catch {
@@ -101,7 +111,9 @@ export function ContentLabAttachResearchDialog({
           Attach topic research
         </h2>
         <p className="mt-0.5 text-xs text-text-muted">
-          Ground the Nerd in {clientName}&apos;s topic searches — multiple can be attached at once.
+          {clientId
+            ? `Ground the Nerd in ${clientName}'s topic searches, multiple can be attached at once.`
+            : 'Ground the Nerd in any of your recent topic searches, multiple can be attached at once.'}
         </p>
       </div>
 
@@ -145,7 +157,7 @@ export function ContentLabAttachResearchDialog({
               </p>
               {!filter && (
                 <Link
-                  href={`/admin/research?clientId=${clientId}`}
+                  href={clientId ? `/admin/research?clientId=${clientId}` : '/admin/research'}
                   onClick={onClose}
                   className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent-text transition hover:bg-accent/20"
                 >
@@ -163,7 +175,7 @@ export function ContentLabAttachResearchDialog({
                   <li key={s.id}>
                     <button
                       type="button"
-                      onClick={() => onToggle(s.id)}
+                      onClick={() => onToggle(s.id, s)}
                       className={cn(
                         'group flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition',
                         attached ? 'bg-accent/10 hover:bg-accent/15' : 'hover:bg-surface-hover/60',
@@ -188,6 +200,11 @@ export function ContentLabAttachResearchDialog({
                             <Clock size={10} />
                             {formatRelativeTime(s.completed_at ?? s.created_at)}
                           </span>
+                          {!clientId && s.clients?.name && (
+                            <span className="truncate font-medium text-text-secondary">
+                              {s.clients.name}
+                            </span>
+                          )}
                           {topicCount != null && (
                             <span>{topicCount} topics</span>
                           )}
