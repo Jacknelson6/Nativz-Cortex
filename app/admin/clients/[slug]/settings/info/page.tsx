@@ -16,6 +16,7 @@ import {
   type BrandDnaLogo,
   type BrandDnaFont,
 } from '@/components/clients/settings/info-brand-dna-slim';
+import { InfoBrandAssetsCard } from '@/components/clients/settings/info-brand-assets-card';
 import { SettingsPageHeader } from '@/components/clients/settings/settings-primitives';
 
 export const dynamic = 'force-dynamic';
@@ -252,6 +253,8 @@ export default async function ClientSettingsInfoPage({
         logos={dnaLogos}
         fonts={dnaFonts}
       />
+
+      <InfoBrandAssetsCard slug={slug} />
 
       <InfoCard icon={<Users size={16} />} title="Contacts">
         <ClientContactsCard
