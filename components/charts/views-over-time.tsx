@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { TrendingUp, SearchX } from 'lucide-react';
+import { SearchX } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 
 interface TrendsPoint {
@@ -109,13 +109,10 @@ export function ViewsOverTime({ searchId, shareToken }: ViewsOverTimeProps) {
 
   return (
     <Card>
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <TrendingUp size={18} className="text-text-muted" />
-          <h3 className="text-lg font-semibold tracking-tight text-text-primary">
-            Search interest over time
-          </h3>
-        </div>
+      <div className="mb-4 flex items-center justify-between gap-2 border-b border-nativz-border/60 pb-4">
+        <h4 className="text-lg font-semibold tracking-tight text-text-primary">
+          Search interest over time
+        </h4>
         {hasChart && (
           <div className="flex items-center gap-1.5 text-xs text-text-muted">
             <span
@@ -222,12 +219,9 @@ function EmptyTrendsState({ headline, body }: { headline: string; body: string }
 export function ViewsOverTimeSkeleton() {
   return (
     <Card>
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <div className="h-[18px] w-[18px] animate-pulse rounded bg-surface-hover" />
-          <div className="h-5 w-44 animate-pulse rounded bg-surface-hover" />
-        </div>
-        <div className="h-3 w-40 animate-pulse rounded bg-surface-hover" />
+      <div className="mb-4 flex items-center justify-between gap-2 border-b border-nativz-border/60 pb-4">
+        <div className="h-5 w-44 animate-pulse rounded bg-surface-hover" />
+        <div className="h-3 w-28 animate-pulse rounded bg-surface-hover" />
       </div>
       <div className="flex h-[200px] gap-2">
         <div className="flex w-9 flex-col justify-between py-2">
