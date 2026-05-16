@@ -25,11 +25,11 @@
     Verify: `grep -c "smm_reviewer_user_id\|last_smm_review_notified_at" supabase/migrations/320_smm_review_routing.sql` returns 2
     Notes: 2026-05-16. Wrote 320_smm_review_routing.sql. Two ADD COLUMN IF NOT EXISTS statements: clients.smm_reviewer_user_id (uuid FK -> users(id) ON DELETE SET NULL) and content_drops.last_smm_review_notified_at (timestamptz, nullable). Added COMMENT ON COLUMN for both so the dispatcher contract is documented at the schema level. Skipped ALTER TYPE because T01 confirmed notifications.type is plain text. Added a partial index `clients_smm_reviewer_user_id_idx` on the new FK (WHERE smm_reviewer_user_id IS NOT NULL) since the dispatcher will lookup by client and most clients will leave it null, so the partial keeps the index small. grep -c returned 7 (the two column names appear in the ALTER + the COMMENT + the index def), comfortably above the acceptance threshold of 2.
 
-[ ] T03: Apply migration 320 via Supabase MCP
+[x] T03: Apply migration 320 via Supabase MCP
     Files: (Supabase MCP) apply_migration name="320_smm_review_routing"
     Acceptance: applies clean; both columns visible via list_tables
     Verify: Supabase MCP execute_sql `SELECT column_name FROM information_schema.columns WHERE table_name IN ('clients','content_drops') AND column_name IN ('smm_reviewer_user_id','last_smm_review_notified_at')` returns both
-    Notes:
+    Notes: 2026-05-16. Applied clean via Supabase MCP apply_migration name=320_smm_review_routing -> {"success":true}. Verification query returns both: clients.smm_reviewer_user_id + content_drops.last_smm_review_notified_at. Partial index also created. Migration ledger now shows 320 as the latest applied migration; next slot is 321.
 
 [ ] T04: Build lib/social/slack-webhook.ts generic helper
     Files: lib/social/slack-webhook.ts
